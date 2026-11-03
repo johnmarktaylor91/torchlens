@@ -1337,6 +1337,39 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     return site_label, source_site
 
 
+def _donor_facet_slice(source: Any, donor_op: Any, value: torch.Tensor) -> torch.Tensor:
+    """Return the facet slice of a donor value when a facet write is firing.
+
+    Outside a facet scatter wrapper the donor value is returned unchanged. Inside
+    one, the wrapper's facet selector is resolved on the SOURCE trace and the
+    view whose home is the donor op is applied to the donor value; when the
+    source trace serves no such facet view (its module facets were not kept),
+    the target's own facet transform chain (the portable view definition) is
+    applied to the donor value instead.
+    """
+
+    from .hooks import _active_facet_fire, _facet_home_label, _resolve_facet_specs
+
+    fire = _active_facet_fire()
+    if fire is None:
+        return value
+    donor_labels = {
+        str(label)
+        for label in (
+            getattr(donor_op, "_layer_label_raw", None),
+            getattr(donor_op, "layer_label", None),
+            getattr(donor_op, "label", None),
+        )
+        if label is not None
+    }
+    view_spec = fire.spec
+    for _facet_name, source_spec in _resolve_facet_specs(source, fire.selector):
+        if source_spec.home is donor_op or _facet_home_label(source_spec) in donor_labels:
+            view_spec = source_spec
+            break
+    return cast(torch.Tensor, view_spec.apply_transforms(value))
+
+
 def patch_from(
     source: Any,
     *,
@@ -1350,7 +1383,10 @@ def patch_from(
     recorded post-capture value at that same site (same-trace alignment is
     exact by construction: same index spaces). Combined with a Selection
     target, only the selected elements are patched (the engine's
-    edit-then-scatter contract).
+    edit-then-scatter contract). With a facet or head target
+    (``tl.head(h, "v")``, ``tl.facet(name)``) the donor is the same facet
+    view of the source's home-op value, so only that slice is copied;
+    ``positions=`` then indexes the facet slice's axes.
 
     PORTABILITY: ``opaque_audit`` (the shipped rule) — the spec's persisted
     args carry the source-trace IDENTITY (label + class + a stable id), never
@@ -1436,6 +1472,10 @@ def patch_from(
             value = donor_op.out
             if not isinstance(value, torch.Tensor):
                 raise HookValueError(f"patch_from source value at {site_label!r} is not a tensor.")
+            # A facet target (tl.head / tl.facet) edits one slice of the home op:
+            # the donor is the SAME facet view of the source value, never the
+            # whole home output.
+            value = _donor_facet_slice(source, donor_op, value)
             # Never hand the source trace's stored tensor itself downstream —
             # the engine writes hook outputs into this trace's records.
             if pairs is None:

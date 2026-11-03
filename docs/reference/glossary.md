@@ -2612,7 +2612,11 @@ default-keep); mask-application semantics documented-unstable*
 **tl.patch_from(source_trace, *, source_site=None, positions=None, position_axis=1)** — *unstable — no deprecation shim owed*
 : Edit factory patching targeted sites from another trace's recorded
   post-capture values (activation patching); with a Selection target only
-  the selected elements are patched. Source-to-target mapping (Patchscopes,
+  the selected elements are patched. With a facet or head target
+  (`tl.head(h, "v")`, `tl.facet(name)`) the donor is the same facet view of
+  the source's home-op value, so only that slice is copied (a single head of
+  GPT-2's fused `c_attn`, not the whole output); `positions=` then indexes
+  the facet slice's axes. Source-to-target mapping (Patchscopes,
   SelfIE): `source_site=` reads the donor at another site of the source trace
   (a label, pass-qualified on multi-pass layers, or a selector naming exactly
   one op; else `patch_source_site_unresolved`), and `positions=` (an int, a

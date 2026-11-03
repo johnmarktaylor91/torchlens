@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator, Mapping, Sequence
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from types import MappingProxyType
 from typing import Any, Literal, TypeAlias, cast
@@ -870,6 +871,11 @@ def expand_facet_hook_entries(
                         entry.normalized_callable,
                         spec,
                         facet_name=facet_name,
+                        selector=FacetSelector(
+                            facet_name,
+                            head_index=selector.head_index,
+                            module_address=selector.module_address,
+                        ),
                     ),
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
@@ -1597,11 +1603,36 @@ def _check_facet_write_conflicts(
             )
 
 
+@dataclass(frozen=True, slots=True)
+class _FacetFire:
+    """The facet slice a facet scatter wrapper is editing right now.
+
+    Set for the duration of the wrapped user hook so a donor-reading edit
+    (``patch_from``) can read the SAME facet view of its donor value instead
+    of handing back the whole home-op output.
+    """
+
+    spec: Any
+    selector: FacetSelector
+
+
+_ACTIVE_FACET_FIRE: ContextVar[_FacetFire | None] = ContextVar(
+    "torchlens_active_facet_fire", default=None
+)
+
+
+def _active_facet_fire() -> _FacetFire | None:
+    """Return the facet slice being edited by the enclosing scatter wrapper, if any."""
+
+    return _ACTIVE_FACET_FIRE.get()
+
+
 def _facet_scatter_hook(
     user_hook: HookCallable,
     spec: Any,
     *,
     facet_name: str,
+    selector: FacetSelector | None = None,
 ) -> HookCallable:
     """Return a home-op hook that edits one facet slice.
 
@@ -1613,12 +1644,18 @@ def _facet_scatter_hook(
         FacetSpec used to read and scatter the slice.
     facet_name:
         Public facet name for diagnostics.
+    selector:
+        The facet selector narrowed to ``facet_name``; a donor-reading edit
+        resolves it on its source trace (defaults to ``tl.facet(facet_name)``).
 
     Returns
     -------
     HookCallable
         Hook with the standard whole-output TorchLens contract.
     """
+
+    if selector is None:
+        selector = FacetSelector(facet_name)
 
     def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
         """Apply a user hook to a facet slice and scatter it into ``out``.
@@ -1639,7 +1676,11 @@ def _facet_scatter_hook(
         from .runtime import validate_hook_output
 
         facet_slice = spec.apply_transforms(out)
-        edited_slice = user_hook(facet_slice, ctx=ctx)
+        token = _ACTIVE_FACET_FIRE.set(_FacetFire(spec=spec, selector=selector))
+        try:
+            edited_slice = user_hook(facet_slice, ctx=ctx)
+        finally:
+            _ACTIVE_FACET_FIRE.reset(token)
         checked_slice = validate_hook_output(edited_slice, facet_slice, hook_context=ctx)
         return spec.scatter_update(out, checked_slice, mode="replace")
 
