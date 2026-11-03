@@ -199,6 +199,7 @@ def test_comparison_tensor_reads_preview_arrays_through_the_codec() -> None:
     )
     scalar = _comparison_tensor(3.0, scalar_codec)
     assert scalar.ndim == 0 and scalar.item() == 3.0
+    assert _comparison_tensor([1.0, 2.0], scalar_codec) is None
 
 
 def test_comparison_tensor_decodes_bfloat16_storage_bits() -> None:

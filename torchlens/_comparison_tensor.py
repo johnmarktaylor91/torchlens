@@ -31,6 +31,9 @@ def _comparison_tensor(value: Any, codec: Any) -> torch.Tensor | None:
     try:
         encoded = codec.to_numpy(value)
         array = encoded.array
+        shape = (encoded.codec_metadata or {}).get("logical_shape")
+        if shape is not None:
+            array = array.reshape(shape)
         # TF and Paddle encode bf16 as storage bits, not integer values.
         if str(encoded.logical_dtype) in {"tf.bfloat16", "paddle.bfloat16"}:
             tensor = torch.from_numpy(np.array(array, copy=True, order="C")).view(torch.bfloat16)
@@ -38,7 +41,6 @@ def _comparison_tensor(value: Any, codec: Any) -> torch.Tensor | None:
             if str(array.dtype) == "bfloat16":
                 array = array.astype(np.float32)
             tensor = torch.from_numpy(np.array(array, copy=True, order="C"))
-        shape = (encoded.codec_metadata or {}).get("logical_shape")
-        return tensor.reshape(shape) if shape is not None else tensor
+        return tensor
     except (TypeError, ValueError):
         return None
