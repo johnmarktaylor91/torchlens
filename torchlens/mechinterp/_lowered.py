@@ -129,8 +129,8 @@ def _delta_for(  # noqa: PLR0913 -- one cell's full evidence set (kind/head/two 
             remedy="use equal-length prompts",
         )
     v = _head_facet(corrupted_log, address, "v").to(torch.float32)  # [b, src, H_kv? , d]
-    group = max(1, views.num_q_heads // max(1, views.n_kv_heads))
-    v_head = v[:, :, head // group if v.shape[2] == views.n_kv_heads else head, :]
+    group = max(1, views.num_q_heads // max(1, views.num_kv_heads))
+    v_head = v[:, :, head // group if v.shape[2] == views.num_kv_heads else head, :]
     return ((pattern_clean - pattern_corrupt) @ v_head) @ w_o_h
 
 
