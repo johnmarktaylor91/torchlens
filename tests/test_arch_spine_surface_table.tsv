@@ -37,7 +37,7 @@ torchlens.errors	torchlens.errors	L0	core	0	0
 torchlens.examples	torchlens.examples	L9	recipe	0	1
 torchlens.experimental	torchlens.experimental	FACADE	facade	0	0
 torchlens.export	torchlens.export	L7	present	1	1
-torchlens.extract	torchlens	FACADE	facade	1	0
+torchlens.extract	torchlens._extraction._front_door	L5	core	1	0
 torchlens.extract_dataset	torchlens.dataset_extraction	L5	core	1	0
 torchlens.facet	torchlens._selection.selectors	L4	core	1	0
 torchlens.facets	torchlens._semantic	L6	appliance	1	1
@@ -72,7 +72,7 @@ torchlens.options	torchlens.options	L2	core	1	0
 torchlens.param	torchlens._selection.selection	L4	core	1	0
 torchlens.pass_variance	torchlens._selection.compare	L4	core	1	0
 torchlens.patch_from	torchlens.intervention.helpers	L4	core	1	0
-torchlens.pluck	torchlens	FACADE	facade	1	0
+torchlens.pluck	torchlens._extraction._front_door	L5	core	1	0
 torchlens.positions	torchlens.intervention._position_edits	L4	core	1	0
 torchlens.preceded_by	torchlens._selection.selectors	L4	core	1	0
 torchlens.project_onto	torchlens.intervention.helpers	L4	core	1	0

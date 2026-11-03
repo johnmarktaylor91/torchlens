@@ -24,6 +24,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ..._selection.selector_base import BaseSelector
 from ..._selection.selectors import in_module
 from . import _pooling, _refusals, _runtime, _sites
 
@@ -225,7 +226,7 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
                 return None
             addresses.add(stack[-1].rsplit(":", 1)[0])
 
-    selection = None
+    selection: BaseSelector | None = None
     for address in sorted(addresses):
         selector = in_module(address)
         selection = selector if selection is None else (selection | selector)

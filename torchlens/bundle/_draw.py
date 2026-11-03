@@ -68,7 +68,7 @@ def _draw_diff(bundle: Bundle, stem: str, fmt: str, options: dict[str, Any]) -> 
 def _draw_graph(bundle: Bundle, stem: str, fmt: str, options: dict[str, Any]) -> str:
     """The union (or member relation) graph through ``show_bundle_graph``."""
 
-    from .._user_public_impls import show_bundle_graph
+    from .._user_public_graph_impls import show_bundle_graph
 
     direction = options["direction"]
     theme = options["theme"]
