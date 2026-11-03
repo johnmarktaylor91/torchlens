@@ -147,6 +147,11 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(
     }[planted]
     assert isinstance(caught.value, expected[0]), repr(caught.value)
     assert caught.value.fields["code"] == expected[1], caught.value.fields
+    if planted != "metadata.pkl":
+        # The re-digested gadget passes the file table and is read as the record:
+        # the refusal comes from the JSON gate, not a digest or size mismatch.
+        assert "JSON" in str(caught.value), str(caught.value)
+        assert "failed its integrity check" not in str(caught.value), str(caught.value)
     assert not marker.exists(), "os.system marker written -> RCE via type-reduce"
 
 
