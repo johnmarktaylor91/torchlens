@@ -310,11 +310,14 @@ To watch the concept token by token, give the fitted probe to the recorder as a
 reducer: each forward of a cached `generate()` replaces the site's activation
 with the probe's decision function at the positions that forward computed, and
 the full activation is released. The series holds the prompt positions first
-(the prefill), then one score per generated token. The check below compares the
-prefill scores with `clf.decision_function` on activations extracted separately.
+(the prefill), then one score per generated token the model read back: the last
+generated token is sampled from the final forward and never fed through the
+model, so `max_new_tokens=16` yields 15 decode scores. The check below compares
+the prefill scores with `clf.decision_function` on activations extracted
+separately.
 
 ```python
-# recipe-test: tool=sklearn expected=(True, True, 16)
+# recipe-test: tool=sklearn expected=(True, True, 15)
 from torchlens.recording import GenerationOptions, reducers
 
 prompt = prompts[torch.as_tensor(held_out[:1])]
