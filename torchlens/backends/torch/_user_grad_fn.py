@@ -1,6 +1,6 @@
 """The user op's live autograd node, stamped on a logging copy for its op record.
 
-Round-31 M5: a same-object in-place return or a pass-through container member is
+A same-object in-place return or a pass-through container member is
 logged against a safe copy whose own ``grad_fn`` is TorchLens's ``CloneBackward``
 bookkeeping node. The wrapper stamps the USER op's live node on the copy
 (``tl_user_grad_fn``) and the op record reads it back, so the copy's node is never

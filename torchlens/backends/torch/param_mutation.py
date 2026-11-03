@@ -157,7 +157,7 @@ def same_object_logging_copy(out_orig: Any) -> Any:
     """Return the distinct tensor a same-object return is logged against.
 
     Logging against the live receiver would clobber its label with the op's. The
-    copy carries the USER op's live autograd node (round-31 M5): the safe copy's
+    copy carries the USER op's live autograd node: the safe copy's
     own ``grad_fn`` is TorchLens's ``CloneBackward`` bookkeeping and must never
     replace the operation's recorded autograd metadata (``grad_fn_class_*`` /
     handle). A leaf receiver (``x.detach().requires_grad_(True)``) has no live
@@ -165,7 +165,7 @@ def same_object_logging_copy(out_orig: Any) -> Any:
     phantom handle. The ``grad_fn`` read is marked as TorchLens bookkeeping: for
     a same-object in-place return the output IS the user's receiver (a registered
     buffer for BN's ``num_batches_tracked.add_(1)``), and an unmarked read would
-    record a phantom declared-state fact (r65 unread-bit).
+    record a phantom declared-state fact.
     """
 
     with internal_scalar_read():
