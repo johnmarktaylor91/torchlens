@@ -17,6 +17,8 @@ import torch.nn as nn
 from _format3_envelope import read_runnable, write_runnable
 
 import torchlens as tl
+from torchlens._io.format3 import reader
+from torchlens._io.format_errors import ArtifactError
 from torchlens._runnable import (
     RUNNABLE_TLSPEC_SCHEMA_VERSION,
     ReadinessStatus,
@@ -155,14 +157,27 @@ def test_v2_descriptor_missing_call_context_is_rejected(tmp_path: Path) -> None:
         loaded.run(inputs=torch.randn(2, 4))
 
 
-def test_v2_descriptor_missing_ambient_context_is_rejected(tmp_path: Path) -> None:
+def test_v2_descriptor_missing_ambient_context_is_rejected(tmp_path: Path, monkeypatch) -> None:
     """A v2 descriptor with an absent ambient context is refused, not defaulted."""
 
     bundle = _save_runnable(tmp_path)
+    allocated = []
+    original = reader.state_new
+
+    def observed_new(cls):
+        allocated.append(cls.__name__)
+        return original(cls)
+
+    monkeypatch.setattr(reader, "state_new", observed_new)
+    tl.load(bundle)
+    assert "Trace" in allocated
+    allocated.clear()
 
     def _strip_ambient(manifest: dict[str, Any]) -> None:
         manifest["run"].pop("ambient_context", None)
 
     _rewrite_manifest(bundle, _strip_ambient)
-    with pytest.raises(Exception, match="ambient_context|fields mismatch"):
+    with pytest.raises(ArtifactError, match="ambient_context") as refusal:
         tl.load(str(bundle))
+    assert refusal.value.fields["code"] == "manifest_schema_invalid"
+    assert "Trace" not in allocated

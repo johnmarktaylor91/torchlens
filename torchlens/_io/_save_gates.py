@@ -583,6 +583,10 @@ def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, tor
     """
 
     state = trace._runnable.capture_state
+    if state is None and not is_live_trace(trace):
+        # The reader binds this family only after validating its capture-state
+        # slot universe and byte digests. User-staged state is not capture state.
+        state = trace._runnable.embedded_state
     if not isinstance(state, Mapping) or any(
         not isinstance(name, str) or not isinstance(value, torch.Tensor)
         for name, value in state.items()

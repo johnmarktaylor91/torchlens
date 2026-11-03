@@ -213,7 +213,8 @@ def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
     # (5) A redigested malformed tensor header reaches the typed payload door.
     generic = _save_bundle(tmp_path, "generic.tl")
     relative = _first_tensor_entry(generic)["blob"]
-    (generic / relative).write_bytes(b"invalid safetensors header")
+    blob_path = generic / relative
+    blob_path.write_bytes(b"!" * len(blob_path.read_bytes()))
     redigest(generic, relative)
     with pytest.raises(ArtifactError) as generic_fail:
         load(generic)
@@ -395,16 +396,23 @@ def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
     assert "row" in str(caught.value)
 
 
-def test_unknown_extra_files_warn_but_do_not_raise(tmp_path: Path) -> None:
+def test_unknown_extra_files_warn_but_do_not_raise(tmp_path: Path, monkeypatch) -> None:
     """Unreferenced files under ``blobs/`` should warn without aborting load."""
 
     bundle_path = _save_bundle(tmp_path)
     extra_blob_path = bundle_path / "blobs" / "unexpected.bin"
     extra_blob_path.write_bytes(b"extra")
+    original_open = Path.open
+
+    def checked_open(path, *args, **kwargs):
+        assert path != extra_blob_path, "the loader read an unreferenced file"
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", checked_open)
 
     with pytest.warns(
         UserWarning,
-        match=rf"unreferenced extra files in blobs/: {re.escape(extra_blob_path.name)}",
+        match=rf"unreferenced extra files.*blobs/{re.escape(extra_blob_path.name)}",
     ):
         restored = load(bundle_path, lazy=True)
 
