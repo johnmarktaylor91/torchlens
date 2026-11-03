@@ -710,12 +710,15 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             strict=strict,
         )
     if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
+        # Warn here, at the depth every other branch warns from, so the warning is
+        # attributed to the caller of ``Trace.do``; set_site then stays quiet.
+        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
         set_site(
             trace,
             hooks_or_site,
             value_or_hook,
             strict=strict,
-            confirm_mutation=confirm_mutation,
+            confirm_mutation=True,
         )
         return "set", ()
     handle = trace.attach_hooks(

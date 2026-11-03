@@ -131,8 +131,13 @@ def test_removed_module_name_raises_typed_redirect(
     # The named replacement is live (``Trace.do`` resolves from the package root).
     target: Any = importlib.import_module("torchlens")
     parts = replacement.split(".")
+    walked = "torchlens"
     for part in parts[1:] if parts[0] == "torchlens" else parts:
-        target = getattr(target, part)
+        walked = f"{walked}.{part}"
+        try:
+            target = getattr(target, part)
+        except AttributeError:  # a public subpackage not yet imported as an attribute
+            target = importlib.import_module(walked)
 
 
 def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:

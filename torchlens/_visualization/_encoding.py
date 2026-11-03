@@ -181,7 +181,15 @@ _DERIVED_COMPOSITE_INPUTS: dict[str, tuple[str, ...]] = {
     "module_call_depth": ("modules",),
 }
 
-_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_number"})
+_PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_index"})
+
+#: Source spellings that classify through another Layer name: ``pass_number`` is the
+#: spelling of the per-pass pass-number source, and ``Layer.pass_index`` is the
+#: property whose row classifies it.
+_SOURCE_ROW_ALIASES: dict[str, str] = {"pass_number": "pass_index"}
+
+#: Retired source spellings, mapped to the spelling that replaced them.
+_RETIRED_SOURCES: dict[str, str] = {"pass_index": "pass_number"}
 
 _SHAPE_FIELDS = frozenset({"shape", "transformed_out_shape"})
 
@@ -352,6 +360,20 @@ def _build_source_rows() -> dict[str, str]:
 
 
 LAYER_SOURCE_ROWS: dict[str, str] = _build_source_rows()
+
+
+def _retired_hint(source: str) -> str:
+    """Return the remedy suffix naming a retired source spelling's replacement, or ''."""
+
+    new = _RETIRED_SOURCES.get(source)
+    return "" if new is None else f"; {source!r} was renamed {new!r}"
+
+
+def _source_row(field_name: str) -> str | None:
+    """Return the classification row of one source spelling, or None when undeclared."""
+
+    return LAYER_SOURCE_ROWS.get(_SOURCE_ROW_ALIASES.get(field_name, field_name))
+
 
 # ---------------------------------------------------------------------------
 # Builtin scalar sources: the node_overlay builtin names where scalar, so the
@@ -699,7 +721,9 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
             )
         from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
-        if color_by in LAYER_SOURCE_ROWS or color_by in LAYER_PASS_LOG_FIELD_ORDER:
+        if (
+            color_by in LAYER_SOURCE_ROWS and color_by not in _RETIRED_SOURCES
+        ) or color_by in LAYER_PASS_LOG_FIELD_ORDER:
             return EncodingChannelSpec(
                 channel="color",
                 source_kind="field",
@@ -713,6 +737,7 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
             remedy=(
                 "pass a Layer/Op field name, one of the scalar builtins "
                 f"({', '.join(sorted(SCALAR_BUILTIN_SOURCES))}), or a callable node -> value"
+                + _retired_hint(color_by)
             ),
             argument="color_by",
         )
@@ -1032,7 +1057,7 @@ def _rolled_derived(state: EncodingState, node: Any, field_name: str) -> float |
 
     marker = _varying_marker(node)
     for input_name in _DERIVED_COMPOSITE_INPUTS[field_name]:
-        if LAYER_SOURCE_ROWS.get(input_name) == ROW_MIRRORED_PER_CALL:
+        if _source_row(input_name) == ROW_MIRRORED_PER_CALL:
             state.note(NOTE_FIRST_PASS_ONLY)
             return None
         if input_name in marker:
@@ -1169,7 +1194,7 @@ def _resolve_device_time(
 def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Resolve a FIELD source on a rolled multi-pass Layer per the allowlist."""
 
-    row = LAYER_SOURCE_ROWS.get(field_name)
+    row = _source_row(field_name)
     if row is None:
         raise _encoding_error(
             f"color_by source {field_name!r} has no declared rolled-aggregate "
@@ -1276,7 +1301,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
 def _require_size_rolled_row(node: Any, field_name: str) -> str:
     """Return a declared rolled-size row or raise the typed source refusal."""
 
-    row = LAYER_SOURCE_ROWS.get(field_name)
+    row = _source_row(field_name)
     if row is None:
         raise _encoding_error(
             f"size_by source {field_name!r} has no declared rolled-aggregate "
@@ -1343,7 +1368,7 @@ def _validate_derived_size_inputs(node: Any, field_name: str, marker: dict[str, 
     """Refuse a derived rolled size whose input is not provably single-valued."""
 
     for input_name in _DERIVED_COMPOSITE_INPUTS[field_name]:
-        if LAYER_SOURCE_ROWS.get(input_name) == ROW_MIRRORED_PER_CALL:
+        if _source_row(input_name) == ROW_MIRRORED_PER_CALL:
             raise _size_rolled_refusal(
                 node,
                 field_name,

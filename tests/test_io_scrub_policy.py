@@ -354,7 +354,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
@@ -375,14 +374,12 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "save_activation": "capture-internal payload writer",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
     "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}

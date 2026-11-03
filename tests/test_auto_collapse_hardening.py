@@ -746,11 +746,11 @@ _DETERMINISM_SNIPPET = textwrap.dedent(
     m = DC(3).eval()
     log = tl.trace(m, torch.randn(2, 8))
     pieces = [
-        repr(_trace_collapse_plan(log, mode="max")),
-        repr(_trace_collapse_plan(log, mode="auto")),
+        repr(log._collapse_plan(mode="max")),
+        repr(log._collapse_plan(mode="auto")),
         repr(log.module_collapse_order),
         repr([(s.t, s.visible_count, tuple(sorted(s.collapsed_addresses)))
-              for s in _trace_collapse_schedule(log).steps]),
+              for s in log._collapse_schedule().steps]),
     ]
     print(hashlib.sha256("\\n".join(pieces).encode()).hexdigest())
     """

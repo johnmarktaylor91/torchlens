@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens._visualization._encoding import (
     COLOR_TRANSFORM_VOCABULARY,
     LAYER_SOURCE_ROWS,
@@ -190,5 +191,7 @@ def test_plain_string_color_by_keeps_linear_default() -> None:
 def test_pass_number_is_the_per_pass_color_source() -> None:
     """``color_by="pass_number"`` is the per-pass source; ``pass_index`` is not a source."""
 
-    assert LAYER_SOURCE_ROWS["pass_number"] == ROW_PER_PASS
-    assert "pass_index" not in LAYER_SOURCE_ROWS
+    assert resolve_color_by("pass_number") is not None
+    assert LAYER_SOURCE_ROWS["pass_index"] == ROW_PER_PASS  # classifies Layer.pass_index
+    with pytest.raises(InvalidArgumentError, match="was renamed 'pass_number'"):
+        resolve_color_by("pass_index")
