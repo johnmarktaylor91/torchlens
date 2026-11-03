@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Callable
 from typing import Any
 
 # Canonical remapped param barcode token (``param_000001``), for R21-1's
@@ -18,6 +19,7 @@ _BARCODE_TOKEN_PATTERN = re.compile(r"(?<![0-9A-Za-z])[0-9A-Za-z]{8}(?![0-9A-Za-
 _BARCODE_TOKEN_FULLMATCH = re.compile(r"[0-9A-Za-z]{8}").fullmatch
 
 
+# Essential complexity: one identity pass preserves coupled record, equivalence and autograd joins.
 def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     """Remap process-local identity tokens to deterministic trace-local ordinals.
 
@@ -124,8 +126,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         return remapped[:run_start] + "_".join(sorted(tokens)) + remapped[run_end:]
 
     equivalence_class_map: dict[str, str] = {}
-    for param in params:
-        param.barcode = remap_barcode_text(getattr(param, "barcode", None))
+    _canonicalize_param_links(params, (*ops, *layers), remap_barcode_text)
     for record in (*ops, *layers):
         original_barcodes = list(getattr(record, "_param_barcodes", ()) or ())
         original_group = "_".join(sorted(original_barcodes))
@@ -237,3 +238,25 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
 
     for object_id_key in ("_provenance_model_object_id", "_provenance_input_object_id"):
         state[object_id_key] = 1 if state.get(object_id_key) is not None else None
+
+
+def _canonicalize_param_links(
+    params: list[Any], records: tuple[Any, ...], remap: Callable[[Any], Any]
+) -> None:
+    """Bind copied parameter edges to their authoritative record before barcodes change.
+
+    Capture operations can retain separate copies of a Param with the same capture-time
+    barcode. They are edges to the trace's parameter row, not independent parameter rows.
+    An unknown barcode stays distinct and still reaches the writer's strict refusal.
+    """
+
+    canonical = {param.barcode: param for param in params if isinstance(param.barcode, str)}
+    for record in records:
+        references = getattr(record, "_param_logs", None)
+        if isinstance(references, (list, tuple)):
+            members = [
+                canonical.get(getattr(param, "barcode", None), param) for param in references
+            ]
+            record._param_logs = tuple(members) if isinstance(references, tuple) else members
+    for param in params:
+        param.barcode = remap(getattr(param, "barcode", None))
