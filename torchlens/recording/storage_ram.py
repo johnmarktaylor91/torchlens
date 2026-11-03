@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import torch
 
+from ._cooked_ancestry import _distinct_label_index_keys
 from ._storage_resolver import _resolve_storage
 from .options import RecordingOptions
 from .types import (
@@ -13,7 +14,6 @@ from .types import (
     RecordContext,
     Recording,
     StorageIntent,
-    _distinct_label_index_keys,
 )
 
 
