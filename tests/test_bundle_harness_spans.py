@@ -332,7 +332,7 @@ def test_v9_stamped_artifact_with_a_fed_by_row_refuses(tmp_path: Path, model: _T
     Format 3 refuses every 2.x stamp at the version floor before any record or
     relation row is read, so a v9-stamped bundle refuses
     ``artifact_version_below_floor`` at ``tl.load``. The stamped-version
-    admission rule itself (``fed_by`` needs tlspec 10) stays pinned at the
+    admission rule itself (a v9 stamp predates ``fed_by``) stays pinned at the
     relation loader every bundle door calls.
     """
 
