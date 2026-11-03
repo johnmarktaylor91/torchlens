@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1426 modules, 634701 lines, 0 modules without a docstring.
+83 packages, 1426 modules, 634702 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -92,7 +92,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 5811 |
-| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30749 |
+| `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30750 |
 | `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4469 |
 
 ## Modules by package
@@ -2015,14 +2015,14 @@ Built-in activation transforms: one contract, declared not sniffed. (13 modules,
 
 ### `torchlens.validation`
 
-Validation subpackage for saved activations, backward capture, and invariants. (68 modules, 30749 lines)
+Validation subpackage for saved activations, backward capture, and invariants. (68 modules, 30750 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Validation subpackage for saved activations, backward capture, and invariants. | 1340 |
 | `_autograd_grad_replay` | Faithful replay of an in-forward ''torch.autograd.grad'' boundary op. | 639 |
 | `_backward_state` | Model-state guards and parameter-gradient evidence for backward validation. | 250 |
-| `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 110 |
+| `_carried_graph` | Typed refusal for a stock backward that reaches a graph an earlier backward freed. | 111 |
 | `_completeness_backstop` | Completeness backstop census: dispatcher-witness counts against captured ops. | 240 |
 | `_constant_source` | The closure-constant source op as validation recognises it (SPEC 2 rules 1 and 3). | 39 |
 | `_degenerate_forward` | Type a perturbation failure whose saved output no perturbation could move. | 233 |

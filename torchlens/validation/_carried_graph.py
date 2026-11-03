@@ -56,6 +56,7 @@ def carried_graph_attributes(model: nn.Module, *, limit: int = _REPORT_LIMIT) ->
 def _collect_graph_tensors(
     value: Any, path: str, found: list[str], *, depth: int, limit: int
 ) -> None:
+    """Append to ``found`` the path of every tensor inside ``value`` that carries an autograd graph."""
     if len(found) >= limit:
         return
     if isinstance(value, torch.Tensor):
