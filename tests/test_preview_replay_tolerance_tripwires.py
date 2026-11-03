@@ -36,6 +36,53 @@ class TestMLXPayloadsClose:
         assert not mlx_payloads_close(np.zeros_like(saved), saved)
 
 
+class TestMLXValidationOracleEpsDerived:
+    """The mlx validation oracle shares the eps-derived band with its siblings.
+
+    Its former decimal ladder gave every wide float the single-precision
+    relative tolerance, so relative double-precision corruption hundreds of
+    millions of its own ULPs wide passed validation on mlx only.
+    """
+
+    @pytest.mark.parametrize(
+        ("saved", "replay", "agree"),
+        [
+            pytest.param(
+                np.full((4,), 1.0 + 1.0j, dtype=np.complex128),
+                np.full((4,), 1.0 + 1.0j, dtype=np.complex128) * (1.0 + 1e-6),
+                False,
+                id="complex-component-corruption",
+            ),
+            pytest.param(
+                np.ones((8,), dtype=np.float64),
+                np.ones((8,), dtype=np.float64) * (1.0 + 1e-6),
+                False,
+                id="double-relative-corruption",
+            ),
+            pytest.param(
+                np.ones((4,), dtype=np.float16),
+                np.nextafter(np.ones((4,), dtype=np.float16), np.float16(2.0), dtype=np.float16),
+                True,
+                id="half-one-ulp-storage-rounding",
+            ),
+            pytest.param(
+                np.full((8,), 4e-4, dtype=np.float16),
+                np.zeros((8,), dtype=np.float16),
+                False,
+                id="half-low-magnitude-zeroed",
+            ),
+        ],
+    )
+    def test_eps_derived_band_rejects_corruption_and_admits_storage_rounding(
+        self, saved: np.ndarray, replay: np.ndarray, agree: bool
+    ) -> None:
+        """Component-eps complex and double relative corruption fail; the half
+        band admits one storage ULP and still rejects zeroed small elements."""
+
+        assert mlx_payloads_close(saved.copy(), saved)
+        assert mlx_payloads_close(replay, saved) is agree
+
+
 class TestPaddleArraysClose:
     """Paddle replay oracle: tolerances must be dtype-aware in both directions."""
 

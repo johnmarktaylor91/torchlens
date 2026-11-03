@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1468 modules, 656653 lines, 0 modules without a docstring.
+83 packages, 1468 modules, 656657 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25254 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38144 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38145 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10643 |
@@ -27,7 +27,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11650 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5951 |
 | `torchlens._observability` | Observability substrates. | 22 | 8239 |
-| `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1518 |
+| `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1519 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 516 |
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 30 | 17252 |
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6363 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54221 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54222 |
 | `torchlens.bridge` | External-tool bridge namespace. | 26 | 8461 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
@@ -89,7 +89,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7122 |
-| `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5268 |
+| `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 69 | 30868 |
@@ -288,7 +288,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38144 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38145 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -359,7 +359,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38144 
 | `_trace_stack` | Order-aligned activation stacking for completed traces. | 140 |
 | `_trace_state_io` | Trace pickle state helpers moved off ''Trace.__getstate__'' and ''__setstate__''. | 689 |
 | `_trace_stats_grad_fn_site` | Pure helpers behind the Trace grad-fn site and fire-timing rollups. | 176 |
-| `_trace_views` | Trace group-view and field-derived accessor functions. | 706 |
+| `_trace_views` | Trace group-view and field-derived accessor functions. | 707 |
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_repr` | Value-record line/card renderers (lovely memo item 6). | 571 |
@@ -608,7 +608,7 @@ Observability substrates. (22 modules, 8239 lines)
 
 ### `torchlens._observe`
 
-Observe kit: memory truth + diagnostics substrates. (6 modules, 1518 lines)
+Observe kit: memory truth + diagnostics substrates. (6 modules, 1519 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -616,7 +616,7 @@ Observe kit: memory truth + diagnostics substrates. (6 modules, 1518 lines)
 | `_device_memory` | Device-memory sampling provider (observe item 15, wave-2 core). | 318 |
 | `_liveness` | The estimated logical-value liveness view (observe item 13). | 105 |
 | `_peaks` | The pass-level-peak publication gate (observe item 4). | 183 |
-| `_svg` | Deterministic, dependency-free SVG renderer for the timeline v2 artifact. | 225 |
+| `_svg` | Deterministic, dependency-free SVG renderer for the timeline v2 artifact. | 226 |
 | `_timeline` | The categorized memory timeline v2 artifact (observe item 11, the flagship). | 641 |
 
 ### `torchlens._partial`
@@ -1276,7 +1276,7 @@ tinygrad backend preview. (9 modules, 4474 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (109 modules, 54221 lines)
+Torch backend implementation package for TorchLens capture. (109 modules, 54222 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1304,7 +1304,7 @@ Torch backend implementation package for TorchLens capture. (109 modules, 54221 
 | `_failed_session` | Torch stopped and failed forward-session cleanup for the FINALIZE stage. | 228 |
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 533 |
-| `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 763 |
+| `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 764 |
 | `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 183 |
 | `_grad_fn_pairing` | Pair autograd ''GradFn'' nodes with the forward ops whose outputs they belong to. | 93 |
 | `_grad_fn_source` | Best-effort source metadata for autograd grad-fn classes. | 115 |
@@ -1993,7 +1993,7 @@ Streaming statistics for out aggregation (real subpackage; item 18). (17 modules
 
 ### `torchlens.trackers`
 
-Trackers: one engine, first-party sinks, measured relays. (15 modules, 5268 lines)
+Trackers: one engine, first-party sinks, measured relays. (15 modules, 5269 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -2008,7 +2008,7 @@ Trackers: one engine, first-party sinks, measured relays. (15 modules, 5268 line
 | `_op_grain` | Tier O: op-grain watching through a disclosed, consented forward wrap. | 541 |
 | `_protocol` | The DOCUMENTED sink protocol: capabilities, delivery states (/3.10). | 236 |
 | `_records` | The sink-neutral emission view over the history records (-3.5). | 568 |
-| `_sinks` | Dependency-free sinks: in-memory (tests/inspection) and JSONL (item 11). | 233 |
+| `_sinks` | Dependency-free sinks: in-memory (tests/inspection) and JSONL (item 11). | 234 |
 | `_tensorboard` | TensorBoardSink: the reference, CI-tested transport (3.10). | 221 |
 | `_wandb` | WandbSink: the thin native serializer over the same records. | 178 |
 | `_watch` | The tier-P/M watch engine over the collector (memo build item 5-6). | 1567 |

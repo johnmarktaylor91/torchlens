@@ -257,6 +257,7 @@ def apply_slot_function(slot: object) -> Callable[..., Any] | None:
     if isinstance(slot, types.ClassMethodDescriptorType):
 
         def call_descriptor(cls: type[Any], *args: Any, **kwargs: Any) -> Any:
+            """Call the C classmethod descriptor bound to ``cls`` (its own doc replaces this)."""
             return slot.__get__(None, cls)(*args, **kwargs)
 
         call_descriptor.__name__, call_descriptor.__qualname__ = slot.__name__, slot.__qualname__

@@ -5,6 +5,7 @@ docs-md	AGENTS.md	11
 docs-md	AGENTS.md	130
 docs-md	AGENTS.md	140
 docs-md	AGENTS.md	19,591
+docs-md	AGENTS.md	18,740
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.13.0
@@ -1041,6 +1042,7 @@ docs-md	docs/field-guide/jacobian_lens.md	12
 docs-md	docs/field-guide/jacobian_lens.md	16
 docs-md	docs/field-guide/jacobian_lens.md	16,
 docs-md	docs/field-guide/jacobian_lens.md	32
+docs-md	docs/field-guide/jacobian_lens.md	32,
 docs-md	docs/field-guide/jacobian_lens.md	512
 docs-md	docs/field-guide/jacobian_lens.md	512,
 docs-md	docs/field-guide/jacobian_lens.md	64
@@ -1734,10 +1736,10 @@ docs-md	docs/maintainers/architecture.md	860.
 docs-md	docs/maintainers/architecture.md	900
 docs-md	docs/maintainers/architecture.md	91
 docs-md	docs/maintainers/docstring_examples_census.md	10
-docs-md	docs/maintainers/docstring_examples_census.md	1044
+docs-md	docs/maintainers/docstring_examples_census.md	1043
 docs-md	docs/maintainers/docstring_examples_census.md	11
 docs-md	docs/maintainers/docstring_examples_census.md	12
-docs-md	docs/maintainers/docstring_examples_census.md	1413.
+docs-md	docs/maintainers/docstring_examples_census.md	1401.
 docs-md	docs/maintainers/docstring_examples_census.md	16
 docs-md	docs/maintainers/docstring_examples_census.md	17
 docs-md	docs/maintainers/docstring_examples_census.md	19
@@ -2205,6 +2207,7 @@ docs-md	docs/maintainers/where.md	150
 docs-md	docs/maintainers/where.md	15088
 docs-md	docs/maintainers/where.md	151
 docs-md	docs/maintainers/where.md	1518
+docs-md	docs/maintainers/where.md	1519
 docs-md	docs/maintainers/where.md	152
 docs-md	docs/maintainers/where.md	153
 docs-md	docs/maintainers/where.md	154
@@ -2518,6 +2521,7 @@ docs-md	docs/maintainers/where.md	380
 docs-md	docs/maintainers/where.md	3807
 docs-md	docs/maintainers/where.md	381
 docs-md	docs/maintainers/where.md	38144
+docs-md	docs/maintainers/where.md	38198
 docs-md	docs/maintainers/where.md	384
 docs-md	docs/maintainers/where.md	385
 docs-md	docs/maintainers/where.md	3863
@@ -2656,6 +2660,7 @@ docs-md	docs/maintainers/where.md	523
 docs-md	docs/maintainers/where.md	525
 docs-md	docs/maintainers/where.md	5266
 docs-md	docs/maintainers/where.md	5268
+docs-md	docs/maintainers/where.md	5269
 docs-md	docs/maintainers/where.md	527
 docs-md	docs/maintainers/where.md	528
 docs-md	docs/maintainers/where.md	529
@@ -2672,7 +2677,7 @@ docs-md	docs/maintainers/where.md	539
 docs-md	docs/maintainers/where.md	54
 docs-md	docs/maintainers/where.md	540
 docs-md	docs/maintainers/where.md	541
-docs-md	docs/maintainers/where.md	54221
+docs-md	docs/maintainers/where.md	54222
 docs-md	docs/maintainers/where.md	543
 docs-md	docs/maintainers/where.md	544
 docs-md	docs/maintainers/where.md	546
@@ -2757,6 +2762,7 @@ docs-md	docs/maintainers/where.md	641
 docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	643
 docs-md	docs/maintainers/where.md	647
+docs-md	docs/maintainers/where.md	647392
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
@@ -2798,6 +2804,7 @@ docs-md	docs/maintainers/where.md	703
 docs-md	docs/maintainers/where.md	704
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	706
+docs-md	docs/maintainers/where.md	707
 docs-md	docs/maintainers/where.md	7083
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	710
@@ -2829,7 +2836,7 @@ docs-md	docs/maintainers/where.md	757
 docs-md	docs/maintainers/where.md	76
 docs-md	docs/maintainers/where.md	760
 docs-md	docs/maintainers/where.md	762
-docs-md	docs/maintainers/where.md	763
+docs-md	docs/maintainers/where.md	764
 docs-md	docs/maintainers/where.md	767
 docs-md	docs/maintainers/where.md	769
 docs-md	docs/maintainers/where.md	77
@@ -10371,6 +10378,7 @@ test-names	tests/test_conditional_invariants.py	12_
 test-names	tests/test_conditional_invariants.py	13_
 test-names	tests/test_conditional_invariants.py	14_
 test-names	tests/test_conditional_invariants.py	15_
+test-names	tests/test_dataclass_defaults_collect.py	311_
 test-names	tests/test_distributed_c0_core.py	10
 test-names	tests/test_distributed_census_topologies.py	10
 test-names	tests/test_draw_header_focus_key.py	1024_
