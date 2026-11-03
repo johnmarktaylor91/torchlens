@@ -526,11 +526,15 @@ def _save_with_sites(save: Any, sites: tuple[str, ...]) -> Any:
     if isinstance(save, BaseSelector):
 
         def keep_selector_or_sites(ctx: Any) -> Any:
+            """Keep a declared site's output or whatever the save selector keeps."""
+
             return keep_sites(ctx) or _save_selector_matches(save, ctx)
 
         return keep_selector_or_sites
 
     def keep_either(ctx: Any) -> Any:
+        """Keep a declared site's output or whatever the save predicate keeps."""
+
         return keep_sites(ctx) or save(ctx)
 
     return keep_either
@@ -617,8 +621,7 @@ def record_generation(
     sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
         if generation is not None:
-            live = cast("Any", recorder)._state.recording
-            sink = _StepSink(generation, live, partial(_max_new_tokens, settings))
+            sink = _StepSink(generation, recorder, partial(_max_new_tokens, settings))
         with _forwards_through(model, recorder, windows, sink):
             generate = cast("Callable[..., Any]", model.generate)
             output = generate(*_positional(input_args), **prompt_kwargs, **generate_kwargs)

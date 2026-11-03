@@ -1,7 +1,11 @@
 """Per-token series, ring buffer, disk spill and cost guard of the generation recorder.
 
-The :class:`_StepSink` runs after every forward that ``generate()`` issues:
-it replaces the declared sites' payloads by their reducers' values, reads the
+The :class:`_StepSink` runs after every forward that ``generate()`` issues.
+A Recorder pass keeps its retained payloads on the capture events of its
+sealed run core and projects them into records when the session ends, so the
+sink works on that core: it projects the pass's records, replaces the declared
+sites' payloads by their reducers' values (releasing the activation the event
+held), stores the records on the core for the final projection, reads the
 declared KV-cache slices, evicts the forwards the ring buffer no longer holds
 (spilling them to disk when asked), and checks the retained-byte budget.
 :class:`TokenSeries` is what ``GenerationRecording.series(name)`` returns.
@@ -12,14 +16,19 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
-from typing import Any, NoReturn
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, NoReturn
 
 import torch
 
+from .._capture.projections import activation_record_from_event
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import module_union_matches
 from ._generation_options import GenerationOptions
-from .types import ActivationRecord, Recording
+from .types import ActivationRecord
+
+if TYPE_CHECKING:
+    from ._recorder import Recorder
 
 __all__ = ["TokenSeries"]
 
@@ -91,17 +100,32 @@ def _kv_slice(tensor: torch.Tensor, window: range) -> torch.Tensor:
     return torch.movedim(tensor[0, :, window.start : window.stop, :], 1, 0).detach().clone()
 
 
+def _release(event: Any, payload: torch.Tensor | None) -> None:
+    """Replace the payload a capture event holds for its output (``None`` releases it).
+
+    The tensor reference is shared by every copy of the event (the pass core, the
+    recorder's journal, replay projections), so one write reaches them all and the
+    activation it held is freed.
+    """
+
+    output = getattr(event, "output", None)
+    for attr, value in (("tensor", payload), ("transformed_tensor", None)):
+        ref = getattr(output, attr, None)
+        if ref is not None and hasattr(ref, "payload"):
+            object.__setattr__(ref, "payload", value)
+
+
 class _StepSink:
     """Per-forward bookkeeping of a widened generation recording."""
 
     def __init__(
         self,
         options: GenerationOptions,
-        recording: Recording,
+        recorder: Recorder,
         max_new_tokens: Callable[[int], int | None],
     ) -> None:
         self.options = options
-        self.recording = recording
+        self.recorder = recorder
         self.max_new_tokens = max_new_tokens
         self.windows: list[range] = []
         self.pass_of_step: list[int] = []
@@ -109,6 +133,8 @@ class _StepSink:
         self.bytes_by_step: list[int] = []
         self.evicted: dict[int, str] = {}
         self.spill_files: dict[int, Path] = {}
+        self.step_records: dict[int, list[ActivationRecord]] = {}
+        self.step_events: dict[int, list[Any]] = {}
         self.retained_bytes = 0
         self.peak_bytes = 0
         self._site_sets = {site: frozenset({site}) for site in options.reducers}
@@ -122,7 +148,7 @@ class _StepSink:
 
         self.windows.append(window)
         self.pass_of_step.append(pass_index)
-        step_bytes = self._reduce(step, pass_index, window)
+        step_bytes = self._reduce(step, window)
         step_bytes += self._read_kv(step, window, kwargs.get("past_key_values"))
         self.bytes_by_step.append(step_bytes)
         self.retained_bytes += step_bytes
@@ -141,14 +167,40 @@ class _StepSink:
                 return site
         return None
 
-    def _reduce(self, step: int, pass_index: int, window: range) -> int:
+    def _pass_core(self, step: int) -> tuple[Any, list[ActivationRecord], list[Any]]:
+        """Return forward ``step``'s sealed run core with its records and their events."""
+
+        cores = self.recorder._captured_run_cores
+        if len(cores) != step + 1:
+            self._refuse(
+                f"forward {step} left {len(cores)} sealed capture core(s) where {step + 1} were "
+                f"expected (a forward the recorder did not run as one pass)",
+                "record a model whose generate() calls model.forward once per step",
+            )
+        records: list[ActivationRecord] = []
+        events: list[Any] = []
+        for event in cores[step].events:
+            record = activation_record_from_event(event)
+            if record is not None:
+                records.append(record)
+                events.append(event)
+        return cores[step], records, events
+
+    def _store(self, step: int, core: Any, records: list[ActivationRecord]) -> None:
+        """Pin ``records`` on forward ``step``'s core: the final projection reads them."""
+
+        facts = MappingProxyType({**core.projection_facts, "records": tuple(records)})
+        self.recorder._captured_run_cores[step] = dataclasses.replace(core, projection_facts=facts)
+        self.step_records[step] = records
+
+    def _reduce(self, step: int, window: range) -> int:
         """Replace the declared sites' payloads of one pass by their reduced values."""
 
-        records = self.recording.records
+        core, records, events = self._pass_core(step)
+        self.step_events[step] = events
         seen: set[str] = set()
         total = 0
-        for index in self.recording.by_pass.get(pass_index, []):
-            record = records[index]
+        for index, (record, event) in enumerate(zip(records, events, strict=True)):
             site = self._site_of(record)
             if site is None:
                 total += _nbytes(record.ram_payload) + _nbytes(record.transformed_ram_payload)
@@ -160,6 +212,7 @@ class _StepSink:
                 )
             seen.add(site)
             value = self._reduced_value(site, record, window, step)
+            _release(event, None)
             records[index] = dataclasses.replace(
                 record,
                 ram_payload=value,
@@ -172,6 +225,7 @@ class _StepSink:
             )
             self.values[site][step] = value
             total += _nbytes(value)
+        self._store(step, core, records)
         missing = set(self.options.reducers) - seen
         if missing:
             self._refuse(
@@ -256,9 +310,9 @@ class _StepSink:
             value = by_step.pop(old, None)
             if value is not None:
                 payloads[name] = value
-        records = self.recording.records
-        for index in self.recording.by_pass.get(self.pass_of_step[old], []):
-            record = records[index]
+        records = self.step_records[old]
+        for index, (record, event) in enumerate(zip(records, self.step_events[old], strict=True)):
+            _release(event, None)
             if record.ctx.address in self.options.reducers:
                 key = str(record.ctx.address)
             else:
@@ -267,6 +321,7 @@ class _StepSink:
                     if payload is not None:
                         payloads[key] = payload
             records[index] = self._evicted_record(record, old, key)
+        self._store(old, self.recorder._captured_run_cores[old], records)
         fate = "dropped"
         if self.options.spill is not None:
             path = Path(self.options.spill)
@@ -316,6 +371,8 @@ class _StepSink:
             )
 
     def _budget_refusal(self, reason: str) -> NoReturn:
+        """Refuse the generation: its retained bytes exceed the budget."""
+
         raise InvalidArgumentError(
             _REFUSAL.format(reason),
             code=BUDGET_EXCEEDED,
@@ -327,6 +384,8 @@ class _StepSink:
         )
 
     def _refuse(self, reason: str, remedy: str) -> NoReturn:
+        """Refuse the generation: a reducer or KV site broke its contract."""
+
         raise InvalidArgumentError(
             _REFUSAL.format(reason), code=REDUCER_INVALID, remedy=remedy, reason=reason
         )
@@ -380,6 +439,8 @@ def site_predicate(sites: tuple[str, ...]) -> Callable[[Any], bool]:
     addresses = frozenset(sites)
 
     def keep(ctx: Any) -> bool:
+        """Return whether ``ctx`` is the output of one of the declared sites."""
+
         return module_union_matches(ctx, addresses)
 
     return keep

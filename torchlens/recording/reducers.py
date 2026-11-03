@@ -90,6 +90,8 @@ def norm(ord: float = 2.0, *, dim: int = -1, position_dim: int = 1) -> Reducer:
     """
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
+        """Return one norm per position."""
+
         values = torch.linalg.vector_norm(tensor.detach().float(), ord=ord, dim=dim)
         return _position_major(values, position_dim)
 
@@ -126,6 +128,8 @@ def top_k(k: int, *, dim: int = -1, position_dim: int = -2) -> Reducer:
         )
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
+        """Return the ``k`` largest indices per position."""
+
         size = tensor.shape[dim]
         indices = torch.topk(tensor.detach(), min(k, size), dim=dim).indices
         return _position_major(indices, position_dim)
@@ -186,6 +190,8 @@ def probe(fitted: Any, *, position_dim: int = 1) -> Reducer:
     bias = bias.detach().to(torch.float32)
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
+        """Return the probe's decision function per position."""
+
         x = tensor.detach().to(torch.float32)
         if x.shape[-1] != weight.shape[1]:
             raise InvalidArgumentError(
