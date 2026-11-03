@@ -33,6 +33,8 @@ from typing import Any
 from torchlens._autoroute import input as _input_registry
 from torchlens._autoroute._registry import class_names_tuple, matches_class_name
 from torchlens._data_classes.trace import ResolvedPreprocessing
+from torchlens._user_funcs import trace as _trace
+from torchlens.options import merge_capture_options
 
 #: Provenance ``source`` stamped on traces whose input a registered preprocessor built.
 _PREPROCESSOR_SOURCE = "registered_input_preprocessor"
@@ -151,8 +153,6 @@ def _trace_preprocessed(
     ``trace.input`` exactly as an explicit ``input_transform=`` would keep it.
     """
 
-    import torchlens as tl
-
     def transform(raw: Any) -> Any:
         """Return the model input for ``raw``."""
 
@@ -165,11 +165,11 @@ def _trace_preprocessed(
         config={"preprocessor": name},
         description=f"registered input preprocessor {name!r}",
     )
-    capture = tl.options.merge_capture_options(
+    capture = merge_capture_options(
         capture=trace_kwargs.pop("capture", None),
         input_transform=transform,
     )
-    return tl.trace(model, payload, capture=capture, **trace_kwargs)
+    return _trace(model, payload, capture=capture, **trace_kwargs)
 
 
 __all__ = ["register", "unregister"]

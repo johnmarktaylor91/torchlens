@@ -397,7 +397,8 @@ assert collisions == {
     # function is bound over the submodule attribute at package import, as
     # compose is).
     "recording": ["dry_run", "recover"], "intervention": ["compose", "population"],
-    "fingerprint": [], "io": [], "observers": [], "options": [],
+    "fingerprint": [], "inputs": [], "io": [], "observers": [], "options": [],
+    "outputs": [],
     "report": [], "repgeom": [],
     "receptive_field": ["rules"], "stats": [],
     # C04: the transforms facade's children are all underscore-private.

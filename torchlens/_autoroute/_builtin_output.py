@@ -23,7 +23,7 @@ from torchlens._autoroute._decode_spellings import (
     STYLE_KW,
     UNDETECTED_REMEDY,
 )
-from torchlens._autoroute.output import register
+from torchlens._autoroute.output import list as _registered_output_detectors, register
 from torchlens._capture._episode_derivation import _render_container_path
 from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
@@ -325,11 +325,9 @@ def output_decoders_cache_key() -> tuple[tuple[str, int, int], ...]:
         dispatch order; re-registering a name changes its order and the key.
     """
 
-    from . import output as autoroute_output
-
     return tuple(
         (detector.name, detector.priority, detector.registration_order)
-        for detector in autoroute_output.list()
+        for detector in _registered_output_detectors()
     )
 
 
