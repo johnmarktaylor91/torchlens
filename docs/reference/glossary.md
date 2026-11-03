@@ -3807,7 +3807,7 @@ describe each surface in depth.
 | `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
-| `Recording.do` | Cook through `to_trace()` and run `Trace.do` on the cooked trace: the edited, replayed Trace |
+| `Recording.do` | Cook through `to_trace()` and run `Trace.do` on a fork of the cooked trace: the edited, replayed Trace, with no in-place mutation warning |
 | `Recording.end_times` | Per-pass end timestamps of the recording |
 | `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
 | `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |

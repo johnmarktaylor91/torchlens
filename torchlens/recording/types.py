@@ -1125,17 +1125,9 @@ class Recording(TraceLike):
         return trace
 
     def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
-        """Return the machine-readable dump of this recording cooked into a Trace.
+        """Return the ``torchlens.agent_trace.v1`` dump of ``self.to_trace()``.
 
-        Parameters
-        ----------
-        max_ops:
-            Optional cap on emitted op rows, as for ``Trace.to_agent_json``.
-
-        Returns
-        -------
-        dict[str, Any]
-            The ``torchlens.agent_trace.v1`` dump of ``self.to_trace()``.
+        ``max_ops`` caps the emitted op rows, as for ``Trace.to_agent_json``.
         """
 
         return self.to_trace().to_agent_json(max_ops=max_ops)
@@ -1194,9 +1186,10 @@ class Recording(TraceLike):
         intervention: Any = None,
         loss: Callable[[Trace], torch.Tensor] | None = None,
     ) -> Trace:
-        """Cook this recording and apply an intervention as ``Trace.do`` does."""
+        """Cook this recording and run ``Trace.do`` on a fork of it (no shared root to warn about)."""
 
-        return self.to_trace().do(
+        fork = self.to_trace().fork()
+        return fork.do(
             hooks_or_site,
             value_or_hook,
             model=model,

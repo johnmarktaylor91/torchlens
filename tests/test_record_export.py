@@ -185,7 +185,7 @@ def test_recording_save_round_trips_through_load(
     recording.save(target, overwrite=True)
     loaded = tl.load(target)
     assert isinstance(loaded, tl.Trace)
-    assert loaded.num_ops == recording.to_trace().num_ops
+    assert len(loaded.ops) == len(recording.to_trace().ops)
 
 
 def test_recording_io_save_cooks_first(
@@ -199,4 +199,4 @@ def test_recording_io_save_cooks_first(
     target = tmp_path / "io.tlspec"
     io_save(recording, str(target))
     assert target.exists()
-    assert tl.load(target).num_ops == recording.to_trace().num_ops
+    assert len(tl.load(target).ops) == len(recording.to_trace().ops)
