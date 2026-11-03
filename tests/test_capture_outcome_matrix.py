@@ -153,7 +153,11 @@ def test_cooked_halted_trace_refuses_runnable_save_and_live_replay(tmp_path) -> 
     with pytest.raises(RunnablePreflightError):
         cooked.save(tmp_path / "cooked_halted.tlspec", level="runnable", overwrite=True)
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        cooked.push()
+        cooked.do(
+            tl.func("linear"),
+            tl.scale(1.0),
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
     assert exc_info.value.fields["code"] == "N5"
 
 

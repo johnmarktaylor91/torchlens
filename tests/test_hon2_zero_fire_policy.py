@@ -29,6 +29,9 @@ from torchlens.intervention.errors import (
 )
 from torchlens.options import CaptureOptions
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 _POLICIES = ("warn", "error", "disclose")
 
 
@@ -199,9 +202,14 @@ def _gated_rerun_case() -> tuple[nn.Module, tl.Trace, dict[str, bool]]:
     model = _ReluAdd()
     trace = tl.trace(model, torch.randn(2, 3), capture=CaptureOptions(replayable=True))
     gate = {"active": True}
-    trace.attach_hooks(
-        tl.func("relu") & tl.where(lambda _op: gate["active"], name_hint="runtime_gate"),
-        tl.zero_ablate(),
+    trace.do(
+        [
+            (
+                tl.func("relu") & tl.where(lambda _op: gate["active"], name_hint="runtime_gate"),
+                tl.zero_ablate(),
+            )
+        ],
+        intervention=_STAGE,
     )
     gate["active"] = False
     return model, trace, gate
@@ -298,7 +306,7 @@ def test_disclose_cannot_silence_the_post_capture_predicate_refusal(same_inputs:
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     label = str(trace.find_sites(tl.func("relu"))[0].layer_label)
-    trace.attach_hooks(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())
+    trace.do([(tl.where(lambda p: p.layer_label == label), tl.zero_ablate())], intervention=_STAGE)
     run_x = x if same_inputs else x + 1.0
     for policy in _POLICIES:
         with pytest.raises(LiveModeLabelError) as refused:

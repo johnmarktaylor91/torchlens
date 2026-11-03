@@ -174,9 +174,8 @@ def test_fork_mutation_does_not_warn_or_mutate_parent_interventions() -> None:
 
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        fork.set(tl.func("relu"), torch.zeros_like(fork_relu_pass.out))
+        fork.do(tl.func("relu"), torch.zeros_like(fork_relu_pass.out))
     assert warnings_record == []
-    fork.push()
 
     assert list(relu_pass.edits) == parent_initial_log
     assert len(fork_relu_pass.edits) > len(parent_initial_log)
@@ -288,13 +287,19 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
 
-    log.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
     with pytest.warns(DirectActivationWriteWarning):
-        log.push()
+        log.do(
+            tl.func("relu"),
+            torch.zeros_like(relu_pass.out),
+            intervention=InterventionOptions(confirm_mutation=True),
+        )
 
     relu_pass.out = relu_pass.out
-    log.set(tl.func("relu"), torch.ones_like(relu_pass.out), confirm_mutation=True)
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        log.push()
+        log.do(
+            tl.func("relu"),
+            torch.ones_like(relu_pass.out),
+            intervention=InterventionOptions(confirm_mutation=True),
+        )
     assert warnings_record == []

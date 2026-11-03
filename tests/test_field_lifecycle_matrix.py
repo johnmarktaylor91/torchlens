@@ -17,6 +17,10 @@ from torchlens.intervention.types import (
     MODEL_LOG_FIELD_FORK_POLICY,
 )
 
+#: Stage a sticky hook without propagating it, then propagate through replay.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+_REPLAY = tl.options.InterventionOptions(engine="replay", confirm_mutation=True)
+
 
 class _LifecycleModel(nn.Module):
     """Small deterministic model for lifecycle transition tests."""
@@ -118,14 +122,15 @@ def test_run_state_transitions() -> None:
 
     stale = _capture_log()
     assert stale.state is TraceState.PRISTINE
-    stale.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    stale.do({tl.func("relu"): _zero_hook}, intervention=_STAGE)
     assert stale.state is TraceState.SPEC_STALE
-    stale.push()
+    # A propagating do replays every staged hook, not only its own edit.
+    stale.do(tl.func("relu"), tl.scale(1.0), intervention=_REPLAY)
     assert stale.state is TraceState.REPLAY_PROPAGATED
 
     rerun_log = _capture_log()
     assert rerun_log.state is TraceState.PRISTINE
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    rerun_log.do({tl.func("relu"): _zero_hook}, intervention=_STAGE)
     assert rerun_log.state is TraceState.SPEC_STALE
     rerun_log.run(_LifecycleModel(), torch.tensor([[-1.0, 2.0, 3.0]]))
     assert rerun_log.state is TraceState.RERUN_PROPAGATED

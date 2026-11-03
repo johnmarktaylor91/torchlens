@@ -448,8 +448,7 @@ def test_tap_masked_values(capture):
     selection = trace[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
     observer = tl.observers.tap(selection)
     fork = trace.fork()
-    fork.attach_hooks("relu_1_2", observer, confirm_mutation=True)
-    fork.push()
+    fork.do("relu_1_2", observer)
     full = observer.values()
     assert full and tuple(full[0].shape) == tuple(trace["relu_1_2"].out.shape)
     masked = observer.values(masked=True)

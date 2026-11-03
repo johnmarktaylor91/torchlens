@@ -21,8 +21,11 @@ from torchlens.intervention.errors import (
 from torchlens.intervention.rerun import run
 from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
-from torchlens.options import CaptureOptions
+from torchlens.options import CaptureOptions, InterventionOptions
 from torchlens.types import Relationship
+
+#: Stage a sticky hook on the trace without propagating it (the rerun propagates it).
+_STAGE = InterventionOptions(engine="set_only", confirm_mutation=True)
 
 
 class BadModel(torch.nn.Module):
@@ -182,7 +185,7 @@ def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
         lambda _op: gate["active"],
         name_hint="runtime_gate",
     )
-    log.attach_hooks(selector, tl.zero_ablate())
+    log.do([(selector, tl.zero_ablate())], intervention=_STAGE)
     gate["active"] = False
 
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
@@ -196,7 +199,7 @@ def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
     """A sticky hook that fires is reconciled without a zero-site warning."""
     model = ReluAdd()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log.do({tl.func("relu"): tl.zero_ablate()}, intervention=_STAGE)
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")

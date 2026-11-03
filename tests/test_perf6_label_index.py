@@ -162,9 +162,7 @@ def test_a_push_with_label_hooks_evaluates_no_selector_per_hook(
     assert len(hooked) >= 5
     fork = trace.fork()
     monkeypatch.setattr(resolver, "evaluate", counting)
-    pushed = fork.push(
-        replay=tl.options.ReplayOptions(hooks={tl.label(label): tl.scale(1.0) for label in hooked})
-    )
+    pushed = fork.do({tl.label(label): tl.scale(1.0) for label in hooked})
     # Before the index, origins and hook targeting each evaluated every hook's
     # selector on every op: 2 x hooks x ops calls.
     assert len(calls) < len(trace._layer_list)

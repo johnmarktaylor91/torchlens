@@ -19,6 +19,9 @@ import torchlens as tl
 from tests.test_sae4_latent_facets import TOL, W_DEC, X, _HandSAE, _latents, _trace
 from torchlens._errors import InvalidArgumentError
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class MultiHeadSelfAttention(nn.Module):
     """Tiny attention block matching the built-in DistilBERT head recipe's class name."""
@@ -83,7 +86,7 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    edited.do({tl.head(1): tl.zero_ablate()}, intervention=_STAGE)
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0
@@ -108,7 +111,9 @@ def test_a_selector_scoped_to_a_module_that_ran_twice_refuses_naming_its_calls()
     model, x = _AttnReluTwice().eval(), torch.randn(2, 3, 8)
     clean = _head_trace(model, x)
     with pytest.raises(InvalidArgumentError) as caught:
-        clean.fork("scoped").attach_hooks(tl.head(1).in_module("act"), tl.zero_ablate())
+        clean.fork("scoped").do(
+            {tl.head(1).in_module("act"): tl.zero_ablate()}, intervention=_STAGE
+        )
     assert caught.value.fields["code"] == "facet_selector_module_multi_call"
     calls = caught.value.fields["call_addresses"]
     assert tuple(calls) == ("act:1", "act:2")

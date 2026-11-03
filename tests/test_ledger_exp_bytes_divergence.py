@@ -25,6 +25,9 @@ from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_p
 from torchlens.errors.episode import BundleExperimentError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
+#: Stage a sticky hook on the trace without propagating it.
+_STAGE = tl.options.InterventionOptions(engine="set_only", confirm_mutation=True)
+
 
 class _ConvBN(nn.Module):
     def __init__(self) -> None:
@@ -47,7 +50,7 @@ def test_edited_rerun_does_not_trip_divergence_detector() -> None:
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.5)), intervention=_STAGE)
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         fork.run(model, x)
@@ -68,7 +71,7 @@ def test_edited_rerun_strict_does_not_raise() -> None:
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.5)), intervention=_STAGE)
     fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
 
 

@@ -7,7 +7,7 @@ code; these tests provoke every one through its production raise site. The
 capability refusals (a selector kind a lifecycle cannot evaluate) and the
 post-capture site-resolution refusals (no match, excess fanout, a bad
 ``max_fanout``, a strict bare string, an empty site table) carry codes too, so
-``Trace.set`` and ``attach_hooks`` refuse a model-input site with one code. The
+``Trace.set`` and ``Trace.do`` refuse a model-input site with one code. The
 ``LiveModeLabelError`` sites are pinned in ``tests/test_stress_refusal_codes.py``.
 """
 
@@ -109,13 +109,17 @@ def _scale_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
 
 
 def test_model_input_site_refusals_carry_one_code_from_both_doors() -> None:
-    """``Trace.set`` and ``attach_hooks`` refuse a model-input site by its condition."""
+    """``Trace.set`` and ``Trace.do`` refuse a model-input site by its condition."""
 
     trace = _ready_trace()
     with pytest.raises(SelectorCapabilityError) as set_info:
         trace.set(tl.model_input(0), lambda out: out * 0.5, confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError) as attach_info:
-        trace.attach_hooks(tl.model_input(0), _scale_hook, confirm_mutation=True)
+        trace.do(
+            tl.model_input(0),
+            _scale_hook,
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
     assert set_info.value.fields["code"] == "model_input_selector_not_live"
     assert attach_info.value.fields["code"] == "model_input_selector_not_live"
     assert "not live hook application sites" in str(set_info.value)
