@@ -110,24 +110,15 @@ class Edit:
         Raises
         ------
         NonExecutableSpecError
-            If the spec is an audit-only placeholder (``opaque_audit``) with no
-            runtime factory, such as a saved user callable loaded back.
+            If the spec is an audit-only placeholder with no runtime factory.
         TypeError
             If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
-            if self.portability == "opaque_audit":
-                from .errors import _refuse_non_executable
+            from .errors import _refuse_placeholder_edit
 
-                _refuse_non_executable(
-                    f"Edit {self.name!r} is an audit-only placeholder (a callable that was "
-                    "not saved, or an argument that cannot be rebuilt) and cannot be run.",
-                    remedy=(
-                        "rebuild the edit with its callable in this session and attach it "
-                        "again, for example tl.trace(model, x, intervene=...)"
-                    ),
-                )
+            _refuse_placeholder_edit(self.name, self.portability)
             raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
 
@@ -178,14 +169,9 @@ class Edit:
         factory-dropping pickle path.
         """
 
-        import copy as _copy
+        from ._edit_copy import deepcopy_edit
 
-        cls = type(self)
-        clone = cls.__new__(cls)
-        memo[id(self)] = clone
-        for key, value in self.__dict__.items():
-            object.__setattr__(clone, key, _copy.deepcopy(value, memo))
-        return clone
+        return deepcopy_edit(self, memo)
 
 
 @dataclass(frozen=True, slots=True)

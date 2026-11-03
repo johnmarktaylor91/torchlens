@@ -269,6 +269,37 @@ def _refuse_non_executable(message: str, *, remedy: str | None = None) -> NoRetu
     raise NonExecutableSpecError(message, **payload)
 
 
+def _refuse_placeholder_edit(name: str, portability: str) -> None:
+    """Refuse to run an audit-only placeholder ``Edit``; return for any other spec.
+
+    A loaded edit whose callable was not saved (or whose argument cannot be
+    rebuilt) is an ``opaque_audit`` placeholder with no hook factory. Firing it
+    raises the typed refusal with its remedy instead of a bare ``TypeError``.
+
+    Parameters
+    ----------
+    name:
+        Edit name, quoted in the refusal message.
+    portability:
+        The edit's portability; only ``"opaque_audit"`` refuses here.
+
+    Raises
+    ------
+    NonExecutableSpecError
+        If ``portability`` is ``"opaque_audit"``.
+    """
+
+    if portability == "opaque_audit":
+        _refuse_non_executable(
+            f"Edit {name!r} is an audit-only placeholder (a callable that was not saved, "
+            "or an argument that cannot be rebuilt) and cannot be run.",
+            remedy=(
+                "rebuild the edit with its callable in this session and attach it again, "
+                "for example tl.trace(model, x, intervene=...)"
+            ),
+        )
+
+
 class UnserializableDictKeyError(ConfigurationError, TypeError):
     """Raised when a spec dict key cannot be preserved through save/load.
 
