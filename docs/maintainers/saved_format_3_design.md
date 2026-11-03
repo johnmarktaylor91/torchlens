@@ -55,6 +55,7 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `_carriers.py` | the opaque carrier values (sections 5 and 8): `UnencodableValue` and `CallablePlaceholder`, shared by both halves of the codec so a decoded carrier re-encodes exactly; below `decode.py` and `values.py` | 46 | reader |
 | `_record_refs.py` | the closed record-reference resolver: canonical row identities and container rebuilding, including repeated and cyclic references, before record allocation | 250 | reader |
 | `_payload_headers.py` | validate referenced safetensors chunks and declared keys before allocating records, without materializing tensor contents | 150 | reader |
+| `restore.py` | Declared record-state restoration, saved-cell true-up and capture-time provenance stamping through trusted caller-supplied parsers | 200 | reader |
 | `payloads.py` | safetensors chunk writer and reader with opaque keys; `LazyActivationRef` rebuilt on (chunk, key) | 450 | writer |
 | `writer.py` | `write_trace`, `write_bundle`, `write_intervention_recipe`: include-flag resolution (reuses `save_policy.py`), privacy and barcode policies carried over from `scrub.py`, record-table emission, manifest, reload check, atomic publish | 750 | writer |
 | `recipe.py` | the intervention recipe (section 8): rule and value encoding with callable placeholders at rule level and in edit arguments, recipe tensors on the shared key counter, typed rebinding at load; `write_intervention_recipe` and the trace writer call it | 700 | writer |
