@@ -202,7 +202,7 @@ _REFUSED: dict[str, tuple[Callable[[], tuple[Any, Any]], Callable[[], tuple[Any,
     ),
     "set_direction_mean": (
         lambda: (_subspace_sel(), set_direction_mean(_H[0], _donors(), dim=-1)),
-        lambda: (_subspace_sel(), mean_ablate(_donors(), dim=None)),
+        lambda: (_subspace_sel(), mean_ablate(_donors(), dim="members")),
     ),
     "subspace_ablate": (
         lambda: (_subspace_sel(), subspace_ablate(_H[:1])),

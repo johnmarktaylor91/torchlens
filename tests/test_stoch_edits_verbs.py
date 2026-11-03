@@ -350,7 +350,7 @@ def test_mean_ablate_population_evidence_set_fill() -> None:
     baseline = log["relu_1_2"].out
     donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
     fork = log.fork()
-    fork.do(tl.label("relu_1_2"), tl.mean_ablate(donors, dim=None))
+    fork.do(tl.label("relu_1_2"), tl.mean_ablate(donors, dim="members"))
     assert torch.allclose(fork["relu_1_2"].out, baseline + 1.0)
     record = sampling_draws(fork)[-1]
     assert record.draw_indices == (), "a mean draws nothing"

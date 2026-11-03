@@ -99,15 +99,18 @@ def mean_ablate(
         and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
-        construction), and ``dim`` then names the further site axes.
+        construction), and ``dim`` then says how far that mean reduces.
     dim:
-        REQUIRED. ``None`` averages every axis of a tensor or self source to
-        one scalar; an int or tuple of ints averages those axes with
-        ``keepdim`` broadcast. For a ``Population``, ``None`` is the
-        elementwise across-member mean and axes reduce that mean further. A
-        semantic axis name refuses ``axis_semantics_unknown`` until axis-role
-        evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``is_batch_independent`` open).
+        REQUIRED. ``None`` averages every axis of the source to one scalar,
+        whatever the source (site, tensor, Op-like or ``Population``); an int
+        or tuple of ints averages those axes with ``keepdim`` broadcast (for a
+        ``Population``, the axes of its elementwise member mean).
+        ``"members"`` is the ``Population`` spelling for the elementwise
+        across-member mean itself, a fill with the members' shape; it refuses
+        ``intervention_over_invalid`` for any other source. A semantic axis
+        name refuses ``axis_semantics_unknown`` until axis-role evidence
+        exists; any other spelling refuses ``intervention_over_invalid`` at
+        construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -120,25 +123,40 @@ def mean_ablate(
         reads the traced batch.
     """
 
+    if isinstance(dim, str) and dim == "members":
+        if not isinstance(source, Population):
+            raise InvalidArgumentError(
+                "mean_ablate(dim='members') averages over a Population's members, "
+                f"and the source is {type(source).__name__ if source is not None else 'the site'}: "
+                "a site, tensor or Op-like source has no member axis",
+                code="intervention_over_invalid",
+                remedy=(
+                    "pass source=<Population> with dim='members' for the elementwise "
+                    "across-member mean, or dim=None / integer axes for this source"
+                ),
+                argument="dim",
+                received=repr(dim),
+            )
+        return _population_mean_spec(source, axes="members", allow_shape_change=allow_shape_change)
     axes = _mean_ablate_axes(dim)
     if axes is None:
         raise InvalidArgumentError(
             f"mean_ablate(dim={dim!r}) is outside the mean vocabulary: dim=None "
             "averages every axis, an int or tuple of ints names the axes to "
-            "average. Accepting another token would record a policy the hook "
-            "does not compute",
+            "average, and dim='members' averages over a Population's members. "
+            "Accepting another token would record a policy the hook does not compute",
             code="intervention_over_invalid",
             remedy=(
                 "pass dim=None for the mean over all axes, or the explicit integer "
                 "axis (or tuple of axes) to average; pass source=<tensor> or "
-                "source=<Population> to average something other than the site"
+                "source=<Population> to average something other than the site "
+                "(dim='members' for the elementwise member mean)"
             ),
             argument="dim",
             received=repr(dim),
         )
-    dim_kwarg: tuple[int, ...] | None = None if axes == "all" else axes
     if isinstance(source, Population):
-        return _population_mean_spec(source, axes=dim_kwarg, allow_shape_change=allow_shape_change)
+        return _population_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
     return _source_mean_spec(source, axes=axes, allow_shape_change=allow_shape_change)
 
 
@@ -185,18 +203,28 @@ def _source_mean_spec(
 
 
 def _population_mean_spec(
-    reference: Population, *, axes: tuple[int, ...] | None, allow_shape_change: bool
+    reference: Population,
+    *,
+    axes: Literal["members", "all"] | tuple[int, ...],
+    allow_shape_change: bool,
 ) -> Edit:
     """Build the ``mean_ablate`` spec whose source is a population.
 
     The fill is computed eagerly at construction (populations are prepared
     before hooks install, D10); the record says ``stochastic=False`` and no
-    seed is ever invented. ``axes=None`` is the elementwise across-member
-    mean, which must match the site's geometry exactly; explicit axes reduce
-    that mean further with ``keepdim`` and broadcast back to the site.
+    seed is ever invented. ``axes="members"`` is the elementwise
+    across-member mean, which must match the site's geometry exactly;
+    ``"all"`` reduces that mean to one scalar and explicit axes reduce it
+    with ``keepdim``, both broadcast back to the site.
     """
 
-    fill = reference.mean() if axes is None else reference.mean(axes)
+    member_mean = reference.mean()
+    if axes == "members":
+        fill = member_mean
+    elif axes == "all":
+        fill = member_mean.mean()
+    else:
+        fill = reference.mean(axes)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime population-mean fill hook."""
@@ -205,7 +233,7 @@ def _population_mean_spec(
             """Fill the site with the prepared population mean."""
 
             prepared = fill.detach().to(device=out.device, dtype=out.dtype)
-            if axes is None:
+            if axes == "members":
                 _prove_event_geometry(prepared, out, verb="mean_ablate")
                 value = prepared
             else:
@@ -237,7 +265,7 @@ def _population_mean_spec(
     return _helper_spec(
         "mean_ablate",
         kwargs={
-            "dim": axes,
+            "dim": None if axes == "all" else axes,
             "allow_shape_change": allow_shape_change,
             "population_identity": reference.identity,
             "population_count": len(reference),

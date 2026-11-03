@@ -70,9 +70,32 @@ def test_door_equals_mean_from_population_elementwise() -> None:
     log = _toy_trace()
     baseline = log[_SITE].out
     donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
-    new = _apply(log, tl.mean_ablate(donors, dim=None))
+    new = _apply(log, tl.mean_ablate(donors, dim="members"))
     assert torch.equal(new, donors.mean().detach().clone())
     assert torch.allclose(new, baseline + 1.0)
+
+
+def test_door_population_dim_none_is_the_scalar_mean() -> None:
+    """``dim=None`` means every axis for every source: one scalar over the member mean."""
+
+    log = _toy_trace()
+    baseline = log[_SITE].out
+    donors = population(torch.randn(4, *baseline.shape), origin="pop")
+    scalar = donors.mean().mean()
+    assert torch.equal(
+        _apply(log, tl.mean_ablate(donors, dim=None)), torch.zeros_like(baseline) + scalar
+    )
+    assert dict(tl.mean_ablate(donors, dim=None).kwargs)["dim"] is None
+    assert dict(tl.mean_ablate(donors, dim="members").kwargs)["dim"] == "members"
+
+
+def test_door_members_spelling_needs_a_population() -> None:
+    """``dim='members'`` names a Population's member axis; other sources refuse typed."""
+
+    for source in (None, torch.ones(4)):
+        with pytest.raises(Exception) as excinfo:
+            tl.mean_ablate(source, dim="members")
+        assert excinfo.value.fields["code"] == "intervention_over_invalid"
 
 
 def test_door_equals_mean_fill_population_axis() -> None:
@@ -105,7 +128,7 @@ def test_door_flags_match_the_old_helpers() -> None:
     baseline = log[_SITE].out
     donors = population(torch.randn(4, *baseline.shape), origin="pop")
     self_global, self_axis = tl.mean_ablate(dim=None), tl.mean_ablate(dim=0)
-    pop_elementwise, pop_axis = tl.mean_ablate(donors, dim=None), tl.mean_ablate(donors, dim=0)
+    pop_elementwise, pop_axis = tl.mean_ablate(donors, dim="members"), tl.mean_ablate(donors, dim=0)
     for spec in (self_global, self_axis):
         assert spec.is_batch_independent is False and spec.portability == "builtin"
         assert dict(spec.metadata)["batch_coherent"] is True
@@ -172,7 +195,7 @@ def test_population_mean_records_a_deterministic_note() -> None:
     baseline = log[_SITE].out
     donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
     fork = log.fork()
-    fork.do(tl.label(_SITE), tl.mean_ablate(donors, dim=None))
+    fork.do(tl.label(_SITE), tl.mean_ablate(donors, dim="members"))
     assert torch.allclose(fork[_SITE].out, baseline + 1.0)
     record = sampling_draws(fork)[-1]
     assert record.draw_indices == (), "a mean draws nothing"
