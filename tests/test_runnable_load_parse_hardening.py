@@ -16,6 +16,7 @@ from torchlens._io.runnable_load import (
     _validated_dtype_literal,
 )
 from torchlens._runnable import ReadinessStatus
+from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 
 
@@ -258,7 +259,9 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     # Preserve the missing-producer refusal witness after a validated descriptor
     # became sufficient for a resave: remove that descriptor deliberately.
     loaded_bare._runnable.descriptor = None
-    with pytest.raises(ArtifactError) as refusal:
-        loaded_bare.save(tmp_path / "resave2.tlspec", level="runnable")
-    assert refusal.value.fields["code"] == "run_capability_unavailable"
-    assert refusal.value.fields["detection_stage"] == "runnable_resave_state_universe"
+    missing_producer = tmp_path / "resave2.tlspec"
+    with pytest.raises(RunnablePreflightError) as refusal:
+        loaded_bare.save(missing_producer, level="runnable")
+    assert refusal.value.fields["code"] == "sparse_preflight_failed"
+    assert refusal.value.fields["diagnostics"][0].code.value == "call_structure_mismatch"
+    assert not missing_producer.exists()
