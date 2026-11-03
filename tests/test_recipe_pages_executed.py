@@ -111,6 +111,9 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: test call (session wall 48.1 s, 30.8 s and 37.9 s; CPU 47.3 s, 30.3 s and
 #: 37.3 s), median 30.1 s. Earlier runs: 17 s alone, 30.8 s unloaded, 37.1 s and
 #: 42.5 s under gate load.
+#: The transcoder attribution-graph notebook downloads GPT-2 small and twelve
+#: transcoders (about 2.2 GB) on a cold cache, and its graph build alone took
+#: 180 s on four cores (8,963 feature nodes).
 SLOW_PAGES: frozenset[str] = frozenset(
     {"docs/recipes/acdc_ioi.md", "examples/recipes/attribution_graph_transcoders_recipe.ipynb"}
 )
