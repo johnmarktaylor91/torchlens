@@ -95,9 +95,11 @@ def test_rg09_pass_qualified_patch_on_real_cross_layer_sharing(rg_loader: Any) -
     loaded = rg_loader("r1-albert-base-v2")
     model, tokenizer = loaded["model"], loaded["tokenizer"]
     encoded = dict(tokenizer(prompt("encoder-sentence-1")["text"], return_tensors="pt"))
-    trace = tl.trace(model, (), encoded, capture=tl.options.CaptureOptions(replayable=True))
+    trace = tl.trace(
+        model, (), input_kwargs=encoded, capture=tl.options.CaptureOptions(replayable=True)
+    )
     try:
-        multi_pass = [label for label in trace.layer_labels if len(trace[label].ops) >= 12]
+        multi_pass = [label for label in trace.layer_labels if len(trace.layers[label].ops) >= 12]
         assert multi_pass, "albert capture shows no 12-pass shared-layer sites"
         target = multi_pass[0]
         with pytest.raises(Exception) as bare_exc:
@@ -106,14 +108,14 @@ def test_rg09_pass_qualified_patch_on_real_cross_layer_sharing(rg_loader: Any) -
             "bare label on the shared layer must refuse teaching the"
             " pass-qualified spellings (the pass-blind-donor class)"
         )
-        pass_two_before = trace[target].ops[1].out.detach().clone()
+        pass_two_before = trace.layers[target].ops[1].out.detach().clone()
         fork = trace.fork()
         try:
             fork.do(f"{target}:3", tl.zero_ablate())
-            assert torch.count_nonzero(fork[target].ops[2].out) == 0, (
+            assert torch.count_nonzero(fork.layers[target].ops[2].out) == 0, (
                 "the addressed pass 3 was not edited"
             )
-            assert torch.equal(fork[target].ops[1].out, pass_two_before), (
+            assert torch.equal(fork.layers[target].ops[1].out, pass_two_before), (
                 "editing pass 3 CHANGED pass 2 -- pass-blind donor corruption"
                 " on real cross-layer weight sharing"
             )
@@ -141,7 +143,7 @@ def test_rg14_clip_processor_kwargs_and_similarity_match_direct(rg_loader: Any) 
     inputs = dict(processor(text=captions, images=image, return_tensors="pt", padding=True))
     with torch.no_grad():
         direct = model(**inputs)
-    trace = tl.trace(model, (), dict(inputs))
+    trace = tl.trace(model, (), input_kwargs=dict(inputs))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [
@@ -220,7 +222,7 @@ def test_rg17_t5_encoder_decoder_capture_matches_direct(rg_loader: Any) -> None:
     encoded["decoder_input_ids"] = torch.tensor([[model.config.decoder_start_token_id]])
     with torch.no_grad():
         direct = model(**encoded)
-    trace = tl.trace(model, (), dict(encoded))
+    trace = tl.trace(model, (), input_kwargs=dict(encoded))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [

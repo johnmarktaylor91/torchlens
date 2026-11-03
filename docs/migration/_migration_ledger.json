@@ -24,7 +24,7 @@
     },
     {
       "id": "fused-attention-not-visible-rows",
-      "doc": "docs/migration/baukit.md:14; autocircuit.md:14; inseq.md:13; transformerlens.md:13",
+      "doc": "docs/migration/baukit.md:14; autocircuit.md:14; inseq.md:13; from_transformerlens.md:13",
       "kind": "undersell-falsehood",
       "receipt": "Four pages still say fused attention internals are 'not visible' while verified READ-ONLY SDPA facets ship (docs/facets.md). Correct wording must name eager-vs-fused and facet-vs-captured-op per the attention-picture-scope lint.",
       "status": "fixed",
@@ -36,16 +36,16 @@
     },
     {
       "id": "captum-ig-no-equivalent",
-      "doc": "docs/migration/captum.md",
+      "doc": "docs/migration/from_captum.md",
       "kind": "undersell-falsehood",
       "receipt": "Said integrated gradients has 'no direct equivalent' while torchlens/attribution exports one. The 2026-08-26 'fixed' verdict was wrong (the line was still live at 4bfb8e68b); fixed 2026-10-05 together with the saliency, occlusion and conductance rows.",
       "status": "fixed",
-      "verified_at": "2026-10-05 (wip/next-cleanup; captum.md rows now name tl.attribution methods)",
+      "verified_at": "2026-10-05 (wip/next-cleanup; from_captum.md rows now name tl.attribution methods)",
       "owner_next": "none (closed by an earlier fix wave; D01 re-verifies in the sweep)"
     },
     {
       "id": "transformerlens-aliases-denied",
-      "doc": "docs/migration/transformerlens.md",
+      "doc": "docs/migration/from_transformerlens.md",
       "kind": "undersell-falsehood",
       "receipt": "Historically denied component naming while enable_transformerlens_aliases ships (semantic/facets.py). The page still centers manual-eager workarounds; re-verify each row against the shipped alias/facet surface.",
       "status": "fixed",
@@ -90,11 +90,11 @@
     },
     {
       "id": "removed-run-spellings-on-comparison-pages",
-      "doc": "docs/migration/penzai.md; baukit.md; autocircuit.md; inseq.md; repe.md; pyvene.md; from_pyvene.md",
+      "doc": "docs/migration/penzai.md; baukit.md; autocircuit.md; inseq.md; repe.md; from_pyvene.md",
       "kind": "structural",
       "receipt": "Rows taught the removed replay/rerun spellings (rerun(..., append=True), replay/rerun hooks) after Trace.run and Trace.push replaced them.",
       "status": "fixed",
-      "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; the refreshed pyvene.md and from_pyvene.md spell trace.run, trace.push, do() and steer_generate, keep rerun and replay only in the removed-spellings sentence of intervention_explainers.md, and every example runs in tests/test_migration_pages_executed.py)",
+      "verified_at": "2026-10-14 (penzai, baukit, autocircuit, inseq and repe now spell trace.run, .push and steer_generate; the merged from_pyvene.md spells trace.run, trace.push, do() and steer_generate, keep rerun and replay only in the removed-spellings sentence of intervention_explainers.md, and every TorchLens example runs in tests/test_migrations.py)",
       "owner_next": "none"
     },
     {
@@ -105,6 +105,15 @@
       "status": "fixed",
       "verified_at": "2026-10-15 (tests/test_bridge_pyreft.py and the page example)",
       "owner_next": "none"
+    },
+    {
+      "id": "landscape-page-current",
+      "doc": "docs/migration/landscape.md",
+      "kind": "current",
+      "receipt": "Comparable-tools page with a checked date and source per row (TransformerLens 4.x and TransformerBridge, nnsight 0.8, interp-engine, vllm-lens, EasySteer, VLM-Lens, pyvene and pyreft idle, penzai archived, treescope idle, SAELens), a serving-scale section and a discovery-versus-monitoring section; statuses are pinned by the comparison-landscape-currency lint row in _claims.json.",
+      "status": "current",
+      "verified_at": "2026-11-03 (repository and release metadata checked the same day)",
+      "owner_next": "re-check the status column at the claims gate"
     }
   ]
 }

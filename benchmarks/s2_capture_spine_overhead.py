@@ -60,7 +60,7 @@ def _plain_forward(model: ThousandOpModel, x: torch.Tensor) -> None:
 def _trace_exhaustive(model: ThousandOpModel, x: torch.Tensor) -> None:
     """Run exhaustive trace capture."""
 
-    tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="none", seed=123))
+    tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123), save="none")
 
 
 def _trace_predicate_false(model: ThousandOpModel, x: torch.Tensor) -> None:
@@ -72,7 +72,7 @@ def _trace_predicate_false(model: ThousandOpModel, x: torch.Tensor) -> None:
 def _record_fastlog(model: ThousandOpModel, x: torch.Tensor) -> None:
     """Run fastlog recording with a predicate that never saves."""
 
-    tl.record(model, x, save=_save_no_ops, seed=123)
+    tl.record(model, x, save=_save_no_ops, capture=tl.options.CaptureOptions(seed=123))
 
 
 def _time_case(

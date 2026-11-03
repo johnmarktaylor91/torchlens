@@ -103,7 +103,8 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, str, tuple[str, ...],
         trace = tl.trace(
             model,
             torch.rand(4),
-            capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+            capture=CaptureOptions(save_args=True, seed=0),
+            save="all",
         )
     try:
         rows = [
@@ -183,7 +184,7 @@ def test_share_memory_leaves_the_live_buffer_shared_and_unchanged() -> None:
     expected = model.b.clone()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.trace(model, torch.rand(4), capture=CaptureOptions(layers_to_save="all"))
+        trace = tl.trace(model, torch.rand(4), save="all")
     trace.cleanup()
     assert model.b.is_shared()
     assert torch.equal(model.b, expected)

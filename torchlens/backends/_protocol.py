@@ -63,7 +63,7 @@ class CaptureBackend(Protocol):
         self,
         session: object,
         model: object,
-        input_args: object,
+        inputs: object,
         input_kwargs: dict[Any, Any] | None,
     ) -> tuple[list[Any], dict[Any, Any], list[str], object]:
         """Normalize inputs, copy caller-owned values, and detect the model device."""
@@ -72,7 +72,7 @@ class CaptureBackend(Protocol):
     def fetch_label_move_input_tensors(
         self,
         session: object,
-        input_args: list[Any],
+        inputs: list[Any],
         input_arg_names: list[str],
         input_kwargs: dict[Any, Any],
         model_device: object,

@@ -51,7 +51,7 @@ class BudgetResolution:
     ----------
     dial:
         The dial BY NAME, e.g. ``collapse="none"``, ``collapse=0.75 (float
-        schedule)``, ``vis_call_depth=3 (above-ceiling estimate)``.
+        schedule)``, ``depth=3 (above-ceiling estimate)``.
     draw_kwargs:
         The draw parameters that apply the dial.
     visible_count:
@@ -103,7 +103,7 @@ def _coverage_for_step(
 
 
 def _call_depth_estimate(trace: Trace, depth: int) -> int:
-    """Estimate visible units at ``vis_call_depth=depth`` without a render.
+    """Estimate visible units at ``depth=depth`` without a render.
 
     Counts ops whose module call nesting is within ``depth`` plus one box
     per module at the cut depth that owns deeper content. A disclosed
@@ -164,7 +164,7 @@ def resolve_budget(
         (``lens_budget_band_missed``) -- disclosed, never silent.
     """
 
-    from ..collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 
     channel_values, op_modules = _op_value_maps(trace, values)
     channel_active = bool(channel_values)
@@ -247,7 +247,7 @@ def resolve_budget(
             + (" at the coverage floor" if channel_active else "")
             + f"; serving the nearest compacting point ({step.visible_count} "
             f"visible at collapse={step.t:g}, full graph {full_visible}). "
-            "Remedy: focus the render with module= or vis_call_depth=, or pass "
+            "Remedy: focus the render with module= or depth=, or pass "
             "an explicit collapse= override.",
             code="lens_budget_band_missed",
         ),
@@ -288,7 +288,7 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
     is the shipped dial that still works. Counts are disclosed ESTIMATES.
     """
 
-    from ..collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 
     best_depth = 1
     best_estimate = _call_depth_estimate(trace, 1)
@@ -309,9 +309,9 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
             TorchLensWarning(
                 f"above the {COLLAPSE_OPTIMIZER_MAX_OPS}-op optimizer ceiling no "
                 f"call depth lands in the {BAND_FLOOR}-{BAND_CEILING} band; serving "
-                f"vis_call_depth={best_depth} (~{best_estimate} visible units, "
+                f"depth={best_depth} (~{best_estimate} visible units, "
                 "estimate). Remedy: focus the render with module= or pass an "
-                "explicit vis_call_depth=.",
+                "explicit depth=.",
                 code="lens_budget_above_ceiling_fallback",
             ),
             stacklevel=3,
@@ -322,15 +322,15 @@ def _resolve_above_ceiling(trace: Trace, op_count: int, channel_active: bool) ->
         depth, estimate = chosen
         in_band = True
     lines = [
-        f"detail dial: vis_call_depth={depth} (above the "
+        f"detail dial: depth={depth} (above the "
         f"{COLLAPSE_OPTIMIZER_MAX_OPS}-op optimizer ceiling on {op_count} ops; "
         f"~{estimate} visible units, estimate)"
     ]
     if channel_active:
         lines.append("coverage floor: not measurable above the ceiling (estimate basis disclosed)")
     return BudgetResolution(
-        dial=f"vis_call_depth={depth} (above-ceiling estimate)",
-        draw_kwargs={"collapse": "none", "vis_call_depth": depth},
+        dial=f"depth={depth} (above-ceiling estimate)",
+        draw_kwargs={"collapse": "none", "depth": depth},
         visible_count=estimate,
         coverage=None,
         in_band=in_band,

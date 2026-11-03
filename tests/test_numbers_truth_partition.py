@@ -65,9 +65,7 @@ def _fixture_traces() -> list[tuple[str, tl.Trace]]:
     fixtures.append(
         (
             "branch_cnn",
-            tl.trace(
-                cnn, torch.randn(2, 3, 4, 4), capture=tl.options.CaptureOptions(layers_to_save=None)
-            ),
+            tl.trace(cnn, torch.randn(2, 3, 4, 4), save=None),
         )
     )
     tied = TiedRecurrent()
@@ -77,7 +75,7 @@ def _fixture_traces() -> list[tuple[str, tl.Trace]]:
             tl.trace(
                 tied,
                 torch.tensor([[1, 2, 3]]),
-                capture=tl.options.CaptureOptions(layers_to_save=None),
+                save=None,
             ),
         )
     )
@@ -135,9 +133,7 @@ def test_module_param_rollups_match_torch_subtree_counts() -> None:
 
     model = BranchCNN()
     model.eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 4, 4), capture=tl.options.CaptureOptions(layers_to_save=None)
-    )
+    log = tl.trace(model, torch.randn(2, 3, 4, 4), save=None)
     try:
         for address in ("stem", "norm", "left", "right", "head"):
             submodule = model.get_submodule(address)
@@ -154,10 +150,10 @@ def test_multipass_layer_owns_all_its_pass_events() -> None:
     log = tl.trace(
         model,
         torch.tensor([[1, 2, 3]]),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
-        layer = log["linear_1_2"]  # the reused mix layer (3 passes)
+        layer = log.layers["linear_1_2"]  # the reused mix layer (3 passes)
         per_pass = [int(op.flops_forward or 0) for op in layer.ops.values()]
         assert len(per_pass) == 3
         assert int(layer.total_flops_forward) == sum(per_pass)
@@ -170,9 +166,7 @@ def test_boundary_rows_render_dash_in_every_additive_cell() -> None:
 
     model = BranchCNN()
     model.eval()
-    log = tl.trace(
-        model, torch.randn(2, 3, 4, 4), capture=tl.options.CaptureOptions(layers_to_save=None)
-    )
+    log = tl.trace(model, torch.randn(2, 3, 4, 4), save=None)
     try:
         frame = log.profile().to_pandas()
         boundary = frame[frame["kind"] == "boundary"]

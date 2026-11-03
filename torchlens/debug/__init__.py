@@ -15,6 +15,11 @@
 - Dead neurons, gradient flow and parameter health: ``tl.debug.dead_neurons(trace)``,
   ``tl.debug.grad_health(trace)`` and ``tl.debug.param_health(model)``; mixed-precision
   gradients that go non-finite under a grad scaler: ``tl.debug.amp_scaled_grads_hint()``.
+- Training-loop checks (capture-free, standalone): ``tl.debug.ChecksSession(model, optimizer)``
+  with its step-check registrations, ``tl.debug.RangeProbe`` and ``tl.debug.LivenessProbe``
+  for output ranges, and the clip, scale and watchdog ledgers (``tl.debug.ClipLedger``,
+  ``tl.debug.ScaleLedger``, ``tl.debug.Watchdog``); findings collect into a
+  ``tl.debug.CheckReport``. See ``docs/reference/checks_kit.md``.
 - Autograd graph structure: ``tl.debug.walk_grad_fn(...)`` and
   ``tl.debug.sketch_grad_fn(...)``.
 - Compilation and speed: ``tl.debug.count_compiles(...)``, ``tl.debug.graph_breaks(...)``,
@@ -30,20 +35,27 @@ Whole-trace health is ``trace.health``; the FLOPs cross-check is
 
 from __future__ import annotations
 
-from .._diagnostics import (
-    DeterminismReport,
-    DTypeRangeReport,
-    NonfiniteReport,
-    ParamHealthReport,
-    check_determinism,
-    dtype_range,
-    grad_health,
-    nonfinite_origin,
-    param_health,
-)
 from ._audit import AuditFinding as AuditFinding
+from ._checks import (
+    CheckFinding,
+    CheckReport,
+    ChecksSession,
+    ClipLedger,
+    ClipLedgerSnapshot,
+    LivenessProbe,
+    OptimizerFacts,
+    RangeProbe,
+    ScaleLedger,
+    ScaleLedgerSnapshot,
+    ScanRow,
+    Watchdog,
+    WatchdogSnapshot,
+)
+from ._checks._audit import ParamHealthReport, param_health
 from ._compile_counter import CompileCounts as CompileCounts, count_compiles
 from ._cost import hot_path, hot_path_rows
+from ._determinism import DeterminismReport, check_determinism
+from ._dtype_range import DTypeRangeReport, dtype_range
 from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 from ._grad_fn_walk import (
     GradFnNode,
@@ -51,6 +63,7 @@ from ._grad_fn_walk import (
     sketch_grad_fn,
     walk_grad_fn,
 )
+from ._gradients import grad_health
 from ._graph import (
     LineageReport,
     compare,
@@ -64,7 +77,14 @@ from ._graph_breaks import (
     graph_breaks,
 )
 from ._infer_input_shape import GuessInputShapeReport, guess_input_shape
-from ._nan import BisectNanReport, FindNanReport, bisect_nan, find_nan
+from ._nan import (
+    BisectNanReport,
+    FindNanReport,
+    NonfiniteReport,
+    bisect_nan,
+    find_nan,
+    nonfinite_origin,
+)
 from ._nan_backward import BackwardNanReport, BackwardTransition, bisect_nan_backward
 from ._params import compare_params
 from ._precision import BisectPrecisionReport, PrecisionRow as PrecisionRow, bisect_precision
@@ -72,6 +92,19 @@ from ._recompute import recompute_candidates
 from ._rerun import clone_input_tree, isolated_capture, preserved_rng_state
 
 __all__ = [
+    "CheckFinding",
+    "CheckReport",
+    "ChecksSession",
+    "ClipLedger",
+    "ClipLedgerSnapshot",
+    "LivenessProbe",
+    "OptimizerFacts",
+    "RangeProbe",
+    "ScaleLedger",
+    "ScaleLedgerSnapshot",
+    "ScanRow",
+    "Watchdog",
+    "WatchdogSnapshot",
     "DTypeRangeReport",
     "DeterminismReport",
     "NonfiniteReport",

@@ -12,6 +12,8 @@ an intervened value as captured-native.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -118,7 +120,7 @@ def test_mlx_halt_returns_partial_trace_at_frontier() -> None:
     """halt= stops the forward at the matched op; the partial trace ends there."""
 
     model = _TwoLayerMLP()
-    trace = tl.trace(model, _input(), backend="mlx", halt=tl.func("relu"))
+    trace = tl.trace(model, _input(), backend="mlx", stop_after=tl.func("relu"))
 
     assert trace.is_stopped is True
     assert str(trace.stop_reason).startswith("relu")
@@ -227,18 +229,27 @@ def test_mlx_shape_changing_hook_refuses_typed() -> None:
     assert info.value.code == "intervention_result_invalid"
 
 
-def test_mlx_recipes_refuses_typed() -> None:
-    """Recipe specs stay refused; only tl.when static predicates dispatch."""
+def test_mlx_recipes_snapshot_dispatches() -> None:
+    """facets= attaches a per-trace facet registry snapshot; non-callables refuse typed."""
 
-    with pytest.raises(BackendUnsupportedError, match="recipe"):
+    def recipe(record: Any) -> dict[str, Any]:
+        return {"is_relu": "relu" in str(getattr(record, "label", ""))}
+
+    trace = tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=[recipe])
+    snapshot = trace.facet_functions
+    assert snapshot is not None
+    assert any("recipe" in entry.public.name for entry in snapshot.functions)
+
+    with pytest.raises(BackendUnsupportedError, match="recipe callables") as info:
         tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=object())
+    assert info.value.code == "trace_option_unsupported"
 
 
 def test_mlx_halt_non_selector_refuses_typed() -> None:
     """Value-dependent halt predicates keep the typed refusal."""
 
     with pytest.raises(BackendUnsupportedError, match="static-label"):
-        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", halt=lambda ctx: True)
+        tl.trace(_TwoLayerMLP(), _input(), backend="mlx", stop_after=lambda ctx: True)
 
 
 def test_mlx_grad_options_with_intervene_refuses_typed() -> None:
@@ -264,7 +275,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "can_intervene", False)
     try:
-        with pytest.raises(BackendUnsupportedError, match="interventions=False"):
+        with pytest.raises(BackendUnsupportedError, match="can_intervene=False"):
             tl.trace(
                 _TwoLayerMLP(),
                 _input(),

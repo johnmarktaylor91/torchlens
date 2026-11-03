@@ -349,12 +349,12 @@ def test_trace_to_pandas_covers_all_op_fields() -> None:
     """
 
     from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER
-    from torchlens.export._trace_tables import _TO_PANDAS_EXCLUDED_OP_FIELDS
+    from torchlens.stats._trace_tables import _TO_PANDAS_EXCLUDED_OP_FIELDS
 
     log = trace_fn(
         _CondConvModel(),
         torch.rand(1, 1, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     try:
         model_df = log.to_pandas()
@@ -386,7 +386,7 @@ def test_trace_to_pandas_func_config_and_conditional_values() -> None:
     log = trace_fn(
         _CondConvModel(),
         torch.rand(1, 1, 8, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     try:
         model_df = log.to_pandas()

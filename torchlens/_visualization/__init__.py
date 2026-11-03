@@ -7,16 +7,8 @@ The experimental Dagua renderer is available from
 from typing import Any
 
 _USER_FUNC_EXPORTS = {
-    "draw_backward",
-    "draw_combined",
     "show_bundle_graph",
     "show_model_graph",
-}
-
-#: Surgery-visuals doors (lane F43; DOCUMENTED-UNSTABLE spellings): lazy so
-#: ``import torchlens._visualization`` never pays for the audit derivation.
-_SURGERY_EXPORTS = {
-    "render_surgery": "surgery_visuals",
 }
 
 
@@ -53,18 +45,10 @@ def __getattr__(name: str) -> Any:
         import importlib
 
         return importlib.import_module(".lenses", __name__)
-    if name in _SURGERY_EXPORTS:
-        import importlib
-
-        module = importlib.import_module(f".{_SURGERY_EXPORTS[name]}", __name__)
-        return getattr(module, name)
     raise AttributeError(f"module 'torchlens._visualization' has no attribute {name!r}")
 
 
 __all__ = [
-    "draw_backward",
-    "draw_combined",
-    "render_surgery",
     "show_bundle_graph",
     "show_model_graph",
 ]

@@ -17,6 +17,9 @@ omitted entirely: `selectors.py` (site selectors incl. `without_op`),
 `predicates.py`, `replay.py` (`push`/`push_from`), `rerun.py` (`run`),
 `save.py` (intervention specs), `runtime.py`, `sweep.py`, `types.py`,
 `handles.py`, `helpers.py`, and `errors.py`.
+- `_facet_writes.py` holds the facet-write internals `hooks.py` uses (scoped
+  facet views, write-conflict checks, the active facet-fire context); patch
+  donor resolution for `helpers.patch_from` lives in `_helper_internals.py`.
 - Facet selectors (`tl.head`, `tl.facet`, `.latent`) on a finished trace: a
   bare `FacetSelector` in `resolver.resolve_sites` (and so `trace[selector]`)
   resolves through `hooks._resolve_facet_specs`, the same resolution the write

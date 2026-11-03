@@ -8,7 +8,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
-import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.trace import Trace
@@ -176,7 +175,7 @@ def _log_model(model: nn.Module) -> Trace:
         Fully postprocessed model log.
     """
     x = torch.ones(1, 4)
-    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return trace_fn(model, x, save="all")
 
 
 def _get_only_event(trace: Trace) -> int:
@@ -277,8 +276,8 @@ def test_rolled_mixed_arm_model_records_per_arm_edge_ops() -> None:
     assert len(else_edges) == 2
 
     parent_label, child_label = then_edges[0]
-    parent_no_pass = trace[parent_label].layer_label
-    child_no_pass = trace[child_label].layer_label
+    parent_no_pass = trace.layers[parent_label].layer_label
+    child_no_pass = trace.layers[child_label].layer_label
 
     assert trace.graph.conditional_edge_call_indices[
         (parent_no_pass, child_no_pass, conditional_id, "then")

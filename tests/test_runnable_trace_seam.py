@@ -210,7 +210,7 @@ def test_trace_pickled_at_pre_seam_commit_refuses_as_2x() -> None:
 
     message = str(excinfo.value)
     assert "saved by torchlens 2.x" in message, message
-    assert "save it again with torchlens 2.36.x" in message, message
+    assert "load it with torchlens 2.36.x" in message, message
     assert "capture the model again" in message, message
     assert excinfo.value.fields["code"] == "artifact_version_below_floor"
     assert excinfo.value.fields["observed"].startswith("module_path=torchlens.")

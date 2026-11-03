@@ -40,8 +40,11 @@
   `activation_patch_attention_output()`, `activation_patch_attention_heads()`,
   `activation_patch_mlp_output()`, `attribution_patch_attention_heads()`.
 - Built on `trace()` plus the `facet` selector from `_selection/selectors.py`;
-  `_CounterfactualStateGuard` snapshots/restores RNG and stateful tensors so
-  clean/corrupted runs stay comparable.
+  `_CounterfactualStateGuard` (in `_state_guard.py`, with `_teardown`)
+  snapshots/restores RNG and stateful tensors so clean/corrupted runs stay
+  comparable.
+- Model-input facet patching (input-homed facets, which live hooks never
+  reach) lives in `_input_patching.py`.
 
 ## reconstruction.py
 - Fused-SDPA facet reconstruction: `SDPAReconstruction`,

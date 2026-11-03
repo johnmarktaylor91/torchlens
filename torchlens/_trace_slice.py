@@ -40,10 +40,10 @@ from torchlens._selection.errors import SelectionError
 
 from ._selection.graph import (
     _edge_partition,
+    _ExecutedDag,
     _lift_region_group,
     _region_labels,
     _resolve_region,
-    _TraceGraph,
     resolve_between_labels,
 )
 from ._selection.selection import (
@@ -79,7 +79,7 @@ class TraceSlice(_SelectionOperand):
 
     _boundary_in: tuple[tuple[str, str], ...]
     _boundary_out: tuple[tuple[str, str], ...]
-    _graph: _TraceGraph
+    _graph: _ExecutedDag
     _internal_edges: tuple[tuple[str, str], ...]
     _labels: tuple[str, ...]
     _member_set: frozenset[str]
@@ -89,7 +89,7 @@ class TraceSlice(_SelectionOperand):
     def __init__(
         self,
         trace: Any,
-        graph: _TraceGraph,
+        graph: _ExecutedDag,
         members: frozenset[str],
         source: str,
     ) -> None:
@@ -396,6 +396,6 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
             right_kind=lifted.kind,
             operator="subgraph",
         )
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     members = _region_labels(graph, _resolve_region(lifted, trace), "subgraph")
     return TraceSlice(trace, graph, members, f"subgraph({lifted!r})")

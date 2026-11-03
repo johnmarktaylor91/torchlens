@@ -21,9 +21,12 @@ from typing import Any
 
 import torch
 
-from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, PayloadUnavailableError
 from .._observability._kernels import RunningStats, _as_reduction_tensor
+from .._trace_state import (
+    STATS_REDUCER_REPR as STATS_REDUCER_REPR,
+    is_stats_capture as is_stats_capture,
+)
 
 __all__ = [
     "STATS_REDUCER_REPR",
@@ -37,10 +40,6 @@ __all__ = [
 
 #: The ``save=`` value that selects reduce-and-discard capture.
 STATS_SAVE_LEVEL = "stats"
-
-#: The reducer's fixed repr; a Trace records it as its transform repr, which
-#: survives save and load, so a reloaded stats trace is still recognised.
-STATS_REDUCER_REPR = "tl.stats save='stats' spine reducer"
 
 #: Packed vector slots, in ``RunningStats`` attribute order, then the dtype code.
 _FIELDS = (
@@ -166,16 +165,16 @@ def _fold_finite(spine: RunningStats, finite: torch.Tensor) -> None:
 
 
 def stats_save_options() -> Any:
-    """Return the ``SaveOptions`` that ``save="stats"`` stands for.
+    """Return the save transforms that ``save="stats"`` stands for.
 
     The summary-role reducer as the activation transform with raw outs
     dropped: the capture's existing reduce-only path, so no raw clone is made
     and the save budget is charged only the packed vectors.
     """
 
-    from ..options import SaveOptions
+    from ..options import _SaveTransforms
 
-    return SaveOptions(activation_transform=_StatsReducer(), save_raw_activations=False)
+    return _SaveTransforms(activation_transform=_StatsReducer(), save_raw_activations=False)
 
 
 def refuse_reduced_payload_read(slot: Any, source_trace: Any) -> None:
@@ -220,17 +219,6 @@ def unpack_spine(vector: torch.Tensor, *, name: str | None = None) -> RunningSta
             setattr(spine, field, cell)
     spine._reduction_dtype = _DTYPE_NAMES.get(cells[len(_FIELDS)])
     return spine
-
-
-def is_stats_capture(trace: Any) -> bool:
-    """Whether ``trace`` was captured with ``save="stats"`` (live or reloaded)."""
-
-    if trace._options_save_raw_activations if is_live_trace(trace) else True:
-        return False
-    transform = trace._options_activation_transform if is_live_trace(trace) else None
-    if getattr(transform, "_tl_stats_reducer", False):
-        return True
-    return trace._activation_transform_repr == STATS_REDUCER_REPR  # noqa: SLF001 -- declared Trace field
 
 
 def site_stats(trace: Any) -> dict[str, RunningStats]:

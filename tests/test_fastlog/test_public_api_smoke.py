@@ -91,7 +91,7 @@ def test_record_multi_arg_and_kwargs_forward() -> None:
     recording = tl.record(
         MultiArgModel(),
         (x, y),
-        {"scale": 2},
+        input_kwargs={"scale": 2},
         save=_keep_all_ops,
     )
 

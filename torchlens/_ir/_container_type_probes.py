@@ -11,6 +11,9 @@ rebuild drops (lossiness). ``container.py`` consumes them.
 from __future__ import annotations
 
 import dataclasses
+import inspect
+import re
+import sys
 import types
 from collections.abc import Callable
 from typing import Any, cast
@@ -304,3 +307,114 @@ def _fields_are_inert_settable(container_type: type[Any], names: tuple[Any, ...]
     if not _type_has_instance_dict(container_type):
         return False
     return not any(_name_is_data_descriptor(container_type, name) for name in names)
+
+
+def _container_type_ref(value: Any) -> tuple[str | None, str | None]:
+    """Return the importable type reference for ``value``."""
+
+    cls = type(value)
+    return cls.__module__, cls.__qualname__
+
+
+def _is_namedtuple_instance(value: Any) -> bool:
+    """Return whether ``value`` is a namedtuple instance."""
+
+    return isinstance(value, tuple) and hasattr(value, "_fields")
+
+
+def _is_hf_model_output(value: Any) -> bool:
+    """Return whether ``value`` looks like a HuggingFace ``ModelOutput``."""
+
+    cls = type(value)
+    if any(
+        base.__module__.startswith("transformers") and base.__name__ == "ModelOutput"
+        for base in cls.__mro__
+    ):
+        return True
+    return (
+        (cls.__module__.startswith("transformers") or cls.__name__.endswith("ModelOutput"))
+        and hasattr(value, "keys")
+        and hasattr(value, "__getitem__")
+    )
+
+
+def _torch_return_type_fields(value: Any) -> tuple[str, ...]:
+    """Best-effort field names for tuple-like torch return types."""
+
+    if not isinstance(value, tuple):
+        return ()
+    n_fields = getattr(value, "n_fields", None)
+    n_unnamed = getattr(value, "n_unnamed_fields", 0)
+    if not isinstance(n_fields, int) or n_fields <= 0 or n_unnamed:
+        return ()
+    field_names = tuple(
+        match.group(1)
+        for match in re.finditer(r"^\s*([A-Za-z_]\w*)=", repr(value), flags=re.MULTILINE)
+    )
+    if len(field_names) != n_fields:
+        return ()
+    return field_names
+
+
+def _is_hf_model_output_type(container_type: type[Any]) -> bool:
+    """Return whether ``container_type`` is a HuggingFace ``ModelOutput`` container class.
+
+    Mirrors the capture-side ``ir.container_registry._is_hf_model_output`` heuristic at
+    the class level. Inspects only the ALREADY-RESOLVED class (its MRO / name / mapping
+    protocol); it never imports ``transformers`` to satisfy an attacker.
+
+    Parameters
+    ----------
+    container_type:
+        Resolved class to classify.
+
+    Returns
+    -------
+    bool
+        True when the class is a real ``transformers`` ``ModelOutput`` subclass or a
+        HuggingFace-style mapping output class.
+    """
+
+    for base in getattr(container_type, "__mro__", ()):
+        if base.__module__.startswith("transformers") and base.__name__ == "ModelOutput":
+            return True
+    return (
+        (
+            container_type.__module__.startswith("transformers")
+            or container_type.__name__.endswith("ModelOutput")
+        )
+        and hasattr(container_type, "keys")
+        and hasattr(container_type, "__getitem__")
+    )
+
+
+def _is_trusted_transformers_output_type(container_type: type[Any], spec: Any | None) -> bool:
+    """Return whether ``container_type`` is a genuine ``transformers`` output by resolution authority.
+
+    r42 secB_1: mirrors :func:`_is_trusted_structseq_type`. The trust decision keys on the SPEC's
+    resolution authority (``spec.type_module`` / ``spec.type_qualname``), never the resolved
+    class's spoofable ``__module__`` string nor a loose ``startswith("transformers")`` prefix
+    (which matches ``transformers_evil``). Trust requires ALL of: the spec named the genuine
+    package (``transformers`` or ``transformers.``-prefixed), that module is actually loaded in
+    ``sys.modules``, and static re-resolution of ``spec.type_qualname`` from it returns the
+    IDENTICAL class object. A ``None`` spec (a legacy direct call with no resolution authority)
+    is never trusted -- fail closed.
+    """
+
+    if spec is None:
+        return False
+    module = spec.type_module or ""
+    if module != "transformers" and not module.startswith("transformers."):
+        return False
+    if not spec.type_qualname:
+        return False
+    loaded = sys.modules.get(module)
+    if loaded is None:
+        return False
+    resolved: Any = loaded
+    try:
+        for attribute_name in spec.type_qualname.split("."):
+            resolved = inspect.getattr_static(resolved, attribute_name)
+    except AttributeError:
+        return False
+    return resolved is container_type

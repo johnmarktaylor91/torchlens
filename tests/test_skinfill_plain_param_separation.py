@@ -169,7 +169,7 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
         "intervention": "#CC79A7",
     }
     expected = {
-        "torchlens": (LEGACY_SEMANTIC_PALETTE, "white", "black", "black"),
+        "torchlens": (OKABE_ITO_SEMANTIC_PALETTE, "white", "black", "black"),
         "paper": (LEGACY_SEMANTIC_PALETTE, "#F7F7F7", "#222222", "#111111"),
         "high_contrast": (LEGACY_SEMANTIC_PALETTE, "white", "black", "black"),
     }
@@ -181,9 +181,9 @@ def test_unchanged_skins_keep_their_palettes_and_plain_fills() -> None:
 
 
 def test_changed_skins_keep_their_role_colours() -> None:
-    """Role colours as shipped: colorblind keeps history; dark frozen weights are lighter."""
+    """Role colours as shipped: colorblind renders Okabe-Ito; dark frozen weights are lighter."""
 
-    assert THEME_PRESETS["colorblind"].semantic_palette is LEGACY_SEMANTIC_PALETTE
+    assert THEME_PRESETS["colorblind"].semantic_palette is OKABE_ITO_SEMANTIC_PALETTE
     dark = THEME_PRESETS["dark"]
     assert {role: dark.semantic_palette[role] for role in _PARAM_ROLES} == {
         "params_generic": "#374151",

@@ -34,19 +34,47 @@ profiler session whose join reached `joined`
 anywhere else refuses typed (`device_time_unavailable`) with the cause and
 remedy — never silent zeros. Joined-but-kernel-less nodes read honest n/a.
 
-### size_by + scale — box minimums (D4 default mapping)
+### size_by + scale — node area
 
-`draw(size_by="dims", scale="sqrt")` sizes nodes by the numel of the
-non-batch output shape (the conservative area-only mapping, applied as the
-D4 default), emitted as width/height MINIMUMS under `fixedsize=false`:
-labels never truncate, fonts never scale, encoded area clamps at 4x the
-default node area. Scalar fields and callables are also legal sources; on
-rolled multi-pass nodes a source that cannot be certified single-valued
-refuses (`size_by_rolled_varying`). On text-heavy nodes the label's natural
-size dominates the minimum — the taper motif reads on compact nodes.
+`size_by` accepts the same builtin tokens as `color_by` with the same
+meaning and legend units (`"time"`, `"bytes"`, `"flops"`, `"magnitude"`,
+`"grad_norm"`, `"device_time"`), plus record field names, callables, and
+the shape token `"dims"`: `draw(size_by="dims", size_scale="sqrt")` sizes nodes
+by the numel of the non-batch output shape (the conservative area-only
+mapping). On rolled multi-pass nodes a source that cannot be certified
+single-valued refuses (`size_by_rolled_varying`).
+
+Sizes are label-aware. Once every label is resolved, the draw estimates each
+label box and takes the median box among the size-encoded nodes as the base:
+the smallest-value node is the size of a typical label, and area grows
+linearly to 4x the base at the largest value. Nodes with typical labels share
+the base, so their areas compare directly. A node whose label is wider or
+taller than the median starts from its own label box instead and grows by the
+same factor, so one long argument row never inflates every node.
+Sizes are emitted as width/height MINIMUMS under `fixedsize=false`: labels
+never truncate and fonts never scale. A `node_spec_fn` that sets its own
+width/height keeps them.
 
 ![size_by CNN](../images/encoding/size_by_dims_cnn.svg)
 ![size_by transformer](../images/encoding/size_by_dims_transformer.svg)
+
+### Collapsed module boxes and segments
+
+When the graph is collapsed (`depth=N`, `collapse="auto"`, `collapse="max"`),
+module boxes and segment capsules are encoded too. A box's value is the
+EXACT sum of its member ops for additive sources: `"time"`
+(`func_duration`), `"bytes"` (`activation_memory`), `"flops"`
+(`flops_forward`), `"device_time"`, and the additive fields
+`transformed_activation_memory`, `flops_backward`, `flops_total` and
+`macs_forward`. The legend states the aggregation (`module boxes: sum over
+member ops`, `... across all calls` on rolled views, `segments: sum over
+member ops`). An op with no function (inputs, outputs, buffers) contributes
+zero time and flops. A box with any member op missing a value is left
+unencoded with a legend note rather than shown with a partial sum. Sources
+with no exact sum over ops (`"magnitude"`, `"grad_norm"`, `"dims"`, other
+fields, callables) leave every box unencoded, and the legend says so
+(`collapsed nodes unencoded: <source> has no exact sum over ops`). A repeat
+fold box shows its representative module only, and the legend notes it.
 
 ### stack_by — rank columns (the classic timestep diagram)
 

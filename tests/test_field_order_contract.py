@@ -69,6 +69,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "_out_hash_cache",
                 "_out_identity_cache",
                 "_output_transform",
+                "_output_slot",
                 "_runnable",
                 "_source_model_ref",
                 "_transform",
@@ -110,7 +111,6 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 # (FieldPolicy.KEEP) with load validation.
                 "last_run",
                 "layer_visualizers",
-                "_module_filter",
                 "_parent_run",
                 # R2-37: the live pinned-graph disclosure; a loaded trace pins
                 # nothing, so it never persists.

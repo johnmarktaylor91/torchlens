@@ -174,16 +174,13 @@ def test_live_intervention_retention_contract(entrypoint: str) -> None:
         assert relu_layer.edits[0].timing == "post"
         assert relu_layer.edits[0].signal == "forward"
     else:
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                LinearRelu(),
-                torch.ones(1, 4),
-                save=tl.func("linear"),
-                intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-                return_output=True,
-            ),
+        recording = tl.record(
+            LinearRelu(),
+            torch.ones(1, 4),
+            save=tl.func("linear"),
+            intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
         )
+        output = cast(torch.Tensor, recording.output)
         assert torch.equal(output, torch.zeros_like(output))
         assert len(recording.records) == 1
         payload = recording.records[0].ram_payload
@@ -214,9 +211,8 @@ def test_intervene_only_mutates_forward_output_without_saving_site() -> None:
         LinearRelu(),
         torch.ones(1, 4),
         intervene=tl.when(tl.func("linear"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="none", output_transform=lambda output: output
-        ),
+        capture=tl.options.CaptureOptions(output_transform=lambda output: output),
+        save="none",
     )
     output = log.transformed_output
 
@@ -234,7 +230,7 @@ def test_conditional_intervention_uses_live_index_lookback() -> None:
         torch.ones(1, 4),
         intervene=tl.when(tl.func("relu") & tl.preceded_by(tl.in_module("layer4")), tl.scale(0.5)),
         save=tl.func("linear") | tl.func("relu"),
-        lookback=4,
+        capture=tl.options.CaptureOptions(lookback=4),
     )
 
     linear = _linear_op(log)
@@ -267,10 +263,11 @@ def test_save_new_outs_rebuilds_child_versions_and_validates_alias_mutation() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
-    log.save_new_outs(model, new_x, layers_to_save="all")
+    log.save_new_outs(model, new_x, save="all")
 
     add_site = log["add_1_1"]
     assert log._replay_arg_version_data_complete
@@ -286,7 +283,8 @@ def test_selective_fast_save_rebuilds_versions_without_unsaved_out_postprocess()
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save=["mul"],
     )
 
     assert log._replay_arg_version_data_complete
@@ -307,7 +305,8 @@ def test_selective_fast_save_without_arg_values_marks_replay_versions_incomplete
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["mul"], save_args=False),
+        capture=tl.options.CaptureOptions(save_args=False),
+        save=["mul"],
     )
 
     assert not log._replay_arg_version_data_complete

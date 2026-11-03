@@ -19,6 +19,8 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
+- `_cost_tiers.py` — the measurable cost tiers of `overhead` and their validation,
+  used by `_cost_perf.py`.
 - `_environment.py` — the environment health checks and capability snapshot behind
   `tl.report.doctor()` (`_doctor.py` imports them lazily).
 - `__init__.py` — public surface (`ExplainReport`, `ProfileReport`, `profile`, `HealthReport`, `FlopsCrossCheck`);
@@ -57,6 +59,12 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
 - `_summary_result.py` — the rebuilt-summary assembler both entry doors share
   (`build_rebuilt_summary`), fact collection, filtering + coverage
   disclosure, and the projection implementations.
+- `_notebook/` — the Jupyter display layer: `cards.py` (`trace_repr_html`, the summary
+  card behind `Trace._repr_html_`), `cardtree.py`, `frontier.py`, `_truncation.py`
+  (treescope truncation), `_grid.py`, `_access.py`, `_axis_labels.py`, `_motifs.py`.
+  Importing it must stay inert (no torch wrapping, no IPython import); it is one of
+  the two appliance modules excluded from callable resolution, and that set must
+  match in `_utils/_callable_safety.py` and `intervention/_resolver_registry.py`.
 
 ## Gotchas
 
@@ -64,4 +72,4 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   ceilinged capture (`capture_verified=False`) must stay visible in profile/explain
   output; never present an unverified capture as clean.
 - `forward_peak_memory` / `backward_peak_memory` are runtime measurements that read `None` (with
-  `*_peak_memory_reason`) on a default CPU capture (opt-in `measure_host_peak_memory=True`) or when an opted-in CPU delta is 0 — never present them as portable facts (root rule, `docs/agent-reference/known-gotchas.md`).
+  `*_peak_memory_reason`) on a default CPU capture (opt-in `measure_host_peak_memory=True`) or when an opted-in CPU delta is 0 — never present them as portable facts (root rule, `docs/internal/agent-reference/known-gotchas.md`).

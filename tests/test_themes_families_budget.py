@@ -79,7 +79,7 @@ def test_speed_resolves_per_pass_member_on_unrolled(mlp_log: Any) -> None:
 def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     """Rolled speed binds total_func_duration WITH the aggregation line."""
 
-    resolution = lenses.resolve_lens(mlp_log, "speed", {"vis_mode": "rolled"})
+    resolution = lenses.resolve_lens(mlp_log, "speed", {"rolled": True})
     assert resolution.source is not None
     assert resolution.source.member == "total_func_duration"
     assert any("total across passes" in line for line in resolution.disclosure)
@@ -227,10 +227,12 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
 
     import warnings as warnings_module
 
-    from torchlens._visualization import collapse_optimizer
+    from torchlens._visualization import _render_names, collapse_optimizer
 
     # A tiny trace over a lowered ceiling: no call depth reaches the 100-220
     # band, so the nearest-depth estimate is served with the coded warning.
+    # The lens budget reads the ceiling from its leaf home; lower it in both.
+    monkeypatch.setattr(_render_names, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
     monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
@@ -238,7 +240,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "lens_budget_above_ceiling_fallback" in codes
     assert not budget.in_band
-    assert "vis_call_depth" in budget.dial
+    assert "depth" in budget.dial
     assert any("estimate" in line for line in budget.disclosure)
 
 

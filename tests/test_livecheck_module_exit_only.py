@@ -285,9 +285,8 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
     ):
         warnings.simplefilter("always")
         warnings.simplefilter("ignore", TorchCapabilityWarning)
-        output, recording = tl.record(
-            _model(), _input(), save=lambda ctx: True, intervene=spec, return_output=True
-        )
+        recording = tl.record(_model(), _input(), save=lambda ctx: True, intervene=spec)
+        output = recording.output
     return {
         "records": [
             (str(r.ctx.label), str(r.ctx.layer_type), _thash(r.ram_payload))
@@ -647,13 +646,13 @@ def test_record_module_steer_fires_once_per_module_call() -> None:
     """``tl.record`` fires a module-only steer once per call, at the boundary, like a plain hook."""
 
     with _fire_spy() as fires:
-        output, recording = tl.record(
+        recording = tl.record(
             _model(),
             _input(),
             save=tl.module("block1"),
             intervene=_SPECS["steer"][0](),
-            return_output=True,
         )
+        output = recording.output
     assert fires == [(True, 1), (True, 1)]  # block1 runs twice; no op-door fire
 
     # The same steer as a plain torch forward hook, run eagerly: its replaced outputs are the

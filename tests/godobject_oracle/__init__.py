@@ -8,5 +8,5 @@ observability, ``Op._copy_with_shallow_fields()`` selective depth, fork isolatio
 warning/dirty-state transition, weakref lifetime, and payload identity.
 
 Any behavior change caught here during the columnar re-plumbing is a bug in
-the migration (docs/reference/trace_core_design.md, LOCKED tripwire).
+the migration (docs/internal/reference/trace_core_design.md, LOCKED tripwire).
 """

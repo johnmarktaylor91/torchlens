@@ -27,7 +27,7 @@ from ..errors import (
     RunCapabilityUnavailableError,
     RuntimeSignatureDriftError,
 )
-from ..intervention.replay import _CallConeNode, _walk_call_cone
+from ..intervention._replay_cone import _CallConeNode, _walk_call_cone
 from . import (
     ActivationPayloadLayerDescriptor,
     DivergencePolicy,

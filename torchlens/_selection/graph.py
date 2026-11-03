@@ -19,7 +19,7 @@ against one trace:
   modes — see :mod:`torchlens._trace_slice`).
 
 THE GENERAL GRAPH-QUERY SUBSTRATE: both producers are thin pure functions
-over :class:`_TraceGraph`, a frozen queryable view of one trace's executed
+over :class:`_ExecutedDag`, a frozen queryable view of one trace's executed
 DAG — nodes are pass-qualified op labels, edges the recorded parent->child
 dataflow, and ``graph.ops`` hands back the full typed ``Op`` record for any
 node (func name, module stack, shapes). A future graph-MOTIF producer
@@ -77,7 +77,7 @@ _DIRECTIONS = ("both", "upstream", "downstream")
 
 
 @dataclass(frozen=True)
-class _TraceGraph:
+class _ExecutedDag:
     """One trace's executed DAG as a frozen, queryable plain graph.
 
     Nodes are pass-qualified op labels (``Op.label``); ``parents`` /
@@ -95,7 +95,7 @@ class _TraceGraph:
     by_site: Mapping[tuple[str, int], str] = field(repr=False)
 
     @classmethod
-    def from_trace(cls, trace: Any) -> _TraceGraph:
+    def from_trace(cls, trace: Any) -> _ExecutedDag:
         """Build the graph view from one finished trace's executed ops."""
 
         from ..receptive_field._path import _graph_indexes
@@ -124,7 +124,7 @@ class _TraceGraph:
 
 
 def _n_hop_labels(
-    graph: _TraceGraph, seeds: frozenset[str], hops: int, direction: str
+    graph: _ExecutedDag, seeds: frozenset[str], hops: int, direction: str
 ) -> frozenset[str]:
     """Return every node within ``hops`` edges of ``seeds`` (seeds included).
 
@@ -151,7 +151,7 @@ def _n_hop_labels(
 
 
 def _between_label_set(
-    graph: _TraceGraph, sources: frozenset[str], sinks: frozenset[str]
+    graph: _ExecutedDag, sources: frozenset[str], sinks: frozenset[str]
 ) -> frozenset[str]:
     """Return nodes on at least one directed source-to-sink path.
 
@@ -173,7 +173,7 @@ def _between_label_set(
 
 
 def _edge_partition(
-    graph: _TraceGraph, members: frozenset[str]
+    graph: _ExecutedDag, members: frozenset[str]
 ) -> tuple[
     tuple[tuple[str, str], ...],
     tuple[tuple[str, str], ...],
@@ -281,7 +281,7 @@ def _resolve_region(operand: Any, trace: Any) -> Selection:
     return operand._resolve(trace)
 
 
-def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> frozenset[str]:
+def _region_labels(graph: _ExecutedDag, resolved: Selection, producer: str) -> frozenset[str]:
     """Map a resolved region's element-carrying sites to graph node labels.
 
     A site that carries at least one selected element is a whole graph
@@ -310,7 +310,7 @@ def _region_labels(graph: _TraceGraph, resolved: Selection, producer: str) -> fr
 
 
 def _materialize_labels(
-    graph: _TraceGraph, trace: Any, labels: frozenset[str], source: str
+    graph: _ExecutedDag, trace: Any, labels: frozenset[str], source: str
 ) -> Selection:
     """Materialize a node-label set as whole-site ACT entries (exact).
 
@@ -356,7 +356,7 @@ class _SliceMembersTerm:
 def _resolve_slice_members_term(node: _SliceMembersTerm, trace: Any) -> Selection:
     """Resolve a slice's member family against one trace (whole-site exact)."""
 
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     labels: set[str] = set()
     for site in node.sites:
         label = graph.by_site.get(site)
@@ -402,7 +402,7 @@ class _BetweenTerm:
 def _resolve_neighborhood_term(node: _NeighborhoodTerm, trace: Any) -> Selection:
     """Resolve one n-hop neighborhood against the trace's executed DAG."""
 
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     seeds = _region_labels(graph, _resolve_region(node.seed, trace), "neighborhood")
     labels = _n_hop_labels(graph, seeds, node.hops, node.direction)
     source = f"neighborhood(hops={node.hops}, direction={node.direction!r})"
@@ -418,7 +418,7 @@ def _resolve_between_term(node: _BetweenTerm, trace: Any) -> Selection:
 
 def resolve_between_labels(
     trace: Any, sources: tuple[Any, ...], sinks: tuple[Any, ...]
-) -> tuple[frozenset[str], _TraceGraph]:
+) -> tuple[frozenset[str], _ExecutedDag]:
     """Resolve lifted endpoint groups to the between-region label set.
 
     The shared machinery behind BOTH spellings of the one idea: the
@@ -426,7 +426,7 @@ def resolve_between_labels(
     presenter call this same function (internal seam).
     """
 
-    graph = _TraceGraph.from_trace(trace)
+    graph = _ExecutedDag.from_trace(trace)
     source_labels: set[str] = set()
     for operand in sources:
         source_labels |= _region_labels(graph, _resolve_region(operand, trace), "between")
@@ -512,3 +512,77 @@ def between(sources: Any, sinks: Any) -> Selector:
 register_term_resolver(_NeighborhoodTerm, _resolve_neighborhood_term)
 register_term_resolver(_BetweenTerm, _resolve_between_term)
 register_term_resolver(_SliceMembersTerm, _resolve_slice_members_term)
+
+
+# ---------------------------------------------------------------------------
+# Unit-level influence: the query term and its builder. The resolver (the
+# field-engine walk and the gradient probes) lives in
+# ``torchlens.receptive_field._influence``, which the ``receptive_field``
+# package imports, so the term resolves whenever a field view exists. The term
+# lives here, beside the other graph producers, so ``.of()`` on the field views
+# can build a query without importing the engine module.
+# ---------------------------------------------------------------------------
+
+_INFLUENCE_DIRECTIONS = ("projective", "receptive")
+_INFLUENCE_METHODS = ("geometric", "gradient")
+_DEFAULT_PROBE_BUDGET = 256
+
+
+@dataclass(frozen=True)
+class _InfluenceTerm:
+    """AST leaf for the unit-level influence query (``.of()`` on the field views)."""
+
+    seed: Any
+    within: tuple[Any, ...] | None
+    direction: str
+    method: str
+    probe_budget: int
+
+    def __repr__(self) -> str:
+        """Return the compact constructor-shaped disclosure."""
+
+        within = "None" if self.within is None else "[" + ", ".join(map(repr, self.within)) + "]"
+        return (
+            f"influence(of={self.seed!r}, within={within}, direction={self.direction!r}, "
+            f"method={self.method!r})"
+        )
+
+
+def _influence(
+    seed: Any,
+    within: Any = None,
+    *,
+    direction: str = "projective",
+    method: str = "geometric",
+    probe_budget: int = _DEFAULT_PROBE_BUDGET,
+) -> Selector:
+    """Build the influence query (the private builder behind the field views' ``.of()``).
+
+    ``seed`` is any ACT region (site label, ``Op``/``Layer``, selection);
+    ``within`` is one target region or a list of them, ``None`` meaning the
+    view default (model outputs when projective, model inputs when
+    receptive). ``direction`` is ``"projective"`` (units the seed reaches) or
+    ``"receptive"`` (units that reach the seed); ``method`` is
+    ``"geometric"`` or ``"gradient"``; ``probe_budget`` bounds the number of
+    autograd probes (seed units times target sites) the gradient method may
+    run.
+    """
+
+    if direction not in _INFLUENCE_DIRECTIONS:
+        raise ValueError(
+            f"influence `direction` must be one of {_INFLUENCE_DIRECTIONS}; got {direction!r}."
+        )
+    if method not in _INFLUENCE_METHODS:
+        raise ValueError(f"influence `method` must be one of {_INFLUENCE_METHODS}; got {method!r}.")
+    if isinstance(probe_budget, bool) or not isinstance(probe_budget, int) or probe_budget < 1:
+        raise ValueError(f"influence `probe_budget` must be a positive int; got {probe_budget!r}.")
+    return Selector(
+        _InfluenceTerm(
+            seed=_lift_region(seed, "influence", "of"),
+            within=None if within is None else _lift_region_group(within, "influence", "within"),
+            direction=direction,
+            method=method,
+            probe_budget=probe_budget,
+        ),
+        kind="ACT",
+    )
