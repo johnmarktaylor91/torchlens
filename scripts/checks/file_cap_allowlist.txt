@@ -47,7 +47,7 @@ torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	104
 torchlens/_capture/projections.py::_sparse_freeze_values	68
 torchlens/_capture/projections.py::sync_recording_grad_records_from_sidecar	62
-torchlens/_capture/projectors.py	1024
+torchlens/_capture/projectors.py	1022
 torchlens/_capture/projectors.py::RecordingProjector.project	87
 torchlens/_capture/projectors.py::RefreshProjector._check_buffer_sink_routing	117
 torchlens/_capture/projectors.py::RefreshProjector.project	89
@@ -371,8 +371,8 @@ torchlens/_postprocess/graph_traversal.py	972
 torchlens/_postprocess/graph_traversal.py::_add_output_layers	303
 torchlens/_postprocess/graph_traversal.py::_remove_orphan_nodes	103
 torchlens/_postprocess/graph_traversal.py::_resolve_output_parent_labels	132
-torchlens/_postprocess/labeling.py	1125
-torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	122
+torchlens/_postprocess/labeling.py	1123
+torchlens/_postprocess/labeling.py::_add_lookup_keys_for_layer_entry	120
 torchlens/_postprocess/labeling.py::_log_final_info_for_layers	84
 torchlens/_postprocess/labeling.py::_log_module_hierarchy_info_for_layer	62
 torchlens/_postprocess/labeling.py::_map_raw_labels_to_final_labels	80
