@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import numpy as np
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._input_coerce import _coerce_input
+from torchlens._input_coerce import _coerce_input, _coerce_input_args, _split_coerced_mapping
 
 
 class TokenOutput:
@@ -443,3 +444,198 @@ def test_trace_with_pil_image_and_attached_processor() -> None:
         assert trace.input is not None
     finally:
         trace.cleanup()
+
+
+class ClipLikeProcessor:
+    """Attached ``AutoProcessor``-style callable returning paired keyword inputs."""
+
+    def __init__(self) -> None:
+        """Start the call ledger."""
+
+        self.calls: list[dict[str, Any]] = []
+
+    def __call__(self, *, return_tensors: str, **modalities: Any) -> dict[str, Any]:
+        """Return the keyword inputs for whichever modalities were passed."""
+
+        self.calls.append({**modalities, "return_tensors": return_tensors})
+        out: dict[str, Any] = {}
+        if "text" in modalities:
+            out["input_ids"] = torch.tensor([[1, 2, 3]])
+        if "images" in modalities:
+            images = modalities["images"]
+            batch = len(images) if isinstance(images, list) else 1
+            out["pixel_values"] = torch.ones(batch, 3, 8, 8)
+        if "audio" in modalities:
+            out["input_features"] = torch.ones(1, 3, 8, 8)
+        return out
+
+
+class MultimodalModel(nn.Module):
+    """CLIP/BLIP/Whisper-shaped model: keyword inputs and an attached processor."""
+
+    def __init__(self) -> None:
+        """Build the tiny towers, the processor and the received-input ledger."""
+
+        super().__init__()
+        self.embed = nn.Embedding(16, 4)
+        self.conv = nn.Conv2d(3, 4, kernel_size=8)
+        self.processor = ClipLikeProcessor()
+        self.received: list[list[str]] = []
+
+    def forward(
+        self,
+        input_ids: Any = None,
+        pixel_values: Any = None,
+        input_features: Any = None,
+    ) -> torch.Tensor:
+        """Sum whichever keyword inputs arrived."""
+
+        given = {
+            "input_ids": input_ids,
+            "pixel_values": pixel_values,
+            "input_features": input_features,
+        }
+        self.received.append(sorted(key for key, value in given.items() if value is not None))
+        out = torch.zeros(1, 4)
+        if input_ids is not None:
+            out = out + self.embed(input_ids).mean(dim=1)
+        if pixel_values is not None:
+            out = out + self.conv(pixel_values).reshape(pixel_values.shape[0], -1)[:, :4].mean(0)
+        if input_features is not None:
+            out = out + self.conv(input_features).reshape(1, -1)[:, :4]
+        return out
+
+
+def _rgb_image() -> Any:
+    """Return a small RGB PIL image."""
+
+    from PIL import Image as pil_image
+
+    return pil_image.new("RGB", (8, 8), color=(10, 20, 30))
+
+
+def test_modality_dict_with_attached_processor_becomes_keyword_inputs() -> None:
+    """A CLIP-style text+image dict runs through ``model.processor`` into kwargs."""
+
+    model = MultimodalModel()
+    image = _rgb_image()
+    raw = {"text": "a cat", "images": image}
+
+    coerced = _coerce_input_args(model, raw)
+    input_args, input_kwargs = _split_coerced_mapping(raw, coerced, None)
+
+    assert model.processor.calls == [{"text": "a cat", "images": image, "return_tensors": "pt"}]
+    assert input_args == []
+    assert set(input_kwargs) == {"input_ids", "pixel_values"}
+
+
+def test_split_coerced_mapping_keeps_caller_keywords_and_passthrough() -> None:
+    """Caller keywords win on a clash; an uncoerced input passes through unchanged."""
+
+    coerced = {"input_ids": torch.zeros(1, 3, dtype=torch.long), "pixel_values": torch.ones(1)}
+    user_kwargs = {"pixel_values": torch.zeros(1), "return_loss": True}
+
+    input_args, input_kwargs = _split_coerced_mapping({"text": "x"}, coerced, user_kwargs)
+
+    assert input_args == []
+    assert input_kwargs is not None
+    assert input_kwargs["pixel_values"] is user_kwargs["pixel_values"]
+    assert input_kwargs["return_loss"] is True
+    raw = {"text": "x"}
+    assert _split_coerced_mapping(raw, raw, None) == (raw, None)
+    tensor = torch.ones(1)
+    assert _split_coerced_mapping("x", tensor, {"k": 1}) == (tensor, {"k": 1})
+
+
+@pytest.mark.parametrize(
+    ("raw_factory", "expected_keys", "expected_received"),
+    [
+        pytest.param(
+            lambda image: {"text": "a cat", "images": image},
+            {"text", "images"},
+            ["input_ids", "pixel_values"],
+            id="clip-text-image",
+        ),
+        pytest.param(
+            lambda image: {"images": image},
+            {"images"},
+            ["pixel_values"],
+            id="blip-caption-image-only",
+        ),
+        pytest.param(
+            lambda image: {"text": "describe", "images": [image, image]},
+            {"text", "images"},
+            ["input_ids", "pixel_values"],
+            id="llava-text-image-batch",
+        ),
+    ],
+)
+def test_trace_modality_dict_with_attached_processor(
+    raw_factory: Any, expected_keys: set[str], expected_received: list[str]
+) -> None:
+    """End-to-end: paired modality dicts reach the forward as keyword inputs."""
+
+    model = MultimodalModel()
+    image = _rgb_image()
+    raw = raw_factory(image)
+
+    trace = tl.trace(model, raw, save="none")
+
+    assert model.received == [expected_received]
+    assert set(model.processor.calls[0]) == expected_keys | {"return_tensors"}
+    assert len(trace.ops) > 0
+
+
+def test_trace_audio_dict_with_attached_processor_passes_sampling_rate() -> None:
+    """A Whisper-style ``{"audio": waveform}`` dict carries the model's sampling rate."""
+
+    model = MultimodalModel()
+    model.sampling_rate = 16_000
+    waveform = np.zeros(1600, dtype=np.float32)
+
+    tl.trace(model, {"audio": waveform}, save="none")
+
+    assert model.received == [["input_features"]]
+    call = model.processor.calls[0]
+    assert call["audio"] is waveform
+    assert call["sampling_rate"] == 16_000
+    assert call["return_tensors"] == "pt"
+
+
+def test_modality_dict_without_processor_stays_positional() -> None:
+    """A dict-taking model with no processor still receives the dict itself."""
+
+    class DictForward(nn.Module):
+        """Model whose forward takes one dict positionally."""
+
+        def __init__(self) -> None:
+            """Start the received ledger."""
+
+            super().__init__()
+            self.received: list[Any] = []
+
+        def forward(self, batch: dict[str, Any]) -> torch.Tensor:
+            """Record the batch and return a constant."""
+
+            self.received.append(batch)
+            return torch.ones(1)
+
+    model = DictForward()
+    raw = {"text": "hello", "images": _rgb_image()}
+
+    assert _coerce_input_args(model, raw) is raw
+    tl.trace(model, raw, save="none")
+    assert model.received == [raw]
+
+
+def test_modality_dict_inside_positional_tuple_is_not_processed() -> None:
+    """A dict among other positional inputs is an ordinary argument, processor or not."""
+
+    model = MultimodalModel()
+    raw = {"text": "hello", "images": _rgb_image()}
+    other = torch.ones(1)
+
+    coerced = _coerce_input_args(model, (raw, other))
+
+    assert coerced == (raw, other)
+    assert model.processor.calls == []

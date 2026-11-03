@@ -1013,7 +1013,6 @@ torchlens/bridge/pytorch_grad_cam.py::cam	82
 torchlens/bridge/sae.py::_next_token_metrics	68
 torchlens/bridge/sae.py::splice	126
 torchlens/bridge/shap.py::explain	68
-torchlens/bridge/transformers.py	804
 torchlens/bridge/transformers.py::_resolve_image_preprocessing	62
 torchlens/bridge/transformers.py::trace_text	67
 torchlens/bundle/__init__.py	1423

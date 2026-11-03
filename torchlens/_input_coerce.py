@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import collections.abc
 from typing import Any
 
 from ._errors import ArgumentTypeError
 from ._options_removed import REMOVED_CAPTURE_MEMBERS
+
+# Hugging Face processor keyword spellings a modality dict is keyed by
+# (``processor(text=..., images=..., audio=..., videos=...)``).
+_MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
 
 
 def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
@@ -28,7 +33,9 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     Returns
     -------
     Any
-        Coerced input when a supported path is available; otherwise ``x``.
+        Coerced input when a supported path is available; otherwise ``x``. A
+        modality dict processed by an attached ``processor`` comes back as the
+        processor's mapping (keyword inputs), see :func:`_split_coerced_mapping`.
     """
 
     import torch
@@ -46,6 +53,13 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
 
     if _is_pil_image(x) or (isinstance(x, list) and x and all(_is_pil_image(item) for item in x)):
         return _process_image(model, x)
+
+    if whole_input and _is_modality_input(x) and _has_attached_processor(model):
+        # A paired-modality dict (CLIP/BLIP/LLaVA text+images, Whisper audio)
+        # processed by the attached processor; the mapping it returns becomes
+        # the forward's keyword inputs (``_split_coerced_mapping``). A dict on
+        # a model without a processor is an ordinary positional input.
+        return _process_modalities(model, x)
 
     if _has_explicit_audio_processor(model) and _is_audio_like_input(x):
         return _process_audio(model, x)
@@ -349,6 +363,163 @@ def _process_audio(model: Any, x: Any) -> Any:
     else:
         result = proc(x, return_tensors="pt")
     return result.input_values if hasattr(result, "input_values") else result
+
+
+def _is_modality_input(x: Any) -> bool:
+    """Return whether ``x`` is a non-empty modality dict with a plausible payload.
+
+    The shape test shared by the Hugging Face multimodal auto-route and the
+    attached-processor coercion path: a mapping keyed by processor spellings
+    (``text``, ``image``/``images``, ``audio``, ``videos``) holding a string,
+    a PIL image (or list of them), or a media payload (tensor, bytes, non-empty
+    sequence, array-like). ``None`` and arbitrary objects decline.
+
+    Parameters
+    ----------
+    x:
+        Candidate user input.
+
+    Returns
+    -------
+    bool
+        ``True`` only when at least one modality key carries a plausible value.
+    """
+
+    if not isinstance(x, collections.abc.Mapping) or not x:
+        return False
+    if not (set(x.keys()) & _MODALITY_KEYS):
+        return False
+    for key, item in x.items():
+        if key in {"image", "images"} and (
+            _is_pil_image(item)
+            or (isinstance(item, list) and bool(item) and _is_pil_image(item[0]))
+        ):
+            return True
+        if key == "text" and isinstance(item, str):
+            return True
+        if key in {"audio", "videos"} and _is_plausible_media_value(item):
+            return True
+    return False
+
+
+def _is_plausible_media_value(value: Any) -> bool:
+    """Return whether ``value`` is a plausible audio/video modality payload.
+
+    Parameters
+    ----------
+    value:
+        Candidate value for an ``audio`` or ``videos`` modality key.
+
+    Returns
+    -------
+    bool
+        ``True`` for tensors, raw bytes, non-empty sequences and array-likes;
+        ``False`` for ``None``, scalars, bare objects and empty containers.
+    """
+
+    import torch
+
+    if isinstance(value, torch.Tensor):
+        return True
+    if isinstance(value, (bytes, bytearray)):
+        return True
+    if isinstance(value, (list, tuple)):
+        return bool(value)
+    return hasattr(value, "__array__")
+
+
+def _has_attached_processor(model: Any) -> bool:
+    """Return whether ``model`` carries a callable multimodal ``processor``.
+
+    Parameters
+    ----------
+    model:
+        Model or model-like object.
+
+    Returns
+    -------
+    bool
+        ``True`` for a callable ``model.processor`` attribute.
+    """
+
+    return callable(getattr(model, "processor", None))
+
+
+def _process_modalities(model: Any, x: collections.abc.Mapping[str, Any]) -> Any:
+    """Run a modality dict through the attached ``model.processor``.
+
+    Parameters
+    ----------
+    model:
+        Model exposing a callable ``processor`` (``AutoProcessor``-like).
+    x:
+        Modality dict (``text``, ``images``, ``audio``, ``videos``, ...).
+
+    Returns
+    -------
+    Any
+        The processor's mapping of model-ready tensors (``input_ids``,
+        ``pixel_values``, ``input_features``, ...): the forward's keyword inputs.
+    """
+
+    kwargs = dict(x)
+    sampling_rate = getattr(model, "sampling_rate", None)
+    if "audio" in kwargs and "sampling_rate" not in kwargs and sampling_rate is not None:
+        kwargs["sampling_rate"] = sampling_rate
+    return model.processor(**kwargs, return_tensors="pt")
+
+
+def _split_coerced_mapping(
+    original: Any, coerced: Any, input_kwargs: dict[Any, Any] | None
+) -> tuple[Any, dict[Any, Any] | None]:
+    """Route a mapping produced by coercion into the forward's keyword inputs.
+
+    Parameters
+    ----------
+    original:
+        The positional input before :func:`_coerce_input_args`.
+    coerced:
+        Its return value.
+    input_kwargs:
+        The caller's keyword inputs (``None`` when none were passed).
+
+    Returns
+    -------
+    tuple[Any, dict[Any, Any] | None]
+        ``(input_args, input_kwargs)``. When coercion produced a new mapping
+        (an attached processor's output) the positional slot empties and the
+        mapping merges under the caller's keywords, which win on a clash;
+        otherwise both pass through unchanged.
+    """
+
+    if coerced is original or not isinstance(coerced, collections.abc.Mapping):
+        return coerced, input_kwargs
+    merged: dict[Any, Any] = dict(coerced)
+    merged.update(input_kwargs or {})
+    return [], merged
+
+
+def _coerce_inputs(
+    model: Any, input_args: Any, input_kwargs: dict[Any, Any] | None
+) -> tuple[Any, dict[Any, Any] | None]:
+    """Coerce positional inputs and route a processor mapping into the keywords.
+
+    Parameters
+    ----------
+    model:
+        Model or model-like object used for duck-typed dispatch.
+    input_args:
+        Single input or positional input container.
+    input_kwargs:
+        The caller's keyword inputs (``None`` when none were passed).
+
+    Returns
+    -------
+    tuple[Any, dict[Any, Any] | None]
+        :func:`_coerce_input_args` applied, then :func:`_split_coerced_mapping`.
+    """
+
+    return _split_coerced_mapping(input_args, _coerce_input_args(model, input_args), input_kwargs)
 
 
 def _is_pil_image(x: Any) -> bool:
