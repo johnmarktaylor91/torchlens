@@ -15,7 +15,7 @@ pytest config excludes `rare` tests via `addopts = -m 'not rare'`.
 | Visualization | `test_large_graphs.py`, `test_node_modes.py`, `test_themes.py`, `test_overlays.py`, `test_bundle_diff_renderer.py` |
 | Validation/backward | `test_validation.py` (siblings `test_validation_perturbation_units.py`, `test_validation_bool_exemption.py`, `test_validation_key_forgery.py`), `test_validate_consolidated.py`, `test_backward.py`, `test_backward_streaming.py` |
 | Portable I/O | `test_io_*.py`, `test_tlspec_*.py`, `fixtures/tlspec_v2_16/` |
-| Intervention | `test_intervention_phase*.py`, `test_selector_unification_phase4.py`, `test_bundle_*.py` |
+| Intervention | `test_intervention_phase*.py`, `test_sites.py`, `test_selector_unification_phase4.py`, `test_bundle_*.py` |
 | Fastlog | `test_fastlog/` |
 | Bridges/compat/export | `test_bridges_*.py`, `test_compat_report.py`, `test_exports.py`, `test_extractor_compat.py` |
 | Examples/audit | `test_examples.py`, `test_examples_load.py`, `test_not_mvp_audit.py` |
@@ -52,7 +52,7 @@ Run memory-heavy real-world tests sequentially. Optional dependency tests should
 | `heavy` | Mid-cost (5-20s) tests, excluded from smoke and the mid backstop. |
 | `slow` | Long-running (>20s) real-world tests. |
 | `serial` | Load-sensitive tests that should run away from parallel worker load. NOT a budget exemption: a file's duration tier is its loosest tier marker, and `serial` is not one. |
-| (none) | Unmarked tests — a majority (14,791/18,668, 79%, measured 2026-11-03) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
+| (none) | Unmarked tests — a majority (14,861/18,740, 79%, measured 2026-11-03) — run only in the backstops, never the commit gate, but are budgeted at the same <5s tier as smoke. |
 | `rare` | Always excluded by default unless explicitly selected. |
 | `optional` | Requires an optional dependency or runtime. |
 | `backend_parity` | Active backend-substrate parity gate. |
