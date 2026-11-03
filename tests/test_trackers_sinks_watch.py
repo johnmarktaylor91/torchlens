@@ -216,7 +216,7 @@ class TestLoudFailures:
         assert info.value.fields["code"] == "watch_signals_invalid"
 
     def test_tier_o_ships_and_activation_grads_defer_typed(self) -> None:
-        """Removal test (U32.1): op grain is no longer a deferred tier.
+        """Removal test: op grain is no longer a deferred tier.
 
         ``grain="op"`` used to refuse ``watch_tier_unavailable`` ("not shipped
         in this build"); it now ships behind consent, so the same call refuses

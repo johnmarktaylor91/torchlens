@@ -269,7 +269,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     model, x = _model_and_input()
     selector = tl.module(address)
     # The default save keeps payloads attached; a spilled one comes back
-    # detached, and the capture discloses it (U27.1).
+    # detached, and the capture discloses it.
     with _counting(monkeypatch) as counts, pytest.warns(TorchLensWarning) as caught:
         log = tl.trace(model, x, save=selector)
     assert counts["spills"] == spills, counts

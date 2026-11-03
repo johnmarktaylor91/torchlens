@@ -1,4 +1,4 @@
-"""``run(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix (U26.3).
+"""``run(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix.
 
 The fast live tier cuts its native forward right after the ``until=`` site's
 output is collected, so nothing downstream runs, and the saved prefix comes back

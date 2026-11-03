@@ -540,7 +540,7 @@ def test_emit_nvtx_capture_option_does_not_change_capture(
     """emit_nvtx should be accepted and should not alter normal logging output.
 
     The host is simulated as NVTX-capable: a CUDA-less host refuses
-    ``emit_nvtx=True`` typed (``emit_nvtx_unavailable``, U35.3).
+    ``emit_nvtx=True`` typed (``emit_nvtx_unavailable``).
     """
 
     from torchlens.backends.torch import _op_markers

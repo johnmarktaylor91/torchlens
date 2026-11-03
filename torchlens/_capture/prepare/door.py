@@ -656,7 +656,7 @@ def _unpack_save_policies(state: _DoorState) -> _DoorState:
         state,
         layers_to_save=capture_options._layers_to_save,
         save_raw_input_policy=capture_options.save_raw_input,
-        save_raw_output_policy=capture_options.save_transformed_output,
+        save_transformed_output_policy=capture_options.save_transformed_output,
         save_mode_value=save_mode_value,
         facet_recipes=facet_recipes,
         halt=state.args.halt,
@@ -794,7 +794,7 @@ def _apply_structure_only_entry(state: _DoorState) -> _DoorState:
         state,
         layers_to_save=layers_to_save,
         save_raw_input_policy=False,
-        save_raw_output_policy=False,
+        save_transformed_output_policy=False,
     )
 
 

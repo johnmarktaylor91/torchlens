@@ -1,4 +1,4 @@
-"""Export honesty parity lockstep (R2-11, N-VZ-4).
+"""Export honesty parity lockstep.
 
 Every capture-honesty fact ``torchlens._capture_honesty.capture_honesty_facts``
 emits must reach every graph and agent surface -- draw, svg, html, Model

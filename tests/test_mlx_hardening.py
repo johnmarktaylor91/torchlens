@@ -340,7 +340,7 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
 def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
     """An nn.Module model gets intermediate gradients, not a silent empty set.
 
-    Walk U06.4: the replay observers built signatures with no module frames
+    The replay observers built signatures with no module frames
     while capture stamps ``op.modules``, so every op inside a module failed
     its 1:1 match and ``intermediate_derived_grads`` came back empty.
     """

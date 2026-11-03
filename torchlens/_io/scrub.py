@@ -898,7 +898,7 @@ def _scrub_value(
         When ``True``, a value with neither a container type handled here
         nor a ``_PORTABLE_STATE_SPEC`` falls back to
         :func:`_stringify_value` instead of being returned unchanged. Used
-        by the ``save_raw_input``/``save_raw_output`` ``True`` policy
+        by the ``save_raw_input``/``save_transformed_output`` ``True`` policy
         (:func:`_scrub_raw_value_for_save`) so live, un-picklable objects
         (generators, locks, open file handles, sockets, ...) nested inside
         a user's raw input/output never reach ``pickle.dump`` unmodified.
@@ -1618,7 +1618,7 @@ def _scrub_field(
     r69 E: an effective ``DROP``/``WEAKREF_STRIP`` wins BEFORE every field-specific
     serializer. The sparse-runnable effective policy lists ``raw_input``/``raw_output``
     in its DROP set, so a runnable save always scrubs both to ``None`` -- including
-    when the ordinary ``save_raw_input``/``save_raw_output`` policy is ``True`` or
+    when the ordinary ``save_raw_input``/``save_transformed_output`` policy is ``True`` or
     ``"small"``. Pre-r69 the Trace raw-value special case ran first and the generic
     small-value policy retained a nested tensor inside the sparse core, firing the
     (unchanged) ``assert_sparse_core_has_no_tensor_payload`` tripwire on a fully
@@ -1827,7 +1827,7 @@ def _is_safely_picklable(value: Any) -> bool:
     Used by :func:`_scrub_value`'s ``stringify_unknown`` path to decide
     whether an unspecced leaf value (one with no
     ``_PORTABLE_STATE_SPEC``) reached via ``save_raw_input``/
-    ``save_raw_output``'s ``True`` policy should be kept as-is (full
+    ``save_transformed_output``'s ``True`` policy should be kept as-is (full
     retention, per those options' docs) or degraded to a bounded
     :func:`_stringify_value` placeholder. Probing picklability once, here,
     at scrub time -- rather than letting the real ``pickle.dump()`` over

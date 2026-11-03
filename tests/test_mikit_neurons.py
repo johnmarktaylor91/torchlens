@@ -1,4 +1,4 @@
-"""Per-neuron MLP contribution rows under the D7 identity gate (R2-26, N-MI-2).
+"""Per-neuron MLP contribution rows under the D7 identity gate.
 
 The rows must sum to the captured MLP output they decompose, and each row
 must equal an independent hand computation from the model's own modules

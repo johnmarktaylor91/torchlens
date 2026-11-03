@@ -1,4 +1,4 @@
-"""Safetensors export of a Trace (R2-08, lane EXTRACT).
+"""Safetensors export of a Trace.
 
 ``tl.export.safetensors(trace, path)`` writes one pickle-free safetensors
 file and ``tl.io.read_safetensors(path)`` reads it back: every saved payload

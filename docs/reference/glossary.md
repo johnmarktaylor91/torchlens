@@ -3176,7 +3176,7 @@ deprecation shim owed*
   label), with the full `RunTruncation` disclosure on `report.truncation`
   (regime, requested sites, executed/skipped counts, skipped-site digest).
   Skipped sites are "not-run", never "passed". With `fast=True` on a live trace
-  (U26.3) the native forward is cut right after the `until=` site, which must be a
+  the native forward is cut right after the `until=` site, which must be a
   site the capture saved (a module address, `"address:call"`, or a saved op label;
   otherwise `run_capability_unavailable` at stage `fast_until_site_unsaved`): the
   prefix keeps the fast path's per-call guards and comes back graph-connected under
@@ -3390,7 +3390,7 @@ deprecation shim owed*
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
 **Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
-: The one typed result of every report-shaped `tl.debug` helper (U42.2):
+: The one typed result of every report-shaped `tl.debug` helper:
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:

@@ -361,7 +361,7 @@ def test_until_requires_full_inputs(tmp_path):
 
 
 def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
-    """Composition matrix (U26.3): until= x fast=True stops a live run; a loaded one refuses.
+    """Composition matrix: until= x fast=True stops a live run; a loaded one refuses.
 
     The live fast tier cuts its native forward after the saved site; a loaded
     artifact's fast tier compiles the full recorded path and still refuses typed.

@@ -1,4 +1,4 @@
-"""Module and stage names resolve to that module's output at every selector door (U26.1).
+"""Module and stage names resolve to that module's output at every selector door.
 
 The rule (DOCUMENTED-UNSTABLE): a module address, a name relative to a wrapped
 inner model, or a dotted name whose module was registered with dots flattened to

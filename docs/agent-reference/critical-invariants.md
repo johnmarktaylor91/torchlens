@@ -193,7 +193,7 @@
     `save=` predicate or the save-all default), each module call collected by its call number.
     Per-call input, path, output structure/shape/dtype, and control-witness guards remain
     mandatory; divergence always raises. `until=` on a live fast run cuts the native forward
-    after the saved site (U26.3): the cut is a `live_stop_after` truncation, later sites read
+    after the saved site: the cut is a `live_stop_after` truncation, later sites read
     `None` for that run, and the verdict is `unverifiable` (no whole-forward fingerprint), which
     marks the live trace monotonically like every truncated run product. `fast=False`
     preserves the full transaction and attestation contract. The live session also fires a

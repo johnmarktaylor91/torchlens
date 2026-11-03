@@ -2,7 +2,7 @@
 
 - Bug 6: the documented ``tl.trace(save=[...])`` list form runs, and every remedy the
   ``save=`` door emits is executed here.
-- U27.2: ``activations_by_address`` on an unmatched address refuses typed and lists the
+- ``activations_by_address`` on an unmatched address refuses typed and lists the
   addresses that exist.
 - forks.8: ``trace.using(name)`` returns a registered appliance; unknown names refuse typed
   with the registered names; outside packages register through the same function.
@@ -238,7 +238,7 @@ class _AttnHost(nn.Module):
 
 
 def test_facet_doors_refuse_typed_on_an_unregistered_attention_class() -> None:
-    """U36.1: both facet doors refuse with MissingFacetError, never a bare KeyError."""
+    """Both facet doors refuse with MissingFacetError, never a bare KeyError."""
 
     from torchlens.errors import MissingFacetError
 

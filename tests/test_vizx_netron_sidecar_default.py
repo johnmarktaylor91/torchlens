@@ -1,4 +1,4 @@
-"""The Netron metrics sidecar is written by default (ruling U09.3).
+"""The Netron metrics sidecar is written by default.
 
 Every file export writes ``<stem>.attachment.json`` beside the artifact
 unless the caller opts out with ``attachment=False``; the memory-only serve

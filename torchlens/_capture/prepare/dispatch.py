@@ -329,7 +329,7 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         save_raw_input=kwargs.get("save_raw_input", MISSING),
         batch_render=kwargs.get("batch_render", MISSING),
         output_transform=kwargs.get("output_transform", MISSING),
-        save_transformed_output=kwargs.get("save_raw_output", MISSING),
+        save_transformed_output=kwargs.get("save_transformed_output", MISSING),
         layer_visualizers=MISSING,
         save_visualizations=MISSING,
         keep_orphans=kwargs.get("keep_orphans", MISSING),

@@ -1,4 +1,4 @@
-"""k-dimensional subspace ablation modes and basis interchange (R2-25, N-IV-6).
+"""k-dimensional subspace ablation modes and basis interchange.
 
 Every mode is checked against an INDEPENDENT projector ``B^T pinv(B B^T) B``
 (pseudo-inverse, not the helper's QR path), applied by hand to the same site

@@ -8,7 +8,7 @@ diagnostics (`param_health`, `grad_health`, `dtype_range`, `nonfinite_origin`,
 no module outside `debug/` re-exports them, so nothing below this package imports it
 back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `tl.report`.
 
-## The report object (U42.2; DOCUMENTED-UNSTABLE)
+## The report object (DOCUMENTED-UNSTABLE)
 - Every report-shaped result is a `tl.report.Report` (defined in
   `torchlens/_debug_report.py`, at the package root so `tl.report` and every
   report subclass can import it without importing this package): `report_type`, `subject`,

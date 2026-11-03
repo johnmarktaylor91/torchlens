@@ -324,7 +324,7 @@ class PaddleBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
@@ -353,7 +353,7 @@ class PaddleBackend:
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
         )
         layers_to_save = capture_options._layers_to_save
@@ -369,7 +369,7 @@ class PaddleBackend:
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = _resolve_optional_capture_field(capture, "seed", random_seed)
@@ -388,7 +388,7 @@ class PaddleBackend:
         # keep_orphans/output_device/detach_saved_activations/save_arg_values/
         # save_code_context/save_rng_states/recurrence_detection/verbose/
         # compute_input_output_distances/backward_ready/save_raw_input/batch_render/
-        # save_raw_output/save_visualizations are CaptureOptions-native fields: the
+        # save_transformed_output/save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
         # with the same backend-local defaults this block used to re-apply.
@@ -484,7 +484,7 @@ class PaddleBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=cast("Callable[[Any], Any] | None", output_transform),
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )

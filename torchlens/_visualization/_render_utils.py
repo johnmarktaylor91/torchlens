@@ -24,8 +24,6 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import graphviz
-
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
 from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
@@ -147,7 +145,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
 
 
 if TYPE_CHECKING:
-    pass
+    import graphviz
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.

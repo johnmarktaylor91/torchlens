@@ -1,4 +1,4 @@
-"""``Trace.cost.pinned_autograd_memory`` discloses what the default attached save keeps alive (R2-37).
+"""``Trace.cost.pinned_autograd_memory`` discloses what the default attached save keeps alive.
 
 The default save keeps autograd history (``detach_saved_activations=False``, unchanged
 here), so every graph-connected payload pins the tensors autograd saved for the

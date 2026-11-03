@@ -1,4 +1,4 @@
-"""Buffer operands for substitution (R2-25, N-IV-9): BatchNorm-stat and state what-ifs.
+"""Buffer operands for substitution: BatchNorm-stat and state what-ifs.
 
 ``trace.do(tl.param("<buffer address>"), edit)`` substitutes the buffer's
 initial version (the value its consumers read) and replays the cone. Each row
