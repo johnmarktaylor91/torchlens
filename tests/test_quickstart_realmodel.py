@@ -58,10 +58,10 @@ class TestResnet18Rungs:
         tl.summary(resnet18_eval, input_shape=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True
-        assert result.num_ops == 151  # the eval-mode regression fixture count
+        assert result.num_ops == 111  # the eval-mode regression fixture count
 
     def test_train_mode_gold_capture_warns_and_differs(self) -> None:
-        """The 211-vs-151 measurement is a regression fixture, not a bug.
+        """The 211-vs-111 measurement is a regression fixture, not a bug.
 
         torchvision delivers models in train mode; a train-mode gold capture
         keeps the caller's mode (tl.trace is the power surface), moves
@@ -77,7 +77,7 @@ class TestResnet18Rungs:
             log = tl.trace(model, torch.rand(1, 3, 224, 224))
         assert len(log) == 211
         eval_log = tl.trace(model.eval(), torch.rand(1, 3, 224, 224))
-        assert len(eval_log) == 151
+        assert len(eval_log) == 111
 
 
 class TestGpt2Rungs:

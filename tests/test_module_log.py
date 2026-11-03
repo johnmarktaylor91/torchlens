@@ -603,11 +603,11 @@ class TestModuleLogIntegration:
         block_counts = [len(log.modules[f"blocks.{idx}"].layer_labels) for idx in range(4)]
         batchnorm_counts = [len(log.modules[f"blocks.{idx}.bn"].layer_labels) for idx in range(4)]
 
-        assert block_counts == [7, 7, 7, 7]
+        assert block_counts == [5, 5, 5, 5]
         assert [len(labels) for labels in block_layers] == block_counts
-        assert batchnorm_counts == [5, 5, 5, 5]
+        assert batchnorm_counts == [3, 3, 3, 3]
         for labels in block_layers:
-            assert [label.split("_", 1)[0] for label in labels].count("buffer") == 4
+            assert [label.split("_", 1)[0] for label in labels].count("buffer") == 2
             assert [label.split("_", 1)[0] for label in labels].count("batchnorm") == 1
             assert [label.split("_", 1)[0] for label in labels].count("conv2d") == 1
             assert [label.split("_", 1)[0] for label in labels].count("relu") == 1

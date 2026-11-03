@@ -4,9 +4,11 @@ An eval-mode ``batch_norm`` call reads its ``running_mean`` / ``running_var``
 buffers and writes nothing: its own ``training`` argument is false. The
 exhaustive capture used to journal a "fused" write for both buffers on every
 call anyway, so each eval BatchNorm grew two buffer-version layers the eager
-computation does not have (resnet18: 143 layers against 111 from a cooked
+computation does not have (resnet18: 151 ops against 111 for a cooked
 recording of the same forward). The expected counts here come from a census
-taken with a torch function mode, never from a literal.
+taken with a torch function mode, never from a literal. Ops are the census
+unit; layers group repeated calls of one module (resnet18 calls each
+BasicBlock's ReLU twice) and must agree between the two capture paths.
 """
 
 from __future__ import annotations
@@ -31,8 +33,8 @@ class _Census:
     buffers_read: set[str] = field(default_factory=set)
     buffer_writes: int = 0
 
-    def expected_layers(self, n_inputs: int = 1, n_outputs: int = 1) -> int:
-        """Inputs, one layer per op, one per buffer read, one per buffer write, outputs."""
+    def expected_ops(self, n_inputs: int = 1, n_outputs: int = 1) -> int:
+        """Inputs, one op per call, one per buffer read, one per buffer write, outputs."""
 
         return n_inputs + self.ops + len(self.buffers_read) + self.buffer_writes + n_outputs
 
@@ -107,8 +109,10 @@ def _assert_counts_match_census(model: nn.Module, x: torch.Tensor) -> None:
     assert len(_compute_ops(exhaustive)) == len(_compute_ops(cooked)) == census.ops
     assert len(_buffer_layers(exhaustive)) == len(census.buffers_read)
     assert len(_buffer_layers(cooked)) == len(census.buffers_read)
-    assert len(exhaustive.layers) == census.expected_layers()
-    assert len(cooked.layers) == census.expected_layers()
+    assert len(exhaustive) == len(cooked) == census.expected_ops()
+    assert len(exhaustive.layers) == len(cooked.layers)
+    repeated_passes = sum(layer.num_passes - 1 for layer in exhaustive.layers)
+    assert len(exhaustive.layers) == census.expected_ops() - repeated_passes
     assert not exhaustive.buffer_write_ops
 
 
@@ -130,7 +134,7 @@ def test_train_batchnorm_block_still_journals_its_writes() -> None:
 
 
 @pytest.mark.heavy
-def test_eval_resnet18_layer_count_matches_census() -> None:
+def test_eval_resnet_layer_count_matches_census() -> None:
     torchvision = pytest.importorskip("torchvision")
     torch.manual_seed(0)
     model = torchvision.models.resnet18().eval()

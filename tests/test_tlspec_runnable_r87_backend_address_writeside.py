@@ -162,8 +162,9 @@ def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
 def test_batchnorm_running_stat_read_and_write_pairs_agree(train: bool) -> None:
     """Every BatchNorm running-stat node -- read AND write -- keeps its address.
 
-    ``bn.running_mean`` / ``bn.running_var`` each appear as a read node and a
-    write node. No node bearing one of those display addresses may report
+    ``bn.running_mean`` / ``bn.running_var`` each appear as a read node, and as
+    a write node in training mode only: an eval-mode ``batch_norm`` call writes
+    nothing. No node bearing one of those display addresses may report
     ``backend_address=None``.
     """
 
@@ -176,9 +177,9 @@ def test_batchnorm_running_stat_read_and_write_pairs_agree(train: bool) -> None:
     ]
     assert stat_ops, "BatchNorm running stats did not materialize as buffer nodes"
 
-    # At least one read + one write node exist for the running stats overall.
+    # A read node always exists; a write node exactly when the call trains.
     assert any(not op.parents for op in stat_ops), "no running-stat read node"
-    assert any(op.parents for op in stat_ops), "no running-stat write node"
+    assert any(op.parents for op in stat_ops) is train, "write nodes must follow the mode"
 
     for op in stat_ops:
         assert op.backend_address == op.address, (

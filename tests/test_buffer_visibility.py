@@ -381,7 +381,7 @@ def test_legacy_bool_refuses_typed(tmp_path: Path, legacy_value: bool) -> None:
 
 @pytest.mark.parametrize(
     ("training", "expected"),
-    [(False, "1 op + 4 buffers"), (True, "2 ops + 6 buffers")],
+    [(False, "1 op + 2 buffers"), (True, "2 ops + 6 buffers")],
 )
 def test_collapsed_batchnorm_labels_ops_and_buffers(
     tmp_path: Path,
