@@ -184,10 +184,10 @@ def test_logit_lens_user_lens_and_layer_selection() -> None:
     assert result.is_validated is False
     assert torch.equal(result.entries[0].logits, torch.zeros(2, 3, 11))
 
-    subset = logit_lens(log, layers=["transformer.h.0"])
+    subset = logit_lens(log, modules=["transformer.h.0"])
     assert [entry.address for entry in subset.entries] == ["transformer.h.0"]
     with pytest.raises(LogitLensError, match="do not expose facet"):
-        logit_lens(log, layers=["transformer.ln_f"])
+        logit_lens(log, modules=["transformer.ln_f"])
     with pytest.raises(LogitLensError, match="missing entries"):
         logit_lens(log, lens={"transformer.h.0": lambda hidden: hidden})
 

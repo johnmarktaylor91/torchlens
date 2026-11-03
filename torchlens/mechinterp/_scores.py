@@ -185,7 +185,7 @@ def head_scores(
     *,
     kind: str | FixedPeriodInduction = "induction",
     measure: str = "mul",
-    layers: Any = None,
+    modules: Any = None,
     pattern_source: Any = None,
 ) -> HeadScores:
     """Score every head against one taxonomy mask (mikit section 8).
@@ -204,8 +204,8 @@ def head_scores(
         ``mul`` (attention mass on mask-eligible sources, TLens-compatible)
         or ``abs`` (1 - L1/2 distance between the pattern row and the mask
         row distribution).
-    layers:
-        Optional layer selector (indices/addresses, as in head contributions).
+    modules:
+        Optional attention-module selector (indices/addresses, as in head contributions).
     pattern_source:
         Optional callable ``module -> [b, head, dst, src]`` pattern override
         (the SSM pseudo-pattern socket); default reads the ``pattern`` facet.
@@ -231,11 +231,12 @@ def head_scores(
             message=f"Unknown head-score measure {measure!r}.",
             remedy=f"choose among {list(_MEASURES)}",
         )
-    modules = _attention_modules(trace)
-    if layers is not None:
+    candidates = _attention_modules(trace)
+    if modules is not None:
         from ._heads import _select_layers
 
-        modules = _select_layers(modules, layers)
+        candidates = _select_layers(candidates, modules)
+    modules = candidates
     if not modules:
         refuse(
             code="mi_head_geometry_unavailable",

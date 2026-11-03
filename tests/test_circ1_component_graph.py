@@ -216,7 +216,7 @@ def test_gpt_neox_recipe_splits_interleaved_qkv(neox_toy) -> None:
     qkv = trace.modules["gpt_neox.layers.0.attention.query_key_value"].out
     q_ref, k_ref, v_ref = qkv.view(*qkv.shape[:2], 2, 3 * 8).chunk(3, dim=-1)
     assert torch.equal(view.q, q_ref) and torch.equal(view.k, k_ref) and torch.equal(view.v, v_ref)
-    stack = mi.attention_head_contributions(trace, layers="gpt_neox.layers.0.attention")
+    stack = mi.attention_head_contributions(trace, modules="gpt_neox.layers.0.attention")
     assert stack.identity_receipt["per_layer"][0]["remainder"] == "verified_bias"
     dense = model.gpt_neox.layers[0].attention.dense
     torch.testing.assert_close(

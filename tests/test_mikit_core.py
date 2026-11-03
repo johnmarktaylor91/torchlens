@@ -258,7 +258,7 @@ def test_head_scores_plan_from_a_structure_only_capture(r0_models):
     # Without the token ids the scores refuse typed instead of failing on the unsaved input.
     no_ids = tl.trace(model, doubled, save=tl.in_module(plan.module_subtrees[0]))
     with pytest.raises(MechInterpError) as excinfo:
-        mi.head_scores(no_ids, kind="induction", layers=[0])
+        mi.head_scores(no_ids, kind="induction", modules=[0])
     assert excinfo.value.fields["code"] == "mi_token_ids_unavailable"
 
 
@@ -327,7 +327,7 @@ def test_kit_refusal_provocations_model_based(r0_models, gpt2_trace):
     assert excinfo.value.fields["code"] == "mi_position_unmappable"
 
     with pytest.raises(MechInterpError) as excinfo:
-        mi.attention_head_contributions(gpt2_trace, layers=[99])
+        mi.attention_head_contributions(gpt2_trace, modules=[99])
     assert excinfo.value.fields["code"] == "mi_head_geometry_unavailable"
 
     from torchlens.mechinterp._residual import _require_payloads
