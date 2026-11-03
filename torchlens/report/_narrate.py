@@ -1,8 +1,8 @@
 """Trace post-hoc narration function (record rebuild destination).
 
-The body of ``Trace.narrate`` lives here; the ``_data_classes._trace_narrate``
-shell imports this module lazily inside the method so the record package stays
-a leaf with respect to the narration renderer.
+The body of ``Trace.narrate`` lives here; the method in ``_data_classes/trace.py``
+reaches it through the ``_doors.report()`` door so the record package stays a leaf
+with respect to the narration renderer.
 """
 
 from __future__ import annotations

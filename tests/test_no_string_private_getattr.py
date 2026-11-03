@@ -172,8 +172,8 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # preview packets' reads of scratch fields the capture start declares
     # (`_<backend>_module_stack`, `_capture_depth`, `_op_captures`, the mlx
     # constants censuses and intervention plan) became direct reads; the tf
-    # loaded-flag reads use the try/except seam `_trace_validation.py` already
-    # uses for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
+    # loaded-flag reads use the try/except seam the `Trace` validation methods already
+    # use for `_loaded_from_bundle`. The lazy-initialised mlx stores and the
     # loaded-trace guards keep their defaulted reads (absence is meaningful).
     "backends/jax": 5,
     "backends/mlx": 19,
