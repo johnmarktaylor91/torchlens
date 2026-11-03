@@ -164,7 +164,6 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             remedy="pass graph='forward', 'backward', or 'combined'",
             argument="graph",
         )
-    num_ops = len(trace) if hasattr(trace, "__len__") else None
     policy: dict[str, Any] = {
         "graph": graph,
         "rolled": rolled,
@@ -221,7 +220,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         dot=str(rendered),
         file_format=file_format,
         path=written if written.exists() else None,
-        num_ops=num_ops,
+        num_ops=len(trace) if hasattr(trace, "__len__") else None,
         policy=policy,
         trace=trace,
     )
