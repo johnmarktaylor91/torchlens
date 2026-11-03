@@ -171,8 +171,8 @@ class Bundle:
     (2, ['clean', 'shifted'], 'clean')
     """
 
-    # Bundle outcome authority (foldB D9, instance three of the two-answers
-    # disease): the container speaks for itself through the DERIVED
+    _comparison_field = staticmethod(_comparisons._tensor_field)
+    # Bundle outcome authority: the container speaks through the DERIVED
     # worst-of-members fold below, so ``outcome_for(bundle)`` never falls back
     # to a false UNKNOWN with the hand-built-object warning.
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 import torch
 
+from .._comparison_tensor import _comparison_tensor
 from .._data_classes.func_call_location import display_frame
 from .._utils._multipass_access import is_multipass_layer
 from ..backends.registry import TORCH_BACKEND_NAME, resolve_backend_spec
@@ -203,13 +204,15 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     return None, f"unavailable: {op_or_label!r} did not resolve to an op"
 
 
-def _safe_out(op: Op) -> tuple[Any | None, str | None]:
+def _safe_out(op: Op, codec: Any = None) -> tuple[Any | None, str | None]:
     """Read ``op.out`` and convert known unavailable cases into a reason.
 
     Parameters
     ----------
     op:
         TorchLens op.
+    codec:
+        Optional producing backend codec for comparison on host tensors.
 
     Returns
     -------
@@ -220,7 +223,8 @@ def _safe_out(op: Op) -> tuple[Any | None, str | None]:
     if not bool(getattr(op, "has_saved_activation", False)):
         return None, "unsaved"
     try:
-        return op.out, None
+        value = op.out
+        return (value if codec is None else _comparison_tensor(value, codec)), None
     except ValueError as exc:
         return None, str(exc)
 
