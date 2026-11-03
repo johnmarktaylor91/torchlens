@@ -190,7 +190,8 @@ def test_whole_model_count_and_bytes_cover_the_same_nodes(trace: tl.Trace, tmp_p
     sized = _sized_nodes(dot)
     assert noun == "ops"
     assert int(count.replace(",", "")) == len(sized)
-    assert size == binary_size(sum(int(trace.ops[name].activation_memory) for name in sized))
+    labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
+    assert size == binary_size(sum(int(trace.ops[label].activation_memory) for label in labels))
     assert f"{trace.num_params:,} params" in dot
     assert not re.search(r"\d (?:KB|MB|GB)\b", dot)
 
@@ -208,7 +209,8 @@ def test_focus_count_skips_the_boundary_stubs(
     assert not any(name.startswith("__module_focus") for name in sized)
     assert "__module_focus_input" in dot and "__module_focus_output" in dot
     if not rolled:
-        expected = sum(int(trace.ops[name].activation_memory) for name in sized)
+        labels = [re.sub(r"pass(\d+)$", r":\1", name) for name in sized]
+        expected = sum(int(trace.ops[label].activation_memory) for label in labels)
         assert f"drawn: {count} ops ({binary_size(expected)})" in header
 
 
@@ -308,9 +310,11 @@ def test_each_module_mark_gets_its_own_key_entry() -> None:
     assert [s.text for s in key_swatches(theme, frozenset(), has_module=True)] == ["module"]
 
 
-def test_frozen_weights_take_okabe_ito_blue_with_white_ink(tmp_path: Path) -> None:
+def test_frozen_weights_take_okabe_ito_black_with_white_ink(tmp_path: Path) -> None:
+    # Okabe-Ito blue #0072B2 fails the CVD gate against the input green
+    # (deuteranopia 37, tritanopia 21, floor 40); black is the member left.
     assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] in _OKABE_ITO
-    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#0072B2"
+    assert OKABE_ITO_SEMANTIC_PALETTE["params_frozen"] == "#000000"
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
     model[0].requires_grad_(False)
     captured = tl.trace(model, torch.randn(1, 4))
@@ -318,6 +322,6 @@ def test_frozen_weights_take_okabe_ito_blue_with_white_ink(tmp_path: Path) -> No
         dot = captured.draw(str(tmp_path / "frozen.svg")).dot
     finally:
         captured.cleanup()
-    frozen = [line for line in dot.splitlines() if "#0072B2" in line and "[label=<" in line]
+    frozen = [line for line in dot.splitlines() if "#000000" in line and "[label=<" in line]
     assert frozen, dot
     assert all('fontcolor="#FFFFFF"' in line or "fontcolor=#FFFFFF" in line for line in frozen)

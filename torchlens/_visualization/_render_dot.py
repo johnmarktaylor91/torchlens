@@ -847,9 +847,9 @@ def _forward_header_label(
     from ._focus_scope import focus_address, reading_notes
     from ._header_block import (
         caption_from_label,
-        drawn_module_marks,
         header_block_label,
         key_swatches,
+        render_module_marks,
     )
     from ._legend import LegendSection, drawn_legend_roles, encoding_sections, statement_node_attrs
 
@@ -863,7 +863,7 @@ def _forward_header_label(
             context.theme,
             drawn_legend_roles(node_attrs, context.theme),
             has_module=False,
-            module_marks=drawn_module_marks(node_attrs, bool(forward_render_ir.regions)),
+            module_marks=render_module_marks(node_attrs, forward_render_ir),
             mutated_parameter=mutated_parameter,
         )
         notes = reading_notes(node_attrs, request.module)

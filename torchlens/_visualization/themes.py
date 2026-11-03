@@ -31,17 +31,18 @@ from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 
 #: The Okabe-Ito semantic role palette (memo FORK-2 branch A set; frozen weights
-#: take the set's dark blue ``#0072B2``, which gets white label ink through
-#: ``_legible_ink``): the default ``torchlens`` skin and the ``colorblind`` skin
-#: render it; the CVD accessibility gate measures it.
+#: take the set's black, the one member left that the CVD gate tells apart
+#: from every role; its blue is too close to the input green, and the white
+#: label ink comes from ``_legible_ink``): the default ``torchlens`` skin and
+#: the ``colorblind`` skin render it; the CVD accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
         "output": "#D55E00",
         "params_generic": "#CFE5F5",
         "params_trainable": "#56B4E9",
-        "params_frozen": "#0072B2",
-        "params_gradient": "#56B4E9:#0072B2",
+        "params_frozen": "#000000",
+        "params_gradient": "#56B4E9:#000000",
         "boolean": "#F0E442",
         "buffer": "#E69F00",
         "intervention": "#CC79A7",

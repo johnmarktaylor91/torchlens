@@ -47,6 +47,7 @@ __all__ = [
     "KeySwatch",
     "caption_from_label",
     "drawn_module_marks",
+    "render_module_marks",
     "drawn_count_line",
     "graph_caption_body",
     "header_block_label",
@@ -312,6 +313,29 @@ def drawn_module_marks(
         if str(attrs.get("peripheries", "")) == "2":
             marks.add("double")
     return frozenset(marks)
+
+
+def render_module_marks(node_attrs: Iterable[Mapping[str, Any]], render_ir: Any) -> frozenset[str]:
+    """Return :func:`drawn_module_marks` for a finished forward IR.
+
+    A module region is a frame only when its cluster was emitted: atomic
+    modules drawn as one box and empty module subtrees keep an IR region
+    but draw no frame.
+    """
+
+    frames = {
+        f"cluster_{region.key.replace(':', '_pass')}"
+        for region in render_ir.regions
+        if region.kind == "module"
+    }
+    pending = list(render_ir.dot_statements)
+    while pending:
+        statement = pending.pop()
+        if statement.kind == "subgraph":
+            if dict(statement.attrs).get("name") in frames:
+                return drawn_module_marks(node_attrs, True)
+            pending.extend(statement.children)
+    return drawn_module_marks(node_attrs, False)
 
 
 def key_swatches(
