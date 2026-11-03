@@ -798,16 +798,20 @@ def session_meta_is_anchored(meta: TensorMeta | None) -> bool:
 def _pinned_storage(t: Any) -> Any | None:
     """Return ``t``'s ``UntypedStorage`` for pinning/validation, else ``None``.
 
-    Calls the ORIGINAL accessor (wrapper ledger ``_decorated_to_orig``): the wrapped
-    read under ``pause_logging`` logs, fingerprints and collects nothing, so the facts
-    match at two frames less; a subclass override or a live fast collector keeps it.
+    Calls the ORIGINAL accessor (unwrap ledger via ``_state.wrap_epoch_ledgers``): the
+    wrapped read under ``pause_logging`` logs, fingerprints and collects nothing, so the
+    facts match at two frames less; a subclass override or a live fast collector keeps
+    the wrapped read. Both reads stay under ``pause_logging``: a raw ``untyped_storage``
+    call while logging is live is a torch callable outside its wrapper edge, which the
+    shadow escape detector (``escape_detection._handle_event``) observes and reports.
     """
     try:
-        if _state._active_fast_run_collector is None:
-            original = _state._decorated_to_orig.get(id(getattr(type(t), "untyped_storage", None)))
-            if original is not None:
-                return original(t)
         with _state.pause_logging():
+            if _state._active_fast_run_collector is None:
+                decorated_to_orig = _state.wrap_epoch_ledgers()[0]
+                original = decorated_to_orig.get(id(getattr(type(t), "untyped_storage", None)))
+                if original is not None:
+                    return original(t)
             return t.untyped_storage()
     except Exception:
         return None
