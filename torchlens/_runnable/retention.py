@@ -27,7 +27,7 @@ from . import (
     SparseRunDescriptor,
     TensorSlotDescriptor,
     TensorSlotRole,
-    state as _state,
+    state as _runnable_state,
 )
 from .state import _slot_device, _torch_dtype
 
@@ -421,7 +421,7 @@ def _preflight_retention_floor(
             _charge(slot)
 
     for key, requested in sorted(floor.items()):
-        available = _state._allocation_budget_bytes(devices[key])
+        available = _runnable_state._allocation_budget_bytes(devices[key])
         if requested > available:
             raise RunCapabilityUnavailableError(
                 f"Loaded-sparse replay retains at least {requested} bytes of op outputs "
@@ -463,7 +463,7 @@ def _check_unretained_extent(
         return
 
     logical_bytes = numel * int(value.element_size())
-    available = _state._allocation_budget_bytes(value.device)
+    available = _runnable_state._allocation_budget_bytes(value.device)
     if logical_bytes <= available and not off_cpu:
         return
     reason = (
