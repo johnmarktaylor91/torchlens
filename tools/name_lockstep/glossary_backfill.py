@@ -32,7 +32,7 @@ def _clean(meaning: str) -> str:
     """Return a docstring meaning as one markdown table cell."""
 
     text = _RST_LITERAL.sub(r"`\1`", " ".join(meaning.split()))
-    return text.replace("|", "\\|").strip()
+    return text.replace("|", "\\|").strip().removesuffix(".")
 
 
 def _details(row: dict[str, Any]) -> str:
@@ -40,7 +40,12 @@ def _details(row: dict[str, Any]) -> str:
 
     parts = ["keyword-only"] if row["kind"] == "keyword_only" else []
     default = row["default"]
-    parts.append("required" if default is None else f"default `{default}`")
+    if default is None:
+        parts.append("required")
+    elif default == "MISSING" or default.startswith("<"):
+        parts.append("optional")  # an unset sentinel: omitting it is not a value
+    else:
+        parts.append(f"default `{default}`")
     return f" ({'; '.join(parts)})"
 
 
@@ -103,7 +108,8 @@ def _last_keyword_table(lines: list[str]) -> tuple[int, int]:
     """Return the ``[start, end)`` line span of the rows of the last ``### Keywords`` table."""
 
     heading = max(i for i, line in enumerate(lines) if line.strip() == "### Keywords")
-    start = heading + 3  # heading, header row, separator row
+    header = next(i for i in range(heading, len(lines)) if lines[i].startswith("|"))
+    start = header + 2  # header row, separator row
     end = start
     while end < len(lines) and lines[end].startswith("|"):
         end += 1
