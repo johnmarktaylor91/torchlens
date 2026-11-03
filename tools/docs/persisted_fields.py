@@ -1,8 +1,8 @@
 """Generate ``docs/maintainers/persisted_fields.md``, the persisted field set of the saved format.
 
 One command: ``python tools/docs/persisted_fields.py``. It reads the writer contract of
-record (``torchlens/schemas/writer_contract_v11.json``), the frozen previous contract
-(``writer_contract_v10.json``) for the key diff, the generated storage bindings
+record (``torchlens/schemas/writer_contract_v12.json``), the frozen previous contract
+(``writer_contract_v11.json``) for the key diff, the generated storage bindings
 (``torchlens/_data_classes/_schema_bindings.py``) for each key's storage kind and type
 annotation, and the record-class modules under ``torchlens/_data_classes/`` with ``ast``
 (nothing is imported) for the public accessor that reads each private store. It writes
@@ -26,8 +26,8 @@ from typing import Any
 
 REPO = Path(__file__).resolve().parents[2]
 SCHEMAS = REPO / "torchlens" / "schemas"
-CONTRACT = SCHEMAS / "writer_contract_v11.json"
-PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v10.json"
+CONTRACT = SCHEMAS / "writer_contract_v12.json"
+PREVIOUS_CONTRACT = SCHEMAS / "writer_contract_v11.json"
 DATA_CLASSES = REPO / "torchlens" / "_data_classes"
 BINDINGS = DATA_CLASSES / "_schema_bindings.py"
 GROUPS_MODULE = DATA_CLASSES / "_trace_groups.py"
