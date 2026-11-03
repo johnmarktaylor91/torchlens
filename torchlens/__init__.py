@@ -592,7 +592,7 @@ def _extract_with_facets(
             outputs[key], views[key] = facet.value, facet
         else:
             outputs[key] = _out_from_log(trace, str(value))
-            views[key] = trace[str(value)]
+            views[key] = trace.ops[str(value)]
     return trace, outputs, views
 
 
@@ -644,7 +644,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            views[label] = trace.ops[canonical_module_site_key(trace, pattern) or pattern]
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -654,7 +654,7 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = trace[match]
+            views[match] = trace.ops[match]
     return trace, outputs, views
 
 

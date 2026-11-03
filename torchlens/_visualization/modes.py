@@ -228,7 +228,7 @@ def vision_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> spec = vision_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec = vision_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
     >>> spec.lines[0], spec.lines[-1].startswith("in=")
     ('conv', True)
     """
@@ -264,7 +264,7 @@ def attention_node_mode(op: Op | Layer, spec: NodeSpec) -> NodeSpec:
     Examples
     --------
     >>> trace = tl.trace(model, x)
-    >>> spec = attention_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec = attention_node_mode(trace.ops["0"], tl.viz.NodeSpec(lines=["conv"]))
     >>> spec.lines
     ['conv']
     """

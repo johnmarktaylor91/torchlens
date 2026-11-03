@@ -769,7 +769,7 @@ def _resolve_trace_outputs(
     views: dict[str, Any] = {}
     if plan.layers_kind == "mapping":
         for label, pattern in plan.layer_plan.items():
-            view = trace[pattern]
+            view = trace.ops[pattern]
             outputs[label] = view.out
             views[label] = view
         return outputs, views
@@ -778,7 +778,7 @@ def _resolve_trace_outputs(
         if not matches:
             raise ValueError(f"Layer lookup {pattern!r} did not resolve to a saved layer.")
         for match in matches:
-            view = trace[match]
+            view = trace.ops[match]
             outputs[match] = view.out
             views[match] = view
     return outputs, views

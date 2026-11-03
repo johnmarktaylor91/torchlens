@@ -9,7 +9,7 @@ from torch import nn
 from .._input_coerce import _coerce_input_args
 from ..options import CaptureOptions
 from ._recorder import Recorder
-from .options import PredicateFn
+from .options import PredicateFn, RecordingOptions
 from .types import DryRun
 
 
@@ -52,9 +52,11 @@ def dry_run(
     inputs = _coerce_input_args(model, inputs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
-        "history_size": history_size,
-        "include_source_events": include_source_events,
-        "on_predicate_error": "fail-fast",
+        "recording": RecordingOptions(
+            history_size=history_size,
+            include_source_events=include_source_events,
+            on_predicate_error="fail-fast",
+        ),
     }
     if seed is not None:
         recorder_kwargs["capture"] = CaptureOptions(seed=seed)
