@@ -51,6 +51,9 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "replay": "use trace.push(...) -- Trace.replay was renamed",
     "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
+    "save_new_outs": (
+        "use trace.run(model, x) -- save_new_outs left the public surface; the refresh engine is internal"
+    ),
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),

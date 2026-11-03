@@ -719,7 +719,7 @@ def _attempt_live_forward(
 
     try:
         with train_mode_norm_writers_eligible():
-            fork.save_new_outs(
+            fork._save_new_outs(
                 model,
                 input_args,
                 input_kwargs=input_kwargs,
@@ -1032,7 +1032,7 @@ def run_live_trace(
     trace:
         Live Trace retaining its source-model weak reference.
     inputs:
-        New forward input accepted by the existing ``save_new_outs`` path.
+        New forward input accepted by the existing ``_save_new_outs`` refresh path.
     seed:
         Optional refresh seed.
     on_divergence:

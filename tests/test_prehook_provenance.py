@@ -560,7 +560,7 @@ def test_fast_second_pass_preserves_exhaustive_provenance_once() -> None:
 
     model.child.register_forward_pre_hook(mutate)
     trace = tl.trace(model, torch.ones(1))
-    trace.save_new_outs(model, torch.ones(1), layers_to_save="all")
+    trace._save_new_outs(model, torch.ones(1), layers_to_save="all")
 
     assert count == 2
     assert len(_call(trace).forward_pre_hook_effects) == 1

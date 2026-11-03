@@ -10,7 +10,7 @@ EXPECTED_MODELLOG_METHODS = {
     "draw",
     "to_dagua_graph",
     "to_pandas",
-    "save_new_outs",
+    "_save_new_outs",
     # validate_saved_outs is the validation-core function spelling; the Trace
     # METHOD is validate_forward_pass (remove-and-rename, no shim kept).
     "validate_forward_pass",

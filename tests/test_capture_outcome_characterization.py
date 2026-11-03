@@ -232,7 +232,7 @@ def test_halted_trace_refresh_refuses_typed() -> None:
     x = torch.ones(1, 3)
     trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(CaptureOutcomeError) as exc_info:
-        trace.save_new_outs(model, x)
+        trace._save_new_outs(model, x)
     assert exc_info.value.fields["code"] == "N5"
 
 

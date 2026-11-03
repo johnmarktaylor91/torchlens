@@ -3081,7 +3081,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
 
-    def save_new_outs(
+    def _save_new_outs(
         self,
         model: torch.nn.Module,
         input_args: torch.Tensor | list[Any],
@@ -3092,7 +3092,7 @@ class Trace(TraceOutputMixin, TraceLike):
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
     ) -> None:
-        """Re-run the model with new inputs, saving only outs."""
+        """Re-run the model with new inputs, saving only outs (internal refresh engine)."""
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,

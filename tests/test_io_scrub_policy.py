@@ -361,7 +361,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
-    "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
