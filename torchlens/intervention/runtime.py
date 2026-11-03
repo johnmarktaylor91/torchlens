@@ -5,13 +5,11 @@ from __future__ import annotations
 import inspect
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
-from types import SimpleNamespace
 from typing import Any
 
 import torch
 
 from .. import _state
-from .._capture.arg_positions import _normalize_func_name
 from .._data_classes._site_key import call_instance_id, render_site_key, site_axis
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
@@ -58,11 +56,12 @@ from ._runtime_sites import (
     _input_splice_module_scope,
     _is_plain_module_selector,
     _op_output_slot,
+    _provisional_inplace_site,
     _selector_uses_only_provisional_fields,
     _site_name,
     _whole_call_site_view,
 )
-from ._zero_fire import note_capture_rule_fired
+from ._zero_fire import note_capture_fire
 from .audit import build_fire_record
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
@@ -74,6 +73,7 @@ from .hooks import (
     make_hook_context,
     split_site_branches,
 )
+from .spec import Recipe
 from .types import FireRecord
 
 
@@ -571,12 +571,7 @@ def _apply_live_hooks(
             )
         )
         if normalized_entry.metadata.get("zero_match_ledger") == "intervene_selector":
-            trace = _state._active_trace
-            if trace is not None:
-                trace._tl_intervene_selector_fire_count = (
-                    int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + 1
-                )
-            note_capture_rule_fired(entry_rule_id)
+            note_capture_fire(_state._active_trace, 1, entry_rule_id)
         current_out = result
     return current_out, tuple(fire_results)
 
@@ -660,7 +655,10 @@ def _has_matching_input_routed_intervention(
         current op's inputs through the post-hook execution path.
     """
 
-    site = _provisional_inplace_site(func_name, trace, func_call_id)
+    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
+
+    modules = tuple(_snapshot_exhaustive_module_stack(trace))
+    site = _provisional_inplace_site(func_name, trace, func_call_id, modules)
     hook_plan = _state._active_hook_plan
     if hook_plan:
         for entry in hook_plan:
@@ -685,8 +683,6 @@ def _intervene_selector_decisions(intervene: Any) -> list[tuple[Any, Any]]:
     ``.decision`` view is ``None`` on a multi-clause spec, and reading only
     that view skipped the in-place input snapshot for every rule.
     """
-
-    from .spec import Recipe
 
     if isinstance(intervene, Recipe):
         return [(rule.target, rule.decision) for rule in intervene.rules]
@@ -762,56 +758,6 @@ def _selector_may_match_provisional_site(selector: Any, site: Any) -> bool:
     if matched:
         return True
     return not _selector_uses_only_provisional_fields(selector)
-
-
-def _provisional_inplace_site(func_name: str, trace: Any, func_call_id: int) -> Any:
-    """Build a selector-matchable site for a not-yet-executed in-place op.
-
-    Parameters
-    ----------
-    func_name:
-        Decorated torch function name.
-    trace:
-        Active trace.
-    func_call_id:
-        Function-call id allocated by the torch wrapper.
-
-    Returns
-    -------
-    Any
-        Minimal live-site proxy for pre-execution selector matching.
-    """
-
-    from ..backends.torch._ops_capture_records import _snapshot_exhaustive_module_stack
-
-    layer_type = _normalize_func_name(func_name)
-    modules = tuple(_snapshot_exhaustive_module_stack(trace))
-    raw_index = trace._raw_graph_ws.layer_counter + 1
-    type_index = trace._raw_graph_ws.raw_layer_type_counter.get(layer_type, 0) + 1
-    raw_label = f"{layer_type}_{type_index}_{raw_index}_raw"
-    return SimpleNamespace(
-        layer_label=raw_label,
-        _layer_label_raw=raw_label,
-        _label_raw=raw_label,
-        raw_index=raw_index,
-        layer_type=layer_type,
-        func_name=func_name,
-        func_call_id=func_call_id,
-        container_path=(),
-        module=modules[-1] if modules else None,
-        modules=modules,
-        output_of_module_calls=(),
-        output_of_modules=(),
-        _tl_module_boundary=False,
-        is_transform=False,
-        transform_kind=None,
-        transform_chain=(),
-        transform_config={},
-        is_inplace=True,
-        _tl_input_snapshot=False,
-        call_index=1,
-        lookup_keys=[],
-    )
 
 
 def _apply_live_backward_hooks(

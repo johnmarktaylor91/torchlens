@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import sys
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Collection, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Final, Literal, NoReturn
+from typing import TYPE_CHECKING, Any, Final, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._ir.container import NamedField
@@ -34,12 +34,16 @@ from .._ir.distribution_container import (
 )
 from .._selection.errors import SiteResolutionError
 
+if TYPE_CHECKING:
+    from .spec import Recipe, Rule
+
 __all__ = (
     "DEFAULT_ZERO_FIRE_POLICY",
     "NON_TENSOR_MODULE_OUTPUT_REASON",
     "ZERO_FIRE_POLICIES",
     "ZeroFirePolicy",
     "capture_rule_fire_ledger",
+    "note_capture_fire",
     "note_capture_rule_fired",
     "zero_fire_policy_scope",
     "check_zero_fire_policy",
@@ -52,6 +56,7 @@ __all__ = (
     "recorded_non_tensor_details",
     "settle_capture_zero_fire",
     "settle_zero_fire",
+    "warn_multiclause_unfired",
 )
 
 ZeroFirePolicy = Literal["warn", "error", "disclose"]
@@ -345,6 +350,31 @@ def note_capture_rule_fired(rule_id: object) -> None:
         fired.add(rule_id)
 
 
+def note_capture_fire(trace: Any, fire_count: int, rule_id: object) -> None:
+    """Count ``fire_count`` intervene fires on ``trace`` and note the fired rule.
+
+    The capture doors' one bookkeeping step after an ``intervene=`` decision
+    fires: the trace's zero-match fire count grows (read by the zero-match
+    selector disclosure) and the rule id enters the per-capture fire ledger
+    (read by per-rule zero-fire settlement).
+
+    Parameters
+    ----------
+    trace:
+        The active trace, or ``None`` outside a capture (count skipped).
+    fire_count:
+        How many fires to add.
+    rule_id:
+        The fired rule's id; see :func:`note_capture_rule_fired`.
+    """
+
+    if trace is not None:
+        trace._tl_intervene_selector_fire_count = (
+            int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + fire_count
+        )
+    note_capture_rule_fired(rule_id)
+
+
 def current_zero_fire_policy() -> ZeroFirePolicy:
     """Return the ``on_zero_fire`` policy of the capture or run in progress (default ``"warn"``)."""
 
@@ -452,5 +482,34 @@ def warn_multiclause_unfired(intervene: object, fire_count: int) -> None:
             "matches a site",
             code="trace_zero_fire",
         ),
-        stacklevel=4,
+        stacklevel=5,
+    )
+
+
+def _unfired_forward_rules(spec: Recipe, fired_rule_ids: Collection[str]) -> tuple[Rule, ...]:
+    """Return the spec's rules that address the forward pass and fired nowhere.
+
+    Settlement is per rule IDENTITY (the rule ids the capture doors noted as
+    they fired), never per action repr: same-named closures render alike, and
+    a callable never renders like its fire record. A backward-only rule
+    (``tl.grad(...)`` or a node site) fires after the capture returns, so the
+    capture-time settlement never judges it.
+
+    Parameters
+    ----------
+    spec:
+        The capture's public ``intervene=`` spec.
+    fired_rule_ids:
+        Rule ids noted as fired during the capture.
+
+    Returns
+    -------
+    tuple[Rule, ...]
+        Unfired forward rules, in spec order.
+    """
+
+    return tuple(
+        rule
+        for rule in spec.rules
+        if rule.signal != "backward" and rule.rule_id not in fired_rule_ids
     )

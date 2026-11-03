@@ -35,7 +35,7 @@ from .._output_slot import (
 )
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.predicates import InterventionPredicate
+from ..intervention.predicates import InterventionPredicate, _warn_intervene_fired_nowhere
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
@@ -71,8 +71,6 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
-    from ..intervention._zero_fire import warn_multiclause_unfired
-    from ..intervention.hooks import site_universe
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -86,19 +84,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 UserWarning,
                 stacklevel=3,
             )
-    intervene_selector = getattr(state.options.intervene, "selector", None)
-    if (
-        isinstance(intervene_selector, BaseSelector)
-        and site_universe(intervene_selector) == "activation"
-        and state.intervene_selector_fire_count == 0
-    ):
-        warnings.warn(
-            f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
-            "no intervention fired.",
-            UserWarning,
-            stacklevel=3,
-        )
-    warn_multiclause_unfired(state.options.intervene, state.intervene_selector_fire_count)
+    _warn_intervene_fired_nowhere(state.options.intervene, state.intervene_selector_fire_count)
 
 
 def _unwrap_ddp_for_fastlog(
