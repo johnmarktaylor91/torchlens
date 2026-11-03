@@ -4404,6 +4404,7 @@ package-docstrings	torchlens/_ir/workspaces.py	19
 package-docstrings	torchlens/_ir/workspaces.py	20
 package-docstrings	torchlens/_ir/workspaces.py	3.3
 package-docstrings	torchlens/_ir/workspaces.py	3.7
+package-docstrings	torchlens/_json_safe.py	3.6
 package-docstrings	torchlens/_kernel_telemetry.py	2.1
 package-docstrings	torchlens/_merged/__init__.py	10
 package-docstrings	torchlens/_merged/_artifact.py	0600
@@ -4581,6 +4582,8 @@ package-docstrings	torchlens/_partial/__init__.py	16
 package-docstrings	torchlens/_partial/__init__.py	24
 package-docstrings	torchlens/_partial/__init__.py	25
 package-docstrings	torchlens/_partial/__init__.py	3.2
+package-docstrings	torchlens/_plots/node_plots.py	24
+package-docstrings	torchlens/_plots/node_plots.py	64
 package-docstrings	torchlens/_postprocess/__init__.py	11
 package-docstrings	torchlens/_postprocess/__init__.py	12
 package-docstrings	torchlens/_postprocess/__init__.py	18
@@ -4949,7 +4952,7 @@ package-docstrings	torchlens/_user_funcs.py	17
 package-docstrings	torchlens/_user_funcs.py	1_1
 package-docstrings	torchlens/_user_funcs.py	28
 package-docstrings	torchlens/_user_funcs.py	41
-package-docstrings	torchlens/_user_public_impls.py	1.0
+package-docstrings	torchlens/_user_public_graph_impls.py	1.0
 package-docstrings	torchlens/_user_public_impls.py	11
 package-docstrings	torchlens/_user_public_impls.py	12
 package-docstrings	torchlens/_user_public_impls.py	13
@@ -5452,7 +5455,6 @@ package-docstrings	torchlens/agent/_budgets.py	205
 package-docstrings	torchlens/agent/_budgets.py	207
 package-docstrings	torchlens/agent/_budgets.py	256
 package-docstrings	torchlens/agent/_compare.py	64,
-package-docstrings	torchlens/agent/_envelope.py	3.6
 package-docstrings	torchlens/agent/_envelope.py	3.9
 package-docstrings	torchlens/agent/_fold.py	11.
 package-docstrings	torchlens/agent/_fold.py	12
@@ -6937,8 +6939,6 @@ package-docstrings	torchlens/validation/invariants.py	64
 package-docstrings	torchlens/validation/status.py	31
 package-docstrings	torchlens/viz/_node_visualizers.py	32.
 package-docstrings	torchlens/viz/feature_maps.py	32
-package-docstrings	torchlens/viz/node_plots.py	24
-package-docstrings	torchlens/viz/node_plots.py	64
 test-docstrings	tests/_ag1_fixtures.py	1.8
 test-docstrings	tests/_ag1_fixtures.py	30,
 test-docstrings	tests/_ag1_fixtures.py	64
