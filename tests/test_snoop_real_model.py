@@ -250,7 +250,7 @@ def test_cuda_metadata_echo_is_zero_sync() -> None:
     sink = io.StringIO()
     torch.cuda.set_sync_debug_mode("error")
     try:
-        tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, stats="off"))
+        tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, value_stats="off"))
     finally:
         torch.cuda.set_sync_debug_mode("default")
     assert "relu" in sink.getvalue()

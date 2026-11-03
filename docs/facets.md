@@ -467,7 +467,7 @@ logits):
   `result.lens_source` is `"contrastive_head"`, each layer's logits are
   `[n_images, n_prompts]`, and the last layer equals CLIP's
   `logits_per_image`. Only vision-tower blocks are projected; passing a
-  text-tower block in `layers=` refuses `logit_lens_layer_outside_head`.
+  text-tower block in `modules=` refuses `logit_lens_layer_outside_head`.
 
 ```text
 classification_head facets          contrastive_image_head facets

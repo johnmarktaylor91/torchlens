@@ -125,14 +125,14 @@ def test_honesty_vocabulary_and_qualifiers(nested_trace) -> None:
 
 
 def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
-    """honesty(as_summary=True) is the disclosure line; to_pandas(evidence=True)
+    """honesty(as_summary=True) is the disclosure line; to_pandas(include_evidence=True)
     interleaves per-cell evidence columns (D9's inline form, on the export door)."""
 
     prof = profile(nested_trace, level="op")
     line = prof.evidence_labels(as_summary=True)
     assert isinstance(line, str)
     assert "formula_exact" in line
-    inline = prof.to_pandas(evidence=True)
+    inline = prof.to_pandas(include_evidence=True)
     columns = list(inline.columns)
     assert columns.index("flops_evidence") == columns.index("flops") + 1
     assert columns.index("time_evidence") == columns.index("time") + 1

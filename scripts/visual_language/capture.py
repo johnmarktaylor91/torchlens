@@ -210,8 +210,7 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         # Bundle.draw takes the draw spellings (open_viewer, never vis_save_only).
         return str(_bundle(trace).draw(**kwargs))
     if panel.call == "bundle_diff":
-        # tl.viz.bundle_diff keeps the engine spelling of the viewer switch.
-        kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
+        # tl.viz.bundle_diff takes the draw spelling of the viewer switch (open_viewer).
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 

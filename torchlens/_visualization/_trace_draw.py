@@ -316,8 +316,8 @@ def last_run_records(trace: Trace) -> tuple[FireRecord, ...]:
 
 def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.to_dagua_graph
     trace: Trace,
-    vis_mode: str = "unrolled",
-    vis_call_depth: int = 1000,
+    rolled: bool = False,
+    depth: int = 1000,
     show_buffers: bool = False,
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
@@ -327,8 +327,8 @@ def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Tr
 
     return _impl(
         trace,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
+        rolled=rolled,
+        depth=depth,
         show_buffers=show_buffers,
         direction=direction,
         include_grad_edges=include_grad_edges,

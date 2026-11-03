@@ -748,8 +748,8 @@
     "_args": "blob_recursive",
     "_kwargs": "blob_recursive",
     "incomplete_reasons": "keep",
+    "input_structure": "keep",
     "is_capture_complete": "keep",
-    "structure": "keep",
     "summary": "keep",
     "tensor_observations": "keep"
    },
@@ -4014,5 +4014,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "b442cbbfcf10fa2d94c0315982fc0f40ccb92f76e347e0deb6c904751973fc0c"
+ "writer_contract_digest": "06eb06c37471250c6888d84a0f56eaf55332dde81cfafcc92659eb249ede2f0f"
 }

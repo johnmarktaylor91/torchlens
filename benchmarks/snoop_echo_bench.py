@@ -103,7 +103,7 @@ def _bench_model(name: str, model: torch.nn.Module, x: torch.Tensor, repeats: in
     scenarios: dict[str, NarrationOptions] = {
         "record_echo_devnull_s": NarrationOptions(sites=True, sink=devnull),
         "record_echo_callable_s": NarrationOptions(sites=True, sink=count_sink),
-        "record_echo_sampled_s": NarrationOptions(sites=True, sink=devnull, stats="sampled"),
+        "record_echo_sampled_s": NarrationOptions(sites=True, sink=devnull, value_stats="sampled"),
     }
     for key, options in scenarios.items():
         rows[key] = _time_best(lambda opt=options: tl.record(model, x, narrate=opt), repeats)

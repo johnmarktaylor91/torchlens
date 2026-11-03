@@ -119,7 +119,7 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     assert "unscanned" in states
     assert "budget: max_scan_elements=20" in str(budgeted)
     unscanned = next(row for row in budgeted.rows if row.state == "unscanned")
-    assert unscanned.stats is None and "budget" in unscanned.reason
+    assert unscanned.value_stats is None and "budget" in unscanned.reason
 
     ranked = table.sort_rows("mean")
     assert "sorted by mean" in repr(ranked)

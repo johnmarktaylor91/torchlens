@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1411 modules, 632545 lines, 0 modules without a docstring.
+83 packages, 1412 modules, 632562 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 31983 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 31985 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1243 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -72,14 +72,14 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
-| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
+| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 966 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 74 | 35370 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1912 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
-| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8491 |
+| `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8490 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 7 | 4094 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12385 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (72 modules, 31983 lines)
+TorchLens - extract outs and metadata from PyTorch models. (72 modules, 31985 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -139,7 +139,7 @@ TorchLens - extract outs and metadata from PyTorch models. (72 modules, 31983 li
 | `_memory_probes` | Host and device memory headroom probes for the save budget. | 85 |
 | `_model_wrappers` | Pre-flight detection of model wrappers TorchLens cannot instrument. | 91 |
 | `_mutate_warnings` | Session-level suppression of mutate-in-place warnings. | 81 |
-| `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 228 |
+| `_option_receipt` | Option explicitness readers, the frozen option-group kit, and :class:'NarrationOptions'. | 230 |
 | `_options_removed` | Public option members removed with no alias, with the remedy each one names. | 51 |
 | `_options_validation` | Value validators for the grouped option dataclasses in ''options.py''. | 423 |
 | `_output_slot` | The model-output slot behind ''Trace.output'' and ''Recording.output''. | 113 |
@@ -1543,12 +1543,13 @@ Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 333 l
 
 ### `torchlens.experimental.dagua`
 
-Experimental Dagua rendering bridge exports. (2 modules, 950 lines)
+Experimental Dagua rendering bridge exports. (3 modules, 966 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Experimental Dagua rendering bridge exports. | 17 |
-| `_bridge` | Experimental Dagua-backed visualization bridge for TorchLens Trace objects. | 933 |
+| `_bridge` | Experimental Dagua-backed visualization bridge for TorchLens Trace objects. | 882 |
+| `_clusters` | Module cluster boxes for the experimental Dagua bridge. | 67 |
 
 ### `torchlens.export`
 
@@ -1706,7 +1707,7 @@ Public I/O and administrative helpers for TorchLens. (1 modules, 365 lines)
 
 ### `torchlens.mechinterp`
 
-torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 8491 lines)
+torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 8490 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1734,7 +1735,7 @@ torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). (26 modules, 
 | `_records` | Typed result records + the shared labeled-coordinate protocol (mikit item 4). | 426 |
 | `_residual` | Residual accumulation + decomposition (mikit item 8; TLens | 416 |
 | `_retention` | Retention plans (mikit ): printable, priceable, composable save plans. | 263 |
-| `_scores` | Head-taxonomy scores (mikit section 8; credit: TLens ''head_detector''). | 289 |
+| `_scores` | Head-taxonomy scores (mikit section 8; credit: TLens ''head_detector''). | 288 |
 | `_walk` | The backward additive-tree walk (mikit // -- the decomposition engine). | 343 |
 
 ### `torchlens.neuro`

@@ -618,7 +618,7 @@ AXES: dict[str, str] = {
     "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
-    "depth": "vis_call_depth module-box nesting cutoff",
+    "depth": "depth= module-box nesting cutoff",
     "skip_fn": "skip_fn layer-hiding predicate (edges chain through)",
     "collapse_fn": "collapse_fn custom module-collapse predicate",
     "node_spec_fn": "node_spec_fn per-node customization callback",
@@ -1096,9 +1096,9 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="c4_call_depth",
-                title="vis_call_depth: limiting module-box nesting",
+                title="depth=: limiting module-box nesting",
                 caption=(
-                    "vis_call_depth caps how deep module boxes nest. LEFT: unlimited (default 1000) shows "
+                    "depth= caps how deep module boxes nest. LEFT: unlimited (default 1000) shows "
                     "inner_module containing loop_module at full detail. RIGHT: depth 1 keeps only the "
                     "outermost module level -- modules deeper than the cap COLLAPSE into single summary "
                     "boxes carrying an honest 'N ops + M buffers' contents remainder (the same collapsed-box element "

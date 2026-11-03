@@ -1199,8 +1199,8 @@
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
   `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
-  facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
-  with `format="json"`. Doc: `docs/for-ai-agents.md`.
+  facts and partial-capture failure evidence never drop; the JSON form is
+  `trace.to_agent_json()`, which takes no token budget. Doc: `docs/for-ai-agents.md`.
 - STRUCTURAL FINGERPRINT (`tl.fingerprint`): `tl.fingerprint.model(model, inputs)`,
   `tl.fingerprint.trace(trace)` and `tl.fingerprint.content(...)` compute address-free
   structural hashes; `tl.fingerprint.assert_unchanged(...)` asserts a model still matches a
@@ -1340,7 +1340,7 @@
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
   `Trace.narrate` replays a finished capture as narration.
-  `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
+  `NarrationEvent.value_stats` is a `tl.stats.TensorStats` (or `None`). Read
   `stats.mean_evidence.population` / `stats.mean_evidence.sample_size` for
   sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
   `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
