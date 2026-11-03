@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1416 modules, 632394 lines, 0 modules without a docstring.
+83 packages, 1416 modules, 632397 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,7 +15,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25068 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1493 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4588 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 88 | 37623 |
@@ -208,7 +208,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25068 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25071 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -243,7 +243,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `config` | Internal grouped capture configuration for spine orchestration. | 9 |
 | `flops` | FLOPs (Floating Point Operations) computation module for TorchLens. | 1942 |
 | `outcome` | The capture-outcome authority: one typed lattice for every capture product. | 752 |
-| `peak_memory` | Host peak-memory instrumentation helpers (brainpipe ). | 399 |
+| `peak_memory` | Host peak-memory instrumentation helpers (brainpipe ). | 402 |
 | `plan` | Compiled, backend-neutral capture intent for the unification spine. | 270 |
 | `predicates` | Predicate evaluation helpers for capture-time fastlog projections. | 555 |
 | `preflight` | Address preflight: price a selective-save spelling BEFORE the forward (leverage B9). | 296 |
