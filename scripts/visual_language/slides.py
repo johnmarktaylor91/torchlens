@@ -102,7 +102,7 @@ def constants() -> dict[str, Any]:
 
     import inspect
 
-    from torchlens._data_classes._trace_viz import TraceVisualizationMixin
+    from torchlens._data_classes.trace import Trace
     from torchlens._visualization import (
         _edge_multiplicity,
         _encoding,
@@ -117,8 +117,7 @@ def constants() -> dict[str, Any]:
     from torchlens._vocab import node_spec
 
     draw_defaults = {
-        name: param.default
-        for name, param in inspect.signature(TraceVisualizationMixin.draw).parameters.items()
+        name: param.default for name, param in inspect.signature(Trace.draw).parameters.items()
     }
     typo = DEFAULT_TYPOGRAPHY
     # Role colors as the default skin renders them, not the

@@ -116,7 +116,6 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     not apply.
     """
 
-    from .._quantities import Bytes
     from ..backends import TORCH_BACKEND_NAME
 
     backend_name = str(trace._provenance_backend or TORCH_BACKEND_NAME)
