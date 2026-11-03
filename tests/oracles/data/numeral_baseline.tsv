@@ -1849,7 +1849,6 @@ docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
 docs-md	docs/maintainers/where.md	78
 docs-md	docs/maintainers/where.md	780
-docs-md	docs/maintainers/where.md	7812
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	786
 docs-md	docs/maintainers/where.md	789
@@ -1863,7 +1862,6 @@ docs-md	docs/maintainers/where.md	799
 docs-md	docs/maintainers/where.md	7991
 docs-md	docs/maintainers/where.md	80
 docs-md	docs/maintainers/where.md	801
-docs-md	docs/maintainers/where.md	804
 docs-md	docs/maintainers/where.md	81
 docs-md	docs/maintainers/where.md	811
 docs-md	docs/maintainers/where.md	814
@@ -3839,8 +3837,6 @@ error-strings	torchlens/bridge/lit/_refusals.py	20
 error-strings	torchlens/bridge/lit/_refusals.py	2024
 error-strings	torchlens/bridge/lit/_refusals.py	83
 error-strings	torchlens/bridge/mcp.py	2.0
-error-strings	torchlens/bridge/transformers.py	224,
-error-strings	torchlens/bridge/transformers.py	256,
 error-strings	torchlens/debug/_checks/_audit.py	1.0.
 error-strings	torchlens/debug/_checks/_param_checks.py	16
 error-strings	torchlens/debug/_checks/_param_checks.py	4.5

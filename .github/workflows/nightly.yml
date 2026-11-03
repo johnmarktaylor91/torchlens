@@ -1256,7 +1256,7 @@ jobs:
                 tqdm.__version__, graphviz.__version__, torch.__version__,
                 safetensors.__version__)
           trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
-          assert trace.num_ops >= 2
+          assert len(trace.ops) >= 2
           # r7 R83-3: the floors for safetensors (tlspec blobs) and pillow
           # (drawing surfaces) resolved here but were never EXERCISED -- a
           # floor too low to carry the API TorchLens calls still passed. One
@@ -1265,8 +1265,8 @@ jobs:
               bundle = Path(tmp) / "floor.tlspec"
               tl.save(trace, str(bundle))
               loaded = tl.load(str(bundle))
-              assert loaded.num_ops == trace.num_ops
-              loaded.draw(vis_save_only=True, vis_outpath=str(Path(tmp) / "floor_graph"))
+              assert len(loaded.ops) == len(trace.ops)
+              loaded.draw(path=str(Path(tmp) / "floor_graph"))
               loaded.cleanup()
           print("floor-env capture + save/load + draw OK")
           PY
@@ -2339,6 +2339,69 @@ jobs:
           pip-audit \
             --ignore-vuln PYSEC-2026-3624
 
+
+  notebooks:
+    # Nothing executed the user notebooks, so eight of them (the
+    # README's ten-minute tutorial included) rotted unnoticed through two rename
+    # rounds. This leg executes every user notebook (notebooks/*.ipynb, the
+    # learning path notebooks/learn/*.ipynb and examples/**/*.ipynb; the
+    # developer audit notebooks are not in the set)
+    # with nbclient, one kernel per notebook, a per-cell and a whole-notebook
+    # timeout, and names the notebook and cell of every failure. Nightly only:
+    # the HF model downloads and about twelve minutes of execution do not belong
+    # on every push. It runs no pytest, so it declares no executed-test floor.
+    name: User notebooks (nbclient)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch, TorchLens and the notebook kernel
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # The [test] extra carries nbclient and ipykernel.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import nbclient, ipykernel, torch; print('nbclient', nbclient.__version__, 'ipykernel', ipykernel.__version__, 'torch', torch.__version__)"
+
+      - name: Restore the Hugging Face model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/hf-cache
+          # Keyed on the notebooks: a notebook edit that pulls a new model
+          # refreshes the cache; the restore key reuses the last one meanwhile.
+          key: notebooks-hf-${{ hashFiles('notebooks/*.ipynb', 'notebooks/learn/*.ipynb', 'examples/**/*.ipynb') }}
+          restore-keys: notebooks-hf-
+
+      - name: Execute every user notebook
+        env:
+          HF_HOME: ${{ runner.temp }}/hf-cache
+          MPLBACKEND: Agg
+          OMP_NUM_THREADS: "2"
+        run: python scripts/run_notebooks.py -j 2
 
   attest:
     name: Executed-test floors (every leg)

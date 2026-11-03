@@ -5,14 +5,14 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1405 modules, 631571 lines, 0 modules without a docstring.
+83 packages, 1406 modules, 631762 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
 | `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 31983 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1243 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25089 |
@@ -60,9 +60,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8488 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3945 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 108 | 53967 |
-| `torchlens.bridge` | External-tool bridge namespace. | 25 | 7812 |
+| `torchlens.bridge` | External-tool bridge namespace. | 26 | 7917 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
-| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8406 |
+| `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8487 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 1964 |
 | `torchlens.debug` | Debugging tools for completed TorchLens traces, grouped by the symptom they answer. | 23 | 9609 |
@@ -178,12 +178,12 @@ TorchLens - extract outs and metadata from PyTorch models. (72 modules, 31983 li
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1238 lines)
+TorchLens auto-routing registries. (6 modules, 1243 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
-| `_builtin_input` | Built-in input auto-route detectors. | 52 |
+| `_builtin_input` | Built-in input auto-route detectors. | 57 |
 | `_builtin_output` | Built-in output auto-route detectors and decoders. | 741 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 192 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
@@ -1343,11 +1343,12 @@ Torch backend implementation package for TorchLens capture. (108 modules, 53967 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (25 modules, 7812 lines)
+External-tool bridge namespace. (26 modules, 7917 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | External-tool bridge namespace. | 114 |
+| `_hf_refusals` | Typed preprocessing refusals shared by the Hugging Face auto-routes. | 105 |
 | `_sae_export` | Write SAE latents and top examples in the formats SAEDashboard and delphi read. | 459 |
 | `_sae_latents` | SAE latents as a facet family, and the logged splice that puts them in a trace. | 565 |
 | `_sae_metrics` | Reconstruction and next-token metrics for the SAE splice experiment. | 204 |
@@ -1388,7 +1389,7 @@ LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2700 lines)
 
 ### `torchlens.bundle`
 
-Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 8406 lines)
+Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 8487 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1399,7 +1400,7 @@ Single Bundle type for intervention-ready TorchLens model logs. (24 modules, 840
 | `_card` | Bundle card and outcome fold: ''repr'', ''str'' and the derived outcome of a ''Bundle''. | 87 |
 | `_compare_gate` | The Bundle comparison gate: two predicates, operand-scoped, topology-aware. | 455 |
 | `_comparisons` | Named per-node comparison fields stored on a bundle's supergraph. | 322 |
-| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 540 |
+| `_deltas` | Member-pairwise delta and comparison helpers for :class:'Bundle'. | 621 |
 | `_draw` | The one ''Bundle.draw'' door (the bundle graph and the member diff picture) and ''Bundle.show''. | 178 |
 | `_fed_by` | The ''fed_by'' relation kind: content provenance between two traced calls. | 531 |
 | `_labels` | Label-shape heuristics behind ''Bundle.at(label)''. | 198 |
