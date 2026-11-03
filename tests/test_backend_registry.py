@@ -1225,6 +1225,7 @@ def test_refusal_code_passed_at_the_raise_site_is_the_instance_code() -> None:
 _GATED_TRACE_OPTION_FLAGS_AT_RECORDS = {
     "intervene": "can_intervene",
     "halt": "can_intervene",
+    "stop_after": "can_intervene",
     "facets": "can_intervene",
     "storage": "has_streaming",
     "streaming": "has_streaming",

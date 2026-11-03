@@ -41,6 +41,7 @@ from .._options import (
     TF_PREVIEW_TRACE_OPTION_POLICY,
     default_if_missing,
     is_missing,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
     resolve_optional_capture_field,
@@ -947,11 +948,10 @@ class TFBackend:
 def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
     """Refuse intervention-gated options the tf preview does not implement.
 
-    The ``interventions`` capability flag admits ``intervene=``, ``halt=``, and
-    ``facets=`` through the shared option gate, so the two unimplemented
-    spellings keep their typed refusals here in the capture path instead of in
-    the declarative policy tables (where a True flag would classify them as
-    self-contradictory registrations).
+    The ``can_intervene`` flag admits ``intervene=``, ``stop_after=`` and ``facets=``
+    through the shared option gate, so the two unimplemented spellings refuse typed
+    here in the capture path instead of in the policy tables (where a True flag
+    would classify them as self-contradictory registrations).
 
     Parameters
     ----------
@@ -964,12 +964,12 @@ def _reject_unimplemented_intervention_options(kwargs: dict[str, Any]) -> None:
         Returns when neither option is explicitly requested.
     """
 
-    halt_value = kwargs.pop("halt", None)
-    if halt_value is not None and not is_missing(halt_value):
+    halt_value = pop_stop_directive(kwargs)
+    if halt_value is not None:
         raise BackendUnsupportedError(
-            "tf backend interventions support intervene= only; trace(halt=...) needs "
+            "tf backend interventions support intervene= only; trace(stop_after=...) needs "
             "partial-forward finalization semantics the tf preview does not "
-            "implement. Use the PyTorch backend for predicate-time halt."
+            "implement. Use the PyTorch backend for stop_after."
         )
     recipes_value = kwargs.pop("facets", None)
     if recipes_value is not None and not is_missing(recipes_value):
