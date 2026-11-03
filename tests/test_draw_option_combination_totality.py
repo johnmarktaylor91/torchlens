@@ -309,7 +309,31 @@ _REFUSAL_COMBOS: list[tuple[str, ...]] = [("scale",)] + [
 
 #: Pairs outside the CORE family whose cells alone reached a library branch
 #: in the full sweep (per-test branch coverage, test-shape lane evidence).
-_COVERAGE_PAIRS: tuple[tuple[str, str], ...] = ()
+_COVERAGE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("vis_node_placement", "code_panel"),
+    ("vis_mode", "fold_patterns"),
+    ("vis_call_depth", "show_legend"),
+    ("collapse_fn", "fold_repeats"),
+    ("vis_mode", "size_by"),
+    ("collapse_fn", "collapse"),
+    ("module", "vis_node_placement"),
+    ("vis_mode", "node_label_fields"),
+    ("vis_graph_overrides", "vis_node_placement"),
+    ("size_by", "scale"),
+    ("vis_node_placement", "show_orphans"),
+    ("vis_mode", "collapse"),
+    ("vis_call_depth", "fold_patterns"),
+    ("vis_call_depth", "collapsed_node_spec_fn"),
+    ("node_spec_fn", "color_by"),
+    ("vis_node_placement", "show_legend"),
+    ("vis_mode", "vis_node_placement"),
+    ("vis_mode", "show_saved_for_backward"),
+    ("vis_graph_overrides", "vis_intervention_mode"),
+    ("vis_call_depth", "stack_by"),
+    ("module", "skip_fn"),
+    ("module", "fold_patterns"),
+    ("vis_mode", "show_buffers"),
+)
 
 
 def _combo_problem(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> str | None:

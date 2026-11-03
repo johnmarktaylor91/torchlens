@@ -6,8 +6,8 @@ undeclared ones refuse typed), and every preview option policy crossed with
 every option the policy may refuse (the shared helper refuses exactly the
 options the policy names). Each generator has one property test that walks
 the whole product and names every cell that breaks the rule, plus a sampled
-parametrization that runs one cell per axis value and both verdicts per row,
-so a failure still points at a single cell id.
+parametrization that runs one cell per axis value and both verdicts per row
+and per column, so a failure still points at a single cell id.
 """
 
 from __future__ import annotations
@@ -123,12 +123,18 @@ def _preview_rejects(policy: PreviewTraceOptionPolicy, option_name: str) -> bool
     )
 
 
+#: Options whose refusal names another option: the save-window check refuses
+#: ``lookback`` and ``lookback_payload_policy`` together and names ``lookback``.
+_REFUSAL_NAMES: dict[str, str] = {"lookback_payload_policy": "lookback"}
+
+
 def _typed_refusal_problem(
     error: BackendUnsupportedError, option_name: str, backend: str
 ) -> str | None:
     """Why ``error`` is not the contracted typed refusal for one option, else ``None``."""
 
     fields = error.fields
+    option_name = _REFUSAL_NAMES.get(option_name, option_name)
     named = fields.get("option") == option_name or option_name in (fields.get("options") or ())
     if fields.get("code") != _option_refusal_code(option_name) or not named:
         return f"refused with {fields!r}, expected code {_option_refusal_code(option_name)!r}"
@@ -176,11 +182,12 @@ def _preview_violation(
 def _covering_cells(
     rows: tuple[Any, ...], columns: tuple[Any, ...], verdict: Any
 ) -> list[tuple[Any, Any]]:
-    """One cell per row and per column, then both verdicts for every row.
+    """One cell per row and per column, then both verdicts for every row and column.
 
     The diagonal ``rows[i % R] x columns[i % C]`` visits every axis value once;
-    a row whose diagonal cells all share one verdict gains the first column
-    with the other verdict, so each row is exercised both ways.
+    a row (or column) whose cells so far all share one verdict gains the first
+    partner with the other verdict, so each axis value is exercised both ways
+    wherever the product has both.
     """
 
     size = max(len(rows), len(columns))
@@ -192,6 +199,13 @@ def _covering_cells(
             extra = next((c for c in columns if verdict(row, c) == wanted), None)
             if extra is not None:
                 cells.append((row, extra))
+    for column in columns:
+        for wanted in (True, False):
+            if any(c is column and verdict(r, c) == wanted for r, c in cells):
+                continue
+            partner = next((r for r in rows if verdict(r, column) == wanted), None)
+            if partner is not None:
+                cells.append((partner, column))
     return cells
 
 
