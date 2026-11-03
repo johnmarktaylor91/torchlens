@@ -484,7 +484,7 @@ def test_hypernetwork_input_weight_receptive_degrades_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py, receptive_field/_types.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of receptive_field/_types.py.
 def test_empty_box_slices_select_nothing() -> None:
     """An empty RF box's slices() must select zero elements, never the whole input."""
 

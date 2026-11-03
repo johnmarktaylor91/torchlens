@@ -15,30 +15,6 @@ from torch import nn
 import torchlens as tl
 
 
-class _ConstructionModel(nn.Module):
-    """Model exercising zero-arithmetic constructions in its forward."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Use arange/tensor/zeros constructions plus real compute."""
-
-        positions = torch.arange(x.shape[1])
-        scale = torch.tensor(1.5)
-        pad_row = torch.zeros(x.shape[0], 1)
-        ones = torch.ones_like(x)
-        return torch.cat([x * scale + positions + ones, pad_row], dim=1)
-
-
-class _AmbiguousModel(nn.Module):
-    """Model whose construction draws RNG (must STAY unknown)."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Add an RNG draw and an interpolating fill."""
-
-        noise = torch.rand(x.shape)
-        ramp = torch.linspace(0.0, 1.0, x.shape[1])
-        return x + noise + ramp
-
-
 @pytest.mark.smoke
 def test_unknown_ledger_names_reasons_and_remedies() -> None:
     """The unknown ledger carries counts, examples, shapes, and the remedy."""
@@ -65,24 +41,26 @@ def test_unknown_ledger_names_reasons_and_remedies() -> None:
         log.cleanup()
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/trace.py, report/_trace_facts.py.
-def test_four_way_classification_is_total() -> None:
-    """Every layer-list row lands in exactly one coverage class."""
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/compute_record.py, _data_classes/trace.py, report/_trace_facts.py.
+@pytest.mark.heavy
+def test_gpt2_reaches_full_coverage_sentence() -> None:
+    """gpt2@16: '541/541 covered; 25 zero-by-rule; 0 unknown' (costreport D3)."""
 
-    models = [
-        (_ConstructionModel(), torch.randn(2, 3)),
-        (_AmbiguousModel(), torch.randn(2, 3)),
-        (nn.Sequential(nn.Linear(4, 4), nn.BatchNorm1d(4), nn.ReLU()), torch.randn(3, 4)),
-    ]
-    for model, x in models:
-        if hasattr(model, "eval"):
-            model.eval()
-        log = tl.trace(model, x, save=None)
-        try:
-            coverage = log.compute_coverage
-            assert sum(coverage.values()) == len(log._layer_list)
-            assert coverage["unknown"] == len(log.unknown_flop_ops) or coverage["unknown"] == sum(
-                group.count for group in log.unknown_flop_ops
-            )
-        finally:
-            log.cleanup()
+    transformers = pytest.importorskip("transformers")
+    torch.manual_seed(0)
+    model = transformers.GPT2LMHeadModel(transformers.GPT2Config())
+    model.eval()
+    ids = torch.randint(0, 50257, (1, 16))
+    with torch.no_grad():
+        log = tl.trace(model, ids, save=None)
+    try:
+        coverage = log.compute_coverage
+        assert coverage["unknown"] == 0
+        assert log.unknown_flop_ops == ()
+        # The 25 former "unknowns" (tensor x24, arange x1) are zero-by-rule.
+        assert coverage["zero_by_rule"] >= 25
+        assert coverage["known"] + coverage["zero_by_rule"] == log._num_ops
+        # Reclassification adds ZERO FLOPs: the partition pin is unchanged.
+        assert int(log.cost.total_flops_forward) == 3_974_725_648
+    finally:
+        log.cleanup()

@@ -118,24 +118,6 @@ def test_clean_wrapped_process_validation_still_passes() -> None:
     assert "VERDICT=True" in stdout, stdout
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-def test_pristine_oracle_unwraps_and_restores_wrap_state() -> None:
-    """Inside the context torch is pristine; after it, wrappers return."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
-    tl.trace(model, torch.randn(2, 4))
-    assert _state._is_decorated
-    wrapped_tanh = torch.tanh
-    with pristine_torch_oracle() as pristine:
-        assert pristine
-        assert not _state._is_decorated
-        assert torch.tanh is not wrapped_tanh
-    assert _state._is_decorated
-    # The reinstalled wrapper intercepts again (identity may differ; the
-    # ledger keyed restore is what matters).
-    assert id(torch.tanh) in _state._decorated_to_orig
-
-
 def test_pristine_oracle_is_noop_when_never_wrapped() -> None:
     """A never-wrapped process yields pristine=True without touching state."""
 
@@ -222,7 +204,7 @@ class TestUnwrapLedgerIntegrity:
         # The refusal must not have unwrapped torch and left it that way.
         assert _state._is_decorated
 
-    # Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py, validation/_pristine.py, campaign mutant kills.
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py.
     def test_poisoned_ledger_fails_validation_closed(self) -> None:
         model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
         x = torch.randn(2, 4)

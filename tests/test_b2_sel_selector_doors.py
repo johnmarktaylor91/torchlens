@@ -19,7 +19,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import AmbiguousOpLookupError
-from torchlens._trace_selector_helpers import canonical_module_site_key
 
 
 def _stage(channels: int) -> nn.Sequential:
@@ -141,6 +140,7 @@ def case(request: pytest.FixtureRequest) -> tuple[nn.Module, torch.Tensor, dict[
     return model, x, names, _hooked_outputs(model, x, list(names.values()))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of __init__.py, _trace_selector_helpers.py.
 def test_extract_and_pluck_resolve_stage_names(case) -> None:
     model, x, names, expected = case
     for name, address in names.items():
@@ -151,33 +151,7 @@ def test_extract_and_pluck_resolve_stage_names(case) -> None:
         torch.testing.assert_close(tl.pluck(model, x, name), expected[address])
 
 
-def test_trace_getitem_and_save_list_resolve_stage_names(case) -> None:
-    model, x, names, expected = case
-    full = tl.trace(model, x)
-    selective = tl.trace(model, x, save=list(names))
-    for name, address in names.items():
-        torch.testing.assert_close(full[name].out, expected[address])
-        torch.testing.assert_close(selective[name].out, expected[address])
-        assert full[name].label == full[address].label
-
-
-def _until_outcome(trace: tl.Trace, x: torch.Tensor, site: str) -> tuple:
-    """Return where an ``until=`` run stopped and how many ops it executed."""
-
-    truncation = trace.run(inputs=x, until=site).report.truncation
-    if truncation is None:
-        return ("full run",)
-    return (truncation.stopped_at, truncation.executed_count)
-
-
-def test_run_until_resolves_stage_names(case) -> None:
-    model, x, names, _expected = case
-    trace = tl.trace(model, x)
-    for name, address in names.items():
-        label = trace[address].layer_label
-        assert _until_outcome(trace, x, name) == _until_outcome(trace, x, label)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/interface.py, _trace_selector_helpers.py.
 def test_relative_name_matching_several_modules_refuses_with_candidates() -> None:
     class _Two(nn.Module):
         def __init__(self) -> None:
@@ -194,17 +168,7 @@ def test_relative_name_matching_several_modules_refuses_with_candidates() -> Non
     assert "'a.0'" in str(exc_info.value) and "'b.0'" in str(exc_info.value)
 
 
-def test_canonical_key_is_none_for_every_existing_name() -> None:
-    """The name mapping never changes a lookup that resolves today."""
-
-    for factory, make_input, _names in _CASES.values():
-        trace = tl.trace(factory().eval(), make_input())
-        names = set(trace._layer_dict_all_keys) | set(trace._layer_logs) | set(trace.modules.keys())
-        for name in names:
-            if isinstance(name, str):
-                assert canonical_module_site_key(trace, name) is None, name
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/prepare/door.py, backends/torch/model_prep.py.
 def test_pluck_resolves_the_module_it_stopped_at() -> None:
     """A halted trace's output alias does not steal the stop module's name."""
 

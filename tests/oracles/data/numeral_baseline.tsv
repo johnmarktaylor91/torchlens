@@ -7317,8 +7317,6 @@ test-docstrings	tests/test_arch_spine_relocations.py	35
 test-docstrings	tests/test_arch_tail_fitted_contract.py	20
 test-docstrings	tests/test_arg_spec_coverage.py	774
 test-docstrings	tests/test_argpos_hardening.py	22
-test-docstrings	tests/test_argpos_hardening.py	31
-test-docstrings	tests/test_argpos_hardening.py	5.0
 test-docstrings	tests/test_aten_profile.py	2.1
 test-docstrings	tests/test_aten_profile.py	2.2
 test-docstrings	tests/test_attested_coupling_selectors.py	42
@@ -7453,12 +7451,6 @@ test-docstrings	tests/test_bridges_launch.py	11.2
 test-docstrings	tests/test_bridges_launch.py	20
 test-docstrings	tests/test_bridges_launch.py	2026
 test-docstrings	tests/test_browser_packets_fixd03_f12.py	18.
-test-docstrings	tests/test_buffer_datamodel.py	1000
-test-docstrings	tests/test_buffer_datamodel.py	12
-test-docstrings	tests/test_buffer_datamodel.py	135
-test-docstrings	tests/test_buffer_datamodel.py	500
-test-docstrings	tests/test_buffer_datamodel.py	52
-test-docstrings	tests/test_buffer_datamodel.py	996
 test-docstrings	tests/test_bug_fixes_phase14.py	16
 test-docstrings	tests/test_bug_fixes_phase14.py	256
 test-docstrings	tests/test_bug_fixes_phase14.py	3172
@@ -7481,11 +7473,7 @@ test-docstrings	tests/test_capture_outcome_characterization.py	17
 test-docstrings	tests/test_capture_outcome_characterization.py	20
 test-docstrings	tests/test_capture_outcome_gates.py	3.6
 test-docstrings	tests/test_capture_outcome_validation_side_channel.py	67
-test-docstrings	tests/test_capture_pure_observer.py	100
 test-docstrings	tests/test_capture_pure_observer.py	128
-test-docstrings	tests/test_capture_pure_observer.py	129
-test-docstrings	tests/test_capture_pure_observer.py	18
-test-docstrings	tests/test_capture_pure_observer.py	57
 test-docstrings	tests/test_capture_pure_observer.py	64
 test-docstrings	tests/test_capture_settlement.py	23
 test-docstrings	tests/test_capture_settlement.py	63
@@ -7632,7 +7620,6 @@ test-docstrings	tests/test_decoration.py	649
 test-docstrings	tests/test_decoration.py	76
 test-docstrings	tests/test_deferred_payload_clone.py	13
 test-docstrings	tests/test_deferred_payload_clone.py	2132
-test-docstrings	tests/test_detached_reference_capture_outcomes.py	43
 test-docstrings	tests/test_device_context_logging.py	2.1
 test-docstrings	tests/test_differential_oracle_authority.py	75
 test-docstrings	tests/test_distributed_boundary_gloo.py	10
@@ -7642,7 +7629,6 @@ test-docstrings	tests/test_distributed_c0_core.py	10
 test-docstrings	tests/test_distributed_c0_core.py	22
 test-docstrings	tests/test_distributed_c0_core.py	3.15
 test-docstrings	tests/test_distributed_census_topologies.py	10
-test-docstrings	tests/test_distributed_funcol_boundaries.py	1.2
 test-docstrings	tests/test_distributed_funcol_boundaries.py	1.4
 test-docstrings	tests/test_distributed_honesty.py	10
 test-docstrings	tests/test_distributed_honesty.py	2026
@@ -7941,7 +7927,6 @@ test-docstrings	tests/test_hash_determinism.py	21
 test-docstrings	tests/test_hf_attention_backend.py	64
 test-docstrings	tests/test_hon_attribution_refusals.py	20.5
 test-docstrings	tests/test_hon_attribution_refusals.py	21.5
-test-docstrings	tests/test_hon_capture_refusals.py	11.2
 test-docstrings	tests/test_hon_capture_refusals.py	31.4
 test-docstrings	tests/test_hon_capture_refusals.py	35.2
 test-docstrings	tests/test_hon_capture_refusals.py	35.3
@@ -9341,7 +9326,6 @@ test-docstrings	tests/test_tvscope_preprocessing.py	232
 test-docstrings	tests/test_tvscope_preprocessing.py	50
 test-docstrings	tests/test_two_pass_inplace_fix.py	27.1
 test-docstrings	tests/test_two_pass_inplace_fix.py	50
-test-docstrings	tests/test_utility_validation_runner_regressions.py	17
 test-docstrings	tests/test_validate_consolidated.py	180
 test-docstrings	tests/test_validate_consolidated.py	225
 test-docstrings	tests/test_validate_consolidated.py	33
@@ -9634,7 +9618,6 @@ test-names	tests/test_conditional_invariants.py	14_
 test-names	tests/test_conditional_invariants.py	15_
 test-names	tests/test_distributed_c0_core.py	10
 test-names	tests/test_distributed_census_topologies.py	10
-test-names	tests/test_distributed_funcol_boundaries.py	10
 test-names	tests/test_dtype_range_audit.py	16_
 test-names	tests/test_dtype_range_audit.py	32_
 test-names	tests/test_explorer_watch_gates.py	18

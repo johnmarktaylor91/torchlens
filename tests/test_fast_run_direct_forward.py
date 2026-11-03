@@ -199,7 +199,7 @@ def _urbandriver() -> tuple[nn.Module, Any]:
     return build_entry(entry)
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_steer.py, _save_budget.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _fast_live_steer.py.
 def test_fast_run_routes_urbandriver_past_its_direct_forward_call() -> None:
     """urbandriver's directly called embedding is routed and its sites collected.
 

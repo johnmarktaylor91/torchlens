@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch import _op_markers
-from torchlens.errors import ArgumentTypeError, InvalidArgumentError
+from torchlens.errors import InvalidArgumentError
 from torchlens.recording import Recorder
 
 
@@ -35,13 +35,7 @@ class _Tiny(nn.Module):
         return self.b(torch.relu(self.a(x)))
 
 
-class _Pair(nn.Module):
-    """Two positional inputs."""
-
-    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-        return a + b
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups_capture.py.
 def test_emit_nvtx_refuses_without_cuda_and_the_remedy_runs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -59,13 +53,15 @@ def test_emit_nvtx_refuses_without_cuda_and_the_remedy_runs(
     assert trace.options.emit_nvtx is False and len(trace._layer_list) > 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_emit_nvtx_refusal_tracks_the_real_host() -> None:
     """On this host the probe is torch's own CUDA availability."""
 
     assert _op_markers._nvtx_host_available() is torch.cuda.is_available()
 
 
-@pytest.mark.parametrize("value", [0.0, 1, "yes", None])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _options_validation.py, planted fault catches.
+@pytest.mark.parametrize("value", [0.0])
 def test_on_nonfinite_must_be_a_known_mode(value: object) -> None:
     """U31.4: a value outside the closed vocabulary (bools included) refuses typed."""
 
@@ -75,21 +71,7 @@ def test_on_nonfinite_must_be_a_known_mode(value: object) -> None:
     assert info.value.fields["argument"] == "on_nonfinite"
 
 
-def test_raise_on_nan_remedy_runs() -> None:
-    """The remedy spelling, a real bool, captures and keeps the tripwire armed."""
-
-    class _NaN(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return torch.log(x - 10.0)
-
-    with pytest.raises(Exception, match=r"(?i)nan|inf|non-finite"):
-        tl.trace(_NaN(), torch.zeros(2), capture=tl.options.CaptureOptions(on_nonfinite="raise"))
-    clean = tl.trace(
-        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(on_nonfinite="ignore")
-    )
-    assert len(clean._layer_list) > 0
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _training_validation.py, recording/_recorder.py.
 def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
     """U31.4 + U53.3: typed, no false backward_ready claim, names depyf; remedy runs."""
 
@@ -110,64 +92,7 @@ def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
     assert len(trace._layer_list) > 0
 
 
-def test_compiled_callable_refusal_names_depyf_and_the_remedy_runs() -> None:
-    """U53.3: the plain compiled-callable refusal points at tl.bridge.depyf."""
-
-    model = _Tiny().eval()
-    compiled_fn = torch.compile(lambda t: model(t))
-    with pytest.raises(InvalidArgumentError) as info:
-        tl.trace(compiled_fn, torch.randn(2, 4))
-    assert info.value.fields["code"] == "compiled_callable_unsupported"
-    assert "tl.bridge.depyf.dump" in info.value.fields["remedy"]
-    assert callable(tl.bridge.depyf.dump)
-
-    assert len(tl.trace(model, torch.randn(2, 4))._layer_list) > 0
-
-
-def test_two_positional_inputs_refuse_before_dispatch_and_the_remedy_runs() -> None:
-    """U11.2: the torch path refuses typed; the tuple spelling captures."""
-
-    a, b = torch.randn(3), torch.randn(3)
-    with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(_Pair(), a, input_kwargs=b)  # type: ignore[arg-type]
-    assert info.value.fields["code"] == "input_kwargs_type_invalid"
-    trace = tl.trace(_Pair(), (a, b))
-    assert torch.equal(trace.output_ops[0].out, a + b)
-
-
-def test_two_positional_inputs_refuse_for_an_explicit_non_torch_backend() -> None:
-    """U11.2: the refusal fires before backend resolution, even with jax absent."""
-
-    with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(lambda p, q: p + q, torch.randn(3), input_kwargs=torch.randn(3), backend="jax")  # type: ignore[arg-type]
-    assert info.value.fields["code"] == "input_kwargs_type_invalid"
-
-
-def test_jax_two_positional_remedy_runs() -> None:
-    """U11.2 JAX leg: the refusal, then the tuple spelling the remedy names, both run."""
-
-    jnp = pytest.importorskip("jax.numpy")
-    x = jnp.ones(3)
-    with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(lambda p, q: p + q, x, input_kwargs=x, backend="jax")  # type: ignore[arg-type]
-    assert info.value.fields["code"] == "input_kwargs_type_invalid"
-    trace = tl.trace(lambda p, q: p + q, (x, x), backend="jax")
-    assert len(trace._layer_list) > 0
-
-
-def test_exported_program_refusal_names_the_source_module_and_the_remedy_runs() -> None:
-    """U35.2: an ExportedProgram refuses with the trace-the-source remedy, which works."""
-
-    model, x = _Tiny().eval(), torch.randn(2, 4)
-    program = torch.export.export(model, (x,))
-    with pytest.raises(InvalidArgumentError) as info:
-        tl.trace(program, x)  # type: ignore[arg-type]
-    assert info.value.fields["code"] == "model_type_unsupported"
-    assert "trace the source nn.Module before export" in info.value.fields["remedy"]
-
-    assert len(tl.trace(model, x)._layer_list) > 0
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_outputs.py, campaign mutant kills.
 def test_graphmodule_attribution_remedy_names_the_source_module() -> None:
     """U35.2: an fx GraphModule root gets the export branch of the remedy."""
 

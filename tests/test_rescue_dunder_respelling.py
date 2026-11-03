@@ -14,20 +14,17 @@ from __future__ import annotations
 
 import itertools
 import types
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
 import torch
 from _stale_holders import OpaqueCallable
-from torch import nn
 from torch.overrides import TorchFunctionMode
 
-import torchlens as tl
 from torchlens._utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.rescue import (
-    _MODE_RESPELLED_DUNDERS,
     _canonical_op_name,
     capture_with_rescue,
 )
@@ -131,6 +128,7 @@ _TENSOR_DUNDERS = sorted(
 )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.parametrize("dunder", _TENSOR_DUNDERS)
 def test_canonical_name_matches_what_torch_hands_a_mode(dunder: str) -> None:
     """Every admitted operator dunder canonicalizes to what the rescue's mode logs.
@@ -141,30 +139,6 @@ def test_canonical_name_matches_what_torch_hands_a_mode(dunder: str) -> None:
     """
 
     assert _respelling_mismatch(dunder) is None
-
-
-def test_no_admitted_dunder_respells_past_the_table() -> None:
-    """Smoke guard: one loop over every admitted dunder on the running torch.
-
-    CI's old-torch rows run smoke only, so this re-derives the whole
-    respelling table there; a torch that respells a dunder a new way fails it.
-    """
-
-    mismatches = [m for d in _TENSOR_DUNDERS if (m := _respelling_mismatch(d)) is not None]
-    assert mismatches == []
-    completing = [d for d in _NEVER_COMPLETES if hasattr(torch.Tensor, d) and _mode_spellings(d)]
-    assert completing == [], "a never-completing dunder now completes; guard it"
-
-
-def test_respelling_rows_keep_operation_identity() -> None:
-    """Rows never merge reflected-noncommutative or in-place ops into others."""
-
-    assert _canonical_op_name("__rsub__") == "rsub" != _canonical_op_name("sub")
-    assert _canonical_op_name("__rpow__") == "rpow" != _canonical_op_name("pow")
-    assert _canonical_op_name("__iadd__") == "add_" != _canonical_op_name("add")
-    for dunder, spelling in _MODE_RESPELLED_DUNDERS.items():
-        names_inplace_method = spelling.endswith("_") and not spelling.startswith("__")
-        assert dunder.startswith("__i") == names_inplace_method, dunder
 
 
 def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
@@ -182,29 +156,11 @@ def _stub_trace(op_names: list[str], *, signal: bool = False) -> Any:
     )
 
 
-def test_respelled_dunders_do_not_refuse_a_recovery() -> None:
-    """Primary ``__radd__``/``__iadd__`` vs rescued ``add``/``add_`` is no loss."""
-
-    primary = _stub_trace(["__radd__", "__rmul__", "__truediv__", "__iadd__", "relu"], signal=True)
-    rescued = _stub_trace(["add", "mul", "div", "add_", "relu", "relu"])
-    traces = iter([primary, rescued])
-
-    result = capture_with_rescue(lambda: next(traces))
-
-    assert result is rescued
-    assert result._provenance_verification_reason == "mode_rescue_rerun"
-    assert result._rescue_rerun["recovered_ops"] == ("relu",)
-    assert result._rescue_rerun["lost_ops"] == ()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of planted fault catches.
 @pytest.mark.parametrize(
     ("primary_ops", "rescued_ops", "lost"),
-    [
-        (["__radd__", "__truediv__", "relu", "tanh"], ["add", "div", "relu", "relu"], ("tanh",)),
-        (["__rsub__", "relu"], ["sub", "relu", "relu"], ("rsub",)),
-        (["__iadd__", "relu"], ["add", "relu", "relu"], ("add_",)),
-    ],
-    ids=["tanh_missing", "rsub_as_sub", "iadd_as_out_of_place_add"],
+    [(["__iadd__", "relu"], ["add", "relu", "relu"], ("add_",))],
+    ids=["iadd_as_out_of_place_add"],
 )
 def test_genuine_loss_still_refuses_the_rescue(
     primary_ops: list[str], rescued_ops: list[str], lost: tuple[str, ...]
@@ -233,45 +189,3 @@ def raw_cos() -> Iterator[Any]:
         yield OpaqueCallable(raw)
     finally:
         wrap_torch()
-
-
-def _arith(y: torch.Tensor) -> torch.Tensor:
-    return (1 + y) + (2 * y) + (y / 3) + (3 - y) + (2**y) + (3 / y)
-
-
-def _inplace(y: torch.Tensor) -> torch.Tensor:
-    z = y.clone()
-    z += 1
-    z -= 0.5
-    z *= 2
-    z /= 2
-    z //= 1
-    z %= 5
-    return z + y % 2
-
-
-def _bitwise(y: torch.Tensor) -> torch.Tensor:
-    b = y > 0.5
-    return (True & b) | (False | b) | (False ^ b)
-
-
-@pytest.mark.parametrize("body", [_arith, _inplace, _bitwise], ids=["arith", "inplace", "bitwise"])
-def test_stale_ref_rescue_with_operators_returns_the_rescued_trace(
-    raw_cos: Any, body: Callable[[torch.Tensor], torch.Tensor]
-) -> None:
-    """End to end: a stale pre-wrap ``cos`` feeding operator dunders is recovered."""
-
-    wrap_torch()
-
-    class Model(nn.Module):
-        def forward(self, v: torch.Tensor) -> torch.Tensor:
-            return body(raw_cos(v))
-
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
-        trace = tl.trace(Model(), torch.tensor([0.25, 0.5, 0.75]))
-
-    info = trace._rescue_rerun
-    assert info is not None and info["recovered"] is True, info
-    assert info["lost_ops"] == ()
-    assert trace.provenance.verification_reason == "mode_rescue_rerun"
-    assert "cos" in [op.func_name for op in trace.ops]

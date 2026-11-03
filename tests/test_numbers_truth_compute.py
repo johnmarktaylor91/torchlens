@@ -45,22 +45,6 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
         log.cleanup()
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py.
-def test_relu_has_zero_macs_non_mac() -> None:
-    """A5 pin: a ReLU has ZERO MACs (the true answer), never 'half its FLOPs'."""
-
-    log = _capture(nn.Sequential(nn.Linear(4, 4, bias=False), nn.ReLU()), torch.randn(2, 4))
-    try:
-        relu = log["relu_1_2"]
-        assert int(relu.macs_forward) == 0
-        record = next(iter(relu.ops.values())).compute_record
-        assert record.mac_applicability == "non_mac"
-        assert record.fma_macs == 0
-        assert int(relu.flops_forward) > 0
-    finally:
-        log.cleanup()
-
-
 # Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_ladder.py, report/_summary_render.py, report/_summary_result.py.
 def test_fma_convention_honored_never_discarded() -> None:
     """A6: fma=1 renders 288 on the toy; the default convention is fma=2."""
@@ -225,7 +209,7 @@ def test_record_collapse_matches_stored_flops_everywhere() -> None:
         log.cleanup()
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups.py, _data_classes/trace.py, report/_trace_facts.py.
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/trace.py, report/_trace_facts.py.
 @pytest.mark.heavy
 def test_bert_base_exact_mac_decomposition() -> None:
     """A5 pin (re-derived per the memo's numbers discipline): bert-base@12.

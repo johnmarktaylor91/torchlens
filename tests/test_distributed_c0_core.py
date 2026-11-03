@@ -84,6 +84,12 @@ class TestGroupLifecycleLedger:
         assert rebuilt.events == ledger.events
         assert rebuilt.lineage_vectors() == ledger.lineage_vectors()
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of distributed/_ledger.py.
+    def test_event_index_must_increase(self):
+        ledger = _ledger([("create", M, 0, "wrapped", "seeded")])
+        with pytest.raises(ValueError):
+            ledger.append(_event(0, "create", M2, 0, "wrapped", "seeded"))
+
 
 class TestLifecycleFailureAtomicity:
     """Lifecycle uncertainty and teardown failures remain visible and repairable."""

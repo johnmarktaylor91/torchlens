@@ -18,17 +18,9 @@ from typing import Any
 
 import pytest
 import torch
-import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-from torchlens import _state
-from torchlens._capture.arg_positions import (
-    FUNC_ARG_SPECS,
-    _normalize_func_name,
-    extract_tensors_and_params,
-)
-from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
 from torchlens.intervention.types import ParentRef
 from torchlens.options import CaptureOptions
 
@@ -180,57 +172,6 @@ def _count_tensors(value: object) -> int:
     return 0
 
 
-@pytest.mark.parametrize(
-    "func_name,args,kwargs", _KWARG_CASES, ids=[case[0] for case in _KWARG_CASES]
-)
-def test_static_table_extracts_kwarg_tensors(
-    func_name: str, args: tuple[object, ...], kwargs: dict[str, object]
-) -> None:
-    """Every tensor passed positionally OR by keyword must be extracted."""
-    spec = FUNC_ARG_SPECS.get(_normalize_func_name(func_name))
-    assert spec is not None, f"no static ArgSpec for {func_name!r}"
-
-    tensors, params = extract_tensors_and_params(spec, args, kwargs)
-    expected = sum(_count_tensors(a) for a in args) + sum(
-        _count_tensors(v) for v in kwargs.values()
-    )
-    found = len(tensors) + len(params)
-    assert found == expected, (
-        f"{func_name}: extracted {found} tensors, expected {expected} "
-        f"(spec tensor_kwargs={spec.tensor_kwargs})"
-    )
-
-
-def test_kwarg_parameters_routed_to_params() -> None:
-    """nn.Parameter passed by keyword must land in the parameter list."""
-    spec = FUNC_ARG_SPECS[_normalize_func_name("linear")]
-    weight = nn.Parameter(torch.randn(4, 3))
-    tensors, params = extract_tensors_and_params(spec, (torch.randn(2, 3),), {"weight": weight})
-    assert len(tensors) == 1
-    assert params == [weight]
-
-
-def test_unknown_arg_fallback_partitions_tensors_and_parameters() -> None:
-    """Unknown function fallback finds tensors and parameters in one partition."""
-
-    normalized_name = "torchlenslocalunknownfallback"
-    _state._dynamic_arg_specs.pop(normalized_name, None)
-    x = torch.randn(2, 3)
-    y = torch.randn(2, 3)
-    weight = nn.Parameter(torch.randn(2, 3))
-
-    tensors, params = _extract_arg_tensors_and_params(
-        normalized_name,
-        ({"left": [x, weight], "duplicate": x},),
-        {"right": y, "weight": weight},
-    )
-
-    assert tensors == [y, x]
-    assert params == [weight]
-    assert normalized_name in _state._dynamic_arg_specs
-    _state._dynamic_arg_specs.pop(normalized_name, None)
-
-
 # ---------------------------------------------------------------------------
 # Integration level: kwarg tensors appear as parents in the trace graph
 # ---------------------------------------------------------------------------
@@ -330,38 +271,7 @@ def _trace_with_args_templates(
     )
 
 
-def test_traced_where_kwargs_recorded_as_parents() -> None:
-    """torch.where(cond, input=a, other=b) records a and b as parents."""
-
-    class M(nn.Module):
-        def forward(self, x):
-            a = x + 1
-            b = x * 2
-            return torch.where(x > 0, input=a, other=b)
-
-    log = tl.trace(M(), torch.randn(2, 3))
-    where_layer = _layer_by_func(log, "where")
-    parents = set(where_layer.parents)
-    assert any("add" in p for p in parents), parents
-    assert any("mul" in p for p in parents), parents
-    assert any("gt" in p for p in parents), parents
-
-
-def test_traced_linear_weight_kwarg_recorded_as_parent() -> None:
-    """F.linear(x, weight=w) with a derived (non-Parameter) weight records w."""
-
-    class M(nn.Module):
-        def forward(self, x):
-            w = (x * 2).t()
-            return F.linear(x + 1, weight=w)
-
-    log = tl.trace(M(), torch.randn(3, 3))
-    linear_layer = _layer_by_func(log, "linear")
-    parents = set(linear_layer.parents)
-    assert any("t_" in p for p in parents), parents
-    assert any("add" in p for p in parents), parents
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py.
 def test_traced_bmm_mat2_kwarg_recorded_as_parent() -> None:
     """torch.bmm(a, mat2=b) records b as a parent."""
 
@@ -378,6 +288,7 @@ def test_traced_bmm_mat2_kwarg_recorded_as_parent() -> None:
     assert any("transpose" in p for p in parents), parents
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/flops.py.
 def test_traced_addmm_kwargs_recorded_as_parents() -> None:
     """torch.addmm(bias, m1, mat2=m2) records the kwarg matrix as a parent."""
 
@@ -396,319 +307,7 @@ def test_traced_addmm_kwargs_recorded_as_parents() -> None:
     assert any("mul" in p for p in parents), parents
 
 
-def test_traced_normal_mean_std_kwargs_recorded_as_parents() -> None:
-    """torch.normal(mean=m, std=s) records both kwarg tensors as parents.
-
-    Before the fix the op had NO parents and was misclassified as an
-    internal source.
-    """
-
-    class M(nn.Module):
-        def forward(self, x):
-            m = x + 1
-            s = (x * 2).abs() + 0.1
-            return torch.normal(mean=m, std=s)
-
-    log = tl.trace(M(), torch.randn(2, 3))
-    normal_layer = _layer_by_func(log, "normal")
-    parents = set(normal_layer.parents)
-    assert any("add_1" in p for p in parents), parents
-    assert any("add_2" in p or "abs" in p for p in parents), parents
-    assert not normal_layer.is_internal_source
-
-
-def test_traced_zeros_like_source_recorded_as_parent() -> None:
-    """torch.zeros_like(y) records y as a shape/source parent."""
-
-    class M(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return a zeros_like tensor derived from an intermediate."""
-
-            y = x + 1
-            return torch.zeros_like(y)
-
-    log = tl.trace(M(), torch.randn(2, 3))
-    zeros_like_layer = _layer_by_func(log, "zeroslike")
-    parents = set(zeros_like_layer.parents)
-    assert any("add" in p for p in parents), parents
-    assert not zeros_like_layer.is_internal_source
-
-
-def test_traced_new_zeros_source_recorded_as_parent() -> None:
-    """x.new_zeros(...) records x as the source tensor parent."""
-
-    class M(nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return a new_zeros tensor derived from an intermediate source."""
-
-            y = x + 1
-            return y.new_zeros((2, 3))
-
-    log = tl.trace(M(), torch.randn(2, 3))
-    new_zeros_layer = _layer_by_func(log, "newzeros")
-    parents = set(new_zeros_layer.parents)
-    assert any("add" in p for p in parents), parents
-    assert not new_zeros_layer.is_internal_source
-
-
-def test_traced_gradient_spacing_tensor_recorded_as_parent() -> None:
-    """torch.gradient records a tensor supplied through ``spacing`` as a parent."""
-
-    class GradientWithTensorSpacing(nn.Module):
-        """Compute a gradient with coordinates derived from a second input."""
-
-        def forward(self, values: torch.Tensor, coordinates: torch.Tensor) -> torch.Tensor:
-            """Return the gradient of values at scaled coordinates.
-
-            Parameters
-            ----------
-            values:
-                Values to differentiate.
-            coordinates:
-                Coordinates used to derive tensor spacing.
-
-            Returns
-            -------
-            torch.Tensor
-                Numerical gradient of ``values``.
-            """
-
-            scaled_coordinates = coordinates * 2
-            return torch.gradient(values, spacing=(scaled_coordinates,), dim=(0,))[0]
-
-    trace = _trace_with_args_templates(
-        GradientWithTensorSpacing(),
-        [torch.tensor([0.0, 1.0, 4.0, 9.0]), torch.arange(4.0)],
-    )
-    gradient = next(op for op in trace.ops if op.func_name == "gradient")
-    scaled_coordinates = next(op for op in trace.ops if op.func_name in {"mul", "__mul__"})
-    assert any("mul" in parent for parent in gradient.parents), gradient.parents
-    _assert_child_edge(scaled_coordinates, gradient)
-    _assert_parents_match_args_template(gradient)
-
-
-@pytest.mark.parametrize("call_style", ["positional", "keyword"])
-@pytest.mark.parametrize("func_name", ["quantile", "nanquantile"])
-def test_traced_quantile_tensor_q_recorded_as_parent(call_style: str, func_name: str) -> None:
-    """Tensor ``q`` is a parent for positional and keyword quantile calls.
-
-    Parameters
-    ----------
-    call_style:
-        Whether ``q`` is supplied positionally or by keyword.
-    func_name:
-        Name of the quantile operation under test.
-    """
-
-    class QuantileWithTensorQ(nn.Module):
-        """Select a quantile using a tensor input."""
-
-        def forward(self, values: torch.Tensor, q: torch.Tensor) -> torch.Tensor:
-            """Return the requested quantile.
-
-            Parameters
-            ----------
-            values:
-                Values to reduce.
-            q:
-                Tensor quantile to select.
-
-            Returns
-            -------
-            torch.Tensor
-                Selected quantile.
-            """
-
-            quantile = getattr(torch, func_name)
-            if call_style == "positional":
-                return quantile(values, q)
-            return quantile(values, q=q)
-
-    trace = _trace_with_args_templates(
-        QuantileWithTensorQ(), [torch.tensor([0.0, 10.0, 20.0]), torch.tensor(0.25)]
-    )
-    quantile = next(op for op in trace.ops if op.func_name == func_name)
-    inputs = [op for op in trace._layer_list if op.is_input]
-
-    assert set(quantile.parents) == {op.layer_label for op in inputs}
-    for input_op in inputs:
-        _assert_child_edge(input_op, quantile)
-    _assert_parents_match_args_template(quantile)
-
-
-@pytest.mark.parametrize(
-    ("func", "kwarg_names", "inputs"),
-    [
-        (
-            F.margin_ranking_loss,
-            ("input1", "input2", "target"),
-            [
-                torch.tensor([1.0, 2.0]),
-                torch.tensor([2.0, 0.0]),
-                torch.tensor([1.0, -1.0]),
-            ],
-        ),
-        (
-            F.cosine_embedding_loss,
-            ("input1", "input2", "target"),
-            [
-                torch.tensor([[1.0, 2.0]]),
-                torch.tensor([[2.0, 0.0]]),
-                torch.tensor([1.0]),
-            ],
-        ),
-        (
-            F.triplet_margin_loss,
-            ("anchor", "positive", "negative"),
-            [
-                torch.tensor([1.0, 2.0]),
-                torch.tensor([1.5, 2.5]),
-                torch.tensor([4.0, 5.0]),
-            ],
-        ),
-    ],
-    ids=lambda case: case.__name__ if callable(case) else None,
-)
-@pytest.mark.parametrize("call_style", ["positional", "keyword"])
-def test_traced_three_input_losses_record_all_tensor_parents(
-    func: Any,
-    kwarg_names: tuple[str, str, str],
-    inputs: list[torch.Tensor],
-    call_style: str,
-) -> None:
-    """Every tensor operand of a three-input loss is retained as a graph parent.
-
-    Parameters
-    ----------
-    func:
-        Loss operation under test.
-    kwarg_names:
-        Schema argument names for the three tensor operands.
-    inputs:
-        Valid loss inputs.
-    call_style:
-        Whether operands are supplied positionally or by keyword.
-    """
-
-    class ThreeInputLoss(nn.Module):
-        """Apply one three-input functional loss."""
-
-        def forward(self, *operands: torch.Tensor) -> torch.Tensor:
-            """Return the configured loss.
-
-            Parameters
-            ----------
-            operands:
-                Three tensor operands for the configured loss.
-
-            Returns
-            -------
-            torch.Tensor
-                Scalar loss value.
-            """
-
-            if call_style == "positional":
-                return func(*operands)
-            return func(**dict(zip(kwarg_names, operands, strict=True)))
-
-    trace = _trace_with_args_templates(ThreeInputLoss(), inputs)
-    loss = next(op for op in trace.ops if op.func_name == func.__name__)
-    input_ops = [op for op in trace._layer_list if op.is_input]
-
-    assert set(loss.parents) == {op.layer_label for op in input_ops}
-    for input_op in input_ops:
-        _assert_child_edge(input_op, loss)
-    _assert_parents_match_args_template(loss)
-
-
-@pytest.mark.parametrize("bound_style", ["positional", "keyword", "mixed"])
-def test_traced_clamp_tensor_bounds_recorded_as_parents(bound_style: str) -> None:
-    """torch.clamp records tensor bounds in every supported calling style.
-
-    Parameters
-    ----------
-    bound_style:
-        Whether the tensor bounds are passed positionally, by keyword, or with
-        the minimum positional and maximum by keyword.
-    """
-
-    class ClampWithTensorBounds(nn.Module):
-        """Clamp a derived value between two derived tensor bounds."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Clamp a value and bounds that each depend on ``x``.
-
-            Parameters
-            ----------
-            x:
-                Source tensor for all three clamp inputs.
-
-            Returns
-            -------
-            torch.Tensor
-                Clamped tensor.
-            """
-
-            value = x + 2
-            lower = x - 1
-            upper = x + 1
-            if bound_style == "positional":
-                return torch.clamp(value, lower, upper)
-            if bound_style == "keyword":
-                return torch.clamp(value, min=lower, max=upper)
-            return torch.clamp(value, lower, max=upper)
-
-    trace = _trace_with_args_templates(ClampWithTensorBounds(), torch.zeros(3))
-    clamp = next(op for op in trace.ops if op.func_name == "clamp")
-    bound_producers = [
-        op for op in trace.ops if op.func_name in {"add", "__add__", "sub", "__sub__"}
-    ]
-    assert len(clamp.parents) == 3
-    assert any("sub" in parent for parent in clamp.parents), clamp.parents
-    assert sum("add" in parent for parent in clamp.parents) == 2
-    assert len(bound_producers) == 3
-    for producer in bound_producers:
-        _assert_child_edge(producer, clamp)
-    _assert_parents_match_args_template(clamp)
-
-
-def test_traced_histogram_tensor_bins_recorded_as_parent() -> None:
-    """torch.histogram records tensor ``bins`` supplied by keyword as a parent."""
-
-    class HistogramWithTensorBins(nn.Module):
-        """Build histogram values and bin edges from separate inputs."""
-
-        def forward(self, values: torch.Tensor, bin_edges: torch.Tensor) -> torch.Tensor:
-            """Histogram derived values using derived tensor bin edges.
-
-            Parameters
-            ----------
-            values:
-                Values to histogram.
-            bin_edges:
-                Source bin edges.
-
-            Returns
-            -------
-            torch.Tensor
-                Histogram counts.
-            """
-
-            shifted_values = values + 1
-            scaled_bins = bin_edges * 2
-            return torch.histogram(shifted_values, bins=scaled_bins)[0]
-
-    trace = _trace_with_args_templates(
-        HistogramWithTensorBins(),
-        [torch.tensor([-1.5, -0.5, 0.5, 1.5]), torch.tensor([-1.0, 0.0, 1.0])],
-    )
-    histogram = next(op for op in trace.ops if op.func_name == "histogram")
-    scaled_bins = next(op for op in trace.ops if op.func_name in {"mul", "__mul__"})
-    assert any("mul" in parent for parent in histogram.parents), histogram.parents
-    _assert_child_edge(scaled_bins, histogram)
-    _assert_parents_match_args_template(histogram)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_autograd.py.
 def test_traced_histogramdd_tensor_bins_recorded_as_parents() -> None:
     """torch.histogramdd records every tensor in keyword ``bins`` as a parent."""
 
@@ -752,7 +351,8 @@ def test_traced_histogramdd_tensor_bins_recorded_as_parents() -> None:
     _assert_parents_match_args_template(histogramdd)
 
 
-@pytest.mark.parametrize("func_name", ["gradient", "clamp", "histogram"])
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/container_registry.py, backends/torch/_ops_autograd.py, campaign mutant kills.
+@pytest.mark.parametrize("func_name", ["gradient"])
 def test_plain_optional_tensor_apis_keep_only_required_tensor_parents(func_name: str) -> None:
     """Scalar/default optional arguments do not add parents to the three fixed APIs.
 

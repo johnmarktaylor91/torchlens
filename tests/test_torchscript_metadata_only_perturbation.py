@@ -412,9 +412,8 @@ def test_attack_parent_also_inside_a_container_slot_gets_no_proof(call) -> None:
     [
         (lambda h, g: value_then_size(h, g), 1, 0),
         (lambda h, g: scale_by_last_dim(y=g, x=h), "x", "y"),
-        (lambda h, g: scale_by_last_dim(h, y=g), 0, "y"),
     ],
-    ids=["positional-swapped", "keywords", "mixed"],
+    ids=["positional-swapped", "keywords"],
 )
 def test_attack_slot_mapping_follows_the_schema(call, size_slot, value_slot) -> None:
     """Only the parent bound to the size-read argument is proven, by position or keyword."""

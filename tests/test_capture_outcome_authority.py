@@ -65,7 +65,6 @@ def test_partial_property_tristate() -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
-        {"status": "totally_new_status"},
         {"status": None},
         {"phase": "prewarm"},
         {"origin": 3},
@@ -145,6 +144,19 @@ def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     assert resolved.status is CaptureStatus.UNKNOWN
     assert resolved.is_derived is True
     assert "attestation_incoherent" in (resolved.note or "")
+
+
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.
+def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
+    state = {
+        "_capture_outcome": {"status": "not_in_vocabulary"},
+        "_tracing_finished": True,
+        "is_stopped": False,
+    }
+    with pytest.warns(RuntimeWarning, match="could not parse"):
+        resolved = resolve_loaded_outcome(state)
+    assert resolved.status is CaptureStatus.UNKNOWN
+    assert "attestation_parse_failed" in (resolved.note or "")
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_outcome_payload.py.

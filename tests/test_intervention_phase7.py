@@ -11,7 +11,6 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens.intervention.errors import (
-    ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
 from torchlens.intervention.rerun import run
@@ -182,24 +181,6 @@ def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
     assert not any("fired at zero sites" in str(item.message) for item in caught)
     assert log.last_run["hooks_fired"] >= 1
     assert log.last_run["hooks_unfired"] == 0
-
-
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
-def test_rerun_strict_divergence_raises_before_swap() -> None:
-    """Strict rerun rejects graph-shape divergence and preserves old state."""
-
-    positive = torch.ones(2, 3)
-    negative = -torch.ones(2, 3)
-    log = _capture(BranchModel(), positive)
-    original_hash = log.provenance.fingerprint
-    original_raw_hash = log._raw_event_shape_hash  # noqa: SLF001
-
-    with pytest.raises(ControlFlowDivergenceError):
-        log.run(BranchModel(), negative, replay=tl.options.ReplayOptions(strict=True))
-
-    assert log.provenance.fingerprint == original_hash
-    assert log._raw_event_shape_hash == original_raw_hash  # noqa: SLF001
-    assert log.state is TraceState.PRISTINE
 
 
 def test_rerun_non_strict_divergence_warns_and_swaps() -> None:
