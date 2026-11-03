@@ -90,7 +90,10 @@ def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> Non
     # Plant a defaultdict with a code-exec factory on a portable-scrubbed field.
     trace.ops[0].annotations = defaultdict(eval, {"k": 1})  # type: ignore[assignment]
     bundle = tmp_path / "b.tlspec"
-    with pytest.warns(UserWarning):
-        trace.save(bundle, overwrite=True)
+    trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)  # must not raise UnpicklingError
+    assert any(
+        row["kind"] == "unencodable_values_stringified"
+        for row in loaded.annotations["capture_advisories"]
+    )
     assert loaded is not None
