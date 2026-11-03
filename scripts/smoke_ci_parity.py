@@ -17,7 +17,7 @@ same answer as the GitHub Tests workflow, for two environment reasons:
 This script builds (once, then reuses) a venv pinned to that enforcing row
 and runs the same commands as the workflow's "Run smoke tests and
 compatibility coverage" and "Fail on an under-executed smoke suite" steps.
-The pins below are kept in lockstep with ``.github/workflows/tests.yml`` by
+The pins below are kept in lockstep with ``.github/workflows/pr.yml`` by
 ``tests/test_ci_packaging_gates.py``. Requires ``uv`` and the Graphviz
 ``dot`` binary.
 
@@ -58,7 +58,7 @@ PYPI_INDEX = "https://pypi.org/simple"
 SMOKE_ENV = {"CI": "true", "OMP_NUM_THREADS": "1", "TORCHLENS_ORACLE_ENFORCE": "1"}
 
 #: The executed-floor attestation step's arguments.
-EXECUTED_FLOOR = "710"
+EXECUTED_FLOOR = "tier:smoke"
 SKIP_FRACTION = "0.15"
 
 DEFAULT_VENV = PROJECT_ROOT / ".venv-ci-smoke"
@@ -131,30 +131,6 @@ def ensure_venv(venv: Path, reinstall: bool) -> Path:
     return python
 
 
-def smoke_test_files() -> list[str]:
-    """Return the test files whose source spells a smoke mark (the files `-m smoke` can select).
-
-    Collecting only these files keeps the gate's collection to the smoke tier
-    instead of the whole tree; ``tests/test_marker_lint.py`` holds every smoke
-    item to the same source token.
-    """
-
-    import importlib.util
-
-    spec = importlib.util.spec_from_file_location(
-        "_torchlens_tier_durations", PROJECT_ROOT / "scripts" / "tier_durations.py"
-    )
-    assert spec is not None and spec.loader is not None
-    tier_durations = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = tier_durations  # dataclasses resolve the module by name
-    spec.loader.exec_module(tier_durations)
-    return [
-        file
-        for file in tier_durations.test_files_on_disk(PROJECT_ROOT / "tests")
-        if tier_durations.source_may_hold_smoke_items(PROJECT_ROOT / file)
-    ]
-
-
 def serial_test_files() -> list[str]:
     """Return the test files carrying the ``serial`` marker, as CI collects them."""
 
@@ -189,11 +165,11 @@ def run_gate(python: Path, workers: int, extra_args: list[str]) -> int:
     with tempfile.TemporaryDirectory(prefix="torchlens-ci-smoke-") as tmp:
         junit = str(Path(tmp) / "smoke.junit.xml")
         commands = [
-            [*pytest, *smoke_test_files(), "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
+            [*pytest, "tests/", "-m", "smoke", "-n", str(workers), "--tb=short", "-q"]
             + [f"--junitxml={junit}", *extra_args],
             [*pytest, *serial_test_files(), "-m", "serial and not slow and not rare and not heavy"]
             + ["--tb=short", "-q"],
-            [*pytest, "tests/test_torch_compat.py", "--tb=short", "-q"],
+            [*pytest, "tests/test_torch_compat.py", "-m", "not smoke", "--tb=short", "-q"],
             [str(python), "scripts/check_ci_executed_tests.py", junit, EXECUTED_FLOOR]
             + [SKIP_FRACTION],
         ]

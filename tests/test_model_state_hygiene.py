@@ -188,22 +188,19 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
     }
 
 
-def _assert_fingerprints_equal(
-    before: dict[str, Any], after: dict[str, Any], *, skip: frozenset[str] = frozenset()
-) -> None:
+def _assert_fingerprints_equal(before: dict[str, Any], after: dict[str, Any]) -> None:
     """Assert two fingerprints match, naming the first differing component.
+
+    Every door, ``tl.validate`` included, seeds the global RNG streams for its own runs
+    and restores them on return, so no component is exempt.
 
     Parameters
     ----------
     before, after:
         Fingerprints from :func:`_model_fingerprint`.
-    skip:
-        Components a door documents as changed (never model state).
     """
 
     for key in before:
-        if key in skip:
-            continue
         if key == "modules":
             for name, entries in before[key].items():
                 assert after[key].get(name) == entries, (
@@ -318,13 +315,6 @@ _DOORS: dict[str, Callable[[_Model], None]] = {
     "validate": _door_validate,
 }
 
-# tl.validate documents that it seeds the global RNGs for its ground-truth and
-# replay runs and does not restore them; every other component, and every
-# component of every other door, must come back unchanged.
-_DOCUMENTED_CHANGES: dict[str, frozenset[str]] = {
-    "validate": frozenset({"torch_rng", "python_rng"}),
-}
-
 # Doors whose failing forward runs outside a capture: ``bind`` is a capture-free
 # executor, and ``tl.validate`` runs its uncaptured ground-truth forward first, so
 # the model's own exception propagates unwrapped there.
@@ -371,9 +361,7 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
                 _DOORS[door](model)
             if expected is TraceCaptureError:
                 assert type(excinfo.value.__cause__) is exc_type
-    _assert_fingerprints_equal(
-        before, _model_fingerprint(model), skip=_DOCUMENTED_CHANGES.get(door, frozenset())
-    )
+    _assert_fingerprints_equal(before, _model_fingerprint(model))
 
     model.gate.exc = None
     with warnings.catch_warnings():

@@ -14,6 +14,7 @@ SCANNED_PATHS = (
     REPO_ROOT / "torchlens" / "_postprocess",
     REPO_ROOT / "torchlens" / "recording",
     REPO_ROOT / "torchlens" / "_data_classes" / "op.py",
+    REPO_ROOT / "torchlens" / "_data_classes" / "_op_save.py",
 )
 ALLOWLIST = {
     "Op._tensor_contents_str_helper",

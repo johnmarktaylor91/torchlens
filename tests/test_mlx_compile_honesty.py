@@ -67,8 +67,9 @@ def test_compiled_entry_refuses_typed() -> None:
     model = _TinyMLP()
     compiled = mx.compile(model)
     x = mx.random.normal((2, 4))
-    with pytest.raises(BackendUnsupportedError, match="traced-transform"):
+    with pytest.raises(BackendUnsupportedError, match="traced-transform") as info:
         tl.trace(compiled, x, backend="mlx")
+    assert info.value.code == "traced_transform_entry_unsupported"
 
 
 @pytest.mark.optional
@@ -80,8 +81,9 @@ def test_compiled_plain_function_entry_refuses_typed() -> None:
 
         return nn.relu(x + 1.0)
 
-    with pytest.raises(BackendUnsupportedError, match="traced-transform"):
+    with pytest.raises(BackendUnsupportedError, match="traced-transform") as info:
         tl.trace(mx.compile(f), mx.ones((3,)), backend="mlx")
+    assert info.value.code == "traced_transform_entry_unsupported"
 
 
 @pytest.mark.optional

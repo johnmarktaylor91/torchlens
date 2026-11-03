@@ -32,8 +32,10 @@ LICENSED_COMPUTE_READERS = {
     # Record classes: field definitions + per-record accessors (a single
     # op/layer's own value is record surface, not aggregation).
     "_data_classes/op.py": "field definition + per-record accessors",
+    "_data_classes/_op_cost.py": "Op cost accessors moved out of op.py (per-record surface)",
     "_data_classes/layer.py": "per-layer mirrors/rollups of its OWN ops (record surface)",
-    "_data_classes/_trace_stats.py": (
+    "_data_classes/_layer_views.py": "Layer rollups of its OWN ops moved out of layer.py (record surface)",
+    "report/_trace_facts.py": (
         "reads ComputeRow.fma_macs from the aggregation service's own rows "
         "(name-collision with the raw op field; the totals themselves come "
         "from aggregate_forward_compute/compute_aggregation)"

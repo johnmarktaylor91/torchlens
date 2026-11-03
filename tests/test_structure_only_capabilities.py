@@ -67,11 +67,18 @@ def test_gated_entries_consult_the_structure_only_chokepoint() -> None:
     refactor that drops a structure-only gate call from a value-bearing
     surface fails here."""
 
-    validation_source = (TORCHLENS_DIR / "_data_classes" / "_trace_validation.py").read_text(
-        encoding="utf-8"
+    # The gated entry bodies live in the record-rebuild destination modules
+    # (the `Trace` methods are thin door calls); read all three.
+    validation_source = "".join(
+        (TORCHLENS_DIR / part).read_text(encoding="utf-8")
+        for part in (
+            "validation/_trace_checks.py",
+            "intervention/_trace_run.py",
+            "backends/torch/_trace_backward.py",
+        )
     )
     gate_calls = re.findall(
-        r'require_structure_only_capability\(self, "([a-z_]+)"\)', validation_source
+        r'require_structure_only_capability\(trace, "([a-z_]+)"\)', validation_source
     )
     # One sibling call per capture-outcome gate site: save_new_outs, push,
     # push_from, run (entry pre-gate + loaded-sparse + halted-analysis +
