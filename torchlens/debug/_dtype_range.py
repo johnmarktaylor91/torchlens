@@ -7,10 +7,16 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import Report, rows_of
+from .._debug_report import Report, at_source, rows_of
 from ._audit import AuditFinding, AuditSeverity
-from ._common import _compute_ops, _op_label, _safe_out
-from ._nan import _module_address, _nonfinite_kind
+from ._common import (
+    _compute_ops,
+    _module_address,
+    _nonfinite_kind,
+    _op_label,
+    _safe_out,
+    _source_line,
+)
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -34,8 +40,6 @@ class DTypeRangeReport(Report):
     num_audited_ops: int
     num_ops: int
 
-    _prints_repr = True
-
     def _report_status(self) -> str:
         """The verdict token on the card's lead line."""
 
@@ -49,7 +53,10 @@ class DTypeRangeReport(Report):
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
 
-        return [f"[{item.severity}] {item.check}: {item.message}" for item in self.findings]
+        return [
+            f"[{item.severity}] {item.check}: {item.message}{at_source(item.source_line)}"
+            for item in self.findings
+        ]
 
     def _report_rows(self) -> list[dict[str, Any]] | None:
         """The natural table rows behind ``to_pandas()``."""
@@ -72,6 +79,8 @@ class DTypeRangeReport(Report):
 
     def __repr__(self) -> str:
         """Return a compact coverage-honest summary.
+
+        ``print(report)`` shows the card: each finding with its op's line.
 
         Returns
         -------
@@ -122,6 +131,7 @@ def _finding(
         ops=(_op_label(op),),
         modules=(module,) if module is not None else (),
         follow_up=follow_up,
+        source_line=_source_line(op),
     )
 
 

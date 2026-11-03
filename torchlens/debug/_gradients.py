@@ -37,7 +37,8 @@ if TYPE_CHECKING:
 from torchlens._errors import InvalidArgumentError, KeywordConflictError
 
 from .._debug_report import Report, table_report, trace_subject
-from ._common import _op_label, _require_pandas, _tensor_unavailable_reason
+from ._common import _op_label, _require_pandas, _source_line, _tensor_unavailable_reason
+from ._grad_scale_proof import PROVEN_UNSCALED, resolve_scale
 
 #: Column order shared by the rows core and the DataFrame view. The first
 #: seven are the historical columns (semantics unchanged under the default
@@ -58,6 +59,15 @@ _GRAD_AUDIT_COLUMNS = (
     "verdict",
     "stage",
     "scale_provenance",
+    "source_line",
+)
+
+
+#: The empty-report hint: the capture recipe that makes this audit run.
+_NO_GRADS_HINT = (
+    "no saved gradients; capture with "
+    "capture=tl.options.CaptureOptions(save_grads=True), then call "
+    "trace.log_backward(loss)"
 )
 
 #: Closed classification bases (D17): legacy total-norm default, RMS opt-in.
@@ -72,7 +82,9 @@ _BASIS_NOTICE = (
 )
 
 
-def _unavailable_row(label: str, module: str | None, reason: str) -> dict[str, Any]:
+def _unavailable_row(
+    label: str, module: str | None, reason: str, source_line: str | None = None
+) -> dict[str, Any]:
     """Build one audit row for a gradient that could not be measured.
 
     Parameters
@@ -83,6 +95,8 @@ def _unavailable_row(label: str, module: str | None, reason: str) -> dict[str, A
         Atomic module address for the row, if known.
     reason:
         Why the gradient payload was unavailable.
+    source_line:
+        ``"file:line"`` of the user code that ran the op, when known.
 
     Returns
     -------
@@ -106,6 +120,7 @@ def _unavailable_row(label: str, module: str | None, reason: str) -> dict[str, A
         "verdict": "unavailable",
         "stage": "pre_clip",
         "scale_provenance": "unknown",
+        "source_line": source_line,
     }
 
 
@@ -260,15 +275,16 @@ def _collect_norm_rows(
     for op in saved_grad_ops:
         label = _op_label(op)
         module = getattr(op, "atomic_module_address", None)
+        source_line = _source_line(op)
         try:
             grad = op.grad_for(bwd=selected_bwd)
         except (KeyError, ValueError) as exc:
-            rows.append(_unavailable_row(label, module, str(exc)))
+            rows.append(_unavailable_row(label, module, str(exc), source_line))
             counts["unavailable"] += 1
             continue
         reason = _tensor_unavailable_reason(grad)
         if reason is not None:
-            rows.append(_unavailable_row(label, module, reason))
+            rows.append(_unavailable_row(label, module, reason, source_line))
             counts["unavailable"] += 1
             continue
         if not isinstance(grad, torch.Tensor):
@@ -282,6 +298,7 @@ def _collect_norm_rows(
             "scale_provenance": provenance,
             "is_frontier": False,
             "reason": "",
+            "source_line": source_line,
         }
         children_by_label[label] = tuple(getattr(op, "children", ()) or ())
         measurable_entries.append((row, torch.linalg.vector_norm(grad.detach())))
@@ -385,6 +402,60 @@ def _classify_rows(
     return measurable
 
 
+def _audit_attrs(
+    trace: Trace,
+    counts: Mapping[str, int],
+    ctx: _AuditScaleContext,
+    *,
+    bwd: int,
+    proof_note: str | None,
+    grad_scales: Mapping[int, float] | None,
+) -> dict[str, Any]:
+    """Build the audit's attrs mapping: counts, thresholds, basis and scale facts.
+
+    Parameters
+    ----------
+    trace:
+        Audited trace (its capture-honesty facts are attached).
+    counts:
+        Verdict counts from the classification pass.
+    ctx:
+        Resolved scale, provenance, basis and thresholds.
+    bwd:
+        One-based backward pass the audit read.
+    proof_note:
+        Why the scale was proven or could not be, when known.
+    grad_scales:
+        Per-backward scale stamps the caller passed, if any.
+
+    Returns
+    -------
+    dict[str, Any]
+        The attrs mapping, before the all-exploding hint is considered.
+    """
+
+    from .._capture_honesty import capture_honesty_facts
+
+    attrs: dict[str, Any] = {
+        **counts,
+        "bwd": bwd,
+        "vanishing_threshold": ctx.vanishing_threshold,
+        "exploding_threshold": ctx.exploding_threshold,
+        "basis": ctx.basis,
+        "scale_provenance": ctx.provenance,
+        "torchlens_capture_honesty": capture_honesty_facts(trace),
+    }
+    if ctx.basis == "total_norm":
+        attrs["basis_notice"] = _BASIS_NOTICE
+    if ctx.scale is not None:
+        attrs["grad_scale"] = ctx.scale
+    if proof_note is not None:
+        attrs["scale_proof"] = proof_note
+    if grad_scales is not None:
+        attrs["grad_scales"] = dict(grad_scales)
+    return attrs
+
+
 def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kwargs + scale stamps + basis selector, all additive by contract
     trace: Trace,
     *,
@@ -412,8 +483,14 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     every op exploding. Pass ``grad_scale=scaler.get_scale()`` (or per-backward
     ``grad_scales={bwd: scale}`` stamps captured AT each backward, never read
     off the scaler later) to audit in unscaled units; the applied scale and
-    its provenance are disclosed per row and in the attrs mapping. UNKNOWN
-    provenance yields UNKNOWN magnitude verdicts in the ``verdict`` column
+    its provenance are disclosed per row and in the attrs mapping. With no
+    scale passed, the audit uses 1.0 only when the trace PROVES the backward
+    ran unscaled (no op under autocast, no multiply, divide or custom autograd
+    node between the loss and the model output, no explicit ``gradient=``
+    seed); provenance is then ``"proven_unscaled"`` and ``attrs["scale_proof"]``
+    says why. Otherwise provenance stays UNKNOWN (``attrs["scale_proof"]``
+    names the fact that could not be proven), and UNKNOWN provenance yields
+    UNKNOWN magnitude verdicts in the ``verdict`` column
     (the scale-invariant ``dead`` and ``nonfinite`` verdicts survive); the
     legacy boolean columns keep their shipped classification through the
     ``basis`` deprecation window (``attrs["basis_notice"]``).
@@ -435,8 +512,10 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
         Positive loss scale the captured backward ran under (AMP:
         ``scaler.get_scale()``). Every gradient norm is divided by it before
         thresholding and reported in unscaled units; ``attrs["grad_scale"]``
-        discloses the value applied. ``None`` (default) audits the captured
-        norms as-is with ``scale_provenance="unknown"``.
+        discloses the value applied. ``None`` (default) uses 1.0 when the
+        trace proves the backward ran unscaled (``scale_provenance=
+        "proven_unscaled"``), else audits the captured norms as-is with
+        ``scale_provenance="unknown"``.
     grad_scales:
         Per-backward scale stamps ``{bwd: scale}`` for multi-backward traces
         whose passes ran under different scales; each audited pass applies
@@ -475,7 +554,7 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     num_backward = len(backward_passes)
     if num_backward == 0 or len(saved_grad_ops) == 0:
         return [], {
-            "message": "no saved gradients; re-trace backward_ready=True + trace.log_backward(loss)",
+            "message": _NO_GRADS_HINT,
             "vanishing": 0,
             "exploding": 0,
             "dead": 0,
@@ -486,10 +565,10 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
             "backward_passes": num_backward,
         }
     selected_bwd = bwd if bwd is not None else 1
-    scale = grad_scales.get(selected_bwd) if grad_scales is not None else grad_scale
+    scale, provenance, proof_note = resolve_scale(trace, selected_bwd, grad_scale, grad_scales)
     ctx = _AuditScaleContext(
         scale=scale,
-        provenance="explicit" if scale is not None else "unknown",
+        provenance=provenance,
         basis=basis,
         vanishing_threshold=vanishing_threshold,
         exploding_threshold=exploding_threshold,
@@ -503,29 +582,15 @@ def gradient_flow_audit_rows(  # noqa: PLR0913 -- the D17 fix-pack public surfac
     measurable = _classify_rows(measurable_entries, ctx, counts)
     _mark_frontiers(rows, children_by_label)
 
-    from .._capture_honesty import capture_honesty_facts
-
     sorted_rows = sorted(
         rows,
         key=lambda row: (int(row["severity"]), bool(row["is_frontier"]), str(row["op"])),
         reverse=True,
     )
-    attrs: dict[str, Any] = {
-        **counts,
-        "bwd": selected_bwd,
-        "vanishing_threshold": vanishing_threshold,
-        "exploding_threshold": exploding_threshold,
-        "basis": basis,
-        "scale_provenance": ctx.provenance,
-        "torchlens_capture_honesty": capture_honesty_facts(trace),
-    }
-    if basis == "total_norm":
-        attrs["basis_notice"] = _BASIS_NOTICE
-    if scale is not None:
-        attrs["grad_scale"] = scale
-    if grad_scales is not None:
-        attrs["grad_scales"] = dict(grad_scales)
-    if scale is None and measurable > 0 and counts["exploding"] == measurable:
+    attrs = _audit_attrs(
+        trace, counts, ctx, bwd=selected_bwd, proof_note=proof_note, grad_scales=grad_scales
+    )
+    if ctx.scale is None and measurable > 0 and counts["exploding"] == measurable:
         # Deterministic disclosure, not a guess: EVERY measurable gradient
         # exceeded the threshold, which is exactly the signature of a scaled
         # AMP backward (list-A row 11). The hint names the possibility and the
@@ -581,7 +646,10 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         :func:`gradient_flow_audit_rows` (the pandas-free core). New fix-pack
         columns: ``module``, ``is_frontier`` (the culprit localizer, memo
         D3), ``grad_norm_raw``, ``rms``, ``numel``, ``verdict``, ``stage``,
-        ``scale_provenance``.
+        ``scale_provenance``, and ``source_line`` (``"file:line"`` of the user
+        code that ran the op). The printed card names the loss scale the
+        verdicts used, and an empty report prints the capture recipe
+        (``CaptureOptions(save_grads=True)`` then ``trace.log_backward(loss)``).
 
     Raises
     ------
@@ -602,6 +670,12 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         grad_scales=grad_scales,
         basis=basis,
     )
+    return _grad_health_report(trace, rows, attrs)
+
+
+def _grad_health_report(trace: Trace, rows: list[dict[str, Any]], attrs: dict[str, Any]) -> Report:
+    """Render audit rows and attrs as the ``grad_health`` table report."""
+
     pd = _require_pandas()
     frame = pd.DataFrame(rows, columns=list(_GRAD_AUDIT_COLUMNS))
     frame.attrs.update(attrs)
@@ -609,5 +683,31 @@ def grad_health(  # noqa: PLR0913 -- the D17 fix-pack public surface: shipped kw
         "grad_health",
         frame,
         subject=trace_subject(trace),
-        finding_columns=("op", "module", "verdict", "grad_norm"),
+        finding_columns=("op", "module", "verdict", "grad_norm", "source_line"),
+        coverage=_scale_coverage(attrs, has_rows=bool(rows)),
+    )
+
+
+def _scale_coverage(attrs: Mapping[str, Any], *, has_rows: bool) -> str | None:
+    """Return the card's coverage line: the loss scale the verdicts used.
+
+    An empty report shows its message instead (the capture recipe when no
+    gradients were saved).
+    """
+
+    if not has_rows:
+        message = attrs.get("message")
+        return str(message) if message else None
+    provenance = attrs.get("scale_provenance")
+    if provenance == PROVEN_UNSCALED:
+        return f"loss scale 1.0 (proven: {attrs.get('scale_proof')})"
+    if provenance == "explicit":
+        scale = attrs.get("grad_scale")
+        if scale is None:
+            return "loss scale from grad_scales="
+        return f"loss scale {scale:g} (grad_scale= passed)"
+    return (
+        f"loss scale unknown ({attrs.get('scale_proof') or 'not proven'}), so magnitude "
+        "verdicts read 'unknown'; pass grad_scale=scaler.get_scale() under AMP, "
+        "or grad_scale=1.0 for an unscaled run"
     )
