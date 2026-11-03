@@ -262,3 +262,45 @@ def test_convnext_block_is_exact_and_matches_autodiff() -> None:
     box = target.receptive_field.at((5, 6))
     assert box.status is ReceptiveFieldStatus.EXACT
     assert torch.equal(_box_mask(box), _receptive_support(block, x, (5, 6)))
+
+
+def _box_extent(box: Any) -> tuple[int, tuple[int, int], tuple[int, int]]:
+    """Channel count and row and column ranges of a 4-d box mask."""
+
+    nonzero = _box_mask(box).nonzero()
+    return (
+        len(set(nonzero[:, 1].tolist())),
+        (int(nonzero[:, 2].min()), int(nonzero[:, 2].max())),
+        (int(nonzero[:, 3].min()), int(nonzero[:, 3].max())),
+    )
+
+
+@pytest.mark.heavy
+def test_convnext_tiny_stem_to_stage_fields_are_exact() -> None:
+    """ConvNeXt-tiny answers stem-to-stage questions geometrically and exactly.
+
+    Expected boxes were checked cell for cell against float64 forward- and
+    reverse-mode autodiff supports on the same model (torchvision and timm agree).
+    """
+
+    models = pytest.importorskip("torchvision.models")
+    torch.manual_seed(0)
+    model = models.convnext_tiny(weights=None).eval()
+    trace = tl.trace(model, torch.rand(1, 3, 224, 224))
+    stem, stage1, stage2 = trace["features.0"], trace["features.3"], trace["features.5"]
+    for op in (stem, stage1, stage2):
+        assert op.receptive_field.status is ReceptiveFieldStatus.EXACT
+    expected = {
+        ((28, 28), "stage1"): (192, (0, 27), (0, 27)),
+        ((10, 40), "stage1"): (192, (0, 18), (6, 27)),
+        ((55, 55), "stage1"): (192, (14, 27), (14, 27)),
+        ((28, 28), "stage2"): (384, (0, 13), (0, 13)),
+    }
+    targets = {"stage1": stage1, "stage2": stage2}
+    for (unit, name), extent in expected.items():
+        box = stem.projective_field.at(unit, target=targets[name])
+        assert box.status is ReceptiveFieldStatus.EXACT
+        assert _box_extent(box) == extent
+    back = stage1.receptive_field.at((0, 27), source=stem)
+    assert back.status is ReceptiveFieldStatus.EXACT
+    assert _box_extent(back) == (96, (0, 28), (27, 55))
