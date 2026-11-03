@@ -337,17 +337,12 @@ def build_render_ir(
         universe = build_node_universe(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
+    from ._encoding import populate_encoding_state
     from ._render_nodes import BOX_SCOPE_HELPERS, _atomic_module_sibling_counts
 
     encoding = getattr(resolved_context, "encoding", None)
-    if encoding is not None:
-        # PHASE A of the encoding channel (L5): a data prepass over the
-        # already-chosen visible-node universe, before any per-node spec
-        # resolution -- collect values once, validate, compute the domain.
-        from ._encoding import populate_encoding_state
-
-        scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
-        populate_encoding_state(encoding, trace, universe, scope)
+    scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
+    populate_encoding_state(encoding, trace, universe, scope)
     if suppressed_args is None and not getattr(resolved_context, "show_redundant_args", False):
         # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
         # proves which constructor-arg rows duplicate captured shapes on
@@ -849,8 +844,6 @@ def _resolve_node_decision(
     tuple
         Recorded top-level calls, owned node arguments, edge color, and structured label spans.
     """
-    from collections import defaultdict
-
     from ._render_common import _RenderIRDecisionBuilder
     from ._render_edges import _segment_for_node
     from ._render_flow import _collapsed_container_leaf_nodes

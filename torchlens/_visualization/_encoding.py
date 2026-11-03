@@ -1115,7 +1115,9 @@ def _resolve_device_time(
     the join attributed no kernels to reads honest n/a, never zero.
     """
 
-    result = _require_join_result(trace, argument)
+    from .._observability._native_profile import require_join_result
+
+    result = require_join_result(trace, argument)
     total, found = _sum_node_device_ns(result, node)
     if not found:
         if argument == "size_by":
@@ -1131,30 +1133,6 @@ def _resolve_device_time(
         elif line not in state.aggregation_lines:
             state.aggregation_lines.append(line)
     return float(total)
-
-
-def _require_join_result(trace: Any, argument: str) -> Any:
-    """Return the trace's Kineto join result or refuse typed (no silent zeros)."""
-
-    from .._observability._join import require_availability
-    from .._observability._native_profile import join_result_for
-
-    result = join_result_for(trace)
-    if result is None:
-        from .._observability._errors import ProfilerSessionError
-
-        raise ProfilerSessionError(
-            f"{argument}='device_time' is unavailable: this trace carries no "
-            "Kineto join (device time exists only for captures run under an "
-            "owned profiler session).",
-            code="device_time_unavailable",
-            remedy=(
-                "capture through torchlens.report.kernel_profile on a "
-                "CUDA host, then draw the returned result.trace"
-            ),
-        )
-    require_availability(result, needs=f"{argument}='device_time'")
-    return result
 
 
 def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -> float | None:
@@ -1507,6 +1485,7 @@ def _collect_encoding_values(
     (``aggregates``) resolve as exact sums over their member ops, and ops
     hidden inside a segment stay out of the domain.
     """
+    from .._observability._native_profile import require_join_result
 
     raw_values: dict[str, float] = {}
     targets = aggregates or AggregateTargets(by_unit={})
@@ -1515,7 +1494,7 @@ def _collect_encoding_values(
         target = targets.by_unit.get(unit.unit_id)
         if target is not None:
             state.unit_keys[unit.unit_id] = target.key
-            collect_aggregate(state, trace, target, raw_values, _require_join_result)
+            collect_aggregate(state, trace, target, raw_values, require_join_result)
             continue
         if emission.kind != "raw_op" or emission.node is None:
             continue
@@ -1533,7 +1512,7 @@ def _collect_encoding_values(
             if size_value is not None:
                 state.size_values[_node_key(node)] = size_value
     for target in targets.segments:
-        collect_aggregate(state, trace, target, raw_values, _require_join_result)
+        collect_aggregate(state, trace, target, raw_values, require_join_result)
     return raw_values
 
 
@@ -1602,16 +1581,19 @@ def _normalize_color_values(state: EncodingState, raw_values: dict[str, float]) 
 
 
 def populate_encoding_state(
-    state: EncodingState, trace: Trace, universe: Any, scope: tuple[Any, ...] | None = None
+    state: EncodingState | None, trace: Trace, universe: Any, scope: tuple[Any, ...] | None = None
 ) -> None:
     """PHASE A: collect values over the visible-node universe and normalize.
 
-    Runs exactly once per draw (``build_render_ir`` calls it before any
-    per-node spec resolution). User callables are invoked exactly once per
-    visible eligible node here; Phase B only reads the precomputed map.
+    A data prepass over the already-chosen visible-node universe, before any
+    per-node spec resolution: collect values once, validate, compute the
+    domain. Runs exactly once per draw (``build_render_ir`` calls it before any
+    per-node spec resolution; a draw with no channel passes ``state=None``).
+    User callables are invoked exactly once per visible eligible node here;
+    Phase B only reads the precomputed map.
     """
 
-    if state.populated:
+    if state is None or state.populated:
         return
     state.populated = True
     if scope is not None:

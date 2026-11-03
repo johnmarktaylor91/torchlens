@@ -23,6 +23,7 @@ from .modes import CollapsedModeScope
 # The spec-slot context lives there too, so the intervention callback reads it
 # without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
+from .themes import _edge_and_label_inks
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
 #: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
@@ -487,12 +488,7 @@ def _add_node_to_graphviz(
             show_saved_for_backward=show_saved_for_backward,
         )
 
-    # Edges and their labels keep the renderer's black only on skins that
-    # leave edge ink unset; the dark skin's edge colours apply here.
-    edge_ink = node_color if theme is None else _theme_line_ink(theme, node_color) or node_color
-    label_ink = (
-        node_color if theme is None else _theme_annotation_ink(theme, node_color) or node_color
-    )
+    edge_ink, label_ink = _edge_and_label_inks(theme, node_color)
     _add_edges_for_node(
         self,
         node,

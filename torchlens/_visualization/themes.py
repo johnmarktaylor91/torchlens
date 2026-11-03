@@ -507,6 +507,20 @@ def _theme_annotation_ink(theme: VisualizationTheme, color: str | None) -> str |
     return color
 
 
+def _edge_and_label_inks(theme: VisualizationTheme | None, node_color: str) -> tuple[str, str]:
+    """Return one node's (edge ink, edge-label ink).
+
+    Edges and their labels keep the renderer's black only on skins that
+    leave edge ink unset; the dark skin's edge colours apply here.
+    """
+
+    if theme is None:
+        return node_color, node_color
+    edge_ink = _theme_line_ink(theme, node_color) or node_color
+    label_ink = _theme_annotation_ink(theme, node_color) or node_color
+    return edge_ink, label_ink
+
+
 def _theme_cluster_attrs(theme: VisualizationTheme) -> dict[str, str]:
     """Return the module-box ink a skin implies: page fill, line border, label caption.
 
