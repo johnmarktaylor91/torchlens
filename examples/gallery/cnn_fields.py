@@ -146,6 +146,44 @@ def iou(left: torch.Tensor, right: torch.Tensor) -> float:
     return float((left & right).sum()) / union if union else 0.0
 
 
+def draw_fields(
+    x: torch.Tensor,
+    spatial: torch.Tensor,
+    empirical: torch.Tensor,
+    projected: torch.Tensor,
+    changed: torch.Tensor,
+    out: Path,
+) -> None:
+    """Save the field overlay and projective support as a diagnostic figure.
+
+    Parameters
+    ----------
+    x, spatial, empirical, projected, changed, out:
+        Input, geometric and measured masks, and output folder. Single seeded run;
+        no uncertainty intervals. Colour limits and stimulus order are fixed.
+    """
+    import matplotlib.pyplot as plt
+
+    image = x[0].permute(1, 2, 0).detach().numpy()
+    image = (image - image.min()) / (image.max() - image.min())
+    fig, axes = plt.subplots(1, 3, figsize=(12, 4), layout="constrained")
+    axes[0].imshow(image)
+    axes[0].contour(spatial.numpy(), levels=[0.5], colors=["black"], linewidths=2)
+    axes[0].imshow(empirical.numpy(), cmap="Blues", alpha=0.3, vmin=0, vmax=1)
+    axes[0].set_title(f"Input field / gradient support\nIoU = {iou(spatial, empirical):.4f}")
+    axes[1].imshow(projected.numpy(), cmap="Greys", vmin=0, vmax=1)
+    axes[1].set_title("Projective field\nblack = potential influence")
+    axes[2].imshow(changed.numpy(), cmap="Greys", vmin=0, vmax=1)
+    axes[2].set_title(f"Changed downstream units\nIoU = {iou(projected, changed):.4f}")
+    for axis in axes:
+        axis.set_xlabel("Horizontal position (pixels or feature units)")
+        axis.set_ylabel("Vertical position")
+    fig.suptitle("ResNet-18: geometric and observed influence (single seeded input)")
+    fig.savefig(out / "cnn_fields.png", dpi=160)
+    fig.savefig(out / "cnn_fields.svg")
+    plt.close(fig)
+
+
 # region: torchlens
 def measure(
     model: nn.Module, x: torch.Tensor, layer: str, channel: int, out: Path
@@ -251,6 +289,7 @@ def measure(
             is_outside and control_delta == 0,
         ),
     }
+    draw_fields(x, spatial, empirical, projected_mask, plain_changed, out)
     trace.annotations["gallery"] = {"layer": layer, "unit": list(unit), "baseline": baseline}
     artifact = out / "cnn_fields.tlspec"
     trace.save(artifact, level="portable", overwrite=True)

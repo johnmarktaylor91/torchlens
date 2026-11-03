@@ -194,6 +194,54 @@ def pearson(left: np.ndarray, right: np.ndarray) -> float:
     return float(np.corrcoef(left, right)[0, 1])
 
 
+def draw_rdms(
+    matrices: Any,
+    correlations: dict[str, float],
+    shuffled: dict[str, float],
+    out: Path,
+) -> None:
+    """Save common-scale RDMs and the one-sided order-error comparison.
+
+    Parameters
+    ----------
+    matrices, correlations, shuffled, out:
+        Selected-stage RDMs, every-site correlations, control correlations and folder.
+        Single extraction run, not statistical inference; no uncertainty intervals.
+    """
+    import matplotlib.pyplot as plt
+
+    values = matrices.get_matrices()
+    fig = plt.figure(figsize=(14, 7), layout="constrained")
+    grid = fig.add_gridspec(2, len(values))
+    axes = [fig.add_subplot(grid[0, i]) for i in range(len(values))]
+    for i, axis in enumerate(axes):
+        image = axis.imshow(values[i], vmin=0, vmax=2, cmap="cividis")
+        axis.set_title(str(matrices.rdm_descriptors["requested"][i]))
+        axis.set_xlabel("Stimulus index")
+        axis.set_ylabel("Stimulus index")
+    fig.colorbar(image, ax=axes, label="Correlation distance (unitless)", shrink=0.7)
+    axis = fig.add_subplot(grid[1, :])
+    keys = list(correlations)
+    positions = list(range(len(keys)))
+    axis.plot(positions, list(correlations.values()), "o-", color="black")
+    axis.plot(positions, list(shuffled.values()), "s--", color="#0072B2")
+    axis.text(positions[-1] + 0.15, correlations[keys[-1]], "Aligned", va="center")
+    axis.text(positions[-1] + 0.15, shuffled[keys[-1]], "Shuffled", va="center")
+    axis.axhline(CORRELATION_MIN, color="black", linestyle=":", linewidth=1)
+    axis.axhline(SHUFFLED_MAX, color="#0072B2", linestyle=":", linewidth=1)
+    axis.set_xticks(positions, keys, rotation=45, ha="right", fontsize=9)
+    axis.set(
+        xlim=(-0.5, len(keys) + 1),
+        ylim=(-1, 1.12),
+        ylabel="RDM Pearson correlation",
+        xlabel="Selected stages, then every residual addition in execution order",
+    )
+    fig.suptitle("Extraction correctness: aligned order and one-sided shuffle (single run)")
+    fig.savefig(out / "neuro_rdms.png", dpi=160)
+    fig.savefig(out / "neuro_rdms.svg")
+    plt.close(fig)
+
+
 # region: torchlens
 def measure(
     model: nn.Module, x: torch.Tensor, ids: list[str], arch: str, out: Path
@@ -227,7 +275,7 @@ def measure(
         raise ValueError(f"expected all eight ResNet residual adds, found {len(adds)}")
     if arch == "vit_b_16" and len(adds) != 25:
         raise ValueError(f"expected 24 ViT residual adds and the positional add, found {len(adds)}")
-    labels = [trace[site].label for site in sites]
+    labels = [trace[site].layer_label for site in sites]
     keys = stages + [f"residual_{i}" for i in range(len(adds))]
     rdm = tl.neuro.rdms(
         trace, sites=sites, metric="correlation", pattern_descriptors={"stimulus_id": ids}
@@ -291,6 +339,10 @@ def measure(
             ids != shuffled_ids,
         ),
     }
+    stage_rdms = tl.neuro.rdms(
+        trace, sites=stages, metric="correlation", pattern_descriptors={"stimulus_id": ids}
+    )
+    draw_rdms(stage_rdms, correlations, shuffled, out)
     trace.annotations["gallery"] = {
         "stimulus_ids": ids,
         "sites": sites,
