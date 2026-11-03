@@ -1,6 +1,6 @@
 """Compatibility re-export; the module lives in ``torchlens._distributed._ledger``."""
 
-# layering: re-export kept for record importers; remove after the S2 fold
+# layering: re-export kept for record importers; remove after the record-tier fold
 from .._distributed._ledger import (  # noqa: F401
     _CREATION_KINDS as _CREATION_KINDS,
     _EVENT_KINDS as _EVENT_KINDS,

@@ -1,6 +1,6 @@
 """Compatibility re-export; the status objects live in ``torchlens._validation_status``."""
 
-# layering: re-export kept for record importers; remove after the S2 fold
+# layering: re-export kept for record importers; remove after the record-tier fold
 from .._validation_status import (  # noqa: F401
     _VALIDATION_REASON_DEFINITIONS as _VALIDATION_REASON_DEFINITIONS,
     REGION_REPLAY_CLASS as REGION_REPLAY_CLASS,

@@ -1,6 +1,6 @@
 """Compatibility path for the tensor-label metadata helpers (now ``torchlens._utils._tensor_label``)."""
 
-# layering: re-export kept for record importers; remove after the S2 fold
+# layering: re-export kept for record importers; remove after the record-tier fold
 from ..._utils._tensor_label import (  # noqa: F401
     _ACTIVE_LABEL_SESSION as _ACTIVE_LABEL_SESSION,
     _DETACHED_ACTIVATION_ANY_INPUT_FUNCS as _DETACHED_ACTIVATION_ANY_INPUT_FUNCS,

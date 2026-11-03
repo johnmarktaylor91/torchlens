@@ -1,6 +1,6 @@
 """Compatibility re-export; the module lives in ``torchlens._distributed._lifecycle``."""
 
-# layering: re-export kept for record importers; remove after the S2 fold
+# layering: re-export kept for record importers; remove after the record-tier fold
 from .._distributed._lifecycle import (  # noqa: F401
     _AUTO_ARM_DEGRADATION as _AUTO_ARM_DEGRADATION,
     _CREATE_WRAP_TARGETS as _CREATE_WRAP_TARGETS,

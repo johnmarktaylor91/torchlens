@@ -1,6 +1,6 @@
 """Compatibility re-export; the module lives in ``torchlens._distributed._recognizer``."""
 
-# layering: re-export kept for record importers; remove after the S2 fold
+# layering: re-export kept for record importers; remove after the record-tier fold
 from .._distributed._recognizer import (  # noqa: F401
     _LAYER2_TYPE_MARKERS as _LAYER2_TYPE_MARKERS,
     _REGISTRATION_MODULES as _REGISTRATION_MODULES,
