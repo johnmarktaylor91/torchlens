@@ -32,6 +32,25 @@ class TinyMLP(nn.Module):
         return self.fc2(self.relu(self.fc1(x)))
 
 
+class TinyCNN(nn.Module):
+    """Small convolutional model for onramp tests."""
+
+    def __init__(self) -> None:
+        """Initialize layers."""
+
+        super().__init__()
+        self.conv = nn.Conv2d(1, 2, 3, padding=1)
+        self.pool = nn.AdaptiveAvgPool2d((1, 1))
+        self.fc = nn.Linear(2, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the model."""
+
+        x = torch.relu(self.conv(x))
+        x = self.pool(x).flatten(1)
+        return self.fc(x)
+
+
 class TinyRecurrent(nn.Module):
     """Small recurrent-parameter model for onramp tests."""
 
@@ -152,6 +171,18 @@ def test_list_ops_on_three_architectures(architecture: tuple[nn.Module, torch.Te
     assert set(both) == {"eval", "train"}
 
 
+# Kept on three architectures: the shared fixture runs only the recurrent model, and these cells were not
+# among the ids the slice removed.
+@pytest.mark.parametrize(
+    "architecture",
+    [
+        (TinyMLP, lambda: torch.randn(2, 4)),
+        (TinyCNN, lambda: torch.randn(2, 1, 4, 4)),
+        (TinyRecurrent, lambda: torch.randn(2, 3)),
+    ],
+    ids=["mlp", "cnn", "recurrent"],
+    indirect=True,
+)
 def test_layer_accessor_queries_and_completion(
     architecture: tuple[nn.Module, torch.Tensor],
 ) -> None:
