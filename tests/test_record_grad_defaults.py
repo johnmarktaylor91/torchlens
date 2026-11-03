@@ -115,7 +115,7 @@ def test_record_opt_in_restores_grad_hooks_and_backward(opt_in: dict[str, object
 
     model, x = _model_and_input()
     if "default_grad" in opt_in:
-        routed = {"recording": tl.options.RecordingOptions(**opt_in)}
+        routed = dict(opt_in)
     else:
         routed = {"capture": tl.options.CaptureOptions(**opt_in)}
     recording = tl.record(model, x, save=_keep_relu, **routed)
@@ -395,7 +395,7 @@ def test_record_default_grad_false_does_not_opt_in() -> None:
         model,
         x,
         save=_keep_relu,
-        recording=tl.options.RecordingOptions(default_grad=False),
+        default_grad=False,
     )
     out = recording.output
     assert not _has_grad_hooks(out)

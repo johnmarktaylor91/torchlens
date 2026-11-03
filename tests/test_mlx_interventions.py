@@ -264,7 +264,7 @@ def test_mlx_interventions_flag_false_refuses_the_surface() -> None:
     spec = tl.backends.spec("mlx")
     object.__setattr__(spec.capabilities, "can_intervene", False)
     try:
-        with pytest.raises(BackendUnsupportedError, match="interventions=False"):
+        with pytest.raises(BackendUnsupportedError, match="can_intervene=False"):
             tl.trace(
                 _TwoLayerMLP(),
                 _input(),

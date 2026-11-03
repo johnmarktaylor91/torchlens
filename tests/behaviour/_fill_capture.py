@@ -234,6 +234,7 @@ def _after_backward(cell: Cell) -> None:
     """
 
     from tests.behaviour.features import _loss_of
+    from torchlens._capture._fused_attention_hold import hold_fused_attention_fastpath_off
     from torchlens.errors import TorchLensError
     from torchlens.validation import last_validation_failure
 
@@ -261,13 +262,15 @@ def _after_backward(cell: Cell) -> None:
     with torch.no_grad():
         torch.manual_seed(SEED)
         frozen = tl.trace(cell.model, cell.fresh_inputs(), **cell.trace_kwargs)
-        reference = _eager_reference(cell) and _plain_leaves(cell)
+        # Under no_grad an eval-mode nn.MultiheadAttention takes torch's fused kernel, which
+        # capture holds off so it records the attention internals; the reference forward
+        # holds it off too, so both run the same unfused program and must agree exactly.
+        with hold_fused_attention_fastpath_off(cell.model):
+            reference = _eager_reference(cell) and _plain_leaves(cell)
     cell.expect(
         frozen.options.inference_only is True, "a capture under no_grad is not inference_only"
     )
     if reference and not cell.case.has("stochastic"):
-        # Eager itself may take another kernel path under no_grad (fused attention), so the
-        # inference-only capture is held to a no_grad plain forward, not to the grad capture.
         cell.expect_same_leaves(reference, cell.output_leaves(frozen), "no_grad capture output")
     try:
         frozen.backward(torch.zeros((), requires_grad=True))
@@ -302,9 +305,7 @@ def _after_record(cell: Cell) -> None:
     _no_stochastic(cell)
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    cooked = tl.record(
-        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
-    ).to_trace()
+    cooked = tl.record(model, cell.fresh_inputs(), default_op=True).to_trace()
     cell.expect(
         cooked.outcome.status is CaptureStatus.COMPLETE, f"record outcome {cooked.outcome.status!r}"
     )

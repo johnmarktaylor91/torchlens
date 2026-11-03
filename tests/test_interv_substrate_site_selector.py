@@ -211,7 +211,7 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
             model,
             torch.randn(2, 4),
             save=site(func="relu"),
-            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
+            on_predicate_error="fail-fast",
         )
     assert "site" in str(excinfo.value)
 

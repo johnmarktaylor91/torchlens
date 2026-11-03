@@ -40,7 +40,7 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   `tlc_` scope-label prefixes that thread module identity through the jaxpr.
 
 ## capabilities.py
-- Registry-backed re-exports only. Per the registry: `interventions=False`,
+- Registry-backed re-exports only. Per the registry: `can_intervene=False`,
   `intermediate_derived_grads=True`, backward capture / fastlog / rng replay /
   streaming all False, `payload_policy="array_payloads"`.
 

@@ -216,7 +216,7 @@ def _render_finished_trace(  # noqa: PLR0913 -- mirrors the facade's spec'd dial
 
     result = Drawing(
         dot=dot,
-        data=data,
+        _data=data,
         file_format=fileformat,
         path=target,
         provenance=provenance,

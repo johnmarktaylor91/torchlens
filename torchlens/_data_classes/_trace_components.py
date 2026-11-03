@@ -612,4 +612,9 @@ TRACE_EXTERNAL_WRITE_EXEMPTIONS: dict[str, str] = {
         "torch capture: Function classes already disclosed by the "
         "foreign_kernel_boundary warning in this capture (once per class)"
     ),
+    "_foreign_departures": (
+        "torch capture (backends/torch/_foreign_data.py): tensors that left torch in "
+        "plain forward code (numpy / dlpack / tolist exports outside any Function), "
+        "matched by later host constructors and popped by postprocess step 3"
+    ),
 }

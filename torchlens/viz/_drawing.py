@@ -39,7 +39,7 @@ class Drawing:
         The rendered file format (``"pdf"``, ``"svg"``, ``"html"``, ...).
     path:
         Path of the written artifact, or ``None`` when nothing was written.
-    data:
+    _data:
         Rendered artifact bytes when the picture was rendered to memory
         (notebook inline path, HTML animations), else ``None``.
     provenance:
@@ -58,7 +58,7 @@ class Drawing:
     dot: str
     file_format: str = "pdf"
     path: Path | None = None
-    data: bytes | None = None
+    _data: bytes | None = None
     provenance: Any | None = None
     receipt: Any | None = None
     num_ops: int | None = None
@@ -79,13 +79,13 @@ class Drawing:
         if editable:
             payload = self.dot.encode("utf-8")
         elif self.file_format == "html":
-            payload = self.data if self.data is not None else self.dot.encode("utf-8")
+            payload = self._data if self._data is not None else self.dot.encode("utf-8")
         elif suffix in _TEXT_FORMATS:
             payload = self.dot.encode("utf-8")
         else:
             fileformat = suffix or self.file_format
-            if self.data is not None and fileformat == self.file_format:
-                payload = self.data
+            if self._data is not None and fileformat == self.file_format:
+                payload = self._data
             else:
                 payload = _render_dot_source(self.dot, fileformat)
         tmp = target.with_name(target.name + ".tl-partial")
@@ -134,15 +134,15 @@ class Drawing:
     def __str__(self) -> str:
         """Return the detached source: DOT for graphs, HTML for animations."""
 
-        if self.file_format == "html" and self.data is not None:
-            return self.data.decode("utf-8", errors="replace")
+        if self.file_format == "html" and self._data is not None:
+            return self._data.decode("utf-8", errors="replace")
         return self.dot
 
     def _repr_html_(self) -> str | None:
         """Inline HTML for notebook display (animations only)."""
 
-        if self.file_format == "html" and self.data is not None:
-            return self.data.decode("utf-8", errors="replace")
+        if self.file_format == "html" and self._data is not None:
+            return self._data.decode("utf-8", errors="replace")
         return None
 
     def _repr_svg_(self) -> str | None:
@@ -150,8 +150,8 @@ class Drawing:
 
         if self.file_format == "html":
             return None
-        if self.data is not None and self.file_format == "svg":
-            return self.data.decode("utf-8", errors="replace")
+        if self._data is not None and self.file_format == "svg":
+            return self._data.decode("utf-8", errors="replace")
         if not self.dot:
             return None
         try:

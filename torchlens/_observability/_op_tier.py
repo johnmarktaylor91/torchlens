@@ -34,7 +34,7 @@ from typing import Any
 
 import torch
 
-from ..options import CaptureOptions, RecordingOptions
+from ..options import CaptureOptions
 from ._artifact import HistoryWriter, RamRing
 from ._collector import PlanRow, StepTruth, WatchPlan, WatchSettings
 from ._errors import WatchLifecycleError, WatchPlanError
@@ -292,9 +292,7 @@ class OpTierCollector:
                 input_args,
                 input_kwargs=input_kwargs,
                 save=self.save,
-                recording=RecordingOptions(
-                    default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True)
-                ),
+                default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True),
             )
         rows: list[PlanRow] = []
         for record in recording.records:
@@ -436,7 +434,7 @@ class OpTierCollector:
             input_args,
             input_kwargs=input_kwargs,
             save=self.save,
-            recording=RecordingOptions(default_op=True),
+            default_op=True,
             capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
         )
         output = _recording.output
@@ -470,7 +468,7 @@ class OpTierCollector:
             input_args,
             input_kwargs=input_kwargs,
             save=self.save,
-            recording=RecordingOptions(default_op=True),
+            default_op=True,
             capture=CaptureOptions(activation_transform=self._reducer, save_raw_activations=False),
         )
         output = recording.output

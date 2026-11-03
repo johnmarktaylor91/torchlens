@@ -41,9 +41,12 @@ from torch import nn
 
 from . import _state
 from ._call_fingerprint import install_module_token_hooks, module_fingerprint_address
+from ._fast_live_hooks import _remove_fast_live_hooks, install_collection_hooks
 from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode
+from ._runnable.verification import _contract_check
 from ._utils._module_call_dispatch import forward_entered_through_module_call
+from ._utils.introspection import get_vars_of_type_from_obj
 from .backends.torch import _session_forwards, _tl as _tl_meta
 from .backends.torch.model_prep import shared_module_addresses
 from .backends.torch.wrappers import _MUTATING_TENSOR_PROPERTY_SETTERS
@@ -59,13 +62,11 @@ __all__ = [
     "_module_output_paths",
     "_output_tensor_leaves",
     "_pair_output_leaves",
-    "_remove_fast_live_hooks",
     "build_direct_forward_routes",
     "build_function_plans",
     "build_module_plans",
     "collected_function_output",
     "direct_forward_routes_installed",
-    "install_collection_hooks",
     "install_session_hooks",
     "recorded_module_call_counts",
     "repeats_last_function_output",
@@ -111,7 +112,6 @@ def _pair_output_leaves(
 
     # Module import: the dotted spelling of this path matches the layer lint's
     # torch-private pattern, but the walker is TorchLens's own, not a torch private.
-    from ._utils.introspection import get_vars_of_type_from_obj
     from .backends.torch import _ops_containers
 
     native = [
@@ -584,34 +584,6 @@ def require_distinct_plan_modules(
             )
 
 
-def install_collection_hooks(
-    handles: list[Any],
-    modules: Mapping[str, nn.Module],
-    plan_addresses: tuple[str, ...],
-    session_ref: weakref.ReferenceType[Any],
-) -> None:
-    """Register one collection forward hook per planned address, appending to ``handles``."""
-
-    for address in plan_addresses:
-        module = modules["" if address == "self" else address]
-
-        def hook(
-            _module: nn.Module,
-            _args: tuple[Any, ...],
-            output: Any,
-            *,
-            module_address: str = address,
-            ref: weakref.ReferenceType[Any] = session_ref,
-        ) -> None:
-            """Forward one module boundary to the active session."""
-
-            session = ref()
-            if session is not None:
-                session.capture_module(module_address, output)
-
-        handles.append(module.register_forward_hook(hook))
-
-
 def install_session_hooks(
     session: Any,
     model: nn.Module,
@@ -766,23 +738,28 @@ def direct_forward_routes_installed(
                 module.__dict__["forward"] = prior
 
 
-def _remove_fast_live_hooks(handles: list[Any]) -> None:
-    """Remove and discard module-hook handles without retaining their session.
+def _lossy_output_failure(output: Any, output_labels: Sequence[str]) -> Any:
+    """Return the failed contract check for a lossy ``torch.distributions`` output.
 
-    Every handle gets its own removal attempt: ``weakref.finalize`` pops its
-    registry entry BEFORE invoking the callback, so this is the one chance to
-    remove these hooks -- a single raising ``remove()`` must never strand the
-    remaining handles on the user's modules forever. The first failure
-    re-raises only after every handle was attempted and the list cleared.
+    Capture flagged the output lossy (a transform list, a parameter the container
+    contract cannot record), so the fast run refuses it as it refuses an opaque
+    root rather than accept a boundary it knows is incomplete; ``None`` otherwise.
     """
 
-    first_error: BaseException | None = None
-    for handle in handles:
-        try:
-            handle.remove()
-        except BaseException as exc:
-            if first_error is None:
-                first_error = exc
-    handles.clear()
-    if first_error is not None:
-        raise first_error
+    # Module import: the dotted spelling of this path matches the layer lint's
+    # torch-private pattern, but the prover is TorchLens's own, not a torch private.
+    from .backends.torch import _ops_containers
+
+    lossy_reason = _ops_containers.lossy_distribution_output_reason(output)
+    if not lossy_reason:
+        return None
+    return _contract_check(
+        "fast_live_model_output_opaque",
+        False,
+        RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE,
+        f"The model returns a {type(output).__qualname__} whose state capture "
+        f"cannot record losslessly ({lossy_reason}). The fast run cannot pair "
+        "a lossy output boundary; the full run records this output as the "
+        "capture did.",
+        affected_op_labels=tuple(output_labels),
+    )

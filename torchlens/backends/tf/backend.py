@@ -11,6 +11,7 @@ from typing import Any, Literal, cast
 
 from ... import _state
 from ..._capture.outcome import stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
@@ -613,7 +614,6 @@ class TFBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             activation_transform=cast(Any, activation_transform),
-            grad_transform=None,
             save_raw_activations=save_raw_activations,
             save_raw_grads=True,
             keep_orphans=False,
@@ -622,7 +622,6 @@ class TFBackend:
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             source_context_lines=num_context_lines,
-            optimizer=None,
             save_source_context=save_source_context,
             save_rng=save_rng,
             recurrence_detection=recurrence_detection,
@@ -639,6 +638,7 @@ class TFBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
+        fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
         trace._source_class_qualname = f"{type(model).__module__}.{type(model).__qualname__}"

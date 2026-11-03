@@ -17,6 +17,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     DerivedGradRecord,
@@ -972,7 +973,7 @@ class MLXBackend:
             spec = get_backend_spec("mlx")
             if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
-                    "MLX backend capability table declares interventions=False; "
+                    "MLX backend capability table declares can_intervene=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
                     "ignoring the requested behavior.",
                     code="interventions_unsupported",
@@ -1006,7 +1007,6 @@ class MLXBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
-            grad_transform=None,
             save_raw_activations=save_raw_activations,
             save_raw_grads=True,
             keep_orphans=keep_orphans,
@@ -1015,7 +1015,6 @@ class MLXBackend:
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=compute_input_output_distances,
             source_context_lines=num_context_lines,
-            optimizer=None,
             save_source_context=save_source_context,
             save_rng=save_rng,
             recurrence_detection=recurrence_detection,
@@ -1032,6 +1031,7 @@ class MLXBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
+        fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module

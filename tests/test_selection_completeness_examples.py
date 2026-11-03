@@ -25,7 +25,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection.selection import _FLIP, _difference_relation, _join_relation
+from torchlens._selection.provenance import _FLIP, _difference_relation, _join_relation
 
 _PAGE = Path(__file__).resolve().parents[1] / "docs" / "reference" / "selection_completeness.md"
 _PYTHON_FENCE = re.compile(r"```python\n(?P<code>.*?)\n```", re.DOTALL)

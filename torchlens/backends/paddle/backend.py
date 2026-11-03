@@ -11,6 +11,7 @@ from typing import Any, cast
 
 from ... import _state
 from ..._capture.outcome import StopRequest, stamp_backend_finalized
+from ..._data_classes._trace_state_io import fill_unset_declared_fields
 from ..._data_classes.derived_grad import (
     DerivedGradAccessor,
     IntermediateDerivedGradAccessor,
@@ -29,9 +30,10 @@ from ..._ir.events import (
     ParentEdge,
 )
 from ..._ir.intervention import FireResult, FunctionEventInput
-from ..._ir.predicate import RecordContext
+from ..._ir.predicate import CaptureSpec, RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._output_slot import returned, stopped
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     apply_static_label_save_policy,
@@ -42,7 +44,6 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec, returned, stopped
 from ...validation.status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
@@ -463,7 +464,6 @@ class PaddleBackend:
             model_class_name=type(model).__name__,
             output_device=output_device,
             activation_transform=cast("Callable[[Any], Any] | None", activation_transform),
-            grad_transform=None,
             save_raw_activations=save_raw_activations,
             save_raw_grads=True,
             keep_orphans=keep_orphans,
@@ -472,7 +472,6 @@ class PaddleBackend:
             detach_saved_activations=detach_saved_activations,
             mark_layer_depths=cast(bool, compute_input_output_distances),
             source_context_lines=num_context_lines,
-            optimizer=None,
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             recurrence_detection=recurrence_detection,
@@ -489,6 +488,7 @@ class PaddleBackend:
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
         )
+        fill_unset_declared_fields(trace)
         trace.name = name
         trace._provenance_backend = cast(BackendName, self.name)
         # Root entry-point identity fact (C07X item (iv)): tf's spelling for a module

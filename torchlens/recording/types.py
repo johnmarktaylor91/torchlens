@@ -15,23 +15,8 @@ import torch
 
 from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
-from .._output_slot import read_output, returned as returned, stopped as stopped
-from . import _types_records
-
-ActivationRecord = _types_records.ActivationRecord
-CaptureDecision = _types_records.CaptureDecision
-CaptureSpec = _types_records.CaptureSpec
-EventKind = _types_records.EventKind
-GradRecord = _types_records.GradRecord
-GradRecordContext = _types_records.GradRecordContext
-ModuleStackFrame = _types_records.ModuleStackFrame
-PredicateDecision = _types_records.PredicateDecision
-PredicateFailure = _types_records.PredicateFailure
-RecordContext = _types_records.RecordContext
-RetroactiveCaptureDecision = _types_records.RetroactiveCaptureDecision
-SaveMode = _types_records.SaveMode
-StorageIntent = _types_records.StorageIntent
-_distinct_label_index_keys = _types_records._distinct_label_index_keys
+from .._ir import predicate as _predicate
+from .._utils.tensor_utils import SaveMode as SaveMode
 
 __all__ = [
     "ActivationRecord",
@@ -44,6 +29,20 @@ __all__ = [
     "RecordingSettings",
     "StorageIntent",
 ]
+
+ActivationRecord = _predicate.ActivationRecord
+CaptureDecision = _predicate.CaptureDecision
+CaptureSpec = _predicate.CaptureSpec
+EventKind = _predicate.EventKind
+GradRecord = _predicate.GradRecord
+GradRecordContext = _predicate.GradRecordContext
+ModuleStackFrame = _predicate.ModuleStackFrame
+PredicateDecision = _predicate.PredicateDecision
+PredicateFailure = _predicate.PredicateFailure
+RecordContext = _predicate.RecordContext
+RetroactiveCaptureDecision = _predicate.RetroactiveCaptureDecision
+StorageIntent = _predicate.StorageIntent
+_distinct_label_index_keys = _predicate._distinct_label_index_keys
 
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
@@ -190,8 +189,8 @@ _RAW_METADATA_FIELDS = (
 
 #: ``RecordingSettings`` field -> the ``_RecordingConfig`` slot it reads. The
 #: record speaks the public spellings: the capture knobs keep their
-#: ``CaptureOptions`` names, the recorder knobs their ``RecordingOptions``
-#: names, and the three door-carried slots their door keywords.
+#: ``CaptureOptions`` names, the recorder knobs their flat ``tl.record``
+#: keyword names, and the three door-carried slots their door keywords.
 _SETTINGS_SLOTS: Final[tuple[tuple[str, str], ...]] = (
     ("keep_op", "keep_op"),
     ("default_op", "default_op"),
@@ -230,7 +229,7 @@ class RecordingSettings:
     recording made?" across every door that configured it: the capture knobs
     (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
     ``grad_transform``, ``lookback``, ...), the recorder knobs
-    (``recording=RecordingOptions(...)``: ``keep_op``, ``default_op``,
+    (the flat ``tl.record`` keywords: ``keep_op``, ``default_op``,
     ``history_size``, ...) and the door keywords ``stop_after=``, ``storage=``
     and ``narrate=``. Values are the live objects the recorder used (the
     predicate or transform callable itself, the ``CaptureSpec``), never repr
@@ -362,12 +361,11 @@ class Recording(TraceLike):
     the count from the failing pass.
     """
 
-    # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this
-    # slots-backed product's validating ``outcome`` property IS the settlement
-    # truth (stamped-record re-parse + conservative derivation, never blessing
-    # COMPLETE). Without it ``outcome_for`` read the absent ``__dict__`` as
-    # UNKNOWN and every capability gate refused settled Recordings with a
-    # false hand-built-object warning (WT1 A-IV item 21, lane A08).
+    # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this slots-backed product's
+    # validating ``outcome`` property IS the settlement truth (stamped-record re-parse +
+    # conservative derivation, never blessing COMPLETE). Without it ``outcome_for`` read the absent
+    # ``__dict__`` as UNKNOWN and every capability gate refused settled Recordings with a false
+    # hand-built-object warning (WT1 A-IV item 21, lane A08).
     _OUTCOME_SELF_AUTHORITY: ClassVar[bool] = True
 
     records: list[ActivationRecord]
@@ -476,6 +474,8 @@ class Recording(TraceLike):
             before the model returned. Never returns ``None`` for a missing
             output.
         """
+
+        from .._output_slot import read_output
 
         return read_output(self._output, owner="Recording")
 

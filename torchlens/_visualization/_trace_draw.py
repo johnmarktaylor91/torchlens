@@ -235,7 +235,7 @@ def animate(
     drawing = Drawing(
         dot="",
         file_format="html",
-        data=html.encode("utf-8"),
+        _data=html.encode("utf-8"),
         num_ops=num_ops,
         policy={"animate": str(getattr(site, "layer_label", site))},
     )

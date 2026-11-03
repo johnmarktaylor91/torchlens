@@ -13,6 +13,7 @@ production raise site and pin the sparse capture.
 
 from __future__ import annotations
 
+import contextlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -21,10 +22,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
 from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
 from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from torchlens._utils._torch_compat import get_sparse_spsolve_cuda_support
 from torchlens.backends.torch._state_bytes import _state_bytes_equal, _whole_storage_uint8
 from torchlens.errors import ArtifactError, TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
@@ -75,6 +78,50 @@ class _SparseInForward(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.sparse.mm(self.adjacency.to_sparse(), self.linear(x))
+
+
+class _SampledAddmm(nn.Module):
+    """``torch.sparse.sampled_addmm`` with all three tensor operands from distinct ops."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("pattern", torch.eye(3) + torch.diag(torch.ones(2), 1))
+        self.left = nn.Linear(4, 4)
+        self.right = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # ``to_sparse(layout=...)`` is the recorded spelling; ``Tensor.to_sparse_csr``
+        # is in torch's override-ignored set and is not decorated.
+        pattern = self.pattern.to_sparse(layout=torch.sparse_csr)
+        sampled = torch.sparse.sampled_addmm(pattern, self.left(x), self.right(x).t())
+        return sampled.to_dense()
+
+
+class _Spdiags(nn.Module):
+    """``torch.sparse.spdiags``: computed diagonals placed at a buffer of offsets."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("offsets", torch.tensor([0, -1, 1]))
+        self.linear = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        band = torch.sparse.spdiags(self.linear(x), self.offsets, (3, 3))
+        return band.to_dense() @ x
+
+
+class _Spsolve(nn.Module):
+    """``torch.sparse.spsolve``: a CSR system matrix and a computed right-hand side."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("system", torch.eye(3) * 2 + torch.diag(torch.ones(2), 1))
+        self.linear = nn.Linear(4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sparse.spsolve(
+            self.system.to_sparse(layout=torch.sparse_csr), self.linear(x).squeeze(-1)
+        )
 
 
 def _hook_raises(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -231,6 +278,74 @@ def test_sparse_in_forward_model_validates() -> None:
     torch.manual_seed(0)
     model = _SparseInForward().eval()
     assert tl.validate(model, [torch.randn(3, 4)], scope="forward", seed=0)
+
+
+def _single_op(trace: Any, func_name: str) -> Any:
+    ops = [op for op in trace.ops if op.func_name == func_name]
+    assert len(ops) == 1, [op.func_name for op in trace.ops]
+    return ops[0]
+
+
+def test_sparse_sampled_addmm_captures_all_operands_and_validates() -> None:
+    torch.manual_seed(0)
+    model = _SampledAddmm().eval()
+    x = torch.randn(3, 4)
+    trace = tl.trace(model, [x])
+    assert len(_single_op(trace, "sampled_addmm").parents) == 3
+    assert tl.validate(model, [x], scope="forward", seed=0)
+
+
+def test_sparse_spdiags_captures_diagonals_and_offsets_and_validates() -> None:
+    torch.manual_seed(0)
+    model = _Spdiags().eval()
+    x = torch.randn(3, 4)
+    trace = tl.trace(model, [x])
+    assert len(_single_op(trace, "spdiags").parents) == 2
+    assert tl.validate(model, [x], scope="forward", seed=0)
+
+
+@pytest.mark.skipif(
+    not get_sparse_spsolve_cuda_support(),
+    reason="HAS_SPARSE_SPSOLVE_CUDA is False: torch.sparse.spsolve cannot run on CUDA here "
+    "(no op, no CUDA device, or a torch build without cuDSS)",
+)
+def test_sparse_spsolve_captures_both_operands_and_validates() -> None:
+    torch.manual_seed(0)
+    model = _Spsolve().cuda().eval()
+    x = torch.randn(3, 4, device="cuda")
+    trace = tl.trace(model, [x])
+    assert len(_single_op(trace, "spsolve").parents) == 2
+    assert tl.validate(model, [x], scope="forward", seed=0)
+
+
+def test_spsolve_arg_spec_extracts_both_operands() -> None:
+    """The static row matches the binding's ``(A, B)`` names; the docstring says input/other."""
+    a = torch.eye(2).to_sparse_csr()
+    b = torch.ones(2)
+    spec = FUNC_ARG_SPECS["spsolve"]
+    assert extract_tensors_and_params(spec, (a, b), {}) == ([a, b], [])
+    assert extract_tensors_and_params(spec, (), {"A": a, "B": b, "left": True}) == ([a, b], [])
+    if hasattr(torch.sparse, "spsolve"):
+        # A wrong keyword name raises TypeError before dispatch; a build with no CPU
+        # kernel raises after the keywords parsed.
+        with contextlib.suppress(NotImplementedError, RuntimeError):
+            torch.sparse.spsolve(A=a, B=b)
+
+
+def test_sampled_addmm_and_spdiags_bind_their_spec_keywords() -> None:
+    pattern = torch.eye(2).to_sparse_csr()
+    mat1, mat2 = torch.ones(2, 3), torch.ones(3, 2)
+    spec = FUNC_ARG_SPECS["sampledaddmm"]
+    kwargs = {"input": pattern, "mat1": mat1, "mat2": mat2}
+    assert extract_tensors_and_params(spec, (), kwargs) == ([pattern, mat1, mat2], [])
+    torch.testing.assert_close(torch.sparse.sampled_addmm(**kwargs).to_dense(), torch.eye(2) * 4)
+    diagonals, offsets = torch.ones(1, 2), torch.tensor([0])
+    spec = FUNC_ARG_SPECS["spdiags"]
+    kwargs = {"diagonals": diagonals, "offsets": offsets}
+    assert extract_tensors_and_params(spec, (), kwargs) == ([diagonals, offsets], [])
+    torch.testing.assert_close(
+        torch.sparse.spdiags(**kwargs, shape=(2, 2)).to_dense(), torch.eye(2)
+    )
 
 
 def test_portable_save_of_a_sparse_activation_refuses_with_a_code(tmp_path) -> None:
