@@ -219,3 +219,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: f59d8ae8d9028bbf736daed02126a5af682a8ae4 (clean)
 recorded: 2026-11-03T15:30:17.900186+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: render-identity-golden: key swatch IMG SRC paths reduced to file names so one golden holds on every host
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 0868b3aa3805561951c57692a98bdbad10e293a1 (dirty)
+recorded: 2026-11-03T19:30:08.023210+00:00
+---
+generator: tests/test_viz_render_identity_oracle.py
+flag: TORCHLENS_UPDATE_VIZ_RENDER_ORACLE=1
+reason: render-identity-golden: key swatch IMG SRC paths reduced to file names so one golden holds on every host
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bb97e2a7fdbf8a3db6b9994175269401e01775dd (dirty)
+recorded: 2026-11-03T19:38:31.404855+00:00

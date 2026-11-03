@@ -4,7 +4,7 @@ docs-md	AGENTS.md	10
 docs-md	AGENTS.md	11
 docs-md	AGENTS.md	130
 docs-md	AGENTS.md	140
-docs-md	AGENTS.md	18,737
+docs-md	AGENTS.md	18,762
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.13.0
@@ -1886,9 +1886,9 @@ docs-md	docs/maintainers/where.md	1056
 docs-md	docs/maintainers/where.md	106
 docs-md	docs/maintainers/where.md	1060
 docs-md	docs/maintainers/where.md	10636
-docs-md	docs/maintainers/where.md	10648
 docs-md	docs/maintainers/where.md	1065
 docs-md	docs/maintainers/where.md	1067
+docs-md	docs/maintainers/where.md	10690
 docs-md	docs/maintainers/where.md	107
 docs-md	docs/maintainers/where.md	1077
 docs-md	docs/maintainers/where.md	108
@@ -2294,7 +2294,7 @@ docs-md	docs/maintainers/where.md	357
 docs-md	docs/maintainers/where.md	358
 docs-md	docs/maintainers/where.md	35874
 docs-md	docs/maintainers/where.md	359
-docs-md	docs/maintainers/where.md	35950
+docs-md	docs/maintainers/where.md	35962
 docs-md	docs/maintainers/where.md	36
 docs-md	docs/maintainers/where.md	360
 docs-md	docs/maintainers/where.md	363
@@ -2305,7 +2305,6 @@ docs-md	docs/maintainers/where.md	369
 docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	372
-docs-md	docs/maintainers/where.md	373
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
 docs-md	docs/maintainers/where.md	3767
@@ -2387,6 +2386,7 @@ docs-md	docs/maintainers/where.md	442
 docs-md	docs/maintainers/where.md	444
 docs-md	docs/maintainers/where.md	44402
 docs-md	docs/maintainers/where.md	445
+docs-md	docs/maintainers/where.md	446
 docs-md	docs/maintainers/where.md	447
 docs-md	docs/maintainers/where.md	4474
 docs-md	docs/maintainers/where.md	449
@@ -2554,7 +2554,7 @@ docs-md	docs/maintainers/where.md	641
 docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	643
 docs-md	docs/maintainers/where.md	647
-docs-md	docs/maintainers/where.md	647092
+docs-md	docs/maintainers/where.md	647136
 docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
@@ -2598,14 +2598,13 @@ docs-md	docs/maintainers/where.md	7083
 docs-md	docs/maintainers/where.md	71
 docs-md	docs/maintainers/where.md	710
 docs-md	docs/maintainers/where.md	712
-docs-md	docs/maintainers/where.md	7122
+docs-md	docs/maintainers/where.md	7120
 docs-md	docs/maintainers/where.md	713
 docs-md	docs/maintainers/where.md	714
 docs-md	docs/maintainers/where.md	715
-docs-md	docs/maintainers/where.md	717
+docs-md	docs/maintainers/where.md	716
 docs-md	docs/maintainers/where.md	718
 docs-md	docs/maintainers/where.md	72
-docs-md	docs/maintainers/where.md	722
 docs-md	docs/maintainers/where.md	723
 docs-md	docs/maintainers/where.md	725
 docs-md	docs/maintainers/where.md	73
@@ -2660,9 +2659,9 @@ docs-md	docs/maintainers/where.md	814
 docs-md	docs/maintainers/where.md	815
 docs-md	docs/maintainers/where.md	816
 docs-md	docs/maintainers/where.md	82
+docs-md	docs/maintainers/where.md	820
 docs-md	docs/maintainers/where.md	821
 docs-md	docs/maintainers/where.md	8239
-docs-md	docs/maintainers/where.md	825
 docs-md	docs/maintainers/where.md	826
 docs-md	docs/maintainers/where.md	829
 docs-md	docs/maintainers/where.md	83
@@ -2672,7 +2671,7 @@ docs-md	docs/maintainers/where.md	836
 docs-md	docs/maintainers/where.md	84
 docs-md	docs/maintainers/where.md	841
 docs-md	docs/maintainers/where.md	843
-docs-md	docs/maintainers/where.md	8461
+docs-md	docs/maintainers/where.md	8456
 docs-md	docs/maintainers/where.md	847
 docs-md	docs/maintainers/where.md	8475
 docs-md	docs/maintainers/where.md	849
@@ -8544,6 +8543,8 @@ test-docstrings	tests/test_debug_findings_source_lines.py	1.0
 test-docstrings	tests/test_debug_findings_source_lines.py	32
 test-docstrings	tests/test_debug_findings_source_lines.py	64
 test-docstrings	tests/test_debug_truths.py	10
+test-docstrings	tests/test_debug_truths.py	100
+test-docstrings	tests/test_debug_truths.py	100,
 test-docstrings	tests/test_debug_truths.py	32
 test-docstrings	tests/test_debug_truths.py	64
 test-docstrings	tests/test_decoration.py	138
@@ -10208,6 +10209,7 @@ test-names	tests/test_real_world_models.py	50
 test-names	tests/test_real_world_models.py	50_
 test-names	tests/test_real_world_models.py	8_224
 test-names	tests/test_receptive_field_deep_chain.py	450_
+test-names	tests/test_replay_templates_default_capture.py	18_
 test-names	tests/test_replay_tolerance_dtype_tripwire.py	32_
 test-names	tests/test_replay_tolerance_dtype_tripwire.py	64
 test-names	tests/test_replay_tolerance_dtype_tripwire.py	64_
