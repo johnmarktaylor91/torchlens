@@ -1685,7 +1685,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                     )
             grad = slot("grad")
             if grad is None and slot("grad_ref") is not None:
-                return object.__getattribute__(self, "materialize_grad")()
+                return object.__getattribute__(self, "payload").materialize_grad()
             return grad
         if name == "out":
             slot = _object_getattribute(self, "_slot")
@@ -1710,7 +1710,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                     or getattr(source_trace, "payload_load_status", None) == "loaded_lazy"
                 )
             ):
-                return object.__getattribute__(self, "materialize_out")()
+                return object.__getattribute__(self, "payload").materialize_out()
             if (
                 slot("_tracing_finished")
                 and not slot("has_saved_activation", False)

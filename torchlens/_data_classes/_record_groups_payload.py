@@ -65,7 +65,7 @@ class OpPayload(_RecordGroup):
         current = op._slot("grad")
         if current is not None:
             return current
-        ref = op.grad_ref
+        ref = op._slot("grad_ref")
         if ref is None:
             raise ArtifactError("no grad_ref to materialize from")
         op._internal_set(
@@ -103,7 +103,7 @@ class OpPayload(_RecordGroup):
         current = op._slot("out")
         if current is not None:
             return current
-        ref = op.out_ref
+        ref = op._slot("out_ref")
         if ref is None:
             raise ArtifactError("no out_ref to materialize from")
         op._internal_set(
