@@ -593,7 +593,7 @@ def distributed_recording_session(trace: Any) -> Iterator[None]:
         The capture runs with the completion authority installed.
     """
 
-    from torchlens.distributed._lifecycle import capture_armed_state
+    from torchlens._distributed._lifecycle import capture_armed_state
 
     global _ACTIVE_FUNCOL_SESSION
     if capture_armed_state() is None:
@@ -670,11 +670,11 @@ def _build_funcol_payload(
     bound:
         Bound call arguments.
     identity:
-        Resolved :class:`~torchlens.distributed._lifecycle.GroupIdentity`.
+        Resolved :class:`~torchlens._distributed._lifecycle.GroupIdentity`.
     seq:
         Issue-time seq on the ``(group_uid, "coll")`` channel.
     arming:
-        The armed state's :class:`~torchlens.distributed._lifecycle.ArmingRecord`.
+        The armed state's :class:`~torchlens._distributed._lifecycle.ArmingRecord`.
     contributions:
         This rank's contribution tensors (possibly ACTs from chained funcol).
     inner_destinations:
@@ -807,7 +807,7 @@ def _make_funcol_wrap(site: FuncolSite, original: Callable[..., Any]) -> Callabl
         raise its own ``TypeError`` anyway).
         """
 
-        from torchlens.distributed._lifecycle import armed_state, next_seq, resolve_group_identity
+        from torchlens._distributed._lifecycle import armed_state, next_seq, resolve_group_identity
 
         state = armed_state()
         if state is None or _inside_boundary():
@@ -994,7 +994,7 @@ def remove_funcol_wraps(originals: dict[tuple[Any, str], Any]) -> None:
         The armed state's original-function registry.
     """
 
-    from torchlens.distributed._lifecycle import restore_wrapped_attr
+    from torchlens._distributed._lifecycle import restore_wrapped_attr
 
     from ..._utils._torch_compat import get_funcol_module
 

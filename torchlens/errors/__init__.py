@@ -197,7 +197,7 @@ _LAZY_EXCEPTION_PATHS = {
     # defining modules import ``errors._base``, so eagerly importing them here
     # would create a cycle.
     "AmbiguousGroupLifetimeError": (
-        "torchlens.distributed._lifecycle",
+        "torchlens._distributed._lifecycle",
         "AmbiguousGroupLifetimeError",
     ),
     "ArtifactTooOldError": ("torchlens._io", "ArtifactTooOldError"),
@@ -266,7 +266,7 @@ _LAZY_EXCEPTION_PATHS = {
     "StructuralHashMismatchError": ("torchlens.fingerprint", "StructuralHashMismatchError"),
     "TorchCapabilityWarning": ("torchlens._utils._torch_compat", "TorchCapabilityWarning"),
     "UncapturedCollectiveOpError": (
-        "torchlens.distributed._recognizer",
+        "torchlens._distributed._recognizer",
         "UncapturedCollectiveOpError",
     ),
     "UnknownBackendError": ("torchlens.backends.registry", "UnknownBackendError"),

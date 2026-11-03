@@ -28,6 +28,13 @@ import torchlens._user_funcs as user_funcs
 import torchlens._user_public_impls as user_public_impls
 from torchlens import Trace, trace as trace_fn
 from torchlens._utils.tensor_utils import tensor_nanequal
+from torchlens._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationStatus,
+)
 from torchlens.backends.torch import rescue
 from torchlens.errors import (
     CaptureGapWarning,
@@ -80,13 +87,6 @@ from torchlens.validation.exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     STRUCTURAL_ARG_POSITIONS,
     posthoc_perturb_check,
-)
-from torchlens.validation.status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationStatus,
 )
 
 _TEST_FORWARD_GLOBAL_TENSOR: torch.Tensor | None = None

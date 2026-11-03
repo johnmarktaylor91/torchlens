@@ -136,6 +136,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     # Capture-side snapshot helpers consumed by the engine; validation reads them.
     "_validation_argument_references": "L2",
     "_validation_state_snapshot": "L2",
+    "_validation_status": "L0",
     "_utils": "L1",
     # -- L3 SETTLE ----------------------------------------------------------
     "_postprocess": "L3",

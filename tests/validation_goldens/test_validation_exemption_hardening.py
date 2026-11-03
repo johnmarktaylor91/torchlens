@@ -11,6 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._validation_status import ValidationStatus
 from torchlens.validation import backward as backward_validation, core
 from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
 from torchlens.validation._invariants_conditional_base import _check_branching_invariants
@@ -42,7 +43,6 @@ from torchlens.validation.invariants import (
     _check_site_key_invariants,
     check_metadata_invariants,
 )
-from torchlens.validation.status import ValidationStatus
 
 
 def _fake_layer(**kwargs: Any) -> Any:

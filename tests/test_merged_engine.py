@@ -17,6 +17,11 @@ from types import SimpleNamespace
 
 import pytest
 
+from torchlens._distributed._ledger import (
+    GroupLifecycleEvent,
+    GroupLifecycleLedger,
+    membership_digest_for_ranks,
+)
 from torchlens._merged import (
     MERGE_FINDING_KINDS,
     BoundaryConsistency,
@@ -29,11 +34,6 @@ from torchlens._merged._evidence import (
     TENSORLESS_KINDS,
     RankEvidence,
     extract_rank_evidence,
-)
-from torchlens.distributed._ledger import (
-    GroupLifecycleEvent,
-    GroupLifecycleLedger,
-    membership_digest_for_ranks,
 )
 from torchlens.types import MergeAlignment, MergeValueStatus
 
@@ -726,8 +726,8 @@ class TestWireVocabularyLockstep:
     def test_install_epoch_vocabulary_matches_ledger_literal(self):
         from typing import get_args
 
+        from torchlens._distributed._ledger import InstallEpoch
         from torchlens._merged._evidence import _INSTALL_EPOCHS
-        from torchlens.distributed._ledger import InstallEpoch
 
         assert set(get_args(InstallEpoch)) == set(_INSTALL_EPOCHS)
 

@@ -55,6 +55,15 @@ from ..._postprocess.loop_grouping_adapter import (
 )
 from ..._quantities import Bytes, Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationReplaySource,
+    ValidationStatus,
+    count_importer_region_annotations,
+)
 from ...backends._finalize import (
     attach_function_root_module,
     mirror_param_derived_grads,
@@ -68,15 +77,6 @@ from ...backends._finalize import (
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
-from ...validation.status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationReplaySource,
-    ValidationStatus,
-    count_importer_region_annotations,
-)
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,

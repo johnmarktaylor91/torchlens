@@ -12,8 +12,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, cast
 
+from .._distributed._ledger import InstallEpoch
 from ..distributed._audit import MembershipLineageVerdict, verify_membership_lineages
-from ..distributed._ledger import InstallEpoch
 from ._boundary_rules import P2P_KINDS
 from ._enums import BoundaryConsistency, MergeAlignment, MergedErrorCode, MergeValueStatus
 from ._errors import MergedFinding, MergeInputError

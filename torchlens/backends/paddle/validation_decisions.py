@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ...validation.status import ValidationReplaySource, ValidationStatus
+    from ..._validation_status import ValidationReplaySource, ValidationStatus
 
 #: Replay of the op's saved inputs did not reproduce its saved output.
 REASON_REPLAY_MISMATCH = "replay_mismatch"
@@ -184,7 +184,7 @@ def fold_status(
             )
         )
     folded = PaddleReplayOutcome(tuple(decisions))
-    from ...validation.status import ValidationStatus
+    from ..._validation_status import ValidationStatus
 
     return ValidationStatus.from_replay_counts(
         backend=backend,

@@ -42,6 +42,7 @@ from ..._ir.workspaces import RawGraphWorkspace
 from ..._postprocess._materialize import materialize_from_events
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
+from ..._validation_status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from ...backends.registry import (
     BackendName,
     get_backend_spec,
@@ -49,7 +50,6 @@ from ...backends.registry import (
 )
 from ...recording._halt import StopSignal
 from ...recording.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -1494,8 +1494,8 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
+            from ..._validation_status import count_importer_region_annotations
             from ...validation.invariants import check_metadata_invariants
-            from ...validation.status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}

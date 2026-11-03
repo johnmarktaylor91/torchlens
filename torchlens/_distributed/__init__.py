@@ -41,12 +41,12 @@ from typing import Any
 import torch
 from torch import nn
 
-from ._utils._torch_compat import (
+from .._utils._torch_compat import (
     get_device_mesh_type,
     get_dtensor_type,
     get_pipelining_module_types,
 )
-from .errors._base import CompatibilityError
+from ..errors._base import CompatibilityError
 
 __all__ = [
     "DistributedCaptureUnsupportedError",
@@ -161,7 +161,7 @@ class DistributedFinding:
         Per-site dual-geometry records aligned with ``sites`` (``None`` for a
         site without one). For DTensor state each record declares BOTH the
         logical shape and the locally held shard
-        (:func:`torchlens.distributed._dtensor.dtensor_dual_geometry`), so a
+        (:func:`torchlens._distributed._dtensor.dtensor_dual_geometry`), so a
         refused sharded model is refused with its parameters precisely
         identified rather than silently mis-counted.
     """
@@ -853,7 +853,7 @@ def _record_tensor(site: str, tensor: torch.Tensor, evidence: _Evidence) -> None
     if kind == "dtensor":
         evidence.dtensor_sites.append(site)
         try:
-            from .distributed._dtensor import dtensor_dual_geometry
+            from ._dtensor import dtensor_dual_geometry
 
             evidence.dtensor_geometry[site] = dtensor_dual_geometry(tensor)
         except Exception:

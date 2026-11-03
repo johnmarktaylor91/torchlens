@@ -301,7 +301,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # It must not steer a capture with no initialized group: per-capture
         # consumers read it through capture_armed_state(), which is None then
         # (tests/test_distributed_teardown_dormancy.py pins it).
-        ("torchlens/distributed/_lifecycle.py", "_STATE"),
+        ("torchlens/_distributed/_lifecycle.py", "_STATE"),
     }
 )
 """Wrapper install / uninstall bookkeeping and prepared-model registration.
@@ -334,7 +334,7 @@ _WARN_ONCE_STATE = frozenset(
         # (user_funcs warn-once flag, C02 lovely tranche).
         ("torchlens/_capture/prepare/door.py", "_BATCHNORM_TRAIN_STATS_WARNED"),
         ("torchlens/_data_classes/_op_save.py", "_WARNED_REFERENCE_SAVE_MODE"),
-        ("torchlens/distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
+        ("torchlens/_distributed/_lifecycle.py", "_AUTO_ARM_DEGRADATION"),
         ("torchlens/recording/_storage_resolver.py", "_WARNED_REFERENCE_SAVE_MODE"),
         # Once-per-file source-drift disclosure for the C4 pinned-digest refusal
         # (fix/postproc 7a58a021); reset row lives in tests/conftest.py.
@@ -1008,7 +1008,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_data_substrate/digests.py", "__all__"),
         ("torchlens/_data_substrate/model_identity.py", "__all__"),
         ("torchlens/_deploy_env.py", "__all__"),
-        ("torchlens/_distributed.py", "__all__"),
+        ("torchlens/_distributed/__init__.py", "__all__"),
         ("torchlens/_episode_spec.py", "__all__"),
         ("torchlens/_extract_refusals.py", "__all__"),
         ("torchlens/_extraction/__init__.py", "__all__"),
@@ -1225,7 +1225,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/distributed/_audit.py", "__all__"),
         ("torchlens/distributed/_dtensor.py", "__all__"),
         ("torchlens/distributed/_ledger.py", "__all__"),
-        ("torchlens/distributed/_lifecycle.py", "__all__"),
+        ("torchlens/_distributed/_lifecycle.py", "__all__"),
         ("torchlens/distributed/_recognizer.py", "__all__"),
         ("torchlens/_ecosystem/__init__.py", "__all__"),
         ("torchlens/errors/__init__.py", "__all__"),
@@ -1482,7 +1482,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/validation/__init__.py", "__all__"),
         ("torchlens/validation/_invariants_primitive_ops.py", "__all__"),
         ("torchlens/validation/consolidated.py", "__all__"),
-        ("torchlens/validation/status.py", "__all__"),
+        ("torchlens/_validation_status.py", "__all__"),
         ("torchlens/_visualization/__init__.py", "__all__"),
         ("torchlens/_visualization/_backward_inventory.py", "__all__"),
         ("torchlens/_visualization/_backward_rows.py", "__all__"),

@@ -15,6 +15,13 @@ import torchlens as tl
 from torchlens._data_classes._compaction import _COMPACTED_TRACES
 from torchlens._postprocess.graph_traversal import _remove_orphan_nodes
 from torchlens._record_type import record_type
+from torchlens._validation_status import (
+    REGION_REPLAY_CLASS,
+    REGION_REPLAY_CLASS_KEY,
+    REGION_REPLAY_IMPORTER_PROVENANCE,
+    REGION_REPLAY_PROVENANCE_KEY,
+    ValidationStatus,
+)
 from torchlens.backends.jax.backend import (
     _control_parent_labels,
     _data_parent_arg_positions,
@@ -23,13 +30,6 @@ from torchlens.backends.jax.backend import (
 from torchlens.errors import BackendUnsupportedError
 from torchlens.intervention.types import EdgeUseRecord
 from torchlens.validation.invariants import MetadataInvariantError
-from torchlens.validation.status import (
-    REGION_REPLAY_CLASS,
-    REGION_REPLAY_CLASS_KEY,
-    REGION_REPLAY_IMPORTER_PROVENANCE,
-    REGION_REPLAY_PROVENANCE_KEY,
-    ValidationStatus,
-)
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")

@@ -563,8 +563,8 @@ def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
 
 
 def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
+    from torchlens._distributed._dtensor import RANK_LOCAL_SHARD
     from torchlens.distributed import _lifecycle as lifecycle
-    from torchlens.distributed._dtensor import RANK_LOCAL_SHARD
 
     lifecycle.disarm()
     trace = _tiny_trace()

@@ -40,14 +40,14 @@ from ..._postprocess._selective_save import (
 )
 from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
-from ...backends.registry import get_backend_spec
-from ...options import CaptureOptions, merge_capture_options
-from ...recording.types import CaptureSpec
-from ...validation.status import (
+from ..._validation_status import (
     ValidationReplaySource,
     ValidationStatus,
     count_importer_region_annotations,
 )
+from ...backends.registry import get_backend_spec
+from ...options import CaptureOptions, merge_capture_options
+from ...recording.types import CaptureSpec
 from .._finalize import (
     attach_function_root_module,
     attach_object_module_logs,

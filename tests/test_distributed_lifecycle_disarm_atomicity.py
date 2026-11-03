@@ -22,11 +22,11 @@ from typing import Any
 import pytest
 import torch
 
+from torchlens._distributed._lifecycle import GroupIdentity  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     is_vetted_build,
 )
-from torchlens.distributed._lifecycle import GroupIdentity  # noqa: E402
 
 # F1 ruling (Lead, 2026-10-01): full collective arming only runs where a
 # census-vetted torch build exists (torchlens.distributed.is_vetted_build());

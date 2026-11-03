@@ -10,7 +10,7 @@ by the existing authority (``torchlens._capture.outcome``) with its vocabulary
 unchanged, and no derivation here may bless COMPLETE or revise a settled
 record (the R06 discipline).
 
-Pattern-of-record: :mod:`torchlens.distributed._ledger` (S7 instruction) —
+Pattern-of-record: :mod:`torchlens._distributed._ledger` (S7 instruction) —
 closed ``Literal`` vocabularies, frozen payload key sets, fail-closed
 ``from_payload``, write-once container, derived views that refuse
 out-of-vocabulary tokens. Parse boundaries raise ``ValueError``; callers

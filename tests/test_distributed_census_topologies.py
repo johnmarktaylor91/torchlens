@@ -1086,7 +1086,7 @@ class TestGroupNSelfHonesty:
         arming typed (layer-1 set inequality), and re-arming after removal
         must succeed."""
 
-        from torchlens.distributed._recognizer import UncapturedCollectiveOpError
+        from torchlens._distributed._recognizer import UncapturedCollectiveOpError
 
         lifecycle.disarm()
         library = torch.library.Library("_c10d_functional", "FRAGMENT")

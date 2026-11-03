@@ -322,7 +322,7 @@ def test_validation_status_oracle_rejects_bare_values_and_foreign_reasons() -> N
 def test_failed_replay_status_names_the_first_failed_decision() -> None:
     """The torch status message names the failed op and reason (the naming cell's source)."""
 
-    from torchlens.validation.status import ValidationStatus
+    from torchlens._validation_status import ValidationStatus
 
     rows = [
         {"op_label": "relu_1_2:1", "decision": "validated", "reason": "replay_matched"},

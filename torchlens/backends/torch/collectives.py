@@ -313,7 +313,7 @@ def _role_entry(role: str, index: int, tensor: torch.Tensor) -> dict[str, Any]:
         "mesh_coords": None,
         "shard_offset": None,
     }
-    from torchlens.distributed._dtensor import dtensor_dual_geometry
+    from torchlens._distributed._dtensor import dtensor_dual_geometry
 
     geometry = dtensor_dual_geometry(tensor)
     if geometry is not None:
@@ -489,7 +489,7 @@ def _build_payload(
 def _journal_boundary(trace: Any, payload: dict[str, Any], op_labels: list[str]) -> None:
     """Append a boundary to the trace-level distributed journal."""
 
-    from torchlens.distributed._lifecycle import armed_state
+    from torchlens._distributed._lifecycle import armed_state
 
     entry = dict(payload)
     entry["op_labels_raw"] = list(op_labels)
@@ -631,7 +631,7 @@ def _make_collective_wrap(site: CollectiveSite, original: Callable[..., Any]) ->
         its own ``TypeError`` anyway).
         """
 
-        from torchlens.distributed._lifecycle import armed_state, next_seq, resolve_group_identity
+        from torchlens._distributed._lifecycle import armed_state, next_seq, resolve_group_identity
 
         state = armed_state()
         if state is None or _inside_boundary():
@@ -804,7 +804,7 @@ def install_collective_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     if not torch.distributed.is_available():
         return
-    from torchlens.distributed._lifecycle import _patch_modules
+    from torchlens._distributed._lifecycle import _patch_modules
 
     for module in _patch_modules():
         for site in COLLECTIVE_SITES:
@@ -820,10 +820,10 @@ def remove_collective_wraps(originals: dict[tuple[Any, str], Any]) -> None:
 
     A site re-patched by a third party after installation is left in place
     with a warning instead of being clobbered back to the pristine function
-    (see :func:`torchlens.distributed._lifecycle.restore_wrapped_attr`).
+    (see :func:`torchlens._distributed._lifecycle.restore_wrapped_attr`).
     """
 
-    from torchlens.distributed._lifecycle import restore_wrapped_attr
+    from torchlens._distributed._lifecycle import restore_wrapped_attr
 
     first_failure: Exception | None = None
     for (module, attr), original in list(originals.items()):
