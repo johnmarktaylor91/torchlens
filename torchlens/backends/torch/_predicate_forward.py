@@ -78,11 +78,7 @@ def _record_predicate_module_boundary_outputs(
         _plain_module_union(predicate) is None and not selector_contains_kind(predicate, "module")
     ):
         return
-    contexts_by_label = {
-        ctx.raw_label: ctx
-        for ctx in state.all_contexts
-        if ctx.kind == "op" and ctx.raw_label is not None
-    }
+    contexts_by_label = state.op_contexts_by_label
     existing = {
         (record.ctx.raw_label, record.ctx.pass_number)
         for record in state.recording.records

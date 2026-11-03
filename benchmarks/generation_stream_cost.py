@@ -86,17 +86,20 @@ def _arm(name: str, sites: tuple[str, ...], spill: Path | None) -> dict[str, Any
 
 
 def _run(
-    model: torch.nn.Module, ids: torch.Tensor, n: int, keywords: dict[str, Any]
+    model: torch.nn.Module, ids: torch.Tensor, n: int, keywords: dict[str, Any], heap: bool
 ) -> dict[str, Any]:
     """Record one generation and return its measurements."""
 
     settings = {"max_new_tokens": n, "min_new_tokens": n, "do_sample": False, "use_cache": True}
-    tracemalloc.start()
+    heap_peak = None
+    if heap:
+        tracemalloc.start()
     start = time.perf_counter()
     generation = tl.record(model, ids, generate_kwargs=settings, **keywords)
     wall = time.perf_counter() - start
-    _, heap_peak = tracemalloc.get_traced_memory()
-    tracemalloc.stop()
+    if heap:
+        _, heap_peak = tracemalloc.get_traced_memory()
+        tracemalloc.stop()
     steps = generation.steps
     decode_bytes = sorted({entry.saved_bytes for entry in steps[1:]})
     return {
@@ -113,7 +116,7 @@ def _run(
         "series_len": len(generation.series(generation.series_names[0]))
         if generation.series_names
         else None,
-        "heap_peak_mib": round(heap_peak / 2**20, 1),
+        "heap_peak_mib": None if heap_peak is None else round(heap_peak / 2**20, 1),
         "rss_mib": round(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024, 1),
     }
 
@@ -124,6 +127,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--new-tokens", type=int, default=2000)
     parser.add_argument("--arms", nargs="+", default=["reduced", "ring", "plain"])
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument(
+        "--heap",
+        action="store_true",
+        help="also trace the Python heap peak with tracemalloc (slows the run several-fold)",
+    )
     args = parser.parse_args(argv)
     torch.manual_seed(0)
     torch.set_num_threads(max(1, torch.get_num_threads()))
@@ -138,7 +146,7 @@ def main(argv: list[str] | None = None) -> int:
         "arms": {},
     }
     for arm in args.arms:
-        report["arms"][arm] = _run(model, ids, args.new_tokens, _arm(arm, sites, spill))
+        report["arms"][arm] = _run(model, ids, args.new_tokens, _arm(arm, sites, spill), args.heap)
         print(arm, json.dumps(report["arms"][arm]), flush=True)
     text = json.dumps(report, indent=2)
     if args.out is not None:

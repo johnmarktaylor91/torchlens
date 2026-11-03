@@ -133,6 +133,11 @@ class RecordingState:
     step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
+    #: Op contexts by raw label, the latest label wins (the same answer as a scan
+    #: of ``all_contexts``): the module-exit re-evaluation of a ``tl.module`` save
+    #: looks its output ops up here in constant time, so a long multi-pass session
+    #: (a generation) no longer rescans every context at every module exit.
+    op_contexts_by_label: dict[str, RecordContext] = field(default_factory=dict)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
@@ -169,6 +174,8 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
+        if ctx.kind == "op" and ctx.raw_label is not None:
+            self.op_contexts_by_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
