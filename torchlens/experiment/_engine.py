@@ -397,11 +397,11 @@ def _record_run_envelope(member: Any, spec: Any, *, started: float) -> None:
 
 
 def _capture_options_like(baseline: Trace) -> Any:
-    """Capture options for a capture-door candidate (intervention-ready)."""
+    """Capture options for a capture-door candidate."""
 
     from ..options import CaptureOptions
 
-    return CaptureOptions(replayable=True)
+    return CaptureOptions()
 
 
 def _measure(metric: Callable[[Any], Any], member: Any, candidate_id: str) -> float:
