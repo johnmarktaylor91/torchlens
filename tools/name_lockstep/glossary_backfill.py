@@ -302,6 +302,86 @@ def prune_stale(glossary: str, rows: list[dict[str, Any]]) -> tuple[str, int, in
     return _prune(glossary, lambda name, owner: any(_names(owner, a) for a in gone.get(name, [])))
 
 
+_ENTRY_ROW = re.compile(r"^\|\s*`([^`=]+)`\s*\|", re.M)
+
+
+def _entry_names(glossary: str) -> list[str]:
+    """Return every spelling the glossary gives an entry row (keyword rows excluded)."""
+
+    return [m.group(1) for m in _ENTRY_ROW.finditer(glossary) if not m.group(1).endswith("*")]
+
+
+def gone_owners(
+    glossary: str, rows: list[dict[str, Any]], keep: Iterable[str] = ()
+) -> dict[str, int]:
+    """Return the keyword-row owners no dumped callable answers to, with their row counts.
+
+    An owner the glossary still lists as a name (an entry row of its own, as a facade
+    taking only ``**kwargs`` has) is not gone, whatever the dump says.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text.
+    rows
+        Every dumped row (the code's public parameters).
+    keep
+        Owner spellings to keep whatever the dump says (a facade taking ``**kwargs``).
+
+    Returns
+    -------
+    dict[str, int]
+        Owner spelling to the number of keyword rows naming it.
+    """
+
+    aliases = [row["aliases"] for row in rows]
+    aliases.append([*_entry_names(glossary), *keep])
+    counts: dict[str, int] = {}
+    for line in glossary.splitlines():
+        match = _KEYWORD_ROW.match(line.strip())
+        if not match:
+            continue
+        for clause in _CLAUSE_SPLIT.split(match.group(2).strip()):
+            head = _CLAUSE_HEAD.match(clause)
+            run = _OWNER_RUN.match(clause[head.end() - len("keyword of ") :]) if head else None
+            if head is None or run is None:
+                continue
+            for span in _SPAN.findall(run.group(1)):
+                owner = span.strip().removesuffix("()")
+                if not any(_names(owner, a) for a in aliases):
+                    counts[owner] = counts.get(owner, 0) + 1
+    return counts
+
+
+def prune_gone(
+    glossary: str, rows: list[dict[str, Any]], keep: Iterable[str] = ()
+) -> tuple[str, int, int]:
+    """Return the glossary with no keyword row naming a callable the dump no longer has.
+
+    A removed method or class leaves its owner spelling in the rows it used to own;
+    ``prune_stale`` cannot see it (no dumped callable answers to the spelling), so this
+    pass drops those owners. Measure with ``gone_owners`` first: a spelling the dump
+    writes differently would be dropped too.
+
+    Parameters
+    ----------
+    glossary
+        Glossary text.
+    rows
+        Every dumped row (the code's public parameters).
+    keep
+        Owner spellings to keep whatever the dump says.
+
+    Returns
+    -------
+    tuple[str, int, int]
+        New text, rows edited, rows removed.
+    """
+
+    gone = gone_owners(glossary, rows, keep)
+    return _prune(glossary, lambda _name, owner: owner in gone)
+
+
 def _name(line: str) -> str:
     """Return the keyword a keyword row spells."""
 
@@ -343,6 +423,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="drop keywords the dumped code no longer takes from the rows naming them",
     )
+    parser.add_argument(
+        "--prune-gone",
+        action="store_true",
+        help="drop owners no dumped callable answers to (a removed method or class)",
+    )
+    parser.add_argument(
+        "--list-gone", action="store_true", help="print the owners --prune-gone would drop"
+    )
+    parser.add_argument(
+        "--keep", action="append", default=[], metavar="OWNER", help="never drop this owner"
+    )
     args = parser.parse_args(argv)
     if args.dump is None and not args.prune_records:
         parser.error("a dump or --prune-records is needed")
@@ -352,9 +443,16 @@ def main(argv: list[str] | None = None) -> int:
         print(f"pruned record owners from {edited} keyword rows; removed {removed} rows")
     if args.dump is not None:
         rows = json.loads(args.dump.read_text(encoding="utf-8"))
+        if args.list_gone:
+            for owner, count in sorted(gone_owners(text, rows, args.keep).items()):
+                print(f"{count}\t{owner}")
+            return 0
         if args.prune_stale:
             text, edited, removed = prune_stale(text, rows)
             print(f"pruned stale keywords from {edited} keyword rows; removed {removed} rows")
+        if args.prune_gone:
+            text, edited, removed = prune_gone(text, rows, args.keep)
+            print(f"pruned gone owners from {edited} keyword rows; removed {removed} rows")
         text, extended, added = backfill(text, rows)
         print(f"extended {extended} keyword rows; added {added} keyword rows")
     args.glossary.write_text(text, encoding="utf-8")

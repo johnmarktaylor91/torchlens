@@ -228,6 +228,29 @@ def test_prune_records_drops_record_owners_and_keeps_fields() -> None:
     assert glossary_backfill.prune_records(pruned)[0] == pruned
 
 
+def test_prune_gone_drops_owners_the_dump_lost_and_keeps_listed_names() -> None:
+    """A removed method leaves its spelling in keyword rows; a listed facade stays."""
+
+    text = (
+        "| `tl.draw` | the drawing facade |\n"
+        "| `edit=` | keyword of `Trace.old_door`, `tl.stats.Stats` (required): a |\n"
+        "| `open_viewer=` | keyword of `tl.draw`, `Trace.old_door` (default `False`) |\n"
+        "| `seed=` | field and constructor keyword of `Gone`; keyword of `Trace.old_door` "
+        "(required) |\n"
+    )
+    rows = [{"aliases": ["tl.stats.Stats"]}]
+    assert glossary_backfill.gone_owners(text, rows) == {"Trace.old_door": 3, "Gone": 1}
+    assert glossary_backfill.gone_owners(text, rows, keep=["Gone"]) == {"Trace.old_door": 3}
+    pruned, edited, removed = glossary_backfill.prune_gone(text, rows)
+    assert (edited, removed) == (3, 0)
+    assert pruned.splitlines()[1:] == [
+        "| `edit=` | keyword of `tl.stats.Stats` (required): a |",
+        "| `open_viewer=` | keyword of `tl.draw` (default `False`) |",
+        "| `seed=` | field of `Gone` |",
+    ]
+    assert glossary_backfill.prune_gone(pruned, rows)[0] == pruned
+
+
 def test_a_row_naming_a_keyword_the_callable_lacks_is_stale() -> None:
     """``k=`` on ``Bundle.rank_changes`` is stale once the code takes ``top_k=`` instead."""
 
