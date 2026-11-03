@@ -1047,6 +1047,7 @@ _ORIGINAL_HOLDING_SITE_ALLOWLIST = {
     ("torch", "_segment_reduce"),
     ("torch", "_sym_sqrt"),
     ("torch.functional", "_add_docstr"),
+    ("torch.sparse", "_add_docstr"),
     ("torch.functional", "overload"),
     # torch 2.1.2 floor only (the CI 2.1.2/2.2.2 rows): ``torch.obj`` is an
     # undocumented module attribute whose underlying object IS, by identity,

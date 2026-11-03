@@ -12,6 +12,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils._torch_compat import tensor_version_or_none
+from ._state_bytes import _whole_storage_uint8
 from .buffer_writes import peek_buffer_write_tracker
 from .escape_detection import (
     ExpectedOriginalToken,
@@ -330,20 +331,10 @@ def _finalize_runnable_ledger(state: _WitnessState) -> None:
         _RUNNABLE_LEDGER_FACTS.setdefault(state.trace, []).extend(facts)
 
 
-def _whole_storage_uint8(source: torch.Tensor) -> torch.Tensor:
-    """Return a ``uint8`` tensor viewing ``source``'s ENTIRE untyped storage (all bytes).
-
-    A zero-copy alias (``source.numpy()`` / ``source.untyped_storage()`` / a raw ``data_ptr``)
-    shares the WHOLE storage, not just ``source``'s element extent: ``np.as_strided`` and a
-    storage ``__setitem__`` can write bytes OUTSIDE ``source``'s view window (r15-H2). Comparing
-    the whole aliased storage -- not ``source.detach().clone()`` (its own extent only) -- makes ANY
-    host write anywhere in the shared storage detectable at forward end.
-    """
-
-    untyped = source.untyped_storage()
-    view = torch.empty(0, dtype=torch.uint8, device=source.device)
-    view.set_(untyped, 0, (untyped.nbytes(),), (1,))
-    return view
+# ``_whole_storage_uint8`` (a uint8 view over a tensor's ENTIRE untyped storage, so a
+# host write anywhere in a shared storage is detectable; sparse tensors read their
+# component bytes) is shared with ``buffer_writes``: the witness compares against the
+# tracker's snapshots, so both sides must read the same bytes.
 
 
 def _snapshot_writeback_source(state: _WitnessState, source: torch.Tensor) -> None:

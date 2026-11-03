@@ -25,6 +25,7 @@ from typing import Any, Literal, cast, get_args
 import torch
 
 from ..backends.torch._tl import get_tensor_label, set_tensor_label
+from ._sparse_parts import sparse_component_tensors
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
@@ -726,42 +727,6 @@ def _dense_tensor_memory_amount(t: torch.Tensor) -> int:
     nelement = _unwrapped_tensor_size_method(torch.Tensor.nelement)
     element_size = _unwrapped_tensor_size_method(torch.Tensor.element_size)
     return int(nelement(t) * element_size(t))
-
-
-_SPARSE_COMPONENT_ACCESSORS: dict[Any, tuple[str, ...]] = {
-    torch.sparse_coo: ("_indices", "_values"),
-    torch.sparse_csr: ("crow_indices", "col_indices", "values"),
-    torch.sparse_csc: ("ccol_indices", "row_indices", "values"),
-    torch.sparse_bsr: ("crow_indices", "col_indices", "values"),
-    torch.sparse_bsc: ("ccol_indices", "row_indices", "values"),
-}
-"""Physical component tensors per sparse layout: every index tensor AND values."""
-
-
-def sparse_component_tensors(t: torch.Tensor) -> tuple[torch.Tensor, ...]:
-    """Return the physical component tensors of a sparse tensor.
-
-    Parameters
-    ----------
-    t:
-        Sparse tensor (COO or any compressed layout).
-
-    Returns
-    -------
-    tuple[torch.Tensor, ...]
-        Index tensor(s) and values tensor backing ``t``.
-
-    Raises
-    ------
-    ValueError
-        For non-strided layouts without a known component decomposition
-        (callers treat that as unmeasurable, never as zero-index-bytes).
-    """
-
-    accessors = _SPARSE_COMPONENT_ACCESSORS.get(t.layout)
-    if accessors is None:
-        raise ValueError(f"no known component decomposition for layout {t.layout}")
-    return tuple(getattr(t, name)() for name in accessors)
 
 
 def get_memory_amount(t: torch.Tensor) -> int:
