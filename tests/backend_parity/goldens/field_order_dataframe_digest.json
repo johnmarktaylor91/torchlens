@@ -239,7 +239,6 @@
       "_options_backward_ready",
       "_options_inference_only",
       "_options_chunk_size",
-      "_module_filter",
       "_options_emit_nvtx",
       "_options_on_nonfinite",
       "annotations",
@@ -1062,13 +1061,13 @@
     ]
   },
   "sha256_chunks": [
-    "4467e71e",
-    "31c14348",
-    "6ea9c949",
-    "e6b46e62",
-    "df67e509",
-    "0de5f496",
-    "ce35e3f8",
-    "d2dd6ac2"
+    "8a7efc2c",
+    "881bb5f2",
+    "de7c0c7c",
+    "3591b043",
+    "8bb4bb49",
+    "f76595e7",
+    "6abdd772",
+    "022ea56a"
   ]
 }

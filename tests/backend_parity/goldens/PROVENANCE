@@ -925,3 +925,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
 recorded: 2026-11-03T08:04:58.765403+00:00
+---
+generator: tests/backend_parity/test_torch_parity_gates.py (field_order_dataframe_digest)
+flag: TORCHLENS_UPDATE_BACKEND_PARITY=1
+reason: C-095 merge: format-stack 3.0 writer meets train ff816cf44
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 405f0d5d4c9669e9dba3ecc20c730fc96bf8ea3c (clean)
+recorded: 2026-11-03T15:43:48.042775+00:00
