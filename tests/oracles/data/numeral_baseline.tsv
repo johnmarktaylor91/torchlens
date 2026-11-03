@@ -4,7 +4,7 @@ docs-md	AGENTS.md	10
 docs-md	AGENTS.md	11
 docs-md	AGENTS.md	130
 docs-md	AGENTS.md	140
-docs-md	AGENTS.md	19,591
+docs-md	AGENTS.md	19,662
 docs-md	AGENTS.md	2.0
 docs-md	AGENTS.md	2.1
 docs-md	AGENTS.md	2.13.0
@@ -1735,12 +1735,11 @@ docs-md	docs/maintainers/architecture.md	860.
 docs-md	docs/maintainers/architecture.md	900
 docs-md	docs/maintainers/architecture.md	91
 docs-md	docs/maintainers/docstring_examples_census.md	10
-docs-md	docs/maintainers/docstring_examples_census.md	1043
+docs-md	docs/maintainers/docstring_examples_census.md	1044
 docs-md	docs/maintainers/docstring_examples_census.md	11
 docs-md	docs/maintainers/docstring_examples_census.md	12
 docs-md	docs/maintainers/docstring_examples_census.md	1484.
 docs-md	docs/maintainers/docstring_examples_census.md	16
-docs-md	docs/maintainers/docstring_examples_census.md	17
 docs-md	docs/maintainers/docstring_examples_census.md	19
 docs-md	docs/maintainers/docstring_examples_census.md	20
 docs-md	docs/maintainers/docstring_examples_census.md	22
@@ -1758,7 +1757,7 @@ docs-md	docs/maintainers/docstring_examples_census.md	45
 docs-md	docs/maintainers/docstring_examples_census.md	48
 docs-md	docs/maintainers/docstring_examples_census.md	53
 docs-md	docs/maintainers/docstring_examples_census.md	63
-docs-md	docs/maintainers/docstring_examples_census.md	95
+docs-md	docs/maintainers/docstring_examples_census.md	94
 docs-md	docs/maintainers/persisted_fields.md	0266
 docs-md	docs/maintainers/persisted_fields.md	11
 docs-md	docs/maintainers/persisted_fields.md	11.
