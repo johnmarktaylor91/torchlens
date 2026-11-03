@@ -6,6 +6,7 @@ import collections.abc
 from typing import Any
 
 from ._errors import ArgumentTypeError
+from ._input_route import _apply_hf_processor, _route_claims, _route_input, _RoutedInputs
 from ._options_removed import REMOVED_CAPTURE_MEMBERS
 
 # Hugging Face processor keyword spellings a modality dict is keyed by
@@ -43,6 +44,12 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     if isinstance(x, torch.Tensor):
         return x
 
+    if whole_input and _route_claims(model, x):
+        # The ``tl.trace`` auto-route's resolution (Hugging Face tokenizer,
+        # AutoProcessor, image recipe) at every entry, so run, record, debug
+        # and validation see the same model inputs as a trace does.
+        return _route_input(model, x)
+
     is_text = isinstance(x, str) or (
         isinstance(x, list) and bool(x) and all(isinstance(item, str) for item in x)
     )
@@ -61,6 +68,25 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
         # a model without a processor is an ordinary positional input.
         return _process_modalities(model, x)
 
+    return _coerce_array_like(model, x)
+
+
+def _coerce_array_like(model: Any, x: Any) -> Any:
+    """Coerce audio-like and NumPy inputs; anything else passes through.
+
+    Parameters
+    ----------
+    model:
+        Model or model-like object.
+    x:
+        Input no earlier door rule took.
+
+    Returns
+    -------
+    Any
+        Processed audio, a tensor from a NumPy array, or ``x`` unchanged.
+    """
+
     if _has_explicit_audio_processor(model) and _is_audio_like_input(x):
         return _process_audio(model, x)
 
@@ -68,6 +94,8 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
         import numpy as np
 
         if isinstance(x, np.ndarray):
+            import torch
+
             return torch.from_numpy(x)
     except ImportError:
         pass
@@ -211,7 +239,11 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         Coerced input payload.
     """
 
-    if _is_batched_text_input(input_args) or _is_batched_image_input(input_args):
+    if (
+        _is_batched_text_input(input_args)
+        or _is_batched_image_input(input_args)
+        or _route_claims(model, input_args)
+    ):
         return _coerce_input(model, input_args)
     if isinstance(input_args, tuple):
         # NamedTuple subclasses (e.g. a GNN model's batch container) are also
@@ -225,6 +257,8 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         # malformed ``_fields``.
         whole = len(input_args) == 1
         coerced_items = [_coerce_input(model, item, whole_input=whole) for item in input_args]
+        if whole and _is_new_mapping(coerced_items[0], input_args[0]):
+            return coerced_items[0]
         if all(new is old for new, old in zip(coerced_items, input_args, strict=True)):
             # Nothing coerced: keep the exact original instance (type-faithful,
             # and a fragile subclass constructor is never run needlessly).
@@ -243,8 +277,31 @@ def _coerce_input_args(model: Any, input_args: Any) -> Any:
         return input_args
     if isinstance(input_args, list):
         whole = len(input_args) == 1
-        return [_coerce_input(model, item, whole_input=whole) for item in input_args]
+        coerced_list = [_coerce_input(model, item, whole_input=whole) for item in input_args]
+        if whole and _is_new_mapping(coerced_list[0], input_args[0]):
+            return coerced_list[0]
+        return coerced_list
     return _coerce_input(model, input_args)
+
+
+def _is_new_mapping(coerced: Any, original: Any) -> bool:
+    """Return whether coercion turned one whole input into a fresh mapping.
+
+    Parameters
+    ----------
+    coerced:
+        The coerced value of a one-item input container's only item.
+    original:
+        That item before coercion.
+
+    Returns
+    -------
+    bool
+        ``True`` when the item became a mapping it was not before (a tokenizer's
+        or processor's output), which the door routes into keyword inputs.
+    """
+
+    return coerced is not original and isinstance(coerced, collections.abc.Mapping)
 
 
 def _has_text_tokenizer(model: Any) -> bool:
@@ -462,11 +519,9 @@ def _process_modalities(model: Any, x: collections.abc.Mapping[str, Any]) -> Any
         ``pixel_values``, ``input_features``, ...): the forward's keyword inputs.
     """
 
-    kwargs = dict(x)
-    sampling_rate = getattr(model, "sampling_rate", None)
-    if "audio" in kwargs and "sampling_rate" not in kwargs and sampling_rate is not None:
-        kwargs["sampling_rate"] = sampling_rate
-    return model.processor(**kwargs, return_tensors="pt")
+    return _apply_hf_processor(
+        model.processor, x, sampling_rate=getattr(model, "sampling_rate", None)
+    )
 
 
 def _split_coerced_mapping(
@@ -519,6 +574,10 @@ def _coerce_inputs(
         :func:`_coerce_input_args` applied, then :func:`_split_coerced_mapping`.
     """
 
+    if isinstance(input_args, _RoutedInputs):
+        merged: dict[Any, Any] = dict(input_args.input_kwargs or {})
+        merged.update(input_kwargs or {})
+        return input_args.input_args, merged
     return _split_coerced_mapping(input_args, _coerce_input_args(model, input_args), input_kwargs)
 
 
@@ -611,3 +670,40 @@ def _is_audio_like_input(x: Any) -> bool:
     """
 
     return isinstance(x, (list, tuple)) or hasattr(x, "shape")
+
+
+def _chunk_rerun_plan(model: Any, x: Any, chunk_size: int, chunk_paths: Any) -> tuple[Any, Any]:
+    """Coerce a chunked rerun's input through the door and plan its chunks.
+
+    Parameters
+    ----------
+    model:
+        Model to execute.
+    x:
+        Forward input supplied by the caller.
+    chunk_size:
+        Maximum leading-dimension chunk size.
+    chunk_paths:
+        Optional explicit tensor leaf paths to split.
+
+    Returns
+    -------
+    tuple[Any, Any]
+        The model-ready positional input and its ``ChunkPlan``.
+
+    Raises
+    ------
+    ChunkedForwardConfigError
+        When the door routed the input into keyword inputs: chunked forwards
+        are positional-input only, as at the capture door.
+    """
+
+    from ._capture.prepare.chunked import _refuse_chunk_option_conflict, plan_chunks
+
+    input_args, input_kwargs = _coerce_inputs(model, x, None)
+    if input_kwargs:
+        _refuse_chunk_option_conflict(
+            "chunk_size capture is positional-input only in v1; keyword inputs are unsupported.",
+            "pass the inputs positionally",
+        )
+    return input_args, plan_chunks(input_args, chunk_size=chunk_size, chunk_paths=chunk_paths)

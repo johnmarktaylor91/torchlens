@@ -13,7 +13,7 @@ from torch import nn
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._errors import CaptureNotActiveError, InvalidArgumentError
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._input_walk import INPUT_TREE_MAX_DEPTH, raise_input_tree_depth_refusal
 from .._robustness import check_model_and_input_variants
 from .._utils.arg_handling import normalize_input_args
@@ -620,7 +620,7 @@ def validate_backward_pass(
     _reject_opaque_wrappers(model)
     model = unwrap_compiled_model(model)
     model = _unwrap_data_parallel(model)
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     check_model_and_input_variants(model, inputs, input_kwargs)
     if input_kwargs is None:
         input_kwargs = {}

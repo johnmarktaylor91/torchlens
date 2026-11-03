@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any
 
 from torchlens._errors import InvalidArgumentError
+from torchlens._input_route import _apply_hf_processor
 
 
 def _load_hf_processor(name_or_path: str) -> Any:
@@ -96,6 +97,6 @@ def _make_multimodal_transform(processor: Any) -> Callable[[dict[str, Any]], Any
     def transform(raw_dict: dict[str, Any]) -> Any:
         """Apply the resolved multimodal processor to one modality dict."""
 
-        return processor(**raw_dict, return_tensors="pt")
+        return _apply_hf_processor(processor, raw_dict)
 
     return transform

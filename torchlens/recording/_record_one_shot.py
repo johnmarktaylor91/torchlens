@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -178,7 +178,7 @@ def record(
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
     validate_postprocess(postprocess)
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard

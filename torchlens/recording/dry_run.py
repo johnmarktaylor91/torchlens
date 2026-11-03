@@ -6,7 +6,7 @@ from typing import Any
 
 from torch import nn
 
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from ..options import CaptureOptions
 from ._recorder import Recorder
 from .options import PredicateFn
@@ -42,7 +42,7 @@ def dry_run(
         Chronological event contexts and any accumulated predicate failures.
     """
 
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
         "history_size": history_size,

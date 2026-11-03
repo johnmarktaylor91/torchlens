@@ -37,6 +37,7 @@ from .._fast_run import (
     close_fast_run_session,
     live_source_model,
 )
+from .._input_route import _fast_run_inputs, _route_transformed_input
 from .._runnable import (
     DivergencePolicy,
     PathFaithfulness,
@@ -185,7 +186,7 @@ def try_guarded_fast_rerun(
         # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
         session.reports_hooked_ceiling = False
         session.output_transform = output_transform
-        session.run(inputs, seed=None)
+        session.run(_fast_run_inputs(inputs), seed=None)
     except (RunCapabilityUnavailableError, PathDivergenceError, RuntimeSignatureDriftError) as exc:
         return False, refusal_code(exc)
     finally:
@@ -766,11 +767,11 @@ def _apply_rerun_transform(
     except AttributeError:
         stored_transform = None
     if transform is _USE_STORED_TRANSFORM and stored_transform is not None:
-        return stored_transform(user_input)
+        return _route_transformed_input(user_input, stored_transform(user_input))
     if transform is False:
         return user_input
     if callable(transform):
-        return transform(user_input)
+        return _route_transformed_input(user_input, transform(user_input))
     return user_input
 
 
