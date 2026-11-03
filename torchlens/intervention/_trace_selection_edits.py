@@ -31,6 +31,7 @@ from .._selection.do_plan import build_selection_do_plan
 from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
+from . import replay as replay_module
 from ._param_fingerprint import changed_param_scope
 from ._replay_context import journal_replay_state, restore_replay_state
 from ._replay_sites import _require_hook_origins
@@ -46,7 +47,6 @@ from .replay import (
     _preflight_log,
     _refuse_armed_gradient_rules,
     _replay_site_key,
-    _run_replay,
     _warn_if_direct_writes_will_be_overlaid,
     push_from,
 )
@@ -553,6 +553,7 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
         )
     origins = _require_hook_origins(_origin_sites_for_hooks(trace, origin_entries, strict=strict))
     with changed_param_scope(False):
-        return _run_replay(
+        # Through the module so a replay counter patched on it sees this push too.
+        return replay_module._run_replay(
             trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
         )
