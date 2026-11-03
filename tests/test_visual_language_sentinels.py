@@ -41,7 +41,7 @@ def test_first_picture_row_names_the_facade_it_stands_in_for() -> None:
 
     row = {r.id: r for r in SENTINELS}["SN13"]
     assert [p.call for p in row.panels] == ["quickstart_render"]
-    assert "pending name: tl.render" in row.note
+    assert "tl.draw" in row.note
 
 
 def test_row_one_is_drawn_once_per_skin_and_the_rest_once() -> None:

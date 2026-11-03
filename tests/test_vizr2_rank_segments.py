@@ -24,9 +24,7 @@ _SEGMENT_NODE = re.compile(r'^\s*"?(\S+__segment__[^"\s\[]+)"?\s*\[[^\]]*label='
 
 
 def _source(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
-    return str(
-        trace.draw(path=str(tmp_path / name), vis_save_only=True, file_format="svg", **kwargs)
-    )
+    return str(trace.draw(path=str(tmp_path / name), file_format="svg", **kwargs).dot)
 
 
 @pytest.mark.parametrize(
@@ -45,8 +43,8 @@ def test_segment_plan_renders_under_rank_with_one_node_per_segment(
     try:
         result = select_collapse_plan(trace, RenderContext(), mode="max")
         assert result.segments, "fixture must produce a segment plan"
-        dot = _source(trace, tmp_path, "dot", collapse=mode, vis_node_placement="dot")
-        rank = _source(trace, tmp_path, "rank", collapse=mode, vis_node_placement="rank")
+        dot = _source(trace, tmp_path, "dot", collapse=mode, layout="dot")
+        rank = _source(trace, tmp_path, "rank", collapse=mode, layout="rank")
     finally:
         trace.cleanup()
     dot_segments = set(_SEGMENT_NODE.findall(dot))
@@ -79,7 +77,7 @@ def test_buffer_nodes_render_under_rank(tmp_path: Path, train: bool, buffers: st
     torch.manual_seed(0)
     trace = tl.trace(_BatchNormNet().train(train), torch.randn(2, 3, 8, 8))
     try:
-        _source(trace, tmp_path, "bn", vis_node_placement="rank", show_buffers=buffers)
+        _source(trace, tmp_path, "bn", layout="rank", show_buffers=buffers)
     finally:
         trace.cleanup()
     assert (tmp_path / "bn.svg").stat().st_size > 0

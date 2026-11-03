@@ -224,7 +224,7 @@ def _header_edit_line(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     sites = intervention_sites_for_log(trace)
     if not sites:
         return None
-    theme = resolve_theme(request.theme, for_paper=request.for_paper)
+    theme = resolve_theme(request.theme)
     color = str((request.graph_overrides or {}).get("intervention_site_color", edit_ink(theme)))
     return header_edit_line(trace, sites, color, vis_mode=request.vis_mode)
 

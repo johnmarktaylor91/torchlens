@@ -261,7 +261,14 @@ class FakeProviderAdapter:
 
         for flag in false_capability_flags(self._delegate.protocol()):
             option = request_option_for_flag(flag)
-            if option is not None and options.get(option) is not None:
+            if option is None:
+                continue
+            # A capture-option request travels inside ``capture=``.
+            requested = options.get(option)
+            capture = options.get("capture")
+            if requested is None and capture is not None:
+                requested = getattr(capture, option, None)
+            if requested is not None:
                 if self.plant == "untyped_refusal":
                     raise RuntimeError(f"fake provider cannot serve {option}")
                 raise BackendUnsupportedError(

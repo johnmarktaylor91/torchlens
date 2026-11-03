@@ -362,6 +362,8 @@ def refresh_rerun_trace_fields_from(trace: Trace, new_log: Trace) -> None:
         Fresh rerun trace supplying current run metadata.
     """
 
+    # Share the fresh return itself; the metadata copier rebuilds containers.
+    trace._output_slot = new_log._output_slot
     field_names = (
         "transformed_output",
         "_options_save_transformed_output",
@@ -470,6 +472,8 @@ def append_state_from(target: Trace, trace: Trace) -> None:
     target._options_seed = trace._options_seed
     target._provenance_input_object_id = trace._provenance_input_object_id
     target._provenance_input_signature_hash = trace._provenance_input_signature_hash
+    # Concatenated captures have no single model-return object.
+    target._output_slot = None
     target._rebind_fork_owner_refs()
 
 

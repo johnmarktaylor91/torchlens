@@ -197,7 +197,7 @@ def test_rg13_render_floors_track_the_captured_graph(
     batch, _ = natural_image_batch
     trace = tl.trace(resnet, batch)
     try:
-        graph = trace.draw(path=str(tmp_path / "resnet-graph"), return_graph=True)
+        graph = trace.draw(path=str(tmp_path / "resnet-graph")).dot
         dot_source = graph.source if hasattr(graph, "source") else str(graph)
         node_count = dot_source.count("label=")
         assert node_count >= 50, (
@@ -241,8 +241,7 @@ def test_rg16_training_step_grads_match_no_torchlens_control(
                 trace = tl.trace(
                     model,
                     batch,
-                    capture=tl.options.CaptureOptions(backward_ready=True),
-                    save_mode="reference",
+                    capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
                 )
                 logits = trace.output_ops[0].out
                 loss = torch.nn.functional.cross_entropy(logits, target)
@@ -294,8 +293,7 @@ def test_rg20_receptive_field_geometric_matches_empirical(
     armed = tl.trace(
         model,
         batch.clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     try:
         early_conv = [label for label in armed.layer_labels if "conv" in label.lower()][1]

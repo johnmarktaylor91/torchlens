@@ -69,15 +69,14 @@ EXEMPT_PREFIX = "exempt: "
 
 DRAW_ENTRY_POINTS: Mapping[str, str] = {
     "Trace.draw": "torchlens._data_classes.trace:Trace.draw",
-    "Trace.draw_backward": "torchlens._data_classes.trace:Trace.draw_backward",
-    "Trace.draw_combined": "torchlens._data_classes.trace:Trace.draw_combined",
     "Module.draw": "torchlens._data_classes.module:Module.draw",
 }
 CALL_ENTRY = {
     "draw": "Trace.draw",
     "lens": "Trace.draw",
-    "draw_backward": "Trace.draw_backward",
-    "draw_combined": "Trace.draw_combined",
+    # The backward and combined pictures are graph= values of the one draw door.
+    "draw_backward": "Trace.draw",
+    "draw_combined": "Trace.draw",
 }
 
 # ---------------------------------------------------------------------------

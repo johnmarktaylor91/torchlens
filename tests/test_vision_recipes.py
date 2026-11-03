@@ -49,7 +49,9 @@ def _capture(family: str, impl: str, **trace_kwargs: Any) -> tuple[Any, Any]:
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             model = spec.build(impl)
-            trace = tl.trace(model, spec.input_args(), spec.input_kwargs(), **trace_kwargs)
+            trace = tl.trace(
+                model, spec.input_args(), input_kwargs=spec.input_kwargs(), **trace_kwargs
+            )
         if trace_kwargs:
             return model, trace
         _CAPTURES[key] = (model, trace)
@@ -113,7 +115,7 @@ def test_qwen2_eager_attention_facets_equal_an_independent_computation() -> None
                 linear.bias.copy_(torch.randn(linear.bias.shape, generator=generator))
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        trace = tl.trace(model, spec.input_args(), spec.input_kwargs())
+        trace = tl.trace(model, spec.input_args(), input_kwargs=spec.input_kwargs())
     attn = model.model.layers[0].self_attn
     view = trace.modules["model.layers.0.self_attn"].facets
     config = model.config
@@ -270,7 +272,9 @@ def test_clip_sdpa_serves_projections_and_reconstructs_on_request() -> None:
     for facet in ("q", "k", "v", "attn_out"):
         assert menu[facet].status == "available_now", facet
     assert menu["pattern"].status == "needs_capture"
-    ready_model, ready = _capture("clip", "sdpa", reconstruction_ready=True)
+    ready_model, ready = _capture(
+        "clip", "sdpa", capture=tl.options.CaptureOptions(reconstruction_ready=True)
+    )
     ready_view = ready.modules[address].facets
     attn = ready_model.vision_model.encoder.layers[0].self_attn
     reference = _clip_vision_reference(attn, ready_view["input"].value)

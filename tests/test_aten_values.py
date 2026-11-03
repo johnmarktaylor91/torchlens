@@ -25,6 +25,7 @@ from torchlens.backends.torch import _aten_capture
 from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 _VALUES = tl.options.CaptureOptions(aten_ops="values")
+_VALUES_REFERENCE = tl.options.CaptureOptions(aten_ops="values", save_mode="reference")
 _ROWS_ONLY = tl.options.CaptureOptions(aten_ops=True)
 
 
@@ -247,7 +248,7 @@ def test_output_device_and_save_mode_are_honored() -> None:
 
     torch.manual_seed(0)
     model = _BlockModel().eval()
-    referenced = tl.trace(model, torch.randn(2, 16), capture=_VALUES, save_mode="reference")
+    referenced = tl.trace(model, torch.randn(2, 16), capture=_VALUES_REFERENCE)
     addmm = _rows(referenced, "addmm")[0]
     assert addmm.out is not None
     # In-place calls fall back to a copy under reference mode, as Op.out does.
@@ -256,7 +257,7 @@ def test_output_device_and_save_mode_are_honored() -> None:
     # Reading a reference out that a later in-place call mutated raises by design
     # (MutatedReferenceError), so the invariant sweep runs on a mutation-free model.
     torch.manual_seed(0)
-    plain_ref = tl.trace(_MaxModel(), torch.randn(3, 5), capture=_VALUES, save_mode="reference")
+    plain_ref = tl.trace(_MaxModel(), torch.randn(3, 5), capture=_VALUES_REFERENCE)
     assert all(row.out is not None for row in plain_ref.aten_ops)
     assert check_metadata_invariants(plain_ref)
 
@@ -476,7 +477,8 @@ def test_classics_smoke_models_keep_values_and_validate(entry_id: str) -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(aten_ops="values", layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(aten_ops="values", save_args=True),
+        save="all",
     )
     assert trace.has_aten_ops and trace.aten_ops
     assert any(row.out is not None for row in trace.aten_ops)

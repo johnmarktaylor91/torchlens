@@ -81,7 +81,7 @@
   reconcile alias-aware physical storage. Transform
   deltas and cross-device temporaries cannot always be known pre-allocation, so this is not a general
   OOM guarantee. Predicate disk-only saves are exempt; exhaustive
-  `capture=tl.options.CaptureOptions(layers_to_save="all")` plus `to_disk(...)`
+  `save="all"` plus `to_disk(...)`
   stays budgeted until postprocess eviction (the former bare flat `layers_to_save=` kwarg is
   removed). Unmeasurable auto devices warn on first charge.
 - Streamed disk writes are ASYNC BY DEFAULT for `trace(storage=tl.to_disk(...))` (spellings

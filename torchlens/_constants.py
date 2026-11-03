@@ -149,6 +149,7 @@ MODEL_LOG_FIELD_ORDER = [
     "output_id2label",
     "output_num_classes",
     "_output_transform",
+    "_output_slot",
     "_options_save_transformed_output",
     "layer_visualizers",
     "save_visualizations",
@@ -479,8 +480,7 @@ LAYER_PASS_LOG_FIELD_ORDER = [
     "injection_provenance",
     # tlspec v9 entry-dark episode-step stamp (C07X / foldB s4.4 item 5):
     # propagation of the ledger-row episode_step meaning onto the op record.
-    # None on every op today; the F-EPISODE read-axis lane writes it with no
-    # further version bump.
+    # None on every op today; the F-EPISODE read-axis lane writes it with no further version bump.
     "episode_step",
     # tlspec v9 entry-dark TL-authored-root marker (C07X item (iv), foldA
     # D11/F41): True only on the root op record of a TL-authored bound-method

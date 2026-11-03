@@ -48,7 +48,7 @@ def _capture_matches_direct_and_validates(model, inputs: dict, direct: torch.Ten
 
     import torchlens as tl
 
-    trace = tl.trace(model, (), dict(inputs))
+    trace = tl.trace(model, (), input_kwargs=dict(inputs))
     try:
         if extra is not None:
             extra(trace)
