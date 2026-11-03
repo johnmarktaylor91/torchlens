@@ -972,7 +972,7 @@ class MLXBackend:
             if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
                     "MLX backend capability table declares can_intervene=False; "
-                    "refusing trace(intervene=/halt=) instead of silently "
+                    "refusing trace(intervene=/stop_after=) instead of silently "
                     "ignoring the requested behavior.",
                     code="interventions_unsupported",
                 )
@@ -983,7 +983,7 @@ class MLXBackend:
             intervention_plan, halt_selector = resolve(intervene, halt, self.mx)
             if grad_options is not None:
                 raise BackendUnsupportedError(
-                    "MLX backend cannot combine grad_options with intervene=/halt=: the "
+                    "MLX backend cannot combine grad_options with intervene=/stop_after=: the "
                     "derived-gradient replay re-runs the model without the intervention "
                     "surface, so its output-divergence oracle would always refuse. Capture "
                     "the intervened trace and the derived gradients in separate calls.",

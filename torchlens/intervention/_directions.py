@@ -425,7 +425,7 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
         raise InvalidArgumentError(
             f"The {side} site {site!r} has no saved tensor out",
             code="direction_site_unsaved",
-            remedy="trace with the site saved (for example layers_to_save='all')",
+            remedy="trace with the site saved (for example save='all')",
         )
     return out
 
