@@ -1087,9 +1087,9 @@ torchlens/distributed/_lifecycle.py::maybe_auto_arm	68
 torchlens/experiment/_engine.py	914
 torchlens/experiment/_engine.py::sweep_sites	82
 torchlens/experiment/_head_sugar.py::head_ablation_candidates	75
-torchlens/experimental/dagua/_bridge.py	933
+torchlens/experimental/dagua/_bridge.py	882
 torchlens/experimental/dagua/_bridge.py::_torchlens_layout_config	61
-torchlens/experimental/dagua/_bridge.py::trace_to_dagua_graph	145
+torchlens/experimental/dagua/_bridge.py::trace_to_dagua_graph	119
 torchlens/export/__init__.py	1183
 torchlens/export/__init__.py::xarray	118
 torchlens/export/_model_explorer/_build.py::build_rolled_graph	86

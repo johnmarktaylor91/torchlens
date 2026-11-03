@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1405 modules, 631541 lines, 0 modules without a docstring.
+83 packages, 1406 modules, 631552 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -72,7 +72,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 73 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 1980 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 333 |
-| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 955 |
+| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 966 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 72 | 35065 |
@@ -1541,12 +1541,13 @@ Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 333 l
 
 ### `torchlens.experimental.dagua`
 
-Experimental Dagua rendering bridge exports. (2 modules, 955 lines)
+Experimental Dagua rendering bridge exports. (3 modules, 966 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Experimental Dagua rendering bridge exports. | 17 |
-| `_bridge` | Experimental Dagua-backed visualization bridge for TorchLens Trace objects. | 938 |
+| `_bridge` | Experimental Dagua-backed visualization bridge for TorchLens Trace objects. | 882 |
+| `_clusters` | Module cluster boxes for the experimental Dagua bridge. | 67 |
 
 ### `torchlens.export`
 
