@@ -3351,7 +3351,7 @@ class Trace(TraceLike):
     def to_pandas(self, include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass."""
 
-        return _doors.export()._trace_tables.to_pandas(
+        return _doors.stats()._trace_tables.to_pandas(
             self, include_decoded_output_summary=include_decoded_output_summary
         )
 
@@ -3365,7 +3365,7 @@ class Trace(TraceLike):
     ) -> Any:
         """Return decoded output rows: the captured rows, or a decode on demand."""
 
-        return _doors.export()._trace_tables.decode_output(
+        return _doors.stats()._trace_tables.decode_output(
             self, k=k, style=style, head=head, tokenizer=tokenizer
         )
 
@@ -3379,7 +3379,7 @@ class Trace(TraceLike):
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe."""
 
-        return _doors.export()._trace_tables.output_table(
+        return _doors.stats()._trace_tables.output_table(
             self, k=k, batch_items=batch_items, style=style, head=head
         )
 

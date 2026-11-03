@@ -254,6 +254,14 @@ dev = [
     # Contributor tooling, not a torchlens runtime feature, so it lives with the
     # other dev-tooling packages rather than in `test` or core `dependencies`.
     "jsonschema>=4.18,<5",
+    # import-linter enforces the layer contracts in .importlinter
+    # (scripts/checks/layering.py, check `import-contracts`). Repository
+    # tooling, never imported by the package. Declared here, the one extra
+    # both CI's repository-checks job and scripts/smoke_ci_parity.py install,
+    # so the check runs instead of skipping. Bounded below the next major like
+    # the tools above: the 2.x line keeps the config schema and the
+    # `forbidden` contract semantics the file relies on.
+    "import-linter>=2.0,<3",
 ]
 test = [
     # BAND COHERENCE: the four ML packages the bridge/ adapters wrap are banded

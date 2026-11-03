@@ -668,6 +668,17 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # Post-T52 census sweep (F27): registries other merged lanes added
         # without classifying -- explicit register/list surfaces.
         ("torchlens/_visualization/theme_registry.py", "_REGISTRY"),
+        # Monitor warm-up registrations: higher layers enroll at import the lazy
+        # imports a first capture would otherwise trigger inside a monitor window;
+        # append-only for the process, run before every window arms.
+        ("torchlens/_utils/rng/monitor_state.py", "_WARMUPS"),
+        # Doctor capability-snapshot provider: report/_doctor.py registers the
+        # torch-aware snapshot at import; the basis module falls back to the torch
+        # compat snapshot when nothing is registered.
+        ("torchlens/_doctor_types.py", "_CAPABILITY_SNAPSHOT_PROVIDER"),
+        # Facet-snapshot provider slot: the capture door registers a lazy loader and
+        # _semantic.facets registers snapshot() when it loads; the engine reads it.
+        ("torchlens/_registry/_facet_snapshot.py", "_PROVIDER"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "_FROZEN_POLICIES"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "FROZEN_POLICY_NAMES"),
         ("torchlens/backends/registry.py", "_REGISTRY"),
@@ -1044,6 +1055,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/tlspec.py", "__all__"),
         ("torchlens/_model_wrappers.py", "__all__"),
         ("torchlens/_registry/__init__.py", "__all__"),
+        ("torchlens/_registry/_facet_snapshot.py", "__all__"),
         ("torchlens/_runnable/execution.py", "__all__"),
         ("torchlens/_runnable/seam.py", "__all__"),
         ("torchlens/_runnable/state.py", "__all__"),
@@ -1550,7 +1562,6 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/bundle/_lookup.py", "__all__"),
         ("torchlens/bundle/_operations.py", "__all__"),
         ("torchlens/bundle/_save.py", "__all__"),
-        ("torchlens/export/_trace_tables.py", "__all__"),
         ("torchlens/intervention/_op_edits.py", "__all__"),
         ("torchlens/intervention/_trace_edits.py", "__all__"),
         ("torchlens/intervention/_trace_hooks.py", "__all__"),
@@ -1559,10 +1570,10 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/receptive_field/_layer_fields.py", "__all__"),
         ("torchlens/receptive_field/_op_fields.py", "__all__"),
         ("torchlens/receptive_field/_trace_tables.py", "__all__"),
-        ("torchlens/recording/_trace_preview.py", "__all__"),
         ("torchlens/report/_narrate.py", "__all__"),
         ("torchlens/report/_trace_facts.py", "__all__"),
         ("torchlens/report/_trace_summary.py", "__all__"),
+        ("torchlens/stats/_trace_tables.py", "__all__"),
         ("torchlens/validation/_trace_checks.py", "__all__"),
     }
 )

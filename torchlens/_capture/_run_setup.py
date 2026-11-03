@@ -30,6 +30,7 @@ from .._capture_state_helpers import (
 from .._data_classes.trace import Trace
 from .._io.streaming import BundleStreamWriter
 from .._ir.selector_eval import selector_contains_kind
+from .._registry._facet_snapshot import facet_snapshot
 from .._selection.module_alias_guard import refuse_model_alias_spellings
 from .._selection.selectors import BaseSelector
 from .._trace_state import TraceState
@@ -232,8 +233,6 @@ def _compose_hook_plan(r: SimpleNamespace) -> None:
 def _construct_trace(r: SimpleNamespace) -> Trace:
     """Build the Trace from the resolved request's option values."""
 
-    from .._semantic import facets as facets_mod
-
     return Trace(
         model_class_name=r.model_class_name,
         output_device=r.output_device,
@@ -269,7 +268,7 @@ def _construct_trace(r: SimpleNamespace) -> Trace:
         save_transformed_output=r.save_transformed_output,
         layer_visualizers=r.layer_visualizers,
         save_visualizations=r.save_visualizations,
-        facet_functions=facets_mod.snapshot(r.recipes),
+        facet_functions=facet_snapshot(r.recipes),
     )
 
 
