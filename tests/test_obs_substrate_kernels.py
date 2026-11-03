@@ -220,7 +220,7 @@ class TestHistogramMerge:
         with pytest.raises(StatKernelError):
             HistogramDescriptor(lo_exp=4, hi_exp=4)
         with pytest.raises(StatKernelError):
-            HistogramDescriptor(encoding="sparse")
+            HistogramDescriptor(bin_encoding="sparse")
 
 
 class TestDtypes:
