@@ -23,6 +23,8 @@ from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
+from ._payload_headers import validate_payload_headers
+from ._record_refs import _RecordResolver
 from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
 from .codec_policy import codec_backend
 from .container import iter_members, read_member_index
@@ -32,13 +34,12 @@ from .decode import (
     MAX_TENSOR_NUMEL,
     STORABLE_DTYPES,
     Decoder,
-    PendingRecord,
     UnencodableValue,
     _element_size,
     build_component,
     cell_error,
 )
-from .restore import restore_record, settle_mapping, settle_tuple
+from .restore import restore_record
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
@@ -56,7 +57,7 @@ from .validate import (
     validate_records,
     verify_listed_files,
 )
-from .values import RowRef, dtype_table
+from .values import dtype_table
 
 __all__ = [
     "DecodedArtifact",
@@ -397,7 +398,7 @@ def _tensor_kind(at: str) -> str:
 # ---- Record tables ---------------------------------------------------------
 
 
-class DecodedArtifact:
+class DecodedArtifact(_RecordResolver):
     """One trace artifact's decoded tables and the record objects built from them."""
 
     def __init__(self, root: Path, manifest: Mapping[str, Any]) -> None:
@@ -412,6 +413,7 @@ class DecodedArtifact:
         self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
         self.objects: dict[str, list[Any]] = {}
+        self._deferred_trace_refs = 0
         self.identities: dict[str, dict[str, int]] = {}
 
     # -- decode -------------------------------------------------------------
@@ -434,9 +436,8 @@ class DecodedArtifact:
             ]
             refuse_cells(kind, self.tables[kind])
             cls = record_class(kind)
-            self.objects[kind] = [state_new(cls) for _ in raw_rows]
+            self.objects[kind] = [] if kind == "trace" else [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
-        self.objects["trace"] = [state_new(record_class("trace"))]
 
     def _check_prerelease_marker(self, fields: dict[str, Any]) -> None:
         """Pop the pre-release marker of a switch-on write; refuse typed unless the switch is on."""
@@ -480,48 +481,15 @@ class DecodedArtifact:
                 for name in list(row):
                     row[name] = self._settle(row[name], f"{kind}[{row_number}].{name}")
 
-    def _settle(self, value: Any, at: str) -> Any:
-        """Replace the references inside a decoded value with the built objects."""
-
-        # Essential complexity: one branch per decoded carrier; the carrier set is closed.
-        if isinstance(value, RowRef):
-            return self._lookup(value, at)
-        if isinstance(value, PendingRecord):
-            fields = {k: self._settle(v, f"{at}.{k}") for k, v in value.fields.items()}
-            return build_component(value.cls, fields, at=at)
-        if isinstance(value, list):
-            return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
-        if isinstance(value, BlobRef):
-            return value
-        if isinstance(value, tuple):
-            items = [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
-            return settle_tuple(value, items, at)
-        if isinstance(value, (set, frozenset)):
-            return type(value)(self._settle(item, at) for item in value)
-        if isinstance(value, dict):
-            mapping = {key: self._settle(item, f"{at}.{key}") for key, item in value.items()}
-            return settle_mapping(value, mapping)
-        return value
-
-    def _lookup(self, reference: RowRef, at: str) -> Any:
-        """Return the object a row reference names, refusing a dangling one."""
-
-        rows = self.objects.get(reference.record)
-        if rows is None:
-            raise cell_error(
-                at, f"references the {reference.record} table, which is absent", code=CELL_CODE
-            )
-        if not 0 <= reference.row < len(rows):
-            raise cell_error(
-                at, f"row {reference.row} is outside the {reference.record} table", code=CELL_CODE
-            )
-        return rows[reference.row]
-
     # -- construction -------------------------------------------------------
 
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
+        if not self.objects.get("trace"):
+            self.objects["trace"] = [state_new(record_class("trace"))]
+            if self._deferred_trace_refs:
+                self.resolve_references()
         with governed_artifact_load():
             for kind in LOAD_ORDER:
                 for row_number, (obj, row) in enumerate(
@@ -701,6 +669,7 @@ def decode_checked(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     artifact.resolve_references()
     validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
     check_record_anchors(manifest, artifact.tables["trace"][0], root)
+    validate_payload_headers(root, artifact.sink.entries)
     return artifact
 
 
