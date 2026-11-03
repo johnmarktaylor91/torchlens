@@ -242,6 +242,11 @@ def draw_cnn_fields(out: Path) -> list[Path]:
     projective_iou = float(oracles["projective_support"]["measured"])
     pinned = summary["pinned"]
     layer = str(pinned.get("layer", "layer"))
+    network = _NETWORK_NAMES.get(
+        str(pinned.get("arch", "")), str(pinned.get("arch", "the network"))
+    )
+    unit = pinned.get("unit", [])
+    where = f"row {unit[-2]}, column {unit[-1]}" if len(unit) >= 2 else "centre"
     side = int(image.shape[0])
     height, width = projected.shape
     r0, r1, c0, c1 = _bbox(spatial)
@@ -294,8 +299,8 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         left.tick_params(labelsize=13.5)  # single digits read small
         right.tick_params(which="major", labelsize=13.5)
         left.set_title(
-            f"Input ({side} x {side} noise, shown faint)\nfield of one {layer} unit "
-            f"(channel {pinned.get('channel', 0)}, centre)",
+            f"Input ({side} x {side} noise, shown faint)\nfield of one {network} {layer} unit\n"
+            f"(channel {pinned.get('channel', 0)}, {where})",
             loc="left",
         )
         left.set_xlabel("Pixel column")
@@ -309,6 +314,7 @@ def draw_cnn_fields(out: Path) -> list[Path]:
                 fill=False,
                 edgecolor=VERMILION,
                 lw=1.2,
+                clip_on=False,  # the outline may sit on the grid's edge
             )
         )
         right.text(
@@ -335,9 +341,8 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         right.tick_params(which="minor", length=0)
         right.set_xticks(range(0, width, 4))
         right.set_yticks(range(0, height, 4))
-        # A little room past the last unit keeps the outline's far edges inside the axes.
-        right.set_xlim(-0.5, width - 0.1)
-        right.set_ylim(height - 0.1, -0.5)
+        right.set_xlim(-0.5, width - 0.5)
+        right.set_ylim(height - 0.5, -0.5)
         right.set_title(
             f"{layer} output ({height} x {width} units)\nreach of the green patch", loc="left"
         )
@@ -345,18 +350,20 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         right.set_ylabel("Unit row")
         fig.supxlabel(
             f"Predicted from the architecture: pixels {c0} to {c1 - 1} on both axes; "
-            f"units {g0} to {g1 - 1}.\n"
-            "Measured: pixels where the unit's gradient is nonzero; units changed by zeroing the patch.",
-            fontsize=SMALL,
+            f"units {g0} to {g1 - 1}.",
+            fontsize=TITLE,
             color=INK,
         )
         match = "exactly" if identical else "closely"
         fig.suptitle(
-            f"The geometric fields match the measured influence {match}:\n"
+            f"The predicted fields match the measured influence {match}:\n"
             f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output",
             fontsize=TITLE,
         )
         return _save(fig, out, "cnn_fields")
+
+
+_NETWORK_NAMES = {"resnet18": "ResNet-18", "resnet50": "ResNet-50", "vit_b_16": "ViT-B/16"}
 
 
 def _site_label(key: str) -> str:
@@ -596,9 +603,27 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
                 [p[1] for p in pairs],
                 s=46,
                 color=color,
-                label=label,
+                label=_CLASS_DISPLAY.get(label, label),
                 zorder=5,
             )
+        # Heads that receive three or more arrows get their count written beside the dot, so the
+        # reader can count edges without separating the arrowheads.
+        class_color = {
+            tuple(p): color for (_label, pairs), color in zip(groups.items(), colors) for p in pairs
+        }
+        for head, count in _fan_in(edges).items():
+            if count >= 3:
+                ax.text(
+                    head[0] + 0.22,
+                    head[1] + 0.22,
+                    f"{count} in",
+                    fontsize=SMALL,
+                    color=class_color.get(head, INK),  # the count wears its head's colour
+                    ha="left",
+                    va="bottom",
+                    zorder=6,
+                    bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
+                )
         ax.set_xticks(range(layers))
         ax.set_yticks(range(per_layer))
         ax.set_xlabel("Layer (zero-based)")
@@ -607,7 +632,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
         ax.set_ylim(-0.5, per_layer - 0.5)
         ax.tick_params(length=0, labelsize=13.5)  # single digits read small
         ax.set_title(
-            f"Arrows: thicker = larger absolute edge score ({low:.2f} thinnest, {high:.2f} thickest)",
+            "Arrows run from sending to receiving head; thicker = larger absolute score",
             loc="left",
             color=MUTED,
         )
@@ -622,10 +647,22 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
         count = "All" if joined == len(edges) else f"{joined} of the"
         fig.suptitle(
             f"{count} {len(edges)} strongest head-to-head edges join Wang's head classes;\n"
-            f"{ends.count(top_class)} of them end at {top_class} heads",
+            f"{ends.count(top_class)} of them end at {_CLASS_DISPLAY.get(top_class, top_class)} heads",
             fontsize=TITLE,
         )
         return _save(fig, out, "ioi_circuit")
+
+
+_CLASS_DISPLAY = {"s2 inhibition": "S2 inhibition"}
+
+
+def _fan_in(edges: list[dict[str, Any]]) -> dict[tuple[int, int], int]:
+    """Count the edges ending at each head."""
+    counts: dict[tuple[int, int], int] = {}
+    for edge in edges:
+        target = (int(edge["target"][0]), int(edge["target"][1]))
+        counts[target] = counts.get(target, 0) + 1
+    return counts
 
 
 def _edge_geometry(
@@ -654,11 +691,11 @@ def _edge_geometry(
         rank_in = seen_in.get(target, 0)
         rank_out = seen_out.get(source, 0)
         seen_in[target], seen_out[source] = rank_in + 1, rank_out + 1
-        offset_in = 1.0 * (rank_in - (fan_in[target] - 1) / 2)
+        offset_in = 1.3 * (rank_in - (fan_in[target] - 1) / 2)
         theta = math.atan2(source[1] - target[1], source[0] - target[0])
         end = (
-            target[0] + 0.3 * math.cos(theta + offset_in),
-            target[1] + 0.3 * math.sin(theta + offset_in),
+            target[0] + 0.24 * math.cos(theta + offset_in),
+            target[1] + 0.24 * math.sin(theta + offset_in),
         )
         start = (source[0] - 0.06 * math.cos(theta), source[1] - 0.06 * math.sin(theta))
         rad = 0.18 * (rank_in - (fan_in[target] - 1) / 2) + 0.12 * (
