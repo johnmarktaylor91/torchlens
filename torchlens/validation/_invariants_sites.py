@@ -129,12 +129,12 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
                 # site_key with anything else, so keep the strict coarse
                 # identity that catches a forged collision.
                 call_instance = ROOT_CALL_INSTANCE
-        identity = (str(op.graph.site_key), call_instance)
+        identity = (str(record_member(op, "site_key", None)), call_instance)
         if identity in seen:
             raise MetadataInvariantError(
                 name,
                 f"I-S2: ops '{seen[identity]}' and '{op.label}' share site_key "
-                f"{op.graph.site_key!r} within call instance {call_instance!r}",
+                f"{record_member(op, 'site_key', None)!r} within call instance {call_instance!r}",
             )
         seen[identity] = op.label
 
@@ -153,7 +153,7 @@ def _check_layer_site_coherence(ml: Trace, name: str) -> None:
         layer = ml._layer_logs.get(layer_label)
         if layer is None:
             continue
-        member_keys = {op.graph.site_key for _, op in layer.ops.items()}
+        member_keys = {record_member(op, "site_key", None) for _, op in layer.ops.items()}
         member_keys.discard(None)
         if len(member_keys) == 1:
             accessor_value = layer_site_key(layer)
