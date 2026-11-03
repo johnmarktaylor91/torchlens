@@ -230,6 +230,8 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         ".replay",
         ".rerun",
         ".record_span",
+        ".push",  # prefix also covers push_from
+        ".attach_hooks",
         ".conditional_then_entry_edges",
         ".conditional_elif_entry_edges",
         ".conditional_else_entry_edges",
@@ -532,6 +534,21 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         assert any(hit_group == group for hit_group, _, _ in hits), (
             f"scanner failed to flag the planted {group} resurrection: {snippet!r}"
         )
+
+    # push/push_from/attach_hooks folded into do: each spelling must reach the
+    # regex through the needle prefilter on its own (no other needle present).
+    for resurrected in (
+        "edited.push()\n",
+        "edited.push_from(site)\n",
+        "edited.attach_hooks(tl.func('relu'), tl.zero_ablate())\n",
+    ):
+        hits = _scan_file(tmp_path / "planted_methods_do_fold.py", resurrected)
+        assert any(group == "methods" for group, _, _ in hits), resurrected
+    for canonical in (
+        "edited.do(tl.func('relu'), tl.zero_ablate())\n",
+        "edited.pushed_sites\n",
+    ):
+        assert not _scan_file(tmp_path / "canonical_methods_do_fold.py", canonical), canonical
 
     resurrected = "nodes = tl.bridge.profiler.execution_trace(trace, path)\n"
     hits = _scan_file(tmp_path / "planted_execution_trace.py", resurrected)
