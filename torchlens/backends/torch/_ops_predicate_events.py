@@ -655,10 +655,7 @@ def _predicate_call_site_chain(trace: "Trace") -> tuple[Any, ...]:
     Trace groups by call site (``callsite_v1``) with the same result.
     """
 
-    context_cache = getattr(trace, "_code_context_cache", None)
-    if context_cache is None:
-        context_cache = {}
-        trace._code_context_cache = context_cache
+    context_cache = trace._code_context_cache
     call_site_out: list[Any] = []
     _get_code_context(
         0,
