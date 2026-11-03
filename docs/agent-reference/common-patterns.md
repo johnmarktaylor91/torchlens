@@ -58,6 +58,14 @@ projective = op.projective_field.at((10, 10))
 layer_to_layer = op.receptive_field.at((10, 10), source=log.input_ops[0])
 table = log.receptive_fields(level="layer")
 outgoing = log.projective_fields(level="layer")
+# Many units at once: .of() takes a bool mask over the op's full output (or
+# full-shape coordinate tuples) and returns a trace-bound tl.Selection, one
+# region per site in within= (default: model outputs / model inputs).
+patch = torch.zeros(tuple(op.shape), dtype=torch.bool)
+patch[0, :, 4:6, 4:6] = True
+reach = op.projective_field.of(patch, within="head")
+sources = log["head"].receptive_field.of([(0, 0, 8, 8)], within="encoder")
+overlap = reach & log["encoder"].projective_field.of([(0, 0, 5, 5)], within="head")
 # Arming the gradient tripwire needs requires_grad inputs, backward_ready=True,
 # and save_mode="reference"; verify().verdict is PASS / FAIL / INDETERMINATE.
 armed = tl.trace(model, x.requires_grad_(True),
