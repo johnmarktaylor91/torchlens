@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1419 modules, 633003 lines, 0 modules without a docstring.
+83 packages, 1419 modules, 633002 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14761 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 18 | 9751 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 6879 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 6878 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
@@ -713,7 +713,7 @@ Selection: naming sites and resolving them on a trace. (18 modules, 9751 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (12 modules, 6879 lines)
+Semantic facet views for TorchLens records. (12 modules, 6878 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -726,7 +726,7 @@ Semantic facet views for TorchLens records. (12 modules, 6879 lines)
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 218 |
 | `facets` | Derived semantic facet views for TorchLens records. | 1998 |
 | `logit_lens` | Logit-lens appliance over semantic facets. | 1397 |
-| `patching` | Prebuilt activation and attribution patching helpers for facets. | 1105 |
+| `patching` | Prebuilt activation and attribution patching helpers for facets. | 1104 |
 | `reconstruction` | Read-only reconstruction helpers for semantic facets. | 661 |
 | `tolerances` | Cancellation-aware error model for semantic facet RECONSTRUCTION gates. | 195 |
 

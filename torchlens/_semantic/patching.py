@@ -465,7 +465,6 @@ def _baseline_traces(
 
         def _run() -> Any:
             """Reset the model/RNG state to the pristine snapshot and trace once."""
-
             guard.reset()
             return trace(model, inputs, **kwargs)
 
@@ -485,19 +484,16 @@ def _capture_by_reference(
 ) -> Any:
     """Run one helper capture with the model's parameter arguments kept by reference.
 
-    ``save_args=True`` (required above) used to copy every weight argument into
-    every helper trace; with a clean, a corrupted and a patched trace alive at
-    once that was three extra copies of the weights (GPT-2's tied 50257 x 768
-    embedding twice per trace: the lookup and ``lm_head``). The helper traces
-    never leave the helper, so a parameter argument is saved as an alias of
-    the parameter's storage instead (see
-    :func:`~torchlens._validation_argument_references.helper_parameter_references`).
-    If the forward wrote a referenced parameter (its version counter moved, or
-    its bytes left the guard's snapshot, which also catches ``param.data``
-    writes), the aliases no longer hold the call-time values: the trace is
-    dropped and the capture runs again on the copy path. ``capture`` must
-    start from :meth:`_CounterfactualStateGuard.reset` so both attempts run
-    from the same state.
+    ``save_args=True`` (required above) used to copy every weight argument into every helper trace;
+    with a clean, a corrupted and a patched trace alive at once that was three extra copies of the
+    weights (GPT-2's tied 50257 x 768 embedding twice per trace: the lookup and ``lm_head``). The
+    helper traces never leave the helper, so a parameter argument is saved as an alias of the
+    parameter's storage instead (see
+    :func:`~torchlens._validation_argument_references.helper_parameter_references`). If the forward
+    wrote a referenced parameter (its version counter moved, or its bytes left the guard's snapshot,
+    which also catches ``param.data`` writes), the aliases no longer hold the call-time values: the
+    trace is dropped and the capture runs again on the copy path. ``capture`` must start from
+    :meth:`_CounterfactualStateGuard.reset` so both attempts run from the same state.
     """
 
     from .._validation_argument_references import helper_parameter_references
@@ -799,20 +795,17 @@ def _run_patch(
 ) -> Any:
     """Fork the corrupted trace, attach one facet hook, and rerun.
 
-    The model/RNG state is reset to the pristine snapshot before the rerun so
-    the only difference between the corrupted baseline and this patched run is
-    the injected clean activation. Every hook-path rerun must leave positive
-    fire evidence (at least one ``replaced=True`` fire record); a run without
-    it raises :class:`PatchApplicationError` instead of returning a trace
-    whose metric would silently equal the corrupted baseline. ``where``
-    overrides the refusal's site description (used by the per-head caller,
-    which must not enable the whole-facet input-patch route).
+    The model/RNG state is reset to the pristine snapshot before the rerun so the only difference
+    between the corrupted baseline and this patched run is the injected clean activation. Every
+    hook-path rerun must leave positive fire evidence (at least one ``replaced=True`` fire record);
+    a run without it raises :class:`PatchApplicationError` instead of returning a trace whose metric
+    would silently equal the corrupted baseline. ``where`` overrides the refusal's site description
+    (used by the per-head caller, which must not enable the whole-facet input-patch route).
 
-    Live hooks fire at wrapped-function and module-boundary sites only, so a
-    facet homed on a MODEL INPUT op (e.g. ``resid_pre`` of a first block) has
-    no site where a hook could ever fire. When the caller identifies the facet
-    (``facet_name`` + ``address``) and its home is a model input, the patch is
-    applied to the input tensor itself and the rerun proceeds without a hook —
+    Live hooks fire at wrapped-function and module-boundary sites only, so a facet homed on a MODEL
+    INPUT op (e.g. ``resid_pre`` of a first block) has no site where a hook could ever fire. When
+    the caller identifies the facet (``facet_name`` + ``address``) and its home is a model input,
+    the patch is applied to the input tensor itself and the rerun proceeds without a hook —
     semantically identical to a hook fire at the home site.
     """
 
@@ -845,7 +838,6 @@ def _run_patch(
 
     def _capture() -> Any:
         """Fork the corrupted trace, attach the counting hook, and rerun from the pristine state."""
-
         fire_ledger.update(fires=0, identical=0)
         log = corrupted_log.fork(name)
         log.attach_hooks(selector, tracked_hook)
@@ -911,7 +903,6 @@ def _run_input_patch(
 
     def _capture() -> Any:
         """Fork the corrupted trace and rerun it on the patched input from the pristine state."""
-
         log = corrupted_log.fork(name)
         guard.reset()
         log.run(model, patched_input)
