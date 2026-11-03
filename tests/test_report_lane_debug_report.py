@@ -59,7 +59,7 @@ def trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
 @pytest.fixture(scope="module")
 def grad_trace(model: nn.Module, x: torch.Tensor) -> Iterator[Any]:
     captured = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
-    captured.log_backward(captured[captured.output_layers[0]].out.sum())
+    captured.backward(captured[captured.output_layers[0]].out.sum())
     try:
         yield captured
     finally:

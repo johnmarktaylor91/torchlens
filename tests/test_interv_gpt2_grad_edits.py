@@ -47,7 +47,7 @@ _LN_SINGLE = "transformer.ln_f"
 _LN_NODE = "NativeLayerNormBackward0"
 _RUNNERS = (
     "trace.backward",
-    "trace.log_backward",
+    "trace.backward",
     "loss.backward",
     "autograd.backward",
     "autograd.grad",
@@ -186,10 +186,8 @@ def _run_backward(trace: Any, model: torch.nn.Module, runner: str) -> Grads:
     """Run one live-backward spelling on the trace output and return the grads."""
 
     loss = _loss(trace[trace.output_layers[0]].out)
-    if runner == "trace.backward":
+    if runner == "trace.backward" or runner == "trace.backward":
         trace.backward(loss)
-    elif runner == "trace.log_backward":
-        trace.log_backward(loss)
     elif runner == "loss.backward":
         loss.backward()
     elif runner == "autograd.backward":
@@ -448,7 +446,7 @@ class TestRealGPT2:
             ("intervene", "trace.backward"),
             ("attach_hooks", "loss.backward"),
             ("layer_record", "autograd.grad"),
-            ("attach_hooks", "trace.log_backward"),
+            ("attach_hooks", "trace.backward"),
         ],
     )
     def test_module_selector_doors(self, real: _Fixture, door: str, runner: str) -> None:

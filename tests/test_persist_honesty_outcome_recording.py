@@ -11,7 +11,7 @@ WT1 A-IV item 21 (lane A08), three defects in one bundle:
   REASON.txt debris) as ``failed=False`` recordings with no error evidence --
   laundering the failure record. Recovery now carries the abort evidence and
   the derived outcome is FAILED; corruption salvage itself is unchanged.
-* ``log_backward`` on a bundle-loaded Trace hooked whatever foreign autograd
+* ``backward`` on a bundle-loaded Trace hooked whatever foreign autograd
   graph the loss came from, half-mutated the trace (backward passes +
   grad_fns from an unrelated forward), then died untyped -- after which
   ``draw_backward`` silently rendered the wrong graph. It now refuses typed
@@ -138,10 +138,10 @@ def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     assert recovered.outcome.status is CaptureStatus.UNKNOWN
 
 
-# --- loaded log_backward refuses before mutating -----------------------------
+# --- loaded backward refuses before mutating -----------------------------
 
 
-def test_loaded_log_backward_refuses_before_mutation(tmp_path):
+def test_loaded_backward_refuses_before_mutation(tmp_path):
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
@@ -149,7 +149,7 @@ def test_loaded_log_backward_refuses_before_mutation(tmp_path):
     loaded = tl.load(tmp_path / "bundle")
     live_loss = model(x.requires_grad_(True)).sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.log_backward(live_loss)
+        loaded.backward(live_loss)
     assert len(loaded.autograd.backward_passes or []) == 0
     assert len(loaded.autograd.grad_fns) == 0
 
@@ -164,10 +164,10 @@ def test_loaded_recording_backward_refuses(tmp_path):
         loaded.capture_backward()
 
 
-def test_live_log_backward_still_works():
+def test_live_backward_still_works():
     model = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
     x = torch.randn(2, 4)
     trace = tl.trace(model, x, capture=CaptureOptions(backward_ready=True))
     loss = trace["relu_1_2"].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
     assert len(trace.autograd.backward_passes) == 1

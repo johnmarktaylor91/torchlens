@@ -711,7 +711,7 @@ def _run_capture(
         output_op = trace[trace.output_layers[0]]
         if not getattr(output_op, "has_saved_activation", False):
             raise AssertionError("backward trace output activation was not saved")
-        trace.log_backward(output_op.out.sum())
+        trace.backward(output_op.out.sum())
         return trace, None, None
     if config == "backward_record":
         recording = tl.record(
