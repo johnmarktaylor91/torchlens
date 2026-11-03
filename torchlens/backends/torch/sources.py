@@ -238,15 +238,19 @@ def log_source_tensor_predicate(
                             transformed_disk_payload=transformed_disk_payload,
                         )
                     )
-        append_projected_event(
-            self,
-            ctx,
-            spec,
-            tensor=t,
-            ram_payload=ram_payload,
-            transformed_ram_payload=transformed_ram_payload,
-            predicate_matched=spec.save_out or spec.save_metadata,
-        )
+        source_kept = spec.save_out or spec.save_metadata
+        if (
+            source_kept or not state.options.lean
+        ):  # lean journal: no shell event for an unkept source
+            append_projected_event(
+                self,
+                ctx,
+                spec,
+                tensor=t,
+                ram_payload=ram_payload,
+                transformed_ram_payload=transformed_ram_payload,
+                predicate_matched=source_kept,
+            )
         # Echo narrator slot (snoop D1, source seam): once per committed
         # input/buffer event, after the append.
         _emit_source_echo(self, ctx)
@@ -263,7 +267,8 @@ def log_source_tensor_predicate(
     except Exception as exc:
         state.handle_predicate_exception(ctx, exc)
     finally:
-        if not halt_only and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
+        fallback = not halt_only and not state.options.lean
+        if fallback and not _predicate_event_was_appended(self, ctx.raw_label or ctx.label):
             append_projected_event(
                 self,
                 ctx,

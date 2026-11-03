@@ -1,0 +1,150 @@
+"""Deterministic facts of a default ``tl.record`` for the lean-option golden.
+
+The golden (``tests/data/record_lean_default_golden.json``) was produced by this
+module's ``default_facts`` on the commit before the lean option existed; the
+test recomputes the facts on a default recording and compares, so a default
+``Recording`` is proven to hold exactly what it held before.
+"""
+
+from __future__ import annotations
+
+import re
+from collections import OrderedDict
+from typing import Any
+
+import torch
+from torch import nn
+
+import torchlens as tl
+
+_SCRUB = ("time", "duration", "handle_id", "call_id", "nonce", "barcode", "memory_backend")
+_ID_PATTERN = re.compile(r"\b(module_id|id|object_id|handle)=\d+")
+
+
+def small_model() -> nn.Module:
+    """Return a four-stage linear model with two nested blocks."""
+
+    torch.manual_seed(0)
+
+    def block() -> nn.Module:
+        return nn.Sequential(OrderedDict(fc=nn.Linear(8, 8), act=nn.ReLU()))
+
+    return nn.Sequential(
+        OrderedDict(stem=nn.Linear(8, 8), block1=block(), block2=block(), head=nn.Linear(8, 4))
+    ).eval()
+
+
+def conv_model() -> nn.Module:
+    """Return a small conv model with normalization, pooling and a residual add."""
+
+    torch.manual_seed(0)
+
+    class Block(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conv = nn.Conv2d(4, 4, 3, padding=1)
+            self.norm = nn.BatchNorm2d(4)
+            self.act = nn.ReLU()
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return self.act(self.norm(self.conv(x)) + x)
+
+    return nn.Sequential(
+        OrderedDict(
+            stem=nn.Conv2d(3, 4, 3, padding=1),
+            block1=Block(),
+            block2=Block(),
+            pool=nn.AdaptiveAvgPool2d(1),
+            flat=nn.Flatten(),
+            head=nn.Linear(4, 3),
+        )
+    ).eval()
+
+
+#: (scenario name, model builder, input builder, saved module)
+SCENARIOS: tuple[tuple[str, Any, Any, str], ...] = (
+    ("small_block2", small_model, lambda: torch.randn(2, 8), "block2"),
+    ("small_head", small_model, lambda: torch.randn(2, 8), "head"),
+    ("conv_block1", conv_model, lambda: torch.randn(1, 3, 6, 6), "block1"),
+)
+
+
+def scenario_input(builder: Any) -> torch.Tensor:
+    """Return the scenario input under a fixed seed."""
+
+    torch.manual_seed(1)
+    return builder()
+
+
+def _scrub(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _scrub(v) for k, v in obj.items() if not any(s in str(k) for s in _SCRUB)}
+    if isinstance(obj, (list, tuple)):
+        return [_scrub(v) for v in obj]
+    if isinstance(obj, float):
+        return round(obj, 4)
+    if isinstance(obj, str):
+        return _ID_PATTERN.sub(r"\1=<id>", obj)
+    if isinstance(obj, (int, bool)) or obj is None:
+        return obj
+    return _scrub(repr(obj))
+
+
+def default_facts(rec: Any) -> dict[str, Any]:
+    """Return the content of a default recording as JSON-serializable facts."""
+
+    events = object.__getattribute__(rec, "_capture_events")
+    ops = []
+    for e in events.amended_op_records():
+        ops.append(
+            _scrub(
+                {
+                    "label_raw": e.label_raw,
+                    "kind": e.kind,
+                    "layer_type": e.layer_type,
+                    "seq": e.seq,
+                    "matched": bool(getattr(e, "predicate_matched", False)),
+                    "parents": [p.parent_label_raw for p in e.parents],
+                    "func": e.function.func_name,
+                    "shape": list(e.output.tensor.shape or ()),
+                    "modules": repr(e.modules),
+                    "policy": repr(e.policy),
+                    "has_payload": e.output.tensor.payload is not None,
+                }
+            )
+        )
+    records = [
+        {
+            "label": r.ctx.label,
+            "raw": r.ctx.raw_label,
+            "pass": r.ctx.pass_number,
+            "shape": list(r.ctx.shape or ()),
+            "payload_sum": None
+            if r.ram_payload is None
+            else round(float(r.ram_payload.float().sum()), 4),
+        }
+        for r in rec.records
+    ]
+    return {
+        "n_op_events": len(events.op_events),
+        "n_amendments": len(events.op_amendments),
+        "n_module_enter": len(events.module_enter_events),
+        "n_module_exit": len(events.module_exit_events),
+        "ops": ops,
+        "records": records,
+        "raw_metadata": _scrub(list(rec.raw_metadata())),
+        "decisions": _scrub(list(rec.lazy_trace.decisions)),
+        "num_ops": rec.num_ops,
+        "len": len(rec),
+        "lean_marker": list(getattr(rec, "lean_omissions", ())),
+    }
+
+
+def record_default(name: str) -> Any:
+    """Record scenario ``name`` with today's default options."""
+
+    scenario = next(s for s in SCENARIOS if s[0] == name)
+    model = scenario[1]()
+    x = scenario_input(scenario[2])
+    with torch.no_grad():
+        return tl.record(model, x, save=tl.module(scenario[3]))

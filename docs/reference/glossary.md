@@ -103,7 +103,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   the flat `tl.record` keywords (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
   `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
   `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
-  `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
+  `RecordingSettings.lean` (PROVISIONAL SPELLING), `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
   `RecordingSettings.on_predicate_error`, `RecordingSettings.on_forward_error`,
   `RecordingSettings.postprocess`) and the door keywords (`RecordingSettings.stop_after`,
   `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
@@ -1687,10 +1687,29 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   recorder knobs stay flat keywords on the door (`default_op`,
   `default_module`, `history_size`, `include_source_events`,
   `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
-  `default_grad`, `postprocess`). The door keywords are `save=`, `intervene=`,
+  `default_grad`, `postprocess`, and `lean`, a PROVISIONAL SPELLING; see
+  **lean (tl.record; PROVISIONAL SPELLING)**). The door keywords are `save=`, `intervene=`,
   `stop_after=` (a site or a predicate), `storage=`,
   `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`, `input_shape=`
   and `on_zero_fire=`.
+
+**lean (tl.record; PROVISIONAL SPELLING)**
+: `tl.record(..., lean=True)` (also `RecordingOptions(lean=True)` and `Recorder(lean=True)`)
+  journals only the events the selection keeps: an op or module boundary the save predicate
+  does not keep gets no shell journal event, no frozen record and no replay clone, which
+  removes most of the per-op bookkeeping of a one-module read. The behaviour is ruled; the
+  public spelling `lean` is PROVISIONAL until the maintainer rules it, so no other name
+  derives from it. A lean recording says what it omitted: `Recording.lean_omissions` names the
+  omitted content (`shell_records_of_unkept_ops`, `module_boundary_events_of_unkept_modules`,
+  `event_indexes_of_unkept_events`, `op_counts`; `()` on a default recording) and the reads
+  that need the full journal (`Recording.event_stream`, `Recording.op_events`,
+  `Recording.lazy_trace`, `Recording.raw_metadata()`, `Recording.to_trace()`) refuse with
+  `recording_lean_omitted` instead of answering from a partial journal; `Recording.records`,
+  `Recording.output`, `summary()`, `to_pandas()` and the other retained-record reads are
+  complete. Gradient capture (`backward_ready=True`, `save_grads=`, `default_grad=`),
+  `intervene=`, `narrate=` and the partial forward-error modes refuse at construction with
+  `record_lean_unsupported`. `RecordingSettings.lean` persists the flag. Default `False`: a
+  default recording's contents are unchanged.
 
 **on_nonfinite (CaptureOptions)**
 : The one NaN/Inf policy, replacing `raise_on_nan` and `track_nonfinite`:
@@ -3574,7 +3593,8 @@ deprecation shim owed*
   `Recording.stop_reason`, `Recording.stops_by_pass`,
   `Recording.records_in_pass(pass_index)`, `Recording.num_ops`,
   `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
-  `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
+  `Recording.lean_omissions` (PROVISIONAL SPELLING), `Recording.is_recovered` and
+  `Recording.backward(loss)`. `Recorder.__call__` runs one pass
   (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
   `ActivationRecord.recorded_time` and `GradRecord.recorded_time` (`recorded_time=`) stamp when a
   record was taken.
@@ -3928,7 +3948,8 @@ describe each surface in depth.
 | `Recording.last_event_label` | Label of the last captured event on a failed recording, best effort |
 | `Recording.last_event_source_line` | Source line of the last captured event on a failed recording, best effort |
 | `Recording.last_successful_op_label` | Label of the last op committed before a failure, or `None` |
-| `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
+| `Recording.lean_omissions` | PROVISIONAL SPELLING. What a lean recording left out; `()` for a default recording |
+| `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not; refused with `recording_lean_omitted` on a lean recording |
 | `Recording.records` | Retained activation records, in capture order |
 | `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
 | `Recording.start_times` | Per-pass start timestamps of the recording |
@@ -3941,6 +3962,7 @@ describe each surface in depth.
 | `RecordingOptions.default_op` | Capture decision for operation events the predicate does not decide |
 | `RecordingOptions.history_size` | Number of earlier events kept for predicate history; 0 to 1024 |
 | `RecordingOptions.include_source_events` | Whether source events appear in the predicate lookback of recent ops |
+| `RecordingOptions.lean` | PROVISIONAL SPELLING. Journal only the events the selection keeps; the recording names its omissions and refuses the reads that need the full journal |
 | `RecordingOptions.max_predicate_failures` | Maximum number of predicate failures stored on the recording; further ones are counted as overflow |
 | `RecordingOptions.on_predicate_error` | Predicate error handling: `"auto"`, `"accumulate"` or `"fail-fast"` |
 
@@ -6428,6 +6450,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `lazy_transitions=` | constructor keyword of `tl.types.InputProvenance` (default `()`): Module addresses whose lazy parameters materialized during the ONE captured forward (disclosure of the sanctioned permanent mutation) |
 | `leaf=` | keyword of `TagGrammar.data` (required) |
 | `leaf_occurrences=` | constructor keyword of `tl.types.Container` (default `()`) |
+| `lean=` | constructor keyword of `tl.options.RecordingOptions` (optional); keyword of `tl.record` (keyword-only; default `False`); constructor keyword of `tl.recording.Recorder` (keyword-only; optional): PROVISIONAL SPELLING. Journal only the events the selection keeps; the recording names its omissions (`Recording.lean_omissions`) and refuses the reads that need the full journal (`recording_lean_omitted`) |
 | `leaves=` | constructor keyword of `tl.types.Container` (required) |
 | `ledger=` | keyword of `Bundle.episode_status` (keyword-only; default `None`): Optional episode ledger; supplies `n_steps_declared` and the driver-halt geometry (fold arms 2 and 4 are ledger-only facts and degrade fail-closed to `episode_unknown` without it) |
 | `ledgers=` | constructor keyword of `tl.debug.CheckReport` (optional) |
