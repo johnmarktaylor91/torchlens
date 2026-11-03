@@ -73,6 +73,7 @@ def _run_remove_orphan_nodes(ctx: StepContext) -> None:
     """Drop raw nodes that reach no model output."""
 
     with _vtimed(ctx.trace, "  Step 3: Remove orphan nodes"):
+        ctx.trace.__dict__.pop("_foreign_departures", None)  # capture-time journal ends here
         graph_traversal._remove_orphan_nodes(ctx.trace)
 
 
