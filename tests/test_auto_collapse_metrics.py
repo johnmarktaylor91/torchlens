@@ -16,6 +16,7 @@ import torch
 import torchlens as tl
 import torchlens._visualization._condensed_flow as condensed_flow
 import torchlens._visualization.auto_collapse as auto_collapse
+import torchlens._visualization.collapse_estimator as collapse_estimator
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
 from torchlens._visualization._render_common import format_collapsed_module_contents
 from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
@@ -49,6 +50,22 @@ tvs = pytest.importorskip("torchvision.models.segmentation")
 
 
 SVG_NODE_RE = re.compile(r'class="node"')
+
+
+@pytest.fixture(autouse=True)
+def _wall_clock_never_changes_plans(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Run every test here as a declared deterministic run.
+
+    The quality planner's wall-clock watchdog abandons to the compact fallback
+    when a machine is busy, so a plan/SVG parity check would otherwise depend on
+    host load (one planning call falls back, the other does not). CI already
+    disarms it through ``CI``; this sets the documented deterministic switch so
+    worker gates match. Fallback disclosure under a fired watchdog stays covered
+    in ``tests/test_collapse_power_ceiling.py``.
+    """
+
+    monkeypatch.setenv("TORCHLENS_DETERMINISTIC", "1")
+    assert not collapse_estimator.watchdog_enabled()
 
 
 class ResidualBlock(torch.nn.Module):
