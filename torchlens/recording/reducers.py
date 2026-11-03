@@ -69,7 +69,12 @@ def _detached(tensor: torch.Tensor) -> torch.Tensor:
     not record a stray ``detach`` op.
     """
 
-    return safe_copy(tensor, detach_tensor=True, save_mode="reference")
+    detached = safe_copy(tensor, detach_tensor=True, save_mode="reference")
+    if isinstance(detached, nn.Parameter):
+        # safe_copy rewraps a parameter with its requires_grad; a fitted probe's
+        # weights are read as values only, so the copy carries no grad.
+        detached.requires_grad_(False)
+    return detached
 
 
 def _position_major(tensor: torch.Tensor, position_dim: int) -> torch.Tensor:
@@ -177,8 +182,10 @@ def _linear_terms(fitted: Any) -> tuple[torch.Tensor, torch.Tensor, str]:
     """Return ``(weight [out, features], bias [out], description)`` of a fitted linear probe."""
 
     if isinstance(fitted, nn.Linear):
-        weight = fitted.weight
-        bias = fitted.bias if fitted.bias is not None else torch.zeros(weight.shape[0])
+        weight: torch.Tensor = fitted.weight
+        bias: torch.Tensor = (
+            fitted.bias if fitted.bias is not None else torch.zeros(weight.shape[0])
+        )
         return weight, bias, "nn.Linear"
     if isinstance(fitted, (tuple, list)) and len(fitted) == 2:
         weight = torch.as_tensor(fitted[0])
@@ -231,11 +238,8 @@ def probe(fitted: Any, *, position_dim: int = 1) -> Reducer:
     """
 
     weight, bias, described = _linear_terms(fitted)
-    # The fitted probe is frozen here: a float32 snapshot taken without grad
-    # carries no autograd edge to the module or tensors it came from.
-    with torch.no_grad():
-        weight = weight.to(torch.float32).clone()
-        bias = bias.to(torch.float32).clone()
+    weight = _detached(weight).to(torch.float32)
+    bias = _detached(bias).to(torch.float32)
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
         """Return the probe's decision function per position."""
