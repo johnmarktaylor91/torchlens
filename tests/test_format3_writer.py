@@ -644,3 +644,24 @@ def test_pruning_retains_complete_orphan_records_or_no_shells(
             loaded.cleanup()
     finally:
         trace.cleanup()
+
+
+def test_injected_record_rows_have_their_declared_identity(tmp_path: Path) -> None:
+    """Synthetic persisted injection rows carry label as well as their layer label."""
+
+    from tests.test_w051_bind_fixwave import _LOGGED, _MLP, _sae_like, _seeded
+
+    model, value = _seeded(_MLP)
+    spec = tl.when(tl.module("fc1"), _sae_like)
+    with pytest.warns(UserWarning, match="fired at zero sites"):
+        trace = tl.trace(model, value, intervene=spec, capture=_LOGGED)
+    try:
+        root = tmp_path / "injected.tlspec"
+        trace.save(root)
+        columns = _records(root)["op"]["columns"]
+        injected = [index for index, value in enumerate(columns["injection_provenance"]) if value]
+        assert injected
+        assert all(isinstance(columns["label"][index], str) for index in injected)
+        assert all(columns["label"][index] == columns["layer_label"][index] for index in injected)
+    finally:
+        trace.cleanup()
