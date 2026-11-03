@@ -175,6 +175,8 @@ def _assert_identical(replayed: Any, live: Any, where: str) -> None:
             assert type(got) is type(want), f"{where}: distribution type"
             assert vars(got).keys() == vars(want).keys(), f"{where}: distribution fields"
             for key, expected in vars(want).items():
+                if not isinstance(expected, torch.Tensor):
+                    assert type(vars(got)[key]) is type(expected), f"{where}: {key} type"
                 _assert_identical(vars(got)[key], expected, f"{where}: distribution.{key}")
         else:
             assert got == want, f"{where}: leaf {index}"
@@ -195,6 +197,9 @@ def test_distribution_output_oracle_compares_state_exactly() -> None:
     got._batch_shape = torch.Size([3])
     with pytest.raises(AssertionError):
         _assert_identical(got, want, "batch shape")
+    got._batch_shape = [2]
+    with pytest.raises(AssertionError):
+        _assert_identical(got, want, "batch shape type")
 
 
 def _attempt(action: Any) -> tuple[Any, TorchLensError | None]:
