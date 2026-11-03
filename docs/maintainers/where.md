@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1392 modules, 628527 lines, 0 modules without a docstring.
+83 packages, 1392 modules, 628525 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12304 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5995 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5993 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13609 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
@@ -1798,7 +1798,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (19 modules, 5995 lines)
+Lightweight predicate-recording namespace for TorchLens. (19 modules, 5993 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1818,7 +1818,7 @@ Lightweight predicate-recording namespace for TorchLens. (19 modules, 5995 lines
 | `exceptions` | Exception types for fastlog predicate recording. | 96 |
 | `options` | Grouped options for fastlog predicate recording. | 423 |
 | `recover` | Load and recover fastlog directory bundles. | 621 |
-| `storage_disk` | Synchronous disk storage backend for fastlog recordings. | 602 |
+| `storage_disk` | Synchronous disk storage backend for fastlog recordings. | 600 |
 | `storage_ram` | In-memory storage backend for fastlog recordings. | 128 |
 | `types` | Core dataclasses for fastlog predicate recording. | 1297 |
 

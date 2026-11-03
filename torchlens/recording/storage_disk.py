@@ -474,8 +474,6 @@ def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
 def _ctx_from_json(data: dict[str, Any]) -> Any:
     """Convert JSON data into a RecordContext."""
 
-    from .types import RecordContext
-
     values = dict(data)
     values["module_stack"] = tuple(ModuleStackFrame(**frame) for frame in values["module_stack"])
     values["recent_events"] = ()

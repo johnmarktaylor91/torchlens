@@ -15,21 +15,7 @@ import torch
 
 from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
-from .._ir.predicate import (
-    ActivationRecord as ActivationRecord,
-    CaptureDecision as CaptureDecision,
-    CaptureSpec as CaptureSpec,
-    EventKind as EventKind,
-    GradRecord as GradRecord,
-    GradRecordContext as GradRecordContext,
-    ModuleStackFrame as ModuleStackFrame,
-    PredicateDecision as PredicateDecision,
-    PredicateFailure as PredicateFailure,
-    RecordContext as RecordContext,
-    RetroactiveCaptureDecision as RetroactiveCaptureDecision,
-    StorageIntent as StorageIntent,
-    _distinct_label_index_keys as _distinct_label_index_keys,
-)
+from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
 
 __all__ = [
@@ -43,6 +29,20 @@ __all__ = [
     "RecordingSettings",
     "StorageIntent",
 ]
+
+ActivationRecord = _predicate.ActivationRecord
+CaptureDecision = _predicate.CaptureDecision
+CaptureSpec = _predicate.CaptureSpec
+EventKind = _predicate.EventKind
+GradRecord = _predicate.GradRecord
+GradRecordContext = _predicate.GradRecordContext
+ModuleStackFrame = _predicate.ModuleStackFrame
+PredicateDecision = _predicate.PredicateDecision
+PredicateFailure = _predicate.PredicateFailure
+RecordContext = _predicate.RecordContext
+RetroactiveCaptureDecision = _predicate.RetroactiveCaptureDecision
+StorageIntent = _predicate.StorageIntent
+_distinct_label_index_keys = _predicate._distinct_label_index_keys
 
 if TYPE_CHECKING:
     from .._capture.session import CapturedRunCore
