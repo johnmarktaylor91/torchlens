@@ -143,6 +143,12 @@ class CaptureSpec:
         Optional target dtype for retained payloads.
     save_mode:
         Tensor retention mode for saved payloads.
+
+    Examples
+    --------
+    >>> spec = CaptureSpec(save_grad=True)
+    >>> spec.save_out, spec.save_grad, spec.save_mode
+    (True, True, 'copy')
     """
 
     save_out: bool = True
@@ -209,6 +215,12 @@ class ActivationRecord:
         Auxiliary record metadata, including disk blob entries when present.
     recorded_at:
         Wall-clock time the record was created.
+
+    Examples
+    --------
+    >>> activation = tl.record(model, x, save=tl.func("relu")).records[0]
+    >>> type(activation).__name__, tuple(activation.ram_payload.shape)
+    ('ActivationRecord', (1, 4, 8, 8))
     """
 
     ctx: RecordContext
@@ -268,6 +280,17 @@ class GradRecordContext:
         Whether this backward node corresponds to a predicate-mode forward op.
     has_op:
         Whether this backward node has a joined forward op.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> out, recording = tl.record(
+    ...     net, torch.randn(2, 4), save=tl.func("relu"), return_output=True, save_grads=True
+    ... )
+    >>> _ = recording.backward(out.sum(), save_grads=True)
+    >>> context = recording.grad_records[0].ctx
+    >>> type(context).__name__, context.grad_kind in ("grad_input", "grad_output")
+    ('GradRecordContext', True)
     """
 
     label: str
@@ -298,7 +321,17 @@ class GradRecordContext:
 
 @dataclass(frozen=True, slots=True)
 class GradRecord:
-    """One retained fastlog gradient event."""
+    """One retained fastlog gradient event.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> out, recording = tl.record(
+    ...     net, torch.randn(2, 4), save=tl.func("relu"), return_output=True, save_grads=True
+    ... )
+    >>> _ = recording.backward(out.sum(), save_grads=True)
+    >>> type(recording.grad_records[0]).__name__
+    'GradRecord'"""
 
     ctx: GradRecordContext
     spec: CaptureSpec
@@ -322,7 +355,13 @@ class PredicateFailure:
 
 @dataclass(frozen=True, slots=True)
 class DryRun:
-    """Predicate dry-run trace without retained tensor payloads."""
+    """Predicate dry-run trace without retained tensor payloads.
+
+    Examples
+    --------
+    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
+    >>> type(plan).__name__, len(plan.contexts) > 0
+    ('DryRun', True)"""
 
     contexts: tuple[RecordContext, ...]
     decisions: tuple[bool, ...] = ()
@@ -450,6 +489,12 @@ class Recording(TraceLike):
     recorders, ``n_ops_completed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> type(recording).__name__, recording.status, len(recording.records)
+    ('Recording', 'complete', 1)
     """
 
     # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this

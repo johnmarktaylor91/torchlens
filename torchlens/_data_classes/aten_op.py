@@ -13,7 +13,15 @@ from .field_policy import build_record_field_policy_table, portable_state_spec_f
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OpRef:
-    """Redundant foreign key from an ATen row to a final Op row."""
+    """Redundant foreign key from an ATen row to a final Op row.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> ref = trace["relu_1_2"].aten_ops[0].parent_op_refs[0]
+    >>> type(ref).__name__, ref.op_label
+    ('OpRef', 'relu_1_2')
+    """
 
     op_row_index: int
     op_label: str
@@ -68,7 +76,15 @@ class _PrimitiveOpProfile:
 
 @dataclass(eq=False, kw_only=True)
 class AtenOp:
-    """One value-free ATen dispatcher call observed during capture."""
+    """One value-free ATen dispatcher call observed during capture.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> row = trace["relu_1_2"].aten_ops[0]
+    >>> type(row).__name__, row.capture_phase
+    ('AtenOp', 'forward')
+    """
 
     label: str
     sequence: int

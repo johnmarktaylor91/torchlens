@@ -278,7 +278,16 @@ def _paired_pass_op(trace: Any, op_label: str | None, grad_fn_object_id: int | N
 
 @dataclass
 class GradFn:
-    """Metadata and runtime ops for one autograd ``grad_fn_handle`` node."""
+    """Metadata and runtime ops for one autograd ``grad_fn_handle`` node.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> opts = tl.options.CaptureOptions(backward_ready=True)
+    >>> trace = tl.trace(net, torch.randn(2, 4), capture=opts)
+    >>> _ = trace.backward(trace[trace.output_layers[0]].out.sum())
+    >>> "ReluBackward0" in [grad_fn.class_name for grad_fn in trace.autograd.grad_fns]
+    True"""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "grad_fn_object_id": FieldPolicy.KEEP,

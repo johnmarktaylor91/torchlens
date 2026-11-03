@@ -90,6 +90,16 @@ def data_array(source: Any, site: str) -> Any:
     ------
     ImportError
         If xarray is unavailable.
+
+    Examples
+    --------
+    >>> # requires: xarray
+    >>> trace = tl.trace(model, x)
+    >>> da = tl.bridge.xarray.data_array(trace, "2")
+    >>> da.dims
+    ('presentation', 'neuroid')
+    >>> da.shape
+    (1, 128)
     """
 
     try:
@@ -130,6 +140,14 @@ def neuroid_assembly(source: Any, site: str) -> Any:
     ------
     ImportError
         If ``brainio`` (Brain-Score's assembly package) is unavailable.
+
+    Examples
+    --------
+    >>> # requires: brainio
+    >>> trace = tl.trace(model, x)
+    >>> assembly = tl.bridge.xarray.neuroid_assembly(trace, "2")
+    >>> assembly.dims
+    ('presentation', 'neuroid')
     """
 
     try:

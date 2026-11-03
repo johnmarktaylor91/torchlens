@@ -282,6 +282,14 @@ def trace_text(
     -------
     Trace
         TorchLens trace with ``input`` set to the original text.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_text(model, "hello world")
+    ... except (ImportError, ValueError):
+    ...     print("no tokenizer resolvable")
+    no tokenizer resolvable
     """
 
     import torchlens as tl
@@ -334,6 +342,16 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     -------
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
+
+    Examples
+    --------
+    >>> from PIL import Image
+    >>> image = Image.new("RGB", (8, 8))
+    >>> try:
+    ...     tl.bridge.transformers.trace_image(model, image)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torchlens as tl
@@ -364,6 +382,14 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     -------
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_multimodal(model, {"text": "hi"})
+    ... except (ImportError, ValueError):
+    ...     print("no processor resolvable")
+    no processor resolvable
     """
 
     from transformers import AutoProcessor

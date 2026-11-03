@@ -19,6 +19,13 @@ class ReadError(TorchLensError, ValueError):
     Every raise site carries a stable ``code=`` plus structured fields; the
     closed reason vocabularies ride ``fields`` (for example
     ``fields["reason"]`` on addressing refusals).
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.ReadError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(tl.errors.ReadError, ValueError)
+    True
     """
 
 
@@ -27,4 +34,11 @@ class ReadInternalError(TorchLensError, RuntimeError):
 
     Fires only on TorchLens contract breaches (suppression leak, engine
     result-shape drift), never on user input.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.ReadInternalError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(tl.errors.ReadInternalError, RuntimeError)
+    True
     """

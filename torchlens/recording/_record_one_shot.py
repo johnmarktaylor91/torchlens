@@ -191,6 +191,14 @@ def record(
     -------
     Recording | tuple[Any, Recording]
         Fastlog recording, optionally with the model output.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> recording.status, len(recording.records)
+    ('complete', 1)
+    >>> tuple(recording.records[0].ram_payload.shape)
+    (1, 4, 8, 8)
     """
 
     _require_torch_fastlog_backend(backend)

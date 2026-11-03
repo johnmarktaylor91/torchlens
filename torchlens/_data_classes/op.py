@@ -1195,6 +1195,15 @@ class Op(OpAtenMixin, _SelectionOperand):
       ``trace[label]`` does not accept it.  Combine
       ``fx_qualpath.replace(".", "_")`` with ``fx_call_index`` when an
       FX-style name form is needed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> op = trace.ops[1]
+    >>> type(op).__name__, op.func_name
+    ('Op', 'relu')
+    >>> tuple(op.out.shape)
+    (1, 4, 8, 8)
     """
 
     __slots__ = ("_core", "_row")

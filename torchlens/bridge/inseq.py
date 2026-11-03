@@ -57,6 +57,16 @@ def attribute(
         method; ``bridge_inseq_forced_decoding_ignored`` when inseq attributed
         a text other than the requested ``generated_texts`` (inseq reports an
         ignored keyword only through its logger).
+
+    Examples
+    --------
+    >>> # requires: inseq
+    >>> class Prebuilt:
+    ...     def attribute(self, inputs, generated_texts=None):
+    ...         return {"text": inputs}
+    >>> payload = tl.bridge.inseq.attribute(None, "Hello", attribution_model=Prebuilt())
+    >>> payload["schema"], payload["method"]
+    ('torchlens.inseq.v1', 'integrated_gradients')
     """
 
     try:
