@@ -21,13 +21,13 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
-import torchvision
 from torch import nn
 
 import torchlens as tl
 from torchlens.errors import InvalidArgumentError
 
 pytest.importorskip("xarray")
+torchvision = pytest.importorskip("torchvision")
 
 
 def _resnet_and_images() -> tuple[nn.Module, torch.Tensor]:

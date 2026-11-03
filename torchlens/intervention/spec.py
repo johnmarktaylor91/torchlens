@@ -52,7 +52,7 @@ from ._site_signal import (
     site_signal,
 )
 from .predicates import as_intervention_decision
-from .types import Edit, HelperDirection, InterventionDecision
+from .types import Edit, InterventionDecision
 
 AddressClass = Literal["structural", "recorded", "value_dependent"]
 
@@ -62,10 +62,15 @@ AddressClass = Literal["structural", "recorded", "value_dependent"]
 SiteSignal = Literal["forward", "backward", "both"]
 
 
-#: Decision renderings print a constant where the removed decision
-#: ``direction=`` keyword used to print (always ``None`` for site-addressed
-#: rules), so renderings minted before the keyword was removed keep their value.
+#: Decision renderings and the rule-id digest print a constant where the
+#: removed ``direction`` keyword and ``Rule.direction`` field used to print
+#: (always ``None`` for site-addressed rules), so renderings and rule ids
+#: minted before the removal keep their value.
 _RULE_ID_TAIL = "None"
+
+#: Values the removed ``Rule.direction`` field took; a third positional
+#: argument spelled with one of them is the old field, refused typed.
+_REMOVED_DIRECTION_VALUES: frozenset[str] = frozenset({"forward", "backward", "both"})
 
 #: Selector kinds addressable on a FIRST capture of a model (no recorded
 #: numbering required): structural positions only.
@@ -269,16 +274,15 @@ class Rule:
     action:
         Helper spec, callable transform, or intervention decision (the raw
         user spelling, preserved for audit).
-    direction:
-        Optional declared signal for the action, kept in the rule identity.
 
-    The pass the rule edits is :attr:`signal`, derived from the target:
-    ``tl.grad(site)`` edits the gradient, a bare site the activation.
+    The site decides the pass: :attr:`signal` is derived from the target
+    (``tl.grad(site)`` edits the gradient, a bare site the activation,
+    ``tl.grad(site) | site`` both) and is never a field. The removed
+    ``direction`` field refuses typed (``intervention_direction_invalid``).
     """
 
     target: Any
     edit: Any
-    direction: HelperDirection | None = None
     address_class: AddressClass = field(default="value_dependent", compare=False)
     decision: InterventionDecision | None = field(default=None, compare=False, repr=False)
     where_repr: str = field(default="", compare=False, repr=False)
@@ -291,6 +295,44 @@ class Rule:
     #: The activation half of the target (``None`` for a gradient-only or
     #: node-only target): the only part a forward predicate may match.
     _forward_target: Any = field(default=None, init=False, compare=False, repr=False)
+
+    def __new__(cls, *args: Any, **kwargs: Any) -> Rule:
+        """Refuse the removed ``direction`` field before the dataclass init runs.
+
+        Parameters
+        ----------
+        *args:
+            Positional constructor arguments (``target``, ``edit``, ...).
+        **kwargs:
+            Keyword constructor arguments.
+
+        Returns
+        -------
+        Rule
+            The uninitialised instance the dataclass ``__init__`` fills.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``intervention_direction_invalid`` when ``direction=`` is passed,
+            or a third positional argument is ``"forward"``, ``"backward"``
+            or ``"both"`` (the old field's slot).
+        """
+
+        positional_stale = len(args) > 2 and args[2] in _REMOVED_DIRECTION_VALUES
+        if "direction" in kwargs or positional_stale:
+            value = args[2] if positional_stale else kwargs["direction"]
+            raise InvalidArgumentError(
+                f"Rule(direction={value!r}) is removed: the site decides the pass. "
+                "A bare site edits the activation, tl.grad(site) the gradient, and "
+                "tl.grad(site) | site both. Nothing was built.",
+                code="intervention_direction_invalid",
+                remedy="drop direction= and address the pass on the target: "
+                "Rule(tl.grad(site), edit) for the gradient, Rule(site, edit) for "
+                "the activation",
+                argument="direction",
+            )
+        return super().__new__(cls)
 
     def __post_init__(self) -> None:
         """Validate the clause and derive its identity facts.
@@ -348,7 +390,7 @@ class Rule:
             return memo[1]
         action_repr = _canonical_repr(self.edit, exact=exact)
         digest = hashlib.sha256(
-            f"{self.where_repr}||{action_repr}||{self.direction}".encode()
+            f"{self.where_repr}||{action_repr}||{_RULE_ID_TAIL}".encode()
         ).hexdigest()[:10]
         identity = (action_repr, f"r-{digest}")
         object.__setattr__(self, "_identity_memo", (versions, identity))
@@ -377,7 +419,7 @@ class Rule:
 
         return (
             f"Rule(target={self.target!r}, edit={self.edit!r}, "
-            f"direction={self.direction!r}, signal={self.signal!r}, rule_id={self.rule_id!r}, "
+            f"signal={self.signal!r}, rule_id={self.rule_id!r}, "
             f"address_class={self.address_class!r})"
         )
 

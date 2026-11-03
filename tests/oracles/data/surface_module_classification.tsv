@@ -11,6 +11,7 @@ Trace	declared
 add	declared
 add_noise	declared
 agent	submodule
+all_sites	declared
 appliances	submodule
 at_step	declared
 attribution	submodule

@@ -30,8 +30,20 @@ from .._data_classes._trace_validation import (
 )
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
-from .._fast_run import run_fast_live_trace, run_fast_loaded_trace, try_guarded_fast_rerun
-from .._runnable import DivergencePolicy, RunnableErrorCode, RunProvider, RunResult
+from .._fast_live_steer import refusal_code
+from .._fast_run import (
+    _FastLiveSession,
+    _FastSparseSession,
+    close_fast_run_session,
+    live_source_model,
+)
+from .._runnable import (
+    DivergencePolicy,
+    PathFaithfulness,
+    RunnableErrorCode,
+    RunProvider,
+    RunResult,
+)
 from .._runnable.execution import (
     raise_analysis_run_unavailable,
     refuse_truncated_rerun,
@@ -40,10 +52,16 @@ from .._runnable.execution import (
 )
 from .._runnable.state import validate_run_seed
 from .._runnable.transaction import _LiveRunOptions, _resolve_run_save_labels
+from .._runnable.verification import _run_fork_name
 from .._trace_state import TraceState
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from ..backends.torch.backward import disarm_triggers as _disarm_triggers_impl
-from ..errors import RunCapabilityUnavailableError, StateBindingError
+from ..errors import (
+    PathDivergenceError,
+    RunCapabilityUnavailableError,
+    RuntimeSignatureDriftError,
+    StateBindingError,
+)
 from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
@@ -60,6 +78,125 @@ __all__ = [
     "push_from",
     "run",
 ]
+
+
+def run_fast_loaded_trace(trace: Any, inputs: Any, *, seed: int | None) -> RunResult:
+    """Run or initialize the explicit verify-once loaded sparse fast path.
+
+    ``trace`` is the loaded sparse source Trace, ``inputs`` the runtime input tree
+    and ``seed`` is pinned for the lifetime of the fast session. Returns the first
+    ordinary verified result or a later compiled fast result.
+    """
+
+    session = trace.__dict__.get("_fast_run_session")
+    if isinstance(session, _FastSparseSession):
+        return session.run(inputs, seed=seed)
+    result = run_loaded_sparse_trace(
+        trace,
+        inputs,
+        seed=seed,
+        on_divergence=DivergencePolicy.RAISE,
+    )
+    if result.report.path_faithfulness is not PathFaithfulness.VERIFIED:
+        raise RunCapabilityUnavailableError(
+            "fast=True requires a fully verified first sparse run; this artifact settled "
+            f"{result.report.path_faithfulness.value}.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            detection_stage="fast_verify_once",
+        )
+    trace.__dict__["_fast_run_session"] = _FastSparseSession.build(
+        trace,
+        result.trace,
+        seed=seed,
+    )
+    return result
+
+
+def run_fast_live_trace(
+    trace: Any, inputs: Any, *, seed: int | None, until: Any = None
+) -> RunResult:
+    """Run the explicit native-forward targeted-collection live fast path.
+
+    The result Trace is a fork the cached session owns: every fast run
+    refreshes that fork and returns it, and the source trace stays untouched
+    (the same source/result split the loaded sparse fast path keeps).
+    """
+
+    model = live_source_model(trace)
+    if model is None:
+        raise RunCapabilityUnavailableError(
+            "The live Trace no longer retains its source model: the trace "
+            "holds it only weakly, so live-run availability depends on the "
+            "caller keeping a strong reference (an inline-constructed model "
+            "is collected at the first gc pass after capture). Keep the "
+            "model alive, or save/load a runnable artifact instead.",
+            code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+            provider=RunProvider.LIVE,
+        )
+    session = trace.__dict__.get("_fast_run_session")
+    if (
+        not isinstance(session, _FastLiveSession)
+        or session.model_ref() is not model
+        or not session.steer_plan.follows(trace)
+    ):
+        if hasattr(session, "close"):
+            session.close()
+        # The result is the session's own fork: repeated fast runs refresh it
+        # and the source trace stays untouched.
+        session = _FastLiveSession(
+            trace, model, target=trace._fork_trace(name=_run_fork_name(trace))
+        )
+        trace.__dict__["_fast_run_session"] = session
+    return session.run(inputs, seed=seed, until=until)
+
+
+def try_guarded_fast_rerun(
+    trace: Any, model: nn.Module, inputs: Any, *, output_transform: Any = None
+) -> tuple[bool, str | None]:
+    """Run the legacy intervened rerun through the guarded fast engine when eligible.
+
+    Parameters
+    ----------
+    trace:
+        Live trace carrying the staged spec; this door refreshes it in place on success.
+    model:
+        The model the caller passed (or the trace's retained live model).
+    inputs:
+        Transformed forward input.
+    output_transform:
+        The resolved rerun output transform, applied to the native output for
+        ``trace.transformed_output`` exactly as the capture engine does.
+
+    Returns
+    -------
+    tuple[bool, str | None]
+        ``(True, None)`` when the fast engine ran; ``(False, code)`` with the
+        typed refusal code when the caller must fall back to the capture
+        engine. A refused session is closed so the fallback's rebuilt trace
+        starts a fresh plan next time; the trace is never poisoned here
+        because the fallback replaces its state.
+    """
+
+    # The legacy door leaves no TorchLens hook on the user's model between
+    # calls (the rerun hook-staging contract), so the session is built for the
+    # run and closed after it; the explicit fast=True door keeps its cached
+    # session as before.
+    close_fast_run_session(trace)
+    session: _FastLiveSession | None = None
+    try:
+        session = _FastLiveSession(trace, model)
+        session.poison_on_divergence = False
+        # The legacy door returns the refreshed Trace, not a run verdict; the
+        # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
+        session.reports_hooked_ceiling = False
+        session.output_transform = output_transform
+        session.run(inputs, seed=None)
+    except (RunCapabilityUnavailableError, PathDivergenceError, RuntimeSignatureDriftError) as exc:
+        return False, refusal_code(exc)
+    finally:
+        if session is not None:
+            session.close()
+    return True, None
 
 
 def _apply_run_save_selection(result: Any, selected: Any) -> Any:

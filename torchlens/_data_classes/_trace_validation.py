@@ -140,6 +140,11 @@ class TraceValidationMixin(_TraceMixinBase):
             ``True`` if validation succeeds. Loaded non-torch traces whose
             runtime replay captures were stripped return an explicit
             unavailable status instead of a pass/fail bool.
+
+        Notes
+        -----
+        Every op replays under its recorded RNG state; like ``tl.trace``, the
+        call restores the caller's global RNG streams on return and on error.
         """
         return _doors.validation()._trace_checks.validate_forward_pass(
             self, ground_truth_output_tensors, verbose=verbose, validate_metadata=validate_metadata
