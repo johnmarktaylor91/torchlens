@@ -14,6 +14,7 @@ class _RecordResolver:
     """Settle references against one artifact's allocated row identities."""
 
     objects: dict[str, list[Any]]
+    _deferred_trace_refs: int
 
     def _settle(self, value: Any, at: str) -> Any:
         """Replace the references inside a decoded value with the built objects."""
@@ -22,7 +23,10 @@ class _RecordResolver:
         if isinstance(value, RowRef):
             return self._lookup(value, at)
         if isinstance(value, PendingRecord):
+            before = self._deferred_trace_refs
             fields = {k: self._settle(v, f"{at}.{k}") for k, v in value.fields.items()}
+            if self._deferred_trace_refs > before:
+                return PendingRecord(value.cls, fields, value.at)
             return build_component(value.cls, fields, at=at)
         if isinstance(value, list):
             return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
@@ -42,6 +46,9 @@ class _RecordResolver:
         """Return the object a row reference names, refusing a dangling one."""
 
         rows = self.objects.get(reference.record)
+        if reference.record == "trace" and not rows and reference.row == 0:
+            self._deferred_trace_refs += 1
+            return reference
         if rows is None:
             raise cell_error(
                 at, f"references the {reference.record} table, which is absent", code=CELL_CODE

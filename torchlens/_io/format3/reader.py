@@ -23,6 +23,7 @@ from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
+from ._payload_headers import validate_payload_headers
 from ._record_refs import _RecordResolver
 from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
 from .codec_policy import codec_backend
@@ -412,6 +413,7 @@ class DecodedArtifact(_RecordResolver):
         self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
         self.objects: dict[str, list[Any]] = {}
+        self._deferred_trace_refs = 0
         self.identities: dict[str, dict[str, int]] = {}
 
     # -- decode -------------------------------------------------------------
@@ -434,9 +436,8 @@ class DecodedArtifact(_RecordResolver):
             ]
             refuse_cells(kind, self.tables[kind])
             cls = record_class(kind)
-            self.objects[kind] = [state_new(cls) for _ in raw_rows]
+            self.objects[kind] = [] if kind == "trace" else [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
-        self.objects["trace"] = [state_new(record_class("trace"))]
 
     def _check_prerelease_marker(self, fields: dict[str, Any]) -> None:
         """Pop the pre-release marker of a switch-on write; refuse typed unless the switch is on."""
@@ -485,6 +486,9 @@ class DecodedArtifact(_RecordResolver):
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
+        self.objects["trace"] = [state_new(record_class("trace"))]
+        if self._deferred_trace_refs:
+            self.resolve_references()
         with governed_artifact_load():
             for kind in LOAD_ORDER:
                 for row_number, (obj, row) in enumerate(
@@ -664,6 +668,7 @@ def decode_checked(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     artifact.resolve_references()
     validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
     check_record_anchors(manifest, artifact.tables["trace"][0], root)
+    validate_payload_headers(root, artifact.sink.entries)
     return artifact
 
 

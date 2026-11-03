@@ -147,6 +147,21 @@ def test_unmodified_copy_round_trips(saved, tmp_path, built_counter):
     assert any(cls.__name__ == "Trace" for cls in built_counter), "allocation observer was idle"
 
 
+@pytest.mark.parametrize("wrapped", [False, True])
+def test_valid_trace_self_reference_survives_validation(tmp_path, wrapped):
+    """Trace identity settles after validation, including inside a pending value record."""
+
+    from torchlens.intervention.types import LiteralValue
+
+    trace = save_tiny(tmp_path / "source", "portable")
+    trace.annotations["self"] = LiteralValue(trace) if wrapped else trace
+    root = tmp_path / "self-reference"
+    trace.save(root)
+    loaded = _load(root)
+    value = loaded.annotations["self"]
+    assert (value.value if wrapped else value) is loaded
+
+
 @pytest.mark.parametrize("offset", [0, 7, 64, 257, 1031, -3])
 def test_byte_flip_in_each_listed_file(saved, tmp_path, built_counter, offset):
     root, _ = saved
