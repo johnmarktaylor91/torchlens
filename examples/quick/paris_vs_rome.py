@@ -15,18 +15,18 @@ import torchlens as tl
 
 model = GPT2LMHeadModel.from_pretrained("gpt2").eval()
 
-# TorchLens tokenizes the text automatically for Hugging Face models
+# TorchLens tokenizes input text automatically for Hugging Face models
 france = tl.trace(model, "The capital of France is")
 italy = tl.trace(model, "The capital of Italy is")
 tok = AutoTokenizer.from_pretrained("gpt2")
 
 
 def paris_vs_rome(trace):  # how much more the model predicts " Paris" than " Rome"
-    logits = trace["lm_head"].out[0, -1]  # the next-word scores
+    logits = trace["lm_head"].out[0, -1]  # next-word scores
     return (logits[tok.encode(" Paris")] - logits[tok.encode(" Rome")]).item()
 
 
-# the values of all 144 attention heads
+# values of all 144 attention heads
 heads = {
     (b, h): tl.module(f"transformer.h.{b}.attn") & tl.head(h, "v")
     for b in range(12)
@@ -38,7 +38,8 @@ effects = {
 }
 print(max(effects, key=effects.get))  # (9, 8): the head that matters most
 
-# the payoff: copy the Italy run and patch in just those two heads from France, in one line
+# the payoff, in one line: fork the Italy run, then .do() patches heads (9, 8) and (10, 0)
+# with their France values and pushes the change through the rest of the network
 both = italy.fork().do(heads[9, 8] | heads[10, 0], tl.patch_from(france))
 # (-5.25, 2.99): the model now prefers Paris over Rome
 print((paris_vs_rome(italy), paris_vs_rome(both)))
