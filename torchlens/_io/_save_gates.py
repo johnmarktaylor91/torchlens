@@ -43,6 +43,9 @@ from .runnable import (
     with_weight_payload,
 )
 
+#: Save preparation shares the bundle assembly stratum.
+__tl_layer__ = "L3"
+
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
     """PERMANENT erasure-prevention invariant for edge substitutions (L6 4.3).
