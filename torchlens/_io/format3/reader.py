@@ -75,8 +75,7 @@ _CORRUPT: Final = _CODES["record_file_corrupt"]
 #: Root entries that mark an artifact written by torchlens 2.x (pickle carrier).
 PRE3_ROOT_MARKERS: Final[tuple[str, ...]] = ("metadata.pkl", "bundle.json")
 _MEMBER_DIR = re.compile(r"^members/(\d+)-([A-Za-z0-9_.-]+)$")
-#: The column whose string identifies a row of each kind; a repeat refuses. Records are
-#: referenced by ``ref`` cells (design section 4), never by these strings.
+#: The column whose string identifies a row of each kind (a repeat refuses; ``ref`` cells link).
 IDENTITY_FIELDS: Final[dict[str, str]] = {
     "op": "label",
     "layer": "layer_label",
@@ -105,9 +104,8 @@ LOAD_ORDER: Final[tuple[str, ...]] = (
     "buffer",
 )
 
-#: Accessor-valued persisted fields, stored as the list of member rows (``schema._edge_members``)
-#: and rebuilt from the members' keys before the owner's state hook: member record kind, the
-#: member's key column, and the accessor class in the member's module (``None``: plain mapping).
+#: Accessor-valued persisted fields (``schema._edge_members``), rebuilt before the owner's state
+#: hook: member record kind, the member's key column, accessor class (``None``: plain mapping).
 _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
     ("layer", "ops"): ("op", "pass_number", "OpAccessor"),
     ("trace", "_param_logs"): ("param", "address", "ParamAccessor"),
@@ -121,14 +119,10 @@ _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
 
 
 def read_manifest(path: str | Path) -> dict[str, Any]:
-    """Read and validate ``manifest.json``; the first door, before any other file is opened.
-
-    Raises ``ArtifactTooOldError`` (``artifact_version_below_floor``: no ``format`` key, a 2.x
-    root marker, or a version below the floor) or ``ArtifactError`` (``manifest_missing``,
-    ``manifest_unreadable``, ``manifest_not_json_object``, ``manifest_schema_invalid``,
-    ``artifact_save_level_invalid``, ``artifact_version_above_runtime``,
-    ``load_path_symlink_rejected``).
-    """
+    """Read and validate ``manifest.json``, the first door: ``ArtifactTooOldError``
+    (``artifact_version_below_floor``: no ``format`` key, a 2.x root marker, a version below
+    the floor) or ``ArtifactError`` with one of the ``manifest_*`` codes, ``artifact_save_level_invalid``,
+    ``artifact_version_above_runtime`` or ``load_path_symlink_rejected``."""
 
     root = Path(path)
     symlink_guard(root, "artifact path")
@@ -201,9 +195,8 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 class TensorRefSink:
     """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
 
-    The entries reach the rehydrate path as the manifest's tensor index (``LazyActivationRef``
-    on (chunk, key)). A structure-only cell decodes to ``None`` and is counted. The codec must
-    be listed, the chunk in ``files``, the key ``t<k>``; a repeated (chunk, key) must agree.
+    The entries become the manifest's tensor index for the rehydrate path. A structure-only
+    cell decodes to ``None``; codec, chunk and ``t<k>`` key are checked; repeats must agree.
     """
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
@@ -489,15 +482,12 @@ class DecodedArtifact:
         if not labels or all(cells.get(column) is None for column in _TEMPLATE_SLOTS):
             return
         if not hasattr(self, "_calls_by_label"):
-            rows, calls = self.tables.get("module_call", ()), self.objects.get("module_call", ())
-            self._calls_by_label = {
-                row.get("label"): call for row, call in zip(rows, calls, strict=True)
-            }
+            rows = self.tables.get("module_call", ())
+            pairs = zip(rows, self.objects["module_call"], strict=True)
+            self._calls_by_label = {row.get("label"): call for row, call in pairs}
         call = self._calls_by_label.get(labels[0])
-        if call is None:
-            return
         for column, slot in _TEMPLATE_SLOTS.items():
-            if cells.get(column) is not None and call.__dict__.get(slot) is None:
+            if call is not None and cells.get(column) is not None and slot not in call.__dict__:
                 call.__dict__[slot] = cells[column]
 
     def _rebuild_accessors(
@@ -539,11 +529,8 @@ class DecodedArtifact:
         return row if rebuilt is None else rebuilt
 
     def trace_state(self, accessor_cls: type) -> dict[str, Any]:
-        """The scrubbed-state-shaped dict the existing rehydrate path restores.
-
-        ``accessor_cls`` is ``ModuleAccessor``, passed in by the rehydration
-        step because the record classes sit above this module.
-        """
+        """The scrubbed-state-shaped dict the rehydrate path restores (``accessor_cls`` is
+        ``ModuleAccessor``, passed in because the record classes sit above this module)."""
 
         state = dict(self._rebuild_accessors("trace", 0, self.tables["trace"][0]))
         state[TLSPEC_KEY] = self.version
@@ -617,8 +604,8 @@ def _restore_record(
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 
-#: Computed columns kept behind their property after a load (column to backing slot); a
-#: ``module`` row's templates go to its first call (``_install_module_templates``).
+#: Computed columns kept behind their property (column to slot); a ``module`` row's templates
+#: go to its first call (``_install_module_templates``).
 _TEMPLATE_SLOTS: Final = {
     f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
 }
@@ -629,9 +616,8 @@ _RESTORED_COMPUTED: Final[dict[str, dict[str, str]]] = {
 
 
 def install_load_hooks(**hooks: Callable[..., Any]) -> None:
-    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors
-    (``torchlens._io.bundle`` installs them; a door without its step refuses with
-    ``bundle_load_failed``)."""
+    """Install the rehydration step of the ``trace``, ``bundle`` and ``recipe`` doors (from
+    ``torchlens._io.bundle``; a door without its step refuses ``bundle_load_failed``)."""
 
     unknown = set(hooks) - _HOOK_KINDS
     if unknown:
@@ -733,47 +719,61 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     root = Path(path)
     manifest = validate_artifact(root)
     _require_kind(manifest, root, "bundle")
+    metadata = _read_relations(root, manifest)
     members = [
         (name, load_trace(member_root, **options))
-        for name, member_root in _iter_members(root, manifest)
+        for name, member_root in _iter_members(root, manifest, metadata)
     ]
-    relations: Any = None
-    baseline: Any = None
-    if "relations.json" in manifest["files"]:
-        data, _ = read_json_file(root / "relations.json", code=_CORRUPT, what="relations")
-        if not isinstance(data, dict) or not isinstance(data.get("relations", []), list):
+    return _hook("bundle", root)(
+        members, metadata=metadata, root=root, tlspec_version=manifest.get(TLSPEC_KEY)
+    )
+
+
+def _read_relations(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Read ``relations.json``: an object whose ``members`` list names each member's path."""
+
+    target = root / "relations.json"
+    if "relations.json" not in manifest["files"]:
+        raise integrity_error(target, "a bundle must list relations.json", code=_CORRUPT)
+    data, _ = read_json_file(target, code=_CORRUPT, what="relations")
+    members = data.get("members") if isinstance(data, dict) else None
+    if not isinstance(members, list) or not all(
+        isinstance(member, dict)
+        and isinstance(member.get("name"), str)
+        and isinstance(member.get("path"), str)
+        for member in members
+    ):
+        raise integrity_error(
+            target, "relations.json must be {members: [{name, path}, ...], ...}", code=_CORRUPT
+        )
+    return data
+
+
+def _iter_members(
+    root: Path, manifest: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> Iterator[tuple[str, Path]]:
+    """Members in ``relations.json`` order; every ``members/`` file must belong to one."""
+
+    declared: dict[str, str] = {}
+    for member in metadata["members"]:
+        path, name = member["path"], member["name"]
+        if _MEMBER_DIR.match(path) is None or path in declared or name in declared.values():
             raise integrity_error(
-                root / "relations.json",
-                "relations.json must be {relations: [...], baseline?}",
+                root / path,
+                "bundle members must be distinct members/<index>-<name>/ directories",
                 code=_CORRUPT,
             )
-        relations = data.get("relations") or None
-        baseline = data.get("baseline")
-    return _hook("bundle", root)(members, relations=relations, baseline=baseline, root=root)
-
-
-def _iter_members(root: Path, manifest: Mapping[str, Any]) -> Iterator[tuple[str, Path]]:
-    """Members in index order, from the manifest's file listing."""
-
-    found: dict[int, str] = {}
+        declared[path] = name
     for relpath in manifest["files"]:
         parts = relpath.split("/")
-        if parts[0] != "members":
-            continue
-        match = _MEMBER_DIR.match("/".join(parts[:2]))
-        if match is None:
+        if parts[0] == "members" and "/".join(parts[:2]) not in declared:
             raise integrity_error(
-                root / relpath,
-                "bundle members must be members/<index>-<name>/",
-                code=_CORRUPT,
+                root / relpath, "member files must belong to a declared member", code=_CORRUPT
             )
-        index, name = int(match.group(1)), match.group(2)
-        if found.setdefault(index, name) != name:
-            raise integrity_error(root / relpath, f"member index {index} repeats", code=_CORRUPT)
-    for index in sorted(found):
-        member_root = root / "members" / f"{index}-{found[index]}"
+    for path, name in declared.items():
+        member_root = root / path
         symlink_guard(member_root, "bundle member")
-        yield found[index], member_root
+        yield name, member_root
 
 
 def load_intervention_recipe(path: str | Path) -> Any:

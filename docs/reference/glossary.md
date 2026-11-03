@@ -1473,8 +1473,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 `tl.types.UnencodableValue`
 : The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
   format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
-  with `type` (the value's `module.qualname`), `repr` (its repr text, bounded), `repr_length`
-  and `at` (the record, row and column it sat in). The load attaches one advisory,
+  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded) and
+  `at` (the record, row and column it sat in). The load attaches one advisory,
   `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
   manifest discloses such values. A record cell that fails its typed schema refuses
   `record_schema_invalid`.

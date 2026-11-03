@@ -25,6 +25,7 @@ Every protective claim gets a test that TRIES the forbidden thing (D18).
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 import torch
@@ -423,6 +424,8 @@ def test_loader_leg_c_namespaced_section_preserves(tmp_path, two_member_bundle: 
 def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: Bundle) -> None:
     """The historical silent load-then-destroy is banned in both directions."""
 
+    from _format3_envelope import redigest
+
     from torchlens._io.format_errors import ArtifactError
 
     path = _saved_bundle_dir(tmp_path, two_member_bundle)
@@ -430,6 +433,7 @@ def test_loader_leg_c_bare_unknown_section_refuses(tmp_path, two_member_bundle: 
     metadata = json.loads(metadata_path.read_text())
     metadata["experiment_index"] = {"runs": [1]}
     metadata_path.write_text(json.dumps(metadata))
+    redigest(Path(path), "relations.json")
 
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(path)

@@ -100,12 +100,15 @@ _OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {"tensor": TENSOR_REFERENC
 
 @dataclasses.dataclass(frozen=True)
 class UnencodableValue:
-    """A value the writer could not encode: its type, bounded repr and location (section 5)."""
+    """A value the writer could not encode: its type name, repr text and where it was.
 
-    type: str
-    repr: str
-    repr_length: int
+    ``_repr_length`` (the unbounded repr's length) is carried for round trips, not public.
+    """
+
+    type_name: str
+    repr_text: str
     at: str
+    _repr_length: int = dataclasses.field(default=0, repr=False, compare=False)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -618,7 +621,7 @@ class Decoder:
             raise cell_error(at, "unencodable disclosure fields are mistyped", code=CELL_CODE)
         if len(data["repr"]) > UNENCODABLE_REPR_LIMIT:
             raise cell_error(at, "unencodable repr is over the repr limit", code=CELL_CODE)
-        return UnencodableValue(data["type"], data["repr"], data["repr_length"], data["at"])
+        return UnencodableValue(data["type"], data["repr"], data["at"], data["repr_length"])
 
     @staticmethod
     def _callable_placeholder(data: Mapping[str, Any], at: str, depth: int) -> CallablePlaceholder:
