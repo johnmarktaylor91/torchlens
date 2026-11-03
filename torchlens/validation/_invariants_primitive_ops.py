@@ -324,9 +324,19 @@ def _value_failure(message: str) -> NoReturn:
     ----------
     message
         Human-readable invariant failure.
+
+    Raises
+    ------
+    MetadataInvariantError
+        With check name and refusal code ``aten_values_consistent`` (an
+        INTERNAL tripwire: it fires only on a capture defect).
     """
 
-    raise MetadataInvariantError("aten_values_consistent", message)
+    raise MetadataInvariantError(
+        "aten_values_consistent",
+        f"{message}. Remedy: report this as a TorchLens bug.",
+        code="aten_values_consistent",
+    )
 
 
 def _value_leaves(value: Any) -> tuple[Any, ...] | None:

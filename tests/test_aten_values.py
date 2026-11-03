@@ -447,6 +447,7 @@ def test_invariant_rejects_a_value_that_disagrees_with_its_facts_or_owner() -> N
     with pytest.raises(MetadataInvariantError) as excinfo:
         check_metadata_invariants(trace)
     assert "aten_values_consistent" in str(excinfo.value)
+    assert excinfo.value.fields["code"] == "aten_values_consistent"
 
     row.out = good + 1
     with pytest.raises(MetadataInvariantError, match="equals its saved output"):
