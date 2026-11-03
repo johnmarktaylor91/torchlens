@@ -1690,7 +1690,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
-  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself. Like
+  (`"forward"` when omitted, so `tl.validate(model, x)` runs the forward replay check; others
+  include `"saved"` and `"receptive_field"`), capturing what it needs itself. Like
   `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
   its own runs and restores the caller's streams on return and on error; the lower-level
   `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
@@ -6728,7 +6729,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `scale=` | keyword of `tl.mechinterp.apply_norm_scale` (keyword-only; default `'frozen'`): `"frozen"` (default; TLens's own default, verified from source) or `"component"` -- the per-component RECOMPUTE mode, which is NOT additive: the row-sum identity is skipped, the receipt says so, and DLA refuses such stacks. TLens `apply_ln_to_stack`; keyword of `tl.trackers.correct_histogram`, `tl.trackers.correct_running_stats`, `tl.trackers.corrected_grad_block` (required) |
 | `scaler=` | keyword of `WatchSession.step` (keyword-only; default `None`); constructor keyword of `tl.debug.ChecksSession` (keyword-only; default `None`): The loop's `GradScaler` handle, or `None` as the DECLARATION that this loop runs no scaler; keyword of `tl.trackers.unscale_stage` (required) |
 | `schema=` | keyword of `tl.agent.build_envelope` (keyword-only; required): Versioned payload schema id (`torchlens.agent.<name>.v1`) |
-| `scope=` | keyword of `SummaryReport.to_pandas` (default `'display'`); keyword of `tl.validate` (keyword-only; required): Validation scope: `"forward"`, `"backward"`, `"saved"`, `"intervention"`, or `"receptive_field"`. `"receptive_field"` captures with `save_mode="reference"`, so a model whose forward writes its own buffers in place (a train-mode BatchNorm's running statistics) raises .. |
+| `scope=` | keyword of `SummaryReport.to_pandas` (default `'display'`); keyword of `tl.validate` (keyword-only; default `'forward'`): Validation scope: `"forward"`, `"backward"`, `"saved"`, `"intervention"`, or `"receptive_field"`. `"receptive_field"` captures with `save_mode="reference"`, so a model whose forward writes its own buffers in place (a train-mode BatchNorm's running statistics) raises .. |
 | `score=` | keyword of `tl.attribution.occlusion` (keyword-only; required): Callable receiving a Trace and returning one finite real scalar. It is invoked once on the original and once on the occluded fork; keyword of `tl.bridge.brain_score.score_parts` (required): A Brain-Score `Score` (any object with `values` and `attrs`) or a plain number |
 | `scores=` | keyword of `tl.repgeom.metric_disagreement` (required): `scores[metric][site]`: a float or a `ScoreInterval` per site. Sites missing under a metric count as NaN there; keyword of `tl.viz.causal_trace_heatmap` (required): 2D array-like patching scores |
 | `sdpa_backend=` | keyword of `tl.report.flops_vs_dispatch` (keyword-only; default `None`): Provenance disclosure of the SELECTED SDPA backend when the caller forced one (e.g. `"math"` under `sdpa_kernel(SDPBackend.MATH)`, which changes the EXECUTED PROGRAM: formula validation only, never a timing comparison). `None` means default selection |
