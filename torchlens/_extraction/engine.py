@@ -42,7 +42,6 @@ from .._errors import InvalidArgumentError
 from .._extraction_provenance import apply_input_transform
 from .._user_public_impls import trace as _capture_trace
 from ..errors._base import TorchLensError, TorchLensWarning
-from ..options import CaptureOptions
 from ..transforms import TensorSpec, TransformContext, TransformPipeline
 from ._engine_batching import _iter_item_batches, _move_envelope_to_device
 from ._front_door import _extract_layers_with_trace, _matching_saved_layer_labels
@@ -716,8 +715,8 @@ def _capture_outputs(
         trace = _capture_trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
-            capture=CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            input_kwargs=dict(envelope.kwargs),
+            save=list(plan.layer_plan.values()),
             intervene=plan.intervention.spec,
         )
         receipt = batch_receipt(trace)
@@ -728,8 +727,8 @@ def _capture_outputs(
         trace = _capture_trace(
             plan.model,
             envelope.args,
-            dict(envelope.kwargs),
-            capture=CaptureOptions(layers_to_save=list(plan.layer_plan.values())),
+            input_kwargs=dict(envelope.kwargs),
+            save=list(plan.layer_plan.values()),
         )
         return _resolve_trace_outputs(plan, trace)
     _trace, outputs, views = _extract_layers_with_trace(

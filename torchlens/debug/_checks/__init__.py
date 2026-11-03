@@ -1,0 +1,65 @@
+"""Training sanity checks -- the torcheck niche, honestly redefined (F23).
+
+A standalone, CAPTURE-FREE check registry on one shared loop-session
+chassis (checks memo D1): the chassis owns the step axis, the three hook
+sites (S-A per-parameter counting hooks, S-B optimizer pre-step, S-C
+post-step), the skip/scale/clip ledgers, and the batched tensor scan;
+trackers subscribe to its bounded event stream (the C06
+``torchlens._observability`` chassis). The registry constructs and runs with
+TorchLens capture entirely off, and the step-check family runs on
+``torch.compile``'d models.
+
+The honestly-redefined flagship checks (memo section 1, all measured):
+
+- "Params changing" ships as a FACT vocabulary whose primary detector is
+  the GRADIENT FACT -- under default AdamW a dead network "changes" every
+  step, and movement statistics lag a real death by 22 to >32 steps.
+- "Exploding gradients" cannot be checked at the optimizer site at all
+  (clipping pins the post-clip norm to max_norm); magnitude lives only at
+  the pre-clip S-A site, and asking where clipping censored the evidence
+  returns a typed ``unavailable``, never a silent pass.
+- Nonfinite parameter gradients COLLECT at S-A (under a GradScaler they
+  are the mechanism working) and RAISE at S-B before the weights are
+  written -- the only pre-write tripwire under fp32 and bf16.
+
+One-shot parameter-space auditing is ``tl.debug.param_health``. The public names of this
+package are re-exported from ``torchlens.debug`` (``tl.debug.ChecksSession`` and so on).
+Every spelling here is DOCUMENTED-UNSTABLE pending naming-session ratification.
+"""
+
+from __future__ import annotations
+
+from ._adapters import OptimizerFacts
+from ._ledgers import (
+    ClipLedger,
+    ClipLedgerSnapshot,
+    ScaleLedger,
+    ScaleLedgerSnapshot,
+    Watchdog,
+    WatchdogSnapshot,
+)
+from ._range import LivenessProbe, RangeProbe
+from ._records import (
+    CheckFinding,
+    CheckReport,
+)
+from ._scan import ScanRow
+from ._session import ChecksSession
+
+__tl_layer__ = "L5"
+
+__all__ = [
+    "CheckFinding",
+    "CheckReport",
+    "ChecksSession",
+    "ClipLedger",
+    "ClipLedgerSnapshot",
+    "LivenessProbe",
+    "OptimizerFacts",
+    "RangeProbe",
+    "ScaleLedger",
+    "ScaleLedgerSnapshot",
+    "ScanRow",
+    "Watchdog",
+    "WatchdogSnapshot",
+]

@@ -1,0 +1,48 @@
+name: Bug report
+description: TorchLens raised an error, gave a wrong result, or behaved differently from its docs.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A small script that reproduces the problem is the most useful thing you can include.
+        For questions about how to do something, use [GitHub Discussions](https://github.com/johnmarktaylor91/torchlens/discussions/categories/q-a) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: The shortest script that shows the problem. Use a small or randomly initialized model if you can.
+      render: python
+    validations:
+      required: true
+  - type: textarea
+    id: traceback
+    attributes:
+      label: Error message and traceback
+      description: The full output, including any TorchLens error code.
+      render: text
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment report
+      description: |
+        Paste the output of:
+
+        ```
+        python -c "import torchlens as tl; print(tl.utils.doctor())"
+        ```
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: The model or library involved (for example a Hugging Face model id), GPU or CPU, and whether it worked in an earlier TorchLens version.

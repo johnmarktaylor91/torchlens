@@ -13,9 +13,9 @@ inert first-party code safe to import + inspect without a trust opt-in:
 
 That premise is FALSE for the extras-gated appliance packages:
 ``torchlens/neuro/__init__.py`` imports ``rsatoolbox`` / ``brainscore_core`` at
-import time, and ``torchlens/_notebook/__init__.py`` imports ``IPython`` /
+import time, and ``torchlens/report/_notebook/__init__.py`` imports ``IPython`` /
 ``jupyter_client`` at import time. A crafted bundle whose ``metadata.pkl``
-carries a ``GLOBAL`` naming ``torchlens.neuro`` (or ``torchlens._notebook``)
+carries a ``GLOBAL`` naming ``torchlens.neuro`` (or ``torchlens.report._notebook``)
 therefore made a PLAIN ``tl.load()`` -- no run, no trust flags -- import those
 foreign third-party packages and execute their top-level code.
 
@@ -88,7 +88,7 @@ def _drop_foreign_modules() -> None:
         for loaded in list(sys.modules):
             if loaded == foreign or loaded.startswith(f"{foreign}."):
                 del sys.modules[loaded]
-    for tl_appliance in ("torchlens.neuro", "torchlens._notebook"):
+    for tl_appliance in ("torchlens.neuro", "torchlens.report._notebook"):
         for loaded in list(sys.modules):
             if loaded == tl_appliance or loaded.startswith(f"{tl_appliance}."):
                 del sys.modules[loaded]
@@ -99,7 +99,7 @@ def _drop_foreign_modules() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens._notebook"])
+@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
 def test_safe_unpickler_defers_appliance_module_without_importing(appliance_module: str) -> None:
     """A GLOBAL naming an appliance module is load-tolerated without ever importing it.
 
@@ -153,7 +153,7 @@ def test_end_to_end_load_does_not_import_appliance_deps(tmp_path: Path) -> None:
     assert "brainscore_core" not in sys.modules
 
 
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens._notebook"])
+@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
 def test_safe_unpickler_admits_appliance_module_only_under_explicit_trust(
     appliance_module: str,
 ) -> None:
@@ -191,8 +191,8 @@ def test_is_torchlens_appliance_module_classification() -> None:
 
     assert _is_torchlens_appliance_module("torchlens.neuro")
     assert _is_torchlens_appliance_module("torchlens.neuro.submodule")
-    assert _is_torchlens_appliance_module("torchlens._notebook")
-    assert _is_torchlens_appliance_module("torchlens._notebook.submodule")
+    assert _is_torchlens_appliance_module("torchlens.report._notebook")
+    assert _is_torchlens_appliance_module("torchlens.report._notebook.submodule")
     assert not _is_torchlens_appliance_module("torchlens")
     assert not _is_torchlens_appliance_module("torchlens._data_classes.trace")
     # A prefix-alike module must not false-positive.
@@ -204,7 +204,7 @@ def test_is_torchlens_appliance_module_classification() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens._notebook"])
+@pytest.mark.parametrize("appliance_module", ["torchlens.neuro", "torchlens.report._notebook"])
 def test_resolver_denies_appliance_module_by_name(appliance_module: str) -> None:
     """A custom key naming an appliance module is denied by default, no import."""
 
@@ -278,8 +278,8 @@ def test_resolver_appliance_classifier_matches_unpickler_classifier() -> None:
     for name in (
         "torchlens.neuro",
         "torchlens.neuro.sub",
-        "torchlens._notebook",
-        "torchlens._notebook.sub",
+        "torchlens.report._notebook",
+        "torchlens.report._notebook.sub",
         "torchlens",
         "torchlens._data_classes.trace",
     ):

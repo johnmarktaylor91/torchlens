@@ -137,9 +137,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(layers_to_save=None,
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------
@@ -159,18 +158,18 @@ def log_model_metadata(
     model_trace = _user_funcs.trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
     return model_trace
 
 
 def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input rungs plus the two execution dials ARE the spec'd surface (F17 B11)
     model: nn.Module | str,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...] | None = None,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     input_shape: Any | None = None,
@@ -188,7 +187,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     and never auto-prints (the repr self-displays).
 
     Input precedence follows the quickstart ladder (F17, memo D2): real
-    ``input_args`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
+    ``inputs`` XOR ``input_shape=`` XOR nothing. ``input_shape=``
     synthesizes seeded tensors per the quickstart grammar and the synthesis
     is disclosed in the render; a zero-input call infers a verified input
     and REUSES its verification trace (no second capture). Mixing the
@@ -202,7 +201,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         device (no weight download) and takes the weights-free path, so it
         needs ``input_shape=`` or meta inputs. Requires ``transformers``; the
         string form is DOCUMENTED-UNSTABLE.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``. The quickstart input ladder
         applies (F17): a real input is the gold rung; omit it and pass
         ``input_shape=`` for a declared shape with synthesized values; omit
@@ -256,14 +255,14 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
     ladder_provenance = None
     input_synthesis: str | None = None
     facade_report = _maybe_weightsfree_summary(
-        model, input_args, input_kwargs, input_shape, summary_kwargs
+        model, inputs, input_kwargs, input_shape, summary_kwargs
     )
     if facade_report is not None:
         return facade_report
-    if input_shape is not None or (input_args is None and not input_kwargs):
+    if input_shape is not None or (inputs is None and not input_kwargs):
         from ._quickstart._resolve import attach_provenance, resolve_inputs
 
-        resolved = resolve_inputs(model, input_args, input_kwargs, input_shape, verb="summary")
+        resolved = resolve_inputs(model, inputs, input_kwargs, input_shape, verb="summary")
         ladder_provenance = resolved.provenance
         input_synthesis = _ladder_synthesis_note(input_shape, resolved)
         if (
@@ -280,11 +279,11 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
                 grad_mode="off",
                 input_synthesis=input_synthesis,
             )
-        input_args = list(resolved.plan.input_args)
+        inputs = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
-    input_args = _coerce_input_args(model, input_args)
-    check_model_and_input_variants(model, input_args, input_kwargs)
+    inputs = _coerce_input_args(model, inputs)
+    check_model_and_input_variants(model, inputs, input_kwargs)
 
     saved_training_flags = [(module, module.training) for module in model.modules()]
     rng_snapshot = log_current_rng_states()
@@ -298,7 +297,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         with grad_context:
             trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
-                input_args=input_args,
+                input_args=inputs,
                 input_kwargs=input_kwargs,
                 layers_to_save=None,
                 recurrence_detection=True,
@@ -553,9 +552,7 @@ def _summary_execution_note(execution_mode: str, grad_mode: str) -> str:
     return f"{mode_part}, {grad_part}, state restored"
 
 
-_GRAPH_VERBS = frozenset(
-    {"show_model_graph", "draw_backward", "draw_combined", "show_bundle_graph"}
-)
+_GRAPH_VERBS = frozenset({"show_model_graph", "show_bundle_graph"})
 
 
 def __getattr__(name: str) -> Any:
@@ -570,7 +567,7 @@ def __getattr__(name: str) -> Any:
 @restores_rng_streams
 def validate_forward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     seed: int | None = None,
     verbose: bool = False,
@@ -586,7 +583,7 @@ def validate_forward_pass(
     ----------
     model:
         Model or callable to validate.
-    input_args:
+    inputs:
         Input for which to validate the saved outs.
     input_kwargs:
         Keyword arguments for model forward pass.
@@ -622,7 +619,7 @@ def validate_forward_pass(
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
-    spec = resolve_backend_spec(backend, model, input_args, input_kwargs)
+    spec = resolve_backend_spec(backend, model, inputs, input_kwargs)
     # Forward only non-default save options: a default call reaches every
     # backend's entry with exactly the keywords it always received.
     save_options: dict[str, Any] = {}
@@ -641,7 +638,7 @@ def validate_forward_pass(
         )
     return spec.validate_entry(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         seed=seed,
         verbose=verbose,
@@ -983,7 +980,7 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches ground
@@ -1486,7 +1483,7 @@ def _validate_forward_pass_torch(
 @restores_rng_streams
 def validate_backward_pass(
     model: nn.Module,
-    input_args: torch.Tensor | list[Any] | tuple[Any, ...],
+    inputs: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
     loss_fn: Callable[[Any], torch.Tensor] | None = None,
     *,
@@ -1504,7 +1501,7 @@ def validate_backward_pass(
     ----------
     model:
         PyTorch model.
-    input_args:
+    inputs:
         Positional args for ``model.forward()``.
     input_kwargs:
         Keyword args for ``model.forward()``.
@@ -1544,7 +1541,7 @@ def validate_backward_pass(
 
     return _impl(
         model,
-        input_args,
+        inputs,
         input_kwargs=input_kwargs,
         loss_fn=loss_fn,
         validate_metadata=validate_metadata,

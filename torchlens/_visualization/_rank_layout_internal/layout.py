@@ -41,7 +41,7 @@ class RankRenderEndpointError(GraphvizRenderError):
     default_remedy: str = (
         "this is a TorchLens render-pipeline bug (a node was hidden while its edges "
         "were kept); report it with the model and draw() arguments, and render with "
-        "vis_node_placement='dot' meanwhile"
+        "layout='dot' meanwhile"
     )
 
     def __init__(
@@ -74,7 +74,7 @@ RANK_LAYOUT_NOTICE = (
     "TorchLens auto-selected rank layout (estimated layout cost={cost}, "
     "threshold={threshold}). Reduce graph complexity with vis_call_depth, "
     "rolled mode, or module= focus; force Graphviz dot with "
-    "vis_node_placement='dot' if you can wait longer (measured: seconds to "
+    "layout='dot' if you can wait longer (measured: seconds to "
     "a few minutes at this scale)."
 )
 _NEATO_TIMEOUT = 120
@@ -1053,7 +1053,7 @@ _NEATO_ENGINE_MISSING = 'no layout engine support for "neato"'
 _NEATO_PLUGIN_REMEDY = (
     "install Graphviz's neato layout plugin (Debian forky and Ubuntu 26.04 or "
     "later: apt install libgvplugin-neato-layout8), or render with "
-    "vis_node_placement='dot'"
+    "layout='dot'"
 )
 
 

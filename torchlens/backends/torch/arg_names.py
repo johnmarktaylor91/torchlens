@@ -24,8 +24,8 @@ def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
     have meaningfully different signatures (``__add__(self, other)`` is a
     2-arg dunder; ``torch.add(input, other, *, alpha, out)`` is not), and the
     historical underscore-stripped shared key (#82) let whichever registered
-    last overwrite the rest, recording wrong ``arg_names`` metadata (W3 audit
-    F9). Lookup falls back to the stripped key for names whose own
+    last overwrite the rest, recording wrong ``arg_names`` metadata (wave-3 audit
+    finding 9). Lookup falls back to the stripped key for names whose own
     introspection stored nothing, preserving the old best-effort behavior.
 
     Skipped for property-like attributes (``real``, ``imag``, ``T``, etc.) that

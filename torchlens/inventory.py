@@ -29,7 +29,6 @@ from torchlens._errors import _actionable_message, _ActionableErrorMixin
 from torchlens.errors._base import ConfigurationError
 
 from ._record_type import record_type
-from .options import CaptureOptions
 
 if TYPE_CHECKING:
     from torch import nn
@@ -425,7 +424,7 @@ def list_sites(
         Optional keyword inputs for the forward rung (kwargs-only models).
     capture:
         Optional ``CaptureOptions`` override for the forward rung, used
-        verbatim (e.g. ``structure_only=True``; shapes are then labeled
+        for capture metadata (e.g. ``structure_only=True``; shapes are then labeled
         hypotheses). Default is a metadata-only capture retaining no
         activation payloads.
 
@@ -439,9 +438,13 @@ def list_sites(
         return _module_rung(model)
     from ._user_public_impls import trace as _capture_trace
 
-    options = capture if capture is not None else CaptureOptions(layers_to_save=None)
+    options = capture
     trace = _capture_trace(
-        model, inputs if inputs is not None else (), input_kwargs, capture=options
+        model,
+        inputs if inputs is not None else (),
+        input_kwargs=input_kwargs,
+        capture=options,
+        save="none",
     )
     return sites_of_trace(trace)
 

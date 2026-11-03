@@ -37,7 +37,8 @@ def _capture(model: nn.Module, x: torch.Tensor) -> Any:
     return tl.trace(
         model.eval(),
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, seed=0),
+        capture=CaptureOptions(save_args=True, seed=0),
+        save="all",
     )
 
 

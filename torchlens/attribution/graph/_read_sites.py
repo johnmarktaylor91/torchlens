@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import torch
+
 from ...intervention.hooks import _resolve_facet_specs
 from ...receptive_field._path import ancestor_labels
 from .._result import AttributionError
@@ -21,7 +23,14 @@ from ..onebackward._accessor import ReadEdgeIndex
 from ..onebackward._targets import resolve_site_edge
 from ._transcoders import Reader
 
-__all__ = ["check_upstream", "facet_labels", "is_module", "op_read_label"]
+__all__ = [
+    "check_upstream",
+    "facet_labels",
+    "is_module",
+    "is_pooled_logits",
+    "op_read_label",
+    "read_payload",
+]
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section Attribution graphs."
 
@@ -122,3 +131,32 @@ def facet_labels(trace: Any, index: ReadEdgeIndex, selector: Any) -> list[str]:
             home = f"{home}:{spec.pass_index}"
         labels.append(resolve_site_edge(index, home, role="frozen").label)
     return labels
+
+
+def read_payload(payloads: Any, label: str, role: str) -> torch.Tensor:
+    """Return a site's captured value (``payloads.payload(label)``) as ``(positions, width)``.
+
+    The logits site may also be a POOLED head, ``(1, classes)`` (a vision
+    transformer's class-token head): it reads as one position.
+    """
+
+    value = payloads.payload(label)
+    if role == "logits" and is_pooled_logits(value):
+        return value.detach()
+    if value is None or value.dim() != 3 or value.shape[0] != 1:
+        shape = None if value is None else tuple(value.shape)
+        raise _site_refusal(
+            f"The {role} site {label!r} holds {shape}; the graph reads one prompt, "
+            "shaped (1, positions, width), with every activation saved (the logits site "
+            "may also be a pooled (1, classes) head). Remedy: "
+            "capture one sequence with the default save mode, for example "
+            "tl.trace(model, tokens[None]).",
+            code="attribution_graph_input_unsupported",
+        )
+    return value.detach()[0]
+
+
+def is_pooled_logits(value: torch.Tensor | None) -> bool:
+    """Whether a logits payload is a pooled ``(1, classes)`` head rather than per-position."""
+
+    return value is not None and value.dim() == 2 and value.shape[0] == 1

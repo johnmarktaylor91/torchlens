@@ -1,12 +1,44 @@
 # Coming from torchinfo
 
-`tl.summary(model, x)` is a drop-in mental model for
-`torchinfo.summary(model, input_data=x)`: one call, one table, params and
-FLOPs per row, a totals footer. This page maps the spellings, then names
-what changes -- including the numbers torchinfo gets wrong that TorchLens
-now gets right.
+This page is for people who print model summaries with `torchinfo.summary` or its predecessor
+`torchsummary`. `tl.summary(model, x)` maps to `torchinfo.summary(model, input_data=x)`: one call,
+one table, params and FLOPs per row, a totals footer. The runnable example uses only
+`summary(...).total_params`, so it does not depend on a particular torchinfo release; the
+measurements below were taken on gpt2 against torchinfo's behavior at that time. Checked 2026-11-03.
 
-## Spelling map
+## The same task in both
+
+The task: the total parameter count of a small network from one call.
+
+### In torchinfo
+
+Needs torchinfo; the fence is skipped where it is not installed.
+
+```python
+# migration-test: tool=torchinfo expected=212
+import torch.nn as nn
+from torchinfo import summary
+
+model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
+result = summary(model, input_size=(2, 8), verbose=0)
+RESULT = result.total_params
+```
+
+### In TorchLens
+
+```python
+# migration-test: tool=torchlens expected=212
+import torch
+import torch.nn as nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 4))
+report = tl.summary(model, torch.zeros(2, 8))
+RESULT = report.total_params
+```
+
+## Translation table
 
 | torchinfo | TorchLens |
 |---|---|
@@ -22,7 +54,38 @@ now gets right.
 | result object (`.total_params`, ...) | the returned report (`.total_params`, `.to_pandas()`, ...) |
 | printed side effect | RETURN-only; the result self-displays |
 
-## The five asks torchinfo does not serve
+### Coming from torchsummary
+
+`torchsummary` (and its fork `pytorch-model-summary`) is frozen; its own
+README points to torchinfo. The swap is one import:
+
+```text
+# before
+from torchsummary import summary
+summary(model, (3, 224, 224))
+
+# after
+import torchlens as tl
+tl.summary(model, input_shape=(1, 3, 224, 224))  # the batch dimension is explicit
+```
+
+torchsummary's `input_size` leaves out the batch dimension and its
+`device="cuda"` default fails on a CPU-only machine; TorchLens takes the
+full shape and runs wherever the model is.
+
+Inputs that crash torchsummary (its own issue tracker) and run here:
+any LSTM, GRU, or other tuple-returning layer (the row prints every
+member shape: an LSTM shows `output`, `h_n`, and `c_n`), a stock
+`nn.TransformerEncoderLayer`, integer or embedding inputs, dict inputs
+(`input_kwargs=`), and Hugging Face GPT-2.
+
+Totals: torchsummary counts a reused module's parameters again at every
+call and skips any parameter not named `weight` or `bias`. TorchLens
+counts each Parameter object once (ties and reuse are named in the Params
+footer) and counts every parameter whatever its name. Its "Params size
+(MB)" line is the `size` part of the Params footer.
+
+## What TorchLens adds
 
 1. **Functional ops exist.** torchinfo (like torchsummary before it) sees
    `nn.Module`s only: torchvision's `torch.flatten`, a residual `+`, a
@@ -48,9 +111,9 @@ now gets right.
    modules, weight-tying, and data-dependent branches are facts, not
    guesses.
 
-## Numbers torchinfo gets wrong that this surface gets right
+### Where the numbers differ from torchinfo's
 
-Measured on gpt2 (the most-compared model in the world):
+Measured on gpt2:
 
 - **Params: torchinfo prints 163,037,184.** The `wte`/`lm_head` weight is
   ONE tied Parameter; torch's own count is **124,439,808**. TorchLens
@@ -69,7 +132,7 @@ Measured on gpt2 (the most-compared model in the world):
 Constants above re-derive from the committed script:
 `python tools/derive_summary_pins.py gpt2`.
 
-## Side by side (real rendered output, from the test goldens)
+### Side by side (rendered output, from the test goldens)
 
 ASCII (the canonical `str(report)` -- what logs and CI see):
 
@@ -116,38 +179,62 @@ Capture  torch | complete | health CHECKED-AND-CLEAN
 More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md
 ```
 
-## Coming from torchsummary
+## What torchinfo does that TorchLens does not
 
-`torchsummary` (and its fork `pytorch-model-summary`) is frozen; its own
-README points to torchinfo. The swap is one import:
+- torchinfo is a single-purpose, lightweight table printer. A `tl.summary` call runs a real
+  forward through the TorchLens capture machinery, so it costs more than shape arithmetic.
+- torchinfo's printed-table muscle memory (`verbose=1` printing as a side effect, `col_names`
+  tuples) maps onto different spellings: TorchLens returns a report object instead of printing,
+  and columns use the `columns=[...]` grammar above. These spellings are documented-unstable
+  pending the naming session.
+- For profilers and per-kernel timing that neither summary tool provides, see
+  [profilers_alongside.md](profilers_alongside.md) and [landscape.md](landscape.md).
 
-```text
-# before
-from torchsummary import summary
-summary(model, (3, 224, 224))
+## Using both
 
-# after
+### torchinfo feeds TorchLens
+
+There is no bridge, and none is needed: both read a plain `nn.Module`. Compare the two footers
+by total parameter count; the tie disclosure and the `fma=2` convention line explain the two
+systematic divergences (below).
+
+### TorchLens feeds torchinfo
+
+There is no bridge. The returned report exposes `.total_params`, `.to_pandas()` and the printed
+text, which can sit beside a torchinfo table in a notebook or a log.
+
+## Semantic differences
+
+- The one-call door is safe by default: eval mode, `no_grad`, and every training flag, BatchNorm
+  buffer and RNG stream restored afterwards. `torchinfo` documents its own `mode=` argument for
+  this; the TorchLens spelling is `execution_mode=`.
+- Weight tying changes the headline: a tied weight is counted once, as torch counts it.
+
+```python
+# migration-test: tool=torchlens expected=True
+import torch
+import torch.nn as nn
+
 import torchlens as tl
-tl.summary(model, input_shape=(1, 3, 224, 224))  # the batch dimension is explicit
+
+
+class Tied(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.embed = nn.Embedding(16, 8)
+        self.head = nn.Linear(8, 16, bias=False)
+        self.head.weight = self.embed.weight
+
+    def forward(self, ids):
+        return self.head(self.embed(ids))
+
+
+model = Tied()
+report = tl.summary(model, torch.tensor([[1, 2, 3]]))
+RESULT = report.total_params == sum(p.numel() for p in model.parameters())
 ```
 
-torchsummary's `input_size` leaves out the batch dimension and its
-`device="cuda"` default fails on a CPU-only machine; TorchLens takes the
-full shape and runs wherever the model is.
-
-Inputs that crash torchsummary (its own issue tracker) and run here:
-any LSTM, GRU, or other tuple-returning layer (the row prints every
-member shape: an LSTM shows `output`, `h_n`, and `c_n`), a stock
-`nn.TransformerEncoderLayer`, integer or embedding inputs, dict inputs
-(`input_kwargs=`), and Hugging Face GPT-2.
-
-Totals: torchsummary counts a reused module's parameters again at every
-call and skips any parameter not named `weight` or `bias`. TorchLens
-counts each Parameter object once (ties and reuse are named in the Params
-footer) and counts every parameter whatever its name. Its "Params size
-(MB)" line is the `size` part of the Params footer.
-
-## What to expect when numbers differ
+### What to expect when numbers differ
 
 If your torchinfo baseline disagrees with TorchLens, check the footer
 first: the tie disclosure (params) and the convention line (`fma=2`,

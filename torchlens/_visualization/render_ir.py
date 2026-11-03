@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
+from ._encoding_size_layout import layout_encoded_sizes
 from ._render_utils import compute_module_penwidth, make_module_cluster_attrs
 from .request import RenderContext
 from .themes import _theme_cluster_attrs, resolve_theme
@@ -340,14 +341,12 @@ def build_render_ir(
         universe = build_node_universe(
             build_source_graph(trace, resolved_context), collapse_fn, repeat_folds
         )
-    encoding = getattr(resolved_context, "encoding", None)
-    if encoding is not None:
-        # PHASE A of the encoding channel (L5): a data prepass over the
-        # already-chosen visible-node universe, before any per-node spec
-        # resolution -- collect values once, validate, compute the domain.
-        from ._encoding import populate_encoding_state  # deferred: cycle _visualization
+    from ._encoding import populate_encoding_state  # deferred: cycle _visualization
+    from ._render_nodes import BOX_SCOPE_HELPERS, _atomic_module_sibling_counts  # deferred: cycle
 
-        populate_encoding_state(encoding, trace, universe)
+    encoding = getattr(resolved_context, "encoding", None)
+    scope = (resolved_context, repeat_folds, segment_lookup, BOX_SCOPE_HELPERS)
+    populate_encoding_state(encoding, trace, universe, scope)
     if suppressed_args is None and not getattr(resolved_context, "show_redundant_args", False):
         # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
         # proves which constructor-arg rows duplicate captured shapes on
@@ -356,8 +355,6 @@ def build_render_ir(
 
         suppressed_args = compute_suppressed_arg_keys(trace, universe)
     suppressed_args = suppressed_args or {}
-    from ._render_nodes import _atomic_module_sibling_counts  # deferred: cycle _visualization
-
     sibling_counts = _atomic_module_sibling_counts(trace)
     decision_inputs = _NodeDecisionInputs(
         universe=universe,
@@ -380,6 +377,7 @@ def build_render_ir(
     entries = universe.source_graph.entries_to_plot
     labels = bundle_labels(trace, entries, resolved_context, collapse_fn)
     nodes = relabel_bundle_nodes(nodes, labels)
+    nodes = layout_encoded_sizes(nodes, encoding, resolved_context)
     edges = _build_forward_edges_from_universe(universe)
     regions = _build_regions(trace, nodes, edges)
     _warn_if_render_exceeds_disclosure_ceiling(len(nodes), len(edges))
@@ -848,8 +846,6 @@ def _resolve_node_decision(
     tuple
         Recorded top-level calls, owned node arguments, edge color, and structured label spans.
     """
-    from collections import defaultdict
-
     from ._render_common import _RenderIRDecisionBuilder  # deferred: cycle _visualization
     from ._render_edges import _segment_for_node  # deferred: cycle _visualization
     from ._render_flow import _collapsed_container_leaf_nodes  # deferred: cycle _visualization
@@ -875,7 +871,7 @@ def _resolve_node_decision(
         container_max_inline=context.container_max_inline,
         pending_nodes=[],
     )
-    theme = resolve_theme(context.theme, for_paper=context.for_paper)
+    theme = resolve_theme(context.theme)
     resolved_specs: list[Any] = []
     if emission.kind == "module_box":
         _build_collapsed_module_node(
@@ -894,6 +890,7 @@ def _resolve_node_decision(
             inputs.repeat_folds,
             context.collapse_fn,
             resolved_specs,
+            encoding=getattr(context, "encoding", None),
         )
         color = "black"
     else:

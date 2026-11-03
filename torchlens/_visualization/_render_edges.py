@@ -1703,8 +1703,8 @@ def _visible_parent_count_unrolled(
         num_parents_shown -= sum(
             [
                 int(
-                    self[parent].is_buffer
-                    and not _is_buffer_visible(self[parent], show_buffer_layers)
+                    self.layers[parent].is_buffer
+                    and not _is_buffer_visible(self.layers[parent], show_buffer_layers)
                 )
                 for parent in child_node.parents
             ]

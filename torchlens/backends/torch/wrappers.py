@@ -60,7 +60,6 @@ from ..._utils.tensor_utils import (
     disarm_deferred_payload_window,
     materialize_deferred_for_call,
     print_override,
-    safe_copy,
 )
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
@@ -72,13 +71,16 @@ from ._completeness_cross_thread import (
 from ._completeness_dispatch import record_uncaptured_owner_callsite
 from ._completeness_escape_state import record_data_alias_mutation
 from ._completeness_origins import internal_scalar_read
+from ._foreign_data import FOREIGN_DATA_FUNC_NAME, HOST_CONSTRUCTOR_FUNC_NAMES, resolve_host_entry
 from ._function_boundary import (
     _BARCODE_TRANSPARENT_FUNCS,
-    EXPORT_FUNC_NAMES,
+    PLAIN_EXPORT_FUNC_NAMES,
     funcs_not_to_log,
     note_function_export,
     print_funcs,
+    unlogged_wrapper_name,
 )
+from ._logged_arguments import logged_args
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
@@ -135,13 +137,17 @@ from .escape_detection import (
     reset_detector_tables,
 )
 from .param_mutation import (
+    adopt_minted_parameter_label as _adopt_minted_parameter_label,
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
-    is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    is_mutated_parameter_receiver as _is_mutated_parameter_receiver,
     late_register_forward_created_parameter,
     materialized_lazy_slots,
+    nested_write_relabeled_receiver as _nested_write_relabeled_receiver,
     note_lazy_slot_materializing,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
+    receiver_mutation_label as _receiver_mutation_label,
+    same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
 
@@ -1136,9 +1142,8 @@ def torch_func_decorator(
     needs_device_injection = func_name in _DEVICE_CONSTRUCTOR_NAMES
     is_unlogged_func = func_name in funcs_not_to_log
     is_print_func = func_name in print_funcs
-    # Decoration-time constant: only the numpy / dlpack export spellings tell a live
-    # ``autograd.Function`` frame that its forward left torch (foreign-kernel boundary).
-    is_export_func = func_name in EXPORT_FUNC_NAMES
+    is_export_func = func_name in PLAIN_EXPORT_FUNC_NAMES
+    is_host_constructor = func_name in HOST_CONSTRUCTOR_FUNC_NAMES
     mutates_receiver = mutates_first_arg or _func_mutates_receiver(func_name)
     inplace_param_index = _positional_inplace_index(func)
     reconstructs_receiver_output = func_name in {"__setitem__", "zero_", "__delitem__"}
@@ -1218,13 +1223,11 @@ def torch_func_decorator(
         # Cross-thread tensor->host escapes are still observed by the mode-independent belt
         # (tensor-method patches), which is independent of this wrapper.
         if not _state._logging_enabled:
-            # Deferred payload clones: pending aliases stay zero-copy for the
-            # process lifetime, so the fast path carries the SAME pre-execution
-            # interception as the logging path — any wrapped call that can
-            # write through a tensor argument first copies out pending aliases
-            # sharing those storages. Disarmed cost is one dict-truthiness
-            # check; with pending aliases, only mutation-signature calls pay
-            # the storage lookups.
+            # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
+            # so the fast path carries the SAME pre-execution interception as the logging path:
+            # any wrapped call that can write through a tensor argument first copies out pending
+            # aliases sharing those storages. Disarmed cost is one dict-truthiness check; with
+            # pending aliases, only mutation-signature calls pay the storage lookups.
             if _COW_PENDING and (
                 mutates_receiver
                 or is_mutating_property_setter
@@ -1235,6 +1238,9 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
+            # Opened before the call: the fast collector mirrors capture's nesting barcode.
+            fast_collector: Any = _state._active_fast_run_collector
+            fast_event = fast_collector and fast_collector.enter_event(is_barcode_transparent)
             if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
                 args, _fast_path_subclass_cls_index
             ):
@@ -1248,9 +1254,8 @@ def torch_func_decorator(
                     out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
                     if out is STILL_DECLINED:
                         raise
-            fast_collector = _state._active_fast_run_collector
-            if fast_collector is not None and fast_collector.wants_function(func_name):
-                fast_collector.capture_function(func_name, out, args, property_accessor)
+            if fast_event is not None:
+                fast_collector.exit_event(fast_event, func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1324,10 +1329,10 @@ def torch_func_decorator(
         )
         trace._wrapper_runtime_ws.current_func_barcode = 0
         if is_export_func:
-            note_function_export(func_name)
+            note_function_export(func_name, args)
         if is_unlogged_func:
             if _diagnostic_edge_armed():
-                wrapper_name = f"torch_func:{func_name}:not_logged"
+                wrapper_name = unlogged_wrapper_name(func_name)
                 with expected_original_call(
                     func,
                     wrapper_name,
@@ -1359,6 +1364,7 @@ def torch_func_decorator(
             return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
+        receiver_label_before = _receiver_mutation_label(args)
         if trace._options_save_args:
             from ._ops_arguments import _copy_saved_call_args
 
@@ -1526,6 +1532,9 @@ def torch_func_decorator(
             autocast_state=autocast_state,
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
+        if isinstance(out_orig, torch.nn.Parameter):
+            # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
+            _adopt_minted_parameter_label(trace, out_orig, args)
 
         # __setitem__, zero_, __delitem__ modify in-place and return None;
         # treat the first arg (the modified tensor) as the output. Mutating
@@ -1566,10 +1575,10 @@ def torch_func_decorator(
         # too: a live intervention replacing its output must be copied into the
         # Parameter (``_apply_inplace_replacement_to_mutated_storage``) so later
         # reads see it, as for any labeled in-place receiver.
-        mutates_prepared_parameter = (
+        mutates_parameter_receiver = (
             was_inplace
             and not is_storage_rebinding_setter
-            and _is_prepared_parameter_receiver(trace, args[0])
+            and _is_mutated_parameter_receiver(trace, args[0])
         )
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
@@ -1578,31 +1587,20 @@ def torch_func_decorator(
         # otherwise the module exit re-reads the input's label and the boundary
         # node (e.g. identity_1_2) never attaches to the module's output_ops.
         if same_object_returned:
-            # Create a distinct tensor object for logging — otherwise attaching
-            # _tl.label_raw on the output would clobber the input's label.
-            # Snapshot the USER op's live autograd node first (round-31 M5):
-            # the safe copy's grad_fn is TorchLens's own ``CloneBackward``
-            # bookkeeping, and it must never replace the operation's recorded
-            # autograd metadata (``grad_fn_class_*`` / handle).
-            # TorchLens bookkeeping read: for a same-object in-place return the
-            # output IS the user's receiver (a registered buffer for BN's
-            # ``num_batches_tracked.add_(1)``), so an unmarked ``grad_fn`` read
-            # would record a phantom declared-state fact (r65 unread-bit).
-            with internal_scalar_read():
-                live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
-            out_orig = safe_copy(out_orig)
-            if live_user_grad_fn is not None and isinstance(out_orig, torch.Tensor):
-                try:
-                    setattr(out_orig, "tl_user_grad_fn", live_user_grad_fn)
-                except AttributeError:
-                    pass
-            out_orig = _parameter_mutation_output_for_logging(
-                trace,
-                out_orig,
-                source=args[0],
-                was_inplace=was_inplace,
-                is_storage_rebind=is_storage_rebinding_setter,
-            )
+            out_orig = _same_object_logging_copy(out_orig)
+            # A nested bottom-level write already recorded this Parameter
+            # mutation; the enclosing initializer keeps its Parameter return
+            # and logs nothing (``nested_write_relabeled_receiver``).
+            if is_bottom_level_func or not (
+                was_inplace and _nested_write_relabeled_receiver(args[0], receiver_label_before)
+            ):
+                out_orig = _parameter_mutation_output_for_logging(
+                    trace,
+                    out_orig,
+                    source=args[0],
+                    was_inplace=was_inplace,
+                    is_storage_rebind=is_storage_rebinding_setter,
+                )
             # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
             if not is_storage_rebinding_setter:
                 _stamp_same_object_mutation(out_orig, args[0], mutation_signature)
@@ -1613,22 +1611,20 @@ def torch_func_decorator(
             )
         else:
             capture_func, capture_func_name = canonical_capture_callable
-        # r28 reconcile: a storage-rebinding setter is RECORDED as the canonical
-        # single-argument ``detach(rhs)`` call -- the receiver's OLD value has
-        # zero dataflow into the result (the rebind replaces every value), so
-        # only the RHS argument is logged. The live receiver still gets the
-        # op's label through the same-object in-place propagation below.
-        log_args, log_kwargs = args, kwargs
-        log_arg_copies, log_kwarg_copies = arg_copies, kwarg_copies
-        if is_storage_rebinding_setter and len(args) >= 2:
-            log_args = (args[1],)
-            log_kwargs = {}
-            log_arg_copies = (arg_copies[1],) if len(arg_copies) >= 2 else log_args
-            log_kwarg_copies = {}
-        elif func_name == "__deepcopy__" and args:
-            # The memo is copy-protocol bookkeeping that ends up holding the output.
-            log_args, log_kwargs, log_kwarg_copies = (args[0],), {}, {}
-            log_arg_copies = tuple(arg_copies[:1]) or log_args
+        host_entry = (
+            resolve_host_entry(trace, func_name, (args, kwargs), out_orig, _set_transform_metadata)
+            if is_host_constructor and not arg_tensorlike
+            else None
+        )
+        if host_entry is not None:
+            capture_func, capture_func_name = host_entry.replay, FOREIGN_DATA_FUNC_NAME
+        logged = logged_args(func_name, args, arg_copies, is_storage_rebinding_setter, host_entry)
+        if logged is None:
+            log_args, log_kwargs = args, kwargs
+            log_arg_copies, log_kwarg_copies = arg_copies, kwarg_copies
+        else:
+            log_args, log_arg_copies = logged
+            log_kwargs, log_kwarg_copies = {}, {}
         out_before_hooks = out_orig
         out_orig = apply_live_hooks_to_outputs(
             trace,
@@ -1754,7 +1750,7 @@ def torch_func_decorator(
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
-            elif mutates_prepared_parameter and not force_distinct_return:
+            elif mutates_parameter_receiver and not force_distinct_return:
                 # Unhooked, or a live intervention whose replacement was copied
                 # into the Parameter: either way the Parameter now holds the
                 # logged op's output, so later reads bind to that op.
@@ -1848,7 +1844,7 @@ def torch_func_decorator(
         if is_barcode_transparent and enclosing_barcode:
             trace._wrapper_runtime_ws.current_func_barcode = enclosing_barcode
 
-        if out_orig is not out_before_hooks and not mutates_prepared_parameter:
+        if out_orig is not out_before_hooks and not mutates_parameter_receiver:
             return out_orig
         if force_distinct_return:
             return out_orig

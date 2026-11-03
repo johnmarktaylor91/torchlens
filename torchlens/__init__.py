@@ -109,6 +109,7 @@ _LAZY_ATTRS = {
     "steer": ("torchlens.intervention.helpers", "steer"),
     "sweep": ("torchlens.intervention.sweep", "sweep"),
     "trace": ("torchlens._user_funcs", "trace"),
+    "draw": ("torchlens._user_funcs", "draw"),
     # Built-in activation transforms (transforms memo s7 home; the submodule
     # spelling tl.transforms is DOCUMENTED-UNSTABLE — the collision with the
     # input-side transform= slot is a named naming-sprint item).
@@ -212,12 +213,12 @@ _REDIRECTS: dict[str, str] = {
     "Macs": "use torchlens.types.Macs",
     "brainpipe": "use torchlens.neuro (plan_extraction, ExtractionPlan, PlanSite, export_npz)",
     "Buffer": "use torchlens.types.Buffer",
-    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(vis_renderer='dagua'))",
+    "build_render_audit": "removed from the public surface; use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "check_metadata_invariants": "use torchlens.validation.check_metadata_invariants",
     "check_spec_compat": "use torchlens.intervention.check_spec_compat",
     "cleanup_tmp": "use torchlens.io.cleanup_tmp",
-    "draw_backward": "use torchlens.Trace.draw_backward (trace.draw_backward())",
-    "draw_combined": "use torchlens.Trace.draw_combined (trace.draw_combined())",
+    "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
+    "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
     "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
@@ -250,7 +251,7 @@ _REDIRECTS: dict[str, str] = {
     "render_graph": "use torchlens.Trace.draw (trace.draw())",
     "render_lines_to_html": "removed from the public surface; use torchlens.Trace.draw (trace.draw())",
     "render_model_graph": "use torchlens.Trace.draw (trace.draw())",
-    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(vis_renderer='dagua'))",
+    "render_trace_with_dagua": "use torchlens.Trace.draw (trace.draw(renderer='dagua'))",
     "replay": "use torchlens.Trace.do (do is the one intervention verb)",
     "replay_from": "use torchlens.Trace.do (do is the one intervention verb)",
     "rerun": "use torchlens.Trace.do with engine='rerun'",
@@ -346,6 +347,7 @@ def __dir__() -> list[str]:
 
 __all__ = [
     "trace",
+    "draw",
     "release_model",
     "clear_cache",
     "export",

@@ -115,7 +115,7 @@ OP_LABELS = {
     "fastlog_op_50": "fastlog 50% op selectivity",
     "fastlog_all": "fastlog all-op/all-module",
     "aux_validate": "tl.validate(scope='forward')",
-    "aux_compat_report": "tl.compat.report",
+    "aux_compat_report": "tl.report.doctor",
     "aux_save": "tl.save fresh tlspec path",
     "aux_load": "tl.load saved fixture",
     "peer_manual_hooks": "Vanilla hooks manual dict",
@@ -732,7 +732,7 @@ def _wrapper_only_headline(rows: list[dict[str, Any]]) -> str:
     if trace_ratio is None or full_ratio is None:
         return (
             "Headline insight: the no-save rows separate TorchLens wrapper and metadata "
-            "overhead from tensor data the user chose to capture. `layers_to_save=[]` is "
+            "overhead from tensor data the user chose to capture. `save=[]` is "
             "the verified metadata-only Trace path, and `fastlog_zero` retains no op or "
             "module records."
         )
@@ -980,7 +980,7 @@ def _write_report(payload: dict[str, Any], path: Path = RESULT_MD) -> None:
             "- Sub-ms operations can legitimately show 0.0 MB USS delta because allocators reuse pages.",
             "- TorchLens Trace captures every tensor-producing torch operation; peer hook rows capture module boundaries only.",
             "- HF GPT-2 and HookedTransformer GPT-2 are separate model implementations and should not be compared row-by-row.",
-            "- No-save Trace rows use `layers_to_save=[]`, which records metadata for every op but saves no activation tensors.",
+            "- No-save Trace rows use `save=[]`, which records metadata for every op but saves no activation tensors.",
             "",
             "## Rerun Tolerance",
             "",

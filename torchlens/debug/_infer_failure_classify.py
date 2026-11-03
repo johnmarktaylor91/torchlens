@@ -75,8 +75,8 @@ def classify_nongeometric_failure(
             "multi_input_required",
             "Every probe died before geometry mattered: the forward requires more "
             f"than one input (last probe error: {multi_input_hits[-1]!r}). Pass the "
-            "real forward call, or the mapping form of input_size= binding each "
-            "forward keyword to its shape, e.g. input_size={'input_ids': (1, 16), "
+            "real forward call, or the mapping form of input_shape= binding each "
+            "forward keyword to its shape, e.g. input_shape={'input_ids': (1, 16), "
             "'pixel_values': (1, 3, 224, 224)}.",
         )
     if shape_independent:

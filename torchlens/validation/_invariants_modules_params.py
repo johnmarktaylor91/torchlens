@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .._ir.container import DataclassField, DictKey, HFKey, NamedField, TupleIndex
+from .._ir.distribution_container import DISTRIBUTION_CONTAINER_KIND
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -264,7 +265,7 @@ def _container_tensor_components(spec: object) -> tuple[object, ...]:
         return tuple(DictKey(key) for key in getattr(spec, "keys", ()) or ())
     if kind == "hf_model_output":
         return tuple(HFKey(key) for key in getattr(spec, "keys", ()) or ())
-    if kind == "namedtuple":
+    if kind in {"namedtuple", DISTRIBUTION_CONTAINER_KIND}:
         return tuple(NamedField(field) for field in getattr(spec, "fields", ()) or ())
     if kind == "dataclass":
         return tuple(DataclassField(field) for field in getattr(spec, "fields", ()) or ())

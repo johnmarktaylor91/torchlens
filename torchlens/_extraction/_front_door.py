@@ -169,9 +169,9 @@ def pluck(
         Layer label, module path, pass-qualified label, or unique substring.
         Resolves strictly to one result; ambiguous lookups refuse typed.
     stop_after:
-        Stop-early site, passed to the capture as
-        ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
-        the site, and an unsupported spelling refuses typed. ``None`` reads the
+        Stop-early site or predicate, passed to the capture as
+        ``trace(stop_after=...)``: the forward halts inclusively after the
+        site, and an unsupported spelling refuses typed. ``None`` reads the
         ambient ``tl.experimental.stop_after`` site, if one is active.
 
     Returns
@@ -186,14 +186,9 @@ def pluck(
         ``activation_not_saved`` if it produced no saved tensor.
     """
 
-    # an explicit site rides the capture options, where the trace
+    # an explicit site rides the door's stop_after=, where the trace
     # validates it; without one the trace reads the ambient site itself.
-    capture = (
-        CaptureOptions(layers_to_save=[layer])
-        if stop_after is None
-        else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
-    )
-    trace = _capture_trace(model, inputs, capture=capture)
+    trace = _capture_trace(model, inputs, save=[layer], stop_after=stop_after)
     return _out_from_log(trace, layer)
 
 
@@ -288,10 +283,8 @@ def _extract_layers_with_trace(
             model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
         )
     layer_plan = _normalize_extract_layers(layers)
-    capture = CaptureOptions(
-        layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
-    )
-    trace = _capture_trace(model, x, capture=capture)
+    capture = CaptureOptions(detach_saved_activations=detach_saved_activations)
+    trace = _capture_trace(model, x, capture=capture, save=list(layer_plan.values()))
     outputs: dict[str, torch.Tensor] = {}
     views: dict[str, _Any] = {}
     if isinstance(layers, _Mapping):

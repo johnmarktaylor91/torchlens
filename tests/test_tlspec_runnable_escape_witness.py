@@ -149,9 +149,15 @@ def test_changed_input_escape_is_unverifiable(
     _assert_not_blessed(result.report)
     # The recorded taken path / baked literal is stale for the changed input, so the
     # sparse output differs from a true live forward -- and the report refuses to
-    # bless it.
+    # bless it. The ``tolist`` sequence is the exception on the output side only: the
+    # ``tolist`` -> ``torch.tensor`` round trip is a captured ``foreigndata`` copy op
+    # that replays from the departed tensor, so the output follows the changed input,
+    # while the witnessed host escape still keeps the report unblessed.
     live = model_cls()(changed_x)
-    assert not torch.allclose(result.output, live)
+    if model_cls is TolistSequenceBake:
+        assert torch.allclose(result.output, live)
+    else:
+        assert not torch.allclose(result.output, live)
 
 
 @pytest.mark.parametrize(

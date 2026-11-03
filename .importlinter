@@ -24,7 +24,7 @@ source_modules =
     torchlens._autoroute
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -38,7 +38,6 @@ source_modules =
     torchlens._autoroute
 forbidden_modules =
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.debug
@@ -57,7 +56,7 @@ source_modules =
     torchlens._data_classes
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -91,13 +90,11 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
     torchlens.bundle
     torchlens.callbacks
-    torchlens.checks
     torchlens.debug
     torchlens.examples
     torchlens.export
@@ -132,13 +129,11 @@ type = forbidden
 source_modules =
     torchlens._extraction
 forbidden_modules =
-    torchlens._notebook
     torchlens._visualization
     torchlens.bridge
     torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -149,7 +144,7 @@ source_modules =
     torchlens._io
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -166,7 +161,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens.attribution
@@ -174,6 +168,7 @@ forbidden_modules =
     torchlens.debug
     torchlens.distributed
     torchlens.receptive_field
+    torchlens.report._notebook
     torchlens._semantic
     torchlens.stats
     torchlens._visualization
@@ -187,7 +182,7 @@ source_modules =
     torchlens._ir
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -206,7 +201,6 @@ forbidden_modules =
     torchlens._data_substrate
     torchlens._extraction
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens.attribution
@@ -230,7 +224,7 @@ source_modules =
     torchlens._merged
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -246,7 +240,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -262,10 +255,10 @@ forbidden_modules =
 allow_indirect_imports = true
 
 [importlinter:contract:_notebook-no-path]
-name = _notebook (L6) does not import higher layers
+name = report._notebook (the former _notebook, L6) does not import higher layers
 type = forbidden
 source_modules =
-    torchlens._notebook
+    torchlens.report._notebook
 forbidden_modules =
     torchlens.callbacks
     torchlens.examples
@@ -274,13 +267,44 @@ forbidden_modules =
     torchlens.trackers
 
 [importlinter:contract:_notebook-no-direct]
-name = _notebook (L6) does not import higher layers directly
+name = report._notebook (the former _notebook, L6) does not import higher layers directly
 type = forbidden
 source_modules =
-    torchlens._notebook
+    torchlens.report._notebook
 forbidden_modules =
     torchlens.experiment
-    torchlens.report
+    torchlens.report._agent_json
+    torchlens.report._backward_attribution
+    torchlens.report._compute_truth
+    torchlens.report._cost_backward
+    torchlens.report._cost_perf
+    torchlens.report._cost_scaling
+    torchlens.report._cost_tree
+    torchlens.report._cost_tree_helpers
+    torchlens.report._doctor
+    torchlens.report._environment
+    torchlens.report._explain
+    torchlens.report._factcore
+    torchlens.report._flops_report
+    torchlens.report._health
+    torchlens.report._narrate
+    torchlens.report._profile
+    torchlens.report._profile_source_line
+    torchlens.report._registry
+    torchlens.report._report_protocol
+    torchlens.report._stats_table
+    torchlens.report._stats_view
+    torchlens.report._summary_charset
+    torchlens.report._summary_columns
+    torchlens.report._summary_config
+    torchlens.report._summary_html
+    torchlens.report._summary_hub
+    torchlens.report._summary_ladder
+    torchlens.report._summary_render
+    torchlens.report._summary_report
+    torchlens.report._summary_result
+    torchlens.report._trace_facts
+    torchlens.report._trace_summary
     torchlens.viz
 allow_indirect_imports = true
 
@@ -303,13 +327,11 @@ type = forbidden
 source_modules =
     torchlens._observability
 forbidden_modules =
-    torchlens._notebook
     torchlens._visualization
     torchlens.bridge
     torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -320,7 +342,7 @@ source_modules =
     torchlens._partial
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -354,7 +376,7 @@ source_modules =
     torchlens._postprocess
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -370,7 +392,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -395,7 +416,6 @@ forbidden_modules =
     torchlens._extraction
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -405,7 +425,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens._capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -425,6 +444,19 @@ forbidden_modules =
     torchlens._visualization
     torchlens.viz
 
+[importlinter:contract:_snoop-no-direct]
+name = snoop (L5) does not import higher layers directly
+type = forbidden
+source_modules =
+    torchlens._snoop
+forbidden_modules =
+    torchlens.bridge
+    torchlens.debug
+    torchlens.export
+    torchlens.report
+    torchlens.viz
+allow_indirect_imports = true
+
 [importlinter:contract:_trace_core-no-path]
 name = _trace_core (L1) does not import higher layers
 type = forbidden
@@ -436,7 +468,6 @@ forbidden_modules =
     torchlens._extraction
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -446,7 +477,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens._capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -473,7 +503,7 @@ source_modules =
     torchlens._utils
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -493,7 +523,6 @@ forbidden_modules =
     torchlens._extraction
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -506,6 +535,7 @@ forbidden_modules =
     torchlens.recording
     torchlens.intervention
     torchlens.receptive_field
+    torchlens.report._notebook
     torchlens._semantic
     torchlens.validation
     torchlens._visualization
@@ -525,7 +555,6 @@ forbidden_modules =
     torchlens._io
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -539,7 +568,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens._capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -570,7 +598,6 @@ forbidden_modules =
     torchlens._extraction
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -580,7 +607,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens._capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -618,12 +644,10 @@ type = forbidden
 source_modules =
     torchlens.attribution
 forbidden_modules =
-    torchlens._notebook
     torchlens._visualization
     torchlens.bridge
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -634,7 +658,7 @@ source_modules =
     torchlens.backends
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -653,7 +677,6 @@ forbidden_modules =
     torchlens._data_substrate
     torchlens._extraction
     torchlens._merged
-    torchlens._notebook
     torchlens.attribution
     torchlens.bridge
     torchlens.bundle
@@ -680,7 +703,7 @@ source_modules =
     torchlens.bundle
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -694,7 +717,6 @@ source_modules =
     torchlens.bundle
 forbidden_modules =
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -720,7 +742,7 @@ source_modules =
     torchlens._capture
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -738,7 +760,6 @@ forbidden_modules =
     torchlens._data_substrate
     torchlens._extraction
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -757,7 +778,7 @@ allow_indirect_imports = true
 name = checks (L5) does not import higher layers
 type = forbidden
 source_modules =
-    torchlens.checks
+    torchlens.debug._checks
 forbidden_modules =
     torchlens.callbacks
     torchlens.examples
@@ -769,9 +790,8 @@ forbidden_modules =
 name = checks (L5) does not import higher layers directly
 type = forbidden
 source_modules =
-    torchlens.checks
+    torchlens.debug._checks
 forbidden_modules =
-    torchlens._notebook
     torchlens.bridge
     torchlens.report
     torchlens._semantic
@@ -786,7 +806,7 @@ source_modules =
     torchlens.compat
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -802,7 +822,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -836,9 +855,9 @@ type = forbidden
 source_modules =
     torchlens.debug
 forbidden_modules =
-    torchlens._notebook
     torchlens.bridge
     torchlens.experiment
+    torchlens.report._notebook
     torchlens._semantic
     torchlens.viz
 allow_indirect_imports = true
@@ -850,7 +869,7 @@ source_modules =
     torchlens.distributed
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -866,7 +885,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -894,7 +912,6 @@ forbidden_modules =
     torchlens._io
     torchlens._ir
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens._postprocess
@@ -908,7 +925,6 @@ forbidden_modules =
     torchlens.bundle
     torchlens.callbacks
     torchlens._capture
-    torchlens.checks
     torchlens.compat
     torchlens.debug
     torchlens.distributed
@@ -954,7 +970,7 @@ source_modules =
     torchlens.recording
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.compat
     torchlens.examples
     torchlens.export
@@ -973,7 +989,6 @@ forbidden_modules =
     torchlens._data_substrate
     torchlens._extraction
     torchlens._merged
-    torchlens._notebook
     torchlens._observability
     torchlens._partial
     torchlens.attribution
@@ -996,7 +1011,7 @@ source_modules =
     torchlens.intervention
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -1010,7 +1025,6 @@ source_modules =
     torchlens.intervention
 forbidden_modules =
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.debug
     torchlens.receptive_field
@@ -1062,13 +1076,11 @@ type = forbidden
 source_modules =
     torchlens.receptive_field
 forbidden_modules =
-    torchlens._notebook
     torchlens._visualization
     torchlens.bridge
     torchlens.experiment
     torchlens.report
     torchlens._semantic
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -1095,7 +1107,6 @@ type = forbidden
 source_modules =
     torchlens.repgeom
 forbidden_modules =
-    torchlens._notebook
     torchlens.bridge
     torchlens._semantic
     torchlens._visualization
@@ -1162,12 +1173,10 @@ type = forbidden
 source_modules =
     torchlens.stats
 forbidden_modules =
-    torchlens._notebook
     torchlens._visualization
     torchlens.bridge
     torchlens.experiment
     torchlens.report
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 
@@ -1186,7 +1195,7 @@ source_modules =
     torchlens.transforms
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.neuro
@@ -1200,7 +1209,6 @@ source_modules =
     torchlens.transforms
 forbidden_modules =
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens.attribution
     torchlens.bridge
@@ -1219,7 +1227,7 @@ source_modules =
     torchlens.validation
 forbidden_modules =
     torchlens.callbacks
-    torchlens.checks
+    torchlens.debug._checks
     torchlens.examples
     torchlens.export
     torchlens.mechinterp
@@ -1236,7 +1244,6 @@ source_modules =
 forbidden_modules =
     torchlens._autoroute
     torchlens._extraction
-    torchlens._notebook
     torchlens._observability
     torchlens._visualization
     torchlens.attribution
@@ -1247,7 +1254,6 @@ forbidden_modules =
     torchlens.report
     torchlens._semantic
     torchlens.stats
-    torchlens._visualization
     torchlens.viz
 allow_indirect_imports = true
 

@@ -34,13 +34,13 @@ def _trace_chain(*, save: object | None = None) -> object:
         model[0].weight.fill_(1.0)
         model[2].weight.fill_(1.0)
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
-    kwargs: dict[str, object] = {"save_mode": "reference"}
+    kwargs: dict[str, object] = {}
     if save is not None:
         kwargs["save"] = save
     return tl.trace(
         model,
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         **kwargs,
     )
 
@@ -84,8 +84,8 @@ def test_unretained_layer_source_names_both_real_label_selectors() -> None:
     trace = _trace_chain(save=tl.label("conv2d_2"))
     source, target = _conv_endpoints(trace)
     expected_recipe = (
-        "tl.trace(model, x.requires_grad_(True), "
-        'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference", '
+        "tl.trace(model, x, "
+        'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 
@@ -130,8 +130,7 @@ def test_reachable_but_none_layer_source_gradient_raises_typed_error() -> None:
     trace = tl.trace(
         _DetachedPath(),
         inputs,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     source = next(op for op in trace._layer_list if op.is_input)
     target = next(op for op in reversed(trace._layer_list) if not op.is_output)

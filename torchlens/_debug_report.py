@@ -19,9 +19,8 @@ The common surface:
   summary keep it unchanged.
 
 The public spelling is ``torchlens.report.Report``. This module sits at
-the package root (not inside ``torchlens.debug``) so ``torchlens.checks``
-can subclass it without importing the ``debug`` package, which itself
-imports ``checks``.
+the package root (not inside ``torchlens.debug``) so callers outside the
+``debug`` package can import it without loading that package.
 """
 
 from __future__ import annotations

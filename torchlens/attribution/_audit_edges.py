@@ -203,7 +203,8 @@ def _edge_trace(request: _AuditRequest, inputs: Any) -> Any:
             request.model,
             positional,
             input_kwargs=request.input_kwargs or None,
-            capture=CaptureOptions(layers_to_save="all", replayable=True),
+            capture=CaptureOptions(replayable=True),
+            save="all",
         )
 
 

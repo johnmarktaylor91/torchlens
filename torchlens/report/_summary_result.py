@@ -22,15 +22,16 @@ from .._observe._peaks import pass_peak_facts
 from ._compute_truth import unknown_op_ledger
 from ._factcore import factcore
 from ._health import health_facts, nonfinite_option_hint
+from ._stats_view import build_stats_summary
 from ._summary_columns import optimizer_state_facts
 from ._summary_config import SummaryConfig
 from ._summary_html import render_html
 from ._summary_ladder import ResolvedView, ViewRow, resolve_view
 from ._summary_render import SummaryFacts, _banner_lines, _cell, cell_totals, render_summary_pair
+from ._summary_report import SummaryReport, build_summary_data
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from ._summary_report import SummaryReport
 
 
 @dataclass(frozen=True)
@@ -76,14 +77,12 @@ def collect_summary_facts(
     # Pass-level peaks publish ONLY through the observe gate (F24 item 4):
     # the basis is named, cpu/mps render under their real meaning, and a
     # CUDA 0 is a high-water fact -- never a raw forward-peak read here.
-
     peak_facts = pass_peak_facts(trace, "forward")
     unexecuted_names: tuple[str, ...] = tuple(
         str(name) for name in (getattr(trace, "uncalled_modules", ()) or ())[:5]
     )
     unknown_groups = unknown_op_ledger(trace)
     unknown_names = tuple(group.func_name or "?" for group in unknown_groups)
-
     pruned = core.params.pruned
     buffer_count = None
     try:
@@ -141,9 +140,9 @@ def _apply_filter(
 ) -> tuple[tuple[ViewRow, ...], str | None]:
     """Presentation-only filtering with the mandatory coverage disclosure."""
 
-    if config.filter is None:
+    if config.where is None:
         return view.rows, None
-    predicate = config.filter
+    predicate = config.where
     if isinstance(predicate, str):
         pattern = re.compile(predicate)
 
@@ -161,10 +160,10 @@ def _apply_filter(
 
     else:
         raise InvalidArgumentError(
-            f"filter= accepts a regex string or a callable over rows; got "
+            f"where= accepts a regex string or a callable over rows; got "
             f"{type(predicate).__name__}.",
             code="summary_option_invalid",
-            remedy="pass a regex string, e.g. filter='conv', or a callable row -> bool",
+            remedy="pass a regex string, e.g. where='conv', or a callable row -> bool",
         )
     visible = tuple(row for row in view.rows if match(row))
     params_total = facts.params_total or 0
@@ -189,15 +188,9 @@ def build_rebuilt_summary(
 ) -> SummaryReport:
     """Build one rebuilt summary result from a finished trace."""
 
-    from ._summary_report import SummaryReport, build_summary_data
-
     if config.view == "stats":
-        from ._stats_view import build_stats_summary
-
         return build_stats_summary(trace, config)
     if config.flop_convention == "fma1":
-        from ._factcore import factcore
-
         for row in factcore(trace).compute.rows:
             if row.kind == "op" and row.flops_fma2 is not None and row.fma_macs is None:
                 raise InvalidArgumentError(
@@ -267,7 +260,7 @@ def render_result_html(payload: RebuiltPayload) -> str:
 def result_to_pandas(report: SummaryReport, scope: str = "display") -> Any:
     """Typed pandas projection (display rows or the full op grain)."""
 
-    import pandas
+    import pandas  # deferred: optional dependency pandas
 
     if scope not in ("display", "all"):
         raise InvalidArgumentError(
@@ -333,7 +326,6 @@ def result_to_markdown(report: SummaryReport) -> str:
             code="summary_result_legacy",
             remedy="call summary() with the rebuilt grammar (bare call, level=, view=, ...)",
         )
-
     columns = payload.config.resolved_columns(payload.view.mixed_trainability)
     totals = cell_totals(payload.facts)
     lines = [

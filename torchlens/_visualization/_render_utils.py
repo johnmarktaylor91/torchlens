@@ -29,6 +29,7 @@ import graphviz
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
 from ._fonts import graphviz_font_env
+from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
@@ -255,10 +256,6 @@ def relativize_visualizer_image(path: str) -> str:
     return path[separator_index + 1 :]
 
 
-#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under.
-DEFAULT_DRAW_STEM = "modelgraph"
-
-
 def collision_safe_outpath(stem: str, fileformat: str) -> str:
     """Return a fresh output stem for a draw call that named no path.
 
@@ -378,6 +375,38 @@ def html_escape(value: str) -> str:
 #: An absolute POSIX or Windows file path: a root (``/`` or ``C:\\``), then
 #: directory segments, then the file name kept by ``strip_path_directories``.
 _ABSOLUTE_PATH_RE = re.compile(r"(?<![\w.~-])(?:[A-Za-z]:[\\/]|/)(?:[^\s()\[\]'\"<>:/\\]+[\\/])+")
+
+
+def _add_svg_accessibility(path: str, aria_label: str) -> None:
+    """Add figure-level accessibility attributes to a rendered SVG.
+
+    Parameters
+    ----------
+    path:
+        Rendered SVG path.
+    aria_label:
+        Root SVG accessibility label.
+
+    Returns
+    -------
+    None
+        The SVG is updated in place when it exists.
+    """
+
+    if not os.path.exists(path):
+        return
+    with open(path, encoding="utf-8") as handle:
+        svg = handle.read()
+    if "aria-label=" not in svg:
+        escaped_label = html_escape(aria_label).replace('"', "&quot;")
+        svg = re.sub(
+            r"<svg\b",
+            f'<svg role="img" aria-label="{escaped_label}"',
+            svg,
+            count=1,
+        )
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(svg)
 
 
 def strip_path_directories(text: str) -> str:

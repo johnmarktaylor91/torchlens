@@ -50,6 +50,27 @@ def join_result_for(trace: Any) -> KinetoJoinResult | None:
         return None
 
 
+def require_join_result(trace: Any, argument: str) -> Any:
+    """Return the trace's Kineto join result or refuse typed (no silent zeros)."""
+
+    result = join_result_for(trace)
+    if result is None:
+        from ._errors import ProfilerSessionError
+
+        raise ProfilerSessionError(
+            f"{argument}='device_time' is unavailable: this trace carries no "
+            "Kineto join (device time exists only for captures run under an "
+            "owned profiler session).",
+            code="device_time_unavailable",
+            remedy=(
+                "capture through torchlens.report.kernel_profile on a "
+                "CUDA host, then draw the returned result.trace"
+            ),
+        )
+    require_availability(result, needs=f"{argument}='device_time'")
+    return result
+
+
 def register_join_result(trace: Any, result: KinetoJoinResult) -> None:
     """Bind one trace's session-time join result (weak, never persisted)."""
 
@@ -99,7 +120,7 @@ class KernelProfileReport:
 
 def kernel_profile(
     model: Any,
-    input_args: Any = None,
+    inputs: Any = None,
     input_kwargs: dict[str, Any] | None = None,
     *,
     activities: Any | None = None,
@@ -112,7 +133,7 @@ def kernel_profile(
     ----------
     model:
         The model to run (any ``tl.trace``-able callable).
-    input_args, input_kwargs:
+    inputs, input_kwargs:
         Forwarded to ``tl.trace``.
     activities:
         Optional explicit ``torch.profiler`` activity list; the default asks
@@ -141,7 +162,7 @@ def kernel_profile(
             activities.append(torch.profiler.ProfilerActivity.CUDA)
     trace_kwargs.setdefault("save", None)
     with session(mode="owned", activities=activities) as active:
-        trace = _capture_trace(model, input_args, input_kwargs, **trace_kwargs)
+        trace = _capture_trace(model, inputs, input_kwargs=input_kwargs, **trace_kwargs)
         if torch.cuda.is_available():  # pragma: no cover - CUDA leg
             torch.cuda.synchronize()
     result = join_session(active, trace, native_chrome_path=native_chrome_path)

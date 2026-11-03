@@ -33,6 +33,7 @@ torchlens.dataset_extraction	torchlens.dataset_extraction	L5	core	0	0
 torchlens.dead	torchlens._selection.values	L4	core	1	0
 torchlens.debug	torchlens.debug	L5	core	0	0
 torchlens.distributed	torchlens.distributed	L3	core	0	0
+torchlens.draw	torchlens._user_funcs	FACADE	facade	1	0
 torchlens.errors	torchlens.errors	L0	core	0	0
 torchlens.examples	torchlens.examples	L9	recipe	0	1
 torchlens.experimental	torchlens.experimental	FACADE	facade	0	0

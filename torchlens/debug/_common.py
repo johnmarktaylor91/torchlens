@@ -126,6 +126,23 @@ def _compute_ops(trace: Trace) -> list[Op]:
     return [op for op in _ordered_ops(trace) if int(getattr(op, "step_index", 0) or 0) > 0]
 
 
+def _multipass_layer_or_none(trace: Trace, label: Any) -> Any | None:
+    """Return the aggregate Layer a bare multi-pass label names, else ``None``.
+
+    ``trace[label]`` refuses a bare multi-pass label (every pass is a distinct
+    op); the lineage contract still owes the honest "select a pass" message,
+    which needs the aggregate record's pass count.
+    """
+
+    if not isinstance(label, str):
+        return None
+    try:
+        layer = trace.layers[label]
+    except Exception:  # noqa: BLE001 - an unresolvable label keeps the door's own message.
+        return None
+    return layer if is_multipass_layer(layer) else None
+
+
 def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
     """Resolve an op-like object or lookup key without raising.
 
@@ -147,7 +164,9 @@ def _resolve_op(trace: Trace, op_or_label: Any) -> tuple[Op | None, str | None]:
         try:
             candidate = trace[op_or_label]
         except Exception as exc:  # noqa: BLE001 - debug helpers report odd inputs instead of raising.
-            return None, f"unavailable: {exc}"
+            candidate = _multipass_layer_or_none(trace, op_or_label)
+            if candidate is None:
+                return None, f"unavailable: {exc}"
     # An aggregate recurrent Layer is per-pass ambiguous: its graph edges are
     # bare labels that re-resolve to aggregates and its per-pass fields trip the
     # multi-pass ValueError tripwire. Refuse it honestly (non-raising, per the

@@ -13,6 +13,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
+import torch
+
 import torchlens.mechinterp as mi
 
 from .._user_public_impls import trace as _capture_trace
@@ -24,7 +26,6 @@ def tlens_agreement_demo() -> dict[str, Any]:
 
     os.environ.setdefault("HF_HUB_OFFLINE", "1")
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
-    import torch
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     model = AutoModelForCausalLM.from_pretrained("gpt2").eval()
@@ -34,7 +35,8 @@ def tlens_agreement_demo() -> dict[str, Any]:
     log = _capture_trace(
         model,
         ids,
-        capture=CaptureOptions(layers_to_save="all", save_args=True),
+        capture=CaptureOptions(save_args=True),
+        save="all",
     )
 
     dec = mi.residual_decomposition(log)
@@ -64,17 +66,29 @@ def tlens_agreement_demo() -> dict[str, Any]:
         "induction_top": scores.topk(3),
     }
 
+    exact = _tlens_parity_rows(prompt)
+    if exact is not None:
+        results["same_object_exact_rows"] = exact
+    return results
+
+
+def _tlens_parity_rows(prompt: str) -> int | None:
+    """Count decomposed gpt2 rows equal to TransformerLens's own residual cache.
+
+    Returns ``None`` (after saying so) when transformer-lens is not installed.
+    """
+
     try:
         from transformer_lens import HookedTransformer
     except ImportError:
         print("(transformer-lens not installed; parity section skipped)")
-        return results
+        return None
 
     tlens = HookedTransformer.from_pretrained_no_processing("gpt2")
     tlens.eval()
     tokens = tlens.to_tokens(prompt)
     _, cache = tlens.run_with_cache(tokens)
-    log2 = _capture_trace(tlens, tokens, capture=CaptureOptions(layers_to_save="all"))
+    log2 = _capture_trace(tlens, tokens, save="all")
     dec2 = mi.residual_decomposition(log2)
     stack, _labels = cache.decompose_resid(layer=-1, return_labels=True)
     exact = sum(
@@ -82,8 +96,7 @@ def tlens_agreement_demo() -> dict[str, Any]:
     )
     assert exact == len(dec2) == 26  # noqa: S101 -- the demo IS its own gate
     print(f"same-object parity: {exact}/26 decomposed rows torch.equal to TLens's own cache")
-    results["same_object_exact_rows"] = exact
-    return results
+    return exact
 
 
 if __name__ == "__main__":

@@ -229,7 +229,9 @@ def _resolve_one_selector(
 
     from .._user_public_impls import trace as _capture_trace
 
-    trace = _capture_trace(model, envelope_args, envelope_kwargs or None, save=selector)
+    trace = _capture_trace(
+        model, envelope_args, input_kwargs=envelope_kwargs or None, save=selector
+    )
     return _saved_sites(trace)
 
 
@@ -371,7 +373,9 @@ def _resolve_mapping_sites(
     except Exception:  # noqa: BLE001 - OR-refusing selectors fall back to per-key captures
         union = None
     if union is not None:
-        trace = _capture_trace(model, envelope_args, envelope_kwargs or None, save=union)
+        trace = _capture_trace(
+            model, envelope_args, input_kwargs=envelope_kwargs or None, save=union
+        )
         return {key: _saved_sites(trace, selector) for key, selector in selectors.items()}
     return {
         key: _resolve_one_selector(model, envelope_args, envelope_kwargs, selector)

@@ -188,13 +188,59 @@ def test_recorder_option_refusals_carry_codes_and_remedies(
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     with pytest.raises(errors.TorchLensError) as exc_info:
-        tl.record(model, torch.randn(1, 4), save=tl.func("relu"), **kwargs)
+        tl.record(model, torch.randn(1, 4), save=tl.func("relu"), **_door_kwargs(kwargs))
     _assert_contract(exc_info.value, expected_code, builtin)
+
+
+_RECORDING_FIELDS = {
+    "history_size",
+    "max_predicate_failures",
+    "on_predicate_error",
+    "on_forward_error",
+    "default_op",
+    "default_module",
+    "default_grad",
+    "include_source_events",
+    "postprocess",
+}
+_CAPTURE_FIELDS = {
+    "lookback",
+    "lookback_payload_policy",
+    "activation_transform",
+    "save_raw_activations",
+    "seed",
+    "save_grads",
+    "grad_transform",
+    "save_raw_grads",
+    "backward_ready",
+    "detach_saved_activations",
+}
+
+
+def _door_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Spell former flat record keywords the way the door takes them now.
+
+    Recorder knobs stay flat door keywords, capture knobs ride
+    ``capture=CaptureOptions(...)`` and ``halt`` is ``stop_after=``; the typed
+    refusal still fires where the Recorder resolves the merged values.
+    """
+
+    out: dict[str, Any] = {}
+    recording = {k: v for k, v in kwargs.items() if k in _RECORDING_FIELDS}
+    capture = {k: v for k, v in kwargs.items() if k in _CAPTURE_FIELDS}
+    out.update(recording)
+    if capture:
+        out["capture"] = tl.options.CaptureOptions(**capture)
+    for key, value in kwargs.items():
+        if key in _RECORDING_FIELDS or key in _CAPTURE_FIELDS:
+            continue
+        out["stop_after" if key == "halt" else key] = value
+    return out
 
 
 TRACE_PREDICATE_DOOR_CASES: tuple[tuple[str, type[BaseException], dict[str, Any]], ...] = (
     ("intervention_predicate_type_invalid", TypeError, {"intervene": "not-callable"}),
-    ("halt_predicate_type_invalid", TypeError, {"halt": "not-callable"}),
+    ("stop_after_type_invalid", TypeError, {"stop_after": 1234}),
 )
 
 
@@ -226,10 +272,10 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
 
     from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention._spec_codec import _validate_format_version
-    from torchlens.intervention.errors import ReplayPreconditionError
+    from torchlens.intervention.errors import TorchLensInterventionError
 
     with pytest.raises(errors.TorchLensError) as exc_info:
-        ReplayPreconditionError("message", selector="both")  # args + fields conflict
+        TorchLensInterventionError("message", selector="both")  # args + fields conflict
     _assert_contract(exc_info.value, "error_constructor_args_conflict", TypeError)
 
     with pytest.raises(errors.TorchLensError) as exc_info:

@@ -33,6 +33,7 @@ from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
 from ...errors._base import TorchLensWarning
 from .. import surgery_visuals as _surgery_visuals
+from .._encoding_request import EncodingChannelRequest
 from ..request import ResolvedRenderRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ..themes import resolve_theme
@@ -67,15 +68,30 @@ LEGEND_DEPENDENT_LENSES: set[str] = set()
 
 #: Request-field name -> Trace.draw kwarg name, where they differ.
 _DRAW_KWARG_SPELLINGS = {
-    "graph_overrides": "vis_graph_overrides",
-    "edge_overrides": "vis_edge_overrides",
-    "grad_edge_overrides": "vis_grad_edge_overrides",
-    "module_overrides": "vis_module_overrides",
-    "engine": "vis_node_placement",
-    "intervention_mode": "vis_intervention_mode",
-    "show_cone": "vis_show_cone",
+    "engine": "layout",
     "show_buffer_layers": "show_buffers",
+    "node_mode": "node_style",
+    "scale": "size_scale",
+    "vis_call_depth": "depth",
 }
+
+#: Trace.draw kwarg name -> request-field name, for the explicit kwargs a
+#: caller passes in draw's dialect (the inverse of the table above, plus the
+#: ``rolled`` bool that stands for the request's ``vis_mode``).
+_REQUEST_SPELLINGS = {draw_name: field for field, draw_name in _DRAW_KWARG_SPELLINGS.items()}
+
+
+def _request_dialect(user_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Return explicit ``Trace.draw`` kwargs in request-field spellings."""
+
+    normalized: dict[str, Any] = {}
+    for name, value in user_kwargs.items():
+        if name == "rolled":
+            normalized["vis_mode"] = "rolled" if value else "unrolled"
+        else:
+            normalized[_REQUEST_SPELLINGS.get(name, name)] = value
+    return normalized
+
 
 #: Attention role rows: module-address suffix -> per-layer fact wording.
 #: These are per-LAYER facts (the module tree's own names plus op types),
@@ -496,8 +512,6 @@ def _perf_stage(
         return None, None
     source, channel_values = _resolve_perf_source(trace, lens, build.view)
     if "color_by" not in build.user_kwargs:
-        from .._encoding import EncodingChannelRequest
-
         build.effective["color_by"] = EncodingChannelRequest(
             source=source.member,
             transform="rank",
@@ -554,7 +568,7 @@ def _debug_stage(trace: Trace, lens: LensPreset, build: _LensBuild) -> Nonfinite
                 "nonfinite status: NOT CHECKED -- no saved payloads to "
                 "examine; the debug lens renders without per-node status "
                 "motifs. Remedy: re-capture with saved payloads or "
-                "CaptureOptions(track_nonfinite=True).",
+                "CaptureOptions(on_nonfinite='track').",
                 code="lens_nonfinite_not_checked",
             ),
             stacklevel=3,
@@ -662,9 +676,12 @@ def _finalize_draw_kwargs(build: _LensBuild, passthrough: dict[str, Any]) -> dic
     graph_overrides.setdefault("fontsize", "10")
     build.effective["graph_overrides"] = graph_overrides
 
-    draw_kwargs = {
-        _DRAW_KWARG_SPELLINGS.get(name, name): value for name, value in build.effective.items()
-    }
+    draw_kwargs: dict[str, Any] = {}
+    for name, value in build.effective.items():
+        if name == "vis_mode":
+            draw_kwargs["rolled"] = value == "rolled"
+        else:
+            draw_kwargs[_DRAW_KWARG_SPELLINGS.get(name, name)] = value
     draw_kwargs.update(passthrough)
     return draw_kwargs
 
@@ -702,7 +719,7 @@ def resolve_lens(
         Draw kwargs in ``Trace.draw`` spellings plus the disclosure record.
     """
 
-    request_kwargs, passthrough = _split_request_kwargs(dict(user_kwargs or {}))
+    request_kwargs, passthrough = _split_request_kwargs(_request_dialect(dict(user_kwargs or {})))
     # The surgery row (lane F43) registers at its module's import; resolving
     # it by name must not depend on the caller having imported that module.
 

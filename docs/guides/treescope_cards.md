@@ -1,14 +1,16 @@
 # Notebook cards and the treescope bridge
 
-*(F16, treescope memo B2-B4/B7. Every spelling on this page is
-DOCUMENTED-UNSTABLE pending the naming session.)*
+*(Every spelling on this page is DOCUMENTED-UNSTABLE: it may change before
+the 3.0 release.)*
 
 TorchLens objects carry dependency-free rich HTML cards as their primary
 notebook experience; the treescope bridge is an **opt-in upgrade** that adds
 interactive array visualization. This ordering is not a preference but a
 mechanical fact: a live IPython kernel calls `_repr_html_` before treescope's
 machinery ever runs, so the card IS the top-level experience whether or not
-treescope is installed.
+treescope is installed. Upstream treescope is idle (last release v0.1.10 on
+2025-08-08, last push 2026-06-18, checked 2026-11-03); the bridge keeps working against
+that release and the cards do not depend on it.
 
 ## The four cards
 
@@ -79,8 +81,8 @@ Rules the bridge keeps:
   reason is named, and a `treescope_bridge_degraded` warning fires once.
 - **Top-level display prefers our card** (`_repr_html_` short-circuits
   treescope). `tl_treescope.display(obj)` is the explicit door to the
-  interactive render; `show(method="treescope")` is the candidate method
-  spelling for the UI sprint.
+  interactive render; `show(method="treescope")` is a candidate method
+  spelling that may replace it.
 - **The duplicate box:** treescope appends any object's `_repr_html_` as a
   collapsed "Rich HTML representation" box after our handler renders. The
   cards suppress the duplicate payload with a narrow, fail-safe check (a
@@ -135,4 +137,4 @@ code, faceted array visualization conventions, truncation budgets with edge
 items, diverging-around-zero defaults, and pattern-coded exceptional values.
 Named code borrow: `infer_balanced_truncation` (including `doubling_bonus`)
 and the two-stage slice-then-convert truncation protocol, ported with license
-notice in `torchlens/_notebook/_truncation.py`.
+notice in `torchlens/report/_notebook/_truncation.py`.

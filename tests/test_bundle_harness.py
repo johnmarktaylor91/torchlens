@@ -18,6 +18,7 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens._io.sidecar import SidecarError
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import (
@@ -345,9 +346,7 @@ def test_draw_diff_gates_only_the_rendered_pair(tmp_path: Path, model: _TinyLM) 
         {"clean": clean, "patched": clean.fork("patched"), "router": _trace(_Other(), [4, 5])},
         baseline="clean",
     )
-    dot = bundle.draw(
-        graph="diff", members=("clean", "patched"), path=str(tmp_path / "d"), open_viewer=False
-    )
+    dot = bundle.draw(graph="diff", members=("clean", "patched"), path=str(tmp_path / "d"))
     assert "clean vs patched" in dot
     with pytest.raises(BundleComparisonError):
         bundle._delta_map("relative_l2")
@@ -419,24 +418,38 @@ def test_at_on_a_member_subset_skips_a_foreign_member(model: _TinyLM) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize(
-    "read",
-    [
-        lambda b: b._delta_map("relative_l2"),
-        lambda b: b._norm_delta(),
-        lambda b: b._output_delta("draft"),
-        lambda b: b.compare("draft", "critique", metric="relative_l2"),
-        lambda b: b.store_comparison("relative_l2"),
-    ],
-)
-def test_delta_family_refuses_unrelated_prompts(model: _TinyLM, read) -> None:
+_DELTA_READS = [
+    lambda b: b._delta_map("relative_l2"),
+    lambda b: b._norm_delta(),
+    lambda b: b._output_delta("draft"),
+    lambda b: b.compare("draft", "critique", metric="relative_l2"),
+    lambda b: b.store_comparison("relative_l2"),
+]
+
+
+@pytest.mark.parametrize("read", _DELTA_READS)
+def test_delta_family_compares_prompts_whose_graphs_line_up(model: _TinyLM, read) -> None:
+    """Two calls on different prompts of one length line up and compare."""
+
     bundle = Bundle(
         {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7, 8])},
         baseline="draft",
     )
-    with pytest.raises(BundleComparisonError) as excinfo:
+    assert read(bundle) is not None
+
+
+@pytest.mark.parametrize("read", _DELTA_READS)
+def test_delta_family_refuses_prompts_of_different_lengths(model: _TinyLM, read) -> None:
+    """Prompts of different token counts refuse typed at the first mismatched site."""
+
+    bundle = Bundle(
+        {"draft": _trace(model, [1, 2, 3, 4]), "critique": _trace(model, [5, 6, 7])},
+        baseline="draft",
+    )
+    with pytest.raises(InvalidArgumentError) as excinfo:
         read(bundle)
-    assert _code(excinfo) == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+    assert excinfo.value.fields["site"]
 
 
 def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None:
@@ -452,11 +465,11 @@ def test_delta_family_refuses_fed_by_members_on_topology(model: _TinyLM) -> None
 def test_chrome_trace_diff_keeps_the_timeline_and_refuses_only_the_deltas(
     tmp_path: Path, model: _TinyLM
 ) -> None:
-    unrelated = Bundle({"draft": _trace(model, [1, 2, 3]), "critique": _trace(model, [4, 5, 6])})
+    unrelated = Bundle({"draft": _trace(model, [1, 2, 3]), "critique": _trace(model, [4, 5])})
     payload = json.loads(tl.export.chrome_trace_diff(unrelated, tmp_path / "a.json").read_text())
     status = payload["metadata"]["deltas"]
     assert status["status"] == "refused"
-    assert status["code"] == "bundle_gate_input_values_differ"
+    assert status["code"] == "metric_shape_mismatch"
     spans = [event for event in payload["traceEvents"] if event["ph"] == "X"]
     assert spans and all(event["args"]["delta"] is None for event in spans)
     same = Bundle({"a": _trace(model, [1, 2, 3]), "b": _trace(model, [1, 2, 3])}, baseline="a")

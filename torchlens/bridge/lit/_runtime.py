@@ -210,7 +210,7 @@ def traced_forward(net: nn.Module, input_kwargs: dict[str, Any], save: Any) -> A
 
     from ..._user_public_impls import trace as tl_trace
 
-    log = tl_trace(net, [], input_kwargs=input_kwargs, save=save)
+    log = tl_trace(net, [], input_kwargs=input_kwargs, save="all" if save is None else save)
     status = getattr(log.outcome, "status", None)
     if getattr(status, "name", str(status)) != "COMPLETE":
         _refusals.refuse_capture_incomplete(status)

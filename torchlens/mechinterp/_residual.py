@@ -139,7 +139,7 @@ def _require_payloads(trace: Any, labels: list[str], *, analysis: str) -> dict[s
             message=f"{analysis} needs {len(missing)} unsaved op payload(s): "
             f"{sorted(str(row['op_label']) for row in missing)}.",
             remedy="recapture with torchlens.mechinterp.retention_plan(trace, analyses=...).predicate "
-            "as save= (or layers_to_save='all'); never a partial table",
+            "as save= (or save='all'); never a partial table",
             missing_sites=missing,
             analysis=analysis,
         )

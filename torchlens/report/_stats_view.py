@@ -14,15 +14,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
-from ._stats_table import build_stats_table
+from ._stats_table import StatsTable, StatsTableRow, build_stats_table
+from ._summary_report import SummaryReport, build_summary_data
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .._data_classes.trace import Trace
-    from ._stats_table import StatsTable, StatsTableRow
     from ._summary_config import SummaryConfig
-    from ._summary_report import SummaryReport
 
 #: Columns of the stats view in render order; ``name`` and ``state`` always render.
 STATS_COLUMNS: tuple[str, ...] = (
@@ -223,8 +222,6 @@ def stats_rows_markdown(table: StatsTable, columns: tuple[str, ...]) -> str:
 
 def build_stats_summary(trace: Trace, config: SummaryConfig) -> SummaryReport:
     """Build the ``view="stats"`` report over one finished trace."""
-
-    from ._summary_report import SummaryReport, build_summary_data
 
     grain = "module" if config.level == "module" else "op"
     table = build_stats_table(trace, max_scan_elements=config.max_scan_elements, grain=grain)

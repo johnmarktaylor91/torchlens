@@ -16,7 +16,7 @@ no license file (its setup file declares MIT) and **zennit** is LGPL: from both,
 vocabulary only -- no source copied, ported, generated-from, or vendored.
 Permissively licensed work is different: the named CODE borrows are ported
 with a license notice in the source file -- treescope (Apache-2.0,
-`torchlens/_notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
+`torchlens/report/_notebook/_truncation.py`) and TransformerLens's `FactoredMatrix`
 (MIT, `torchlens/mechinterp/_factored.py`) -- and Apache-2.0 reuse carries
 NOTICE attribution. Do not over-apply the cleanroom rule to permissively licensed
 work; do not under-apply it to unlicensed or copyleft work.
@@ -179,7 +179,7 @@ work; do not under-apply it to unlicensed or copyleft work.
 ## Training-time diagnostics and tracking
 
 - **torcheck** (pengyan510) -- the check vocabulary and the register-once /
-  named-module / enable-disable ergonomics `torchlens.checks` systematizes.
+  named-module / enable-disable ergonomics `tl.debug.ChecksSession` systematizes.
   **torchtest** -- same niche, honored the same way.
 - **Andrej Karpathy**, "A Recipe for Training Neural Networks" -- the raw
   update-to-weight ratio and the sanity-check culture. **Lightning** -- the

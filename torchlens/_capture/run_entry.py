@@ -184,7 +184,6 @@ def _run_model_and_save_specified_outs(
     inference_only: bool = False,
     inference_only_implied: bool = False,
     name: str | None = None,
-    module_filter: Callable[[Any], bool] | None = None,
     emit_nvtx: bool = False,
     measure_python_peak_memory: bool = False,
     distributed_witness: str = "none",
@@ -195,6 +194,7 @@ def _run_model_and_save_specified_outs(
     structure_only: bool = False,
     log_injections: bool = False,
     measure_host_peak_memory: bool = False,
+    aten_ops: bool = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -295,8 +295,7 @@ def _run_model_and_save_specified_outs(
         grad_storage_path: Optional portable bundle directory for streaming grad save.
         retain_grads_in_memory: Whether streamed grads should remain in memory after
             backward finalization.
-        out_sink: Optional callback invoked with ``(label, tensor)`` for each
-            saved out.
+        out_sink: Optional callback invoked with ``(label, tensor)`` for each saved out.
         replayable: If True, capture replay-template metadata and mark the
             returned log as eligible for intervention mutators, replay, rerun, and
             intervention spec persistence.
@@ -321,8 +320,7 @@ def _run_model_and_save_specified_outs(
             change graph construction or saved payloads.
         measure_python_peak_memory: If True, fold a ``tracemalloc``
             Python-allocation peak into the CPU/MPS ``forward_peak_memory``
-            measurement. Off by default because the allocator hook taxes every
-            traced operation.
+            measurement. Off by default because the allocator hook taxes every traced operation.
         distributed_witness: Session-time witness level for collective boundary
             records captured under the distributed opt-in. ``"none"`` (default)
             records structure and correlation only; ``"digest"`` adds byte-exact
@@ -341,6 +339,7 @@ def _run_model_and_save_specified_outs(
             knob; never changes control flow).
         log_injections: Record intervention-hook torch calls as injected-op records.
         measure_host_peak_memory: Measure CPU peaks (resets the process ``VmHWM``).
+        aten_ops: Record the ATen operations each logged torch call dispatched to.
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
@@ -493,7 +492,7 @@ def _finish_run_entry(trace: Trace, r: SimpleNamespace, echo_session: Any) -> No
         # DAG -- coherent only beside the bound_method entry-point fact
         # (fail-closed load validation in _io/_forgery_identity_facts.py).
         for output_label in trace.output_layers:
-            for output_op in trace[output_label].ops:
+            for output_op in trace.ops.resolve_all(output_label):
                 output_op.tl_authored_root = True
     from .._snoop._entry import finish_echo
 

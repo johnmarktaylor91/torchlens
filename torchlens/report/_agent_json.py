@@ -28,7 +28,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes._value_repr import _payload_state as _payload_state
 from .._json_safe import json_safe
 from ._explain import _safe_len
-from ._factcore import _memory
+from ._factcore import _memory, factcore
 from ._health import health_facts
 
 #: Schema identifier for the agent trace dump.
@@ -170,7 +170,6 @@ def _json_safe_value(value: Any) -> Any:
         # Non-finite floats are not JSON: tag them the way every agent-surface
         # envelope does (AUD-CODE 2.6) so ``json.dumps(..., allow_nan=False)``
         # -- the documented JSON-serializable promise -- holds.
-
         return json_safe(value)
     if value is None or isinstance(value, bool | int | str):
         return value
@@ -247,8 +246,6 @@ def _factcore_counts(log: Any, *, module_row_count: int) -> dict[str, Any]:
     """
 
     try:
-        from ._factcore import factcore
-
         core = factcore(log)
     except Exception:  # noqa: BLE001 -- foreign/partial logs keep the raw fallback
         return {

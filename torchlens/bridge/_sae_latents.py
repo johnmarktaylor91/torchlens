@@ -32,7 +32,7 @@ from ..intervention.errors import MultiMatchWarning, SiteResolutionError
 from ..options import CaptureOptions
 from ._utils import module_for_site, resolve_one_site
 
-_DOCS = "docs/recipes/pretrained_saes.md"
+_DOCS = "docs/field-guide/pretrained_saes.md"
 _INVALID_NAME_CHARS = frozenset("[],")
 
 

@@ -932,7 +932,7 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
 def declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
     """Return whether a live state slot still holds its snapshot bytes (byte-exact, NaN-safe)."""
 
-    from ..backends.torch.rescue import _state_bytes_equal
+    from ..backends.torch._state_bytes import _state_bytes_equal
 
     try:
         return (

@@ -231,13 +231,9 @@ EXPECTED_TRACE_PARAM_COLLISIONS = (
     "backend",
     "capture",
     "episode",
-    "halt",
     "intervene",
-    "lookback",
-    "profile",
     "save",
     "storage",
-    "streaming",
 )
 
 

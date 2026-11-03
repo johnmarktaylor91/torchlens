@@ -25,8 +25,8 @@ To see what your environment supports, run the environment report:
 ```python
 import torchlens as tl
 
-print(tl.utils.doctor())     # installed extras, torch capability flags, degraded probes
-print(tl.compat.report())    # the compatibility view of the same facts
+print(tl.report.doctor())                 # installed extras, torch capability flags, degraded probes
+print(tl.report.doctor(model, inputs))    # adds the model-specific compatibility checks
 ```
 
 Include its output in any bug report about capture or torch compatibility.
@@ -67,7 +67,7 @@ matching demotion. Run `-n N` with `N` equal to the cores you have, never `-n au
 The glossary (`docs/reference/glossary.md`) is the canonical API specification and code
 conforms to it. Renaming, adding or removing any public name (a dataclass field, a property,
 a method, a top-level `tl.*` name, a keyword argument) updates, in the same change, the
-glossary entry, the examples under `docs/agent-reference/`, and the audit notebooks under
+glossary entry, the examples under `docs/internal/agent-reference/`, and the audit notebooks under
 `notebooks/audit/` and `examples/` that use it. A change that leaves them stale is
 incomplete. `python tools/name_lockstep check --base ref:<base-branch>` lists every new,
 renamed and removed public name against a base and exits 1 for each missing glossary entry,
@@ -81,6 +81,12 @@ tolerance or skip a validation check to make a test pass: a validation failure i
 working, so find and fix the capture bug. The only legitimate exemption is behaviour that is
 correct by design and provably outside the check's contract, and even then the carve-out is
 narrow and still fails on the unintended case.
+
+## Public claims
+
+A sentence in the README or docs that states a number, a comparison or an "every" or "any"
+claim needs a row in `docs/migration/_claims_ledger.json` pointing at the test or artifact
+behind it.
 
 ## Public repository
 

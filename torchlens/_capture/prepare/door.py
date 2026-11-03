@@ -32,7 +32,6 @@ from ..._errors import (
     ArgumentTypeError,
     CaptureNotActiveError,
     InvalidArgumentError,
-    KeywordConflictError,
     TorchLensWarning,
 )
 from ..._input_coerce import (
@@ -45,6 +44,7 @@ from ..._robustness import check_model_and_input_variants
 from ..._runnable.state_live import capture_observer_bracket
 from ..._selection.selectors import BaseSelector, FuncSelector, ModuleSelector
 from ..._trace_selector_helpers import (
+    _resolve_save_transforms,
     _route_save_label_selection,
     _split_save_options_and_predicate,
 )
@@ -66,9 +66,8 @@ from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
     CaptureOptions,
     ReplayOptions,
-    SaveOptions,
+    _SaveTransforms,
     merge_capture_options,
-    merge_save_options,
     merge_streaming_options,
 )
 from ...recording.options import PredicateFn
@@ -334,7 +333,7 @@ def prepare_capture(
         ``secret`` (None when not caching); ``admission`` the door facts the run
         bracket and epilogue read: ``meta_admission``, ``rescue_eligible``,
         ``episode_resolved``, ``stop_after_site``, ``stop_after_selector_shaped``,
-        ``stop_after_ambient``, ``profile_enabled``, ``save_grads_policy`` and
+        ``stop_after_ambient``, ``save_grads_policy`` and
         ``uses_selective_layers_to_save``.
     """
     return _build_request(
@@ -414,7 +413,7 @@ def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
         save_rng = True
     return merge_capture_options(
         capture=args.capture,
-        layers_to_save=args.layers_to_save,
+        _layers_to_save=args.layers_to_save,
         input_transform=args.transform,
         save_raw_input=args.save_raw_input,
         batch_render=args.batch_render,
@@ -448,23 +447,19 @@ def _merge_door_capture_options(args: _DoorArgs) -> CaptureOptions:
         name=args.name,
         cache=args.cache,
         cache_dir=args.cache_dir,
-        module_filter=args.module_filter,
-        stop_after=args.stop_after,
         jax_control_flow=args.jax_control_flow,
         jax_max_control_flow_unroll=args.jax_max_control_flow_unroll,
         module_identity_mode=args.module_identity_mode,
         payload_policy=args.payload_policy,
-        save_preview=args.save_preview,
-        raise_on_nan=args.raise_on_nan,
         structure_only=args.structure_only,
     )
 
 
 def _refuse_option_shapes(capture_options: CaptureOptions) -> None:
     """Refuse option values the torch door cannot honor."""
-    if isinstance(capture_options.layers_to_save, torch.Tensor):
+    if isinstance(capture_options._layers_to_save, torch.Tensor):
         raise ArgumentTypeError(
-            "capture.layers_to_save received a torch.Tensor -- this is almost "
+            "save received a torch.Tensor -- this is almost "
             "always a model input routed to the wrong slot. Bundle model inputs "
             "as one tuple, e.g. tl.trace(model, (input_a, input_b, input_c)), "
             "and use save= for selective capture.",
@@ -493,7 +488,6 @@ def _open_door_state(
         capture_options=capture_options,
         chunked=args.chunk_size is not MISSING and args.chunk_size is not None,
     )
-    profile_enabled = False if isinstance(args.profile, MissingType) else bool(args.profile)
     raw_input = None
     input_transform = capture_options.input_transform
     if input_transform is not None:
@@ -518,7 +512,6 @@ def _open_door_state(
         capture_options=capture_options,
         raw_input=raw_input,
         echo_options=echo_options,
-        profile_enabled=profile_enabled,
     )
 
 
@@ -576,8 +569,11 @@ def _refuse_episode_combinations(args: _DoorArgs, capture_options: CaptureOption
             code=STRUCTURE_ONLY_EPISODE_UNSUPPORTED,
         )
     if getattr(args.episode, "step_output_kind", "tokens") != "none" and (
-        capture_options.layers_to_save in (None, "none", "None", "NONE")
-        or (isinstance(capture_options.layers_to_save, list) and not capture_options.layers_to_save)
+        capture_options._layers_to_save in (None, "none", "None", "NONE")
+        or (
+            isinstance(capture_options._layers_to_save, list)
+            and not capture_options._layers_to_save
+        )
     ):
         # Kind-conditional save rule (foldA D8, lane F40b): tokens/digest
         # evidence derives from the retained root output, so a value-free
@@ -615,23 +611,18 @@ def _resolve_episode(state: _DoorState) -> _DoorState:
 def _resolve_save_and_storage(state: _DoorState) -> _DoorState:
     """Merge the save options, resolve storage routing and the chunk request."""
     args = state.args
-    save_options = merge_save_options(
-        save=state.grouped_save_options,
-        activation_transform=args.activation_transform,
-        grad_transform=args.grad_transform,
-        save_raw_activations=args.save_raw_activations,
-        save_raw_grads=args.save_raw_grads,
-    )
-    if args.storage is not None and args.streaming is not None:
-        raise KeywordConflictError(
-            "Both storage and streaming options were supplied",
-            code="storage_argument_conflict",
-            remedy="remove streaming and pass only storage, or remove storage",
-            arguments=("storage", "streaming"),
+    save_options = (
+        state.grouped_save_options
+        if state.grouped_save_options is not None
+        else _resolve_save_transforms(
+            state.capture_options,
+            activation_transform=args.activation_transform,
+            grad_transform=args.grad_transform,
+            save_raw_activations=args.save_raw_activations,
+            save_raw_grads=args.save_raw_grads,
         )
-    streaming_options = merge_streaming_options(
-        streaming=args.storage if args.storage is not None else args.streaming,
     )
+    streaming_options = merge_streaming_options(streaming=args.storage)
     chunk_size_value = None if isinstance(args.chunk_size, MissingType) else args.chunk_size
     chunk_paths_value = None if isinstance(args.chunk_paths, MissingType) else args.chunk_paths
     normalized_chunk_size = normalize_chunk_size(chunk_size_value)
@@ -662,7 +653,7 @@ def _unpack_save_policies(state: _DoorState) -> _DoorState:
     facet_recipes = None if isinstance(state.args.facets, MissingType) else state.args.facets
     return replace(
         state,
-        layers_to_save=capture_options.layers_to_save,
+        layers_to_save=capture_options._layers_to_save,
         save_raw_input_policy=capture_options.save_raw_input,
         save_raw_output_policy=capture_options.save_transformed_output,
         save_mode_value=save_mode_value,
@@ -672,21 +663,10 @@ def _unpack_save_policies(state: _DoorState) -> _DoorState:
 
 
 def _resolve_stop_after(state: _DoorState) -> _DoorState:
-    """Refuse a stop_after/halt conflict, then compile stop_after into the halt slot."""
-    capture_options = state.capture_options
+    """Compile the door's ``stop_after=`` site (or the ambient one) into the halt slot."""
     halt = state.halt
-    if capture_options.stop_after is not None and halt is not None:
-        raise ArgumentConflictError(
-            "Both stop_after= and halt= were configured; they compile into the same "
-            "stop-directive slot and cannot combine",
-            code="stop_after_halt_conflict",
-            remedy=(
-                "pass one stop directive: keep halt= (compose predicates with & |) "
-                "or keep stop_after="
-            ),
-            arguments=("stop_after", "halt"),
-        )
-    stop_after_site = capture_options.stop_after
+    stop_after = state.args.stop_after
+    stop_after_site = None if isinstance(stop_after, MissingType) else stop_after
     stop_after_ambient = False
     if stop_after_site is None and halt is None:
         from ...experimental import _active_stop_after_site
@@ -803,8 +783,8 @@ def _apply_structure_only_entry(state: _DoorState) -> _DoorState:
             halt=state.halt,
             streaming_options=state.streaming_options,
             lookback_payload_policy=state.args.lookback_payload_policy,
-            raise_on_nan_value=capture_options.raise_on_nan,
-            track_nonfinite_value=capture_options.track_nonfinite,
+            raise_on_nan_value=capture_options.on_nonfinite == "raise",
+            track_nonfinite_value=capture_options.on_nonfinite in ("track", "warn"),
             replayable=capture_options.replayable,
             should_save_grads=state.should_save_grads,
         ),
@@ -821,17 +801,17 @@ def _resolve_backward_flags(state: _DoorState) -> _DoorState:
     """Resolve backward_ready from the explicit flag, save_grads and gradient streaming."""
     capture_options = state.capture_options
     should_save_grads = state.should_save_grads
-    train_mode_explicit = capture_options.is_field_explicit("backward_ready")
+    train_mode_explicit = capture_options._is_field_explicit("backward_ready")
     train_mode_value = capture_options.backward_ready
     inference_only_conflicts: list[str] = []
-    if capture_options.is_field_explicit("backward_ready") and train_mode_value is True:
+    if capture_options._is_field_explicit("backward_ready") and train_mode_value is True:
         inference_only_conflicts.append("backward_ready")
-    if capture_options.is_field_explicit("save_grads") and should_save_grads:
+    if capture_options._is_field_explicit("save_grads") and should_save_grads:
         inference_only_conflicts.append("save_grads")
-    if capture_options.is_field_explicit("replayable") and capture_options.replayable is True:
+    if capture_options._is_field_explicit("replayable") and capture_options.replayable is True:
         inference_only_conflicts.append("replayable")
     backward_opted_in = (
-        capture_options.is_field_explicit("save_grads")
+        capture_options._is_field_explicit("save_grads")
         and should_save_grads
         and state.save_grads_policy is not True
     )
@@ -971,13 +951,13 @@ def _recursive_door_kwargs(state: _DoorState) -> dict[str, Any]:
     grad_transform = save_options.grad_transform
     save_raw_activations = save_options.save_raw_activations
     save_raw_grads = save_options.save_raw_gradients
-    recursive_save_options = SaveOptions(
+    recursive_save_options = _SaveTransforms(
         activation_transform=activation_transform,
         grad_transform=grad_transform,
         save_raw_activations=save_raw_activations,
         save_raw_grads=save_raw_grads,
     )
-    recursive_save_value: SaveOptions | PredicateFn | BaseSelector | None = (
+    recursive_save_value: _SaveTransforms | PredicateFn | BaseSelector | None = (
         save_predicate if save_predicate is not None else recursive_save_options
     )
     recursive_activation_transform: _ActivationPostfunc | None | MissingType = (
@@ -1010,8 +990,6 @@ def _recursive_door_kwargs(state: _DoorState) -> dict[str, Any]:
         "lookback": state.args.lookback,
         "lookback_payload_policy": state.args.lookback_payload_policy,
         "storage": None,
-        "streaming": None,
-        "profile": state.profile_enabled,
         "facets": state.facet_recipes,
         "chunk_size": None,
         "chunk_paths": None,
@@ -1075,7 +1053,6 @@ def _finish_chunked_trace(state: _DoorState, request: CaptureRequest, trace: Tra
     trace.last_run = dict(trace.last_run or {})
     trace.last_run["chunk_size"] = state.normalized_chunk_size
     trace.last_run["chunk_paths"] = normalize_chunk_paths(state.chunk_paths_value)
-    trace.profile_enabled = state.profile_enabled
     if state.uses_selective_layers_to_save:
         _restrict_layer_nums_to_saved(trace, bool(_door_options(request).save_args))
     _render_and_unwrap(request, trace)

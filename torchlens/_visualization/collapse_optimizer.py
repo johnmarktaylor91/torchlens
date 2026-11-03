@@ -51,6 +51,7 @@ from ._collapse_signatures import fingerprints_for
 from ._render_common import BoundaryNode
 from ._render_edges import _is_buffer_visible
 from ._render_flow import _entries_to_plot_for_context
+from ._render_names import COLLAPSE_OPTIMIZER_MAX_OPS
 from ._render_nodes import _normalize_buffer_visibility
 from ._segment_descriptors import (
     _child_segment_covered_ops,
@@ -122,18 +123,8 @@ if TYPE_CHECKING:
 
 MAX_SALIENCE_FLOOR = 0.75
 
-#: Preflight compute ceiling for the v2 collapse selection (b8 R60). The
-#: frontier DP is measured superlinear (~n^1.75) in rendered op count with no
-#: internal time budget, so above this many ops the optimizer DECLINES with a
-#: disclosed warning instead of silently burning CPU-hours: ``draw`` renders
-#: uncollapsed, ``Trace.collapse_plan()`` refuses typed
-#: (``collapse_plan_unavailable``), and the schedule degrades to its single
-#: full-graph step. Calibration: the largest shipped-suite models
-#: (densenet201 at 1,517 ops, maxvit_t at 1,307) must stay admitted -- their
-#: schedules are the suite's slow cells at tens of seconds -- while the
-#: extrapolated multi-thousand-op cost (an hour-class compute at ~5,000 ops)
-#: is exactly what the ceiling exists to refuse.
-COLLAPSE_OPTIMIZER_MAX_OPS = 2000
+# COLLAPSE_OPTIMIZER_MAX_OPS (imported above) lives in ``_render_names`` so the
+# lens budget reads it without importing this module.
 
 
 @dataclass(frozen=True)

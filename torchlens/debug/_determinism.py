@@ -445,7 +445,7 @@ def _report_message(report: DeterminismReport, total_captures: int) -> str:
 
 def check_determinism(
     model: Any,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[Any, Any] | None = None,
     *,
     runs: int = 2,
@@ -469,7 +469,7 @@ def check_determinism(
     model:
         Source model; never mutated (deepcopy-impossible models return an
         ``inconclusive`` verdict with a ``model_factory`` remedy).
-    input_args:
+    inputs:
         Forward input value or positional-argument list/tuple.
     input_kwargs:
         Optional forward keyword arguments.
@@ -533,7 +533,7 @@ def check_determinism(
     try:
         for _ in range(runs):
             traces.append(
-                isolated_capture(model, input_args, input_kwargs, seed=seed, **(trace_kwargs or {}))
+                isolated_capture(model, inputs, input_kwargs, seed=seed, **(trace_kwargs or {}))
             )
         reference = traces[0]
         divergences, unchecked, nonfinite = _compare_all_runs(traces, rtol=rtol, atol=atol)
@@ -543,7 +543,7 @@ def check_determinism(
         seed_sensitivity_verdict: str | None = None
         if seed_sensitivity:
             probe = isolated_capture(
-                model, input_args, input_kwargs, seed=seed + 1, **(trace_kwargs or {})
+                model, inputs, input_kwargs, seed=seed + 1, **(trace_kwargs or {})
             )
             traces.append(probe)
             seed_sensitivity_verdict = _seed_probe_verdict(reference, probe, rtol=rtol, atol=atol)

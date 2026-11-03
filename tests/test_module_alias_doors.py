@@ -13,7 +13,7 @@ So every door refuses an alias spelling (``tl.module("dec")``,
 with ONE typed error: the same code and the same message, naming the
 canonical name, which fires at every call site of the shared module. The
 doors are ``tl.trace`` and ``tl.record`` (``intervene=``, ``save=`` and
-``halt=``), post-hoc ``find_sites`` and ``fork().do``, and
+``stop_after=``), post-hoc ``find_sites`` and ``fork().do``, and
 ``spec.bind(model)``. Capture and bind doors refuse before any forward runs.
 
 The canonical spelling is held to an eager oracle at every door: a forward
@@ -306,13 +306,13 @@ def _edit_trace(model: nn.Module, selector: Any) -> torch.Tensor:
 def _edit_record(model: nn.Module, selector: Any) -> torch.Tensor:
     """Run the edit through ``tl.record`` with an opaque callable ``save=``."""
 
-    output, _recording = tl.record(
+    _recording = tl.record(
         model,
         _X,
         save=lambda ctx: True,
         intervene=tl.when(selector, tl.add(_DELTA)),
-        return_output=True,
     )
+    output = _recording.output
     return output
 
 
@@ -363,19 +363,19 @@ def _trace_save(model: nn.Module, selector: Any) -> Any:
 def _record_save(model: nn.Module, selector: Any) -> Any:
     """Select retained records with ``tl.record(save=)``."""
 
-    return tl.record(model, _X, save=selector, return_output=True)
+    return tl.record(model, _X, save=selector)
 
 
 def _trace_halt(model: nn.Module, selector: Any) -> Any:
-    """Halt the capture with ``tl.trace(halt=)``."""
+    """Stop the capture with ``tl.trace(stop_after=)``."""
 
-    return tl.trace(model, _X, halt=selector)
+    return tl.trace(model, _X, stop_after=selector)
 
 
 def _record_halt(model: nn.Module, selector: Any) -> Any:
-    """Halt the recording with ``tl.record(halt=)``."""
+    """Stop the recording with ``tl.record(stop_after=)``."""
 
-    return tl.record(model, _X, save=lambda ctx: True, halt=selector, return_output=True)
+    return tl.record(model, _X, save=lambda ctx: True, stop_after=selector)
 
 
 #: Every door that reads a module selector. The first five carry an edit; the

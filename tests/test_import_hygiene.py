@@ -711,7 +711,8 @@ def test_torchvision_model_trace_still_covers_torchvision_ops() -> None:
     torchvision_models = pytest.importorskip("torchvision.models")
 
     import torchlens as tl
-    from torchlens._constants import TORCHVISION_FUNCS, get_orig_torch_funcs
+    from torchlens._constants import get_orig_torch_funcs
+    from torchlens._torchvision_ops import TORCHVISION_FUNCS
 
     wrapped_targets = set(get_orig_torch_funcs())
     assert set(TORCHVISION_FUNCS).issubset(wrapped_targets)
@@ -743,9 +744,7 @@ def test_torchvision_cpp_ops_record_real_func_name() -> None:
 
     boxes = torch.tensor([[0.0, 0.0, 1.0, 1.0], [0.1, 0.1, 1.1, 1.1], [3.0, 3.0, 4.0, 4.0]])
     scores = torch.tensor([0.9, 0.8, 0.7])
-    trace = tl.trace(
-        NmsModel(), (boxes, scores), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    trace = tl.trace(NmsModel(), (boxes, scores), save="all")
 
     assert any(op.func_name == "nms" for op in trace.ops)
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "nms")

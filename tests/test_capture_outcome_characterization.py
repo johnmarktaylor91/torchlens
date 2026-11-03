@@ -167,7 +167,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
 
     monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
 
 
@@ -186,7 +186,7 @@ def test_halted_finalize_failure_propagates_with_halt_context(monkeypatch) -> No
 
     monkeypatch.setattr(TorchBackend, "cleanup_model_session", _boom)
     with pytest.raises(ValueError, match="planted halted-cleanup") as exc_info:
-        tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+        tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
 
 
@@ -198,7 +198,7 @@ def test_halted_finalize_failure_propagates_with_halt_context(monkeypatch) -> No
 def test_halted_trace_basic_shape() -> None:
     """A halted capture finishes postprocess: finished truthy, halted truthy."""
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert trace.is_stopped is True
     assert trace._tracing_finished is True
     assert trace.graph.stop_frontier == trace.stop_reason
@@ -214,7 +214,7 @@ def test_halted_trace_has_no_transient_attribution_leak() -> None:
     lives in test_capture_settlement.py.
     """
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert "_output_attribution_input_tensors" not in trace.__dict__
 
 
@@ -230,7 +230,7 @@ def test_halted_trace_refresh_refuses_typed() -> None:
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
-    trace = tl.trace(model, x, halt=halt_on_relu)
+    trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(CaptureOutcomeError) as exc_info:
         trace.save_new_outs(model, x)
     assert exc_info.value.fields["code"] == "N5"
@@ -249,7 +249,7 @@ def test_halted_trace_fast_run_refuses_typed() -> None:
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
-    trace = tl.trace(model, x, halt=halt_on_relu)
+    trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(CaptureOutcomeError) as exc_info:
         trace.run(inputs=x, fast=True)
     assert exc_info.value.fields["code"] == "N5"
@@ -269,7 +269,7 @@ def test_halted_trace_runnable_save_refuses_typed() -> None:
 
     model = ThreeStageModel()
     x = torch.ones(1, 3)
-    trace = tl.trace(model, x, halt=halt_on_relu)
+    trace = tl.trace(model, x, stop_after=halt_on_relu)
     with pytest.raises(RunnablePreflightError) as exc_info:
         trace.save("/tmp/tl_p0_halted_runnable.tlspec", level="runnable", overwrite=True)
     assert exc_info.value.fields.get("code") == RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value
@@ -294,7 +294,7 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
     model_halt.load_state_dict(model_full.state_dict())
     x = torch.randn(4, 3)
     trace_full = tl.trace(model_full, x)
-    trace_halt = tl.trace(model_halt, x, halt=_halt_on_linear)
+    trace_halt = tl.trace(model_halt, x, stop_after=_halt_on_linear)
 
     assert list(trace_full.buffer_layers) == list(trace_halt.buffer_layers)
     full_labels = [entry.layer_label for entry in trace_full._layer_list]
@@ -356,7 +356,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 
     x = torch.ones(1, 3)
     with Recorder(
-        TwoOpModel(), save=lambda ctx: ctx.kind == "op", halt=_halt_second_pass
+        TwoOpModel(), save=lambda ctx: ctx.kind == "op", stop_after=_halt_second_pass
     ) as recorder:
         first_output = recorder(x)
         second_output = recorder(x)

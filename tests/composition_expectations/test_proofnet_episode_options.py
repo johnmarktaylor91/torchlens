@@ -198,7 +198,7 @@ def test_episode_x_halt_is_coupled_via_step_status_rows(episode_rig: dict[str, A
     import torchlens as tl
 
     rig = episode_rig
-    trace = tl.trace(rig["root"], rig["example"], episode=rig["spec"](), halt=tl.func("tanh"))
+    trace = tl.trace(rig["root"], rig["example"], episode=rig["spec"](), stop_after=tl.func("tanh"))
     classification, _ = _expect("halt_predicate")
     assert classification in {ORTHOGONAL, COUPLED}
     assert trace.outcome.status.name == "STOPPED"
@@ -226,7 +226,7 @@ def test_episode_x_save_predicate_retaining_source_is_orthogonal(
     assert trace.annotations["episode"] is not None
     tanh_labels = [label for label in trace.layer_labels if "tanh" in label]
     assert tanh_labels, "no tanh layer captured"
-    first_pass = trace[tanh_labels[0]].ops[0]
+    first_pass = trace.layers[tanh_labels[0]].ops[0]
     assert first_pass.out is not None, "the save predicate retained nothing"
 
 
@@ -276,7 +276,7 @@ def test_episode_x_raise_on_nan_is_orthogonal(episode_rig: dict[str, Any]) -> No
         rig["root"],
         rig["example"],
         episode=rig["spec"](),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise"),
     )
     classification, _ = _expect("raise_on_nan")
     assert classification in {ORTHOGONAL, COUPLED}

@@ -21,8 +21,8 @@ cannot undo arbitrary side effects performed during Python import.
 
 Security posture, stated plainly: enabling a provider grants ordinary Python
 process authority; there is no sandbox claim; conformance evidence
-(``torchlens.conformance``) is correctness evidence, never a security
-review. ``TORCHLENS_PLUGINS=none`` beats everything.
+(the repository's test-side conformance suite) is correctness evidence, never a
+security review. ``TORCHLENS_PLUGINS=none`` beats everything.
 
 Every spelling is DOCUMENTED-UNSTABLE pending naming-session ratification.
 The per-user trust ledger is deferred (MEMO 8.1); its one v1 obligation

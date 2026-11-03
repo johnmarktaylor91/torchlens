@@ -45,13 +45,13 @@ from typing import Any
 from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
-from .._notebook._grid import GridBudgets, array_grid_html
-from .._notebook.cards import partial_trace_card
-from .._notebook.cardtree import render_card_html
-from .._notebook.frontier import nonfinite_frontier
 from .._partial import PartialTrace
 from .._utils.display import atomic_write_text
 from ..errors._base import TorchLensWarning
+from ..report._notebook._grid import GridBudgets, array_grid_html
+from ..report._notebook.cards import partial_trace_card
+from ..report._notebook.cardtree import render_card_html
+from ..report._notebook.frontier import nonfinite_frontier
 from ._common import _static_graph_data
 
 __all__ = ["HtmlReportOptions", "write_report"]
@@ -333,7 +333,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
             '<div id="tl-graph-wrap" class="tl-report-graph">'
             f'<div id="tl-graph-inner">{svg}</div></div>'
             f'<div class="tl-report-stats">graph: real layout, collapse={collapse!r}'
-            + (f", vis_call_depth={vis_call_depth}" if vis_call_depth is not None else "")
+            + (f", depth={vis_call_depth}" if vis_call_depth is not None else "")
             + "</div>"
         )
         return html, facts
@@ -342,7 +342,7 @@ def _graph_section(log: Any, graph: str, vis_call_depth: int | None) -> tuple[st
         TorchLensWarning(
             "the report could not embed the real graph layout and fell back to "
             "the labeled schematic canvas. "
-            "Remedy: install Graphviz, or reduce the graph with vis_call_depth/"
+            "Remedy: install Graphviz, or reduce the graph with depth/"
             "module focus and re-export",
             code="report_graph_fallback",
         ),
@@ -381,12 +381,11 @@ def _draw_svg(log: Any, collapse: str, vis_call_depth: int | None) -> str | None
             outpath = os.path.join(tmp, "graph")
             kwargs: dict[str, Any] = {
                 "collapse": collapse,
-                "vis_save_only": True,
                 "path": outpath,
                 "file_format": "svg",
             }
             if vis_call_depth is not None:
-                kwargs["vis_call_depth"] = vis_call_depth
+                kwargs["depth"] = vis_call_depth
             log.draw(**kwargs)
             svg_text = Path(f"{outpath}.svg").read_text(encoding="utf-8")
     except Exception:  # noqa: BLE001 - the ladder decides what happens next

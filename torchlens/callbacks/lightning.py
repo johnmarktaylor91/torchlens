@@ -17,7 +17,6 @@ from typing import Any, cast
 import torch
 
 from torchlens.errors import TorchLensError, TorchLensWarning
-from torchlens.options import CaptureOptions
 
 from .._user_public_impls import _validate_summary_grammar, summary, trace
 
@@ -314,7 +313,7 @@ class _LayerProfilerCallbackMixin:
                 return trace(
                     pl_module,
                     model_input,
-                    capture=CaptureOptions(layers_to_save=self.layers_to_save),
+                    save=self.layers_to_save,
                 )
         # Training must never die for a profile (disclosed below). These are what
         # a forward fed a guessed input raises plus every TorchLens refusal.

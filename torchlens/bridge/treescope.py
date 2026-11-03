@@ -58,6 +58,7 @@ from typing import Any
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, MissingDependencyError
 from ..errors._base import TorchLensWarning
+from ..report._notebook._card_suppression import register_card_suppressor
 
 __all__ = [
     "BRIDGE_LEDGER",
@@ -579,6 +580,10 @@ def consume_repr_suppression(obj: Any) -> bool:
         return False
 
 
+# Cards sit below this bridge and never import it: they consult the slot.
+register_card_suppressor(consume_repr_suppression)
+
+
 # ---------------------------------------------------------------------------
 # The explicit bridge door (memo 3.7)
 
@@ -612,7 +617,7 @@ def display(obj: Any) -> None:
             tensor = None
     supported, _reason = probe_tensor_support()
     if tensor is not None and supported:
-        from .._notebook._truncation import (
+        from ..report._notebook._truncation import (
             CELL_BUDGET_DEFAULT,
             EDGE_ITEMS_DEFAULT,
             PER_AXIS_BUDGET_DEFAULT,

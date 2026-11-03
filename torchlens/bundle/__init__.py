@@ -18,12 +18,7 @@ from ..intervention._super.super_logs import (
     SuperModuleCallAccessor,
     SuperParamAccessor,
 )
-from ..intervention._super.super_op import (
-    SuperAtenOp,
-    SuperLayerAccessor,
-    SuperOp,
-    SuperOpAccessor,
-)
+from ..intervention._super.super_op import SuperAtenOp, SuperLayerAccessor, SuperOp, SuperOpAccessor
 from ..intervention._topology.topology import Supergraph
 from ..intervention.types import Relationship
 from . import (
@@ -64,6 +59,7 @@ from ._deltas import (
 from ._draw import bundle_draw as _bundle_draw
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
+from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
 from ._members import coerce_member_name, parse_members
 from ._outcome_fold import _fold_member_outcomes as _fold_member_outcomes  # re-export
 from ._provenance import (
@@ -76,6 +72,10 @@ from ._relation_carriage import (
     _bundle_downstream,
     _bundle_relate,
     _bundle_upstream,
+)
+from ._relation_grades import (
+    RelationGrade as RelationGrade,  # re-export: torchlens.bundle.RelationGrade
+    _bundle_relation_grades,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._token_divergence import (
@@ -91,88 +91,9 @@ if TYPE_CHECKING:
     from .._capture.outcome import CaptureOutcome
     from .._data_classes.trace import Trace
     from .._literals import VisDirectionLiteral
+    from ..viz._drawing import Drawing
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
-
-
-class _BundleAccessorClassView:
-    """Class-level placeholder for Bundle accessor properties."""
-
-
-class _BundleAccessorProperty:
-    """Property that exposes Bundle accessors without inflating method counts."""
-
-    def __init__(self, accessor_cls: type[Any]) -> None:
-        """Initialize the property.
-
-        Parameters
-        ----------
-        accessor_cls:
-            Accessor class to instantiate for Bundle instances.
-        """
-
-        self._accessor_cls = accessor_cls
-        self._class_view = _BundleAccessorClassView()
-
-    def __get__(
-        self,
-        instance: Bundle | None,
-        owner: type[Bundle] | None = None,
-    ) -> Any:
-        """Return a class view or an accessor on instances.
-
-        Parameters
-        ----------
-        instance:
-            Bundle instance, or ``None`` for class access.
-        owner:
-            Owning Bundle class.
-
-        Returns
-        -------
-        Any
-            Class view for class access, otherwise the instantiated accessor.
-        """
-
-        if instance is None:
-            return self._class_view
-        return self._accessor_cls(instance)
-
-
-class _BundleStructuralProperty:
-    """Descriptor exposing Bundle predicates without counting as a method."""
-
-    def __init__(self, getter: Callable[[Bundle], Any]) -> None:
-        """Initialize the descriptor.
-
-        Parameters
-        ----------
-        getter:
-            Instance getter to call for Bundle instances.
-        """
-
-        self._getter = getter
-        self.__doc__ = getter.__doc__
-
-    def __get__(self, instance: Bundle | None, owner: type[Bundle]) -> Any:
-        """Return the descriptor on classes or computed value on instances.
-
-        Parameters
-        ----------
-        instance:
-            Bundle instance, or ``None`` for class access.
-        owner:
-            Owning Bundle class.
-
-        Returns
-        -------
-        Any
-            Descriptor for class access, otherwise the computed property value.
-        """
-
-        if instance is None:
-            return self
-        return self._getter(instance)
 
 
 #: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
@@ -580,6 +501,7 @@ class Bundle:
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
+    relation_grades = _bundle_relation_grades  # derived row grades, never stored
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
@@ -773,8 +695,8 @@ class Bundle:
         floor of the comparison gate passes for every member pair (a view
         read, so different input values are allowed). ``compare()`` on the
         returned view is the member-by-member matrix at this site and first
-        runs the comparison gate (shared graph, same input values) over the
-        members it reads. To read a subset of members, build a bundle of
+        runs the comparison gate (shared graph; same input values or, for runs
+        on different inputs, graphs that line up) over the members it reads. To read a subset of members, build a bundle of
         them: ``tl.Bundle({name: bundle[name] for name in names}).at(site)``.
 
         Parameters
@@ -978,14 +900,14 @@ class Bundle:
 
         return _operations.bundle_fork(self, name)
 
-    def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
+    def run(self, model: nn.Module, inputs: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
         model:
             Model forwarded to each member.
-        x:
+        inputs:
             Forward input.
 
         Returns
@@ -994,7 +916,7 @@ class Bundle:
             This bundle.
         """
 
-        return _operations.bundle_run(self, model, x, **kwargs)
+        return _operations.bundle_run(self, model, inputs, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member; released members read ``"unmeasured"``.
@@ -1002,10 +924,15 @@ class Bundle:
         Parameters
         ----------
         fn:
-            Callable receiving one member log. A callable that accepts a
-            second positional parameter additionally receives the member's
-            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
-            callables keep the historical contract unchanged.
+            Callable receiving one member log. A callable whose second
+            positional parameter is required (or that takes ``*args``)
+            additionally receives the member's NAME there
+            (``bundle.map(lambda log, name: ...)``); a callable declaring a
+            parameter called ``name`` receives it by keyword
+            (``lambda log, k=3, name=None: ...``). A defaulted second
+            parameter with another name keeps its default
+            (``lambda log, k=3: ...`` is called as ``fn(log)``), and
+            single-parameter callables keep the historical contract.
 
         Returns
         -------
@@ -1018,18 +945,7 @@ class Bundle:
 
         return _operations.bundle_map(self, fn)
 
-    @staticmethod
-    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
-        """Whether ``fn`` can take (member, name) rather than (member,) only.
-
-        Signature inspection failures (builtins, C callables) fall back to
-        the historical single-argument call, never a guessed two-argument
-        call that would raise mid-iteration.
-        """
-
-        return _operations.accepts_member_name(fn)
-
-    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
+    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
         """Render each bundle member graph as a member-keyed strip.
 
         Parameters
@@ -1037,16 +953,15 @@ class Bundle:
         kind:
             Picture kind forwarded to each member's :meth:`Trace.show`.
         **kwargs:
-            Forwarded to each member's :meth:`Trace.show`. When an output
-            path is supplied, member names are appended to produce one artifact
-            per log. ``vis_mode='none'`` is accepted and returns without
-            rendering, matching ``Trace.show``.
+            ``Trace.draw`` keywords, forwarded to each member. When a ``path``
+            is supplied, member names are appended to produce one artifact
+            per member.
 
         Returns
         -------
-        dict[str, str | None]
-            Member-keyed render results. Values are DOT source strings when
-            rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
+        dict[str, Drawing | str]
+            Member-keyed results: each member's :class:`Drawing`, or the
+            ``repr`` / HTML text for those kinds.
         """
 
         return _operations.bundle_show(self, kind, **kwargs)
@@ -1139,7 +1054,9 @@ class Bundle:
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op
+            scores one row per pass, keyed by its pass-qualified label
+            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
@@ -1178,7 +1095,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.compare_members(self, a, b, metric=metric, on=on)
@@ -1266,7 +1185,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.diff_members(self, left_name, right_name, metric=metric, on=on)
@@ -1428,8 +1349,8 @@ class Bundle:
         """Run the two-predicate comparison gate over the operand pairs.
 
         Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
-        (topology -> model-axis floor -> value-level input identity, per
-        operand pair; A-GATE, foldB D6/D18).
+        (topology -> model-axis floor -> site line-up: proven-equal input values
+        or equal graph-shape hashes, per operand pair; A-GATE, foldB D6/D18).
 
         Parameters
         ----------

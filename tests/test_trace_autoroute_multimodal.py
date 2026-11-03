@@ -43,11 +43,15 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
     import PIL.Image  # noqa: F401
 
     model = transformers.CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    # The auto-route gate probes the local Hugging Face cache only (it never does
+    # network I/O while routing), so fetch the processor files the way the model's
+    # weights were fetched; a cache holding only the weights declines the route.
+    transformers.AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     log = tl.trace(
         model,
         {"text": "a cat", "images": _pil_image()},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     assert log.provenance.input_preprocessor is not None
@@ -68,7 +72,7 @@ def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> No
     log = tl.trace(
         _DictModel(),
         {"key": "value"},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     assert log.provenance.input_preprocessor is None
@@ -102,7 +106,7 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
     log = tl.trace(
         _DictModel(),
         {"images": _pil_image()},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     assert log.provenance.input_preprocessor is None
@@ -125,9 +129,8 @@ def test_dict_transform_override_skips_multimodal_autoroute(
     log = tl.trace(
         nn.Linear(1, 1),
         {"text": "hello", "images": _pil_image()},
-        capture=tl.options.CaptureOptions(
-            input_transform=lambda value: torch.ones(1), layers_to_save="none"
-        ),
+        capture=tl.options.CaptureOptions(input_transform=lambda value: torch.ones(1)),
+        save="none",
     )
 
     # The explicit transform bypasses the multimodal autoroute entirely: no

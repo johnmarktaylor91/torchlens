@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, cast
 import torch
 
 from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
+from . import _influence  # noqa: F401  (registers the resolver behind .of())
 from ._errors import (
     AmbiguousInputError,
     BackendUnsupportedError,

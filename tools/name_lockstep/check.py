@@ -5,7 +5,7 @@ glossary entry, the agent-reference examples, and the audit notebooks and exampl
 use it. This module turns that rule into findings:
 
 - a new or renamed name needs a glossary entry (its head spelling);
-- a new root name or namespace export also needs a mention in ``docs/agent-reference/``;
+- a new root name or namespace export also needs a mention in ``docs/internal/agent-reference/``;
 - a renamed or removed name leaves no old spelling in the glossary, the agent
   reference, ``notebooks/audit/`` or ``examples/``.
 
@@ -33,7 +33,7 @@ from name_lockstep.diff import SurfaceDiff
 DEFAULT_GLOSSARY = ("docs/reference/glossary.md",)
 #: Lockstep places, as (label, directory, suffixes).
 PLACES = (
-    ("agent-reference", "docs/agent-reference", (".md",)),
+    ("agent-reference", "docs/internal/agent-reference", (".md",)),
     ("notebooks/audit", "notebooks/audit", (".ipynb", ".py", ".md")),
     ("examples", "examples", (".py", ".md", ".ipynb")),
 )
@@ -301,7 +301,8 @@ def _explained(
     Returns
     -------
     bool
-        True when the text is a live name, a third-party attribute, a URL, or (for a
+        True when the text is a live name, a third-party attribute, a URL, (for a
+        member) an attribute in a file that never names the owning class, or (for a
         keyword) an assignment target.
     """
 
@@ -310,10 +311,35 @@ def _explained(
     if claims.owns(line, leaf, start, end) or attribution.in_url(line, start):
         return True
     if row["kind"] == "member":
-        return attribution.third_party(line, start, bound)
+        return attribution.third_party(line, start, bound) or _owner_absent(row, lines)
     if row["kind"] == "param":
         return attribution.is_assignment(lines, number, start)
     return False
+
+
+def _owner_absent(row: dict[str, Any], lines: list[str]) -> bool:
+    """Return whether a member's owning class is never spelled in the file.
+
+    A leaf such as ``view`` is also a method of foreign objects (``tensor.view(...)``);
+    a file that never names the owner class cannot be reading the gone member.
+
+    Parameters
+    ----------
+    row
+        Base row of the gone member (``owner`` is ``module:Qualname``).
+    lines
+        The file's lines.
+
+    Returns
+    -------
+    bool
+        True when the owner class name appears nowhere in the file.
+    """
+
+    owner = str(row.get("owner", "")).rsplit(":", 1)[-1].split(".")[0]
+    if not owner:
+        return False
+    return not any(owner in line for line in lines)
 
 
 def is_private(row: dict[str, Any]) -> bool:

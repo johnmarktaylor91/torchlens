@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 from collections import OrderedDict
 from collections.abc import Callable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from ._lineage import BundleOperation, mint_bundle_id
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from torch import nn
 
     from .._data_classes.trace import Trace
+    from ..viz._drawing import Drawing
     from . import Bundle
 
 __all__ = [
@@ -106,9 +107,9 @@ def bundle_run(self: Bundle, model: nn.Module, x: Any = None, **kwargs: Any) -> 
 def bundle_map(self: Bundle, fn: Callable[..., Any]) -> dict[str, Any]:
     """Apply a function independently to each member; released members read ``"unmeasured"``."""
 
-    pass_name = self._accepts_member_name(fn)
+    mode = _member_name_mode(fn)
     results: dict[str, Any] = {
-        name: (fn(member, name) if pass_name else fn(member))
+        name: _call_with_member_name(fn, member, name, mode)
         for name, member in self._members.items()
     }
     for candidate in released_candidates(self):
@@ -143,31 +144,67 @@ def released_candidates(bundle: Bundle) -> list[str]:
 def accepts_member_name(fn: Callable[..., Any]) -> bool:
     """Whether ``fn`` can take (member, name) rather than (member,) only."""
 
+    return _member_name_mode(fn) != "none"
+
+
+def _member_name_mode(fn: Callable[..., Any]) -> Literal["none", "positional", "keyword"]:
+    """How ``Bundle.map`` hands ``fn`` the member's name, if at all.
+
+    ``"positional"`` when the second positional parameter is REQUIRED (the
+    documented ``lambda log, name: ...`` form) or ``fn`` takes ``*args``;
+    ``"keyword"`` when ``fn`` declares a parameter called ``name`` that is not
+    its first (``def f(log, *, name)``, ``def f(log, k=3, name=None)``);
+    ``"none"`` otherwise, so a defaulted second parameter
+    (``lambda log, k=3: ...``) keeps its default instead of receiving the
+    name. Signature inspection failures (builtins, C callables) fall back to
+    ``"none"``, never a guessed two-argument call that would raise
+    mid-iteration.
+    """
+
     try:
         signature = inspect.signature(fn)
     except (TypeError, ValueError):
-        return False
+        return "none"
     positional_kinds = (
         inspect.Parameter.POSITIONAL_ONLY,
         inspect.Parameter.POSITIONAL_OR_KEYWORD,
     )
-    count = 0
-    for parameter in signature.parameters.values():
-        if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-            return True
-        if parameter.kind in positional_kinds:
-            count += 1
-    return count >= 2
+    parameters = list(signature.parameters.values())
+    positional = [parameter for parameter in parameters if parameter.kind in positional_kinds]
+    if any(
+        parameter.name == "name"
+        and parameter.kind is not inspect.Parameter.POSITIONAL_ONLY
+        and parameter is not (positional[0] if positional else None)
+        for parameter in parameters
+    ):
+        return "keyword"
+    if len(positional) >= 2 and positional[1].default is inspect.Parameter.empty:
+        return "positional"
+    if any(parameter.kind is inspect.Parameter.VAR_POSITIONAL for parameter in parameters):
+        return "positional" if len(positional) <= 1 else "none"
+    return "none"
 
 
-def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
+def _call_with_member_name(
+    fn: Callable[..., Any],
+    member: Any,
+    name: str,
+    mode: Literal["none", "positional", "keyword"],
+) -> Any:
+    """Call ``fn`` on one member, passing its name the way ``mode`` says."""
+
+    if mode == "positional":
+        return fn(member, name)
+    if mode == "keyword":
+        return fn(member, name=name)
+    return fn(member)
+
+
+def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
     """Render each bundle member graph as a member-keyed strip."""
 
-    if kwargs.get("vis_mode") == "none":
-        return dict.fromkeys(self._members)
-
     base_outpath = kwargs.get("path")
-    results: dict[str, str | None] = {}
+    results: dict[str, Drawing | str] = {}
     for name, member in self._members.items():
         member_kwargs = dict(kwargs)
         if isinstance(base_outpath, str):

@@ -46,7 +46,7 @@ Every verb climbs the same three-rung **input ladder** ([full guide](docs/quicks
 ```python
 # API sketch; `model` is your model and `lm` any HuggingFace language model.
 log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
 log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
@@ -177,8 +177,8 @@ Visualize the graph as a PDF:
 
 ```python
 log.draw()                        # unrolled by default
-log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
-log.draw(vis_mode='unrolled')     # every pass as a distinct node
+log.draw(rolled=True)             # rolled (compact for recurrent)
+log.draw(rolled=False)            # every pass as a distinct node
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
@@ -200,10 +200,11 @@ log = tl.trace(model, x, save=tl.in_module('classifier'))
 # Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
 conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
 log = tl.trace(model, x, save=conv_before_relu,
-               lookback=4, lookback_payload_policy='detached_raw')
+               capture=tl.options.CaptureOptions(lookback=4,
+                                                 lookback_payload_policy='detached_raw'))
 
 # Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('features.6'))
+log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
@@ -218,7 +219,7 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
                    batch_size=32, path='torchlens-activations/')
 ```
 
-**Performance note:** With `halt=` and `tl.record`, capture can run *faster
+**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
@@ -333,8 +334,8 @@ modules_df = log.modules.to_pandas()
 
 ```python
 log.draw()                           # default: unrolled with sibling ordering
-log.draw(vis_mode='rolled')          # compact rolled layout
-log.draw(vis_mode='unrolled')        # every pass as a distinct node
+log.draw(rolled=True)                # compact rolled layout
+log.draw(rolled=False)               # every pass as a distinct node
 ```
 
 Control nesting depth to zoom in on submodules:
@@ -361,7 +362,7 @@ recurrent_model = SimpleRecurrent()
 seq = torch.randn(6, 5)
 recurrent_log = tl.trace(recurrent_model, seq)
 print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(vis_mode='rolled')
+recurrent_log.draw(rolled=True)
 ```
 
 And the HTML export is already **interactive** -- one self-contained file with
@@ -395,7 +396,7 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.push()` /
+`capture=tl.options.CaptureOptions(intervention_ready=True)` and use `log.fork()` + `log.push()` /
 `log.run(model, x)`. Live hooks during rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
@@ -403,7 +404,7 @@ for the full reference.
 
 To steer many forwards or a `generate()` loop, use `spec.bind(model)` (about the cost of a
 plain hook) rather than tracing or rerunning per step; see the steering recipe in
-[docs/agent-reference/common-patterns.md](docs/agent-reference/common-patterns.md).
+[docs/internal/agent-reference/common-patterns.md](docs/internal/agent-reference/common-patterns.md).
 
 Compare multiple runs side by side with `tl.bundle`:
 
@@ -472,8 +473,8 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`halt=`) | yes (+`halt=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
-| Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
+| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
+| Halt / recording / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory
 reduction); preview `tl.validate(...)` returns a status whose `bool()` raises for
@@ -509,6 +510,12 @@ print(prof_log.profile().evidence_labels())
 if torch.cuda.is_available():
     nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
                         capture=tl.options.CaptureOptions(emit_nvtx=True))
+
+# ATen level: record the operations each torch call dispatched to (opt-in; the
+# default capture installs no dispatch mode and the accessors refuse typed)
+aten_log = tl.trace(model, torch.randn(1, 3, 64, 64),
+                    capture=tl.options.CaptureOptions(aten_ops=True))
+print([row.operator for row in aten_log.ops[0].aten_ops])
 ```
 
 Dataset-level statistics stream in constant memory -- including *exact*
@@ -702,6 +709,9 @@ saved activations are unaffected either way.
 | [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |
 | [docs/reference/glossary.md](docs/reference/glossary.md) | Public terminology and stable mechanism names |
 | [docs/reference/limitations.md](docs/reference/limitations.md) | Edge scenarios, typed symptoms, and remedies |
+| [docs/reference/composition_matrix.md](docs/reference/composition_matrix.md) | Which feature pairings are verified together, refused on purpose, or not yet verified |
+| [docs/migration/landscape.md](docs/migration/landscape.md) | Comparable tools and their status, with dated sources |
+| [MIGRATIONS.md](MIGRATIONS.md) | Artifact compatibility: the 2.x floor and the conditional five-year window |
 
 
 ## Security

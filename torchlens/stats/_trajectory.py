@@ -272,7 +272,8 @@ class _TrajectoryFolder:
         log = trace(
             model,
             model_input,
-            capture=CaptureOptions(layers_to_save="all", save_args=True),
+            capture=CaptureOptions(save_args=True),
+            save="all",
         )
         try:
             # The lens is checked once, on the first batch.
