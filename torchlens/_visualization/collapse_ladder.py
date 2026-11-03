@@ -464,13 +464,13 @@ def auto_from_ladder(
     context: RenderContext,
     source_graph: SourceGraph | None,
 ) -> Any:
-    """Return the auto-mode result: the first in-band ladder point, evened (D8).
+    """Return the auto-mode result: the first in-band ladder point, evened.
 
     ``auto`` is the first schedule step whose realized count meets the
     readable-band cap, evened by :func:`_even_auto_plan`. When no step
     reaches the band, the DISCLOSED strongest point is served: the max
     endpoint with ``band_missed=True`` and ``strongest_plan_count`` from the
-    REALIZED plan (memo D7; the reason never says "floor").
+    REALIZED plan (the reason never says "floor").
     """
 
     optimizer = _optimizer()

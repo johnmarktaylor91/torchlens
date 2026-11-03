@@ -1548,7 +1548,7 @@ def _build_collapsed_module_node(
     mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
     mode_result = mode_fn(ml, default_spec, mode_scope)
     mode_spec = default_spec if mode_result is None else mode_result
-    # Encoding channels (C3 slot): exact member-op aggregate, user may override.
+    # Encoding channels: exact member-op aggregate, user may override.
     mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
         result = collapsed_node_spec_fn(ml, mode_spec)

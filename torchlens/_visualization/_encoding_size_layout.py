@@ -27,22 +27,22 @@ from dataclasses import replace
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# SIZE channel constants (wave 1; D4 DEFAULT-APPLIED -- memo 3.1/3.2 C2).
+# SIZE channel constants (the default area-only mapping).
 # ---------------------------------------------------------------------------
 
-#: Closed ``scale=`` vocabulary (slate 3.2). Log is REJECTED by design: it
+#: Closed ``scale=`` vocabulary. Log is REJECTED by design: it
 #: flattens 512-vs-4096 and defeats the size motif.
 SIZE_SCALE_VOCABULARY = ("sqrt", "linear")
 
 #: Max clamp in value space: encoded node area never exceeds this multiple of
 #: the default node area. PROVISIONAL value per the design memo (4.0), to be
-#: tuned once at the D4 rendered-candidates session; the min clamp is free
+#: tuned once at a rendered-candidates review; the min clamp is free
 #: (fixedsize=false -- the box only ever GROWS from the label's natural size).
 SIZE_BY_MAX_AREA_MULT = 4.0
 
 #: Graphviz's own default node geometry in inches (dot default width=0.75,
 #: height=0.5). Emitted sizes are MINIMUMS scaled from this baseline with the
-#: default aspect ratio preserved (D4 default mapping C2: area-only,
+#: default aspect ratio preserved (default mapping: area-only,
 #: conservative -- no per-rank axis rules that could mislead about which axis
 #: is which).
 DEFAULT_NODE_WIDTH_IN = 0.75
@@ -50,11 +50,11 @@ DEFAULT_NODE_HEIGHT_IN = 0.5
 
 
 def non_batch_numel(shape: tuple[int, ...]) -> float:
-    """D4 default mapping C2: numel of the non-batch shape (batch = dim 0).
+    """Default size mapping: numel of the non-batch shape (batch = dim 0).
 
     Rank <= 1 resolves to 1 (default box) -- conservative: a rank-1 dim may
-    or may not be a batch axis, and C2 never misleads about which axis is
-    which.
+    or may not be a batch axis, and the mapping never misleads about which
+    axis is which.
     """
 
     if len(shape) <= 1:

@@ -245,7 +245,7 @@ def segment_encoding_attrs(state: Any, name: str) -> dict[str, str]:
 def box_channel_spec(state: Any, name: str, spec: Any) -> Any:
     """Apply an encoded module box's fill and size minimums to its NodeSpec.
 
-    Runs in the C3 slot (after the mode preset, before the user callback,
+    Runs in the encoding slot (after the mode preset, before the user callback,
     which still sees and may override them). Unencoded boxes pass through.
     """
 
