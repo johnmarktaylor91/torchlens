@@ -471,7 +471,7 @@ torchlens/_semantic/logit_lens.py::logit_lens_predictions	121
 torchlens/_semantic/patching.py	1104
 torchlens/_semantic/patching.py::_require_effective_patch	62
 torchlens/_semantic/patching.py::_run_patch	74
-torchlens/_semantic/patching.py::activation_patch_residual_stream	129
+torchlens/_semantic/patching.py::activation_patch_residual_stream	128
 torchlens/_semantic/patching.py::attribution_patch_attention_heads	67
 torchlens/_semantic/recipes/__init__.py::activate_entrypoint_recipes	63
 torchlens/_semantic/recipes/attention.py	801
