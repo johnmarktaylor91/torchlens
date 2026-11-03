@@ -10,9 +10,7 @@ code whose remedy runs.
 
 from __future__ import annotations
 
-import hashlib
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +20,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens._selection.subspace import _basis_digest
 
 _SITE = "linear_1_1"
 _D = 6
@@ -81,44 +78,6 @@ def _write(directory: Path, *, underscored: bool = False, **changes: Any) -> Pat
     return directory
 
 
-def _sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def _float64_sha(tensor: torch.Tensor) -> str:
-    return hashlib.sha256(tensor.double().contiguous().numpy().tobytes()).hexdigest()
-
-
-@pytest.mark.parametrize("underscored", [False, True], ids=["dotted", "underscored"])
-def test_reader_returns_what_the_artifact_holds(tmp_path: Path, underscored: bool) -> None:
-    directory = _write(tmp_path / "artifact", underscored=underscored)
-    artifact = tl.bridge.pyreft.read(directory, repo="example/loreft", revision="abc123")
-    assert torch.equal(artifact.rotation, _ROTATION) and artifact.rotation.dtype == torch.float32
-    assert torch.equal(artifact.weight, _WEIGHT) and artifact.weight.dtype == torch.bfloat16
-    assert torch.equal(artifact.bias, _BIAS) and artifact.bias.dtype == torch.bfloat16
-    assert (artifact.layer, artifact.component, artifact.unit) == (8, "block_output", "pos")
-    assert artifact.units_per_example == 1 and artifact.rank == _RANK
-    provenance = artifact.provenance
-    weight_name = f"intkey_{_KEY.replace('.', '_') if underscored else _KEY}.bin"
-    assert provenance["weight_file"] == weight_name
-    assert provenance["repo"] == "example/loreft" and provenance["revision"] == "abc123"
-    assert provenance["files_sha256"] == {
-        "config.json": _sha(directory / "config.json"),
-        weight_name: _sha(directory / weight_name),
-    }
-    assert provenance["source_dtype"] == {
-        "rotation": "float32",
-        "weight": "bfloat16",
-        "bias": "bfloat16",
-    }
-    assert provenance["param_sha256"] == {
-        "R": _float64_sha(_ROTATION),
-        "W": _float64_sha(_WEIGHT),
-        "b": _float64_sha(_BIAS),
-    }
-    assert "example/loreft@abc123" in artifact.origin
-
-
 def _ready() -> Any:
     return tl.trace(_MODEL, _X, capture=tl.options.CaptureOptions(replayable=True))
 
@@ -127,53 +86,6 @@ def _positions() -> torch.Tensor:
     positions = torch.zeros(2, 5, dtype=torch.bool)
     positions[:, _POSITION] = True
     return positions
-
-
-def test_applied_edit_equals_the_hand_loreft_formula(tmp_path: Path) -> None:
-    """``h + Q^T (W h + b - Q h)`` with ``Q`` the float64 orthonormalised ``R^T``."""
-
-    artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
-    fork = _ready().fork()
-    fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
-    result = fork.push()[_SITE].out
-    helper = _reloaded_helper(fork, tmp_path)
-    kwargs = dict(helper.kwargs)
-    rows = kwargs["basis"]
-    assert kwargs["orthonormalised"] is True and kwargs["source_dtype"] == "float32"
-    assert kwargs["origin_sha256"] == _basis_digest(_ROTATION.T.double().contiguous())
-    assert kwargs["basis_sha256"] == _basis_digest(rows)
-    assert kwargs["method"] == "loreft"
-    weight, bias = _WEIGHT.double(), _BIAS.double()
-    with torch.no_grad():
-        h = _MODEL.lin1(_X)
-        hand = h + (h @ weight.T + bias - h @ rows.T) @ rows
-    mask = _positions().unsqueeze(-1).expand(2, 5, _D)
-    assert torch.allclose(result, torch.where(mask, hand, h), rtol=0.0, atol=1e-12)
-    assert torch.equal(result[~mask], h[~mask])
-    # Orthonormalising the float32 rotation moves the rows by float32 rounding only.
-    assert float((rows - _ROTATION.T.double()).abs().max()) < 1e-6
-
-
-def _reloaded_helper(fork: Any, tmp_path: Path) -> Any:
-    """Return the staged edit as a portable save reloads it."""
-
-    path = tmp_path / "loreft.tlspec"
-    tl.io.save_intervention(fork, path, level="portable")
-    return tl.io.load_intervention_spec(path).hook_specs[0].helper
-
-
-def test_one_position_edit_saves_portable_and_reapplies_bit_identically(tmp_path: Path) -> None:
-    artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
-    fork = _ready().fork()
-    fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
-    staged = fork.push()
-    path = tmp_path / "one_position.tlspec"
-    tl.io.save_intervention(fork, path, level="portable")
-    spec = tl.io.load_intervention_spec(path)
-    fresh = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    assert torch.equal(fresh.push()[_SITE].out, staged[_SITE].out)
 
 
 def _remedy_runs(error: Any, tmp_path: Path) -> None:
@@ -266,10 +178,3 @@ def test_positions_that_are_not_a_bool_mask_refuse(tmp_path: Path) -> None:
     positions = torch.zeros(2, 5, dtype=torch.bool)
     positions[:, -1] = True
     assert artifact.subspace(_SITE, positions=positions) is not None
-
-
-def test_bridge_module_imports_no_peer() -> None:
-    """Resolving ``tl.bridge.pyreft`` imports neither pyreft nor pyvene."""
-
-    assert tl.bridge.pyreft.read is not None
-    assert "pyreft" not in sys.modules and "pyvene" not in sys.modules

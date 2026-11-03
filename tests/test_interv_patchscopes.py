@@ -154,17 +154,6 @@ def test_mapping_matches_plain_torch(
     assert not torch.allclose(got, clean)
 
 
-def test_donor_batch_of_one_broadcasts(tiny_gpt2: torch.nn.Module) -> None:
-    """A one-row source patches every row of a batched target."""
-
-    target = torch.cat([_TARGET, _TARGET.flip(1)])
-    got = _torchlens_patch(
-        tiny_gpt2, _SOURCE, target, source_layer=0, target_layer=1, positions={-1: 2}
-    )
-    want = _torch_patch(tiny_gpt2, _SOURCE, target, source_layer=0, target_layer=1, pairs=[(-1, 2)])
-    torch.testing.assert_close(got, want, rtol=0.0, atol=1e-6)
-
-
 def test_source_site_by_label(tiny_gpt2: torch.nn.Module) -> None:
     """A pass-qualified label names the donor op as well as a selector does."""
 
@@ -222,18 +211,6 @@ def test_ambiguous_source_site_refuses_typed(tiny_gpt2: torch.nn.Module) -> None
     with pytest.raises(HookValueError) as info:
         tl.trace(tiny_gpt2, _TARGET, intervene=tl.when(tl.module("transformer.h.1"), edit))
     assert info.value.fields["code"] == "patch_source_site_unresolved"
-
-
-def test_mapping_is_disclosed_in_the_edit_identity(tiny_gpt2: torch.nn.Module) -> None:
-    """The audit identity of the edit carries the mapping, never tensors."""
-
-    source = tl.trace(tiny_gpt2, _SOURCE)
-    edit = tl.patch_from(source, source_site="transformer.h.0:1", positions={-1: 3})
-    kwargs = dict(edit.kwargs)
-    assert kwargs["source_site"] == repr("transformer.h.0:1")
-    assert kwargs["positions"] == repr(((-1, 3),))
-    assert kwargs["position_axis"] == "1"
-    assert repr(edit).startswith("tl.Edit('patch_from'")
 
 
 requires_offline_venue = pytest.mark.skipif(

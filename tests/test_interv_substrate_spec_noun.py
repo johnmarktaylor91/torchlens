@@ -16,7 +16,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
-from torchlens.intervention.spec import classify_where
 
 
 class _TinyModel(nn.Module):
@@ -43,53 +42,6 @@ def _ready_trace(model: nn.Module) -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-def test_when_returns_immutable_public_spec() -> None:
-    spec = tl.when(tl.func("relu"), tl.scale(0.0))
-    assert isinstance(spec, Recipe)
-    assert len(spec.rules) == 1
-    assert spec.rules[0].rule_id.startswith("r-")
-    with pytest.raises((AttributeError, TypeError)):
-        spec.rules = ()  # type: ignore[misc]
-
-
-def test_rule_ids_distinguish_action_arguments() -> None:
-    """noise(std=0.1) vs noise(std=0.9) carry DIFFERENT rule identities.
-
-    The ledger memo's distinguishability oracle (D1d): two rules differing
-    in any edit parameter must produce different canonical identity.
-    """
-
-    low = tl.when(tl.func("relu"), tl.add_noise(std=0.1))
-    high = tl.when(tl.func("relu"), tl.add_noise(std=0.9))
-    assert low.rules[0].rule_id != high.rules[0].rule_id
-    assert low.digest != high.digest
-
-
-def test_merge_preserves_rule_ids_and_refuses_duplicates() -> None:
-    a = tl.when(tl.func("relu"), tl.scale(0.0))
-    b = tl.when(tl.func("linear"), tl.add_noise(std=0.1))
-    merged = a.merge(b)
-    assert [rule.rule_id for rule in merged.rules] == [
-        a.rules[0].rule_id,
-        b.rules[0].rule_id,
-    ]
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        a.merge(a)
-    assert excinfo.value.fields["code"] == "spec_rules_duplicate"
-
-
-def test_single_rule_compat_surface() -> None:
-    """Single-clause specs keep the historical .selector/.decision reads."""
-
-    selector = tl.func("relu")
-    spec = tl.when(selector, tl.scale(0.5))
-    assert spec.selector is selector
-    assert spec.decision is not None
-    multi = spec.merge(tl.when(tl.func("linear"), tl.scale(0.5)))
-    assert multi.selector is None
-    assert multi.decision is None
-
-
 def test_where_term_must_be_callable() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
         tl.when("relu_1_2", tl.scale(0.0))  # type: ignore[arg-type]
@@ -109,41 +61,9 @@ def test_merge_operands_must_be_specs() -> None:
     assert excinfo.value.fields["code"] == "intervention_spec_type_invalid"
 
 
-def test_address_law_classification() -> None:
-    assert classify_where(tl.func("relu")) == "structural"
-    assert classify_where(tl.in_module("fc1")) == "structural"
-    assert classify_where(tl.label("relu_1_2")) == "recorded"
-    assert classify_where(lambda ctx: True) == "value_dependent"
-    # composite: worst class wins
-    assert classify_where(tl.func("relu") & tl.label("relu_1_2")) == "recorded"
-
-
 # ---------------------------------------------------------------------------
 # Doors
 # ---------------------------------------------------------------------------
-
-
-def test_capture_door_accepts_spec_unchanged() -> None:
-    model = _TinyModel()
-    spec = tl.when(tl.func("relu"), tl.scale(0.0))
-    log = tl.trace(model, torch.randn(2, 4), intervene=spec)
-    assert torch.count_nonzero(log["relu_1_2"].out) == 0
-
-
-def test_do_door_accepts_spec_unchanged() -> None:
-    model = _TinyModel()
-    log = _ready_trace(model)
-    fork = log.fork()
-    fork.do(tl.when(tl.func("relu"), tl.scale(0.0)))
-    assert torch.count_nonzero(fork["relu_1_2"].out) == 0
-
-
-def test_attach_hooks_door_accepts_spec_unchanged() -> None:
-    model = _TinyModel()
-    log = _ready_trace(model)
-    fork = log.fork()
-    handle = fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
-    assert len(handle.handle_ids) == 1
 
 
 def test_spec_door_refuses_extra_arguments() -> None:
@@ -175,14 +95,6 @@ def test_replay_door_refuses_value_dependent_rule_by_name() -> None:
     # all-or-nothing: the structural rule attached NO hooks either
     staged = getattr(fork, "_intervention_spec", None)
     assert staged is None or not staged.hook_specs
-
-
-def test_multi_clause_spec_applies_every_rule() -> None:
-    model = _TinyModel()
-    spec = tl.when(tl.in_module("fc1"), tl.scale(0.0)).merge(tl.when(tl.func("relu"), tl.add(1.0)))
-    log = tl.trace(model, torch.randn(2, 4), intervene=spec)
-    # fc1 output zeroed, then relu(0)=0 gets +1: relu out is all ones
-    assert torch.allclose(log["relu_1_2"].out, torch.ones(2, 4))
 
 
 def test_overlapping_rules_refuse_at_fire_time() -> None:

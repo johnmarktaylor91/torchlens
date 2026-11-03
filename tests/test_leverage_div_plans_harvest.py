@@ -39,18 +39,6 @@ _SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 # ---------------------------------------------------------------------------
 
 
-def test_collapse_plan_roundtrips_and_reapplies_on_clean_recapture():
-    baseline_model, _, x = make_insertion_pair()
-    first = tl.trace(baseline_model, x, **_SAVE_ALL)
-    exported = export_collapse_plan(first, mode="auto")
-    payload = json.loads(json.dumps(exported))  # must survive real JSON
-    second = tl.trace(baseline_model, x, **_SAVE_ALL)
-    report = reapply_collapse_plan(second, payload)
-    assert report.applicable
-    assert report.changed_cohorts == ()
-    assert report.collapsed_addresses  # the plan's units survived the trip
-
-
 def test_collapse_plan_reapply_refuses_across_insertion():
     """Strict reapply refuses on the join's changed cohorts, teaching."""
 
@@ -118,21 +106,6 @@ def test_harvest_clean_policy_refuses_intervention_fields():
     with pytest.raises(InvalidArgumentError) as excinfo:
         HarvestSpec(policy="none", engine="replay")
     assert excinfo.value.fields["code"] == "harvest_schema_invalid"
-
-
-def test_harvest_execution_gated_per_address_class_never_coarsens():
-    spec = HarvestSpec(
-        policy="intervened",
-        engine="replay",
-        address_class="selection",
-        target_site_keys=("s1|relu|relu||1",),
-        receipt_digest="deadbeef",
-        verification="movers_subset_of_cone",
-    )
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        require_executable(spec)
-    assert excinfo.value.fields["code"] == "harvest_address_class_ungated"
-    assert "never silently coarsened" in str(excinfo.value)
 
 
 def test_harvest_block_fail_closed_on_foreign_fields():

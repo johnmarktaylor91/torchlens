@@ -370,14 +370,6 @@ def test_draw_pinned_refusals(combo: tuple[str, ...], sweep_trace: Any, tmp_path
 _SAMPLED = _SINGLES + _CORE_PAIRS + [pair for pair in _COVERAGE_PAIRS if pair not in _CORE_PAIRS]
 
 
-@pytest.mark.heavy
-@pytest.mark.parametrize("combo", _SAMPLED, ids=["+".join(combo) for combo in _SAMPLED])
-def test_draw_option_combination(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
-    """Documented combination: each option alone and each structural pair draws or refuses typed."""
-
-    _exercise_combo(combo, sweep_trace, tmp_path)
-
-
 @pytest.mark.slow
 def test_every_declared_option_combination_draws_or_refuses_typed(
     sweep_trace: Any, tmp_path: Path

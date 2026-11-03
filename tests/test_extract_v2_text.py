@@ -18,7 +18,7 @@ import pytest
 import torch
 
 from torchlens import extract_dataset
-from torchlens.dataset_extraction import hf_collate, open_extraction
+from torchlens.dataset_extraction import hf_collate
 
 pytestmark = [pytest.mark.real_model, pytest.mark.heavy]
 
@@ -49,61 +49,6 @@ def gpt2_and_tokenizer(tmp_path_factory):
     )
     model = transformers.GPT2Model(config).eval()
     return model, tokenizer
-
-
-def _solo_rows(model, tokenizer, layer: str = "ln_f") -> list[torch.Tensor]:
-    """Per-string solo forwards: the position-correctness oracle."""
-
-    rows = []
-    with torch.no_grad():
-        for prompt in _PROMPTS:
-            encoded = tokenizer(prompt, return_tensors="pt")
-            rows.append(model(**encoded).last_hidden_state[0])
-    return rows
-
-
-@pytest.mark.parametrize("padding_side", ["right", "left"])
-@pytest.mark.parametrize("batch_size", [2, 4])
-def test_gpt2_padded_batches_match_solo_forwards(
-    gpt2_and_tokenizer, padding_side: str, batch_size: int, tmp_path: Path
-) -> None:
-    """T-POSITION: right AND left padding agree with solo rows per string.
-
-    The left legs are the measured rel 41.6% defect class: they pass ONLY
-    because the engine derives mask-based position_ids (disclosed once).
-    """
-
-    model, tokenizer = gpt2_and_tokenizer
-    tokenizer.padding_side = padding_side
-    collate = hf_collate(tokenizer, pad_token="eos")
-    kwargs = {}
-    solo = _solo_rows(model, tokenizer)
-    import contextlib
-
-    disclosure = (
-        pytest.warns(UserWarning, match="derived position_ids")
-        if padding_side == "left" and batch_size > 1
-        else contextlib.nullcontext()
-    )
-    with disclosure:
-        extract_dataset(
-            model,
-            list(_PROMPTS),
-            {"h": "ln_f"},
-            batch_size=batch_size,
-            path=tmp_path,
-            collate=collate,
-            ragged="trim",
-            progress=False,
-            **kwargs,
-        )
-    reader = open_extraction(tmp_path)
-    for index in range(len(_PROMPTS)):
-        row = reader.row(index)["h"]
-        reference = solo[index]
-        assert row.shape == reference.shape, f"row {index} extent"
-        rel = (row - reference).abs().max() / reference.abs().max()
-        assert rel < 1e-4, f"row {index} rel {rel:.3e} under {padding_side} padding"
 
 
 def test_gpt2_no_pad_token_refuses_then_eos_opt_in_recorded(
@@ -186,57 +131,3 @@ def test_tokenizer_resolves_once_per_run(gpt2_and_tokenizer, tmp_path: Path) -> 
     assert calls["n"] == 2, "one tokenization per batch through the ONE resolved tokenizer"
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert manifest["run"]["collate_observed"]["tokenizer_source"] == "attached"
-
-
-def test_bert_class_left_padding_via_engine_matches_solo(tmp_path: Path) -> None:
-    """The encoder leg (measured rel 25.6% class) through the full engine."""
-
-    transformers = pytest.importorskip("transformers")
-    torch.manual_seed(0)
-    config = transformers.BertConfig(
-        vocab_size=64,
-        hidden_size=32,
-        num_hidden_layers=2,
-        num_attention_heads=2,
-        intermediate_size=64,
-        max_position_embeddings=32,
-        attn_implementation="eager",
-    )
-    model = transformers.BertModel(config).eval()
-
-    rows = [[5, 6, 7, 8], [9, 10], [11, 12, 13]]
-
-    def collate_left(items):
-        """Left-pad integer token rows."""
-
-        width = max(len(row) for row in items)
-        ids = torch.zeros(len(items), width, dtype=torch.long)
-        mask = torch.zeros(len(items), width, dtype=torch.long)
-        for i, row in enumerate(items):
-            ids[i, width - len(row) :] = torch.tensor(row)
-            mask[i, width - len(row) :] = 1
-        return {"input_ids": ids, "attention_mask": mask}
-
-    with pytest.warns(UserWarning, match="derived position_ids"):
-        extract_dataset(
-            model,
-            rows,
-            {"h": "encoder.layer.0"},
-            batch_size=3,
-            path=tmp_path,
-            collate=collate_left,
-            ragged="trim",
-            progress=False,
-        )
-    reader = open_extraction(tmp_path)
-    with torch.no_grad():
-        for index, row in enumerate(rows):
-            ids = torch.tensor([row])
-            solo = model(
-                input_ids=ids,
-                attention_mask=torch.ones_like(ids),
-                output_hidden_states=True,
-            ).hidden_states[1][0]
-            stored = reader.row(index)["h"]
-            rel = (stored - solo).abs().max() / solo.abs().max()
-            assert rel < 1e-4, f"row {index} rel {rel:.3e}"

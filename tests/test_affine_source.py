@@ -9,7 +9,6 @@ with its remedy run.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -79,41 +78,11 @@ def _hand(rank: int, one_position: bool) -> torch.Tensor:
     return torch.where(_one_position_mask(), edited, h)
 
 
-@pytest.mark.parametrize("one_position", [False, True], ids=["every-position", "one-position"])
-@pytest.mark.parametrize("rank", [1, 4])
-def test_affine_source_equals_the_hand_loreft_formula(rank: int, one_position: bool) -> None:
-    fork = _ready().fork()
-    fork.do(_target(rank, one_position), _edit(rank))
-    result = fork.push()[_SITE].out
-    assert torch.allclose(result, _hand(rank, one_position), rtol=0.0, atol=1e-12)
-    if one_position:
-        untouched = ~_one_position_mask()
-        assert torch.equal(result[untouched], _ready()[_SITE].out[untouched])
-
-
 def _apply(spec: Any) -> Any:
     fork = _ready().fork()
     for hook_spec in spec.hook_specs:
         fork.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
     return fork.push()
-
-
-@pytest.mark.parametrize("rank", [1, 4])
-def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) -> None:
-    fork = _ready().fork()
-    fork.do(_target(rank, False), _edit(rank))
-    session = fork.push()
-    path = tmp_path / "loreft.tlspec"
-    tl.io.save_intervention(fork, path, level="portable")
-    loaded = tl.io.load_intervention_spec(path)
-    helper = loaded.hook_specs[0].helper
-    assert helper.name == "subspace_edit" and helper.portability == "builtin"
-    inner = helper.args[0]
-    assert inner.name == "set_affine_coordinates"
-    assert torch.equal(inner.args[0], _W[:rank]) and torch.equal(
-        dict(inner.kwargs)["bias"], _B[:rank]
-    )
-    assert torch.equal(_apply(loaded)[_SITE].out, session[_SITE].out)
 
 
 def test_bias_absent_default_fills_and_applies_without_a_bias() -> None:

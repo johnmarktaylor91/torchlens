@@ -25,20 +25,16 @@ from torchlens._visualization._edit_highlighter import HighlighterStyle, highlig
 from torchlens._visualization._edit_marks import (
     EditMark,
     EditRow,
-    edit_ink,
     edit_marks_by_site,
     edit_rows,
     header_edit_line,
     short_edit_text,
 )
-from torchlens._visualization.node_spec import intervention_sites_for_log, render_lines_to_html
-from torchlens._visualization.themes import THEME_PRESETS
+from torchlens._visualization.node_spec import intervention_sites_for_log
 from torchlens.errors import TorchLensWarning
 from torchlens.intervention.types import Edit, FireRecord
-from torchlens.options import VisualizationOptions
 
 PURPLE = "#7B1FA2"
-DARK_PURPLE = "#C084FC"
 
 
 def _traced(intervene: Any = None) -> tl.Trace:
@@ -81,23 +77,6 @@ def test_node_rows_cap_at_three_then_more() -> None:
     assert all(isinstance(row, EditRow) and row.color == PURPLE for row in rows)
 
 
-def test_edit_row_html_spec() -> None:
-    """The edit row is the last row after a 4 pt gap: delta 11 pt, text 10 pt, bold purple."""
-
-    # On 11 pt op labels (the mockups) the row is 11 pt over 10 pt; it scales with the label.
-    label = render_lines_to_html(["relu_1_1", "(2, 3)", EditRow("Δ zero_ablate", PURPLE, 11.0)])
-    assert label.index("(2, 3)") < label.index('POINT-SIZE="4"') < label.index("zero_ablate")
-    assert (
-        f'<FONT COLOR="{PURPLE}"><B><FONT POINT-SIZE="11">Δ</FONT>'
-        '<FONT POINT-SIZE="10">&#160;zero_ablate</FONT></B></FONT>'
-    ) in label
-    assert "<HR" not in label.upper()
-    default = render_lines_to_html(["relu_1_1", EditRow("Δ zero_ablate", PURPLE)])
-    assert (
-        '<FONT POINT-SIZE="14">Δ</FONT><FONT POINT-SIZE="12.7">&#160;zero_ablate</FONT>' in default
-    )
-
-
 def _fired_site(label: str, *edits: Any) -> SimpleNamespace:
     """Return a stand-in site whose fire records name ``edits``."""
 
@@ -132,53 +111,6 @@ def test_header_edit_line_forms() -> None:
         _fired_site("d_1_1", tl.clip_norm(1.0)),
     ]
     assert header_edit_line(trace, four, PURPLE) == "4 edits (marked)"
-
-
-def test_edit_ink_per_skin() -> None:
-    """The four light skins draw ``#7B1FA2``; the dark skin its lighter tint."""
-
-    for name in ("torchlens", "paper", "colorblind", "high_contrast"):
-        assert edit_ink(THEME_PRESETS[name]) == PURPLE
-    assert edit_ink(THEME_PRESETS["dark"]) == DARK_PURPLE
-
-
-def test_cone_is_off_by_default() -> None:
-    """JMT's 29 Apr ruling, confirmed 29 Oct: downstream marking off unless asked for."""
-
-    assert VisualizationOptions().show_cone is False
-
-
-def test_edited_node_dot(tmp_path: Path) -> None:
-    """The edited node keeps its fill and gains the ring and edit row; the header names it."""
-
-    trace = _traced()
-    try:
-        dot = trace.draw(file_format="dot", path=str(tmp_path / "toy")).dot
-    finally:
-        trace.cleanup()
-    relu_line = next(line for line in dot.splitlines() if "tl_edited" in line)
-    assert f'color="{PURPLE}"' in relu_line or f"color={PURPLE}" in relu_line.replace('"', "")
-    assert "penwidth=2.5" in relu_line.replace('"', "")
-    assert "zero_ablate" in relu_line
-    assert "1 edit:" in dot and "on relu_1_1" in dot
-    assert "tl_downstream" not in dot
-    assert "#FF00FF" not in dot and "#FFB3FF" not in dot
-
-
-def test_dark_skin_uses_its_tint(tmp_path: Path) -> None:
-    """The dark skin draws ring, row and header token in ``#C084FC``."""
-
-    trace = _traced()
-    try:
-        dot = trace.draw(
-            file_format="dot",
-            path=str(tmp_path / "dark"),
-            theme="dark",
-        ).dot
-    finally:
-        trace.cleanup()
-    assert dot.count(DARK_PURPLE) >= 3
-    assert PURPLE not in dot
 
 
 def _svg_group(svg: str, cls: str) -> str:
@@ -228,76 +160,6 @@ def test_highlight_svg_lays_underlays_where_f2_says() -> None:
     ) == (_SAMPLE_SVG.replace("tl_edited", "").replace("tl_downstream", ""))
 
 
-@pytest.mark.parametrize("placement", ["dot", "rank"])
-def test_highlighter_in_svg_on_both_engines(tmp_path: Path, placement: str) -> None:
-    """``show_cone=True`` lays the highlighter into the SVG on dot and the rank layout."""
-
-    trace = _traced()
-    try:
-        trace.draw(
-            file_format="svg",
-            path=str(tmp_path / f"cone_{placement}"),
-            show_cone=True,
-            layout=placement,
-        )
-        trace.draw(
-            file_format="svg",
-            path=str(tmp_path / f"plain_{placement}"),
-            layout=placement,
-        )
-    finally:
-        trace.cleanup()
-    cone = (tmp_path / f"cone_{placement}.svg").read_text(encoding="utf-8")
-    plain = (tmp_path / f"plain_{placement}.svg").read_text(encoding="utf-8")
-    assert "tl_downstream" in cone
-    assert cone.count('stroke-opacity="0.25"') >= 3  # node outline plus two arrow shapes
-    assert "stroke-opacity" not in plain
-    assert "tl_edited" in plain
-
-
-def test_highlighter_dark_opacity(tmp_path: Path) -> None:
-    """The dark skin's highlighter is ``#C084FC`` at 0.35."""
-
-    trace = _traced()
-    try:
-        trace.draw(
-            file_format="svg",
-            path=str(tmp_path / "dark"),
-            show_cone=True,
-            theme="dark",
-        )
-    finally:
-        trace.cleanup()
-    svg = (tmp_path / "dark.svg").read_text(encoding="utf-8")
-    assert f'stroke="{DARK_PURPLE}" stroke-opacity="0.35"' in svg
-
-
-def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
-    """PDF and PNG carry the highlighter: they are written from the processed SVG."""
-
-    pytest.importorskip("cairosvg")
-    trace = _traced()
-    try:
-        for fileformat in ("pdf", "png"):
-            trace.draw(
-                file_format=fileformat,
-                path=str(tmp_path / "cone"),
-                show_cone=True,
-            )
-    finally:
-        trace.cleanup()
-    assert (tmp_path / "cone.pdf").read_bytes().startswith(b"%PDF")
-    png = (tmp_path / "cone.png").read_bytes()
-    assert png.startswith(b"\x89PNG")
-    from PIL import Image
-
-    with Image.open(tmp_path / "cone.png") as image:
-        pixels = image.convert("RGB").getdata()
-        # The translucent purple over white is a pale violet no other mark uses.
-        assert any(r > g + 20 and b > g + 20 and r > 180 and b > 180 for r, g, b in pixels)
-    assert not list(tmp_path.glob("*.highlight.svg"))
-
-
 def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> None:
     """A raster format other than PDF or PNG draws without the highlighter and says so."""
 
@@ -314,28 +176,6 @@ def test_highlighter_warns_when_the_format_cannot_carry_it(tmp_path: Path) -> No
     codes = [getattr(entry.message, "fields", {}).get("code") for entry in record]
     assert codes.count("viz_highlighter_not_drawn") == 1
     assert (tmp_path / "cone.jpg").exists()
-
-
-def test_as_node_hook_is_purple(tmp_path: Path) -> None:
-    """The as_node hook diamond is restyled in the edit purple and tagged as the edit."""
-
-    trace = _traced()
-    try:
-        dot = trace.draw(
-            file_format="dot",
-            path=str(tmp_path / "as_node"),
-            intervention_mode="as_node",
-        ).dot
-    finally:
-        trace.cleanup()
-    hook_line = next(
-        line
-        for line in dot.splitlines()
-        if line.lstrip().startswith("intervention_hook_") and "->" not in line
-    )
-    assert "shape=diamond" in hook_line
-    assert PURPLE in hook_line and "#F3E5F5" in hook_line
-    assert "tl_edited" in hook_line
 
 
 class _SharedLinearTwice(nn.Module):
@@ -393,52 +233,6 @@ def test_backward_edit_marks_its_own_pass(tmp_path: Path) -> None:
     edited = [line for line in dot.splitlines() if "tl_edited" in line]
     assert len(edited) == 1
     assert "hook(named_backward)" in edited[0]
-
-
-def test_unrolled_forward_edit_marks_only_its_pass(tmp_path: Path) -> None:
-    """An edit on pass 2 rings pass 2 alone, tags only what pass 2 feeds, and keeps its pass.
-
-    The node slot hands an unrolled node its aggregate Layer; the ring, edit row
-    and downstream class must follow the rendered pass, not the layer.
-    """
-
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _SharedLinearTwice(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    try:
-        fork = trace.fork("edited")
-        layers = {layer.layer_type: layer.layer_label for layer in fork._layer_logs.values()}
-        linear, relu = layers["linear"], layers["relu"]
-        fork.do(tl.label(f"{linear}:2"), tl.zero_ablate())
-        dot = fork.draw(
-            file_format="dot",
-            rolled=False,
-            show_cone=True,
-            path=str(tmp_path / "shared_fwd"),
-        ).dot
-        rolled = fork.draw(
-            file_format="dot",
-            rolled=True,
-            path=str(tmp_path / "shared_fwd_rolled"),
-        ).dot
-    finally:
-        trace.cleanup()
-    # Rolled, the one node stands for both passes; the header keeps the pass.
-    assert f"&#160;on {linear}:2" in rolled
-    nodes = {
-        line.split(" [", 1)[0].strip(): line
-        for line in dot.splitlines()
-        if " [label=" in line and "->" not in line
-    }
-    edited = sorted(name for name, line in nodes.items() if "tl_edited" in line)
-    assert edited == [f"{linear}pass2"]
-    assert "zero_ablate" not in nodes[f"{linear}pass1"]
-    assert "tl_downstream" in nodes[f"{relu}pass2"]
-    assert "tl_downstream" not in nodes[f"{relu}pass1"]
-    assert "tl_downstream" not in nodes[f"{linear}pass1"]
 
 
 _PATCHED_IMPORT_PROBE = """

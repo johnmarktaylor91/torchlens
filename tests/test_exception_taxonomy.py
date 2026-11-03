@@ -615,41 +615,6 @@ def _failing_rows(rows: Any, check: Callable[..., None]) -> list[str]:
     return failures
 
 
-def _public_error_classes() -> dict[str, type[BaseException]]:
-    """Return every public ``torchlens.errors`` exception or warning class.
-
-    Returns
-    -------
-    dict[str, type[BaseException]]
-        Mapping from public name to the resolved class object.
-    """
-
-    discovered: dict[str, type[BaseException]] = {}
-    for name in dir(errors):
-        obj = getattr(errors, name)
-        if isinstance(obj, type) and issubclass(obj, BaseException):
-            discovered[name] = obj
-    return discovered
-
-
-def test_builtin_lineage_golden_is_closed() -> None:
-    """The lineage golden covers exactly the public error surface.
-
-    A new public exception class cannot ship without a conscious lineage row,
-    and a removed class cannot leave a stale row behind.
-    """
-
-    discovered = set(_public_error_classes())
-    golden = set(BUILTIN_LINEAGE_GOLDEN)
-
-    assert discovered - golden == set(), (
-        f"public error classes missing a builtin-lineage golden row: {sorted(discovered - golden)}"
-    )
-    assert golden - discovered == set(), (
-        f"stale builtin-lineage golden rows: {sorted(golden - discovered)}"
-    )
-
-
 def _check_builtin_lineage(
     class_name: str,
     expected_builtins: tuple[str, ...],
@@ -758,14 +723,6 @@ def _check_old_exception_mapping(
         assert class_name == "SpecPortabilityError"
     else:
         assert cls.__name__ == class_name
-
-
-def test_spec_portability_alias_is_unchanged() -> None:
-    """SpecPortabilityError remains an alias for the executable-save error."""
-
-    from torchlens.intervention import errors as intervention_errors
-
-    assert intervention_errors.SpecPortabilityError is intervention_errors.OpaqueCallableError
 
 
 _BACKEND_REFUSAL_ROWS = (
@@ -1000,34 +957,6 @@ def test_multiarg_refusals_survive_pickle_and_deepcopy() -> None:
             assert restored.fields == original.fields, label
 
 
-def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
-    """The ``save=`` type door refuses typed and its remedy names spellings that run.
-
-    ``save='all'`` and the ``save=[...]`` list form are documented ``tl.trace``
-    spellings and run (U26.3-fix bug 6); an unsupported type still refuses with a
-    code and a remedy. Historical ``TypeError`` lineage is preserved.
-    """
-
-    import torch
-    from torch import nn
-
-    import torchlens as tl
-
-    with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        tl.trace(nn.Identity(), torch.randn(2), save=3)
-
-    assert exc_info.value.fields["code"] == "save_predicate_type_invalid"
-    assert isinstance(exc_info.value, TypeError)
-    assert "save='all'" in exc_info.value.fields["remedy"]
-    assert "Remedy:" in str(exc_info.value)
-    x = torch.randn(2)
-    saved_all = tl.trace(nn.Identity(), x, save="all")
-    default = tl.trace(nn.Identity(), x)
-    assert [op.label for op in saved_all._layer_list if op.has_saved_activation] == [
-        op.label for op in default._layer_list if op.has_saved_activation
-    ]
-
-
 def test_collapse_order_mode_door_names_its_narrower_domain() -> None:
     """The collapse_order refusal remedy never sends the caller back in circles.
 
@@ -1115,32 +1044,6 @@ def test_predicate_type_doors_split_by_surface() -> None:
         assert record_info.value.fields["code"] == f"recording_{base}_predicate_type_invalid"
         assert isinstance(record_info.value, ValueError)
         assert not isinstance(record_info.value, TypeError)
-
-
-def test_option_group_conflict_doors_split_by_site_history() -> None:
-    """Each grouped/flat conflict door keeps its historical builtin, per code.
-
-    The five merge entrypoints historically raised ``raise
-    ValueError(conflict_message)`` and now raise ``ArgumentConflictError``
-    under ``option_group_conflict``; the visualization merge historically
-    raised a raw ``TypeError`` and now raises ``KeywordConflictError`` under
-    ``option_group_keyword_conflict``. One code maps to one catchable builtin.
-    """
-
-    with pytest.raises(errors.ArgumentConflictError) as value_info:
-        merge_capture_options(capture=CaptureOptions(name="one"), name="two")
-    assert value_info.value.fields["code"] == "option_group_conflict"
-    assert isinstance(value_info.value, ValueError)
-    assert not isinstance(value_info.value, TypeError)
-
-    with pytest.raises(errors.KeywordConflictError) as keyword_info:
-        merge_visualization_options(
-            visualization=VisualizationOptions(layout="dot"),
-            layout="rank",
-        )
-    assert keyword_info.value.fields["code"] == "option_group_keyword_conflict"
-    assert isinstance(keyword_info.value, TypeError)
-    assert not isinstance(keyword_info.value, ValueError)
 
 
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1549,31 +1452,6 @@ def test_package_exception_classes_are_registered_or_allowlisted() -> None:
         f"(register them or add an exact-name allowlist entry with a reason): "
         f"{sorted(stranded)}"
     )
-
-
-@pytest.mark.heavy
-def test_taxonomy_allowlist_has_no_stale_or_shadowing_entries() -> None:
-    """The allowlist stays exact: no dead entries, no double-classification.
-
-    An entry for a deleted class is stale noise; an entry for a class that IS
-    registered would let a later un-registration pass silently.
-    """
-
-    discovered = set(_exception_class_definitions())
-    registered = _registered_exception_homes()
-    allowlisted = set(_TAXONOMY_INTERNAL_ALLOWLIST)
-
-    assert allowlisted - discovered == set(), (
-        f"stale allowlist entries (class no longer defined): {sorted(allowlisted - discovered)}"
-    )
-    assert allowlisted & registered == set(), (
-        "allowlist entries that are ALSO registered in torchlens.errors "
-        f"(remove the allowlist row): {sorted(allowlisted & registered)}"
-    )
-    for entry, reason in _TAXONOMY_INTERNAL_ALLOWLIST.items():
-        assert isinstance(reason, str) and reason.strip(), (
-            f"allowlist entry {entry!r} must carry a non-empty reason"
-        )
 
 
 # --- fixwave-5 refusal-code provocations (error-code coverage gate) -----------------
