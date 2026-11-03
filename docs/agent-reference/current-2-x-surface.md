@@ -1909,7 +1909,7 @@ object's docstring):
 - `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).
 - `tl.transformer.receipt_from_patch_grid`: Build a validated receipt from a mech-interp patch grid row.
 - `tl.transformer.render_neuron_card`: Render the selected-pair neuron card (family-gated static card).
-- `tl.types.Accessor`: Generic dict-like accessor for ordered TorchLens log objects.
+- `tl.types.Accessor`: Generic dict-like accessor for ordered TorchLens log objects; every collection serves `.labels` (its lookup labels in order), Op collections `.compute` / `.nonfinite`, Layer collections `.compute` / `.recurrent` / `.saved_grad` / `.internal_source` / `.internal_sink`, Module collections `.uncalled` (addresses).
 - `tl.types.ContainerLeafOccurrence`: One tensor occurrence at one container path.
 - `tl.types.ContainerSpec`: Portable description of an output container seen during capture.
 - `tl.types.Container`: Computed view over a captured Python output container.

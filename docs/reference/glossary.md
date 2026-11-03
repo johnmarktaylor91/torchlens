@@ -51,6 +51,23 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   are Layer collections; on any Layer collection they keep the members that pass the Trace-level
   filter, so `len(trace.layers.compute)` counts the compute Layers.
 
+**Op filters**
+: `trace.ops.compute` and `trace.ops.nonfinite` are Op collections; on any Op collection they
+  keep the members that pass the Trace-level filter (`Trace.compute_ops`, `Trace.nonfinite_ops`),
+  so `len(trace.ops.compute)` counts the compute ops and `trace.saved_ops.nonfinite` the saved
+  ops whose output held NaN or Inf.
+
+**Module filters**
+: `trace.modules.uncalled` lists the addresses `Trace.uncalled_modules` records; an uncalled
+  module has no Module record, so the answer is addresses, not records.
+
+**Collection labels (`.labels`)**
+: Every collection serves `.labels`, the tuple of its lookup labels in collection order:
+  `trace.layers.labels` the Layer labels, `trace.ops.labels` the counted Op labels,
+  `trace.modules.labels` the module addresses, `trace.params.labels` the parameter addresses, and
+  the same on any filtered collection (`trace.layers.compute.labels`). The per-noun Trace
+  projections (`Trace.layer_labels`) stay.
+
 **Recording**
 : A sparse, torch-only event stream returned by `tl.record(model, inputs, save=...)`.
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
@@ -4004,8 +4021,12 @@ The sections above describe each surface in depth.
 ### Members
 | Spelling | Meaning |
 | --- | --- |
+| `Accessor.labels` | The lookup label of every record the collection lists, in order |
 | `Accessor.count_by` | Count records by one or more record fields |
+| `ModuleAccessor.uncalled` | Addresses of registered modules the captured pass never called |
 | `Accessor.search` | Return records whose lookup key contains `needle` |
+| `TraceOpAccessor.compute` | The members that are not input, output or buffer rows |
+| `TraceOpAccessor.nonfinite` | The members whose output held NaN or Inf |
 | `AmbiguousBackendError.default_remedy` | The remedy the error names when none is passed |
 | `BackendCapabilities.can_intervene` | Whether live intervention capture is supported (was `interventions`) |
 | `BackendCapabilities.has_validation_replay` | Whether the backend can perform replay validation |
@@ -4292,6 +4313,7 @@ The sections above describe each surface in depth.
 | `ScanRow.zero_fraction` | Fraction of values equal to zero |
 | `Selection.align_to` | Re-bind a resolved selection onto another trace |
 | `Selection.labels` | Pass-qualified op label of every row, in row order |
+| `Site.record` | The `Op`, `Param` or `EdgeUseRecord` the row names, through a weak trace link |
 | `Selection.selector` | The selector that produced the rows, or `None` |
 | `Selection.to_pandas` | One row per site: label, kind, key, num_selected, numel, shape, relation, source |
 | `Session.to_bundle` | Return a bundle containing all captured invocation logs |

@@ -228,3 +228,70 @@ def test_grad_fns_accessor_returns_grad_fn_for_pass_label() -> None:
 
     assert isinstance(trace.autograd.grad_fns[f"{grad_fn.label}:1"], GradFn)
     assert trace.autograd.grad_fns[f"{grad_fn.label}:1"] is grad_fn
+
+
+class _IdleBranchModel(torch.nn.Module):
+    """Model with a registered submodule the forward never calls and one inf-making op."""
+
+    def __init__(self) -> None:
+        """Register a used and an unused Linear."""
+
+        super().__init__()
+        self.used = torch.nn.Linear(3, 3)
+        self.idle = torch.nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Divide by zero once so one op output is non-finite."""
+
+        y = self.used(x)
+        return y / torch.zeros_like(y)
+
+
+def test_every_collection_serves_its_labels() -> None:
+    """``.labels`` on layers, ops and modules lists the lookup labels in order (walk names option b)."""
+
+    trace = _strict_trace()
+
+    assert trace.layers.labels == tuple(trace.layer_labels)
+    assert trace.ops.labels == tuple(op.label for op in trace.ops)
+    assert "linear_1_1:2" in trace.ops.labels
+    assert trace.modules.labels == tuple(trace.modules.keys())
+    assert "lin" in trace.modules.labels
+    assert trace.params.labels == tuple(param.address for param in trace.params)
+    for label in trace.layers.compute.labels:
+        assert trace.layers.compute[label] is trace.layers[label]
+
+
+def test_ops_compute_filter_matches_the_trace_level_view() -> None:
+    """``trace.ops.compute`` is the Op spelling of ``trace.layers.compute``."""
+
+    trace = _strict_trace()
+
+    compute = trace.ops.compute
+    assert list(compute) == list(trace.compute_ops)
+    assert compute.labels == trace.compute_ops.labels
+    assert not any(op.is_input or op.is_output or op.is_buffer for op in compute)
+    assert {op.layer_label for op in compute} == set(trace.layers.compute.labels)
+    assert list(trace.input_ops.compute) == []
+
+
+def test_ops_nonfinite_and_modules_uncalled_filters() -> None:
+    """``trace.ops.nonfinite`` and ``trace.modules.uncalled`` mirror the Trace-level answers."""
+
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _IdleBranchModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(layers_to_save="all"),
+    )
+
+    nonfinite = trace.ops.nonfinite
+    assert nonfinite.labels == tuple(trace.nonfinite_ops)
+    assert len(nonfinite) >= 1
+    assert all(isinstance(op, Op) for op in nonfinite)
+    assert all(not torch.isfinite(op.out).all() for op in nonfinite)
+    assert trace.ops.compute.nonfinite.labels == nonfinite.labels
+
+    assert list(trace.modules.uncalled) == list(trace.uncalled_modules)
+    assert "idle" in trace.modules.uncalled
+    assert "idle" not in trace.modules.labels

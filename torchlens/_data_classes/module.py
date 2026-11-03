@@ -2556,6 +2556,21 @@ class ModuleAccessor(Accessor["Module"]):
             list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
         )
 
+    @property
+    def uncalled(self) -> list[str]:
+        """Addresses of registered modules the captured pass never called.
+
+        The collection spelling of ``Trace.uncalled_modules``: an uncalled module
+        has no ``Module`` record, so the answer is its addresses. Empty when no
+        member still reaches its trace.
+        """
+
+        for module in self._list:
+            trace = module._source_trace
+            if trace is not None:
+                return trace.uncalled_modules
+        return []
+
     def _composition_note(self) -> str | None:
         """Composition breakdown: total calls across modules (F10)."""
 
