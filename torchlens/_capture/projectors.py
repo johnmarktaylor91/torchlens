@@ -8,13 +8,15 @@ from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any
 from weakref import WeakKeyDictionary
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
 from .._record_type import record_type
+from ._cooked_inventory import install_cooked_inventory, install_run_facts
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -893,15 +895,8 @@ class RecordingProjection:
 
         trace.buffer_layers = list(self.buffer_layers)
         trace.internal_source_ops = list(self.internal_source_ops)
-        trace._provenance_start_time = self.trace_facts["capture_start_time"]
-        trace._provenance_setup_duration = self.trace_facts["setup_duration"]
-        trace._cost_forward_duration = self.trace_facts["forward_duration"]
-        trace._cost_forward_peak_memory = self.trace_facts["forward_peak_memory"]
-        trace._cost_forward_peak_memory_reason = self.trace_facts.get("forward_peak_memory_reason")
-        trace._provenance_forward_memory_backend = self.trace_facts["forward_memory_backend"]
-        trace._source_model_ref = self.trace_facts["source_model_ref"]
-        trace._options_seed = self.trace_facts["random_seed"]
-        trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
+        install_run_facts(trace, self.trace_facts)
+        install_cooked_inventory(trace, self.trace_facts, param_accessor=ParamAccessor)
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label
 

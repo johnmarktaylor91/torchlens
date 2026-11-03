@@ -624,7 +624,7 @@ _WEAK_SUBJECT_TABLES = frozenset(
         ("torchlens/backends/torch/completeness_witness.py", "_RUNNABLE_INPUT_STORAGE_SITES"),
         ("torchlens/backends/torch/completeness_witness.py", "_STATE_METADATA_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STORAGE_REBIND_BARRIER_LABELS"),
-        ("torchlens/backends/torch/model_prep.py", "_source_line_cache"),
+        ("torchlens/backends/torch/_module_class_metadata.py", "_source_line_cache"),
         # Implicit-backward task ordinals keyed weakly by their owning trace;
         # entries die with the trace.
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
@@ -807,7 +807,7 @@ _PROCESS_CACHES = frozenset(
         # above: evicted by the owning trace's slot callback and by cleanup().
         ("torchlens/backends/torch/tensor_tracking.py", "_STATE_BOUNDARY_GRAD_FNS"),
         ("torchlens/backends/torch/completeness_witness.py", "_FRAMEWORK_FILENAME_VERDICTS"),
-        ("torchlens/backends/torch/model_prep.py", "_module_class_metadata_cache"),
+        ("torchlens/backends/torch/_module_class_metadata.py", "_module_class_metadata_cache"),
         ("torchlens/backends/torch/ops.py", "_CAPTURE_PRODUCER_POLICIES"),
         # Agent-surface digest-hint cache (moved from torchlens/bridge/mcp.py
         # in the 2026-10 agent-reference reorg): full stat identity (path,
@@ -979,7 +979,7 @@ _WEAKLY_HELD = frozenset(
         ("torchlens/backends/torch/completeness_witness.py", "_RUNNABLE_LEDGER_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STATE_METADATA_FACTS"),
         ("torchlens/backends/torch/completeness_witness.py", "_STORAGE_REBIND_BARRIER_LABELS"),
-        ("torchlens/backends/torch/model_prep.py", "_source_line_cache"),
+        ("torchlens/backends/torch/_module_class_metadata.py", "_source_line_cache"),
         ("torchlens/backends/torch/tensor_tracking.py", "_IMPLICIT_BACKWARD_TASK_IDS"),
         ("torchlens/backends/torch/tensor_tracking.py", "_OWNED_STATE_GRAD_HOOK_HANDLES"),
         ("torchlens/backends/torch/wrappers.py", "_COW_STATE_PTRS_CACHE"),
@@ -1289,6 +1289,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/export/_netron_emit.py", "__all__"),
         ("torchlens/export/_report.py", "__all__"),
         ("torchlens/recording/__init__.py", "__all__"),
+        ("torchlens/recording/_dry_run.py", "__all__"),
         ("torchlens/recording/types.py", "__all__"),
         ("torchlens/features.py", "__all__"),
         ("torchlens/fingerprint.py", "__all__"),

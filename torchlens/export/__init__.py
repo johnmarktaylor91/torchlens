@@ -27,7 +27,7 @@ from .._capture_honesty import capture_honesty_facts, honesty_preamble_lines
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._io._json import loads_bounded
 from .._utils.display import atomic_write_text
-from ._common import _iter_layers, _scalarize_cell, _static_graph_data
+from ._common import _cook_recording, _iter_layers, _scalarize_cell, _static_graph_data
 from ._graphs import netron
 from ._naming import _duration_us, _layer_display_name, _safe_id, _sanitize_flamegraph_frame
 from ._registry import (
@@ -737,7 +737,7 @@ def xarray(trace: Any) -> Any:
     Parameters
     ----------
     trace:
-        TorchLens ``Trace`` whose saved tensor outs should be exported.
+        ``Trace`` (or a ``Recording``, cooked first) whose saved outs are exported.
 
     Returns
     -------
@@ -773,8 +773,8 @@ def xarray(trace: Any) -> Any:
     >>> dataset["out"].sizes["presentation"]
     1
     """
-    # D15: xarray's product IS saved tensor values -- it refuses through the
-    # EXISTING value-payload capability (a marked empty array would be synthetic).
+    # D15: a Recording cooks first; the value-payload capability refuses (no synthetic array).
+    trace = _cook_recording(trace)
     _require_structure_only_capability(trace, "value_payloads")
 
     try:

@@ -1,8 +1,11 @@
-"""Fastlog early-abort control signal."""
+"""Fastlog early-abort control signal and the halted-state writer for a frozen Recording."""
 
 from __future__ import annotations
 
-from typing import Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn
+
+if TYPE_CHECKING:
+    from .types import Recording
 
 
 class StopSignal(BaseException):
@@ -88,3 +91,16 @@ def stop(reason: str = "") -> NoReturn:
 
         active_trace.__dict__["_stop_requested"] = StopRequest(kind="stop", reason=reason)
     raise StopSignal(reason)
+
+
+def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
+    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
+    ``reason`` means none was given.
+    """
+
+    recording.stops_by_pass.setdefault(pass_index, reason)
+    if recording.is_stopped:
+        return
+    object.__setattr__(recording, "is_stopped", True)
+    object.__setattr__(recording, "status", "halted")
+    object.__setattr__(recording, "stop_reason", reason)

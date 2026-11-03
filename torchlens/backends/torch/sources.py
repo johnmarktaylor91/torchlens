@@ -195,7 +195,7 @@ def log_source_tensor_predicate(
             "raw_index": raw_index,
             "type": source,
             "type_index": type_index,
-            "func_name": None,
+            "func_name": "none",  # the exhaustive source spelling (``log_source_tensor_exhaustive``)
             "input_output_address": extra_addr,
             "tensor": t,
             "address": module_frame.address if module_frame else None,
@@ -326,7 +326,7 @@ def _echo_and_halt_on_source(
                 "raw_index": raw_index,
                 "type": source,
                 "type_index": type_index,
-                "func_name": None,
+                "func_name": "none",
                 "input_output_address": extra_addr,
                 "tensor": t,
             },

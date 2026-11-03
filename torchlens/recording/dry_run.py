@@ -8,9 +8,9 @@ from torch import nn
 
 from .._input_coerce import _coerce_input_args
 from ..options import CaptureOptions
+from ._dry_run import DryRun
 from ._recorder import Recorder
 from .options import PredicateFn
-from .types import DryRun
 
 
 def dry_run(
