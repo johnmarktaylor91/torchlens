@@ -286,9 +286,10 @@ class LazyActivationRef:
                     tensor = handle.get_tensor(key)
                 if _file_identity(blob_path.stat()) != identity:
                     observed_sha256 = "a file that changed while it was read"
-        except (OSError, SafetensorError, ValueError) as exc:
+        except (ImportError, OSError, SafetensorError, ValueError) as exc:
+            hint = " Install safetensors>=0.4." if isinstance(exc, ImportError) else ""
             raise ArtifactError(
-                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}",
+                f"Failed to materialize key {key!r} of blob {blob_path}: {exc}.{hint}",
                 code="bundle_load_failed",
             ) from exc
         if tensor is None or observed_sha256 != self.expected_sha256:

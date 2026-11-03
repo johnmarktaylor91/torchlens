@@ -680,7 +680,7 @@ def test_bundle_load_raises_for_missing_safetensors_backend(
     def _raise_backend_import(*_args: Any, **_kwargs: Any) -> Any:
         raise ImportError("missing backend")
 
-    monkeypatch.setattr("torchlens._io.format3.payloads.safe_open", _raise_backend_import)
+    monkeypatch.setattr("torchlens._io.lazy.safe_open", _raise_backend_import)
 
     with pytest.raises(ArtifactError, match="Install safetensors>=0.4"):
         load(bundle_path)
@@ -706,7 +706,7 @@ def test_bundle_load_raises_on_missing_blob_file(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError, match=blob_path.name) as excinfo:
         load(bundle_path)
-    assert excinfo.value.fields["code"] == "bundle_load_failed"
+    assert excinfo.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
 def test_bundle_load_raises_on_truncated_safetensors(tmp_path: Path) -> None:

@@ -5,9 +5,9 @@ the storage bindings or a record class changes and commit the result;
 `tests/test_persisted_fields_doc.py` fails when this page and the generator disagree.
 
 Contract of record: `torchlens/schemas/writer_contract_v12.json`, digest
-`da93c9b0e9b190797c12d7d47c453c67b7ce8427cf33dea9501754f52a6ed5aa`.
+`f654f5572d9d7046df8c2176efeb60b78ae9bf492435cd4cef83996fe48d1287`.
 Previous contract: `torchlens/schemas/writer_contract_v11.json`, digest
-`bf712f3e3abf8f25845de30aa2984e051fb0675a76ea23c78be31b26925833ac` (tlspec 11).
+`c48cc517e89ec3ff9d299e4ad21acf13f33cad7172440993494e30e4baacd5e0` (tlspec 11).
 Reader floor: tlspec 12.
 
 12 record contracts, 781 persisted keys.
@@ -65,7 +65,7 @@ Payload codecs: `torch_safetensors_v1`, `numpy_safetensors_v1`.
 
 | record | class | persisted keys | session-only keys |
 | --- | --- | ---: | ---: |
-| `trace` | `torchlens._data_classes.trace.Trace` | 183 | 156 |
+| `trace` | `torchlens._data_classes.trace.Trace` | 183 | 157 |
 | `op` | `torchlens._data_classes.op.Op` | 176 | 27 |
 | `layer` | `torchlens._data_classes.layer.Layer` | 92 | 8 |
 | `aten_op` | `torchlens._data_classes.aten_op.AtenOp` | 32 | 0 |
