@@ -10,7 +10,7 @@ item 12: "forged provenance refuses").
 
 from __future__ import annotations
 
-import pickle
+import json
 
 import pytest
 import torch
@@ -44,25 +44,115 @@ def _sae_like(out: torch.Tensor, *, ctx) -> torch.Tensor:
     return torch.sigmoid(z)
 
 
-def _tampered_load(tmp_path, tamper):
-    """Save a logged capture, tamper its pickled state, and load it back.
+# The injected hook is a user callable: format 3 writes its recipe (a callable
+# placeholder) only at a non-portable level (saved_format_3.md section 5); the
+# portable default refuses intervention_spec_not_portable before any row is read.
+_SAVE_LEVEL = "audit"
+_OP_TABLE = "records/op.json"
+_TUPLE_TAG = "tuple"
 
-    ``tamper(state)`` mutates the raw metadata mapping in place; the return
-    value is whatever ``tl.load`` does with the forged artifact.
+
+class _TypedTuple(list):
+    """A saved typed tuple, opened as a mutable list for tampering."""
+
+
+def _decode_cell(cell):
+    """Open one op-table cell for tampering (typed tuples become mutable lists)."""
+
+    if isinstance(cell, dict) and cell.get("$tl") == _TUPLE_TAG:
+        return _TypedTuple(_decode_cell(item) for item in cell["items"])
+    if isinstance(cell, dict):
+        return {key: _decode_cell(item) for key, item in cell.items()}
+    if isinstance(cell, list):
+        return [_decode_cell(item) for item in cell]
+    return cell
+
+
+def _encode_cell(value, *, top: bool = False):
+    """Write one opened cell back in the table's typed-JSON vocabulary.
+
+    Typed tuples (and any sequence assigned to a column, the shape the writer
+    gives the dataflow columns) become typed tuples again, bytes the format's
+    base64 cell, so a forgery reaches the injected-row validators instead of
+    the cell grammar in front of them.
     """
+
+    if isinstance(value, (_TypedTuple, tuple)) or (top and isinstance(value, list)):
+        return {"$tl": _TUPLE_TAG, "items": [_encode_cell(item) for item in value]}
+    if isinstance(value, list):
+        return [_encode_cell(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _encode_cell(item) for key, item in value.items()}
+    if isinstance(value, (bytes, bytearray)):
+        from torchlens._io.format3.values import ValueEncoder
+
+        return ValueEncoder().encode(bytes(value), "tamper")
+    return value
+
+
+class _OpRow:
+    """Attribute view of one saved op row (the format 3 op table is columnar).
+
+    A read opens the stored cell (kept, so in-place edits of mapping cells
+    persist); an assignment replaces it. ``_flush`` writes every opened cell
+    back; the forged table is then re-digested, so the artifact's file and
+    record digests stay true and the load reaches the record validators.
+    """
+
+    def __init__(self, columns, index) -> None:
+        object.__setattr__(self, "_columns", columns)
+        object.__setattr__(self, "_index", index)
+        object.__setattr__(self, "_opened", {})
+        object.__setattr__(self, "_assigned", set())
+
+    def __getattr__(self, name):
+        columns = object.__getattribute__(self, "_columns")
+        opened = object.__getattribute__(self, "_opened")
+        if name not in columns:
+            raise AttributeError(name)
+        if name not in opened:
+            opened[name] = _decode_cell(columns[name][object.__getattribute__(self, "_index")])
+        return opened[name]
+
+    def __setattr__(self, name, value) -> None:
+        assert name in object.__getattribute__(self, "_columns"), f"no op column {name!r}"
+        object.__getattribute__(self, "_opened")[name] = value
+        object.__getattribute__(self, "_assigned").add(name)
+
+    def _flush(self) -> None:
+        columns = object.__getattribute__(self, "_columns")
+        index = object.__getattribute__(self, "_index")
+        assigned = object.__getattribute__(self, "_assigned")
+        for name, value in object.__getattribute__(self, "_opened").items():
+            columns[name][index] = _encode_cell(value, top=name in assigned)
+
+
+def _tampered_load(tmp_path, tamper):
+    """Save a logged capture, tamper its saved op rows, and load it back.
+
+    ``tamper(state)`` mutates the saved op rows (``state["_layer_list"]``,
+    every row of the op table) in place; the return value is whatever
+    ``tl.load`` does with the forged artifact.
+    """
+
+    from _format3_envelope import redigest
 
     torch.manual_seed(0)
     model = _Chain().eval()
     x = torch.randn(2, 4)
     logged = tl.trace(model, x, intervene=tl.when(tl.func("relu"), _sae_like), capture=_LOGGED)
     path = tmp_path / "forged.tlspec"
-    logged.save(str(path))
-    metadata_path = path / "metadata.pkl"
-    with metadata_path.open("rb") as handle:
-        state = pickle.load(handle)
+    logged.save(str(path), level=_SAVE_LEVEL)
+    table_path = path / _OP_TABLE
+    table = json.loads(table_path.read_text(encoding="utf-8"))
+    columns = table["columns"]
+    state = {"_layer_list": [_OpRow(columns, row) for row in range(table["rows"])]}
+    assert _injected_rows(state), "the fixture must persist injected op rows"
     tamper(state)
-    with metadata_path.open("wb") as handle:
-        pickle.dump(state, handle)
+    for row in state["_layer_list"]:
+        row._flush()
+    table_path.write_text(json.dumps(table, separators=(",", ":"), ensure_ascii=False), "utf-8")
+    redigest(path, _OP_TABLE)
     return tl.load(str(path))
 
 
