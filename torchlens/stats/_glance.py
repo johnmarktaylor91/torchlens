@@ -56,6 +56,12 @@ def glance(
     TypeError
         When ``tensor`` is not a ``torch.Tensor`` (teaching message naming
         the captured-record spelling for record payloads).
+
+    Examples
+    --------
+    >>> line = tl.stats.glance(torch.zeros(2, 8))
+    >>> line.startswith("f32[2,8]@cpu n=16")
+    True
     """
 
     if not isinstance(tensor, torch.Tensor):
