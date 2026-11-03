@@ -893,7 +893,12 @@ jobs:
         env:
           COVERAGE_FILE: ${{ runner.temp }}/coverage-mid
         run: |
-          coverage report --fail-under=55
+          # --ignore-errors: a test compiles code under a forged filename inside
+          # torchlens/ (tests/test_scoped_patching_escape_detection.py), which
+          # has no source to read. pytest-cov always reports with
+          # ignore_errors=True, so this is the denominator the floor of 55 was
+          # set and measured on.
+          coverage report --ignore-errors --fail-under=55
 
       - name: Write the combined coverage report
         if: always()
@@ -902,7 +907,7 @@ jobs:
         run: |
           # coverage xml exits 2 under pyproject's fail_under, which the step
           # above already reports; the report itself is what this step needs.
-          coverage xml -o "${{ runner.temp }}/coverage-mid.xml" || test -s "${{ runner.temp }}/coverage-mid.xml"
+          coverage xml --ignore-errors -o "${{ runner.temp }}/coverage-mid.xml" || test -s "${{ runner.temp }}/coverage-mid.xml"
 
       - name: Upload the combined coverage report
         if: always()
