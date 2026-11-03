@@ -564,3 +564,22 @@ def _is_namedtuple_instance(value: Any) -> bool:
 
     fields = getattr(type(value), "_fields", None)
     return isinstance(value, tuple) and isinstance(fields, tuple)
+
+
+def _addressable_bound_leaves(output: Any) -> Iterator[tuple[torch.Tensor, tuple[Any, ...]]]:
+    """Yield the bound door's live output leaves that carry a stable container path.
+
+    The bound executor walks outputs with the exhaustive-mode walker, whose
+    fallback for a container it cannot address (a distribution object, an
+    arbitrary class) still finds tensors inside it, with the empty path. No
+    rebuild is possible there, so such leaves are skipped: the rule records
+    zero fire and the output stays whole, matching this capture door, which
+    sees no tensor site in such an output.
+    """
+
+    from ..backends.torch._ops_interventions import _iter_loggable_live_outputs
+
+    output_is_tensor = isinstance(output, torch.Tensor)
+    for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
+        if output_is_tensor or container_path != ():
+            yield out, container_path

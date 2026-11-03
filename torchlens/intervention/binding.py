@@ -883,10 +883,8 @@ def _make_boundary_hook(
         """Replace the module's output leaves when the pass qualifier matches."""
 
         from .._ir.selector_eval import module_address_matches
-        from ..backends.torch._ops_interventions import (
-            _iter_loggable_live_outputs,
-            _replace_output_tensors_by_path,
-        )
+        from ..backends.torch._ops_interventions import _replace_output_tensors_by_path
+        from ._module_boundary import _addressable_bound_leaves
         from .hooks import make_hook_context
         from .runtime import _execute_hook
 
@@ -899,7 +897,7 @@ def _make_boundary_hook(
         if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
-        for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
+        for out, container_path in _addressable_bound_leaves(output):
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",

@@ -620,7 +620,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   bound executor that applies a spec to live calls. A synchronous generator or iterator returned
   by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
   settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`.
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`. A
+  module-boundary rule (`tl.module(address)`) edits the tensor leaves of a module output that
+  is a tensor or a supported container (tuple, list, dict, namedtuple, dataclass, HF model
+  output); an output of another type (a distribution object) holds no addressable tensor
+  site, so the rule records zero fire there at both doors, bound executor and capture.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
 : One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
