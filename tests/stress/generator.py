@@ -28,7 +28,7 @@ Inputs = tuple[tuple[Any, ...], dict[str, Any]]
 """Positional arguments and keyword arguments for one forward call."""
 
 SUBSET_PATH = Path(__file__).with_name("subset.json")
-SUBSET_SIZE = 200
+SUBSET_SIZE = 300
 FULL_MATRIX_ENV = "TORCHLENS_STRESS_FULL"
 """Set to ``1`` to run every generated cell instead of the pre-merge subset."""
 
