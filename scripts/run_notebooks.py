@@ -14,7 +14,8 @@ locally it needs the ``test`` extra (nbclient, ipykernel)::
 
 Only the notebooks in ``STORED_OUTPUT_NOTEBOOKS`` keep outputs in git (the ten-minute
 tutorial and the learning path, which GitHub renders as the first impression). ``--write-outputs`` executes
-them and writes their outputs back in place with machine paths scrubbed; every other
+them and writes their outputs back in place with machine paths, timings, widget state and
+other run-to-run noise scrubbed (``_scrub_outputs``); every other
 notebook is committed without outputs (``tests/test_notebook_output_policy.py``).
 
 Exit status: 0 when every selected notebook ran clean, 1 otherwise.
@@ -30,6 +31,7 @@ import subprocess
 import sys
 import sysconfig
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +55,10 @@ STORED_OUTPUT_NOTEBOOKS = (
 DEFAULT_CELL_TIMEOUT = 600
 DEFAULT_NOTEBOOK_TIMEOUT = 1200
 _RESULT_PREFIX = "NOTEBOOK_RESULT "
+# Every directory level under /tmp: workers run with TMPDIR set to a per-job subdirectory.
+_TMP_DIRS = re.compile(r"/tmp/(?:[^/\s'\"]+/)+")
+_GRAD_FN_ID = re.compile(r"\bgrad_fn_(\d{6,})(?!\d)")
+_SCRUBBED_MIMES = ("application/json", "image/svg+xml")
 
 
 @dataclass(frozen=True)
@@ -85,33 +91,69 @@ def _scrub(text: str) -> str:
         (paths["stdlib"], f".../lib/python{sysconfig.get_python_version()}"),
     ):
         text = text.replace(prefix, replacement)
-    text = re.sub(r"/tmp/[^/\s'\"]+/", "/tmp/", text)
+    text = _TMP_DIRS.sub("/tmp/", text)
     return text.replace(str(Path.home()), "~")
 
 
-def _scrub_value(value: object) -> object:
+def _stable_grad_fn_ids(text: str, ids: dict[str, str]) -> str:
+    """Replace ``grad_fn_<memory address>`` node ids with ids numbered by first appearance."""
+
+    return _GRAD_FN_ID.sub(lambda m: ids.setdefault(m.group(1), f"grad_fn_{len(ids) + 1}"), text)
+
+
+def _scrub_value(value: object, scrub: Callable[[str], str]) -> object:
     """Scrub a string or list-of-strings notebook field; leave other values alone."""
 
     if isinstance(value, str):
-        return _scrub(value)
+        return scrub(value)
     if isinstance(value, list):
-        return [_scrub(item) if isinstance(item, str) else item for item in value]
+        return [scrub(item) if isinstance(item, str) else item for item in value]
     return value
 
 
-def _scrub_outputs(notebook: Any) -> None:
-    """Scrub machine paths from every output of an executed notebook, in place."""
+def _coalesce_streams(outputs: list[Any]) -> list[Any]:
+    """Merge adjacent stream outputs with the same name; the kernel splits them arbitrarily."""
 
+    merged: list[Any] = []
+    for output in outputs:
+        last = merged[-1] if merged else None
+        if (
+            last is not None
+            and output.get("output_type") == "stream" == last.get("output_type")
+            and output.get("name") == last.get("name")
+        ):
+            last["text"] = "".join(last.get("text", "")) + "".join(output.get("text", ""))
+        else:
+            merged.append(output)
+    return merged
+
+
+def _scrub_outputs(notebook: Any) -> None:
+    """Make an executed notebook's outputs machine-independent, in place.
+
+    Drops machine paths, per-cell execution timings and the ipywidgets state (random model
+    ids), merges the kernel's arbitrary stdout chunks and numbers ``grad_fn`` node ids.
+    """
+
+    ids: dict[str, str] = {}
+
+    def scrub(text: str) -> str:
+        return _stable_grad_fn_ids(_scrub(text), ids)
+
+    notebook.get("metadata", {}).pop("widgets", None)
     for cell in notebook.cells:
         cell.get("metadata", {}).pop("execution", None)
-        for output in cell.get("outputs", []):
+        if "outputs" not in cell:
+            continue
+        cell["outputs"] = _coalesce_streams(cell["outputs"])
+        for output in cell["outputs"]:
             for key in ("text", "evalue", "traceback"):
                 if key in output:
-                    output[key] = _scrub_value(output[key])
+                    output[key] = _scrub_value(output[key], scrub)
             data = output.get("data", {})
             for mime in list(data):
-                if mime.startswith("text/") or mime == "application/json":
-                    data[mime] = _scrub_value(data[mime])
+                if mime.startswith("text/") or mime in _SCRUBBED_MIMES:
+                    data[mime] = _scrub_value(data[mime], scrub)
 
 
 def _first_error(notebook: Any) -> tuple[int | None, str]:
