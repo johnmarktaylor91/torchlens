@@ -240,13 +240,38 @@ class TestUnwrapLedgerIntegrity:
         model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
         tl.trace(model, torch.randn(2, 4))
         offenders = [
-            getattr(orig, "__tl_wrapper_name__")
+            getattr(orig, "__tl_wrapper_name__", orig)
             for orig in _state._decorated_to_orig.values()
-            if hasattr(orig, "__tl_wrapper_name__")
+            if id(orig) in _state._decorated_to_orig
         ]
         assert not offenders, offenders
         with pristine_torch_oracle() as pristine:
             assert pristine
+
+    def test_marker_bearing_foreign_original_is_not_poison(self) -> None:
+        """A foreign wrapper built with ``functools.wraps`` over a torchlens
+        wrapper inherits ``__tl_wrapper_name__`` through ``__dict__``; adopted as
+        an original at re-wrap it is a legitimate original, so the scan keys on
+        ledger identity (is the orig itself a wrapper key?), not the marker."""
+
+        def adopted_foreign_original(*args, **kwargs):  # pragma: no cover
+            raise AssertionError("the oracle must not call ledger entries")
+
+        adopted_foreign_original.__tl_wrapper_name__ = "torch_func:cos"  # type: ignore[attr-defined]
+
+        def wrapper_over_it(*args, **kwargs):  # pragma: no cover
+            raise AssertionError("the oracle must not call ledger entries")
+
+        model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
+        tl.trace(model, torch.randn(2, 4))
+        key = id(wrapper_over_it)
+        _state._decorated_to_orig[key] = adopted_foreign_original
+        try:
+            with pristine_torch_oracle() as pristine:
+                assert pristine
+        finally:
+            _state._decorated_to_orig.pop(key, None)
+        assert _state._is_decorated
 
 
 _MASKED_PROBE_SCRIPT = _PROBE_SCRIPT.replace(

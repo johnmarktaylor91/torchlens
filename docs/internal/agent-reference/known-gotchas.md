@@ -122,6 +122,20 @@
   those keys. Every call of the original and every re-raise stays in the wrapper's own frame: the
   escape detector and failure-origin classification read that frame, so never route `func` through
   a helper. Tests: `tests/test_protocol_redispatch.py`.
+- **A peer that re-wraps a torch slot after the first capture is rebased at unwrap, never
+  reported as long as the rebase holds.** `nnsight` patches `torch.Tensor.backward` at import
+  with `functools.wraps` around whatever is installed; imported after a capture, that is the
+  torchlens wrapper, held in `__wrapped__` and in a module global, and `wraps` copies our
+  `__dict__` markers onto the foreign function. `unwrap_torch()` leaves the foreign wrapper in
+  place, points every such reference at the original (`backends/torch/_foreign_wrappers.py`) and
+  strips the copied markers; re-wrap adopts the foreign callable as the slot's new original, so
+  later captures still log the call. The burial `TorchLensWarning` names only a reference the
+  walk cannot rewrite (a read-only `__wrapped__`), and every teardown report comes AFTER the
+  decorated flag flips: raised under warnings-as-errors before the flip, it once left torch
+  restored under a flag that said wrapped, and every later capture in the process logged only
+  module boundaries. Decide "is this ours" by ledger identity (`id(fn) in
+  _state._decorated_to_orig`), never by a `__tl_*` attribute. Tests:
+  `tests/test_wrap_state_compat.py` (TestUnwrapSafety), `tests/test_docs_snippets.py` (peer parity).
 - Buffer provenance never rests on values: step 6 merges two buffer nodes only when
   capture recorded the same buffer version for both (tensor object, storage and version counter,
   `torchlens._ir.workspaces.RawGraphWorkspace.buffer_version_keys`) and the later one is not a journaled write, and a buffer
