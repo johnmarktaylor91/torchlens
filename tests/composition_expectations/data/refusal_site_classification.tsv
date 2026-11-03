@@ -1960,3 +1960,4 @@ torchlens._io.lazy:_manifest_entry_for_blob_ref:ArtifactError::1	CONTRACTED	mani
 torchlens._io._save_gates:_capture_activation_blob_specs:ArtifactError::1	CONTRACTED	artifact_tensor_unsupported	Runnable activation archive requires a dense tensor payload, as before helper extraction.
 torchlens._io._save_gates:_capture_activation_blob_specs:ArtifactError::2	CONTRACTED	run_capability_unavailable	Selected runnable activation cannot be archived without its materialized payload.
 torchlens._io._save_gates:_capture_source_state:ArtifactError::1	CONTRACTED	run_capability_unavailable	Runnable state archive requires the tensor-only capture-time snapshot, never save-time model state.
+torchlens._postprocess._streamed_tensor_types:_dtype_from_manifest_string:ArtifactError::1	CONTRACTED	record_schema_invalid	A streamed reference requires a dtype from the closed runtime table; moved from finalization with an existing typed record refusal and remedy.
