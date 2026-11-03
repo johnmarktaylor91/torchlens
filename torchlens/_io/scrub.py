@@ -1831,7 +1831,7 @@ def _blob_kind_for_field(owner: Any, field_name: str) -> str:
         return "grad"
     if field_name == "transformed_grad":
         return "transformed_grad"
-    if field_name in {"saved_args", "saved_kwargs"}:
+    if field_name in {"saved_args", "saved_kwargs", "input", "transformed_output"}:
         return "captured_arg"
     if field_name == "out_versions_by_child":
         return "child_version"

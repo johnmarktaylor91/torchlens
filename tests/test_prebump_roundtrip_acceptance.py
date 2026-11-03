@@ -906,7 +906,7 @@ def test_tamper_structure_only_with_payload_refuses_typed(tmp_path) -> None:
         warnings.simplefilter("ignore")
         trace.save(str(honest_path))
     record = read_record(honest_path, "trace")
-    record["_options_structure_only"] = True
+    record["fields"]["_options_structure_only"] = True
     write_record(honest_path, "trace", record)
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(honest_path))

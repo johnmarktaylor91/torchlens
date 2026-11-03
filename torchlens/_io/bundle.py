@@ -107,6 +107,7 @@ from .format3.writer import (
     settle_live_side,
     write_trace_envelope,
 )
+from .format_errors import OpaqueCallableError
 from .lazy import LazyActivationRef, _read_materialization_manifest
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -857,7 +858,7 @@ def save(
                 # The replacement is already installed atomically. A stale backup
                 # is recoverable cleanup debris, not a failed save.
                 pass
-    except ArtifactError as exc:
+    except (ArtifactError, OpaqueCallableError) as exc:
         _run_save_recovery(tmp_path, backup_path, bundle_path, primary=exc)
         raise
     except BackendPayloadUnsupportedError as exc:
