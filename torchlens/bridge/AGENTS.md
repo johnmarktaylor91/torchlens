@@ -103,6 +103,13 @@ optional dependency.
   `autoroute/_builtin_input.py` and imported eagerly by `user_funcs.py`, so it
   must import cleanly without `transformers` installed (gating stays inside
   the functions).
+- `_hf_processor.py` (used by `transformers.py`): `_resolve_hf_processor(model, name_or_path)`
+  loads the `AutoProcessor` for a modality dict (cache first, then the Hub unless offline)
+  and refuses typed `preprocessing_unresolved` when it cannot; `_load_hf_processor` is the
+  one network seam tests patch; `_make_multimodal_transform(processor)` builds the
+  `input_transform`. The auto-route claims on `name_or_path` alone (no cache or Hub I/O
+  in detection); a dict on a model with an attached `model.processor` is coerced in
+  `torchlens/_input_coerce.py` instead.
 - `hf_attention.py` (re-exported from `hf.py`): `register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function
   (`torchlens_mask`, transformers' boolean `sdpa_mask` with the causal skip
