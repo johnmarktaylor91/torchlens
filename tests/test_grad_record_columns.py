@@ -50,19 +50,36 @@ def _records(op: object) -> list:
     return list(getattr(op, "_grad_records", None) or [])
 
 
+def _record_opcodes(trace: tl.Trace, directory: Path) -> tuple[int, int]:
+    """Return the opcodes the gradient records cost in ``metadata.pkl``, and their count.
+
+    The trace is saved with its records and again after clearing them; every other
+    per-pass fact (backward passes, grad_fn calls) is in both saves, so the difference is
+    the encoding of the records alone.
+    """
+
+    ops = list(trace)
+    num_records = sum(len(_records(op)) for op in ops)
+    with_records = _metadata_opcodes(trace, directory / "with.tlspec")
+    for op in ops:
+        op._clear_gradient_records()
+    without_records = _metadata_opcodes(trace, directory / "without.tlspec")
+    return with_records - without_records, num_records
+
+
 def test_grad_record_opcodes_scale_by_op_not_by_record(tmp_path: Path) -> None:
-    """Thirty-eight more backward passes add bytes, not opcodes per record."""
+    """Thirty-eight more backward passes add bytes to the records, not opcodes per record."""
 
     few, many = _trace_with_passes(2), _trace_with_passes(40)
     num_ops = len(list(many))
-    few_records = sum(len(_records(op)) for op in few)
-    many_records = sum(len(_records(op)) for op in many)
+    (tmp_path / "few").mkdir()
+    (tmp_path / "many").mkdir()
+    few_cost, few_records = _record_opcodes(few, tmp_path / "few")
+    many_cost, many_records = _record_opcodes(many, tmp_path / "many")
     assert many_records - few_records >= 38 * 4, "the passes must reach the ops"
-    few_count = _metadata_opcodes(few, tmp_path / "few.tlspec")
-    many_count = _metadata_opcodes(many, tmp_path / "many.tlspec")
-    assert many_count - few_count < 4 * num_ops, (
-        f"metadata opcodes grew {many_count - few_count} ({few_count} -> {many_count}) for "
-        f"{many_records - few_records} more gradient records over {num_ops} ops"
+    assert many_cost - few_cost < 4 * num_ops, (
+        f"gradient-record opcodes grew {many_cost - few_cost} ({few_cost} -> {many_cost}) for "
+        f"{many_records - few_records} more records over {num_ops} ops"
     )
 
 
