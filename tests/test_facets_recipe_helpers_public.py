@@ -21,10 +21,11 @@ class MyAttention(nn.Module):
         self.num_heads = num_heads
         self.qkv = nn.Linear(d_model, 3 * d_model)
         self.out = nn.Linear(d_model, d_model)
+        self.scale = nn.Parameter(torch.ones(d_model))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # noqa: D102
         q, k, v = self.qkv(x).split(x.shape[-1], dim=-1)
-        return self.out(q * k.sigmoid() + v)
+        return self.out(q * k.sigmoid() + v) * self.scale
 
 
 def _recipe(module: Any) -> dict[str, Any]:
@@ -34,7 +35,7 @@ def _recipe(module: Any) -> dict[str, Any]:
         "q": qkv.split(3, dim=-1)[0].heads(n_heads),
         "q_explicit": qkv.split(3, dim=-1)[0].heads(n_heads, 4),
         "q_bad": qkv.split(3, dim=-1)[0].heads(5),
-        "out_weight": parameter_spec(module, "out.weight", "my_attention_test"),
+        "scale": parameter_spec(module, "scale", "my_attention_test"),
     }
 
 
@@ -46,7 +47,7 @@ def _register() -> Iterator[None]:
     tl.facets.register(
         class_name="MyAttention",
         target_scope="module",
-        facets=("q", "q_explicit", "q_bad", "out_weight"),
+        facets=("q", "q_explicit", "q_bad", "scale"),
     )(_recipe)
     try:
         yield
@@ -80,7 +81,7 @@ def test_heads_infers_the_head_dimension_and_refuses_a_bad_split() -> None:
     assert torch.equal(q, facets["q_explicit"].value)
     with pytest.raises(ValueError, match="not divisible by 5"):
         _ = facets["q_bad"].value
-    assert tuple(facets["out_weight"].value.shape) == (16, 16)
+    assert tuple(facets["scale"].value.shape) == (16,)
 
 
 def test_heads_rejects_a_non_positive_count() -> None:

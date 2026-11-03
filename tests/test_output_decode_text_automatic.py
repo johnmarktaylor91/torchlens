@@ -7,7 +7,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._errors import PayloadUnavailableError
+from torchlens._errors import InvalidArgumentError
 
 
 class _Config:
@@ -60,9 +60,9 @@ def test_placeholder_labels_without_a_tokenizer_decode_nothing() -> None:
     trace = tl.trace(_PlaceholderLM().eval(), torch.ones(1, 2))
 
     assert trace.provenance.output_postprocessor is None
-    with pytest.raises(PayloadUnavailableError) as excinfo:
+    with pytest.raises(InvalidArgumentError) as excinfo:
         trace.decode_output()
-    assert excinfo.value.code in {"decoded_output_unavailable", "decode_style_unknown"}
+    assert excinfo.value.fields["code"] == "decode_style_unknown"
 
 
 def test_two_wide_labels_still_classify() -> None:
@@ -76,4 +76,4 @@ def test_two_wide_labels_still_classify() -> None:
     model._torchlens_output_tokenizer = _Tokenizer()
     trace = tl.trace(model, torch.ones(1, 2))
     assert trace.provenance.output_postprocessor.style == "classification"
-    assert trace.decode_output()[0]["label"] == "LABEL_1"
+    assert trace.decode_output()["rows"][0]["label"] == "LABEL_1"

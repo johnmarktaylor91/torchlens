@@ -66,7 +66,7 @@ def test_custom_detector_registered_publicly_decodes_on_demand() -> None:
 
         trace = tl.trace(_Fixed().eval(), torch.ones(1, 2))
         rows = trace.decode_output(style="my_labels")
-        assert rows[0]["label"] == "dog"
+        assert rows["rows"][0]["label"] == "dog"
         assert tl.postprocessing.info("my_labels")["priority"] == 5
 
         with pytest.raises(ValueError, match=r"tl\.postprocessing\.unregister\('my_labels'\)"):
@@ -81,4 +81,4 @@ def test_unknown_style_remedy_names_the_public_registration() -> None:
     trace = tl.trace(_Fixed().eval(), torch.ones(1, 2))
     with pytest.raises(Exception, match=r"tl\.postprocessing\.register") as excinfo:
         trace.decode_output(style="nonsense_style")
-    assert getattr(excinfo.value, "code", None) == "decode_style_unknown"
+    assert excinfo.value.fields["code"] == "decode_style_unknown"

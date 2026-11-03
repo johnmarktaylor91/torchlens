@@ -3806,8 +3806,6 @@ error-strings	torchlens/bridge/lit/_refusals.py	20
 error-strings	torchlens/bridge/lit/_refusals.py	2024
 error-strings	torchlens/bridge/lit/_refusals.py	83
 error-strings	torchlens/bridge/mcp.py	2.0
-error-strings	torchlens/bridge/transformers.py	224,
-error-strings	torchlens/bridge/transformers.py	256,
 error-strings	torchlens/debug/_checks/_audit.py	1.0.
 error-strings	torchlens/debug/_checks/_param_checks.py	16
 error-strings	torchlens/debug/_checks/_param_checks.py	4.5

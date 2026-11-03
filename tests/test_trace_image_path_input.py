@@ -89,7 +89,7 @@ def test_missing_image_path_refuses_without_a_tokenizer() -> None:
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.trace(_ImageModel(), "no_such_dog.jpg")
-    assert excinfo.value.code == "image_path_missing"
+    assert excinfo.value.fields["code"] == "image_path_missing"
     assert "no_such_dog.jpg" in str(excinfo.value)
 
 
@@ -112,7 +112,7 @@ def test_undecodable_image_file_refuses_typed(tmp_path: Path) -> None:
     bogus.write_bytes(b"not an image")
     with pytest.raises(InvalidArgumentError) as excinfo:
         _materialize_image_paths(_ImageModel(), str(bogus))
-    assert excinfo.value.code == "image_path_unreadable"
+    assert excinfo.value.fields["code"] == "image_path_unreadable"
 
 
 def test_explicit_input_transform_still_receives_the_opened_image(tmp_path: Path) -> None:

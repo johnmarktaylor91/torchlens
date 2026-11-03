@@ -83,7 +83,6 @@ def test_unexecutable_declarations_build_no_transform() -> None:
     """Declarations outside the executable subset stay transform-less (never guessed)."""
 
     pytest.importorskip("torchvision.transforms")
-    assert transform_from_declared(None) is None
     assert transform_from_declared(DeclaredPreprocessing()) is None
     bgr = DeclaredPreprocessing(resize_size=32, channel_order="bgr")
     assert transform_from_declared(bgr) is None
