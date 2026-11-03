@@ -8374,7 +8374,6 @@ test-docstrings	tests/test_onebackward_realmodel.py	81
 test-docstrings	tests/test_onebackward_refusals.py	10
 test-docstrings	tests/test_onebackward_refusals.py	14
 test-docstrings	tests/test_op_label_resolution.py	2_4
-test-docstrings	tests/test_op_payload_lifetime.py	37
 test-docstrings	tests/test_oracle_attestation.py	10
 test-docstrings	tests/test_oracle_attestation.py	13.1
 test-docstrings	tests/test_oracle_attestation.py	53
@@ -8460,8 +8459,6 @@ test-docstrings	tests/test_perf_method.py	128
 test-docstrings	tests/test_perf_method.py	256
 test-docstrings	tests/test_perf_method.py	33
 test-docstrings	tests/test_perf_ownership.py	28
-test-docstrings	tests/test_persist_honesty_real_model.py	18
-test-docstrings	tests/test_persist_honesty_real_model.py	19
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	18
 test-docstrings	tests/test_persist_honesty_streamed_settlement.py	20
 test-docstrings	tests/test_pinned_autograd_memory.py	32
@@ -8523,9 +8520,6 @@ test-docstrings	tests/test_r10_container_rce.py	64
 test-docstrings	tests/test_r12_import_ref_rce.py	10
 test-docstrings	tests/test_r12_import_ref_rce.py	12
 test-docstrings	tests/test_r18a_compat_report.py	37
-test-docstrings	tests/test_r18cg_capture_gap.py	2.12
-test-docstrings	tests/test_r18cg_capture_gap.py	2.13
-test-docstrings	tests/test_r18cg_capture_gap.py	2.13.
 test-docstrings	tests/test_r18g_tensor_rng.py	100
 test-docstrings	tests/test_r18g_tensor_rng.py	16
 test-docstrings	tests/test_r18g_tensor_rng.py	1_000_001
@@ -9186,10 +9180,6 @@ test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	37611347240,
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	75
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	76
 test-docstrings	tests/test_tlspec_runnable_r77_buffer_universe.py	77
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	20.0
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	73
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	75
-test-docstrings	tests/test_tlspec_runnable_r77_param_provenance.py	76
 test-docstrings	tests/test_tlspec_runnable_r79_empty_name_param.py	79
 test-docstrings	tests/test_tlspec_runnable_r79_seed_typing.py	64
 test-docstrings	tests/test_tlspec_runnable_r79_session_leak.py	20.0
@@ -9953,7 +9943,6 @@ test-names	tests/test_tlspec_runnable_r75_envelope_path.py	75_
 test-names	tests/test_tlspec_runnable_r75_param_identity.py	75_
 test-names	tests/test_tlspec_runnable_r77_buffer_universe.py	77_
 test-names	tests/test_tlspec_runnable_r77_fact_components.py	77_
-test-names	tests/test_tlspec_runnable_r77_param_provenance.py	77_
 test-names	tests/test_tlspec_runnable_r79_empty_name_param.py	79_
 test-names	tests/test_tlspec_runnable_r79_seed_typing.py	79_
 test-names	tests/test_tlspec_runnable_r79_session_leak.py	79_
