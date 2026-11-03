@@ -106,8 +106,8 @@ def test_bare_draw_in_a_kernel_writes_nothing_and_displays_inline(
     drawing = trace.draw(path=None)
     assert drawing.path is None
     assert drawing.file_format == "svg"
-    assert drawing.data is not None and b"<svg" in drawing.data
-    assert drawing._repr_svg_() is not None
+    svg = drawing._repr_svg_()  # the inline display path; the payload bytes are private
+    assert svg is not None and "<svg" in svg
     assert _files(tmp_path) == []
 
 

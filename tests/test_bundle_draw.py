@@ -217,8 +217,8 @@ def test_bare_draw_in_a_kernel_displays_inline_and_writes_nothing(
     drawing = bundle.draw(path=None)
     assert drawing.path is None
     assert drawing.file_format == "svg"
-    assert drawing.data is not None and b"<svg" in drawing.data
-    assert drawing._repr_svg_() is not None
+    svg = drawing._repr_svg_()  # the inline display path; the payload bytes are private
+    assert svg is not None and "<svg" in svg
     assert list(tmp_path.iterdir()) == []
     assert "written to" not in capsys.readouterr().out
     written = bundle.draw(str(tmp_path / "kept.svg"))  # a path always writes

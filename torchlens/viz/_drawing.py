@@ -238,7 +238,7 @@ class DrawTarget:
         data = written.read_bytes() if written.exists() else None
         if self.scratch is not None:
             self.scratch.cleanup()
-        return Drawing(dot=dot, file_format=self.file_format, data=data, **fields)
+        return Drawing(dot=dot, file_format=self.file_format, _data=data, **fields)
 
 
 def resolve_draw_target(
