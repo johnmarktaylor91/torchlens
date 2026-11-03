@@ -161,11 +161,20 @@ def test_static_surface_skips_unparseable_files(tmp_path: Path) -> None:
     assert "code:model_missing" in static_surface.code_rows(package, PKG)
 
 
-def _corpus(root: Path, glossary: str) -> check.Corpus:
+CONTRACT = (
+    "| code | meaning | remedy |\n|---|---|---|\n"
+    "| `model_missing` | No model was given. | Pass a model. |\n"
+    "| `recipe_audit_only` | Audit only. | Record. |\n"
+    "| `predicate_type_invalid` | Bad predicate. | Pass a callable. |\n"
+)
+
+
+def _corpus(root: Path, glossary: str, contract: str = CONTRACT) -> check.Corpus:
     """Write a minimal lockstep repository whose glossary is ``glossary``."""
 
     files = {
         "docs/reference/glossary.md": glossary,
+        static_surface.CONTRACT_DOC: contract,
         "docs/internal/agent-reference/surface.md": "Use `tl.run(model)`.\n",
         "notebooks/audit/a.py": "trace = tl.run(model)\n",
         "examples/demo.py": "trace = tl.run(model)\n",
@@ -184,6 +193,17 @@ def _missing_in_glossary(inventory: dict, corpus: check.Corpus) -> set[str]:
     return {f.row_id for f in findings if f.place == "glossary" and f.problem == "missing"}
 
 
+def test_codes_need_a_contract_row_not_a_glossary_entry(inventory: dict, tmp_path: Path) -> None:
+    """A code's lockstep place is the error contract table; `input_invalid` lacks a row there."""
+
+    corpus = _corpus(tmp_path, "nothing\n")
+    findings = check.check_lockstep(diff_inventories({}, inventory), corpus, inventory)
+    code_findings = {
+        (f.row_id, f.place, f.problem) for f in findings if f.row_id.startswith("code:")
+    }
+    assert code_findings == {("code:input_invalid", "contract", "missing")}
+
+
 def test_member_leaf_counts_only_beside_its_owner(inventory: dict, tmp_path: Path) -> None:
     """A bare `differentiable` under another entry does not document ``Options.differentiable``."""
 
@@ -193,15 +213,10 @@ def test_member_leaf_counts_only_beside_its_owner(inventory: dict, tmp_path: Pat
         ## Keywords
 
         | `differentiable=` | keyword of `run` |
-
-        ## Codes
-
-        `model_missing`, `recipe_audit_only`, `predicate_type_invalid`, `input_invalid`
         """,
     )
     missing = _missing_in_glossary(inventory, corpus)
     assert f"member:{PKG}.core:Options.differentiable" in missing
-    assert not any(row_id.startswith("code:") for row_id in missing)
 
     corpus = _corpus(
         tmp_path,

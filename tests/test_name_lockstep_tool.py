@@ -688,21 +688,20 @@ def test_cli_diff_check_and_codemod(tmp_path: Path, capsys: pytest.CaptureFixtur
     # unless the target check is skipped explicitly.
     assert main([*common, "diff", "--base", str(base_file), "--head", str(head_file)]) == 2
     assert "records no commit" in capsys.readouterr().err
-    common += ["--target", "none"]
-    assert main([*common, "diff", "--base", str(base_file), "--head", str(head_file)]) == 0
+    pair = ["--base", str(base_file), "--head", str(head_file), "--target", "none"]
+    assert main([*common, "diff", *pair]) == 0
     printed = capsys.readouterr()
     assert printed.err.startswith("base: unverified")
     assert json.loads(printed.out)["counts"]["renamed"] == 1
-    assert main([*common, "check", "--base", str(base_file), "--head", str(head_file)]) == 1
+    assert main([*common, "check", *pair]) == 1
     assert "lockstep:" in capsys.readouterr().out
     out = tmp_path / "gate.json"
-    args = [*common, "gate-input", "--base", str(base_file), "--head", str(head_file)]
-    assert main([*args, "--out", str(out)]) == 0
+    assert main([*common, "gate-input", *pair, "--out", str(out)]) == 0
     assert len(json.loads(out.read_text())) == 3
     rows = _codemod_repo(tmp_path)
     proposals = tmp_path / "proposals.json"
     proposals.write_text(json.dumps(rows))
-    assert main(["--repo", str(tmp_path), "codemod", "--proposals", str(proposals)]) == 0
+    assert main([*common, "codemod", "--proposals", str(proposals)]) == 0
     assert "dry run: nothing written" in capsys.readouterr().out
     assert load_inventory(proposals)["param:budget"]["proposed"] == "limit"
 

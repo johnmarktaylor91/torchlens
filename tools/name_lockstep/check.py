@@ -27,7 +27,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from name_lockstep import attribution, spelling
+from name_lockstep import attribution, spelling, static_surface
 from name_lockstep.codecontext import CodeContext
 from name_lockstep.diff import SurfaceDiff
 
@@ -175,6 +175,12 @@ class Corpus:
             base = root / directory
             paths = sorted(p for p in base.rglob("*") if p.suffix in suffixes and p.is_file())
             files[label] = [(_label(p, root), p.read_text(encoding="utf-8")) for p in paths]
+        contract = root / static_surface.CONTRACT_DOC
+        files["contract"] = (
+            [(_label(contract, root), contract.read_text(encoding="utf-8"))]
+            if contract.is_file()
+            else []
+        )
         if snippets:
             glossary_labels = {label for label, _ in files["glossary"]}
             files["snippets"] = [
@@ -423,11 +429,15 @@ def _needs(row: dict[str, Any]) -> list[str]:
     Returns
     -------
     list[str]
-        Place labels; none for an underscore keyword.
+        Place labels; none for an underscore keyword. A refusal code's place is the error
+        contract table (``docs/reference/error_refusal_contract.md``), the canonical
+        vocabulary of codes, not the glossary.
     """
 
     if is_private(row):
         return []
+    if row["kind"] == "code":
+        return ["contract"]
     places = ["glossary"]
     if row["kind"] in _AGENT_REFERENCE_KINDS:
         places.append("agent-reference")
