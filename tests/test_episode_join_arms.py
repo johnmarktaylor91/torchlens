@@ -322,7 +322,7 @@ def test_default_arm_per_segment_facts_stay_usable() -> None:
     output_op = log.output_ops[0]
     assert output_op.out is not None
     assert len(log._layer_list) > 0
-    assert log["argmax_1_5"].parents  # graph edges readable
+    assert log.layers["argmax_1_5"].parents  # graph edges readable
 
 
 # ---------------------------------------------------------------------------

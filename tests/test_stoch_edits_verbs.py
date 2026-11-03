@@ -145,14 +145,14 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     x = torch.randn(6, 4)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     layer = next(lab for lab in log.layer_labels if lab.startswith("linear"))
-    assert log[layer].num_passes == 2, "the fixture must be a real two-pass layer"
+    assert log.layers[layer].num_passes == 2, "the fixture must be a real two-pass layer"
 
     donors = population(torch.randn(8, *log[f"{layer}:1"].out.shape), origin="donor stack")
     per_firing = sample_from(donors, seed=13, share_draw="per_firing")
     fork = log.fork()
     # The explicit Layer selection is the all-passes spelling (one rule, two
     # pass firings) -- exactly the treeified-scrub shape A4b pins.
-    fork.do(fork[layer].__selection__(), tl.patch_from(per_firing))
+    fork.do(fork.layers[layer].__selection__(), tl.patch_from(per_firing))
     records = [r for r in sampling_draws(fork) if r.share_draw == "per_firing"]
     assert len(records) == 2, "one draw per pass firing"
     assert records[0].derived_seed != records[1].derived_seed
@@ -160,7 +160,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
 
     per_rule = sample_from(donors, seed=13, share_draw="per_rule")
     fork2 = log.fork()
-    fork2.do(fork2[layer].__selection__(), tl.patch_from(per_rule))
+    fork2.do(fork2.layers[layer].__selection__(), tl.patch_from(per_rule))
     records2 = [r for r in sampling_draws(fork2) if r.share_draw == "per_rule"]
     assert len(records2) == 2
     assert records2[0].derived_seed == records2[1].derived_seed

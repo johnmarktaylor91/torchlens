@@ -15,7 +15,6 @@ from collections.abc import Hashable, Mapping
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal
 
-from .._utils._multipass_access import is_multipass_layer
 from ._summary_columns import attention_full_square_line, counted_attention_ops
 
 if TYPE_CHECKING:
@@ -359,29 +358,16 @@ def _ops_for_labels(trace: Trace, labels: list[str]) -> list[Any]:
 
     Notes
     -----
-    A bare (non-pass-qualified) layer label resolves to an aggregate ``Layer``,
-    not a single ``Op``. The root ``ModuleCall`` stores such bare labels while
-    submodule calls store pass-qualified op labels. For a multi-pass (recurrent)
-    layer that aggregate cannot answer per-pass reads (``has_saved_activation``,
-    ``func_duration``, ...): ``Layer._single_pass_or_error`` raises the deliberate
-    multi-pass ``ValueError`` tripwire, which every downstream ``getattr(op, ...,
-    default)`` in :func:`_row`/:func:`_sum_optional`/:func:`_values` would leak
-    (``getattr`` shields only ``AttributeError``), crashing ``profile("call")``
-    and ``profile("module")`` on ANY recurrent model. Expanding the aggregate to
-    its concrete per-pass Ops surfaces the true per-pass values and also repairs
-    the silent undercount (N passes would otherwise collapse into one row).
+    The root ``ModuleCall`` stores bare layer labels while submodule calls store
+    pass-qualified op labels. ``trace.ops.resolve_all`` expands a bare multi-pass
+    (recurrent) label to its concrete per-pass Ops, so per-pass reads
+    (``has_saved_activation``, ``func_duration``, ...) see true per-pass values
+    and N passes never collapse into one row.
     """
 
     ops: list[Any] = []
     for label in labels:
-        try:
-            resolved = trace[label]
-        except (KeyError, ValueError):
-            continue
-        if is_multipass_layer(resolved):
-            ops.extend(resolved.ops.values())
-        else:
-            ops.append(resolved)
+        ops.extend(trace.ops.resolve_all(label))
     return ops
 
 

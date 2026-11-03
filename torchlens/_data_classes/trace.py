@@ -1254,20 +1254,20 @@ class Trace(TraceOutputMixin, TraceLike):
     def __getitem__(self, ix: Any) -> Any:
         """Return one record, or the Selection a selector names.
 
-        After the pass: an int, slice or string addresses records as before;
-        a selector is the one resolution door. A set-naming selector
-        (``tl.func``, ``tl.in_module``, ``tl.where``, ``tl.label_contains``,
-        a ``tl.Selector`` and their compositions) returns a ``tl.Selection``
-        of every matching site, never capped (``len`` and ``repr`` report the
-        count). A spelling that names one thing (an exact label, a target
-        spec, a facet selector) must match exactly one and returns that
-        record. During the pass, the raw barcode lookup applies.
+        After the pass an int, slice or string addresses records; a selector is
+        the one resolution door: a set-naming selector (``tl.func``, ``tl.where``,
+        ``tl.in_module``, ``tl.label_contains``, compositions) returns a
+        ``tl.Selection`` of every match, never capped; a one-thing spelling (exact
+        label, target spec, facet) must match exactly one and returns it. During
+        the pass the raw barcode lookup applies. Never a ``Layer`` (that door is
+        ``trace.layers[...]``): a layer label gives its Op or refuses a bare
+        multi-pass label; ``label:N`` (1-based), ``label:last``, ``label:all``.
 
         Args:
             ix: index, slice, label, address, substring or selector.
 
         Returns:
-            Op, Layer, Module, ModuleCall, Param, Buffer, GradFn or Selection.
+            Op, Selection, Module, ModuleCall, Param, Buffer or GradFn.
         """
         if self._tracing_finished:
             return _getitem_after_pass(self, ix)
@@ -1984,7 +1984,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
     @property
     def source(self) -> "TraceSource":
-        """Source facts of the traced model class: locations, signatures, docstrings."""
+        """Where the traced model's source lives: class, ``__init__`` and ``forward`` facts."""
 
         return TraceSource(self)
 

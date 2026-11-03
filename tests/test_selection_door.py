@@ -168,3 +168,49 @@ def test_in_module_has_one_signature(trace: tl.Trace) -> None:
     assert record.module.split(":", 1)[0] == "fc1"
     with pytest.raises(TypeError):
         tl.in_module(trace[selection.labels[0]], "fc1")  # type: ignore[call-arg]
+
+
+def test_site_record_returns_the_op_param_or_edge_it_names(trace: tl.Trace) -> None:
+    """``Site.record`` hands back the record a row names (walk surface.5 / RC-45)."""
+
+    act = trace[tl.func("relu")]
+    for row in act:
+        layer_label, pass_index = row.key
+        op = row.record
+        assert op is trace.ops[op.label]
+        assert (op.layer_label, op.pass_number or 1) == (layer_label, pass_index)
+    param_rows = trace[tl.param("fc1.weight")]
+    assert len(param_rows) == 1
+    assert param_rows[0].record is trace.params["fc1.weight"]
+
+
+def test_site_record_on_edge_rows_is_the_edge_use_record() -> None:
+    """EDGE rows return the EdgeUseRecord whose address they carry, never a synthesized one."""
+
+    torch.manual_seed(0)
+    replayable = tl.trace(
+        _TwoRelu(), torch.randn(3, 4), capture=tl.options.CaptureOptions(replayable=True)
+    )
+    relu_op = next(op for op in replayable.ops if op.func_name == "relu")
+    use = relu_op.edge_uses[0]
+    rows = replayable[use.__selection__()]
+    assert rows.kind == "EDGE" and len(rows) == 1
+    assert rows[0].record is use
+
+
+def test_site_record_refuses_typed_once_the_trace_is_released() -> None:
+    """A row outliving its trace refuses ``selection_trace_released`` instead of crashing."""
+
+    import gc
+
+    from torchlens.errors import SelectionError
+
+    torch.manual_seed(0)
+    trace = tl.trace(_TwoRelu(), torch.randn(3, 4))
+    row = trace[tl.func("relu")][0]
+    assert row.record is not None
+    del trace
+    gc.collect()
+    with pytest.raises(SelectionError) as info:
+        _ = row.record
+    assert info.value.fields["code"] == "selection_trace_released"

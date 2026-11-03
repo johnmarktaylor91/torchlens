@@ -92,7 +92,7 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
     for output_label in log.output_layers:
-        for op in log[output_label].ops:
+        for op in log.layers[output_label].ops:
             assert op.tl_authored_root is True
     # The marker discloses the ROOT record only, never interior ops.
     interior = [op for op in log._layer_list if op.label.split(":")[0] not in log.output_layers]
@@ -210,7 +210,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     log.save(target)
     loaded = tl.load(target)
     assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
-    out_op = loaded[loaded.output_layers[0]].ops[0]
+    out_op = loaded.layers[loaded.output_layers[0]].ops[0]
     assert out_op.tl_authored_root is True
     with pytest.raises(ModelMismatchError) as excinfo:
         loaded._validate_supplied_model_matches_capture(model)
@@ -284,5 +284,5 @@ def test_return_shapes_capture_instead_of_refusing(method_name: str, expected_ou
     # A None-returning root has no output op to carry the marker; the
     # Trace-level bound_method fact remains the TL-authorship disclosure.
     for output_label in log.output_layers:
-        for op in log[output_label].ops:
+        for op in log.layers[output_label].ops:
             assert op.tl_authored_root is True

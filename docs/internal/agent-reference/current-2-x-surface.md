@@ -997,7 +997,7 @@
   region, ...)` grows from the sites outside `region`; `trace.subgraph` takes
   the same member set), PARAM/EDGE operands refuse
   `selection_kind_incompatible`. Both are pure functions over the ONE
-  executed-DAG substrate (`selection_graph._TraceGraph`, adjacency shared
+  executed-DAG substrate (`selection_graph._ExecutedDag`, adjacency shared
   verbatim with the influence-geometry path machinery) — a future graph-
   MOTIF producer is one more pure function over the same object, not a
   rewrite. `trace.between(sources, sinks)` returns the SAME region as a
@@ -1174,7 +1174,8 @@
   naming-session ratification): bare `trace.summary()` / `tl.summary(model, x)`
   render the AUTO VIEW LADDER (coalesced hybrid -> strictly folded module tree
   -> descending depth -> protected totals-conserving elision) under a derived
-  48-body-row budget, returning a `SummaryReport` (str subclass) whose text is
+  48-body-row budget, returning a `SummaryReport` (str subclass; a `view="stats"` report serves its typed
+  `StatsTable` as `report.table`) whose text is
   canonical byte-stable ASCII (unicode only at display boundaries through a 1:1
   glyph table; `ascii == degrade(unicode)` CI-pinned; detection fails toward
   ASCII, `TORCHLENS_SUMMARY_STYLE` overrides). The identity partition is law:
@@ -1950,7 +1951,7 @@ object's docstring):
 - `tl.transformer.prediction_table_html`: Emit the zero-dependency HTML top-k table (inspectus, matched).
 - `tl.transformer.receipt_from_patch_grid`: Build a validated receipt from a mech-interp patch grid row.
 - `tl.transformer.render_neuron_card`: Render the selected-pair neuron card (family-gated static card).
-- `tl.types.Accessor`: Generic dict-like accessor for ordered TorchLens log objects.
+- `tl.types.Accessor`: Generic dict-like accessor for ordered TorchLens log objects; every collection serves `.labels` (its lookup labels in order), Op collections `.compute` / `.nonfinite`, Layer collections `.compute` / `.recurrent` / `.saved_grad` / `.internal_source` / `.internal_sink`, Module collections `.uncalled` (addresses).
 - `tl.types.ContainerLeafOccurrence`: One tensor occurrence at one container path.
 - `tl.types.ContainerSpec`: Portable description of an output container seen during capture.
 - `tl.types.Container`: Computed view over a captured Python output container.

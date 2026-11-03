@@ -1513,8 +1513,8 @@ def _same_rerun_inputs(source_log: Trace, new_log: Trace) -> bool:
     labels = list(getattr(source_log, "input_layers", None) or ())
     if not labels or labels != list(getattr(new_log, "input_layers", None) or ()):
         return False
-    source_rows = boundary_label_rows(labels, source_log.__getitem__)
-    new_rows = boundary_label_rows(labels, new_log.__getitem__)
+    source_rows = boundary_label_rows(labels, source_log.layers.__getitem__)
+    new_rows = boundary_label_rows(labels, new_log.layers.__getitem__)
     for source_op, new_op in zip(source_rows, new_rows, strict=True):
         before = getattr(source_op, "out", None)
         after = getattr(new_op, "out", None)

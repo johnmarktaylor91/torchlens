@@ -167,7 +167,7 @@ def test_neighborhood_family_semantics_ignore_element_masks(log) -> None:
 def test_neighborhood_accepts_op_and_layer_seeds(log) -> None:
     """Op and Layer handles lift as seeds through __selection__."""
 
-    layer = log["relu_1_2"]
+    layer = log.layers["relu_1_2"]
     from_layer = log[tl.neighborhood(layer, hops=0)]
     assert _labels(from_layer) == {_RELU}
     from_op = log[tl.neighborhood(layer.ops[0], hops=0)]
@@ -469,7 +469,7 @@ def test_subgraph_is_the_general_door(log) -> None:
     assert set(from_producer.labels) == {_RELU, _TANH, _ADD, _HEAD}
     from_string = log.subgraph("relu_1_2")
     assert from_string.labels == (_RELU,)
-    from_layer = log.subgraph(log["relu_1_2"])
+    from_layer = log.subgraph(log.layers["relu_1_2"])
     assert from_layer.labels == (_RELU,)
     from_units = log.subgraph(tl.units(_ADD, [(0, 0)]))
     assert from_units.labels == (_ADD,)  # family semantics: whole site

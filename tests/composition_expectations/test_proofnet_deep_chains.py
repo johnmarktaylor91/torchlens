@@ -133,7 +133,7 @@ def test_chain_multipass_pass_qualified_edit_is_exact() -> None:
     trace = tl.trace(model, example, capture=tl.options.CaptureOptions(replayable=True))
     try:
         tanh_layer = [label for label in trace.layer_labels if "tanh" in label][0]
-        assert len(trace[tanh_layer].ops) == 3, "recurrence grouping lost the 3 passes"
+        assert len(trace.layers[tanh_layer].ops) == 3, "recurrence grouping lost the 3 passes"
         with pytest.raises(Exception) as bare_exc:
             trace.fork().do(tanh_layer, tl.zero_ablate())
         assert "pass" in str(bare_exc.value).lower(), (
@@ -142,12 +142,12 @@ def test_chain_multipass_pass_qualified_edit_is_exact() -> None:
         )
         fork = trace.fork()
         try:
-            pass_one_before = trace[tanh_layer].ops[0].out.clone()
+            pass_one_before = trace.layers[tanh_layer].ops[0].out.clone()
             fork.do(f"{tanh_layer}:2", tl.zero_ablate())
-            assert torch.equal(fork[tanh_layer].ops[0].out, pass_one_before), (
+            assert torch.equal(fork.layers[tanh_layer].ops[0].out, pass_one_before), (
                 "editing pass 2 CHANGED pass 1 -- donor semantics corrupted"
             )
-            assert torch.count_nonzero(fork[tanh_layer].ops[1].out) == 0, (
+            assert torch.count_nonzero(fork.layers[tanh_layer].ops[1].out) == 0, (
                 "the addressed pass 2 was not edited"
             )
             # After the pass-2 OUTPUT is zeroed, exactly one step remains:

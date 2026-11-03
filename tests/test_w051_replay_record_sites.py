@@ -92,7 +92,7 @@ def test_do_layer_record_is_the_all_passes_spelling(loop) -> None:
     # The all-passes spelling fans out to every pass; the fan-out is
     # DISCLOSED (MultiMatchWarning), exactly like ``tl.label_contains("relu_1")``.
     with pytest.warns(MultiMatchWarning):
-        fork.do(fork["relu_1_2"], tl.zero_ablate())
+        fork.do(fork.layers["relu_1_2"], tl.zero_ablate())
     _assert_matches(fork, _truth(model, x, {1, 2, 3}))
 
 
@@ -128,7 +128,7 @@ def test_lower_record_site_target_shapes(loop) -> None:
     _model, _x, trace = loop
     op_lowered = lower_record_site_target(trace["relu_1_2:2"])
     assert isinstance(op_lowered, LabelSelector) and op_lowered.selector_value == "relu_1_2:2"
-    layer_lowered = lower_record_site_target(trace["relu_1_2"])
+    layer_lowered = lower_record_site_target(trace.layers["relu_1_2"])
     assert isinstance(layer_lowered, CompositeSelector) and layer_lowered.operator == "or"
     assert [s.selector_value for s in layer_lowered.selectors] == [
         "relu_1_2:1",

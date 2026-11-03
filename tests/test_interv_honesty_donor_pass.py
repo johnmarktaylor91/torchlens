@@ -137,7 +137,7 @@ def test_recurrent_model_donor_pin_shared_transformer_encoder() -> None:
     sites = [
         label
         for label in donor.layer_labels
-        if label.startswith("linear") and getattr(donor[label], "num_passes", 1) > 1
+        if label.startswith("linear") and getattr(donor.layers[label], "num_passes", 1) > 1
     ]
     assert sites, "shared encoder must produce multi-pass linear sites"
     for site in sites:
@@ -180,7 +180,7 @@ def test_recurrent_model_donor_pin_albert_family() -> None:
     site = next(
         label
         for label in donor.layer_labels
-        if label.startswith("linear") and getattr(donor[label], "num_passes", 1) > 1
+        if label.startswith("linear") and getattr(donor.layers[label], "num_passes", 1) > 1
     )
     donor_pass_1 = donor[f"{site}:1"].out
     donor_pass_2 = donor[f"{site}:2"].out

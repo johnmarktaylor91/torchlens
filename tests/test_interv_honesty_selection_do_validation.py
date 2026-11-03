@@ -102,7 +102,7 @@ def test_wrong_shape_tensor_value_refuses_typed_not_bare(capture) -> None:
     """Shape mismatches stay typed refusals on the Selection lane."""
 
     fork = capture.fork()
-    sel = capture["relu_1_2"].__selection__()
+    sel = capture.layers["relu_1_2"].__selection__()
     with pytest.raises(Exception) as excinfo:
         fork.do(sel, torch.ones(2, 2))
     assert not isinstance(excinfo.value, AttributeError)

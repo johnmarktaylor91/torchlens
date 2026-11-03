@@ -169,7 +169,7 @@ Key entry points:
   sinks)` (structural position on the executed DAG: n-hop region and the
   source-to-sink influence sub-DAG; whole-site exact masks, seeded from the
   sites with a nonempty element mask, empty = disclosure; pure functions over the one
-  `selection_graph._TraceGraph` substrate a future motif producer extends).
+  `selection_graph._ExecutedDag` substrate a future motif producer extends).
   `trace.between(sources, sinks)` presents the same region as a
   `TraceSlice` (frozen presenter, never a Trace: member ops, internal
   edges, EXPLICIT `boundary_in_edges`/`boundary_out_edges`, no

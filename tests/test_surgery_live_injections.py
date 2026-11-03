@@ -122,7 +122,7 @@ def test_injection_anchored_provenance_c07_grammar(chain) -> None:
         "output_slot",
         "spec_rule_id",
     ]
-    host = logged["relu_1_2"].ops[0]
+    host = logged.layers["relu_1_2"].ops[0]
     assert prov.host_site_key == host.site_key
     assert prov.spec_rule_id == spec.rules[0].rule_id  # PERSISTED rule id
     assert prov.host_pass == 1
