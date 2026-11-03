@@ -229,10 +229,8 @@ class RecordingSettings:
     recording made?" across every door that configured it: the capture knobs
     (``capture=CaptureOptions(...)``: ``save_grads``, ``activation_transform``,
     ``grad_transform``, ``lookback``, ...), the recorder knobs
-    (``recording=RecordingOptions(...)``: ``default_op``, ``history_size``,
-    ...; ``keep_op`` and ``intervene`` from the door's ``save=`` and
-    ``intervene=``) and the door keywords ``stop_after=``, ``storage=`` and
-    ``narrate=``. Values are the live objects the recorder used (the
+    (``recording=RecordingOptions(...)``: ``default_op``, ``history_size``, ...) and
+    the door keywords ``save=``, ``intervene=``, ``stop_after=``, ``storage=``, ``narrate=``. Values are the live objects the recorder used (the
     predicate or transform callable itself, the ``CaptureSpec``), never repr
     strings. Built by the recorder; there is no public constructor.
 

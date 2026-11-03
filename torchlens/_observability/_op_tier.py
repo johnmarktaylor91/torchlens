@@ -28,6 +28,7 @@ Spellings are DOCUMENTED-UNSTABLE pending naming-session ratification.
 from __future__ import annotations
 
 import uuid
+import warnings
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
@@ -275,13 +276,13 @@ class OpTierCollector:
             warning at step 0 of a ten-hour run is not disclosure).
         """
 
-        import warnings
-
         from .. import recording as fastlog
         from ..recording import _record_one_shot
 
         _record: Any = _record_one_shot.record
-
+        meta_only = RecordingOptions(
+            default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True)
+        )
         with warnings.catch_warnings():
             # Fastlog's zero-match WARNING is superseded here by the plan-time
             # TYPED refusal below (strictly stronger: a warning at step 0 of a
@@ -292,9 +293,7 @@ class OpTierCollector:
                 input_args,
                 input_kwargs=input_kwargs,
                 save=self.save,
-                recording=RecordingOptions(
-                    default_op=fastlog.CaptureSpec(save_out=False, save_metadata=True)
-                ),
+                recording=meta_only,
             )
         rows: list[PlanRow] = []
         for record in recording.records:

@@ -22,7 +22,7 @@ from ..backends.registry import (
     require_capability_implementation,
 )
 from ..intervention.predicates import InterventionPredicate
-from ..options import CaptureOptions, StorageOptions
+from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
@@ -55,6 +55,19 @@ _RECORD_FLAT_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _refuse_unread_fields(group: str, unread: list[str], why: str, remedy: str) -> None:
+    """Refuse grouped-option fields ``tl.record`` does not read (a silent no-op)."""
+
+    if unread:
+        raise ArgumentTypeError(
+            f"tl.record does not read {group}= field(s) {', '.join(unread)}: {why}, so they "
+            "would be a silent no-op",
+            code="record_capture_option_unsupported",
+            remedy=remedy,
+            argument=group,
+        )
+
+
 def _unfold_capture_options(capture: CaptureOptions | None) -> dict[str, Any]:
     """Read the former ``record`` door keywords off ``capture=``.
 
@@ -70,17 +83,13 @@ def _unfold_capture_options(capture: CaptureOptions | None) -> dict[str, Any]:
             for name in capture._specified_fields  # noqa: SLF001
             if name not in _CAPTURE_DOOR_FIELDS and name != "backward_ready"
         )
-        if unread:
-            raise ArgumentTypeError(
-                f"tl.record does not read CaptureOptions field(s) {', '.join(unread)}: the "
-                "recorder has no door for them, so they would be a silent no-op",
-                code="record_capture_option_unsupported",
-                remedy=(
-                    "drop the field(s) from capture= for tl.record, or use tl.trace, which "
-                    "reads every CaptureOptions field"
-                ),
-                argument="capture",
-            )
+        _refuse_unread_fields(
+            "capture",
+            unread,
+            "the recorder has no door for them",
+            "drop the field(s) from capture= for tl.record, or use tl.trace, which reads every "
+            "CaptureOptions field",
+        )
     for name in _CAPTURE_DOOR_FIELDS:
         explicit = isinstance(capture, CaptureOptions) and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
@@ -119,28 +128,21 @@ def _unfold_recording_options(recording: RecordingOptions | None) -> dict[str, A
 
     if recording is None:
         return dict(_RECORDING_DOOR_DEFAULTS)
-    if not isinstance(recording, RecordingOptions):
-        raise ArgumentTypeError(
-            f"Grouped option 'recording' received {type(recording).__name__}, not RecordingOptions",
-            code="option_group_type_invalid",
-            remedy="pass a tl.options.RecordingOptions instance or None as recording",
-            argument="recording",
-            received_type=type(recording).__name__,
-        )
-    unread = sorted(
-        name
-        for name in recording._specified_fields  # noqa: SLF001
-        if name not in _RECORDING_DOOR_DEFAULTS
+    recording = _merge_grouped_options(
+        option=recording,
+        option_factory=RecordingOptions,
+        flat_to_group={},
+        flat_values={},
+        group_name="recording",
+        conflict_message="",
     )
-    if unread:
-        raise ArgumentTypeError(
-            f"tl.record does not read RecordingOptions field(s) {', '.join(unread)} off "
-            "recording=: the door takes them as save= and intervene=, so they would be a "
-            "silent no-op",
-            code="record_capture_option_unsupported",
-            remedy="pass the predicate as tl.record(save=...) and the intervention as intervene=",
-            argument="recording",
-        )
+    unread = sorted(set(recording._specified_fields) - set(_RECORDING_DOOR_DEFAULTS))  # noqa: SLF001
+    _refuse_unread_fields(
+        "recording",
+        unread,
+        "the door takes them as save= and intervene=",
+        "pass the predicate as tl.record(save=...) and the intervention as intervene=",
+    )
     return {
         name: getattr(recording, name) if recording._is_field_explicit(name) else default  # noqa: SLF001
         for name, default in _RECORDING_DOOR_DEFAULTS.items()
