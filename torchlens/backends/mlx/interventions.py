@@ -20,12 +20,17 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from typing import Any
 
-from ..._ir.selector_eval import first_selector_kind_outside, selector_contains_kind
+from ..._ir.selector_eval import (
+    first_selector_kind_outside,
+    module_union_addresses,
+    selector_contains_kind,
+)
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection.selectors import BaseSelector
 from ...intervention.hooks import make_hook_context, normalize_hook
 from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
+from ._module_interventions import _validate_module_selector
 
 #: Refusal code for gradient-universe sites (registered in `_protocols.mlx`).
 _MLX_REFUSAL_BACKWARD = "backward_capture_unsupported"
@@ -105,6 +110,8 @@ def selector_matches_capture_context(selector: BaseSelector, ctx: Any) -> bool:
         ``{layer_type}_{type_index}`` alias retry for label-universe kinds.
     """
 
+    if module_union_addresses(selector) is not None:
+        return False
     if bool(selector(ctx)):
         return True
     if ctx.layer_type is None or ctx.type_index is None:
@@ -158,6 +165,7 @@ def resolve_mlx_intervention_plan(
             )
         _reject_gradient_site(selector)
         _reject_non_static_selector(selector, surface="intervene")
+        _validate_module_selector(selector)
         plan = MLXInterventionPlan(
             selector=selector,
             applier=_resolve_decision_applier(decision, mx),

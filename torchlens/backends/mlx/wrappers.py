@@ -9,6 +9,7 @@ from typing import Any
 
 from ... import _state
 from ..._ir.events import ModuleFrame
+from ._module_interventions import _apply_module_exit, _module_capture_op
 from .model_prep import MLXModuleTree
 
 _ACTIVE_TAP_OBSERVER: object | None = None
@@ -464,10 +465,8 @@ class _MLXWrapperRegistry:
             MLX backend receiving wrapper events.
         op_name:
             TorchLens operation type to emit, or ``None`` for stack-only module wrappers.
-        module_tree:
-            Optional discovered MLX module tree used to count module calls.
-        module_instances:
-            Optional mapping from wrapped module instance id to primary address.
+        module_tree, module_instances:
+            Discovered module tree and instance-id to primary-address map.
         """
 
         original_attribute = inspect.getattr_static(owner, name, None)
@@ -499,14 +498,16 @@ class _MLXWrapperRegistry:
             trace = _state._active_trace
             if trace is None:
                 return original(*args, **kwargs)
-
             frame = _push_module_frame(trace, module_tree, module_instances, args, kwargs)
             try:
-                if op_name is None:
-                    return original(*args, **kwargs)
-                if getattr(trace, "_mlx_capture_depth", 0) > 0:
-                    return original(*args, **kwargs)
-                return _call_and_emit_guarded(trace, backend, op_name, original, args, kwargs)
+                capture_op = _module_capture_op(trace, frame, op_name)
+                if capture_op is None or getattr(trace, "_mlx_capture_depth", 0) > 0:
+                    output = original(*args, **kwargs)
+                else:
+                    output = _call_and_emit_guarded(
+                        trace, backend, capture_op, original, args, kwargs
+                    )
+                return _apply_module_exit(trace, backend, frame, output)
             finally:
                 if frame is not None:
                     getattr(trace, "_mlx_module_stack").pop()

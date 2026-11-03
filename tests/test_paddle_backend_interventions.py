@@ -114,13 +114,14 @@ def test_paddle_module_exit_changes_output_and_validates() -> None:
     )
     producer = _relu_op(trace)
     assert producer.is_edited
-    assert producer.intervention_fired
+    assert trace.capture_events.op_event_by_label_raw[producer._label_raw].fire_results
     assert list(producer.edits)
     assert np.allclose(_output_op(trace).out.numpy(), 0.5)
     assert PaddleBackend().validate_trace(trace) is True
 
 
-def test_paddle_module_union_fires_once_per_call() -> None:
+@pytest.mark.parametrize("second, expected", [("0", 0.5), ("1", 0.25)])
+def test_paddle_module_union_fires_once_per_call(second: str, expected: float) -> None:
     """Overlapping module addresses apply scale once rather than twice."""
 
     model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.ReLU())
@@ -128,9 +129,42 @@ def test_paddle_module_union_fires_once_per_call() -> None:
         model,
         paddle.ones([2, 4]),
         backend="paddle",
-        intervene=tl.when(tl.module("0") | tl.module("0"), tl.scale(0.5)),
+        intervene=tl.when(tl.module("0") | tl.module(second), tl.scale(0.5)),
     )
-    assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("address, expected", [("block", 9.0), ("block:2", 13.5)])
+def test_paddle_module_exit_nested_leaves_aliases_and_repeated_calls(
+    address: str, expected: float
+) -> None:
+    """Edit boundary leaves while keeping aliases and earlier consumers replayable."""
+
+    class Leaves(paddle.nn.Layer):
+        def forward(self, x: Any) -> Any:
+            first = x + 1
+            return {"main": first, "alias": first, "other": [first * 2, x], "tag": "kept"}
+
+    class Model(paddle.nn.Layer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Leaves()
+
+        def forward(self, x: Any) -> Any:
+            a, b = self.block(x), self.block(x)
+            assert a["tag"] == b["tag"] == "kept"
+            return (
+                a["main"] + a["alias"] + sum(a["other"]) + b["main"] + b["alias"] + sum(b["other"])
+            )
+
+    trace = tl.trace(
+        Model(),
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module(address), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), expected)
     assert PaddleBackend().validate_trace(trace) is True
 
 

@@ -6,8 +6,10 @@ import inspect
 from dataclasses import dataclass, field
 from typing import Any
 
+from ... import _state
 from ..._ir.events import ModuleFrame
 from .._finalize import join_module_address as _join_module_address, nearest_metadata_parent
+from ._module_interventions import _apply_module_exit
 
 
 @dataclass
@@ -271,15 +273,17 @@ def _make_post_hook() -> Any:
         args: tuple[Any, ...],
         kwargs: dict[str, Any],
         output: object,
-    ) -> None:
+    ) -> Any:
         """Pop module frame metadata after one Paddle forward call."""
 
-        del layer, args, kwargs, output
-        from ... import _state
-
+        del layer, args, kwargs
         trace = _state._active_trace
         if trace is not None and getattr(trace, "_paddle_module_stack", None):
-            trace._paddle_module_stack.pop()
+            try:
+                return _apply_module_exit(trace, trace._paddle_module_stack[-1], output)
+            finally:
+                trace._paddle_module_stack.pop()
+        return None
 
     return hook
 

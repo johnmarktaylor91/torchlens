@@ -23,6 +23,7 @@ from ... import _state
 from ..._capture._stop_after_policy import settle_unfired_stop_after
 from ..._ir.intervention import FireResult
 from ..._ir.predicate import RecordContext
+from ..._ir.selector_eval import selector_contains_kind
 from ..._selection.selectors import BaseSelector
 from ...intervention.predicates import as_intervention_decision
 from ...intervention.types import Edit, FireRecord, InterventionDecision, TargetSpec
@@ -34,6 +35,7 @@ from .._protocols.paddle import (
     PADDLE_REFUSAL_PREDICATE,
 )
 from ..registry import BackendUnsupportedError
+from ._module_interventions import _validate_module_selector
 
 _PADDLE_SUPPORTED_HELPER_NAMES = ("add", "replace_with", "scale", "zero_ablate")
 """Builtin helper specs with a Paddle-native adapter, sorted."""
@@ -107,6 +109,7 @@ class PaddleInterventionRuntime:
         from ...intervention.hooks import split_site_branches
 
         selector = getattr(intervene, "selector", None)
+        _validate_module_selector(selector)
         if selector is not None and any(
             universe != "activation" for universe, _branch in split_site_branches(selector)
         ):
@@ -135,7 +138,9 @@ class PaddleInterventionRuntime:
             Normalized decision when the predicate matched.
         """
 
-        if self.intervene is None:
+        if self.intervene is None or selector_contains_kind(
+            getattr(self.intervene, "selector", None), "module"
+        ):
             return None
         result = self.intervene(ctx)
         try:

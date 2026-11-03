@@ -69,12 +69,13 @@ def test_mlx_module_exit_changes_output_and_validates() -> None:
     )
     producer = next(op for op in trace._layer_list if op.type == "linear")
     assert producer.is_edited
-    assert producer.intervention_fired
+    assert trace.capture_events.op_event_by_label_raw[producer._label_raw].fire_results
     assert np.allclose(np.asarray(trace._layer_list[-1].out), np.asarray(model.l2.bias))
     assert MLXBackend().validate_trace(trace).passed
 
 
-def test_mlx_module_union_fires_once_per_call() -> None:
+@pytest.mark.parametrize("second, factor", [("l1", 1.0), ("l2", 0.5)])
+def test_mlx_module_union_fires_once_per_call(second: str, factor: float) -> None:
     """An overlapping union applies a non-idempotent action only once."""
 
     model = _TwoLayerMLP()
@@ -82,9 +83,39 @@ def test_mlx_module_union_fires_once_per_call() -> None:
         model,
         _input(),
         backend="mlx",
-        intervene=tl.when(tl.module("l1") | tl.module("l1"), tl.scale(0.5)),
+        intervene=tl.when(tl.module("l1") | tl.module(second), tl.scale(0.5)),
     )
-    expected = np.full((1, 2), 2.1 * 0.5 * 3 * 0.25 - 0.2)
+    expected = np.full((1, 2), (2.1 * 0.5 * 3 * 0.25 - 0.2) * factor)
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("address, expected", [("block", 9.0), ("block:2", 13.5)])
+def test_mlx_module_exit_nested_leaves_aliases_and_repeated_calls(
+    address: str, expected: float
+) -> None:
+    """Edit boundary leaves, preserving earlier consumers and call-qualified sites."""
+
+    class Leaves(nn.Module):
+        def __call__(self, x: Any) -> Any:
+            first = x + 1
+            return {"main": first, "alias": first, "other": [first * 2, x], "tag": "kept"}
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.block = Leaves()
+
+        def __call__(self, x: Any) -> Any:
+            a, b = self.block(x), self.block(x)
+            assert a["tag"] == b["tag"] == "kept"
+            return (
+                a["main"] + a["alias"] + sum(a["other"]) + b["main"] + b["alias"] + sum(b["other"])
+            )
+
+    trace = tl.trace(
+        Model(), _input(), backend="mlx", intervene=tl.when(tl.module(address), tl.scale(0.5))
+    )
     assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
     assert MLXBackend().validate_trace(trace).passed
 
