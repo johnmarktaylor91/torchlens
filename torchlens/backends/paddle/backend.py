@@ -61,6 +61,7 @@ from .._finalize import (
 from .._options import (
     PADDLE_EXTRA_KWARG_POLICY,
     PADDLE_PREVIEW_TRACE_OPTION_POLICY,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
     reject_unsupported_trace_options,
     resolve_optional_capture_field as _resolve_optional_capture_field,
@@ -412,20 +413,14 @@ class PaddleBackend:
         grad_options = _default_if_missing(grad_options, None)
         save_predicate = pop_static_label_save_predicate(extra_kwargs, backend_name="paddle")
         intervene = _default_if_missing(extra_kwargs.pop("intervene", None), None)
-        halt = _default_if_missing(extra_kwargs.pop("halt", None), None)
-        # ``stop_after=`` is the one public stop directive (the door passes
-        # ``halt=None``); the live intervention runtime runs it as the halt.
-        stop_after = _default_if_missing(extra_kwargs.pop("stop_after", None), None)
-        if stop_after is not None:
-            halt = stop_after
+        halt = pop_stop_directive(extra_kwargs)
         facet_recipes = _default_if_missing(extra_kwargs.pop("facets", None), None)
         if grad_options is not None and (intervene is not None or halt is not None):
             raise BackendUnsupportedError(
-                "paddle backend preview cannot combine grad_options with "
-                "trace(intervene=...) or trace(stop_after=...): derived-gradient "
-                "replay re-executes the forward without interventions, so the "
-                "matched intermediates would misrepresent the intervened "
-                "capture. Capture derived gradients in a separate plain trace.",
+                "paddle backend preview cannot combine grad_options with trace(intervene=...) "
+                "or trace(stop_after=...): derived-gradient replay re-executes the forward "
+                "without interventions, so the matched intermediates would misrepresent the "
+                "intervened capture. Capture derived gradients in a separate plain trace.",
                 code=PADDLE_REFUSAL_OPTION,
                 option="grad_options",
             )

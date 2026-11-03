@@ -37,6 +37,7 @@ from ..._user_funcs_guards import (
 from ...backends._options import (
     MLX_EXTRA_KWARG_POLICY,
     TRACE_OPTION_CAPABILITY_GATES,
+    pop_stop_directive,
     reject_extra_trace_kwargs,
 )
 from ...backends._trace_options import _CONTROL_FLOW
@@ -359,22 +360,8 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),
         intervene=kwargs["intervene"],
-        halt=_preview_stop_directive(kwargs),
+        halt=pop_stop_directive(dict(kwargs)),
     )
-
-
-def _preview_stop_directive(kwargs: dict[str, Any]) -> Any:
-    """Return the stop predicate a preview capture runs as its halt selector.
-
-    ``stop_after=`` is the one public stop directive (the door no longer takes
-    ``halt=`` and passes it as ``None``), so a preview backend that halts on a
-    selector receives ``stop_after`` in that role.
-    """
-
-    stop_after = kwargs.get("stop_after", MISSING)
-    if stop_after is MISSING or stop_after is None:
-        return kwargs.get("halt")
-    return stop_after
 
 
 def _trace_option_explicit(option_name: str, public_trace_kwargs: dict[str, Any]) -> bool:
