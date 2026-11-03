@@ -33,7 +33,7 @@ class _SharedCell(nn.Module):
 
 def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> str:
     """Render to DOT and return the source."""
-    return trace.draw(path=str(tmp_path / name), vis_save_only=True, file_format="dot", **kwargs)
+    return trace.draw(path=str(tmp_path / name), file_format="dot", **kwargs).dot
 
 
 def test_collapse5_overview_discloses_reuse_and_never_switches(tmp_path: Path) -> None:
@@ -42,7 +42,7 @@ def test_collapse5_overview_discloses_reuse_and_never_switches(tmp_path: Path) -
     try:
         overview = _draw(trace, tmp_path, "overview", collapse="auto")
         plain = _draw(trace, tmp_path, "plain")
-        rolled = _draw(trace, tmp_path, "rolled", collapse="auto", vis_mode="rolled")
+        rolled = _draw(trace, tmp_path, "rolled", collapse="auto", rolled=True)
     finally:
         trace.cleanup()
     plain_note = "this model reuses 1 module across 4 calls"

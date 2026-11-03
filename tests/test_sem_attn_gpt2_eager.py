@@ -30,7 +30,7 @@ def eager_capture():
     spec = FAMILY_BY_NAME["gpt2"]
     model = spec.build("eager")
     kwargs = spec.input_kwargs()
-    trace = tl.trace(model, (), kwargs)
+    trace = tl.trace(model, (), input_kwargs=kwargs)
     yield model, trace
     tl.release_model(model)
 
@@ -158,7 +158,7 @@ def test_unsaved_anchor_reports_needs_capture():
 
     spec = FAMILY_BY_NAME["gpt2"]
     model = spec.build("eager")
-    trace = tl.trace(model, (), spec.input_kwargs(), save=tl.func("softmax"))
+    trace = tl.trace(model, (), input_kwargs=spec.input_kwargs(), save=tl.func("softmax"))
     try:
         view = trace.modules[ATTN_ADDRESS].facets
         menu = view.declared()

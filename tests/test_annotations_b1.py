@@ -75,7 +75,7 @@ def _trace_tiny() -> tuple[Trace, _TinyAnnotatedModel, torch.Tensor]:
     torch.manual_seed(901)
     model = _TinyAnnotatedModel()
     x = torch.randn(2, 4)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all")), model, x
+    return tl.trace(model, x, save="all"), model, x
 
 
 def _first_compute_op(trace: Trace) -> Any:
@@ -142,7 +142,7 @@ def test_annotate_uses_large_default_fanout() -> None:
     trace = tl.trace(
         _ManyReluModel(),
         torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     with pytest.warns(MultiMatchWarning, match="matched 10 sites"):
@@ -223,9 +223,8 @@ def test_annotation_image_sets_nodespec_image_hook(tmp_path: Path) -> None:
 
     trace.annotate(tl.func("relu"), image=image_path)
     dot = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "graph"),
-    )
+    ).dot
 
     assert str(image_path) in dot

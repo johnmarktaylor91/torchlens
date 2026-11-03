@@ -162,7 +162,7 @@ def test_bert_padded_batch_parity(tmp_path) -> None:
         "bert-base-uncased", attn_implementation="eager"
     ).eval()
     batch = tokenizer(["The cat sat on the mat.", "Short."], return_tensors="pt", padding=True)
-    log = tl.trace(model, batch.input_ids, {"attention_mask": batch.attention_mask})
+    log = tl.trace(model, batch.input_ids, input_kwargs={"attention_mask": batch.attention_mask})
     tokens0 = _tokens(tokenizer, batch.input_ids[0])
     views = tviz.attention_views(log, tokens=tokens0)
     assert len(views) == 12
@@ -198,7 +198,7 @@ def test_t5_rectangular_cross_attention(tmp_path) -> None:
         "translate English to German: The house is wonderful.", return_tensors="pt"
     ).input_ids
     decoder_ids = tokenizer("Das Haus ist wunderbar.", return_tensors="pt").input_ids
-    log = tl.trace(model, encoder_ids, {"decoder_input_ids": decoder_ids})
+    log = tl.trace(model, encoder_ids, input_kwargs={"decoder_input_ids": decoder_ids})
     view = tviz.attention_view(
         log,
         "decoder.block.0.layer.1.EncDecAttention",
@@ -228,7 +228,7 @@ def test_distilbert_unified_class_names() -> None:
         "distilbert-base-uncased", attn_implementation="eager"
     ).eval()
     batch = tokenizer("The unified class name trap.", return_tensors="pt")
-    log = tl.trace(model, batch.input_ids, {"attention_mask": batch.attention_mask})
+    log = tl.trace(model, batch.input_ids, input_kwargs={"attention_mask": batch.attention_mask})
     views = tviz.attention_views(log, tokens=_tokens(tokenizer, batch.input_ids[0]))
     assert len(views) == 6
     assert views[0].provenance == "captured"

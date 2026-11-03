@@ -60,7 +60,8 @@ def test_fast_pass_selective_save_matches_fresh_trace_outputs() -> None:
         fresh_trace = tl.trace(
             model,
             replacement_input,
-            capture=tl.options.CaptureOptions(layers_to_save="all", seed=11),
+            capture=tl.options.CaptureOptions(seed=11),
+            save="all",
         )
 
         fast_saved = _saved_tensor_by_label(fast_trace, selected_labels)

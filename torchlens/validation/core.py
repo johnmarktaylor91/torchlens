@@ -1,4 +1,4 @@
-"""Core validation logic for verifying saved outs.
+"""Core validation logic for verifying saved activations.
 
 Orchestrates a three-phase verification pipeline for every layer in the graph:
 
@@ -1953,7 +1953,7 @@ def _check_arglocs_correct_for_arg(
         if verbose:
             print(
                 f"Parent {parent_layer_label} of {target_layer_label} is logged as "
-                f"{arg_type} {argloc_key} to {target_layer_label}, but its saved outs "
+                f"{arg_type} {argloc_key} to {target_layer_label}, but its saved activations "
                 "don't match the saved argument."
             )
         return ValidationCheckResult.failed_result("arg_logging_mismatch")
@@ -2627,7 +2627,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     perturb:
         Whether to perturb one or more parent values before replay.
     layers_to_perturb:
-        Layers whose saved outs should be perturbed.
+        Layers whose saved activations should be perturbed.
     verbose:
         Whether to print replay diagnostics on failure.
 
@@ -2742,7 +2742,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if not matches_saved and not perturb and isinstance(recomputed_output, torch.Tensor):
         matches_saved = _deep_numeric_replay_matches_saved(layer, recomputed_output)
 
-    # Forward replay failure (non-perturbed): saved outs don't match.
+    # Forward replay failure (non-perturbed): saved activations don't match.
     if not matches_saved and not perturb:
         # Exemption candidate: a parent is an in-place RNG op that may have
         # mutated its tensor after the child logged it as an arg. The blanket
@@ -3166,13 +3166,13 @@ def _prepare_input_args_for_validating_layer(
     layer_to_validate_parents_for:
         Layer being checked.
     layers_to_perturb:
-        Layers whose saved outs should be perturbed.
+        Layers whose saved activations should be perturbed.
     perturb_strategy:
         ``"default"`` for the op-aware random perturbation, or
         ``"step_up"``/``"step_down"`` for minimal deterministic step
         perturbations used to retry after a perturbed execution exception.
     skip_parent_swap_labels:
-        Parent labels whose saved outs must NOT be swapped in, keeping the
+        Parent labels whose saved activations must NOT be swapped in, keeping the
         child's own saved-arg snapshot at those slots. Used by the
         in-place-RNG snapshot proof: the snapshot holds the pre-mutation
         values the child actually consumed.

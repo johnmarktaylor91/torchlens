@@ -735,9 +735,7 @@ def test_guard_pass_metadata_is_machine_readable() -> None:
             return torch.relu(x)
 
     wrap_torch(escape_detector="shadow")
-    trace = tl.trace(
-        Model(), torch.randn(3), capture=tl.options.CaptureOptions(layers_to_save=["relu"])
-    )
+    trace = tl.trace(Model(), torch.randn(3), save=["relu"])
     assert trace.capture_guard_passes
     assert all(
         item["owner_thread_id"] == trace.provenance.owner_thread_id

@@ -112,7 +112,6 @@ OPTIONS_CLASS_NAMES = (
     "CaptureOptions",
     "InterventionOptions",
     "ReplayOptions",
-    "SaveOptions",
     "StorageOptions",
     "VisualizationOptions",
 )

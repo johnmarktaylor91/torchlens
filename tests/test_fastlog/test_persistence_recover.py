@@ -36,8 +36,8 @@ def _write_bundle(path: Path) -> tl.Recording:
     return tl.record(
         PersistenceModel(),
         torch.ones(1, 3),
+        storage=tl.options.StorageOptions(path=path, retain_in_memory=False),
         default_op=True,
-        streaming=tl.options.StorageOptions(path=path, retain_in_memory=False),
     )
 
 
@@ -366,7 +366,7 @@ def test_disk_roundtrip_label_index_deduplicates_same_raw_label(tmp_path: Path) 
         PersistenceModel(),
         torch.ones(1, 3),
         save=tl.func("relu"),
-        streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
+        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
     )
 
     label = recording.records[0].ctx.label
@@ -426,8 +426,8 @@ def test_disk_finalize_baseexception_marks_partial(
         tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
+            storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
             default_op=True,
-            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     assert not bundle_path.exists()
@@ -456,8 +456,8 @@ def test_disk_finalize_refuses_concurrently_created_target(
         tl.record(
             PersistenceModel(),
             torch.ones(1, 3),
+            storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
             default_op=True,
-            streaming=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
         )
 
     assert list(bundle_path.iterdir()) == []

@@ -11,7 +11,6 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
@@ -178,7 +177,7 @@ def _log_model(model: nn.Module, x: torch.Tensor) -> Trace:
         Fully postprocessed model log.
     """
 
-    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return trace_fn(model, x, save="all")
 
 
 def _get_only_event(trace: Trace) -> ConditionalEvent:

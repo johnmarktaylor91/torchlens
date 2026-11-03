@@ -144,6 +144,16 @@ class GenerationRecording:
     _sink: Any = dataclasses.field(default=None, repr=False, compare=False)
 
     @property
+    def output(self) -> Any:
+        """Return what ``generate()`` returned, exactly (``recording.output``).
+
+        Held in memory only; a recording loaded from disk refuses with
+        ``output_not_stored``.
+        """
+
+        return self.recording.output
+
+    @property
     def n_steps(self) -> int:
         """Return the number of recorded forwards (prefill included)."""
 

@@ -81,7 +81,7 @@ RESULT = (X.shape, len(set(prompt_id)), bool(0.4 < y.mean() < 0.6))
 ## 2. Train with scikit-learn and report the standard metrics
 
 Hold out whole prompts, train a seeded `LogisticRegression` on the rest, and
-report the five metrics a probe result should carry. Accuracy and F1 read the
+report the five metrics a probe result should carry. Accuracy and the F-score read the
 thresholded prediction; ROC AUC and average precision read the score and do not
 depend on the threshold. Token identity is trivially readable from a random
 network's residual stream, so every metric is 1.0 here; a real concept is not.

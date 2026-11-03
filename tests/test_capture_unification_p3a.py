@@ -140,7 +140,8 @@ def _assert_saved_ops_match_full_trace(
     full = tl.trace(
         model,
         x.clone(),
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=123),
+        capture=tl.options.CaptureOptions(seed=123),
+        save="all",
     )
     selective = tl.trace(
         model, x.clone(), save=predicate, capture=tl.options.CaptureOptions(seed=123)
@@ -253,7 +254,7 @@ def test_layers_to_save_retains_output_parent_when_selector_misses_parent() -> N
 
     model = PredicateToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["relu"], seed=17))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=17), save=["relu"])
 
     output = log["output_1"]
     assert output.has_saved_activation is True
@@ -289,7 +290,7 @@ def test_layers_to_save_matches_legacy_label_spellings(
 
     model = FinalLabelDriftToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[selector], seed=19))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=19), save=[selector])
 
     saved_relu_labels = {
         op.layer_label for op in log._layer_list if op.type == "relu" and op.has_saved_activation
@@ -302,7 +303,7 @@ def test_integer_layers_to_save_uses_single_legacy_layer_index() -> None:
 
     model = IntegerSelectorToy()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=[2], seed=23))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=23), save=[2])
 
     saved_compute_labels = [
         op.layer_label
@@ -317,7 +318,7 @@ def test_layers_to_save_unqualified_module_label_saves_all_passes() -> None:
 
     model = RecurrentToy(passes=3)
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["attn"], seed=7))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=7), save=["attn"])
     linear_layer = next(layer for layer in log.layers if layer.layer_type == "linear")
     assert linear_layer.num_passes == 3
     assert [op.has_saved_activation for op in linear_layer.ops._list] == [True, True, True]
@@ -331,7 +332,7 @@ def test_layers_to_save_pass_qualified_module_label_saves_one_pass() -> None:
 
     model = RecurrentToy(passes=3)
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=["attn:2"], seed=7))
+    log = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=7), save=["attn:2"])
     linear_layer = next(layer for layer in log.layers if layer.layer_type == "linear")
     assert [op.has_saved_activation for op in linear_layer.ops._list] == [False, True, False]
     assert linear_layer.ops[1].out is not None

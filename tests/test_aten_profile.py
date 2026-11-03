@@ -196,13 +196,15 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
         Trace with a present primitive profile.
     """
 
-    capture = tl.options.CaptureOptions(backward_ready=backward_ready, aten_ops=True)
-    kwargs = {"save_mode": "reference"} if backward_ready else {}
+    capture = tl.options.CaptureOptions(
+        backward_ready=backward_ready,
+        aten_ops=True,
+        **({"save_mode": "reference"} if backward_ready else {}),
+    )
     return tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=backward_ready),
         capture=capture,
-        **kwargs,
     )
 
 
@@ -324,13 +326,8 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
 ) -> None:
     """Delayed links remain typed across CopySlices and in-place/view cases."""
 
-    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True)
-    trace = tl.trace(
-        model,
-        torch.ones(2, 3, requires_grad=True),
-        capture=capture,
-        save_mode="reference",
-    )
+    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True, save_mode="reference")
+    trace = tl.trace(model, torch.ones(2, 3, requires_grad=True), capture=capture)
     trace.log_backward(trace.output_ops[0].out)
 
     rows = trace._primitive_op_profile.primitive_ops

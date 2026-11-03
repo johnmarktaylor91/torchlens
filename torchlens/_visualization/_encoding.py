@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from ._encoding_request import EncodingChannelRequest
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -463,20 +464,6 @@ def interpolate_hex(start: str, end: str, fraction: float) -> str:
         for start_value, end_value in zip(start_rgb, end_rgb, strict=True)
     ]
     return "#{:02X}{:02X}{:02X}".format(*values)
-
-
-@dataclass(frozen=True)
-class EncodingChannelRequest:
-    """A color source paired with an explicit transform (lens layer door).
-
-    The lens roster's performance rows pass this as ``color_by`` so the
-    view-resolved member arrives WITH its rank transform; a bare string or
-    callable ``color_by`` keeps the historical linear default.
-    """
-
-    source: Any
-    transform: str = "linear"
-    display_name: str | None = None
 
 
 @dataclass(frozen=True)
