@@ -21,6 +21,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens._semantic.logit_lens import LogitLensError
+from torchlens.bundle._aligned_sites import site_row_key
 from torchlens.options import CaptureOptions
 from torchlens.recording import Recorder
 from torchlens.recording.options import RecordingOptions
@@ -136,8 +137,10 @@ def test_names6_rank_changes_by_module_names_modules() -> None:
     assert "dec.0" in module_keys
     scores = [score for _, score in module_rows]
     assert scores == sorted(scores, reverse=True)
-    # The module's score is its most changed site's score.
-    dec_sites = [score for key, score in site_rows if key.startswith(("dec.0", "dec"))]
+    # The module's score is its most changed site's score (site rows are keyed by op label).
+    dec_keys = {site_row_key(op) for op in trace.ops if op.atomic_module_address == "dec.0"}
+    dec_sites = [score for key, score in site_rows if key in dec_keys]
+    assert dec_sites
     assert dict(module_rows)["dec.0"] == pytest.approx(max(dec_sites))
     # The default is unchanged: one row per site.
     assert {key for key, _ in pair.rank_changes(k=64, by="site")} == {key for key, _ in site_rows}
