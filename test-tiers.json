@@ -1778,10 +1778,10 @@
       ],
       "torchlens/_input_coerce.py": [
         "tests/test_buffer_datamodel.py",
-        "tests/test_decoration.py",
         "tests/test_module_log.py",
         "tests/test_param_log.py",
         "tests/test_state_hygiene_oracles.py",
+        "tests/test_string_positional_arg.py",
         "tests/test_tuple_subclass_ctor_guard.py",
         "tests/test_validation.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
@@ -4483,10 +4483,10 @@
         "tests/test_alias_scan_scaling.py",
         "tests/test_capture_unification_p4.py",
         "tests/test_input_boundary_guards.py",
+        "tests/test_input_copy_leaf_status.py",
         "tests/test_internals.py",
         "tests/test_intervention_phase3.py",
         "tests/test_r18i_utils_options.py",
-        "tests/test_robustness_pr4.py",
         "tests/test_tuple_subclass_ctor_guard.py"
       ],
       "torchlens/_utils/collections.py": [
@@ -4548,6 +4548,16 @@
         "tests/test_r18h_introspect_hash.py",
         "tests/test_utility_validation_runner_regressions.py",
         "tests/test_w3_structural_hardening.py"
+      ],
+      "torchlens/_utils/input_leaves.py": [
+        "tests/test_capture_cache_impl_fingerprint.py",
+        "tests/test_capture_failure_reporting.py",
+        "tests/test_input_boundary_guards.py",
+        "tests/test_input_copy_leaf_status.py",
+        "tests/test_robustness_pr4.py",
+        "tests/test_tuple_subclass_ctor_guard.py",
+        "tests/test_validation.py",
+        "tests/test_validation_deepcopy_fidelity.py"
       ],
       "torchlens/_utils/introspection.py": [
         "tests/test_col_offset_map_frame_free.py",
@@ -6985,6 +6995,11 @@
         "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_wrapper_teardown_hygiene.py"
       ],
+      "torchlens/backends/torch/_autograd_grad_marker.py": [
+        "tests/test_replay_grad_fidelity.py",
+        "tests/test_validation_degenerate_forward.py",
+        "tests/test_validation_non_pass_records.py"
+      ],
       "torchlens/backends/torch/_backward_dispatch.py": [
         "tests/test_backward_intervention.py",
         "tests/test_checkpoint_invocation_tokens.py",
@@ -7205,6 +7220,9 @@
         "tests/test_implicit_boundary_tightening.py",
         "tests/test_saved_tensors_hooks_capture.py",
         "tests/test_wrapper_teardown_hygiene.py"
+      ],
+      "torchlens/backends/torch/_held_plain_holders.py": [
+        "tests/test_module_held_tensor_sources.py"
       ],
       "torchlens/backends/torch/_held_refs.py": [
         "tests/test_completeness_witness.py",
@@ -7580,14 +7598,14 @@
         "tests/test_torch_func_transforms.py"
       ],
       "torchlens/backends/torch/_storage_overlap.py": [
-        "tests/test_completeness_witness.py",
-        "tests/test_decoration.py",
+        "tests/test_buffer_datamodel.py",
+        "tests/test_buffer_storage_key_id_reuse.py",
         "tests/test_fast_run_direct_forward.py",
-        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_model_prep_hardening.py",
+        "tests/test_param_witness_gating.py",
         "tests/test_r28_capture_attribution.py",
         "tests/test_schema_lockstep.py",
-        "tests/test_scoped_patching_escape_detection.py",
-        "tests/test_wrap_state_compat.py"
+        "tests/test_weightsfree_fabrication.py"
       ],
       "torchlens/backends/torch/_tl.py": [
         "tests/test_deepcopy_capture_identity.py",
@@ -7633,6 +7651,16 @@
         "tests/test_rf_ext_projective_gradient.py",
         "tests/test_scoped_patching_escape_detection.py",
         "tests/test_torch_func_transforms.py",
+        "tests/test_wrap_state_compat.py"
+      ],
+      "torchlens/backends/torch/_view_writeback.py": [
+        "tests/test_capture_guard_transactionality.py",
+        "tests/test_completeness_witness.py",
+        "tests/test_decoration.py",
+        "tests/test_identity_shims.py",
+        "tests/test_legacy_tensor_constructors.py",
+        "tests/test_scoped_patching_escape_detection.py",
+        "tests/test_stale_reference_holders.py",
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/_weightsfree_ctx.py": [
@@ -7705,8 +7733,8 @@
         "tests/test_capture_admission_ordering.py",
         "tests/test_capture_guard_transactionality.py",
         "tests/test_decoration.py",
-        "tests/test_legacy_tensor_constructors.py",
         "tests/test_mechanical_belt.py",
+        "tests/test_stale_module_global_validation.py",
         "tests/test_wrap_state_compat.py"
       ],
       "torchlens/backends/torch/bound_root.py": [
@@ -10471,17 +10499,17 @@
       "torchlens/receptive_field/__init__.py": [
         "tests/test_glossary_conformance_b2c.py",
         "tests/test_r19b_rf_gradient_verify.py",
-        "tests/test_rf_at.py",
+        "tests/test_receptive_field_deep_chain.py",
+        "tests/test_receptive_field_empty_endpoint.py",
         "tests/test_rf_crossval.py",
-        "tests/test_rf_entities.py",
         "tests/test_rf_ext_api.py",
         "tests/test_rf_geometry_hardening.py",
         "tests/test_rf_gradient.py"
       ],
       "torchlens/receptive_field/_engine.py": [
         "tests/test_perf5_rf_invariant_cost.py",
+        "tests/test_receptive_field_empty_endpoint.py",
         "tests/test_replay2_rf_empty_axis.py",
-        "tests/test_rf_at.py",
         "tests/test_rf_ext_path.py",
         "tests/test_rf_geometric.py",
         "tests/test_rf_rules.py",
@@ -10500,10 +10528,10 @@
       ],
       "torchlens/receptive_field/_engine_forward.py": [
         "tests/test_perf5_rf_invariant_cost.py",
+        "tests/test_receptive_field_empty_endpoint.py",
         "tests/test_rf_ext_api.py",
         "tests/test_rf_ext_forward_walk.py",
         "tests/test_rf_ext_projective_desc.py",
-        "tests/test_rf_ext_projective_gradient.py",
         "tests/test_rf_ext_validation.py",
         "tests/test_rf_remediation_rules.py",
         "tests/test_rf_rules.py"
@@ -10531,8 +10559,8 @@
       "torchlens/receptive_field/_forward_query.py": [
         "tests/test_perf5_rf_invariant_cost.py",
         "tests/test_r19f_rf_view_table.py",
+        "tests/test_receptive_field_empty_endpoint.py",
         "tests/test_rf_crossval.py",
-        "tests/test_rf_entities.py",
         "tests/test_rf_ext_api.py",
         "tests/test_rf_ext_forward_walk.py",
         "tests/test_rf_ext_validation.py",
@@ -11834,9 +11862,9 @@
         "tests/test_replay_grad_fidelity.py",
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
-        "tests/test_validation_bool_exemption.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_backward_state.py": [
@@ -11866,8 +11894,18 @@
         "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
-        "tests/test_validation_perturbation_units.py",
-        "tests/test_validation_set_receiver.py"
+        "tests/test_validation_non_pass_records.py",
+        "tests/test_validation_perturbation_units.py"
+      ],
+      "torchlens/validation/_degenerate_forward.py": [
+        "tests/test_replay_tolerance_dtype_tripwire.py",
+        "tests/test_validation.py",
+        "tests/test_validation_bool_exemption.py",
+        "tests/test_validation_degenerate_forward.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
+        "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_destination_coverage.py": [
         "tests/test_validation.py",
@@ -11875,9 +11913,19 @@
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
         "tests/test_validation_index_domain_in_range.py",
-        "tests/test_validation_registry_ledger.py",
         "tests/test_validation_rung1_class3.py",
+        "tests/test_validation_saved_value_proofs.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "torchlens/validation/_domain_perturbations.py": [
+        "tests/test_replay_tolerance_dtype_tripwire.py",
+        "tests/test_validation.py",
+        "tests/test_validation_bool_exemption.py",
+        "tests/test_validation_comparator_selftest.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
+        "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_edge_boundary.py": [
         "tests/test_capture_unification_p3b.py",
@@ -12104,9 +12152,19 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
         "tests/test_validation_after_load.py",
-        "tests/test_validation_bool_exemption.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
+        "tests/test_validation_perturbation_units.py"
+      ],
+      "torchlens/validation/_non_pass_record.py": [
+        "tests/test_replay_tolerance_dtype_tripwire.py",
+        "tests/test_validation.py",
+        "tests/test_validation_bool_exemption.py",
+        "tests/test_validation_comparator_selftest.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_norm_running_var_proof.py": [
@@ -12146,8 +12204,18 @@
         "tests/test_validate_save_options.py",
         "tests/test_validation.py",
         "tests/test_validation_deepcopy_fidelity.py",
-        "tests/test_validation_set_receiver.py",
+        "tests/test_validation_default_dtype_and_parameter_output.py",
         "tests/test_valmem2_parameter_references.py"
+      ],
+      "torchlens/validation/_posthoc_decision.py": [
+        "tests/test_validation.py",
+        "tests/test_validation_exemption_table.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_immunizer_liveness.py",
+        "tests/test_validation_registry_ledger.py",
+        "tests/test_validation_rung1_class3.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_pristine.py": [
         "tests/test_backward_validation_walker_guards.py",
@@ -12163,9 +12231,9 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
         "tests/test_validation_bool_exemption.py",
-        "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
@@ -12173,9 +12241,9 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validate_save_options.py",
         "tests/test_validation.py",
-        "tests/test_validation_bool_exemption.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py",
         "tests/test_valmem3_saved_arg_offload.py"
       ],
@@ -12185,8 +12253,8 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_set_buffer_provenance.py",
         "tests/test_validation.py",
-        "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_replay_storage_context.py": [
@@ -12194,9 +12262,9 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
         "tests/test_validation_bool_exemption.py",
-        "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_replay_warnings.py": [
@@ -12213,20 +12281,30 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_torch_func_transforms.py",
         "tests/test_validation.py",
-        "tests/test_validation_bool_exemption.py",
         "tests/test_validation_completeness_pass_grained.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
+      ],
+      "torchlens/validation/_saved_value_proofs.py": [
+        "tests/test_validation.py",
+        "tests/test_validation_exemption_table.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_registry_ledger.py",
+        "tests/test_validation_rung1_class3.py",
+        "tests/test_validation_saved_value_proofs.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_script_metadata_proof.py": [
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_torchscript_metadata_only_perturbation.py",
         "tests/test_validation.py",
         "tests/test_validation_bool_exemption.py",
-        "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_sdpa_value_proofs.py": [
@@ -12243,9 +12321,9 @@
         "tests/test_replay_tolerance_dtype_tripwire.py",
         "tests/test_validation.py",
         "tests/test_validation_bool_exemption.py",
-        "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
@@ -12254,9 +12332,9 @@
         "tests/test_source_provenance_validation.py",
         "tests/test_validation.py",
         "tests/test_validation_bool_exemption.py",
-        "tests/test_validation_comparator_selftest.py",
         "tests/test_validation_exemption_tightening.py",
         "tests/test_validation_hardening.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_validation_perturbation_units.py"
       ],
       "torchlens/validation/_stock_layer_grads.py": [
@@ -12267,6 +12345,16 @@
         "tests/test_inplace_output_grads.py",
         "tests/test_validate_consolidated.py",
         "tests/test_validation_pristine_ground_truth.py",
+        "tests/validation_goldens/test_validation_exemption_hardening.py"
+      ],
+      "torchlens/validation/_structural_slot_checks.py": [
+        "tests/test_validation.py",
+        "tests/test_validation_exemption_ledger.py",
+        "tests/test_validation_exemption_table.py",
+        "tests/test_validation_exemption_tightening.py",
+        "tests/test_validation_hardening.py",
+        "tests/test_validation_registry_ledger.py",
+        "tests/test_validation_rung1_class3.py",
         "tests/validation_goldens/test_validation_exemption_hardening.py"
       ],
       "torchlens/validation/_trace_checks.py": [
@@ -12318,12 +12406,12 @@
       ],
       "torchlens/validation/diagnostics.py": [
         "tests/test_backward_validation_failure_record.py",
-        "tests/test_backward_validation_module_keys.py",
         "tests/test_capture_outcome_validation_side_channel.py",
-        "tests/test_forward_created_parameters.py",
         "tests/test_validate_consolidated.py",
         "tests/test_validation.py",
+        "tests/test_validation_degenerate_forward.py",
         "tests/test_validation_diagnostics.py",
+        "tests/test_validation_non_pass_records.py",
         "tests/test_valmem3_saved_arg_offload.py"
       ],
       "torchlens/validation/exemptions.py": [
