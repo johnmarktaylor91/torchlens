@@ -45,7 +45,7 @@ def _healthy() -> dict:
 
 
 def test_grouping_kwarg_is_keyword_only_and_structural_proceeds() -> None:
-    log = _tiny_trace(grouping="structural")
+    log = _tiny_trace(capture=tl.options.CaptureOptions(grouping="structural"))
     assert log.options.grouping == "structural"
     assert log.options.grouping_policy == _healthy()
 
@@ -60,7 +60,7 @@ def test_grouping_entry_refusals() -> None:
         (None, "grouping_invalid"),
     ):
         with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.trace(model, torch.randn(1, 4), grouping=value)
+            tl.trace(model, torch.randn(1, 4), capture=tl.options.CaptureOptions(grouping=value))
         assert excinfo.value.fields["code"] == code
 
 

@@ -46,7 +46,7 @@ def test_rg02_kwargs_and_cache_transport_match_direct_forward(lm: dict[str, Any]
     encoded["use_cache"] = True
     with torch.no_grad():
         direct = lm["model"](**encoded)
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
         assert trace.outcome.status.name == "COMPLETE"
         matches = [
@@ -76,7 +76,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     import torchlens as tl
 
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
         coverage = tl.facets.coverage(trace)
         assert not coverage.unresolved, f"unresolved facet rows: {coverage.unresolved}"
@@ -123,7 +123,7 @@ def test_rg03_facet_family_floor_and_attention_implementation_diff(
     eager_trace = tl.trace(
         eager_model,
         (),
-        dict(encoded),
+        input_kwargs=dict(encoded),
         capture=tl.options.CaptureOptions(save_args=True),
     )
     try:
@@ -147,7 +147,7 @@ def test_rg04_logit_lens_final_layer_matches_native_logits(lm: dict[str, Any]) -
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     with torch.no_grad():
         native = lm["model"](**encoded).logits
-    trace = tl.trace(lm["model"], (), dict(encoded))
+    trace = tl.trace(lm["model"], (), input_kwargs=dict(encoded))
     try:
         lens = sem.logit_lens(trace)
         assert lens.is_validated, "logit_lens self-validation did not run/pass"
@@ -245,7 +245,12 @@ def test_rg07_replay_edit_through_cache_graph_matches_manual_ablation(
     model = lm["model"]
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
     encoded["use_cache"] = True
-    trace = tl.trace(model, (), dict(encoded), capture=tl.options.CaptureOptions(replayable=True))
+    trace = tl.trace(
+        model,
+        (),
+        input_kwargs=dict(encoded),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
     try:
         target = None
         for label in trace.layer_labels:
@@ -299,7 +304,7 @@ def test_rg08_episode_captured_generation_matches_direct_generate(
     trace = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
         episode=tl.options.EpisodeOptions(
             num_steps=4, step_output_kind="tokens", acknowledge_step_cost=True
         ),
@@ -345,7 +350,7 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
     steered = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
         episode=episode_spec(),
         intervene=tl.when(tl.func("tanh"), tl.scale(3.0)),
     )
@@ -371,7 +376,7 @@ def test_rg18_steered_generation_fires_each_step_with_negative_control(
     control = tl.trace(
         model.generate,
         (ids,),
-        {"max_new_tokens": 4, "do_sample": False},
+        input_kwargs={"max_new_tokens": 4, "do_sample": False},
         episode=episode_spec(),
         intervene=tl.when(tl.func("tanh"), tl.scale(1.0)),
     )
@@ -402,7 +407,12 @@ def test_rg19_mean_ablation_over_semantics_and_fail_closed(lm: dict[str, Any]) -
 
     model = lm["model"]
     encoded = _encode(lm, prompt("clean-factual-1")["clean"])
-    trace = tl.trace(model, (), dict(encoded), capture=tl.options.CaptureOptions(replayable=True))
+    trace = tl.trace(
+        model,
+        (),
+        input_kwargs=dict(encoded),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
     try:
         target = None
         for label in trace.layer_labels:

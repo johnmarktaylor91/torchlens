@@ -24,7 +24,7 @@ from torchlens.mechinterp._errors import MechInterpError
 
 pytest.importorskip("transformers")
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
+_CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 def _tiny_gpt2():
@@ -47,8 +47,8 @@ def pair():
     model = _tiny_gpt2()
     clean_ids = torch.tensor([[3, 7, 1, 9, 4]])
     corrupt_ids = torch.tensor([[5, 7, 2, 9, 8]])
-    clean = tl.trace(model, clean_ids, capture=_CAPTURE)
-    corrupt = tl.trace(model, corrupt_ids, capture=_CAPTURE)
+    clean = tl.trace(model, clean_ids, capture=_CAPTURE, save="all")
+    corrupt = tl.trace(model, corrupt_ids, capture=_CAPTURE, save="all")
     try:
         yield model, clean, mi.component_graph(clean), mi.component_graph(corrupt)
     finally:

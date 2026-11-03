@@ -20,9 +20,9 @@ INERT_OPTION_KWARGS = [
     (tl.options.InterventionOptions, "auto_promote", False),
     (tl.options.InterventionOptions, "cohort_migration", True),
     (tl.options.InterventionOptions, "error_severity_threshold", "recoverable"),
-    (tl.options.SaveOptions, "output_dir", "/tmp/nowhere"),
-    (tl.options.SaveOptions, "save_level", "full"),
-    (tl.options.SaveOptions, "bundle_format", "directory"),
+    (tl.options.CaptureOptions, "output_dir", "/tmp/nowhere"),
+    (tl.options.CaptureOptions, "save_level", "full"),
+    (tl.options.CaptureOptions, "bundle_format", "directory"),
     (tl.options.ReplayOptions, "is_appended", True),
     (tl.options.ReplayOptions, "device_override", "cpu"),
 ]

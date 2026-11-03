@@ -399,12 +399,8 @@ def _validate_receptive_field_scope(
         model,
         ready_args,
         input_kwargs=ready_kwargs,
-        save_mode="reference",
-        capture=CaptureOptions(
-            layers_to_save="all",
-            backward_ready=True,
-            seed=seed,
-        ),
+        capture=CaptureOptions(backward_ready=True, seed=seed, save_mode="reference"),
+        save="all",
         backend=backend,
     )
     if validate_metadata:

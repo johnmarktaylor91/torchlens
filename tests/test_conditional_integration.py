@@ -825,9 +825,8 @@ def _log_model(
     return trace_fn(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            save_source_context=save_source_context, layers_to_save=layers_to_save
-        ),
+        capture=tl.options.CaptureOptions(save_source_context=save_source_context),
+        save=layers_to_save,
     )
 
 

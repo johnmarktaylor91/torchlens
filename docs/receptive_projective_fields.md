@@ -22,7 +22,7 @@ x = torch.randn(1, 3, 224, 224, requires_grad=True)
 # save_mode="reference": the default detaching save mode frees the autograd
 # history the empirical probes consume.
 trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference"
+    model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
 op = trace["layer4.1.conv2"]
@@ -158,8 +158,7 @@ backward-ready graph, and reference-saved payloads; anything less is reported as
 trace = tl.trace(
     model,
     x.requires_grad_(True),
-    capture=tl.options.CaptureOptions(backward_ready=True),
-    save_mode="reference",
+    capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
 )
 
 # Exhaustive/sampled trace sweep over center units (and optionally corners).
@@ -193,7 +192,6 @@ unit = op.receptive_field.center_unit(batch_index=0)
 # Highlight the ancestor cone in the graph drawing.
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
-    vis_save_only=True,
     file_format="svg",
 )
 
@@ -208,5 +206,5 @@ from becoming an apparently precise answer.
 ## References
 
 - Araujo, Norris, and Sim, [*Computing Receptive Fields of Convolutional Neural Networks*](https://distill.pub/2019/computing-receptive-fields/), Distill, 2019.
-- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/hash/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
+- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/file/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
 - Lehky and Sejnowski, [*Network model of shape-from-shading: neural function arises from both receptive and projective fields*](https://www.nature.com/articles/333452a0), Nature, 1988.

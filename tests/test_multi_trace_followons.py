@@ -222,14 +222,12 @@ def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
         bundle,
         path=str(tmp_path / "rolled_bundle"),
         vis_mode="rolled",
-        vis_save_only=True,
         file_format="svg",
     )
     backward_source = _visualization.show_bundle_graph(
         bundle,
         path=str(tmp_path / "backward_bundle"),
         signal="backward",
-        vis_save_only=True,
         file_format="svg",
     )
 
@@ -248,7 +246,6 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
         bundle,
         path=str(tmp_path / "backward_bundle_regression"),
         signal="backward",
-        vis_save_only=True,
         file_format="svg",
     )
 
@@ -266,7 +263,6 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
         bundle,
         path=str(tmp_path / "backward_bundle_no_supergraph"),
         signal="backward",
-        vis_save_only=True,
         file_format="svg",
     )
 
@@ -286,7 +282,6 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
         path=str(tmp_path / "styled_bundle"),
         vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
         vis_edge_overrides={first_edge: {"color": "#0072B2"}},
-        vis_save_only=True,
         file_format="svg",
     )
 

@@ -41,7 +41,7 @@ from torchlens.errors._base import TorchLensWarning
 # heavy tier per the marker lint's 5 s smoke budget.
 pytestmark = pytest.mark.real_model
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", save_args=True)
+_CAPTURE = tl.options.CaptureOptions(save_args=True)
 
 
 @pytest.fixture(scope="module")
@@ -65,7 +65,7 @@ def gpt2_inputs() -> tuple[torch.Tensor, torch.Tensor]:
 def gpt2_log(gpt2: Any, gpt2_inputs: tuple[torch.Tensor, torch.Tensor]) -> Any:
     """One cached exhaustive capture of the clean batch."""
 
-    log = tl.trace(gpt2, gpt2_inputs[0], capture=_CAPTURE)
+    log = tl.trace(gpt2, gpt2_inputs[0], capture=_CAPTURE, save="all")
     yield log
     log.cleanup()
 
@@ -168,7 +168,7 @@ def test_activation_patch_residual_stream_never_silently_flat(
             )
         except PatchApplicationError:
             return  # typed refusal is an honest settled state
-    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)
+    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE, save="all")
     try:
         baseline = _last_token_metric(baseline_log).detach()
     finally:
@@ -231,7 +231,7 @@ def test_activation_patch_surfaces_settle_typed_or_effective(
         except AmbiguousSiteError as exc:
             assert "pass-qualified" in str(exc)
             return
-    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE)
+    baseline_log = tl.trace(gpt2, corrupted, capture=_CAPTURE, save="all")
     try:
         baseline = _last_token_metric(baseline_log).detach()
     finally:

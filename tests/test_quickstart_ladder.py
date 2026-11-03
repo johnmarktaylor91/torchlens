@@ -23,7 +23,7 @@ from torchlens._quickstart import (
     resolve_rung,
     trace_input_provenance,
 )
-from torchlens._user_funcs import render as _render
+from torchlens._user_funcs import draw as _render
 from torchlens.errors import SynthesizedValueReadWarning
 from torchlens.types import InputSpec
 
@@ -261,7 +261,7 @@ class TestTypedRefusalProvocation:
     def test_render_pipeline_failure_refuses_typed(self) -> None:
         """A graphviz pipeline failure surfaces as one typed refusal."""
 
-        from torchlens._quickstart._render import _render_dot_source
+        from torchlens.viz._drawing import _render_dot_source
 
         with pytest.raises(Exception) as excinfo:
             _render_dot_source("digraph { a -> b }", "not_a_real_format")
@@ -274,7 +274,7 @@ class TestTypedRefusalProvocation:
 
         import sys as _sys
 
-        from torchlens._quickstart._render import _render_dot_source
+        from torchlens.viz._drawing import _render_dot_source
 
         monkeypatch.setitem(_sys.modules, "graphviz", None)  # import raises ImportError
         with pytest.raises(Exception) as excinfo:
@@ -286,12 +286,12 @@ class TestTypedRefusalProvocation:
     def test_open_viewer_windows_branch_uses_startfile(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:
-        """The explicit view=True door routes through os.startfile on Windows."""
+        """The explicit open_viewer=True door routes through os.startfile on Windows."""
 
         import os as _os
         import sys as _sys
 
-        from torchlens._quickstart._render import _open_viewer
+        from torchlens.viz._drawing import _open_viewer
 
         opened: list[str] = []
         monkeypatch.setattr(_sys, "platform", "win32")
