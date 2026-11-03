@@ -85,6 +85,15 @@ class SaveBudgetExceededError(CaptureError, RuntimeError):
     ``committed_bytes`` or ``projected_bytes``, ``budget_bytes``, ``device``,
     ``num_saved``, ``label``, ``accounting_phase``) so callers branch on numbers
     rather than parsing the message.
+
+    Examples
+    --------
+    >>> opts = tl.options.CaptureOptions(save_budget=16)
+    >>> try:
+    ...     tl.trace(model, x, capture=opts)
+    ... except SaveBudgetExceededError as err:
+    ...     print(type(err).__name__)
+    SaveBudgetExceededError
     """
 
 
