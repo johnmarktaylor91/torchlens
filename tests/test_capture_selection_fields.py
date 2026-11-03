@@ -47,15 +47,12 @@ def test_public_save_selects_final_labels_and_none() -> None:
     assert not any(op.has_saved_activation for op in tl.trace(model, x, save=None).ops)
 
 
-def test_module_filter_retained_until_where_composes_with_save_forms() -> None:
+def test_save_predicate_composes_the_module_selection() -> None:
     model = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
     trace = tl.trace(
         model,
         torch.ones(1, 3),
-        save="all",
-        capture=CaptureOptions(
-            module_filter=lambda fields: any(address == "1" for address, _ in fields.modules)
-        ),
+        save=tl.where(lambda context: "1" in context.module_stack),
     )
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "relu")
     assert not any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")

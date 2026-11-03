@@ -78,7 +78,7 @@ exception) with a separate honest partial on `exc.partial_trace`.
 
 `save=[...]` is still supported when selection depends on final labels that are only known
 after postprocessing. That path runs the legacy two-pass strategy. For recurrent layers,
-`layers_to_save=["attn"]` saves all passes, while `layers_to_save=["attn:2"]` saves only pass 2
+`save=["attn"]` saves all passes, while `save=["attn:2"]` saves only pass 2
 using TorchLens's 1-based pass-label syntax.
 
 ## What Not To Optimize Away

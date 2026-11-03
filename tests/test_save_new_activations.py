@@ -142,14 +142,14 @@ def test_save_new_outs_branching():
     log.cleanup()
 
 
-def test_save_new_outs_layers_to_save():
-    """save_new_outs respects layers_to_save parameter."""
+def test_save_new_outs_save():
+    """save_new_outs respects the save parameter."""
     model = _SimpleFF()
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
 
     # Only save the first layer
     first_label = log.layer_labels[0]
-    log.save_new_outs(model, torch.randn(2, 5), seed=42, layers_to_save=[first_label])
+    log.save_new_outs(model, torch.randn(2, 5), seed=42, save=[first_label])
 
     assert log[first_label].has_saved_activation
     log.cleanup()
@@ -162,7 +162,7 @@ def test_save_new_outs_fast_path_does_not_attach_streaming_refs() -> None:
     log = trace_fn(model, torch.randn(2, 5), capture=tl.options.CaptureOptions(seed=42))
     output_label = log.output_layers[0]
 
-    log.save_new_outs(model, torch.randn(2, 5), seed=42, layers_to_save=[output_label])
+    log.save_new_outs(model, torch.randn(2, 5), seed=42, save=[output_label])
 
     assert getattr(log, "_out_writer", None) is None
     assert all(getattr(layer, "out_ref", None) is None for layer in log._layer_list)
@@ -360,7 +360,7 @@ class TestSaveNewActivationsStateReset:
         model = _SimpleLinear()
         log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
-            log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
+            log.save_new_outs(model, torch.randn(2, 10), save="all")
             assert log.cost.func_calls_duration >= 0
         finally:
             log.cleanup()
@@ -371,7 +371,7 @@ class TestSaveNewActivationsStateReset:
         log = trace_fn(model, torch.randn(2, 10), save="all")
         try:
             labels_pass1 = set(log.layer_labels)
-            log.save_new_outs(model, torch.randn(2, 10), layers_to_save="all")
+            log.save_new_outs(model, torch.randn(2, 10), save="all")
             labels_pass2 = set(log.layer_labels)
             assert labels_pass1 == labels_pass2
         finally:
@@ -404,7 +404,7 @@ class TestSaveNewActivationsStateReset:
         log = trace_fn(model, torch.ones(2, 10), save="all")
         try:
             input_val_1 = log["input_1"].out.clone()
-            log.save_new_outs(model, torch.zeros(2, 10), layers_to_save="all")
+            log.save_new_outs(model, torch.zeros(2, 10), save="all")
             input_val_2 = log["input_1"].out
             assert not torch.equal(input_val_1, input_val_2)
         finally:
