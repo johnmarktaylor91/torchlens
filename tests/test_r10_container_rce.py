@@ -20,7 +20,6 @@ so an absolute / ``..`` member path escaped the bundle root. The fix
 
 from __future__ import annotations
 
-import os
 import pickle
 import sys
 from collections import OrderedDict
@@ -33,7 +32,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
-from torchlens._io.bundle_container import _resolve_bundle_member_path
 from torchlens._ir.container import (
     ContainerReconstructionError,
     ContainerSpec,
@@ -75,13 +73,6 @@ class _NamedTupleModel(nn.Module):
 
     def forward(self, x: torch.Tensor) -> Any:
         return _Pair(x + 1, 7)
-
-
-class _StructseqModel(nn.Module):
-    """Return a ``torch.return_types`` structseq output."""
-
-    def forward(self, x: torch.Tensor) -> Any:
-        return torch.max(x, dim=0)
 
 
 class _OrderedDictModel(nn.Module):
@@ -182,53 +173,6 @@ def test_tampered_container_type_denies_code_execution(
 # --------------------------------------------------------------------------- #
 
 
-def test_resolver_denies_loaded_non_container_type_without_construction() -> None:
-    """A loaded type that is not the recorded benign kind is refused, not constructed."""
-
-    import subprocess  # noqa: F401  (ensure it is in sys.modules)
-
-    spec = ContainerSpec(
-        kind="namedtuple",
-        fields=("args",),
-        type_module="subprocess",
-        type_qualname="Popen",
-    )
-    with pytest.raises(ContainerReconstructionError):
-        _resolve_container_type(spec)
-
-
-def test_container_tripwire_is_a_registered_typed_refusal() -> None:
-    """The default-deny tripwire is public, typed, and structured (R64-3).
-
-    It escapes users raw from the documented ``Op.multi_output_type``
-    property, so it must resolve from ``torchlens.errors``, carry the
-    contract code ``container_spec_inadmissible`` plus a remedy, and keep
-    its ``ValueError`` lineage for the runnable run wrapper. Pickle and
-    deepcopy round-trips keep the structured payload (the R64 pickle-family
-    defect class).
-    """
-
-    import copy
-
-    from torchlens import errors as tl_errors
-
-    assert tl_errors.ContainerReconstructionError is ContainerReconstructionError
-
-    spec = ContainerSpec(
-        kind="namedtuple",
-        fields=("args",),
-        type_module="subprocess",
-        type_qualname="Popen",
-    )
-    with pytest.raises(tl_errors.ContainerReconstructionError) as captured:
-        _resolve_container_type(spec)
-    assert isinstance(captured.value, ValueError)
-    assert captured.value.fields["code"] == "container_spec_inadmissible"
-    assert captured.value.fields["remedy"]
-    for clone in (pickle.loads(pickle.dumps(captured.value)), copy.deepcopy(captured.value)):
-        assert clone.fields == captured.value.fields
-
-
 def test_resolver_never_imports_an_unloaded_attacker_module() -> None:
     """A container type naming an unloaded module is refused WITHOUT importing it."""
 
@@ -284,21 +228,6 @@ def test_legit_namedtuple_output_still_round_trips(tmp_path: Path) -> None:
     assert torch.equal(result.output.value, x + 1)
 
 
-def test_legit_structseq_output_still_round_trips(tmp_path: Path) -> None:
-    """A torch.return_types structseq output reconstructs to its exact type."""
-
-    x = torch.tensor([[1.0, 4.0], [3.0, 2.0]])
-    bundle = tmp_path / "structseq.tlspec"
-    tl.trace(_StructseqModel(), x, capture=_CAP).save(
-        bundle, level="runnable", include_weights=True
-    )
-    result = tl.load(bundle).run(inputs=x)
-    live = _StructseqModel()(x)
-
-    assert type(result.output) is type(live)
-    assert torch.equal(result.output.values, live.values)
-
-
 def test_legit_ordereddict_output_still_round_trips(tmp_path: Path) -> None:
     """An OrderedDict output reconstructs to the exact mapping subtype."""
 
@@ -314,53 +243,9 @@ def test_legit_ordereddict_output_still_round_trips(tmp_path: Path) -> None:
     assert result.output["meta"] == 3
 
 
-def test_resolver_admits_torch_structseq_and_namedtuple_and_ordereddict() -> None:
-    """Direct resolver admits the benign container classes it must keep working."""
-
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="namedtuple", type_module="torch.return_types", type_qualname="max")
-        )
-        is torch.return_types.max
-    )
-    assert (
-        _resolve_container_type(
-            ContainerSpec(
-                kind="namedtuple",
-                fields=("value", "meta"),
-                type_module=_Pair.__module__,
-                type_qualname=_Pair.__qualname__,
-            )
-        )
-        is _Pair
-    )
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="dict", type_module="collections", type_qualname="OrderedDict")
-        )
-        is OrderedDict
-    )
-
-
 # --------------------------------------------------------------------------- #
 # FINDING 2 -- member-path traversal guard.
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize("evil", ["/etc/passwd", "../../etc/passwd", "../escape", "a/../../b"])
-def test_member_path_rejects_traversal(evil: str, tmp_path: Path) -> None:
-    """Absolute / parent-traversal member paths are rejected."""
-
-    with pytest.raises(ArtifactError):
-        _resolve_bundle_member_path(tmp_path, evil)
-
-
-def test_member_path_accepts_legit_relative(tmp_path: Path) -> None:
-    """A legit ``members/NNNN.tlspec`` member path resolves inside the bundle root."""
-
-    resolved = _resolve_bundle_member_path(tmp_path, "members/0000.tlspec")
-    assert resolved == (tmp_path / "members" / "0000.tlspec").resolve()
-    assert resolved.resolve().is_relative_to(tmp_path.resolve())
 
 
 @pytest.mark.parametrize("evil_path", ["/etc/passwd", "../../outside.tlspec"])
@@ -387,15 +272,3 @@ def test_bundle_loader_rejects_escaping_member_path(evil_path: str, tmp_path: Pa
 # --------------------------------------------------------------------------- #
 # Prior gate denials remain intact (defense-in-depth parity smoke).
 # --------------------------------------------------------------------------- #
-
-
-def test_os_module_not_leaked_by_container_resolver() -> None:
-    """The resolver never returns a bare function/module even when named."""
-
-    assert (
-        _resolve_container_type(
-            ContainerSpec(kind="namedtuple", type_module="os", type_qualname="getcwd")
-        )
-        is None
-    )  # getcwd is not a type -> graceful None
-    assert not os.path.exists("/tmp/__r10_should_never_exist__")

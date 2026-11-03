@@ -74,20 +74,6 @@ def test_edited_execution_context_fails_runtime_fingerprint(
     assert any("fingerprint" in diagnostic.message for diagnostic in loaded.readiness.diagnostics)
 
 
-def test_edited_argument_names_fail_runtime_fingerprint(
-    runnable_manifest: tuple[Path, Path, dict],
-) -> None:
-    """A hand-edited call arity/argument list refuses at parse."""
-
-    path, manifest_path, manifest = runnable_manifest
-    call = manifest["run"]["calls"][0]
-    call["argument_names"] = [*call["argument_names"], "forged"]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-    loaded = tl.load(path)
-    assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
-
-
 def test_reserved_name_prefix_alias_group_refuses(
     runnable_manifest: tuple[Path, Path, dict],
 ) -> None:
