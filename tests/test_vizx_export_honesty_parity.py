@@ -219,7 +219,7 @@ class _Writer:
 def _draw(trace: tl.Trace, tmp: Path) -> str:
     """The draw caption source (DOT)."""
 
-    return str(trace.draw(vis_save_only=True))
+    return str(trace.draw().dot)
 
 
 def _svg(trace: tl.Trace, tmp: Path) -> str:

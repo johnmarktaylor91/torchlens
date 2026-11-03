@@ -26,7 +26,7 @@ tl.record(model, input, save=...)
   +- returns Recording; Recording.to_trace() materializes full structure
 ```
 
-Selective `layers_to_save` uses a predicate-backed single pass when early labels are
+Selective `save=` uses a predicate-backed single pass when early labels are
 sufficient and falls back to the two-pass strategy for final-numbering selectors:
 negative indexes, integer ordinals, indexed label strings (`relu_1_2`, `relu_1` — any
 `_<digit>` component; orphan removal renumbers ordinals AND type indexes after capture),
@@ -52,8 +52,7 @@ windowed = tl.trace(
     model,
     x,
     save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-    lookback=4,
-    lookback_payload_policy="detached_raw",
+capture=CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
 )
 patched = tl.trace(
     model,
@@ -105,7 +104,7 @@ image_log.draw(node_spec_fn=tl.viz.nodes.scree())
 Sprint B annotation/MDS names are provisional until review-day signoff. `Trace.model_profile`
 is computed, not persisted. `tl.repgeom.mds_evolution(...)` requires the target batch
 activations to have been saved at capture time; use a curated `save=` subset, not exhaustive
-`layers_to_save="all"`,
+`save="all"`,
 for image batches. `Trace._annotation_blobs` is public-provisional only for render-time
 annotation payloads and compatibility review.
 Sprint C RDM, feature-map, and scree node visuals are PIL-only render-time images composed

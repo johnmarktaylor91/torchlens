@@ -98,7 +98,7 @@ def test_track_nonfinite_records_capture_basis() -> None:
     log = tl.trace(
         _NanModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     labels = log.nonfinite_ops
     assert any(label.startswith("truediv") for label in labels)
@@ -124,7 +124,7 @@ def test_track_nonfinite_covers_unsaved_ops_on_selective_save() -> None:
         model,
         x,
         save=tl.func("relu"),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     assert any(label.startswith("truediv") for label in tracked.nonfinite_ops)
     assert tracked.nonfinite_coverage.basis == "capture"
@@ -153,7 +153,7 @@ def test_multipass_nonfinite_op_is_pass_qualified() -> None:
     log = tl.trace(
         _LoopLog(),
         torch.full((2, 4), 2.0),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     hits = [label for label in log.nonfinite_ops if "log" in label]
     assert hits, log.nonfinite_ops
@@ -195,7 +195,7 @@ def test_structure_only_refuses_track_nonfinite() -> None:
         tl.trace(
             _CleanModel(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(structure_only=True, track_nonfinite=True),
+            capture=tl.options.CaptureOptions(structure_only=True, on_nonfinite="track"),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
 
@@ -207,7 +207,7 @@ def test_raise_on_nan_stop_and_throw_unchanged_by_tracking() -> None:
         tl.trace(
             _NanModel(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(raise_on_nan=True, track_nonfinite=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     assert "nan" in str(excinfo.value).lower() or "finite" in str(excinfo.value).lower()
 
@@ -258,14 +258,14 @@ def test_raise_on_nan_survives_buffer_sources() -> None:
     log = tl.trace(
         _BufferedClean().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(raise_on_nan=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="raise"),
     )
     assert str(log.outcome.status).endswith("COMPLETE")
     with pytest.raises(Exception) as excinfo:
         tl.trace(
             _BufferedNanModel().eval(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         )
     assert "finite" in str(excinfo.value).lower() or "nan" in str(excinfo.value).lower()
 
@@ -276,7 +276,7 @@ def test_track_nonfinite_survives_buffer_sources() -> None:
     log = tl.trace(
         _BufferedNanModel().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     assert any(label.startswith("truediv") for label in log.nonfinite_ops)
 
@@ -288,7 +288,7 @@ def test_loaded_trace_restores_default_and_serves_saved_basis(tmp_path) -> None:
     log = tl.trace(
         _NanModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(track_nonfinite=True),
+        capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     assert log.nonfinite_coverage.basis == "capture"
     path = tmp_path / "nonfinite.tlspec"

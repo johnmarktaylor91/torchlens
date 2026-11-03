@@ -67,7 +67,7 @@ named code), `not yet proven` (False, refusal not yet pinned by a passing suite 
 | Forward capture (`tl.trace`) | supported | |
 | Replay validation (`has_validation_replay`; `validate_trace`, status object with per-op reasons) | supported | |
 | Payload materialization (`payload_materialization`; `save` / `load` with array payloads) | supported | |
-| Static-label interventions (`can_intervene`; `intervene=`, `halt=`) | supported | |
+| Static-label interventions (`can_intervene`; `intervene=`, `stop_after=`) | supported | |
 | Intermediate derived gradients (`intermediate_derived_grads`; `grad_options=`) | supported | |
 | Backward capture (`backward_capture`; `save_grads`, `backward_ready`) | unsupported | `backward_capture_unsupported` |
 | Fastlog (`fastlog`) | unsupported | `fastlog_unsupported` |

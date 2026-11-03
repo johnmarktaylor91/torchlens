@@ -27,7 +27,7 @@ from torch import nn
 import torchlens as tl
 from tests.oracles.test_legacy_graph_counts import Grad
 from torchlens.errors import ScalarEscapeWarning
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 
 #: A C function no wrapper patches (stand-in for a pybind extension call): its
 #: output carries no provenance. The pristine binding is held inside a tuple: the
@@ -90,9 +90,11 @@ def test_capture_advisories_match_the_planted_kinds_and_counts(
 
 def _two_pass_trace(transform: Callable[[torch.Tensor], torch.Tensor] | None) -> tl.Trace:
     torch.manual_seed(0)
-    save = SaveOptions(grad_transform=transform) if transform is not None else None
     trace = tl.trace(
-        Grad().train(), torch.randn(3, 4), capture=CaptureOptions(save_grads=True), save=save
+        Grad().train(),
+        torch.randn(3, 4),
+        capture=CaptureOptions(save_grads=True, grad_transform=transform),
+        save="all",
     )
     loss = trace[trace.output_layers[0]].out.sum()
     trace.backward(loss, retain_graph=True)

@@ -83,7 +83,6 @@ def _draw(model: nn.Module, x: torch.Tensor, tmp_path: Path, name: str, **kwargs
     trace = tl.trace(model, x)
     return str(
         trace.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / name),
             **kwargs,
@@ -236,20 +235,18 @@ def test_legend_intervention_row_only_on_an_intervened_render(tmp_path: Path) ->
         capture=tl.options.CaptureOptions(replayable=True),
     )
     plain = trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "plain"),
         show_legend=True,
-    )
+    ).dot
     assert not any(row.startswith("intervention") for row in _legend_rows(str(plain)))
     fork = trace.fork("edited")
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     edited = fork.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / "edited"),
         show_legend=True,
-    )
+    ).dot
     rows = _legend_rows(str(edited))
     assert "edited" in rows
     # The downstream highlighter is off by default, so its key row is absent.
@@ -329,7 +326,7 @@ def test_header_advisory_names_no_local_directory(tmp_path: Path) -> None:
         # the advisory under test, not a defect.
         warnings.simplefilter("always")
         trace = tl.trace(_Branch(), torch.ones(1, 3))
-    dot = str(trace.draw(vis_save_only=True, file_format="svg", path=str(tmp_path / "adv")))
+    dot = str(trace.draw(file_format="svg", path=str(tmp_path / "adv")).dot)
     assert "capture advisory" in dot
     assert str(Path(__file__).resolve().parent) not in dot
     assert f"{Path(__file__).name}:" in dot
@@ -348,10 +345,9 @@ def test_as_node_intervention_keeps_the_site_inside_its_module_boxes(tmp_path: P
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     dot = str(
         fork.draw(
-            vis_save_only=True,
             file_format="svg",
             path=str(tmp_path / "as_node"),
-            vis_intervention_mode="as_node",
+            intervention_mode="as_node",
         )
     )
     into_hook = [line for line in _edge_lines(dot) if "-> intervention_hook_" in line]
@@ -376,7 +372,7 @@ def test_rank_path_page_follows_the_skin(skin: str, tmp_path: Path) -> None:
         tmp_path,
         f"rank_{skin}",
         theme=skin,
-        vis_node_placement="rank",
+        layout="rank",
     )
     page = THEME_PRESETS[skin].graph["bgcolor"]
     if skin == "dark":
