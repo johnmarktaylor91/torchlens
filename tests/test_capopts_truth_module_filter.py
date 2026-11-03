@@ -27,7 +27,7 @@ class ThreeStep(nn.Module):
 
 
 def _saved_labels(log: tl.Trace) -> list[str]:
-    return [op.layer_label for op in log if getattr(op, "out", None) is not None]
+    return [op.layer_label for op in log if op.has_saved_activation]
 
 
 def test_selection_composed_into_save_saves_the_same_sites() -> None:
@@ -38,7 +38,12 @@ def test_selection_composed_into_save_saves_the_same_sites() -> None:
     by_predicate = tl.trace(
         model,
         x,
-        save=tl.where(lambda ctx: ctx.func_name == "linear" and "fc2" not in ctx.module_stack),
+        save=tl.where(
+            lambda ctx: (
+                ctx.func_name == "linear"
+                and all(frame.address != "fc2" for frame in ctx.module_stack)
+            )
+        ),
     )
     saved = _saved_labels(by_selector)
     assert saved, "the composed selection should keep the fc1 payload"

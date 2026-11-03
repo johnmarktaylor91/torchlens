@@ -379,14 +379,13 @@ class TestSaveNewActivationsStateReset:
 
     @pytest.mark.parametrize(
         "trace_kwargs",
-        [{}, {"layers_to_save": "all"}],
+        [{}, {"save": "all"}],
         ids=["default_selector", "explicit_all"],
     )
     def test_5x_stress(self, trace_kwargs: dict[str, str]) -> None:
         """Stress test: repeated refreshes stay aligned for default and explicit-all saves."""
         model = _SimpleLinear()
-        save_kwargs = {"save": trace_kwargs["layers_to_save"]} if trace_kwargs else {}
-        log = trace_fn(model, torch.randn(2, 10), **save_kwargs)
+        log = trace_fn(model, torch.randn(2, 10), **trace_kwargs)
         try:
             for _ in range(5):
                 next_x = torch.randn(2, 10)

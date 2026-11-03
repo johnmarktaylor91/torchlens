@@ -61,11 +61,11 @@ def test_save_predicate_composes_the_module_selection() -> None:
     trace = tl.trace(
         model,
         torch.ones(1, 3),
-        save=tl.where(lambda context: "1" in context.module_stack),
+        save=tl.where(lambda context: any(f.address == "1" for f in context.module_stack)),
     )
     assert any(op.has_saved_activation for op in trace.ops if op.func_name == "relu")
     assert not any(op.has_saved_activation for op in trace.ops if op.func_name == "linear")
-    predicate = tl.where(lambda context: "1" in context.module_stack)
+    predicate = tl.where(lambda context: any(f.address == "1" for f in context.module_stack))
     # A bare label string composes with a selector (the selector algebra lifts it);
     # a list or a callable is not a selector operand and keeps Python's TypeError.
     assert isinstance("all" & predicate, CompositeSelector)

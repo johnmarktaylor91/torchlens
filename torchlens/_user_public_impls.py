@@ -261,7 +261,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
                 grad_mode="off",
                 input_synthesis=input_synthesis,
             )
-        inputs = list(resolved.plan.inputs)
+        inputs = list(resolved.plan.input_args)
         input_kwargs = dict(resolved.plan.input_kwargs)
 
     inputs = _coerce_input_args(model, inputs)
@@ -279,7 +279,7 @@ def summary(  # noqa: PLR0913 -- ladder-conjugated public verb: the three input 
         with grad_context:
             trace = _user_funcs._run_model_and_save_specified_outs(
                 model=model,
-                inputs=inputs,
+                input_args=inputs,
                 input_kwargs=input_kwargs,
                 layers_to_save=None,
                 recurrence_detection=True,
