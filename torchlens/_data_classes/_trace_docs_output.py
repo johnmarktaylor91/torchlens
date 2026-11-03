@@ -110,9 +110,8 @@ DOCS: dict[str, str] = {
         
         With no keywords this returns the rows the automatic capture-time
         decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
-        decodes again from the retained output tensors (the output ops'
-        values), the persisted ``output_id2label`` and the shipped ImageNet
-        bank, without touching ``decoded_output``.
+        decodes again from the retained output tensors, the persisted
+        ``output_id2label`` and the ImageNet bank, never ``decoded_output``.
         
         Parameters
         ----------
@@ -126,7 +125,8 @@ DOCS: dict[str, str] = {
             Output head to decode, as an output container path such as
             ``"logits"``, ``"0"`` or ``"0.logits"``.
         tokenizer:
-            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
+            Tokenizer with a ``decode`` method, used by ``"hf_text"``; without
+            one the rows carry the argmax ``token_ids`` and ``text`` is ``None``.
         
         Returns
         -------
