@@ -5779,6 +5779,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `environment_witnesses=` | constructor keyword of `tl.debug.DeterminismReport` (required): Named `(witness, value)` lines: deterministic-algorithms flag, cuDNN flags, TF32 flags, `CUBLAS_WORKSPACE_CONFIG`, thread counts |
 | `episode=` | keyword of `tl.trace` (keyword-only; default `None`): Torch-only episode capture declaration (`EpisodeOptions`); constructor keyword of `tl.transformer.AttentionView` (default `None`): Optional episode coordinates |
 | `episode_id=` | keyword of `Bundle.episode_status` (required): Episode entity named by `episode_member` relation rows |
+| `episode_ledger=` | keyword of `Bundle.episode_status` (keyword-only; default `None`): Optional episode ledger; supplies `n_steps_declared` and the driver-halt geometry (fold arms 2 and 4 are ledger-only facts and degrade fail-closed to `episode_unknown` without it) |
 | `eps=` | constructor keyword of `tl.transforms.SrpSizing` (required): Requested maximum pairwise-L2 distortion; keyword of `tl.transforms.srp_dims_for` (default `0.1`): Maximum pairwise-L2 distortion target, in `(0, 1)`; keyword of `tl.transforms.unit_norm` (default `1e-12`): Norm floor guarding division by zero |
 | `error=` | constructor keyword of `tl.bridge.brain_score.ScoreParts` (default `None`): The benchmark's reported error of the score, or `None`; constructor keyword of `tl.experiment.GridCell` (required): The refusal (`grid_cell_unresolved: ...`, `grid_cell_multi_site: ...`) or the failure text; None otherwise; constructor keyword of `tl.intervention.BindReport` (default `None`) |
 | `error_repr=` | constructor keyword of `tl.Recording` (default `None`) |
@@ -6240,7 +6241,6 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `leaf=` | keyword of `TagGrammar.data` (required) |
 | `leaf_occurrences=` | constructor keyword of `tl.types.Container` (default `()`) |
 | `leaves=` | constructor keyword of `tl.types.Container` (required) |
-| `ledger=` | keyword of `Bundle.episode_status` (keyword-only; default `None`): Optional episode ledger; supplies `n_steps_declared` and the driver-halt geometry (fold arms 2 and 4 are ledger-only facts and degrade fail-closed to `episode_unknown` without it) |
 | `ledgers=` | constructor keyword of `tl.debug.CheckReport` (optional) |
 | `left=` | keyword of `MergedTrace.happens_before` (required); keyword of `tl.viz.bundle_diff` (keyword-only; default `None`): Left member name or log. Defaults to the first bundle member |
 | `legend=` | constructor keyword of `tl.transformer.Annotation` (default `''`): Kind legend line |
