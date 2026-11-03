@@ -218,6 +218,8 @@ def _state_tokens(trace: Any) -> list[str]:
         detail = f": stopped at {boundary}" if boundary else ""
         tokens.append(f"({status}{detail})")
     state = getattr(getattr(trace, "state", None), "name", "PRISTINE")
+    if trace.is_pristine is False:
+        tokens.append("(edited)")
     if state != "PRISTINE":
         tokens.append(f"({state.lower()})")
     if getattr(trace, "_options_structure_only", False):
@@ -249,13 +251,17 @@ def _identity(trace: Any) -> str:
     layers = len(getattr(trace, "_layer_logs", {}) or {})
     ops = getattr(trace, "_num_ops", 0)
     states = " ".join(_state_tokens(trace))
-    facts = [model, f"{format_count(layers)} layers", f"{format_count(ops)} ops"]
-    if states:
-        facts.append(states)
-    facts.append(_health_text(trace))
-    if not getattr(trace, "_tracing_finished", False):
-        facts.insert(1, "(capture in progress)")
-    return one_line(f"Trace {name}", facts)
+    identity = f"Trace {name}"
+    health = _health_text(trace)
+    progress = "(capture in progress)" if not getattr(trace, "_tracing_finished", False) else ""
+    # Drop optional metadata in order, keeping every honesty marker visible.
+    required = [progress, states, health]
+    counts = [f"{format_count(layers)} layers", f"{format_count(ops)} ops"]
+    for optional in ([model, *counts], counts, []):
+        line = one_line(identity, [*optional, *required])
+        if len(line) <= 100 or not optional:
+            return line
+    return identity
 
 
 def _trace_rows(trace: Any) -> list[tuple[str, str]]:
@@ -282,7 +288,7 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
         ("graph", _graph_text(trace)),
         (
             "saved",
-            f"{exact(saved)} of {exact(len(trace._layer_list))} op outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
+            f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
         ),
         ("outputs", f"{exact(len(trace.output_layers))} output sites"),
         ("flops", "MACs reported as FLOPs // 2"),

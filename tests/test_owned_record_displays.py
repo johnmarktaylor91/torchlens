@@ -60,6 +60,7 @@ def test_owned_tuple_wire_bytes_match_plain_tuple():
     rebuilt = _rebuild_tuple_value(owned, owned)
     assert type(rebuilt) is tuple
     assert canonical_metadata_bytes(rebuilt) == canonical_metadata_bytes(plain)
+    assert canonical_metadata_bytes(owned) == canonical_metadata_bytes(plain)
     sanitized = sanitize_annotation_tensors({"rows": owned})
     assert type(sanitized["rows"]) is tuple
     assert _encode(owned) == _encode(plain)
@@ -122,6 +123,7 @@ def test_aten_records_and_event_stream_are_bounded(trace):
     assert trace.aten_ops
     row = trace.aten_ops[0]
     assert repr(row).startswith(f"AtenOp {row.label}:")
+    assert "_display_owner_keys" not in row.__getstate__()
     assert len(repr(row)) <= 100
     assert "  schema" in str(row)
     assert len(repr(row.output_tensor_facts[0])) <= 100

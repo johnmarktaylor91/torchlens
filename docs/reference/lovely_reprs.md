@@ -67,6 +67,7 @@ _Poisoned/truediv_1_4 (pass 1/1) [op 4/5 __truediv__] -> f32[1,8]@cpu n=8 no_fin
 >>> log.first_nonfinite()
 First non-finite saved out is in layer truediv_1_4 (op __truediv__, ...), shape=(1, 8),
 dtype=torch.float32, parents=relu_1_2, sub_1_3, source=<file>:14.
+>>> _ = log.health_facts
 >>> log
 Trace _poisoned_1: _Poisoned, 7 layers, NaN/Inf FOUND (.nonfinite_ops)
 ```

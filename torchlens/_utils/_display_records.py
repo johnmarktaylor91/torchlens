@@ -81,7 +81,7 @@ def frame_str(frame: Any) -> str:
                 ("line", str(frame.line_number)),
                 ("function", str(frame.func_name)),
             ],
-            more=(".code_context", ".func_source"),
+            more=(".code_context", ".source_context"),
         ),
         lambda _error: frame_repr(frame),
     )
