@@ -219,3 +219,14 @@ _AxisSets: TypeAlias = tuple[_IndexSet | None, ...]
 
 
 __all__: list[str] = []
+
+
+def _union_optional(sets: Iterable[_IndexSet | None]) -> _IndexSet | None:
+    """Union path sets, where ``None`` is the whole extent and so absorbs the rest."""
+
+    materialized: list[_IndexSet] = []
+    for item in sets:
+        if item is None:
+            return None
+        materialized.append(item)
+    return None if not materialized else _IndexSet.union(tuple(materialized))

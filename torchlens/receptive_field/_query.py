@@ -18,6 +18,7 @@ from ._index_set import (
     _IndexSet,
     _Progression,
     _progression_sumset,
+    _union_optional,
 )
 from ._query_causal import EXTENDED_KINDS, map_extended_to_parent
 from ._query_maps import (
@@ -919,12 +920,6 @@ def _build_box(
         empty=empty,
         covers_input=covers_input,
     )
-
-
-def _union_optional(sets: Iterable[_IndexSet | None]) -> _IndexSet | None:
-    """Union constrained sets while preserving an unconstrained ``None`` result."""
-    materialized = tuple(item for item in sets if item is not None)
-    return None if not materialized else _IndexSet.union(materialized)
 
 
 __all__: list[str] = []
