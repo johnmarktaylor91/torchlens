@@ -77,16 +77,18 @@ pytest tests/ -m "not rare and not slow" -x --tb=short        # phase boundary
 
 The behaviour net is the corpus-by-feature matrix under `tests/behaviour/`: corpus models
 (the classics sample in `tests/classics_corpus/` plus toy models) crossed with features in
-pairs and chosen triples, each cell asserting trace, validate, save, load, equality and a
-plain-forward match. Its `README.md` in that directory is the authority once the harness
-lands; until then:
+pairs and chosen triples, each cell asserting trace, validate, save, load, equality, a
+plain-forward match and each active feature's own promise. Each cell is one test,
+`test_cell[<case>-<featureA>-<featureB>]`, that judges every oracle and fails with one
+message naming each failing oracle and its reason. Its `README.md` in that directory is
+the authority once the harness lands; until then:
 
 1. Add the model or input to the corpus list with one line saying what makes it special.
 2. Add the feature, or the feature pair, to the feature table; a cell is a row in that
    table, never a new test function.
 3. Mark the cell for the tier it belongs to. The cheapest corpus entries crossed with the
-   core pairs run in smoke; everything else runs in `slow`; a nightly subset of the model
-   gallery runs through the same harness.
+   core pairs run in `heavy`, and cheap cells listed in `SMOKE_CELLS` in
+   `tests/behaviour/test_matrix.py` run in smoke instead; everything else runs in `slow`.
 4. Run the cell's file through the `inner` tier before the commit gate.
 
 ## Adding a stress row
@@ -102,6 +104,10 @@ authority once the harness lands; until then:
    expected outcome (a result, or a typed refusal by error class and code).
 3. A failure that is a real bug becomes a finding with the row id; the row stays red until
    the fix lands. Never weaken an assertion or a validation tolerance to turn a row green.
+4. Rewrite `tests/stress/subset.json` (`python -m tests.stress.generator --write-subset`).
+   The `slow` tier takes those 300 cells, chosen to cover every axis value and then by
+   cost; each cell is one test, `test_cell[<cell id>]`, judged by all six oracles, and a
+   failure names each failing oracle. `TORCHLENS_STRESS_FULL=1` runs the whole matrix.
 
 ## Shrinking the suite
 

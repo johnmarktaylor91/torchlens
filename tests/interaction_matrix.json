@@ -223,7 +223,7 @@
    "a": "backend",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -279,7 +279,7 @@
    "a": "backend",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -302,7 +302,7 @@
    "a": "backend",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -360,7 +360,7 @@
    "a": "backend",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "backend='torch' is the only backend the net captures; the rows are torch-only edits."
   },
@@ -409,7 +409,7 @@
    "a": "backward",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -463,7 +463,7 @@
    "a": "backward",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -487,7 +487,7 @@
    "a": "backward",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -540,7 +540,7 @@
    "a": "backward",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -577,7 +577,7 @@
    "a": "bind",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -631,7 +631,7 @@
    "a": "bind",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -653,7 +653,7 @@
    "a": "bind",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -709,7 +709,7 @@
    "a": "bind",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -740,7 +740,7 @@
    "a": "bundle",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -794,7 +794,7 @@
    "a": "bundle",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -817,7 +817,7 @@
    "a": "bundle",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -872,7 +872,7 @@
    "a": "bundle",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -895,7 +895,7 @@
    "a": "draw",
    "b": "edit_chain",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -948,7 +948,7 @@
    "a": "draw",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -971,7 +971,7 @@
    "a": "draw",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1025,7 +1025,7 @@
    "a": "draw",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1054,7 +1054,7 @@
    "a": "edit_chain",
    "b": "export",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1062,7 +1062,7 @@
    "a": "edit_chain",
    "b": "extract",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1070,7 +1070,7 @@
    "a": "edit_chain",
    "b": "fast_run",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1078,7 +1078,7 @@
    "a": "edit_chain",
    "b": "fork_do",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1086,7 +1086,7 @@
    "a": "edit_chain",
    "b": "halt",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1094,7 +1094,7 @@
    "a": "edit_chain",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1102,7 +1102,7 @@
    "a": "edit_chain",
    "b": "index",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1110,7 +1110,7 @@
    "a": "edit_chain",
    "b": "intervene",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -1118,7 +1118,7 @@
    "a": "edit_chain",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1126,7 +1126,7 @@
    "a": "edit_chain",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1134,7 +1134,7 @@
    "a": "edit_chain",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1142,7 +1142,7 @@
    "a": "edit_chain",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1150,7 +1150,7 @@
    "a": "edit_chain",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1158,7 +1158,7 @@
    "a": "edit_chain",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1166,7 +1166,7 @@
    "a": "edit_chain",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1174,7 +1174,7 @@
    "a": "edit_chain",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1182,7 +1182,7 @@
    "a": "edit_chain",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -1190,7 +1190,7 @@
    "a": "edit_chain",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1368,7 +1368,7 @@
    "a": "export",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1390,7 +1390,7 @@
    "a": "export",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1442,7 +1442,7 @@
    "a": "export",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1487,7 +1487,7 @@
    "a": "extract",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1511,7 +1511,7 @@
    "a": "extract",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1566,7 +1566,7 @@
    "a": "extract",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1604,7 +1604,7 @@
    "a": "fast_run",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1627,7 +1627,7 @@
    "a": "fast_run",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1680,7 +1680,7 @@
    "a": "fast_run",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1712,7 +1712,7 @@
    "a": "fork_do",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1734,7 +1734,7 @@
    "a": "fork_do",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1789,7 +1789,7 @@
    "a": "fork_do",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1812,7 +1812,7 @@
    "a": "halt",
    "b": "hooks",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1835,7 +1835,7 @@
    "a": "halt",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1888,7 +1888,7 @@
    "a": "halt",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "A halted capture keeps the ops that ran; the row edits a saved site among them or is not applicable when none is floating-point."
   },
@@ -1912,7 +1912,7 @@
    "a": "hooks",
    "b": "index",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1920,7 +1920,7 @@
    "a": "hooks",
    "b": "intervene",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -1928,7 +1928,7 @@
    "a": "hooks",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1936,7 +1936,7 @@
    "a": "hooks",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1944,7 +1944,7 @@
    "a": "hooks",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1952,7 +1952,7 @@
    "a": "hooks",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1960,7 +1960,7 @@
    "a": "hooks",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1968,7 +1968,7 @@
    "a": "hooks",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1976,7 +1976,7 @@
    "a": "hooks",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1984,7 +1984,7 @@
    "a": "hooks",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -1992,7 +1992,7 @@
    "a": "hooks",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -2000,7 +2000,7 @@
    "a": "hooks",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2016,7 +2016,7 @@
    "a": "index",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2071,7 +2071,7 @@
    "a": "index",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2094,7 +2094,7 @@
    "a": "intervene",
    "b": "mean_ablate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -2148,7 +2148,7 @@
    "a": "intervene",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Capture-time rules on distinct sites are merged into one recipe (recipe_a & recipe_b)."
   },
@@ -2171,7 +2171,7 @@
    "a": "mean_ablate",
    "b": "multipass",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2179,7 +2179,7 @@
    "a": "mean_ablate",
    "b": "recipes",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2187,7 +2187,7 @@
    "a": "mean_ablate",
    "b": "record",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2195,7 +2195,7 @@
    "a": "mean_ablate",
    "b": "reporting",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2203,7 +2203,7 @@
    "a": "mean_ablate",
    "b": "rerun",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2211,7 +2211,7 @@
    "a": "mean_ablate",
    "b": "save",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2219,7 +2219,7 @@
    "a": "mean_ablate",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2227,7 +2227,7 @@
    "a": "mean_ablate",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -2235,7 +2235,7 @@
    "a": "mean_ablate",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2279,7 +2279,7 @@
    "a": "multipass",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2332,7 +2332,7 @@
    "a": "recipes",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2376,7 +2376,7 @@
    "a": "record",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2414,7 +2414,7 @@
    "a": "reporting",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2445,7 +2445,7 @@
    "a": "rerun",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2469,7 +2469,7 @@
    "a": "save",
    "b": "steer",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },
@@ -2492,7 +2492,7 @@
    "a": "steer",
    "b": "storage",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Disk-streamed payloads are materialized by the fork edit on the sites it reads."
   },
@@ -2500,7 +2500,7 @@
    "a": "steer",
    "b": "validate",
    "status": "composes",
-   "evidence": "tests/behaviour/test_matrix.py::test_feature_checks",
+   "evidence": "tests/behaviour/test_matrix.py::test_cell",
    "confidence": "medium",
    "note": "Behaviour net sweep cell: the pair runs on one cheap case per session and the core pairs over every case."
   },

@@ -1,4 +1,4 @@
-"""The behaviour net: cases times feature pairs, one test per oracle.
+"""The behaviour net: cases times feature pairs, one test per cell.
 
 Cell universe (see ``README.md``):
 
@@ -9,9 +9,12 @@ Cell universe (see ``README.md``):
 * every other case (the rest of the corpus and the toy models) times the core
   pairs, ``slow``.
 
-Test ids are ``case-featureA-featureB``. A cell passes when each oracle
-passes, is a typed refusal or is not applicable by design; a failure is a
-capture, validation or persistence finding, never something to loosen.
+Each cell is one test, ``test_cell[case-featureA-featureB]``, that judges every
+oracle (the six base oracles, then each active feature's own check) and never
+stops at the first unsatisfied one: a failing cell reports every failing oracle
+and its reason in one message. A cell passes when each oracle passes, is a
+typed refusal or is not applicable by design; a failure is a capture,
+validation or persistence finding, never something to loosen.
 """
 
 from __future__ import annotations
@@ -26,7 +29,7 @@ import pytest
 
 from tests.behaviour.cases import Case, _draws_random_numbers, all_cases, smoke_cases
 from tests.behaviour.features import FEATURES, Feature, feature
-from tests.behaviour.harness import BASE_ORACLES, CellResult, cell_id
+from tests.behaviour.harness import BASE_ORACLES, CellResult, Outcome, cell_id
 
 MATRIX_PATH = Path(__file__).resolve().parents[1] / "interaction_matrix.json"
 
@@ -72,12 +75,32 @@ def _sweep_cells() -> Iterator[Cell]:
         yield cheap[index % len(cheap)], pair
 
 
+#: The smoke hook. Cell ids listed here run in the smoke tier instead of
+#: ``heavy`` (the two tier marks are exclusive; ``tests/test_marker_lint.py``).
+#: Empty today: the net has no smoke cells. To turn it on, list the ids and set
+#: ``_SMOKE_TIER`` to the smoke marker spelled in this file (``pytest.mark``
+#: followed by ``.smoke``): the smoke file list is a text scan of each test
+#: file's own source, so the marker must be spelled here, never through an
+#: alias in a conftest. Only cheap cells can join; an id the universe does not
+#: hold, or one outside the cheap cells, raises at import.
+SMOKE_CELLS: frozenset[str] = frozenset()
+_SMOKE_TIER: pytest.MarkDecorator | None = None
+
+
 def _param(cell: Cell, *marks: pytest.MarkDecorator) -> object:
     """One cell as a pytest param: its id, its tier marks and its xdist group."""
 
     case, pair = cell
     name = cell_id(case, pair)
     return pytest.param(cell, id=name, marks=[*marks, pytest.mark.xdist_group(name=name)])
+
+
+def _cheap_tier(cell: Cell) -> pytest.MarkDecorator:
+    """The tier mark of a cheap cell: ``heavy``, or smoke when the hook names it."""
+
+    if _SMOKE_TIER is not None and cell_id(*cell) in SMOKE_CELLS:
+        return _SMOKE_TIER
+    return pytest.mark.heavy
 
 
 #: ``TORCHLENS_BEHAVIOUR_UNIVERSE`` narrows the universe for a targeted run:
@@ -94,7 +117,9 @@ def _universe() -> list[object]:
     rest = [case for case in all_cases() if case not in cheap]
     params: list[object] = []
     if "cheap" in parts:
-        params += [_param(cell, pytest.mark.heavy) for cell in _cells(cheap, core)]
+        cheap_cells = list(_cells(cheap, core))
+        _check_smoke_cells({cell_id(*cell) for cell in cheap_cells})
+        params += [_param(cell, _cheap_tier(cell)) for cell in cheap_cells]
     if "sweep" in parts:
         params += [_param(cell, pytest.mark.slow) for cell in _sweep_cells()]
     if "core" in parts:
@@ -102,63 +127,34 @@ def _universe() -> list[object]:
     return params
 
 
+def _check_smoke_cells(cheap_ids: set[str]) -> None:
+    """Refuse a smoke hook entry that names no cheap cell (a typo would drop it silently)."""
+
+    unknown = sorted(SMOKE_CELLS - cheap_ids)
+    if unknown:
+        raise ValueError(f"SMOKE_CELLS names ids that are not cheap cells: {unknown[:5]}")
+
+
 UNIVERSE = _universe()
 
 
-def _assert_ok(result: CellResult, oracle: str) -> None:
-    outcome = result.oracle(oracle)
-    assert outcome.ok, f"{result.cell_id} {oracle}: {outcome.status}: {outcome.detail}"
-
-
 @pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_trace(cell_result: CellResult) -> None:
-    """Capture finishes with ops and the outcome the features declare."""
+def test_cell(cell_result: CellResult) -> None:
+    """Every oracle of the cell holds; a failure names each failing oracle.
 
-    _assert_ok(cell_result, "trace")
+    The base oracles: capture finishes with ops and the outcome the features
+    declare (``trace``), default forward validation with metadata invariants
+    passes (``validate``), a portable save succeeds (``save``), the artifact
+    loads (``load``), the loaded trace equals the live one through the public
+    surface (``equality``), and the output equals a plain forward or the replay
+    a feature declares (``forward_match``). Then each active feature's own
+    promise on the live and loaded traces (``feature:<name>``).
+    """
 
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_validate(cell_result: CellResult) -> None:
-    """Default forward validation with metadata invariants passes."""
-
-    _assert_ok(cell_result, "validate")
-
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_save(cell_result: CellResult) -> None:
-    """A portable save succeeds."""
-
-    _assert_ok(cell_result, "save")
-
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_load(cell_result: CellResult) -> None:
-    """The saved artifact loads."""
-
-    _assert_ok(cell_result, "load")
-
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_equality(cell_result: CellResult) -> None:
-    """The loaded trace equals the live one through the public surface."""
-
-    _assert_ok(cell_result, "equality")
-
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_forward_match(cell_result: CellResult) -> None:
-    """The trace's output equals a plain forward (or the replay a feature declares)."""
-
-    _assert_ok(cell_result, "forward_match")
-
-
-@pytest.mark.parametrize("cell_result", UNIVERSE, indirect=True)
-def test_feature_checks(cell_result: CellResult) -> None:
-    """Each active feature's own promise holds on the live and loaded traces."""
-
-    checks = [name for name in cell_result.outcomes if name.startswith("feature:")]
-    for name in checks:
-        _assert_ok(cell_result, name)
+    failures = cell_result.failures()
+    assert not failures, f"{cell_result.cell_id}: {len(failures)} oracle(s) failed\n" + "\n".join(
+        failures
+    )
 
 
 def test_feature_axis_matches_interaction_matrix() -> None:
@@ -182,6 +178,28 @@ def test_oracles_are_the_six_the_net_promises() -> None:
     """The base oracle list is the one the README documents."""
 
     assert BASE_ORACLES == ("trace", "validate", "save", "load", "equality", "forward_match")
+
+
+def test_cell_verdict_names_every_unsatisfied_oracle() -> None:
+    """A cell's failures list every failing or unreached oracle and nothing satisfied."""
+
+    result = CellResult(
+        "toy-a-b",
+        {
+            "trace": Outcome("pass"),
+            "validate": Outcome("fail", "replay differs"),
+            "save": Outcome("refused", "typed", "TorchLensError", "code"),
+            "load": Outcome("not_applicable", "by design"),
+            "equality": Outcome("pass"),
+            "feature:a": Outcome("fail", "promise broken"),
+            "feature:b": Outcome("pass"),
+        },
+    )
+    assert result.failures() == [
+        "validate: fail: replay differs",
+        "forward_match: not_run: the cell did not reach this oracle",
+        "feature:a: fail: promise broken",
+    ]
 
 
 def test_stochastic_tag_names_samplers_not_training_gated_ops() -> None:
