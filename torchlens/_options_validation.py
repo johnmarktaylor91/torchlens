@@ -356,7 +356,7 @@ def _validate_transformed_output_request(values: Mapping[str, Any]) -> None:
     """Refuse ``save_transformed_output=True`` with no ``output_transform``.
 
     The flag asks to keep the transformed output, yet nothing transforms it:
-    refuse before the capture instead of silently saving nothing (names.10).
+    refuse before the capture instead of silently saving nothing.
     """
 
     if values["save_transformed_output"] is True and values["output_transform"] is None:

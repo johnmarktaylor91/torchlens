@@ -517,7 +517,7 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | QK and OV circuits on verified head weight views | `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-neuron MLP rows under the identity gate | `mlp_neuron_contributions`, `layers`, `neurons`, `onto`, `positions` | unstable -- no deprecation shim owed |
 | Alias table generation value | `generation="4.x"` (TransformerBridge canonical hook names) | unstable -- no deprecation shim owed |
-| Appliance on the `trace.using` door | `trace.using("mechinterp")` (ruled, H.28 and names.5) with `logit_lens` (ruled); `head_scores`, `qk_circuit`, `ov_circuit` | the method spellings other than `logit_lens` are unstable -- no deprecation shim owed |
+| Appliance on the `trace.using` door | `trace.using("mechinterp")` (ruled 3 Nov 2026) with `logit_lens` (ruled); `head_scores`, `qk_circuit`, `ov_circuit` | the method spellings other than `logit_lens` are unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 | Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentSender`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `module_address`, `patch_edges`, `corrupted_graph` | unstable -- no deprecation shim owed |
 
@@ -692,8 +692,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
   Editing a root trace warns `TraceMutationWarning` once per root trace; a `fork()` never warns
   and `torchlens.io.suppress_mutate_warnings()` quiets the session. There is no per-call opt-out
-  keyword: `confirm_mutation=` is gone from every door and from `InterventionOptions` (JMT
-  2026-11-03 12:04 PM PT, walk 2026-11-03-decisions names.14).
+  keyword: `confirm_mutation=` is gone from every door and from `InterventionOptions` (ruled
+  3 Nov 2026).
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
@@ -1489,10 +1489,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   intervention spec; `tl.sweep` captures one intervened trace per swept replacement
   value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) `Trace.do(site,
   value_or_hook=None, /, *, ...)`: the first parameter is `site`, positional-only, on `Trace`,
-  `Layer`, `Op` and `Bundle` alike (JMT 2026-11-03 12:04 PM PT, walk 2026-11-03-decisions
-  names.13). `Trace.run(model=None, x=None, /, *, inputs=..., ...)`: the model and input are
-  positional-only; positional inputs return a new `Trace` (JMT 2026-11-03 11:49 AM PT, walk
-  2026-11-03-decisions names.9). Replay re-executes
+  `Layer`, `Op` and `Bundle` alike (ruled 3 Nov 2026). `Trace.run(model=None, x=None, /, *,
+  inputs=..., ...)`: the model and input are positional-only; positional inputs return a new
+  `Trace` (ruled 3 Nov 2026). Replay re-executes
   forward ops only, so a gradient site on `do` without `model=`/`x=`, on `engine="replay"`, or in
   `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
   rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with

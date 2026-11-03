@@ -9,7 +9,7 @@ the appliance registry under the name ``"mechinterp"`` through a lazy
 kit.
 
 The appliance name ``"mechinterp"`` and ``logit_lens`` on it are ruled spellings
-(H.28, names.5); the other method spellings stay DOCUMENTED-UNSTABLE.
+(ruled 3 Nov 2026); the other method spellings stay DOCUMENTED-UNSTABLE.
 """
 
 from __future__ import annotations
@@ -85,7 +85,7 @@ class MechInterpAppliance:
     ) -> LogitLens:
         """Project per-block hidden states through the model's output head.
 
-        The public logit lens (names.5): ``trace.using("mechinterp").logit_lens()``
+        The public logit lens: ``trace.using("mechinterp").logit_lens()``
         returns what the private ``torchlens._semantic.logit_lens.logit_lens``
         returns for this trace, including its fail-closed verification
         refusals (``logit_lens_head_unavailable``, ``logit_lens_identity_mismatch``,

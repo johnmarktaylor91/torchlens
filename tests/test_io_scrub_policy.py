@@ -765,6 +765,8 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
             cache=False,
             save_raw_input=raw_policy,
             save_transformed_output=raw_policy,
+            # ``True`` needs a transform since names.10; identity keeps the policy under test.
+            output_transform=(lambda out: out) if raw_policy is True else None,
         ),
     )
     path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"

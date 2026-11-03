@@ -87,7 +87,7 @@ def test_names5_mechinterp_appliance_registered_under_its_ruled_name() -> None:
 def test_names5_logit_lens_forwards_to_the_private_lens(monkeypatch: pytest.MonkeyPatch) -> None:
     """``trace.using("mechinterp").logit_lens(modules=...)`` is the private lens on this trace."""
 
-    import torchlens._semantic.logit_lens as lens_module
+    import torchlens.mechinterp._appliance as kit_module
 
     _, trace = _blocks_trace()
     seen: dict[str, Any] = {}
@@ -97,7 +97,7 @@ def test_names5_logit_lens_forwards_to_the_private_lens(monkeypatch: pytest.Monk
         seen.update(kwargs)
         return "lens"
 
-    monkeypatch.setattr(lens_module, "logit_lens", fake)
+    monkeypatch.setattr(kit_module, "_logit_lens", fake)
     assert trace.using("mechinterp").logit_lens(modules=["dec"], verify=False) == "lens"
     assert seen["trace"] is trace
     assert seen["layers"] == ["dec"]
@@ -117,7 +117,8 @@ def test_names5_logit_lens_keeps_the_fail_closed_refusal() -> None:
 
 
 def _ablated_pair() -> tuple[tl.Trace, tl.Bundle]:
-    _, trace = _blocks_trace()
+    # do() on this base still needs replayable=True (names.1 lands with replay-templates).
+    trace = tl.trace(_Blocks(), torch.randn(2, 4), replayable=True)
     fork = trace.fork()
     fork.do(tl.label(str(trace.modules["dec.0"].calls[0].output_ops[0])), tl.zero_ablate())
     return trace, tl.Bundle({"base": trace, "edited": fork}, baseline="base")
@@ -217,11 +218,13 @@ def test_names10_other_save_transformed_output_settings_still_capture() -> None:
     """The default ``"small"`` and ``True`` with a transform are untouched."""
 
     model = _Counting()
+    fired: list[int] = []
+    model.lin.register_forward_hook(lambda *_: fired.append(1))
     x = torch.randn(2, 4)
     assert CaptureOptions().save_transformed_output == "small"
     with_transform = CaptureOptions(save_transformed_output=True, output_transform=lambda o: o * 2)
     trace = tl.trace(model, x, capture=with_transform)
-    assert model.calls == 1
+    assert fired == [1]
     assert trace.options.save_transformed_output is True
 
 
