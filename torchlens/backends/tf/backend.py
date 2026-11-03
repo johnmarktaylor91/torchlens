@@ -109,7 +109,6 @@ class TFBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None = None,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -181,7 +180,6 @@ class TFBackend:
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
         name = resolve_optional_capture_field(capture, "name", name)
-        module_filter = resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = resolve_optional_capture_field(capture, "transform", transform)
         output_transform = resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -211,7 +209,6 @@ class TFBackend:
         random_seed = default_if_missing(random_seed, None)
         num_context_lines = default_if_missing(num_context_lines, 7)
         name = default_if_missing(name, None)
-        module_filter = default_if_missing(module_filter, None)
         transform = default_if_missing(transform, None)
         raw_input = default_if_missing(raw_input, None)
         output_transform = default_if_missing(output_transform, None)
@@ -245,7 +242,6 @@ class TFBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -284,7 +280,6 @@ class TFBackend:
                 verbose=verbose,
                 backward_ready=backward_ready,
                 name=name,
-                module_filter=module_filter,
                 transform=transform,
                 raw_input=raw_input,
                 save_raw_input=save_raw_input,
@@ -354,7 +349,6 @@ class TFBackend:
             verbose=verbose,
             backward_ready=backward_ready,
             name=name,
-            module_filter=module_filter,
             transform=transform,
             raw_input=raw_input,
             save_raw_input=save_raw_input,
@@ -537,7 +531,6 @@ class TFBackend:
         verbose: bool,
         backward_ready: bool,
         name: str | None,
-        module_filter: object | None,
         compute_input_output_distances: bool = True,
         transform: object | None,
         raw_input: object | None,
@@ -583,8 +576,6 @@ class TFBackend:
             Backward-ready flag.
         name
             Optional trace label.
-        module_filter
-            Module filter option.
         transform
             Input transform option.
         raw_input
@@ -627,7 +618,6 @@ class TFBackend:
             recurrence_detection=recurrence_detection,
             verbose=verbose,
             backward_ready=backward_ready,
-            module_filter=cast(Any, module_filter),
             emit_nvtx=False,
             input_transform=cast(Any, transform),
             input=raw_input,
@@ -1043,7 +1033,6 @@ def _reject_unsupported_options(
     save_source_context: bool,
     save_rng: bool,
     backward_ready: bool,
-    module_filter: object | None,
     transform: object | None,
     layer_visualizers: dict[Any, Any] | None,
     save_visualizations: bool,
@@ -1073,8 +1062,6 @@ def _reject_unsupported_options(
         RNG-state option.
     backward_ready
         Backward-ready option.
-    module_filter
-        Module filter option.
     transform
         Input transform option.
     layer_visualizers
@@ -1101,7 +1088,6 @@ def _reject_unsupported_options(
             "save_source_context": save_source_context,
             "save_rng": save_rng,
             "backward_ready": backward_ready,
-            "module_filter": module_filter,
             "transform": transform,
             "output_device": output_device,
             "layer_visualizers": layer_visualizers,

@@ -6,7 +6,7 @@ The bodies moved verbatim from the torch door (``torchlens._user_funcs``, then
 (``stop_after_site``, ``stop_after_selector_shaped``, ``stop_after_ambient``,
 ``save_grads_policy``, ``uses_selective_layers_to_save``,
 ``episode_resolved``, ``meta_admission``), the user's knobs from
-``CaptureRequest.options`` (``module_filter``, ``input_transform``,
+``CaptureRequest.options`` (``input_transform``,
 ``save_args``, ``layer_visualizers``, ``unwrap_when_done``) and the cache
 ``key``, ``path``, ``secret`` and ``store`` callable from ``CaptureRequest.cache``.
 """
@@ -136,7 +136,7 @@ def _safe_visualizer_filename(label: str) -> str:
 def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     """Run the door epilogue on a finished capture and return its trace.
 
-    Order (pinned): stop_after never fired; on_nonfinite="warn"; module_filter zero fire;
+    Order (pinned): stop_after never fired; on_nonfinite="warn";
     input_transform provenance; selective save; summary print; layer
     visualizers; ``unwrap_when_done``; cache store; episode ledger;
     weightsfree settlement. ``request.admission`` carries the door facts,
@@ -161,7 +161,6 @@ def finish_trace(result: ForwardResult, request: CaptureRequest) -> Trace:
     _check_stop_after_fired(trace, facts)
     if getattr(options, "on_nonfinite", "ignore") == "warn":
         _warn_once_nonfinite_detected(trace)
-    _warn_module_filter_zero_saved(trace, getattr(options, "module_filter", None))
     input_transform = getattr(options, "input_transform", None)
     if input_transform is not None:
         stamp_user_transform_provenance(trace, input_transform)
@@ -272,30 +271,6 @@ def _warn_once_nonfinite_detected(trace: Trace) -> None:
         ),
         stacklevel=4,
     )
-
-
-def _warn_module_filter_zero_saved(trace: Trace, module_filter: Any) -> None:
-    """Warn when ``module_filter`` suppressed every selected payload."""
-    module_filter_suppressed = int(trace.__dict__.pop("_tl_module_filter_suppressed", 0))
-    if (
-        module_filter is not None
-        and module_filter_suppressed > 0
-        and int(trace._num_saved_ops or 0) == 0
-    ):
-        warnings.warn(
-            TorchLensWarning(
-                f"module_filter suppressed every selected payload "
-                f"({module_filter_suppressed} ops): the returned trace has full "
-                "metadata but ZERO saved activations. module_filter is a third "
-                "save gate composed with save=/layers_to_save, and its argument "
-                "is an op-record namespace (fields such as func_name, "
-                "layer_label, modules), NEVER an nn.Module. "
-                "Remedy: write the filter against op-record fields (e.g. lambda "
-                "op: op.func_name == 'linear'), or drop module_filter",
-                code="module_filter_zero_saved",
-            ),
-            stacklevel=4,
-        )
 
 
 def _restrict_layer_nums_to_saved(trace: Trace, save_args: bool) -> None:

@@ -212,7 +212,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Nonfinite",
                 'lens "debug"',
                 call="lens",
-                capture={"module_filter": "@unsaved_abs"},
+                capture={"save": "@unsaved_abs"},
                 kwargs={"lens": "debug"},
             ),
         ),

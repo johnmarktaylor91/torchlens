@@ -15,7 +15,7 @@ DOCS: dict[str, str] = {
         
         Parameters
         ----------
-        model, input_args, input_kwargs, layers_to_save, grad_layers_to_save, seed, backward_ready:
+        model, input_args, input_kwargs, save, save_grads, seed, backward_ready:
             Forwarded unchanged to
             :func:`torchlens._capture.trace.save_new_outs`.
         """
