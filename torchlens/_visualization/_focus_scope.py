@@ -12,12 +12,13 @@ Spellings here are DOCUMENTED-UNSTABLE pending the naming session.
 
 from __future__ import annotations
 
+import html
 import re
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from ._render_utils import compute_module_penwidth, html_escape
+from ._frame_penwidth import compute_module_penwidth
 
 if TYPE_CHECKING:
     import graphviz
@@ -41,6 +42,12 @@ _OP_NAME = re.compile(r"^(?P<kind>.+?)_(?P<nth>\d+)_(?P<op>\d+)(?::\d+)?$")
 #: HTML tags inside a node label, and a ``name=value`` call argument in its text.
 _TAG = re.compile(r"<[^>]*>")
 _ARGUMENT = re.compile(r"(?:^|\s)[A-Za-z_]\w*=\S")
+
+
+def _escape(value: str) -> str:
+    """Escape the three Graphviz HTML-label specials (``&``, ``<``, ``>``)."""
+
+    return html.escape(value, quote=False)
 
 
 def focus_address(module: Any) -> str | None:
@@ -229,19 +236,19 @@ def scope_caption_head(trace: Trace, module: Any, count_line: str, params_line: 
     """
 
     focus = focus_address(module)
-    class_name = html_escape(trace._source_class_name)
+    class_name = _escape(trace._source_class_name)
     if focus is None:
         return (
-            f"<B>{class_name}</B><br align='left'/>{html_escape(count_line)}"
+            f"<B>{class_name}</B><br align='left'/>{_escape(count_line)}"
             f"<br align='left'/>{params_line}<br align='left'/>"
         )
     focus_module = trace.modules[focus]
-    steps = [html_escape(step) for step in _breadcrumb(focus)]
-    steps[-1] = f"<B>{steps[-1]}</B> ({html_escape(focus_module.class_name)})"
+    steps = [_escape(step) for step in _breadcrumb(focus)]
+    steps[-1] = f"<B>{steps[-1]}</B> ({_escape(focus_module.class_name)})"
     scope = " &gt; ".join([f"<B>{class_name}</B>", *steps])
     return (
         f"{scope}<br align='left'/>"
-        f"drawn: {html_escape(count_line)}<br align='left'/>"
+        f"drawn: {_escape(count_line)}<br align='left'/>"
         f"whole model: {params_line}<br align='left'/>"
     )
 
