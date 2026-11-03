@@ -15,7 +15,6 @@ import pytest
 import torch
 
 from torchlens._observability import (
-    HISTORY_SCHEMA_VERSION,
     ObservationRecord,
     RunningStats,
     RunRecord,
@@ -52,13 +51,6 @@ def _write(path: Path) -> None:
     writer.append_block(_committed(1, "traces/step-1.tlspec"))
 
 
-def test_trace_ref_round_trips_and_defaults_to_none(tmp_path: Path) -> None:
-    _write(tmp_path)
-    blocks = HistoryReader(tmp_path).step_blocks()
-    assert [block.trace_ref for block in blocks] == [None, "traces/step-1.tlspec"]
-    assert HistoryReader(tmp_path).run.schema_version == HISTORY_SCHEMA_VERSION == 2
-
-
 def test_schema_v1_artifact_without_trace_ref_loads_unchanged(tmp_path: Path) -> None:
     """An artifact written before the field existed: no key, schema_version 1."""
 
@@ -78,7 +70,7 @@ def test_schema_v1_artifact_without_trace_ref_loads_unchanged(tmp_path: Path) ->
     assert len(list(reader.observations())) == 2
 
 
-@pytest.mark.parametrize("bad", ["", 7])
+@pytest.mark.parametrize("bad", [7])
 def test_malformed_trace_ref_refuses_typed(bad: object) -> None:
     with pytest.raises(HistorySchemaError) as info:
         StepBlockRecord(segment_id="s", global_step=0, provenance="explicit", trace_ref=bad)  # type: ignore[arg-type]

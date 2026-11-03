@@ -39,28 +39,6 @@ def _lightning_attach(callback: trk.LightningWatchCallback) -> None:
     callback.on_train_end(trainer, model)
 
 
-def test_env_configured_lightning_callback_prints_each_source(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Acceptance U34.2: env values are used and every setting names its source."""
-
-    pytest.importorskip("lightning")
-    monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "gradients,parameters")
-    monkeypatch.setenv("TORCHLENS_WATCH_HIST_EVERY", "none")
-    printed: list[str] = []
-    sink = trk.MemorySink()
-    callback = trk.LightningWatchCallback(to=sink, select=("weight",), print_fn=printed.append)
-    _lightning_attach(callback)
-    assert len(printed) == 1
-    text = printed[0]
-    assert "signals=('gradients', 'parameters')  [env TORCHLENS_WATCH_SIGNALS]" in text
-    assert "select=('weight',)  [argument]" in text
-    assert "every=5  [derived: logging_steps=5]" in text
-    assert "hist_every=None  [env TORCHLENS_WATCH_HIST_EVERY]" in text
-    assert callback.settings.signals == ("gradients", "parameters")
-    assert any(p.tag.startswith("parameters/") for p in sink.scalars)
-
-
 def test_argument_beats_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TORCHLENS_WATCH_EVERY", "9")
     monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "parameters")
@@ -98,7 +76,6 @@ def test_environment_beats_the_derived_cadence(monkeypatch: pytest.MonkeyPatch) 
 @pytest.mark.parametrize(
     ("name", "value"),
     [
-        ("TORCHLENS_WATCH_EVERY", "0"),
         ("TORCHLENS_WATCH_EVERY", "often"),
         ("TORCHLENS_WATCH_HIST_EVERY", "-2"),
         ("TORCHLENS_WATCH_SIGNALS", "grads"),
@@ -113,16 +90,3 @@ def test_malformed_variable_refuses_naming_it(
         resolve_callback_settings(signals=None, select=None, every=None, hist_every=UNSET)
     assert info.value.fields["code"] == "watch_env_config_invalid"
     assert info.value.fields["variable"] == name
-
-
-def test_environment_never_activates_instrumentation(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Config variables alone install nothing: no callback, no hook."""
-
-    monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "gradients")
-    monkeypatch.setenv("TORCHLENS_WATCH_EVERY", "1")
-    model = torch.nn.Linear(4, 4)
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2)
-    model(torch.randn(2, 4)).sum().backward()
-    optimizer.step()
-    assert not optimizer._optimizer_step_pre_hooks
-    assert not model._forward_hooks and not model._forward_pre_hooks

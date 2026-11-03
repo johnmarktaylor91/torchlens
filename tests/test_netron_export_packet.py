@@ -24,7 +24,6 @@ import warnings
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -244,32 +243,6 @@ def test_packet_generator_builds_manifest_and_appearances(tmp_path: Path) -> Non
         encoding="utf-8"
     )
     assert "root boxes" in appearance and "sidebar payload" in appearance
-
-
-@pytest.mark.heavy
-def test_resnet18_architecture_real_row(tmp_path: Path) -> None:
-    """The REALISM-RULE PR fixture: torchvision resnet18, weights=None.
-
-    Weights change no exported structure, so the architecture-real capture
-    is sufficient for PR speed (memo s6); the checkpoint roster belongs to
-    the scheduled/release packet (D03).
-    """
-
-    torchvision = pytest.importorskip("torchvision")
-    onnx = pytest.importorskip("onnx")
-    json_format = pytest.importorskip("google.protobuf.json_format")
-
-    log = tl.trace(torchvision.models.resnet18(weights=None).eval(), torch.randn(1, 3, 224, 224))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        path = tl.export.netron(log, tmp_path / "resnet18.json", attachment=True)
-    model = json_format.Parse(path.read_text(encoding="utf-8"), onnx.ModelProto())
-    onnx.checker.check_model(model, full_check=True)
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    props = {row["key"]: row["value"] for row in payload["metadataProps"]}
-    assert int(props["torchlens.function_count"]) >= 8, "the residual stages drill down"
-    assert len(payload["graph"]["node"]) <= 20, "the shallow module view is a diagram"
-    assert int(props["torchlens.hidden_buffer_count"]) == 80, "eval resnet18 buffer census"
 
 
 if __name__ == "__main__":

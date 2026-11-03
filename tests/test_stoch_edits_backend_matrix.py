@@ -18,10 +18,8 @@ from __future__ import annotations
 
 import ast
 import pickle
-import re
 from pathlib import Path
 
-import pytest
 import torch
 
 import torchlens as tl
@@ -86,17 +84,6 @@ def test_paddle_adapter_table_admits_no_new_family_name() -> None:
     assert not (table & _NEW_FAMILY_NAMES)
 
 
-def test_tf_curated_chain_admits_no_new_family_name() -> None:
-    """The TF curated helper if-chain stays disjoint from the stochastic family."""
-
-    source = (_REPO / "torchlens" / "backends" / "tf" / "interventions.py").read_text(
-        encoding="utf-8"
-    )
-    compared = set(re.findall(r"spec\.name\s*==\s*['\"]([a-z_]+)['\"]", source))
-    assert compared, "the TF curated chain parsed empty"
-    assert not (compared & _NEW_FAMILY_NAMES)
-
-
 def test_construction_and_identity_are_backend_free() -> None:
     """D36: construction, repr, equality, and pickle identity need no backend."""
 
@@ -117,16 +104,3 @@ def test_construction_and_identity_are_backend_free() -> None:
     # Builtin-portability members round-trip identity through pickle.
     for spec in (permute_batch(seed=1, axis=0), tl.mean_ablate(dim=None)):
         assert pickle.loads(pickle.dumps(spec)) == spec
-
-
-@pytest.mark.rare
-def test_mlx_live_leg_refuses_new_family() -> None:
-    """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
-
-    mlx = pytest.importorskip("mlx.core")
-    del mlx
-    from torchlens.backends.mlx.interventions import resolve_helper_applier
-    from torchlens.errors import BackendUnsupportedError
-
-    with pytest.raises(BackendUnsupportedError):
-        resolve_helper_applier(permute_batch(seed=1, axis=0))

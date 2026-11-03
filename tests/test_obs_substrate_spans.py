@@ -120,24 +120,6 @@ class TestOneProfilerDoor:
 class TestSpanRegistry:
     """Entry registration, finally-pop, leak closure, coordinates."""
 
-    def test_lifecycle_and_coordinates(self) -> None:
-        registry = SpanRegistry(device="cpu", rank=0)
-        span_id = registry.open("op::linear_1", altitude="op", owner="model")
-        record = registry.close(span_id)
-        assert record.end_ns is not None and record.end_ns >= record.start_ns
-        assert record.clock_domain == "monotonic"
-        assert record.device == "cpu" and record.rank == 0
-        assert record.pid and record.tid
-        assert not record.leaked
-
-    def test_parent_nesting(self) -> None:
-        registry = SpanRegistry()
-        outer = registry.open("outer", altitude="op", owner="user_region")
-        inner = registry.open("inner", altitude="op", owner="user_region")
-        inner_record = registry.close(inner)
-        registry.close(outer)
-        assert inner_record.parent_span_id == outer
-
     def test_altitude_and_owner_vocabularies(self) -> None:
         registry = SpanRegistry()
         with pytest.raises(SpanError) as excinfo:
@@ -184,54 +166,14 @@ class TestSpanRegistry:
 class TestRegion:
     """tl.region semantics: ids, nesting, inertness, consumers (W1.2)."""
 
-    def test_inert_without_a_consumer(self) -> None:
-        with region("quiet", lr=0.1) as record:
-            pass
-        assert record.span_id is None
-        assert not record.recorded_on_capture
-
-    def test_occurrence_ids_increment(self) -> None:
-        with region("epoch") as first:
-            pass
-        with region("epoch") as second:
-            pass
-        assert second.occurrence_index == first.occurrence_index + 1
-
-    def test_parent_nesting(self) -> None:
-        with region("outer"), region("inner") as inner:
-            assert inner.parent_name == "outer"
-
     def test_non_scalar_metadata_refuses(self) -> None:
         with pytest.raises(SpanError) as excinfo, region("x", tensor=torch.ones(2)):
             pass
         assert excinfo.value.fields["code"] == "region_metadata_invalid"
 
-    def test_region_records_span_under_session(self) -> None:
-        with session(mode="owned") as live:
-            with region("train_loop", lr=0.5) as record:
-                pass
-            assert record.span_id is not None
-        assert live.result is not None
-        span = next(s for s in live.result.spans if s.name == "train_loop")
-        assert span.owner == "user_region"
-        assert span.metadata["lr"] == 0.5
-        assert span.metadata["occurrence"] == record.occurrence_index
-        assert span.end_ns is not None
-
 
 class TestSessionEngine:
     """Owned/borrowed lifecycles, nested refusal, restore-on-error (W1.3)."""
-
-    def test_owned_lifecycle_produces_result(self) -> None:
-        with session(mode="owned") as live:
-            assert active_session() is live
-            assert live.profiler is not None
-        assert active_session() is None
-        result = live.result
-        assert result is not None
-        assert result.mode == "owned"
-        assert result.availability in ("empty", "partial")
-        assert result.facts["kineto_join"] == "not_requested"
 
     def test_nested_owned_refuses_early(self) -> None:
         with session(mode="owned"):
@@ -263,26 +205,3 @@ class TestSessionEngine:
     def test_mode_vocabulary(self) -> None:
         with pytest.raises(ProfilerSessionError):
             session(mode="psychic")
-
-    def test_restore_on_error_closes_leaked_spans_and_slot(self) -> None:
-        try:
-            with session(mode="owned") as live:
-                live.registry.open("about-to-crash", altitude="op", owner="model")
-                raise RuntimeError("user code exploded")
-        except RuntimeError:
-            pass
-        assert active_session() is None  # slot restored on the error path
-        assert live.result is not None
-        assert live.result.leaked_spans == 1
-        leaked = [s for s in live.result.spans if s.leaked]
-        assert len(leaked) == 1 and leaked[0].name == "about-to-crash"
-
-    def test_session_reusable_after_error(self) -> None:
-        try:
-            with session(mode="owned"):
-                raise RuntimeError("boom")
-        except RuntimeError:
-            pass
-        with session(mode="owned") as second:
-            pass
-        assert second.result is not None

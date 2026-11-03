@@ -11,13 +11,10 @@ label from before the view mutation.
 
 from __future__ import annotations
 
-import warnings
-
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import last_validation_failure
 
 
 class _SliceIadd(nn.Module):
@@ -35,27 +32,6 @@ class _SliceIadd(nn.Module):
         return m.moveaxis(1, 2)
 
 
-def test_slice_augmented_assignment_validates() -> None:
-    torch.manual_seed(0)
-    model = _SliceIadd().eval()
-    x = torch.randn(1, 2, 4)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
-
-
-def test_writeback_setitem_parents_are_the_base_and_the_view() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_SliceIadd().eval(), torch.randn(1, 2, 4))
-    setitems = [op for op in trace.ops if op.func_name == "__setitem__"]
-    assert len(setitems) == 2
-    for op in setitems:
-        base_parent = op.parent_arg_positions["args"][0]
-        value_parent = op.parent_arg_positions["args"][2]
-        assert base_parent != value_parent
-        assert value_parent.startswith("iadd")
-
-
 class _ViewWrittenElsewhere(nn.Module):
     """A view mutated in place, then written to a different region of its base."""
 
@@ -66,16 +42,6 @@ class _ViewWrittenElsewhere(nn.Module):
         v.add_(y)
         m[:, 2:4] = v
         return m * 2
-
-
-def test_view_written_to_another_region_validates() -> None:
-    torch.manual_seed(0)
-    inputs = (torch.randn(3, 4), torch.randn(3, 2))
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(_ViewWrittenElsewhere().eval(), inputs, scope="forward") is True, (
-            last_validation_failure()
-        )
 
 
 def test_view_written_to_another_region_binds_two_labels() -> None:

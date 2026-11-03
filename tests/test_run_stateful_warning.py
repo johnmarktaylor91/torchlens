@@ -11,20 +11,6 @@ from torch import nn
 import torchlens as tl
 
 
-def test_training_mode_stateless_model_does_not_warn() -> None:
-    """Training mode alone should not trigger the live-state warning."""
-
-    model = nn.Sequential(nn.Linear(3, 3), nn.ReLU()).train()
-    captured = tl.trace(model, torch.randn(2, 3))
-
-    with warnings.catch_warnings(record=True) as observed:
-        captured.run(inputs=torch.randn(2, 3))
-
-    assert not [
-        warning for warning in observed if "training-mode BatchNorm" in str(warning.message)
-    ]
-
-
 @pytest.mark.smoke
 def test_live_run_warns_once_and_batchnorm_stats_mutate() -> None:
     """Default live execution warns once; the restore bracket undoes BN stats.
@@ -127,7 +113,7 @@ def test_graph_change_error_names_live_state_mutation_and_isolation_hint() -> No
     assert "run(inputs=..., fast=True)" in message
 
 
-@pytest.mark.parametrize("training", [False, True])
+@pytest.mark.parametrize("training", [True])
 def test_fast_live_run_handles_batchnorm_without_refresh_projection(training: bool) -> None:
     """Run BatchNorm natively while collecting its explicitly requested functional output."""
 

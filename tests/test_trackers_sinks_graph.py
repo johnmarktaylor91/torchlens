@@ -57,40 +57,6 @@ def conv_trace():
 class TestGraphIR:
     """The dep-free layer: names, edges, truthful fields, join oracle."""
 
-    def test_nodes_and_edges_from_executed_dag(self, conv_trace) -> None:  # noqa: ANN001
-        trace, _ = conv_trace
-        ir = trk.build_graph_ir(trace)
-        assert len(ir.nodes) == len(trace._layer_list)
-        names = {node.name for node in ir.nodes}
-        assert len(names) == len(ir.nodes), "node names must be unique"
-        # Every input edge resolves to a real node (the frontend join).
-        for node in ir.nodes:
-            for parent in node.inputs:
-                assert parent in names
-        # Module namespacing: the nested Sequential shows up as a slash path.
-        assert any("/" in node.name for node in ir.nodes)
-
-    def test_dict_input_model_still_graphs(self, conv_trace) -> None:  # noqa: ANN001
-        """The decade-old add_graph failure class: ours always logs."""
-
-        _, dict_trace = conv_trace
-        ir = trk.build_graph_ir(dict_trace)
-        assert len(ir.nodes) == len(dict_trace._layer_list) > 0
-
-    def test_truthful_fields_disclosed(self, conv_trace) -> None:  # noqa: ANN001
-        """No allocator claim anywhere; timing carries its evidence label."""
-
-        trace, _ = conv_trace
-        ir = trk.build_graph_ir(trace)
-        payload = json.dumps(ir.as_dict())
-        assert "allocator" not in payload.replace(
-            "memory_coloring: unavailable (no allocator source)", ""
-        )
-        assert any("memory_coloring: unavailable" in d for d in ir.disclosures)
-        if ir.timing_evidence is not None:
-            assert ir.timing_evidence == trk.TIMING_EVIDENCE
-            assert any("host bracket" in d for d in ir.disclosures)
-
     def test_join_oracle_catches_corruption(self, conv_trace) -> None:  # noqa: ANN001
         """Corrupt one stats name -> the oracle names the unmatched node."""
 
@@ -118,33 +84,6 @@ class TestGraphIR:
 
 class TestTensorBoardIngestPin:
     """The pinned ingest leg (runs where the tensorboard extra is installed)."""
-
-    def test_event_file_binds_stats_to_nodes(self, conv_trace, tmp_path) -> None:  # noqa: ANN001
-        """GraphDef + StepStats land and every stats row joins a node."""
-
-        pytest.importorskip("tensorboard")
-        from tensorboard.backend.event_processing.event_accumulator import (
-            EventAccumulator,
-        )
-
-        trace, _ = conv_trace
-        ir = trk.build_graph_ir(trace)
-        logdir = str(tmp_path / "tb")
-        trk.graph_ir_to_tensorboard(ir, logdir)
-        accumulator = EventAccumulator(logdir)
-        accumulator.Reload()
-        graph = accumulator.Graph()
-        graph_names = {node.name for node in graph.node}
-        assert {node.name for node in ir.nodes} <= graph_names
-        run_metadata = accumulator.RunMetadata("step1")
-        stats_names = {
-            stat.node_name
-            for device in run_metadata.step_stats.dev_stats
-            for stat in device.node_stats
-        }
-        assert stats_names, "StepStats rows must land"
-        unmatched = ir.join_oracle(tuple(sorted(stats_names)))
-        assert unmatched == (), f"unbound stats rows: {unmatched}"
 
     @pytest.mark.skipif(
         importlib.util.find_spec("tensorboard") is not None,

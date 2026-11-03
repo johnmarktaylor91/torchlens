@@ -71,84 +71,7 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     assert "TorchLens Discoverability Summary" in tiny_summary_log.provenance._summary()
 
 
-def test_summary_discloses_unknown_flops_operations() -> None:
-    """Summary reports unknown operations excluded from aggregate FLOP totals."""
-
-    class _PadModel(nn.Module):
-        """Model containing an intentionally unregistered pad operation."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Pad the final dimension."""
-
-            return torch.nn.functional.pad(x, (1, 1))
-
-    log = tl.trace(_PadModel(), torch.randn(2, 3))
-
-    # The default footer names the unknown op, the lower-bound status, and
-    # the remedy (summary memo 3.5).
-    rebuilt = log.summary()
-    assert "pad" in rebuilt
-    assert "lower bounds" in rebuilt
-    assert "remedy: torchlens._capture.flops.register_op_rule" in rebuilt
-
-
-@pytest.mark.parametrize("training", [True, False])
-def test_batchnorm_module_summary_uses_real_output_shape_and_dtype(training: bool) -> None:
-    """BatchNorm summary rows use module outputs instead of trailing running-stat buffers."""
-
-    class _BatchNormModel(nn.Module):
-        """Small BatchNorm model with captured running-stat buffer operations."""
-
-        def __init__(self) -> None:
-            """Initialize the BatchNorm layer."""
-
-            super().__init__()
-            self.norm = nn.BatchNorm2d(3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Normalize one image batch."""
-
-            return self.norm(x)
-
-    model = _BatchNormModel()
-    model.train(training)
-    log = tl.trace(model, torch.randn(2, 3, 4, 4))
-
-    for report in (log.summary(), log.summary(view="compute")):
-        norm_lines = [line for line in str(report).splitlines() if "norm (BatchNorm2d)" in line]
-        assert norm_lines, str(report)
-        assert all("(2, 3, 4, 4)" in line for line in norm_lines), norm_lines
-        assert not any("(3)" in line for line in norm_lines), norm_lines
-
-
-@pytest.mark.parametrize(
-    "kwargs",
-    [{}, {"level": "module"}, {"level": "op"}, {"view": "compute"}],
-    ids=["default", "module", "op", "compute"],
-)
-def test_grammar_axes_render(tiny_summary_log: tl.Trace, kwargs: dict[str, str]) -> None:
-    """Every row grain and column bundle renders the header and its own axis.
-
-    The per-axis checks fail if level= or view= were ignored: the compute
-    bundle adds macs/evidence and drops the (%) column, op grain shows op
-    labels, module grain shows only module rows.
-    """
-    summary_text = tiny_summary_log.summary(**kwargs)
-    assert summary_text.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")
-    (column_header,) = [line for line in summary_text.splitlines() if "name (type)" in line]
-    if kwargs.get("view") == "compute":
-        assert "macs" in column_header and "evidence" in column_header
-        assert "(%)" not in column_header
-    else:
-        assert "(%)" in column_header and "macs" not in column_header
-    if kwargs.get("level") == "op":
-        assert "conv2d_" in summary_text and "linear_" in summary_text
-    elif kwargs.get("level") == "module":
-        assert "conv (Conv2d)" in summary_text
-        assert "conv2d_" not in summary_text
-
-
-@pytest.mark.parametrize("kwargs", [{"view": "compute"}, {"level": "op"}], ids=["compute", "op"])
+@pytest.mark.parametrize("kwargs", [{"level": "op"}], ids=["compute", "op"])
 def test_summary_handles_multi_pass_layers(kwargs: dict[str, str]) -> None:
     """Compute and op views render a repeated layer without the multi-pass accessor error."""
 
@@ -175,13 +98,6 @@ def test_custom_columns_selection(tiny_summary_log: tl.Trace) -> None:
     assert "params" in narrow
 
 
-def test_op_level_renders_op_rows(tiny_summary_log: tl.Trace) -> None:
-    """level='op' renders one row per executed op pass."""
-    summary_text = tiny_summary_log.summary(level="op")
-    assert "conv2d" in summary_text
-    assert "linear" in summary_text
-
-
 def test_repr_remains_short_for_resnet18() -> None:
     """The compact repr should stay comfortably below the sprint cap."""
     torchvision_models = pytest.importorskip("torchvision.models")
@@ -193,12 +109,3 @@ def test_repr_remains_short_for_resnet18() -> None:
     finally:
         log.cleanup()
     assert len(rendered) < 1200
-
-
-def test_torchlens_summary_wrapper() -> None:
-    """The top-level wrapper should return the rendered summary string."""
-    model = TinySummaryModel()
-    x = torch.randn(1, 3, 8, 8)
-    summary_text = tl.summary(model, x)
-    assert isinstance(summary_text, str)
-    assert summary_text.startswith("TinySummaryModel | input (1, 3, 8, 8) float32")

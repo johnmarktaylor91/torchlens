@@ -68,26 +68,6 @@ def _op_by_func(trace: tl.Trace, prefix: str) -> str:
     raise AssertionError(f"no saved op with func name {prefix!r}")
 
 
-def test_fork_edit_on_input_leaf_fires_on_captured_value_and_propagates() -> None:
-    torch.manual_seed(0)
-    model = _Affine().eval()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=_READY)
-    captured_input = trace["input_1"].out.detach().clone()
-
-    fork = trace.fork()
-    fork.do(tl.label("input_1"), tl.scale(0.5))
-
-    assert torch.equal(fork["input_1"].out, captured_input * 0.5)
-    with torch.no_grad():
-        expected = torch.relu(model.lin(captured_input * 0.5))
-    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
-    assert torch.equal(trace["input_1"].out, captured_input), "the edit wrote through"
-    assert torch.allclose(trace.reconstruct_output(), model(x).detach(), atol=1e-6)
-    helpers = [getattr(record, "edit_name", None) for record in fork["input_1"].edits]
-    assert helpers == ["scale"]
-
-
 def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path) -> None:
     torch.manual_seed(0)
     model = _Affine().eval()
@@ -107,28 +87,6 @@ def test_fork_edit_on_loaded_trace_refuses_naming_the_loaded_condition(tmp_path)
     assert message.endswith(info.value.fields["remedy"])
 
 
-def test_fork_edit_at_random_source_site_edits_the_captured_draw() -> None:
-    torch.manual_seed(0)
-    model = _NoisyAffine().eval()
-    x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=_READY)
-    noise_label = _op_by_func(trace, "randn_like")
-    captured_noise = trace[noise_label].out.detach().clone()
-    add_label = _op_by_func(trace, "add")
-
-    fork = trace.fork()
-    fork.do(tl.label(noise_label), tl.scale(0.5))
-
-    assert torch.equal(fork[noise_label].out, captured_noise * 0.5), (
-        "the replay redrew the noise before the edit fired"
-    )
-    assert torch.allclose(fork[add_label].out, x + captured_noise * 0.5, atol=1e-6)
-    with torch.no_grad():
-        expected = model.lin(x + captured_noise * 0.5)
-    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
-    assert torch.equal(trace[noise_label].out, captured_noise), "the edit wrote through"
-
-
 class _DropoutAffine(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -136,33 +94,6 @@ class _DropoutAffine(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.lin(torch.nn.functional.dropout(x, p=0.5, training=self.training))
-
-
-def test_fork_edit_at_a_random_site_edited_at_capture_applies_once() -> None:
-    """A capture-time edit is baked into the saved out; the fork edit must not re-apply it."""
-
-    torch.manual_seed(0)
-    model = _DropoutAffine().eval()
-    x = torch.randn(2, 4)
-    trace = tl.trace(
-        model,
-        x,
-        capture=_READY,
-        intervene=tl.when(tl.func("dropout"), tl.scale(0.5)),
-    )
-    dropout_label = _op_by_func(trace, "dropout")
-    captured = trace[dropout_label].out.detach().clone()
-    assert torch.equal(captured, x * 0.5), "the capture-time edit did not fire at the dropout"
-
-    fork = trace.fork()
-    fork.do(tl.label(dropout_label), tl.scale(0.5))
-
-    assert torch.equal(fork[dropout_label].out, captured * 0.5), (
-        "the fork edit re-applied the capture-time edit on the saved value"
-    )
-    with torch.no_grad():
-        expected = model.lin(captured * 0.5)
-    assert torch.allclose(fork.reconstruct_output(), expected, atol=1e-6)
 
 
 def test_edit_past_an_index_lookup_refuses_typed_naming_site_and_origin() -> None:

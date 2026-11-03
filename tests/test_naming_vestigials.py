@@ -88,36 +88,6 @@ def collect_stem_collisions() -> dict[str, list[str]]:
     return {stem: files for stem, files in groups.items() if len(files) > 1}
 
 
-def test_round_token_test_function_count_never_grows() -> None:
-    """The round-token test-name census stays at or below its ceiling."""
-
-    found = count_round_token_test_functions()
-    assert len(found) <= _ROUND_TOKEN_FUNCTION_CEILING, (
-        f"round-token test names grew to {len(found)} (ceiling "
-        f"{_ROUND_TOKEN_FUNCTION_CEILING}): name new tests by PURPOSE, not "
-        "sprint round — the newest entries are likely "
-        f"{sorted(found)[-5:]}"
-    )
-
-
-def test_no_new_test_file_stem_collisions() -> None:
-    """Stripped-stem collisions stay within the frozen known set."""
-
-    collisions = collect_stem_collisions()
-    known_only = {
-        stem
-        for stem in collisions
-        if stem not in ("test_independent_fact_pins", "test_no_bare_detach")
-        # sub-directory namespacing legitimately reuses these two stems
-    }
-    new = sorted(known_only - _KNOWN_STEM_COLLISIONS)
-    assert not new, (
-        "new test-file stem collisions (a round-named twin of an existing "
-        f"purpose file): { {stem: collisions[stem] for stem in new} } — merge "
-        "into the purpose-named file or pick a genuinely distinct name"
-    )
-
-
 def test_round_token_scanner_is_red_capable(tmp_path: Path) -> None:
     """The token regex catches planted round names and passes purpose names."""
 

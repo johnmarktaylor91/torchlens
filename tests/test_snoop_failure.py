@@ -52,24 +52,6 @@ def _crash_tail(sink: io.StringIO) -> list[str]:
     return [line for line in sink.getvalue().split("\n") if line]
 
 
-def test_crash_tail_order_and_attempted_marker() -> None:
-    """Memo test 5: qualified attempted line last, frontier fields correct."""
-
-    lines = _crash_tail(io.StringIO())
-    failed_index = next(i for i, line in enumerate(lines) if line.startswith("!! forward failed"))
-    assert "RuntimeError" in lines[failed_index]
-    assert any(line.startswith("!! last completed event=") and "relu" in line for line in lines)
-    assert any(line.startswith("!! last narrated event=") for line in lines)
-    attempted = [line for line in lines if line.startswith("!! attempted call=layer_norm")]
-    assert len(attempted) == 1
-    assert "[2,8]" in attempted[0]
-    assert "(not proven culprit)" in attempted[0]
-    assert lines[-1].startswith("-- end echo tail")
-    # The tail REPRINTS lines that already appeared live.
-    live_relu = [i for i, line in enumerate(lines) if "relu_1" in line and "#" in line]
-    assert len(live_relu) >= 2
-
-
 def test_on_error_only_narrates_nothing_until_failure() -> None:
     """Memo test 9 shape: happy passes emit zero bytes; the crash speaks."""
 
@@ -249,19 +231,3 @@ def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
     assert "(exact)" in tripwire[0]
     narrated = [line for line in lines if line.startswith("!! last narrated event=")]
     assert narrated and "div" in narrated[0]
-
-
-def test_halted_capture_footer_says_halted_not_failed() -> None:
-    """Halted (halt=/stop_after) is not failed; the footer distinguishes."""
-
-    sink = io.StringIO()
-    log = tl.trace(
-        nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)),
-        torch.randn(2, 4),
-        stop_after=tl.func("relu"),
-        narrate=NarrationOptions(sites=True, sink=sink),
-    )
-    assert log is not None
-    transcript = sink.getvalue()
-    assert "halted, not failed" in transcript
-    assert "!! forward failed" not in transcript

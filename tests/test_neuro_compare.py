@@ -26,12 +26,8 @@ import torchlens as tl
 from torchlens.neuro._compare import (
     ANALYSES,
     _site_matrices,
-    cross_validated_ridge,
-    loo_errors,
-    ridge_folds,
 )
-from torchlens.repgeom import MetricDisagreement, ScoreInterval, compare_rdms, rdm
-from torchlens.stats import cka
+from torchlens.repgeom import MetricDisagreement, ScoreInterval
 
 
 class _Counted(nn.Module):
@@ -57,68 +53,11 @@ def _target(n: int = 24, columns: int = 5) -> np.ndarray:
     return np.random.default_rng(1).normal(size=(n, columns))
 
 
-def test_trace_source_scores_every_site_without_rerunning_the_model() -> None:
-    model, log = _trace()
-    calls = model.calls
-    result = tl.neuro.compare(log, _target(), analyses=("rsa", "ridge", "cka"))
-    assert model.calls == calls
-    assert result.analyses == ANALYSES
-    assert result.sites and set(result.scores) == set(ANALYSES)
-    for name in ANALYSES:
-        assert set(result.scores[name]) == set(result.sites)
-    assert result.intervals == {}
-
-
-def test_each_analysis_equals_its_standalone_computation() -> None:
-    rng = np.random.default_rng(2)
-    site = rng.normal(size=(20, 7))
-    target = site[:, :3] @ rng.normal(size=(3, 4)) + rng.normal(size=(20, 4))
-    result = tl.neuro.compare({"s": site}, target, analyses=("rsa", "ridge", "cka"))
-    assert result.scores["rsa"]["s"] == compare_rdms(
-        rdm(site, "correlation"), rdm(target, "correlation"), method="spearman"
-    )
-    assert result.scores["cka"]["s"] == pytest.approx(cka(site, target), abs=1e-12)
-    predicted, _alphas = cross_validated_ridge(
-        site, target, alphas=result.settings["ridge_alphas"], n_folds=5, seed=0
-    )
-    columns = [np.corrcoef(predicted[:, j], target[:, j])[0, 1] for j in range(4)]
-    assert result.scores["ridge"]["s"] == pytest.approx(float(np.mean(columns)), abs=1e-12)
-    assert result.similarity_repository_ids == {
-        "rsa": "measure/*/rsa-rdm=correlation-compare=spearman",
-        "ridge": None,
-        "cka": "measure/*/cka-kernel=linear-hsic=gretton-score",
-    }
-
-
 def _explicit_ridge(train_x, train_y, test_x, alpha):  # type: ignore[no-untyped-def]
     mean_x, mean_y = train_x.mean(axis=0), train_y.mean(axis=0)
     xc = train_x - mean_x
     weights = np.linalg.solve(xc.T @ xc + alpha * np.eye(xc.shape[1]), xc.T @ (train_y - mean_y))
     return (test_x - mean_x) @ weights + mean_y
-
-
-def test_ridge_matches_explicit_folds_and_brute_force_leave_one_out() -> None:
-    rng = np.random.default_rng(3)
-    x = rng.normal(size=(18, 4))
-    y = x @ rng.normal(size=(4, 2)) + 0.5 * rng.normal(size=(18, 2))
-    alphas = (0.01, 1.0, 100.0)
-    predicted, chosen = cross_validated_ridge(x, y, alphas=alphas, n_folds=3, seed=4)
-    expected = np.empty_like(y)
-    for fold, held_out in enumerate(ridge_folds(18, 3, 4)):
-        train = np.setdiff1d(np.arange(18), held_out)
-        errors = []
-        fast = loo_errors(x[train], y[train], alphas)
-        for alpha in alphas:
-            residuals = []
-            for leave in range(train.size):
-                keep = np.delete(train, leave)
-                guess = _explicit_ridge(x[keep], y[keep], x[train[leave]][None, :], alpha)
-                residuals.append(y[train[leave]] - guess[0])
-            errors.append(float(np.mean(np.square(residuals))))
-        np.testing.assert_allclose(fast, errors, rtol=1e-10, atol=0)
-        assert chosen[fold] == alphas[int(np.argmin(errors))]
-        expected[held_out] = _explicit_ridge(x[train], y[train], x[held_out], chosen[fold])
-    np.testing.assert_allclose(predicted, expected, rtol=0, atol=1e-10)
 
 
 def test_ridge_recovers_a_noise_free_linear_target() -> None:

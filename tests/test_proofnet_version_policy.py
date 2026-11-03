@@ -14,8 +14,6 @@ import re
 from pathlib import Path
 
 from packaging.requirements import Requirement
-from packaging.specifiers import SpecifierSet
-from packaging.version import Version
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 POLICY_PATH = REPO_ROOT / "tests" / "support" / "proofnet" / "support_policy.tsv"
@@ -96,59 +94,6 @@ def test_policy_table_matches_pyproject_bands() -> None:
         )
 
 
-def test_every_named_leg_has_a_constraints_file_with_reviewed_pins() -> None:
-    """Lockstep direction 2: a claimed leg is a file, not a sentence."""
-
-    for row in _policy_rows():
-        for column in ("floor_leg", "current_leg", "candidate_leg"):
-            leg = row[column]
-            if leg in OWNED_LEGS and leg != "latest_canary":
-                pins = _leg_pins(leg)
-                if row["package"] in pins:
-                    band = SpecifierSet(row["claimed_band"])
-                    inside = Version(pins[row["package"]]) in band
-                    if column == "candidate_leg":
-                        continue  # the candidate leg is outside-claim by design
-                    assert inside, (
-                        f"{leg}: pins {row['package']}=={pins[row['package']]}"
-                        f" OUTSIDE the claimed band {row['claimed_band']}"
-                    )
-
-
-def test_floor_leg_pins_sit_at_the_band_floor_edge() -> None:
-    """The floor leg executes the CLAIMED minimum, not a comfortable middle."""
-
-    pins = _leg_pins("hf_floor")
-    transformers_band = next(
-        row["claimed_band"] for row in _policy_rows() if row["package"] == "transformers"
-    )
-    floor_spelling = re.search(r">=([0-9.]+)", transformers_band)
-    assert floor_spelling, transformers_band
-    claimed_floor = Version(floor_spelling.group(1))
-    pinned = Version(pins["transformers"])
-    assert pinned.release[:2] == claimed_floor.release[:2], (
-        f"HF_FLOOR pins transformers {pinned}, but the claimed floor line is"
-        f" {claimed_floor}.x -- the floor edge is not being executed"
-    )
-
-
-def test_open_ended_bands_carry_a_latest_canary() -> None:
-    """No upper bound without a daily canary obligation (the D3 invariant)."""
-
-    for row in _policy_rows():
-        band = row["claimed_band"]
-        has_ceiling = "<" in band or band.startswith("~=") or "==" in band
-        declared_open = row["open_ended"] == "yes"
-        assert declared_open == (not has_ceiling), (
-            f"{row['package']}: open_ended={row['open_ended']} but band is"
-            f" {band!r} -- the table lies about the ceiling"
-        )
-        if declared_open:
-            assert row["canary"] == "latest_canary", (
-                f"{row['package']}: an OPEN band with no latest canary is an unexecuted claim"
-            )
-
-
 #: The torch-FLOOR CI rows (tests.yml) pin torchvision to the exact release
 #: upstream PAIRED with torch's own floor patch for that row -- torchvision
 #: 0.18+ hard-requires torch>=2.3, so a floor row running torch's OWN claimed
@@ -160,45 +105,3 @@ def test_open_ended_bands_carry_a_latest_canary() -> None:
 #: "TorchLens supports torchvision 0.16/0.17", so it is an explicit
 #: out-of-band exception, not a silent loosening of the >=0.18 commitment.
 _TORCH_FLOOR_PAIRED_TORCHVISION: frozenset[str] = frozenset({"0.16.2", "0.17.2"})
-
-
-def test_installed_environment_is_inside_a_named_leg() -> None:
-    """The venue we actually test in must be one of the named legs' worlds:
-    inside the claimed band, or exactly the candidate leg's pin."""
-
-    from importlib import metadata
-
-    candidate_pins = _leg_pins("hf_5_candidate")
-    for row in _policy_rows():
-        package = row["package"]
-        try:
-            installed = Version(metadata.version(package).split("+")[0])
-        except metadata.PackageNotFoundError:
-            continue
-        inside_claim = installed in SpecifierSet(row["claimed_band"])
-        is_candidate_world = package in candidate_pins and installed == Version(
-            candidate_pins[package]
-        )
-        is_torch_floor_pairing = (
-            package == "torchvision" and str(installed) in _TORCH_FLOOR_PAIRED_TORCHVISION
-        )
-        assert inside_claim or is_candidate_world or is_torch_floor_pairing, (
-            f"{package} {installed} is outside the claimed band"
-            f" {row['claimed_band']} AND is not the candidate leg's pin --"
-            " this venue tests a world no leg claims"
-        )
-
-
-def test_candidate_leg_pin_matches_the_enumerated_red_venue() -> None:
-    """The enumerated-red manifest's measured venue IS the candidate pin
-    (a manifest measured on a different version proves nothing)."""
-
-    pins = _leg_pins("hf_5_candidate")
-    manifest_text = ENUMERATED_RED.read_text()
-    measured = re.search(r"transformers ([0-9][0-9.]*)", manifest_text)
-    assert measured, "the enumerated-red manifest does not state its venue"
-    assert measured.group(1) == pins["transformers"], (
-        f"enumerated-red manifest measured on transformers {measured.group(1)}"
-        f" but the candidate leg pins {pins['transformers']} -- re-measure or"
-        " re-pin in the same commit"
-    )

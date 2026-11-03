@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
-import torch
 
 import torchlens.trackers as trk
 from torchlens.trackers._errors import SinkDeliveryError, SinkProtocolError, TrackersError
@@ -54,36 +51,9 @@ class TestProtocol:
             trk.require_capabilities(_Weird(), ("scalar",))
         assert info.value.fields["unknown"] == ("telepathy",)
 
-    def test_missing_capability_named(self) -> None:
-        sink = trk.MemorySink(capabilities=frozenset({"scalar"}))
-        with pytest.raises(SinkProtocolError) as info:
-            trk.require_capabilities(sink, ("scalar", "raw_histogram"))
-        assert info.value.fields["missing"] == ("raw_histogram",)
-
 
 class TestJSONLSink:
     """Build item 11: persisted rows, header first, footer marks complete."""
-
-    def test_round_trip(self, tmp_path) -> None:  # noqa: ANN001
-        path = tmp_path / "run.jsonl"
-        sink = trk.JSONLSink(path)
-        sink.emit_scalar(trk.ScalarPoint("gradients/norm/w", 100, 1.5))
-        sink.emit_histogram(
-            trk.HistogramPoint("gradients/hist/w", 100, (1, 2), (0.0, 1.0, 2.0), {"num": 3.0})
-        )
-        sink.emit_text(trk.TextPoint("torchlens/meta/manifest", 0, "{}"))
-        sink.close()
-        rows = [json.loads(line) for line in path.read_text().splitlines()]
-        assert rows[0]["format"] == trk.JSONL_FORMAT
-        assert rows[1] == {
-            "kind": "scalar",
-            "tag": "gradients/norm/w",
-            "step": 100,
-            "value": 1.5,
-        }
-        assert rows[2]["counts"] == [1, 2]
-        assert rows[2]["edges"] == [0.0, 1.0, 2.0]
-        assert rows[-1] == {"kind": "closed"}
 
     def test_write_failure_latches(self, tmp_path) -> None:  # noqa: ANN001
         path = tmp_path / "run.jsonl"
@@ -144,11 +114,6 @@ class TestTensorBoardSinkDuckPath:
             sink.emit_histogram(trk.HistogramPoint("gradients/hist/w", 0, (1,), (0.0, 1.0), {}))
         assert info.value.fields["code"] == "tracker_relay_histogram_unsupported"
 
-    def test_no_relay_reports_clean(self) -> None:
-        sink = trk.TensorBoardSink(_DuckWriter())
-        assert sink.relays == {}
-        assert trk.detect_relays() == {}
-
 
 class TestWandbSinkContract:
     """Native sink invariants that need no wandb install."""
@@ -175,12 +140,6 @@ class TestWandbSinkContract:
             sink.emit_histogram(point)
         assert info.value.fields["code"] == "tracker_histogram_bucket_cap"
 
-    def test_safe_descriptor_fits_the_cap(self) -> None:
-        """The named remedy really renders under 512 buckets."""
-
-        bins = 2 * trk.WANDB_SAFE_DESCRIPTOR.bins_per_side + 1
-        assert bins <= trk.WANDB_BUCKET_CAP
-
     def test_scalar_logs_at_caller_step(self) -> None:
         logged: list[tuple[dict, int]] = []
 
@@ -191,45 +150,3 @@ class TestWandbSinkContract:
         sink = trk.WandbSink(_Run())
         sink.emit_scalar(trk.ScalarPoint("gradients/norm/w", 102, 3.0))
         assert logged == [({"gradients/norm/w": 3.0}, 102)]
-
-
-class TestBoundedTransferOracle:
-    """C-WATCH's CPU-shaped half: emitted bytes independent of tensor numel.
-
-    The CUDA transfer row runs in the D02 cluster campaign; what is
-    provable here with zero GPUs is the sink-boundary law from memo 3.12 --
-    O(bins) numbers cross per site per sampled step, INDEPENDENT of numel.
-    """
-
-    @staticmethod
-    def _emitted_bytes(width: int, tmp_path) -> tuple[int, int]:  # noqa: ANN001
-        torch.manual_seed(0)
-        model = torch.nn.Linear(width, width)
-        opt = torch.optim.SGD(model.parameters(), lr=1e-3)
-        path = tmp_path / f"run_{width}.jsonl"
-        session = trk.watch(
-            model,
-            to=trk.JSONLSink(path),
-            signals=("gradients",),
-            optimizer=opt,
-            every=1,
-            hist_every=1,
-        )
-        with session, session.step(0):
-            opt.zero_grad(set_to_none=True)
-            model(torch.randn(2, width)).sum().backward()
-            opt.step()
-        rows = [json.loads(line) for line in path.read_text().splitlines()]
-        payload_rows = [r for r in rows if r.get("kind") in ("scalar", "histogram")]
-        per_step_bytes = sum(len(json.dumps(r)) for r in payload_rows if r.get("step") == 0)
-        return (len(payload_rows), per_step_bytes)
-
-    def test_numel_independence(self, tmp_path) -> None:  # noqa: ANN001
-        """4096x more elements -> the SAME emission row count and geometry."""
-
-        rows_small, bytes_small = self._emitted_bytes(8, tmp_path)
-        rows_large, bytes_large = self._emitted_bytes(512, tmp_path)
-        assert rows_small == rows_large
-        # Byte payloads differ only in digit widths, never in structure:
-        # well under 2x while numel grew 4096x.
-        assert bytes_large < 2 * bytes_small

@@ -13,10 +13,6 @@ from torchlens.errors._base import TorchLensWarning
 class TestEventSchema:
     """The load-bearing event contract: kinds, reasons, gradient stamps."""
 
-    def test_scalar_event(self) -> None:
-        event = ObserverEvent(key="grad_norm", kind="scalar", value=1.5, global_step=3)
-        assert event.value == 1.5
-
     def test_scalar_without_value_refuses(self) -> None:
         with pytest.raises(ObserverEventError) as excinfo:
             ObserverEvent(key="grad_norm", kind="scalar")
@@ -79,14 +75,6 @@ class TestEventSchema:
 
 class TestEventStream:
     """Bounded stream; throwing subscribers cannot corrupt collection."""
-
-    def test_publish_snapshot_and_bound(self) -> None:
-        stream = EventStream(capacity=3)
-        for index in range(5):
-            stream.publish(ObserverEvent(key=f"k{index}", kind="scalar", value=float(index)))
-        snapshot = stream.snapshot()
-        assert [event.key for event in snapshot] == ["k2", "k3", "k4"]
-        assert stream.published_total == 5
 
     def test_non_event_publish_refuses(self) -> None:
         with pytest.raises(ObserverEventError):

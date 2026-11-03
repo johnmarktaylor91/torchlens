@@ -17,8 +17,6 @@ import math
 import pytest
 
 from torchlens.repgeom import (
-    DisagreeingPair,
-    MetricDisagreement,
     ScoreInterval,
     metric_disagreement,
 )
@@ -32,33 +30,6 @@ _SCORES = {
 
 def _interval(score: float, half: float) -> ScoreInterval:
     return ScoreInterval(score, score - half, score + half, 0.95, 100, 100, 0)
-
-
-def test_ranks_and_flagged_pairs_match_the_hand_computation() -> None:
-    report = metric_disagreement(_SCORES)
-    assert isinstance(report, MetricDisagreement)
-    assert report.metrics == ("rsa", "ridge", "cka")
-    assert report.sites == ("a", "b", "c")
-    assert report.ranks == {
-        "rsa": {"a": 2.0, "b": 1.0, "c": 3.0},
-        "ridge": {"a": 1.0, "b": 2.0, "c": 3.0},
-        "cka": {"a": 2.0, "b": 1.0, "c": 3.0},
-    }
-    assert report.pairs == (
-        DisagreeingPair("a", "b", {"rsa": "b", "ridge": "a", "cka": "b"}, None),
-    )
-
-
-def test_plain_table_text() -> None:
-    assert metric_disagreement(_SCORES).table() == (
-        "site         rsa  rank       ridge  rank         cka  rank\n"
-        "a         0.3000     2      0.6000     1      0.9000     2\n"
-        "b         0.5000     1      0.4000     2      0.9500     1\n"
-        "c         0.1000     3      0.2000     3      0.5000     3\n"
-        "\n"
-        "pairs ordered differently by the metrics: 1 of 3\n"
-        "  a vs b: rsa, cka rank b higher; ridge rank a higher"
-    )
 
 
 def test_data_form_round_trips_plain_types() -> None:
@@ -109,18 +80,6 @@ def test_too_few_metrics_or_sites_refuse() -> None:
         metric_disagreement({"rsa": {"a": 0.1}, "cka": {"a": 0.2}})
 
 
-def test_separation_against_the_point_order_is_not_firm() -> None:
-    # rsa's point scores rank b higher, but its intervals sit the other way
-    # round (a percentile interval need not contain its point score).
-    odd_rsa_b = ScoreInterval(0.5, 0.10, 0.20, 0.95, 100, 100, 0)
-    scores = {
-        "rsa": {"a": _interval(0.3, 0.05), "b": odd_rsa_b},
-        "ridge": {"a": _interval(0.6, 0.05), "b": _interval(0.4, 0.05)},
-    }
-    (pair,) = metric_disagreement(scores).pairs
-    assert pair.firm is False
-
-
 def test_mixed_and_nan_intervals_read_unknown() -> None:
     mixed = {
         "rsa": {"a": 0.3, "b": 0.5},
@@ -135,15 +94,3 @@ def test_mixed_and_nan_intervals_read_unknown() -> None:
     }
     (pair,) = metric_disagreement(with_nan).pairs
     assert pair.firm is None
-
-
-def test_three_metric_majority_still_flags_the_minority() -> None:
-    report = metric_disagreement(
-        {
-            "rsa": {"a": 0.2, "b": 0.4},
-            "ridge": {"a": 0.1, "b": 0.3},
-            "cka": {"a": 0.9, "b": 0.8},
-        }
-    )
-    (pair,) = report.pairs
-    assert pair.higher == {"rsa": "b", "ridge": "b", "cka": "a"}

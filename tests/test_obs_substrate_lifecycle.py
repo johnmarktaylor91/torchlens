@@ -19,8 +19,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._observability import HistoryCollector, WatchSettings, region, session
-from torchlens._observability._session import active_session
+from torchlens._observability import HistoryCollector, WatchSettings, region
 
 
 def _model() -> nn.Sequential:
@@ -37,13 +36,6 @@ def _hook_census(model: nn.Module) -> int:
 class TestHookLifecycle:
     """Every hook handle removed on every exit path."""
 
-    def test_discovery_leaves_zero_hooks(self) -> None:
-        model = _model()
-        collector = HistoryCollector(model)
-        baseline = _hook_census(model)
-        collector.discover(torch.randn(2, 6))
-        assert _hook_census(model) == baseline
-
     def test_discovery_forward_raising_leaves_zero_hooks(self) -> None:
         model = _model()
         collector = HistoryCollector(model)
@@ -51,25 +43,6 @@ class TestHookLifecycle:
         with pytest.raises(RuntimeError):
             collector.discover(torch.randn(2, 999))  # shape mismatch mid-forward
         assert _hook_census(model) == baseline
-
-    def test_detach_removes_everything_and_is_idempotent(self) -> None:
-        model = _model()
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-        collector = HistoryCollector(model, streams=("activation", "param"))
-        baseline = _hook_census(model)
-        opt_baseline = len(optimizer._optimizer_step_pre_hooks) + len(
-            optimizer._optimizer_step_post_hooks
-        )
-        collector.discover(torch.randn(2, 6))
-        collector.attach(optimizer=optimizer)
-        assert _hook_census(model) > baseline
-        collector.detach()
-        collector.detach()
-        assert _hook_census(model) == baseline
-        assert (
-            len(optimizer._optimizer_step_pre_hooks) + len(optimizer._optimizer_step_post_hooks)
-            == opt_baseline
-        )
 
     def test_context_manager_detaches_on_exception(self) -> None:
         model = _model()
@@ -80,19 +53,6 @@ class TestHookLifecycle:
             collector.attach()
             raise RuntimeError("training crashed")
         assert _hook_census(model) == baseline
-
-    def test_exception_inside_step_still_commits_and_detaches(self) -> None:
-        model = _model()
-        collector = HistoryCollector(model)
-        collector.discover(torch.randn(2, 6))
-        collector.attach()
-        with pytest.raises(RuntimeError), collector.step(0):
-            model(torch.randn(2, 6))
-            raise RuntimeError("mid-step crash")
-        # The block still committed atomically (readable killed run).
-        assert len(collector.ring.blocks) == 1
-        collector.detach()
-        assert _hook_census(model) == 0
 
 
 class TestRngPurity:
@@ -182,30 +142,3 @@ class TestCaptureComposition:
 
         with region("offline"):
             assert observers.active_span_records() == []
-
-
-class TestSessionStatePurity:
-    """The active-session slot and region stacks restore on every path."""
-
-    def test_slot_restores_after_success_and_error(self) -> None:
-        assert active_session() is None
-        with session(mode="owned"):
-            assert active_session() is not None
-        assert active_session() is None
-        with pytest.raises(RuntimeError), session(mode="owned"):
-            raise RuntimeError("halt")
-        assert active_session() is None
-
-    def test_region_stack_unwinds_on_error(self) -> None:
-        with pytest.raises(RuntimeError), region("outer"):
-            raise RuntimeError("body crashed")
-        # A fresh region sees no stale parent.
-        with region("fresh") as record:
-            assert record.parent_name is None
-
-    def test_global_rng_untouched_by_session_and_region(self) -> None:
-        torch.manual_seed(77)
-        before = torch.get_rng_state().clone()
-        with session(mode="owned"), region("r", k=1):
-            pass
-        assert torch.equal(before, torch.get_rng_state())

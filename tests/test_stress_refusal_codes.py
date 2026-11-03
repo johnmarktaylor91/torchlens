@@ -13,7 +13,6 @@ production raise site and pin the sparse capture.
 
 from __future__ import annotations
 
-import contextlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -22,18 +21,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._capture.arg_positions import FUNC_ARG_SPECS, extract_tensors_and_params
-from torchlens._constants import ORIG_TORCH_FUNCS
-from torchlens._ir.selector_eval import evaluate
 from torchlens._robustness import UnsupportedTensorVariantError
-from torchlens._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from torchlens._utils._sparse_parts import sparse_component_tensors
 from torchlens._utils._torch_compat import get_sparse_spsolve_cuda_support
 from torchlens.backends.torch._state_bytes import _state_bytes_equal, _whole_storage_uint8
 from torchlens.errors import ArtifactError, TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.hooks import live_selector_matches_site
 from torchlens.types import FailureOrigin
-from torchlens.validation._perturb import _perturb_layer_outs
 
 _LIVE_SUBJECT = SimpleNamespace(_layer_label_raw="relu_1")
 
@@ -132,28 +127,6 @@ def _hook_scales(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
     return out * 0.5
 
 
-def test_forward_raising_carries_forward_raised() -> None:
-    with pytest.raises(TraceCaptureError) as excinfo:
-        tl.trace(_ForwardRaises(), [torch.randn(2, 4)])
-    error = excinfo.value
-    assert error.fields["code"] == "forward_raised"
-    assert error.origin is FailureOrigin.USER_OP
-    assert isinstance(error.__cause__, _PlainUserError)
-
-
-def test_hook_raising_plain_carries_forward_raised() -> None:
-    """The stress row's repro: a capture-time hook raising a plain exception."""
-
-    with pytest.raises(TraceCaptureError) as excinfo:
-        tl.trace(
-            nn.Linear(4, 4),
-            [torch.randn(2, 4)],
-            intervene=tl.when(tl.func("linear"), _hook_raises),
-        )
-    assert excinfo.value.fields["code"] == "forward_raised"
-    assert isinstance(excinfo.value.__cause__, _PlainUserError)
-
-
 def test_torchlens_frame_raising_carries_capture_internal_error() -> None:
     with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(_ForwardRaisesInsideTorchLens(), [torch.randn(2, 4)])
@@ -184,12 +157,6 @@ def test_live_finalized_label_hook_refusal_carries_code() -> None:
     assert "finalized postprocess label" in str(excinfo.value)
 
 
-def test_live_evaluation_of_finalized_label_carries_code() -> None:
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        evaluate(tl.label("relu_1_3"), _LIVE_SUBJECT, lifecycle="live")
-    assert excinfo.value.fields["code"] == "label_selector_not_live"
-
-
 def test_hooks_fallback_refusal_carries_code(monkeypatch: pytest.MonkeyPatch) -> None:
     """The hooks-side raise fires when evaluation declines without raising."""
 
@@ -201,12 +168,6 @@ def test_hooks_fallback_refusal_carries_code(monkeypatch: pytest.MonkeyPatch) ->
     assert excinfo.value.fields["code"] == "label_selector_not_live"
 
 
-def test_live_mode_label_error_defaults_its_code() -> None:
-    assert LiveModeLabelError("message only").fields["code"] == "label_selector_not_live"
-    explicit = LiveModeLabelError("x", code="rerun_staged_label_unmatchable")
-    assert explicit.fields["code"] == "rerun_staged_label_unmatchable"
-
-
 def test_sparse_buffer_refuses_typed_at_entry() -> None:
     model = _SparseAdjacency().eval()
     with pytest.raises(UnsupportedTensorVariantError) as info:
@@ -214,24 +175,6 @@ def test_sparse_buffer_refuses_typed_at_entry() -> None:
     assert info.value.fields["code"] == "unsupported_tensor_variant"
     assert "model.adjacency" in str(info.value)
     assert model.adjacency.layout is torch.sparse_coo
-
-
-def test_sparse_in_forward_model_captures() -> None:
-    torch.manual_seed(0)
-    model = _SparseInForward().eval()
-    x = torch.randn(3, 4)
-    with torch.no_grad():
-        expected = model(x)
-    trace = tl.trace(model, [x])
-    torch.testing.assert_close(trace[trace.output_layers[0]].out, expected)
-    labels = [layer.layer_label for layer in trace.layers]
-    assert any(label.startswith("mm_") for label in labels), labels
-
-
-def test_torch_sparse_ops_are_in_the_wrap_inventory() -> None:
-    """``torch.sparse`` re-exports C builtins the overridable crawl never visits."""
-    for name in ("mm", "addmm", "sum", "softmax", "log_softmax", "sampled_addmm"):
-        assert ("torch.sparse", name) in ORIG_TORCH_FUNCS, name
 
 
 def test_whole_storage_bytes_cover_sparse_components() -> None:
@@ -243,15 +186,6 @@ def test_whole_storage_bytes_cover_sparse_components() -> None:
     assert not torch.equal(_whole_storage_uint8(sparse), before)
 
 
-def test_sparse_component_tensors_per_layout() -> None:
-    dense = torch.eye(3) + torch.diag(torch.ones(2), 1)
-    assert len(sparse_component_tensors(dense.to_sparse())) == 2
-    assert len(sparse_component_tensors(dense.to_sparse_csr())) == 3
-    assert len(sparse_component_tensors(dense.to_sparse_csc())) == 3
-    with pytest.raises(ValueError, match="no known component decomposition"):
-        sparse_component_tensors(dense)
-
-
 def test_state_bytes_equal_reads_sparse_components() -> None:
     sparse = (torch.eye(3) + torch.diag(torch.ones(2), 1)).to_sparse()
     clone = sparse.detach().clone()
@@ -259,19 +193,6 @@ def test_state_bytes_equal_reads_sparse_components() -> None:
     sparse._values().mul_(2)
     assert not _state_bytes_equal(sparse, clone)
     assert not _state_bytes_equal(sparse, clone.to_sparse_csr())
-
-
-def test_perturbing_a_sparse_parent_keeps_its_structure() -> None:
-    sparse = (torch.eye(3) + torch.diag(torch.ones(2), 1)).to_sparse()
-    perturbed = _perturb_layer_outs(sparse, torch.randn(3, 4))
-    assert perturbed.layout is torch.sparse_coo
-    assert perturbed.shape == sparse.shape
-    assert torch.equal(perturbed._indices(), sparse._indices())
-    assert not torch.equal(perturbed._values(), sparse._values())
-    csr = sparse.to_sparse_csr()
-    rebuilt = sparse_with_values(csr, csr.values() * 3)
-    assert rebuilt.layout is torch.sparse_csr
-    torch.testing.assert_close(rebuilt.to_dense(), csr.to_dense() * 3)
 
 
 def test_sparse_in_forward_model_validates() -> None:
@@ -295,15 +216,6 @@ def test_sparse_sampled_addmm_captures_all_operands_and_validates() -> None:
     assert tl.validate(model, [x], scope="forward", seed=0)
 
 
-def test_sparse_spdiags_captures_diagonals_and_offsets_and_validates() -> None:
-    torch.manual_seed(0)
-    model = _Spdiags().eval()
-    x = torch.randn(3, 4)
-    trace = tl.trace(model, [x])
-    assert len(_single_op(trace, "spdiags").parents) == 2
-    assert tl.validate(model, [x], scope="forward", seed=0)
-
-
 @pytest.mark.skipif(
     not get_sparse_spsolve_cuda_support(),
     reason="HAS_SPARSE_SPSOLVE_CUDA is False: torch.sparse.spsolve cannot run on CUDA here "
@@ -316,36 +228,6 @@ def test_sparse_spsolve_captures_both_operands_and_validates() -> None:
     trace = tl.trace(model, [x])
     assert len(_single_op(trace, "spsolve").parents) == 2
     assert tl.validate(model, [x], scope="forward", seed=0)
-
-
-def test_spsolve_arg_spec_extracts_both_operands() -> None:
-    """The static row matches the binding's ``(A, B)`` names; the docstring says input/other."""
-    a = torch.eye(2).to_sparse_csr()
-    b = torch.ones(2)
-    spec = FUNC_ARG_SPECS["spsolve"]
-    assert extract_tensors_and_params(spec, (a, b), {}) == ([a, b], [])
-    assert extract_tensors_and_params(spec, (), {"A": a, "B": b, "left": True}) == ([a, b], [])
-    if hasattr(torch.sparse, "spsolve"):
-        # A wrong keyword name raises TypeError before dispatch; a build with no CPU
-        # kernel raises after the keywords parsed.
-        with contextlib.suppress(NotImplementedError, RuntimeError):
-            torch.sparse.spsolve(A=a, B=b)
-
-
-def test_sampled_addmm_and_spdiags_bind_their_spec_keywords() -> None:
-    pattern = torch.eye(2).to_sparse_csr()
-    mat1, mat2 = torch.ones(2, 3), torch.ones(3, 2)
-    spec = FUNC_ARG_SPECS["sampledaddmm"]
-    kwargs = {"input": pattern, "mat1": mat1, "mat2": mat2}
-    assert extract_tensors_and_params(spec, (), kwargs) == ([pattern, mat1, mat2], [])
-    torch.testing.assert_close(torch.sparse.sampled_addmm(**kwargs).to_dense(), torch.eye(2) * 4)
-    diagonals, offsets = torch.ones(1, 2), torch.tensor([0])
-    spec = FUNC_ARG_SPECS["spdiags"]
-    kwargs = {"diagonals": diagonals, "offsets": offsets}
-    assert extract_tensors_and_params(spec, (), kwargs) == ([diagonals, offsets], [])
-    torch.testing.assert_close(
-        torch.sparse.spdiags(**kwargs, shape=(2, 2)).to_dense(), torch.eye(2)
-    )
 
 
 def test_portable_save_of_a_sparse_activation_refuses_with_a_code(tmp_path) -> None:

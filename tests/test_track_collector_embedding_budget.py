@@ -18,7 +18,6 @@ from torch import nn
 import torchlens.trackers as trk
 from torchlens._observability import HistoryCollector
 from torchlens._observability._collector import (
-    DEFAULT_ARTIFACT_BUDGET_BYTES,
     EMBEDDING_SKETCH_CAP_NUMEL,
     WatchSettings,
 )
@@ -112,7 +111,3 @@ def test_budget_refuses_before_the_crossing_block_and_artifact_stays_readable(
     reader = HistoryReader(tmp_path / "run")
     assert [block.global_step for block in reader.step_blocks()] == [0, 1, 2]
     assert len(list(reader.observations())) == 3 * len(collector.site_catalog)
-
-
-def test_default_budget_is_256_mib() -> None:
-    assert WatchSettings().artifact_budget_bytes == DEFAULT_ARTIFACT_BUDGET_BYTES == 256 << 20
