@@ -119,6 +119,30 @@ def test_import_contracts_run_with_the_dev_extra(tmp_path: Path) -> None:
     assert "0 kept, 1 broken" in broken.message
 
 
+def test_import_contracts_find_the_tool_without_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unactivated venv (empty PATH) still runs the contracts from the interpreter's bin."""
+
+    empty = tmp_path / "empty-path"
+    empty.mkdir()
+    monkeypatch.setenv("PATH", str(empty))
+    kept = layering.check_contracts(_contract_repo(tmp_path / "kept", "low", "high"))
+    assert kept.status == "ok", kept
+    assert "1 kept, 0 broken" in kept.message
+
+
+def test_import_contracts_fail_when_the_module_has_no_executable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """importlinter importable but lint-imports missing is a FAIL, never a skip."""
+
+    monkeypatch.setattr(layering, "_lint_imports_executable", lambda: None)
+    outcome = layering.check_contracts(_contract_repo(tmp_path / "kept", "low", "high"))
+    assert outcome.failed, outcome
+    assert "no lint-imports executable" in outcome.message
+
+
 def test_file_cap_allowlist_ratchet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _fixture(tmp_path, {"largest_scc": 2, "in_function_internal_imports": 3}, 7)
     monkeypatch.setattr(file_cap, "FILE_CAP", 4)
