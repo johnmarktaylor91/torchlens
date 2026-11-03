@@ -56,6 +56,15 @@ def validate_tlspec(
         If a unified manifest file is missing.
     torchlens.errors.ArtifactTooOldError
         If the artifact is a portable ModelLog bundle of torchlens 2.16.
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = os.path.join(tmp, "run.tlspec")
+    ...     _ = tl.trace(model, x).save(path)
+    ...     print(tl.validation.validate_tlspec(path))
+    None
     """
 
     from ..io import detect_tlspec_format, inspect_tlspec

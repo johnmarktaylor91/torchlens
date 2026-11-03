@@ -52,6 +52,13 @@ class MetadataInvariantError(_ActionableErrorMixin, ValidationError, ValueError)
     ``_ActionableErrorMixin`` supplies ``__reduce__`` so the strict two-argument
     constructor survives pickle/deepcopy/process boundaries (R64-F1) instead of
     degrading to a bare ``TypeError`` when ``cls(*args)`` is replayed.
+
+    Examples
+    --------
+    >>> issubclass(MetadataInvariantError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(MetadataInvariantError, ValueError)
+    True
     """
 
     def __init__(self, check_name: str, message: str, *, code: str | None = None) -> None:
