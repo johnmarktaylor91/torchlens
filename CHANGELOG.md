@@ -485,6 +485,16 @@
   assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
   created by differentiating an inferred-order node sit one order above it. The invariant is
   unchanged.
+- **backward**: a backward pass or `torch.autograd.grad` run inside forward now pairs the GradFn
+  of every captured op it walked with that op (`GradFn.has_op` is True).
+  The walk runs before any layer exists, so every GradFn was left unpaired; the projection rebuild
+  now pairs these discoveries once the final layers are known. Order inference applies to paired
+  nodes as it does to unpaired ones, so the GradFn orders of a second-order gradient inside forward
+  match those of the same math run after the trace.
+- **runnable**: bind checks a direct version alias's recorded shape and dtype against the value it
+  binds, as it already did for the producer slot. A crafted `.tlspec` whose alias recorded a
+  different shape or dtype bound the producer's value unchecked; it now raises
+  `PathDivergenceError` with `OUTPUT_SHAPE_MISMATCH` or `OUTPUT_DTYPE_MISMATCH` naming the alias.
 - **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
   gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
   op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start
