@@ -25,6 +25,11 @@
   because the allocator hook costs 1.7x-2.5x total capture time. Never assert `forward_peak_memory
   > 0` (or not None) on the default path; a test that needs a CPU number opts in.
   `backward_peak_memory` is the largest pass peak on CPU, not a sum.
+- ATen rows are opt-in: a default capture installs no dispatch mode, `trace.has_aten_ops` is
+  `False`, and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError` (`aten_ops_unavailable`) rather than returning an empty tuple. Pass
+  `capture=tl.options.CaptureOptions(aten_ops=True)`; the switch is a session knob (not persisted,
+  inherited by `run()` refreshes, fast or not) while the recorded rows persist.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
@@ -270,3 +275,13 @@
   identity after each run; every other module stays on hooks. A direct call no capture
   marked (no capture of the model made one, or the flag is False) is still refused as
   `run_capability_unavailable` at stage `fast_live_module_hook_unobserved`.
+- **Foreign data round trips link every compatible departure.** After a plain-code
+  `.numpy()` / `__array__` / `__dlpack__` / `to_dlpack` / `.tolist()` export, a later host
+  constructor with no tensor argument that matches no departure by memory or by value is
+  recorded as an `unresolved` `foreigndata` op with every compatible departure as a parent
+  (buffer arguments link all departures; list and scalar arguments link `tolist` departures
+  only) and validation fails it with `foreign_data_roundtrip_unreplayable`. A genuine constant
+  built after such an export therefore fails validation by design: build it before the
+  forward or wrap the foreign step in an `autograd.Function`. `.item()`, `int()`, `float()`
+  and `bool()` are control-flow scalars under the completeness witness's scalar belt and are
+  deliberately not departures.

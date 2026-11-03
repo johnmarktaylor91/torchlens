@@ -187,6 +187,7 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     # process facts of the capturing run; load restores the default.
     "track_device_memory": FieldPolicy.DROP,
     "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
+    "_options_aten_ops": FieldPolicy.DROP,  # session knob
     "_device_memory_samples": FieldPolicy.DROP,
     "annotations": FieldPolicy.KEEP,
     "_provenance_observer_spans": FieldPolicy.KEEP,

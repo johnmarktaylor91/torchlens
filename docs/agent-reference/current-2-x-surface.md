@@ -92,7 +92,8 @@
   re-enables grad (`torch.enable_grad()` inside it) and an output carries autograd history;
   an explicit `inference_only=True` is never cleared.
   A backward run through such a capture records the ATen calls it dispatched on
-  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE), and
+  `BackwardPass.aten_ops` (session-time, DOCUMENTED-UNSTABLE; the per-op rows behind
+  `Trace.aten_ops` / `Op.aten_ops` need `CaptureOptions(aten_ops=True)`), and
   `tl.report.backward_status(trace)` counts them: `executed_flops` is exact for the matmul
   and convolution families at fma2 (FlopCounterMode's convention), per pass in
   `executed_flops_per_pass`, with every other recorded op kind named in `uncounted_ops`.
@@ -550,6 +551,16 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
+  installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
+  and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
+  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
+  op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
+  observe (empty when complete). With the switch off nothing is installed and every accessor
+  except `has_aten_ops` raises `tl.errors.AtenOpsUnavailableError` (`aten_ops_unavailable`),
+  naming the switch; `run()` refreshes inherit the knob, `run(fast=True)` results and non-torch
+  backends record nothing. GPU kernel recording is out of scope.
   `CaptureOptions(measure_python_peak_memory=True)` additionally folds in a `tracemalloc`
   Python-allocation peak, which stays positive for tiny models. It is OFF by default because
   the allocator hook costs 1.7x-2.5x total capture time on real CNNs/ViTs. The flag is a
@@ -685,8 +696,8 @@
   Files saved by torchlens 2.x: a manifest stamp or Trace state stamp older than the current
   `tlspec_version`, a pickled 2.x module path, or the 2.16 ModelLog format refuses at
   `tl.load` with the typed `tl.errors.ArtifactTooOldError` ("saved by torchlens 2.x"; the
-  remedy names 2.36.x and re-capture). There is no reader, ledger or migration. Legacy 2.16
-  intervention specs remain loadable — the refusal covers Trace rehydration only. WRITE/READ SYMMETRY (W051-IO): the
+  remedy: load it with 2.36.x, or capture again). There is no reader, ledger or migration. The
+  2.16 intervention spec format (`format_version` 1) refuses the same way. WRITE/READ SYMMETRY (W051-IO): the
   save path dry-runs the exact `metadata.pkl` bytes through the loader's default-deny
   unpickler before writing — an unportable value refuses typed (`annotation_value_unportable`
   naming the key path / `metadata_value_unportable`), tensors under annotations (incl.
@@ -959,7 +970,9 @@
   refuses `slice_save_unsupported`; `__selection__` lifts the member family
   back into the algebra (slices compose and feed `do()`).
   `trace.subgraph(selection)` is the general door presenting ANY ACT region
-  as the same view. Session-time only; never persisted.
+  as the same view. Session-time only; never persisted. Doc of record for what the
+  algebra can and cannot express (completeness, necessity of the closure producers):
+  `docs/reference/selection_completeness.md`.
   `torchlens/_selection/compare.py`).
   CROSS-RUN (L6 stage 4a; DOCUMENTED-UNSTABLE): `resolved.align_to(target)`
   re-binds an ACT selection onto another trace keyed on the L1 structural
@@ -1097,17 +1110,6 @@
   `torchlens._ir.events.BackwardPassEnd.close_path` disclosure is sidecar-event-only in wave 2.
   GROUPED FLOOR -- `trace.grad_fn_site_summary` rolls backward facts up per
   L1 site_key (read-only; keyless legacy refuses `site_key_unavailable`).
-- PREDICATE RUNTIME EXTENSION POINT (S4 seam; every spelling
-  DOCUMENTED-UNSTABLE pending naming-session ratification):
-  `torchlens._ir.predicate_registry` is the ONE documented door through which
-  predicate consumers accept user predicates for the capture-lifecycle
-  `save`/`halt`/`until` slots (`PredicateProtocol` — one positional concrete
-  `RecordContext`; `coerce_predicate(value, slot=...)` — raw callables incl.
-  `BaseSelector` instances returned BY IDENTITY, registered names via a
-  slot-aware enforcing wrapper; `register_predicate(name)` — mutates nothing
-  on the user's object, stamps no loader-consulted attribute). The registry
-  is INERT until consumers adopt name acceptance. `intervene=`/grad slots are
-  outside the contract. Contract: `docs/reference/predicate_runtime.md`.
 - NETRON EXPORT v2 (F14; every kwarg spelling DOCUMENTED-UNSTABLE pending the
   naming sprint): `tl.export.netron(log, path=None, *, granularity="module"|"op"|"rolled",
   depth=1, show_buffers="never"|"meaningful"|"always", attachment=None, serve=False,
@@ -1302,8 +1304,7 @@
   is the user-facing verbs door.
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
-  switch). The compatibility window and `tl.migrate` left with the 2.x saved-file readers:
-  a file saved by torchlens 2.x refuses at `tl.load` with one typed error.
+  switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
   `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
   scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
   (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,

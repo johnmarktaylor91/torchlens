@@ -28,8 +28,8 @@
 9a. Rehydration floor: this release reads only its own format. An artifact stamped
     `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
     `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
-    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
-    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
+    retired-key pop or legacy spelling adapter remains on any record class. The 2.16
+    intervention spec format (`format_version` 1) refuses with the same error. Save dry-runs `metadata.pkl`
     through the loader's default-deny unpickler and refuses unportable values typed
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
@@ -97,9 +97,21 @@
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
     validation replays it by calling the Function's `apply` again. An ordinary custom Function
-    (interior in torch) is captured op by op exactly as before; a plain round trip outside a
-    Function is never collapsed: its `from_numpy` stays a parentless source op and the census
-    keeps reporting any unowned dispatch it makes. A `torch.jit.ScriptFunction` called from an
+    (interior in torch) is captured op by op exactly as before. A round trip outside any
+    Function is never collapsed into a boundary that hides ops: the export is journaled as a
+    departure (`backends/torch/_foreign_data.py`; its own dispatches owned by the audited
+    `foreign_data:export` token) and the host constructor that brings data back is one
+    `foreigndata` op (`transform_kind="foreign_data"`) whose logged arguments are the departed
+    tensors. A zero-copy or copy round trip (`resolution` `view` / `copy`) replays exactly from
+    the departed tensor plus logged literals through the portable
+    `torchlens._utils._foreign_data_replay.foreigndata` (modes `strided`, `gather`, `copy`),
+    which a runnable artifact resolves from the closed synthetic table
+    (`_io/_runnable_synthetic.py`); the departure's storage-range read runs with logging
+    paused so it never poisons the completeness witness; a re-entry after host computation TorchLens did not see
+    (`resolution` `unresolved`) is linked to every compatible departure and validation records
+    the typed failure `foreign_data_roundtrip_unreplayable` for it, never a constant; only a
+    `from_dlpack` of a consumed capsule in a capture with NO departure replays its recorded
+    value (`resolution` `constant`). A `torch.jit.ScriptFunction` called from an
     eager forward is one `jitscript` boundary op (`transform_kind="jit.script"`,
     `backends/torch/_script_boundary.py`, same core): its dispatches are owned by the audited
     `jit_script:boundary` token and replay calls the function again; a call that writes into a
@@ -218,3 +230,8 @@
     intervals (storage-pointer equality never decides); the recorded default device enters as a
     scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
     with a no-allocation readiness capability gate.
+- ATen recording is opt-in and never silent: with `CaptureOptions(aten_ops=False)` (the default)
+  no dispatch mode is installed and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
+  and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
+  filled with synthetic rows.

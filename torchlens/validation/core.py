@@ -14,6 +14,7 @@ Exemption decisions (which ops to skip, which args are structural) are
 delegated to the registries in ``exemptions.py``.
 """
 
+import functools
 import math
 from collections import Counter, defaultdict, deque
 from collections.abc import Sequence
@@ -72,6 +73,11 @@ from ._index_domain import (
     layer_has_index_domain_parent,
 )
 from ._non_pass_record import record_replay_exception as _record_replay_exception
+from ._pre_replay import (
+    CoreBindings,
+    _is_provable_functionless_source_or_boundary,
+    pre_replay_verdict,
+)
 from ._reduction_depth import _op_reduction_depth
 from ._replay_device import (
     align_output_to_saved_device,
@@ -1363,6 +1369,18 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     return op_has_genuine_replacement_evidence(layer)
 
 
+_PRE_REPLAY_VERDICT = functools.partial(
+    pre_replay_verdict,
+    CoreBindings(ValidationCheckResult, _is_intentional_intervention_replacement),
+)
+"""The pre-replay early exits with this module's result type and replacement predicate."""
+
+_FUNCTIONLESS_SOURCE_OR_BOUNDARY = functools.partial(
+    _is_provable_functionless_source_or_boundary, _is_intentional_intervention_replacement
+)
+"""The functionless source-or-boundary proof with this module's replacement predicate."""
+
+
 def _classify_user_excluded_replay_surface(
     trace: "Trace",
     layer: Op,
@@ -1453,50 +1471,6 @@ def _not_saved_by_user_justification(
         f"save_arg_values={bool(trace._options_save_args)}, "
         f"default_op={default_op}, keep_op={keep_op_name})"
     )
-
-
-def _is_provable_functionless_source_or_boundary(layer: "Op") -> bool:
-    """Return whether a functionless op is a structural source or boundary.
-
-    Parameters
-    ----------
-    layer:
-        Operation pass being validated.
-
-    Returns
-    -------
-    bool
-        True only when captured metadata proves the absence of a callable is
-        expected by design, rather than a lost computational function.
-    """
-
-    if getattr(layer, "func", None) is not None:
-        return False
-    if _is_intentional_intervention_replacement(layer):
-        return True
-    parents = tuple(getattr(layer, "parents", ()) or ())
-    children = tuple(getattr(layer, "children", ()) or ())
-    parent_arg_positions = getattr(layer, "parent_arg_positions", {}) or {}
-    has_parent_arg_positions = any(
-        bool(parent_arg_positions.get(arg_type)) for arg_type in ("args", "kwargs")
-    )
-    saved_args = getattr(layer, "saved_args", None)
-    has_saved_args = bool(saved_args)
-    func_call_id = getattr(layer, "func_call_id", None)
-    is_buffer_boundary = (
-        func_call_id is None
-        and bool(getattr(layer, "buffer_source", None))
-        and bool(getattr(layer, "buffer_write_kind", None))
-    )
-    if is_buffer_boundary:
-        return True
-    is_source = (
-        not parents and not has_parent_arg_positions and not has_saved_args and func_call_id is None
-    )
-    if is_source:
-        return True
-    is_output_boundary = bool(parents) and not children and has_parent_arg_positions
-    return is_output_boundary
 
 
 def _resolve_output_entry_for_index(
@@ -1674,7 +1648,7 @@ def _check_layer_arguments_logged_correctly(
         # forward-hook output replacements injected by the user. This skip is
         # deliberately narrow -- it must NOT swallow a real op that merely lost
         # its func, which would mask a capture bug.
-        if _is_provable_functionless_source_or_boundary(target_layer):
+        if _FUNCTIONLESS_SOURCE_OR_BOUNDARY(target_layer):
             continue
 
         # Make sure that all parent layers appear in at least one argument and
@@ -2673,11 +2647,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
-
-    if layer.func is None:
-        if _is_provable_functionless_source_or_boundary(layer):
-            return ValidationCheckResult.exempted("functionless_source_or_boundary")
-        return ValidationCheckResult.failed_result("no_replayable_function")
+    early = _PRE_REPLAY_VERDICT(self, layer, layer_to_validate_parents_for_label, perturb)
+    if early is not None:
+        return early
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     # Membership is proved PER CALL: Tensor.new's value-bearing overloads

@@ -301,6 +301,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
         "subclass",
     ),
     ("torchlens._errors", "BackwardStreamUnavailableError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "AtenOpsUnavailableError", errors.CaptureError, "subclass"),
     (
         "torchlens.intervention.errors",
         "NonExecutableSpecError",
@@ -396,6 +397,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "BackendRuntimeCompatibilityError": ("ValueError",),
     "BackendUnsupportedError": ("ValueError", "RuntimeError"),
     "BackwardStreamUnavailableError": ("RuntimeError",),
+    "AtenOpsUnavailableError": ("RuntimeError",),
     "BaselineUndeterminedError": ("ValueError",),
     "AmbiguousBatchInputError": ("ValueError",),
     "BatchNormTrainModeWarning": ("Warning",),
@@ -892,6 +894,7 @@ def test_capture_context_refusals_name_the_active_trace_remedy(
         errors.ArgumentTypeError,
         errors.ArgumentConflictError,
         errors.CaptureNotActiveError,
+        errors.AtenOpsUnavailableError,
     ),
 )
 def test_actionable_refusal_pickle_round_trip(

@@ -259,3 +259,80 @@ def test_module_focus_branching_boundaries(tmp_path: Path) -> None:
     assert _boundary_node_count(dot, "input") == 2
     assert "ext: linear_1_1" in dot
     assert "ext: linear_2_2" in dot
+
+
+class _ListBlock(nn.Module):
+    """Block with a nested MLP, held inside a never-called ``nn.ModuleList``."""
+
+    def __init__(self) -> None:
+        """Initialize modules."""
+
+        super().__init__()
+        self.norm = nn.LayerNorm(4)
+        self.mlp = nn.Sequential(nn.Linear(4, 4), nn.Tanh())
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass."""
+
+        return x + self.mlp(self.norm(x))
+
+
+class _ModuleListModel(nn.Module):
+    """GPT-style stack: ``blocks`` is a ModuleList that is iterated, never called."""
+
+    def __init__(self) -> None:
+        """Initialize modules."""
+
+        super().__init__()
+        self.stem = nn.Linear(4, 4)
+        self.blocks = nn.ModuleList([_ListBlock() for _ in range(3)])
+        self.heads = nn.ModuleDict({"out": nn.Linear(4, 2)})
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the forward pass."""
+
+        x = self.stem(x)
+        for block in self.blocks:
+            x = block(x)
+        return self.heads["out"](x)
+
+
+@pytest.mark.parametrize(
+    "address",
+    ["blocks.1", "blocks.1.mlp", "blocks.1.mlp.0", "heads.out"],
+)
+@pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
+def test_module_focus_under_uncalled_container(tmp_path: Path, address: str, vis_mode: str) -> None:
+    """A module inside an uncalled ModuleList/ModuleDict focuses without a KeyError."""
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    assert "blocks" not in log.modules
+    assert "heads" not in log.modules
+    dot = _render_dot(log, tmp_path, module=address, vis_mode=vis_mode)
+
+    assert f"@{address}" in dot
+    assert _boundary_node_count(dot, "input") >= 1
+    assert _boundary_node_count(dot, "output") >= 1
+
+
+def test_module_focus_under_uncalled_container_by_module_object(tmp_path: Path) -> None:
+    """Passing the Module object for a ModuleList child renders like the address."""
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    dot = _render_dot(log, tmp_path, module=log.modules["blocks.1"])
+
+    assert "@blocks.1" in dot
+    assert "@blocks.0" not in dot
+
+
+def test_boundary_module_path_follows_the_call_stack() -> None:
+    """Boundary placement uses the focused op's called modules, never address prefixes."""
+
+    from torchlens._visualization._render_flow import _boundary_module_path
+
+    log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
+    target = log.modules["blocks.1.mlp"]
+    stack = ("blocks.1:1", "blocks.1.mlp:1", "blocks.1.mlp.0:1")
+
+    assert _boundary_module_path(target, "unrolled", stack) == ["blocks.1:1", "blocks.1.mlp:1"]
+    assert _boundary_module_path(target, "rolled", stack) == ["blocks.1", "blocks.1.mlp"]

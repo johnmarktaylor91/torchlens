@@ -30,6 +30,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from ._factcore import factcore
 from ._summary_columns import (
     ATTENTION_FULL_SQUARE_FUNCS,
     label_shapes,
@@ -227,8 +228,6 @@ class _ModelIndex:
 
     def __init__(self, trace: Trace) -> None:
         """Index ops, modules, and parameter identities for one trace."""
-
-        from ._factcore import factcore
 
         self.core = factcore(trace)
         aggregation = self.core.compute
