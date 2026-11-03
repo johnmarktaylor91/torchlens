@@ -158,7 +158,7 @@ torchlens.intervention.spec:Rule.__new__:InvalidArgumentError::1	CONTRACTED	inte
 torchlens.intervention.spec:Rule.__post_init__:ArgumentTypeError::1	CONTRACTED	intervention_where_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.spec:Recipe.__post_init__:ArgumentTypeError::1	CONTRACTED	intervention_rule_type_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.spec:Recipe.__post_init__:InvalidArgumentError::1	CONTRACTED	spec_rules_duplicate	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
-torchlens.intervention.spec:Recipe.match:InvalidArgumentError::1	CONTRACTED	spec_rules_overlap	C03 intervention substrate: typed + code + contract-doc row; site moved from __call__ into the shared match() matcher (F01)
+torchlens.intervention.spec:_match_rules:InvalidArgumentError::1	CONTRACTED	spec_rules_overlap	C03 intervention substrate: typed + code + contract-doc row; site moved from __call__ into the shared match() matcher (F01), then into the module-level _match_rules helper
 torchlens.intervention.spec:Recipe.merge:ArgumentTypeError::1	CONTRACTED	intervention_spec_type_invalid	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.spec:refuse_unreplayable_rules:InvalidArgumentError::1	CONTRACTED	spec_rule_unreplayable	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
 torchlens.intervention.sweep:sweep:ArgumentTypeError::1	CONTRACTED	sweep_values_missing	C03 intervention substrate: typed + code + contract-doc row, classified in its own change
