@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1405 modules, 631343 lines, 0 modules without a docstring.
+83 packages, 1405 modules, 631535 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -83,7 +83,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12349 |
-| `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
+| `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 6036 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13666 |
@@ -1792,18 +1792,18 @@ Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12349
 
 ### `torchlens.receptive_field.rules`
 
-Built-in receptive-field rules and idempotent pack registration. (10 modules, 1389 lines)
+Built-in receptive-field rules and idempotent pack registration. (10 modules, 1581 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Built-in receptive-field rules and idempotent pack registration. | 19 |
-| `_utils` | Typed captured-parameter normalization for receptive-field rules. | 143 |
+| `_utils` | Typed captured-parameter normalization for receptive-field rules. | 231 |
 | `attention` | Attention and normalization-over-axis receptive-field rules. | 64 |
 | `conv_pool` | Convolution and pooling receptive-field rules. | 199 |
-| `elementwise` | Elementwise, broadcasting, reduction, and embedding RF rules. | 138 |
+| `elementwise` | Elementwise, broadcasting, reduction, and embedding RF rules. | 157 |
 | `interpolation` | Interpolation receptive-field rules with branch-correct source scales. | 291 |
-| `linear` | Dense mixing and cumulative-operation receptive-field rules. | 36 |
-| `norms` | Mode-aware normalization receptive-field rules. | 130 |
+| `linear` | Dense mixing and cumulative-operation receptive-field rules. | 65 |
+| `norms` | Mode-aware normalization receptive-field rules. | 186 |
 | `sequence` | Fail-closed rules for operations with nonlocal sequence semantics. | 22 |
 | `transforms` | Shape, ordering, slicing, concatenation, and padding RF rules. | 347 |
 
