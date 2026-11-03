@@ -94,7 +94,8 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   selected sites at every forward it runs, so each decode step records only its new position and
   the cost grows linearly with the number of generated tokens. It returns a
   `GenerationRecording`: `.recording` (the multi-pass `Recording`, one pass per forward),
-  `.steps` (one `GenerationStep` per forward: `step`, 0 for the prefill; `pass_index`; `kind`;
+  `.steps` (one `GenerationStep` per forward: `step`, 0 for the prefill; `pass_number`, the
+  recorder pass holding its records (was `pass_index`; JMT 1 Nov 2026 3:00 PM PT, walk names.1 a); `kind`;
   `positions`, the absolute positions it computed; `n_ops`, `n_records`, `saved_bytes`),
   `.sequences`, `.prompt_length`, `.settings` (the settings that decide the tokens, the torch seed
   and an RNG-state digest), `.not_recorded` (cache tensors, the sampling between forwards, the

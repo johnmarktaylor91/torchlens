@@ -156,7 +156,8 @@
   steady-state model.
 - **names**: one public word for the one-based pass counter, `pass_number` (walk names.1). The
   keyword of `for_pass` on `trace.autograd.backward_passes`, `grad_fn.calls` and `op.grads` is
-  `pass_number` (was `pass_index`); the value it takes is unchanged.
+  `pass_number` (was `pass_index`); the value it takes is unchanged. `GenerationStep.pass_index`
+  is `GenerationStep.pass_number`, with the same value.
 
 ### Features
 

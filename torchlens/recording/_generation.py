@@ -78,9 +78,9 @@ class GenerationStep:
     ----------
     step:
         0 for the prefill forward, then 1, 2, ... for each decode forward.
-    pass_index:
+    pass_number:
         The Recorder pass that holds this forward's records
-        (``recording.by_pass[pass_index]``).
+        (``recording.by_pass[pass_number]``).
     kind:
         ``"prefill"`` or ``"decode"``.
     positions:
@@ -95,7 +95,7 @@ class GenerationStep:
     """
 
     step: int
-    pass_index: int
+    pass_number: int
     kind: Literal["prefill", "decode"]
     positions: range
     n_ops: int
@@ -159,9 +159,9 @@ class GenerationRecording:
                 code="record_generation_step_missing",
                 remedy=f"pass a step from 0 to {len(self.steps) - 1}",
             )
-        pass_index = self.steps[step].pass_index
+        pass_number = self.steps[step].pass_number
         records = self.recording.records
-        return [records[index] for index in self.recording.by_pass.get(pass_index, [])]
+        return [records[index] for index in self.recording.by_pass.get(pass_number, [])]
 
     def step_of_position(self, position: int) -> GenerationStep:
         """Return the step whose forward computed an absolute sequence position.
@@ -420,19 +420,19 @@ def _steps(recording: Recording, windows: list[tuple[int, range]]) -> tuple[Gene
 
     ops_by_pass: dict[int, int] = {}
     for row in recording.raw_metadata():
-        pass_index = int(row["pass_number"])
-        ops_by_pass[pass_index] = ops_by_pass.get(pass_index, 0) + 1
+        pass_number = int(row["pass_number"])
+        ops_by_pass[pass_number] = ops_by_pass.get(pass_number, 0) + 1
     steps = []
-    for step, (pass_index, window) in enumerate(windows):
-        indexes = recording.by_pass.get(pass_index, [])
+    for step, (pass_number, window) in enumerate(windows):
+        indexes = recording.by_pass.get(pass_number, [])
         payloads = (recording.records[index].ram_payload for index in indexes)
         steps.append(
             GenerationStep(
                 step=step,
-                pass_index=pass_index,
+                pass_number=pass_number,
                 kind="prefill" if step == 0 else "decode",
                 positions=window,
-                n_ops=ops_by_pass.get(pass_index, 0),
+                n_ops=ops_by_pass.get(pass_number, 0),
                 n_records=len(indexes),
                 saved_bytes=sum(
                     payload.numel() * payload.element_size()

@@ -6,6 +6,7 @@ Every public keyword and field that takes or reports a one-based pass counts it 
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Iterator
 
 import pytest
@@ -13,6 +14,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.recording._generation import GenerationStep
 
 
 class _TwoLayer(nn.Module):
@@ -72,3 +74,11 @@ def test_for_pass_refuses_pass_index_keyword(two_pass_trace: tl.Trace) -> None:
     for accessor in (two_pass_trace.autograd.backward_passes, op.grads, grad_fn.calls):
         with pytest.raises(TypeError, match="pass_index"):
             accessor.for_pass(pass_index=1)
+
+
+def test_generation_step_counts_its_pass_as_pass_number() -> None:
+    """``GenerationStep`` names the recorder pass holding its records ``pass_number``."""
+
+    names = {field.name for field in dataclasses.fields(GenerationStep)}
+    assert "pass_number" in names
+    assert "pass_index" not in names
