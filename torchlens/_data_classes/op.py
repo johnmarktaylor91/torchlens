@@ -3593,54 +3593,6 @@ def _install_op_field_descriptors() -> None:
 _install_op_field_descriptors()
 
 
-def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:
-    """Pool repeated immutable metadata across a whole building-phase store.
-
-    Column-major equivalent of ``Op._compact_metadata`` (same class ladder,
-    same ``_UNPOOLED_SLOTS`` skips, same container-member handling) operating
-    directly on the row cells, so a core-backed trace pools without paying
-    the per-attribute descriptor protocol.
-
-    Parameters
-    ----------
-    store:
-        Building-phase ``OpRowStore`` (frozen stores are left untouched --
-        pooling always precedes the physical freeze).
-    pool:
-        Pass-local ``pool key -> canonical instance`` table shared with any
-        remaining per-op walks of the same trace.
-    """
-
-    rows = store.rows_building()
-    if rows is None:
-        return
-    pooled_classes = _POOLED_CLASSES
-    pool_get = pool.get
-    for fid, name in enumerate(store.layout.names):
-        if name in _UNPOOLED_SLOTS:
-            continue
-        for row_cells in rows:
-            value = row_cells[fid]
-            if value is None or value is _MISSING:
-                continue
-            cls = value.__class__
-            if cls in pooled_classes:
-                key = (cls, value.hex()) if cls is Duration else (cls, value)
-                pooled = pool_get(key)
-                if pooled is None:
-                    pool[key] = value
-                elif pooled is not value:
-                    row_cells[fid] = pooled
-            elif cls is list or cls is set or cls is dict:
-                _pool_container_members(value, pool, 0)
-            elif cls is tuple or cls is frozenset:
-                pooled = _pool_value(value, pool)
-                if pooled is not value:
-                    row_cells[fid] = pooled
-            elif isinstance(value, dict):
-                _pool_container_members(value, pool, 0)
-
-
 # The tlspec v8 coordinated bump retired this class's S3 pre-release
 # registrations (site_key, edge_substitutions, edge_replacement_stamps);
 # their persisting policies are declared directly in _FIELD_POLICY above.
