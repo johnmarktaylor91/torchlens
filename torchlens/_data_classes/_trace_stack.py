@@ -12,10 +12,6 @@ from .._errors import InvalidArgumentError, PayloadUnavailableError
 if TYPE_CHECKING:
     from .trace import Trace
 
-    _TraceMixinBase = Trace
-else:
-    _TraceMixinBase = object
-
 
 @dataclass(frozen=True)
 class StackedActivations:
@@ -141,35 +137,4 @@ def stack_traces(trace: Trace, selector: Any) -> StackedActivations:
     return StackedActivations(torch.stack(tensors, dim=0), tuple(labels))
 
 
-class TraceStackMixin(_TraceMixinBase):
-    """Mixin providing order-aligned saved activation stacks."""
-
-    def stack(self: Trace, selector: Any) -> StackedActivations:
-        """Stack selector-matched saved outputs in recorded execution order.
-
-        Selector evaluation reuses :meth:`Trace.find_sites`. Matching operations
-        are then sorted explicitly by their recorded ``ordinal_index``; selector
-        iteration order is never treated as authoritative. The resulting rows can
-        feed ``torchlens.stats.cka``, across-layer PCA, or ``torchlens.repgeom.rdm``.
-
-        Parameters
-        ----------
-        selector:
-            TorchLens selector accepted by :meth:`Trace.find_sites`.
-
-        Returns
-        -------
-        StackedActivations
-            Tensor rows and their aligned layer labels.
-
-        Raises
-        ------
-        ValueError
-            If no operations match, execution ordinals are invalid, a payload was
-            not saved, a primary output is not one tensor, or shapes differ.
-        """
-
-        return stack_traces(self, selector=selector)
-
-
-__all__ = ["StackedActivations", "TraceStackMixin"]
+__all__ = ["StackedActivations", "stack_traces"]

@@ -1747,7 +1747,7 @@ def test_collapse_ceiling_warning_category_and_attribution(
     R19 (hunt-6): the decline advisory was a bare ``UserWarning`` with
     ``stacklevel=2``, which (a) could not be filtered/promoted via the
     ``TorchLensWarning`` taxonomy and (b) blamed an internal torchlens frame
-    (``_trace_stats.py``) instead of the user's ``draw()`` call site.
+    (the ``Trace`` summary method) instead of the user's ``draw()`` call site.
     """
 
     import warnings as warnings_module

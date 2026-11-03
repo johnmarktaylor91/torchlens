@@ -973,7 +973,7 @@ def _get_code_context(
 
     FuncCallLocation = _FUNC_CALL_LOCATION
     if FuncCallLocation is None:
-        from .._data_classes import FuncCallLocation
+        from .._data_classes.func_call_location import FuncCallLocation
 
         _FUNC_CALL_LOCATION = FuncCallLocation
 
