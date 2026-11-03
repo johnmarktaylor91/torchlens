@@ -667,6 +667,12 @@ def extract(
 ) -> dict[str, _torch.Tensor]:
     """Return saved outs for many layers.
 
+    ``tl.extract`` is the narrow door: it takes only ``model``, ``inputs``,
+    ``layers`` and ``detach_saved_activations``. Every other capture option
+    (``save=`` predicates, ``stop_after=``, ``capture=``, ``intervene=``,
+    ``episode=``, storage) belongs to ``tl.trace``; call it and read
+    ``trace[label].out`` when you need one of them.
+
     Parameters
     ----------
     model:

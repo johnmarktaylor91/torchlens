@@ -96,3 +96,34 @@ def _validate_disk_only_keep_grad_defaults(options: _RecordingConfig) -> None:
             raise RecordingConfigError(
                 f"{name} cannot use save_grad=True with disk-only fastlog storage"
             )
+
+
+def refuse_episode_on_record(episode: object) -> None:
+    """Refuse ``episode=`` on the record door with the typed teaching refusal.
+
+    Episode capture (the per-step ledger, the step-qualified selectors and
+    the coupled-replay rules) lives on ``tl.trace``; the sparse recorder has
+    no step ledger to attach it to, so the keyword is accepted only to
+    refuse it typed instead of with a bare ``TypeError``.
+
+    Parameters
+    ----------
+    episode:
+        The ``episode=`` value as passed; ``None`` means not given.
+
+    Raises
+    ------
+    RecordingConfigError
+        ``record_episode_unsupported`` when an episode declaration was given.
+    """
+
+    if episode is None:
+        return
+    raise RecordingConfigError(
+        "tl.record() does not take episode=: episode capture (the step ledger, "
+        "at_step selectors and coupled replay) runs on the exhaustive door. "
+        "Remedy: tl.trace(model, x, episode=...) with the same declaration, "
+        "and save= to keep the capture sparse.",
+        code="record_episode_unsupported",
+        remedy="use tl.trace(model, x, episode=..., save=...)",
+    )

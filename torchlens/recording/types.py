@@ -50,7 +50,7 @@ if TYPE_CHECKING:
     from ..intervention.predicates import InterventionPredicate
     from ..options import StorageOptions
     from ..types import _ActivationPostfunc, _GradientPostfunc
-    from ..viz._drawing import Drawing
+    from ._dry_run import DryRun
     from .options import (
         ForwardErrorMode,
         GradPredicateFn,
@@ -60,104 +60,6 @@ if TYPE_CHECKING:
         PredicateFn,
         _RecordingConfig,
     )
-
-
-@dataclass(frozen=True, slots=True)
-class DryRun:
-    """Predicate dry-run trace without retained tensor payloads.
-
-    Examples
-    --------
-    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
-    >>> type(plan).__name__, len(plan.contexts) > 0
-    ('DryRun', True)
-    """
-
-    contexts: tuple[RecordContext, ...]
-    decisions: tuple[bool, ...] = ()
-    predicate_failures: tuple[PredicateFailure, ...] = ()
-
-    @property
-    def events(self) -> tuple[RecordContext, ...]:
-        """Return chronological dry-run events."""
-
-        return self.contexts
-
-    def print_tree(self) -> str:
-        """Return a unicode-indented event tree for this trace."""
-
-        from .._visualization.fastlog_live import print_tree
-
-        return print_tree(self)
-
-    def to_pandas(self) -> Any:
-        """Return a pandas DataFrame representation of trace events."""
-
-        from .._visualization.fastlog_live import to_pandas
-
-        return to_pandas(self)
-
-    def draw(self, **kwargs: Any) -> Drawing:
-        """Render a flat Graphviz graph of trace operation events.
-
-        Returns
-        -------
-        Drawing
-            The picture; ``str()`` of it is the DOT source.
-        """
-
-        from .._visualization.fastlog_live import draw
-
-        return draw(self, **kwargs)
-
-    def summary(self) -> str:
-        """Return a concise human-readable dry-run summary."""
-
-        from .._visualization.fastlog_live import summary
-
-        return summary(self)
-
-    def timeline_html(self) -> Any:
-        """Return an IPython HTML timeline for this trace."""
-
-        from .._visualization.fastlog_live import timeline_html
-
-        return timeline_html(self)
-
-    def filter(
-        self,
-        other_keep_op: Callable[[RecordContext], PredicateDecision] | None = None,
-    ) -> DryRun:
-        """Return a new trace with decisions from a new op predicate.
-
-        Parameters
-        ----------
-        other_keep_op:
-            Predicate for op, input, and buffer events. Module boundary
-            events have no predicate slot and are never re-selected.
-
-        Returns
-        -------
-        RecordingTrace
-            New trace sharing the same event tuple and predicate failures.
-        """
-
-        from .._capture.predicates import _normalize_capture_decision
-
-        decisions: list[bool] = []
-        for ctx in self.contexts:
-            predicate = None if ctx.kind in {"module_enter", "module_exit"} else other_keep_op
-            result = predicate(ctx) if predicate is not None else False
-            spec = _normalize_capture_decision(result, ctx, False)
-            if not isinstance(spec, CaptureSpec):
-                decisions.append(True)
-                continue
-            decisions.append(spec.save_out or spec.save_metadata)
-        return DryRun(
-            contexts=self.contexts,
-            decisions=tuple(decisions),
-            predicate_failures=self.predicate_failures,
-        )
 
 
 #: Closed RecordContext field set exported by :meth:`Recording.raw_metadata`.
@@ -357,6 +259,16 @@ class RecordingSettings:
 @dataclass(frozen=True, slots=True, init=False)
 class Recording(TraceLike):
     """Result of a fastlog recording session.
+
+    A Recording is the event stream, not the graph. It has ``to_pandas()``,
+    ``summary()`` and ``narrate()``; it has no ``draw()`` and no facets. Call
+    ``to_trace()`` to cook it into a ``Trace`` with every ``Trace.draw``
+    option (``vis_mode``, nesting depth, rolled recurrent views) and the
+    ``modules[...].facets`` views. Recorded ops carry the same parameter and
+    argument equivalence classes exhaustive capture gives them, so the cooked
+    Trace groups a reused layer into passes the way ``tl.trace`` does.
+    ``tl.recording.dry_run(...).draw()`` renders only a flat event graph and
+    takes ``vis_outpath``, ``vis_save_only`` and ``vis_fileformat`` alone.
 
     Built by ``tl.record`` and ``Recorder``; there is no public constructor
     (the recorder and the bundle recovery build it through the private
@@ -746,6 +658,7 @@ class Recording(TraceLike):
 
         if self._recording_trace is None:
             from .._capture.projections import recording_trace_from_events
+            from ._dry_run import DryRun
 
             contexts = (
                 ()
@@ -1224,6 +1137,80 @@ class Recording(TraceLike):
         )
         return trace
 
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return the ``torchlens.agent_trace.v1`` dump of ``self.to_trace()``.
+
+        ``max_ops`` caps the emitted op rows, as for ``Trace.to_agent_json``.
+        """
+
+        return self.to_trace().to_agent_json(max_ops=max_ops)
+
+    def save(
+        self,
+        path: str | Path,
+        *,
+        level: str = "portable",
+        overwrite: bool = False,
+        include_outs: bool | None = None,
+        include_weights: bool = False,
+        include_grads: bool | None = None,
+        include_saved_args: bool | None = None,
+        include_rng_states: bool | None = None,
+        include_activations: bool = False,
+        include_source: bool = True,
+        include_custom_attributes: bool = True,
+        include_buffer_values: bool | None = None,
+        strict: bool = True,
+    ) -> None:
+        """Cook this recording into a Trace and save it as a ``.tlspec`` directory.
+
+        The parameters are ``Trace.save``'s; ``tl.load(path)`` reads the artifact
+        back as a Trace.
+        """
+
+        self.to_trace().save(
+            path,
+            level=level,
+            overwrite=overwrite,
+            include_outs=include_outs,
+            include_weights=include_weights,
+            include_grads=include_grads,
+            include_saved_args=include_saved_args,
+            include_rng_states=include_rng_states,
+            include_activations=include_activations,
+            include_source=include_source,
+            include_custom_attributes=include_custom_attributes,
+            include_buffer_values=include_buffer_values,
+            strict=strict,
+        )
+
+    def fork(self, name: str | None = None) -> Trace:
+        """Cook this recording and return a copy-on-write intervention fork of it."""
+
+        return self.to_trace().fork(name)
+
+    def do(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any = None,
+        *,
+        model: torch.nn.Module | None = None,
+        inputs: Any = None,
+        intervention: Any = None,
+        loss: Callable[[Trace], torch.Tensor] | None = None,
+    ) -> Trace:
+        """Cook this recording and run ``Trace.do`` on a fork of it (no shared root to warn about)."""
+
+        fork = self.to_trace().fork()
+        return fork.do(
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            inputs=inputs,
+            intervention=intervention,
+            loss=loss,
+        )
+
     def _recover_halt_frontier(self) -> tuple[str, torch.Tensor]:
         """Recover the frontier (output-parent label, tensor) for a halted recording.
 
@@ -1302,16 +1289,3 @@ def _recording_setstate(self: Recording, state: list[Any]) -> None:
 # pair would pickle the live model output.
 Recording.__getstate__ = _recording_getstate  # type: ignore[method-assign,assignment]
 Recording.__setstate__ = _recording_setstate  # type: ignore[attr-defined]
-
-
-def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
-    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
-    ``reason`` means none was given.
-    """
-
-    recording.stops_by_pass.setdefault(pass_index, reason)
-    if recording.is_stopped:
-        return
-    object.__setattr__(recording, "is_stopped", True)
-    object.__setattr__(recording, "status", "halted")
-    object.__setattr__(recording, "stop_reason", reason)

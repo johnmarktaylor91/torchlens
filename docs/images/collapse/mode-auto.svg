@@ -47,7 +47,7 @@
 <text xml:space="preserve" text-anchor="start" x="225.88" y="-364.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@bn1</text>
 <text xml:space="preserve" text-anchor="start" x="203" y="-343.56" font-family="Helvetica,sans-Serif" font-size="14.00">BatchNorm2d</text>
 <text xml:space="preserve" text-anchor="start" x="169.62" y="-323.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 32, 32), 256.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="197.38" y="-304.06" font-family="Helvetica,sans-Serif" font-size="14.00">1 op + 4 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="197.38" y="-304.06" font-family="Helvetica,sans-Serif" font-size="14.00">1 op + 2 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="167.75" y="-284.31" font-family="Helvetica,sans-Serif" font-size="14.00">128 params (all trainable)</text>
 </g>
 <!-- conv2d_1_1pass1&#45;&gt;bn1pass1 -->
@@ -95,7 +95,7 @@
 <text xml:space="preserve" text-anchor="start" x="218.38" y="-749.06" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer1</text>
 <text xml:space="preserve" text-anchor="start" x="212.75" y="-728.31" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="173.38" y="-708.56" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 64, 16, 16), 64.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="186.5" y="-688.81" font-family="Helvetica,sans-Serif" font-size="14.00">12 ops + 16 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="190.25" y="-688.81" font-family="Helvetica,sans-Serif" font-size="14.00">12 ops + 8 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="156.5" y="-669.06" font-family="Helvetica,sans-Serif" font-size="14.00">147968 params (all trainable)</text>
 </g>
 <!-- maxpool2d_1_4pass1&#45;&gt;layer1pass1 -->
@@ -115,7 +115,7 @@
 <text xml:space="preserve" text-anchor="start" x="218.38" y="-905.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer2</text>
 <text xml:space="preserve" text-anchor="start" x="212.75" y="-884.81" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="177.12" y="-865.06" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="186.5" y="-845.31" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 20 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="186.5" y="-845.31" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 10 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="156.5" y="-825.56" font-family="Helvetica,sans-Serif" font-size="14.00">525568 params (all trainable)</text>
 </g>
 <!-- layer1pass1&#45;&gt;layer2pass1 -->
@@ -135,7 +135,7 @@
 <text xml:space="preserve" text-anchor="start" x="218.38" y="-1062.06" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer3</text>
 <text xml:space="preserve" text-anchor="start" x="212.75" y="-1041.31" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="177.12" y="-1021.56" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="186.5" y="-1001.81" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 20 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="186.5" y="-1001.81" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 10 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="152.75" y="-982.06" font-family="Helvetica,sans-Serif" font-size="14.00">2099712 params (all trainable)</text>
 </g>
 <!-- layer2pass1&#45;&gt;layer3pass1 -->
@@ -155,7 +155,7 @@
 <text xml:space="preserve" text-anchor="start" x="218.38" y="-1218.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@layer4</text>
 <text xml:space="preserve" text-anchor="start" x="212.75" y="-1197.81" font-family="Helvetica,sans-Serif" font-size="14.00">Sequential</text>
 <text xml:space="preserve" text-anchor="start" x="180.88" y="-1178.06" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="186.5" y="-1158.31" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 20 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="186.5" y="-1158.31" font-family="Helvetica,sans-Serif" font-size="14.00">14 ops + 10 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="152.75" y="-1138.56" font-family="Helvetica,sans-Serif" font-size="14.00">8393728 params (all trainable)</text>
 </g>
 <!-- layer3pass1&#45;&gt;layer4pass1 -->

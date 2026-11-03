@@ -1276,10 +1276,10 @@ def _validate_rerun_result(new_log: Trace, old_log: Trace, *, strict: bool) -> i
 
     old_hash = getattr(old_log, "_raw_event_shape_hash", None)
     new_hash = getattr(new_log, "_raw_event_shape_hash", None)
-    if old_hash is None or new_hash is None:
-        # The raw-event hash is session-only, so a loaded trace has none. Compare
-        # both postprocessed graphs the same way instead of a raw hash against a
-        # graph hash, which never match and would always report divergence.
+    if old_hash is None or new_hash is None or old_log.__dict__.get("_cooked_from") is not None:
+        # The raw hash is session-only (a loaded trace has none) and journal-shaped (a
+        # cooked Recording's op lane also holds module boundaries), so compare both
+        # postprocessed graphs the same way instead; raw against graph never matches.
         old_hash = compute_graph_shape_hash(old_log, rerun_signature=True)
         new_hash = compute_graph_shape_hash(new_log, rerun_signature=True)
     if old_hash == new_hash:

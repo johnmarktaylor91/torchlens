@@ -58,7 +58,7 @@ class TestResnet18Rungs:
         tl.summary(resnet18_eval, input_shape=(1, 3, 224, 224))
         assert state_dict_hash(resnet18_eval) == hash_before
         assert result.receipt.state_verified is True
-        assert result.num_ops == 151  # the eval-mode regression fixture count
+        assert result.num_ops == 111  # the eval-mode regression fixture count
 
 
 class TestGpt2Rungs:

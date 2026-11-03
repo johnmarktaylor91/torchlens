@@ -52,7 +52,7 @@
 <text xml:space="preserve" text-anchor="start" x="85.38" y="-362.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">@blocks.0</text>
 <text xml:space="preserve" text-anchor="start" x="73.38" y="-341.56" font-family="Helvetica,sans-Serif" font-size="14.00">SmallResBlock</text>
 <text xml:space="preserve" text-anchor="start" x="62.88" y="-321.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 4, 8, 8), 1.0 KiB</text>
-<text xml:space="preserve" text-anchor="start" x="68.5" y="-302.06" font-family="Helvetica,sans-Serif" font-size="14.00">4 ops + 4 buffers</text>
+<text xml:space="preserve" text-anchor="start" x="68.5" y="-302.06" font-family="Helvetica,sans-Serif" font-size="14.00">4 ops + 2 buffers</text>
 <text xml:space="preserve" text-anchor="start" x="42.25" y="-282.31" font-family="Helvetica,sans-Serif" font-size="14.00">156 params (all trainable)</text>
 </g>
 <!-- conv2d_1_1pass1&#45;&gt;blocks.0pass1 -->

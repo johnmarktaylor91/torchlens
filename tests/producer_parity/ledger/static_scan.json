@@ -8,6 +8,46 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_capture/_cooked_inventory.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_capture/_episode_join.py",
@@ -83,6 +123,14 @@
   "ambiguous": true,
   "field": "label_raw",
   "file": "torchlens/_capture/_nonfinite_prefix.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_output_parent",
+  "file": "torchlens/_capture/_sparse_refs.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -268,7 +316,7 @@
   "field": "equivalence_class",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 1,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -372,7 +420,7 @@
   "field": "is_output_parent",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {
@@ -452,7 +500,7 @@
   "field": "params",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -686,14 +734,6 @@
   "has_default": false,
   "sites": 5,
   "via_getattr": false
- },
- {
-  "ambiguous": false,
-  "field": "pass_index",
-  "file": "torchlens/_capture/session.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,
@@ -1361,6 +1401,14 @@
  },
  {
   "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_io/_save_subject.py",
+  "has_default": false,
+  "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
@@ -1372,7 +1420,7 @@
   "field": "modules",
   "file": "torchlens/_io/bundle.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -6353,6 +6401,14 @@
  },
  {
   "ambiguous": false,
+  "field": "equivalence_class",
+  "file": "torchlens/backends/torch/_ops_predicate_events.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "has_internal_source_ancestor",
   "file": "torchlens/backends/torch/_ops_predicate_events.py",
   "has_default": false,
@@ -6366,6 +6422,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/backends/torch/_ops_predicate_events.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -7574,6 +7638,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/export/_common.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -8937,6 +9009,14 @@
  },
  {
   "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/recording/_dry_run.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "output",
   "file": "torchlens/recording/_generation.py",
   "has_default": false,
@@ -9076,7 +9156,7 @@
   "field": "kind",
   "file": "torchlens/recording/types.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 1,
   "via_getattr": false
  },
  {

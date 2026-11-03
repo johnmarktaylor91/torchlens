@@ -139,7 +139,7 @@ def test_bundle_method_count_stays_within_phase_budget() -> None:
     # upstream/downstream, token_pairs, token_divergence, add_alternative)
     # and draw are real methods now (max-push walk surface.7, late.26) and
     # count here; measure_members is removed into Bundle.map (walk names.11).
-    assert len(members) <= 44
+    assert len(members) <= 45
     assert "relate" in members
     for removed in (
         "joint_metric",
@@ -244,3 +244,48 @@ def test_stored_comparison_unknown_name_refuses_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.stored_comparison("never_stored")
     assert excinfo.value.fields["code"] == "comparison_unknown"
+
+
+def test_bundle_summary_is_a_text_card() -> None:
+    """Bundle.summary returns the card: members, outcomes, baseline, relations (RC-278)."""
+
+    bundle = _capture_pair(seed=0, offset=0.5)
+    card = bundle.summary()
+    assert isinstance(card, str)
+    assert "members (2): baseline (baseline), changed" in card
+    assert "baseline: 'baseline'" in card
+    assert "outcomes:" in card and "relations:" in card
+    assert "structurally consistent:" in card
+
+
+def test_bundle_to_pandas_stacks_members() -> None:
+    """Bundle.to_pandas stacks each member's table under a leading member column (RC-278)."""
+
+    pd = pytest.importorskip("pandas")
+    bundle = _capture_pair(seed=0, offset=0.5)
+    frame = bundle.to_pandas()
+    assert list(frame.columns)[0] == "member"
+    assert list(frame.index) == list(range(len(frame)))
+    per_member = {name: len(bundle[name].to_pandas()) for name in bundle.names}
+    assert frame["member"].value_counts().to_dict() == per_member
+    assert list(dict.fromkeys(frame["member"])) == bundle.names
+    empty = tl.Bundle().to_pandas()
+    assert isinstance(empty, pd.DataFrame)
+    assert list(empty.columns) == ["member"] and len(empty) == 0
+
+
+def test_bundle_to_agent_json_dumps_every_member() -> None:
+    """Bundle.to_agent_json is the agent_bundle.v1 dump with per-member dumps (RC-278)."""
+
+    import json
+
+    bundle = _capture_pair(seed=0, offset=0.5)
+    dump = bundle.to_agent_json(max_ops=3)
+    assert dump["schema"] == "torchlens.agent_bundle.v1"
+    assert dump["member_count"] == 2
+    assert dump["names"] == ["baseline", "changed"]
+    assert dump["baseline_name"] == "baseline"
+    assert sum(dump["outcome"].values()) == 2
+    assert set(dump["members"]) == {"baseline", "changed"}
+    assert dump["members"]["changed"] == bundle["changed"].to_agent_json(max_ops=3)
+    json.dumps(dump)
