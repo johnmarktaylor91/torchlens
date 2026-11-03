@@ -21,12 +21,9 @@ from __future__ import annotations
 import dataclasses
 import hashlib
 import json
-from collections import deque
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
-
-import torch
 
 from ..._data_classes._state_adapter import state_items
 from .. import _json
@@ -51,7 +48,7 @@ from .decode import decode_value
 from .payloads import PayloadStore
 from .recipe import RecipeHeader, build_recipe, write_recipe
 from .schema import LiveCells, level_columns, record_kind_of, record_schema
-from .values import ValueEncoder, object_state, record_type_table, tagged
+from .values import ValueEncoder, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
@@ -73,8 +70,6 @@ _DISCLOSURE_PATHS_SHOWN = 16
 #: Op keys whose absent map is written as an empty object (contract page,
 #: "Values settled on the live side"); the live op is settled the same way.
 _EMPTY_MAP_OP_KEYS = ("edge_substitutions", "edge_replacement_stamps")
-#: Values the discovery walk never descends into.
-_LEAF_TYPES = (str, bytes, bytearray, int, float, complex, bool, type(None), torch.Tensor)
 
 
 def _container_items(value: Any) -> list[Any]:
@@ -114,42 +109,17 @@ class RecordTables:
         return row
 
     def discover(self) -> None:
-        """Seed the live containers, then register every record reachable by reference."""
+        """Seed canonical containers; encoding discovers the remaining persisted edges.
+
+        Walking arbitrary runtime state also reaches stale copies of parameter records
+        after a fork. Only cells the format actually writes may add records beyond these
+        canonical seeds; ``_encode_record_rows`` already follows those cells to a fixed point.
+        """
 
         for key, kind in _SEED_KEYS:
             for item in _container_items(self.state.get(key)):
                 if record_kind_of(item) == kind:
                     self.add(item, kind)
-        pending: deque[Any] = deque(self.state.values())
-        for rows in self.rows.values():
-            pending.extend(rows)
-        seen: set[int] = set()
-        while pending:
-            value = pending.popleft()
-            if isinstance(value, _LEAF_TYPES) or id(value) in seen:
-                continue
-            seen.add(id(value))
-            pending.extend(self._children(value))
-
-    def _children(self, value: Any) -> list[Any]:
-        """Register ``value`` if it is a record; return the values it holds."""
-
-        kind = record_kind_of(value)
-        if kind == "trace":
-            return []
-        if kind is not None:
-            self.add(value, kind)
-            return [item for _, item in state_items(value)]
-        if isinstance(value, Mapping):
-            return [*value.keys(), *value.values()]
-        if isinstance(value, (list, tuple, set, frozenset)):
-            return list(value)
-        if type(value).__module__.startswith("torchlens") and not isinstance(value, type):
-            try:
-                return list(object_state(value).values())
-            except (AttributeError, TypeError, ValueError):
-                return []
-        return []
 
     def reference(self, value: Any) -> dict[str, Any] | None:
         """Return the ``ref`` cell of a record object, or ``None`` for other values."""

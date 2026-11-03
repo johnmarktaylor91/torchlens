@@ -649,3 +649,8 @@ def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path:
     assert len(refs) == len(set(refs))
     loaded = tl.load(bundle_path)
     assert torch.equal(loaded.output_ops[0].materialize_out(), expected)
+    resaved_path = tmp_path / "stream-resaved.tlspec"
+    trace.save(resaved_path)
+    resaved = tl.load(resaved_path)
+    for op in trace.saved_ops:
+        assert torch.equal(op.materialize_out(), resaved[op.label].materialize_out())
