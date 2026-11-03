@@ -33,7 +33,6 @@ _TESTS_ROOT = TESTS_DIR
 _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
     {
         "test_generative_properties_r73.py",
-        "test_io_error_typing_r65.py",
         "test_io_reconstructible_predicate_r10.py",
         "test_io_rollup_hardening_r10r60.py",
         "test_io_runnable_slot_id_uniqueness_r10.py",
@@ -106,14 +105,12 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_r7_torch_type_io_rce.py",
         "test_r8_operator_gate_rce.py",
         "test_r9_appliance_import_rce.py",
-        "test_rng_monitor_escapes_r3.py",
         "test_rng_seal_r57.py",
         "test_runnable_r36_regressions.py",
         "test_tlspec_runnable_r15_writeclass.py",
         "test_tlspec_runnable_r16_writeclass_temporal.py",
         "test_tlspec_runnable_r18_param_escape_parity.py",
         "test_tlspec_runnable_r19_param_buffer_writemask.py",
-        "test_tlspec_runnable_r20_state_toctou_attest.py",
         "test_tlspec_runnable_r21_attest_mha_dropout.py",
         "test_tlspec_runnable_r22_attest_tripwire_inf.py",
         "test_tlspec_runnable_r23_structseq_invert.py",
