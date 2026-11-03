@@ -4969,7 +4969,7 @@ package-docstrings	torchlens/_trace_core/relation_views.py	20
 package-docstrings	torchlens/_trace_core/relation_views.py	2026
 package-docstrings	torchlens/_trace_core/relation_views.py	3.2
 package-docstrings	torchlens/_trace_core/relation_views.py	3.5,
-package-docstrings	torchlens/_trace_selector_helpers.py	1_2
+package-docstrings	torchlens/_trace_selection_shape.py	1_2
 package-docstrings	torchlens/_trace_selector_helpers.py	256
 package-docstrings	torchlens/_trace_state.py	3.3,
 package-docstrings	torchlens/_transport.py	35
