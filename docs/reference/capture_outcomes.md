@@ -42,7 +42,9 @@ object is never mutated). Its message names the original type and text, the
 committed op count and the last captured op, and states the origin.
 `exc.partial_trace` is the `PartialTrace`; `exc.origin` is the same
 `FailureOrigin` the settled outcome records (classified on the original
-exception). TorchLens's own errors (a `TorchLensError`, or any exception
+exception), and `exc.fields["code"]` follows it: `forward_raised` for
+`user_op` and `unknown`, `capture_internal_error` for `torchlens` (both in
+the error refusal contract's stable-codes table). TorchLens's own errors (a `TorchLensError`, or any exception
 class defined in the `torchlens` package) propagate as themselves, also
 carrying `exc.partial_trace`. The outcome's `reason` and `error_type`
 describe the original exception in both cases. Interrupts (`KeyboardInterrupt`,

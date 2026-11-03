@@ -872,7 +872,7 @@ def _retained_storage_identities(tensor: RetainedPayload) -> list[tuple[tuple[An
     with pause_logging():
         try:
             if tensor.layout is not torch.strided:
-                from ._utils.tensor_utils import sparse_component_tensors
+                from ._utils._sparse_parts import sparse_component_tensors
 
                 device = str(tensor.device)
                 return [

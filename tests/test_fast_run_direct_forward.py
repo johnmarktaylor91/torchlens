@@ -182,12 +182,13 @@ def test_fast_run_collects_a_direct_forward_site_on_a_new_input(
     trace = tl.trace(model, torch.randn(2, 3))
     new_x = torch.randn(2, 3)
     result = trace.run(inputs=new_x, fast=True)
-    assert trace.last_run["engine"] == "guarded_fast", trace.last_run.get("fast_refused")
+    product = result.trace
+    assert product.last_run["engine"] == "guarded_fast", product.last_run.get("fast_refused")
     with torch.no_grad():
         native = model(new_x)
     _assert_same(native, result.output)
     fresh = tl.trace(model, new_x)
-    sites = list(trace.find_sites(tl.module("parent.inner")))
+    sites = list(product.find_sites(tl.module("parent.inner")))
     fresh_sites = list(fresh.find_sites(tl.module("parent.inner")))
     assert sites and len(sites) == len(fresh_sites)
     for site, fresh_site in zip(sites, fresh_sites, strict=True):
@@ -206,7 +207,7 @@ def test_fast_run_matches_the_full_run_on_the_same_input() -> None:
     full_trace = tl.trace(model, x)
     fast = fast_trace.run(inputs=x, fast=True)
     full = full_trace.run(inputs=x)
-    assert fast_trace.last_run["engine"] == "guarded_fast", fast_trace.last_run.get("fast_refused")
+    assert fast.trace.last_run["engine"] == "guarded_fast", fast.trace.last_run.get("fast_refused")
     _assert_same(full.output, fast.output)
 
 

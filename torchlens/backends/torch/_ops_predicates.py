@@ -83,11 +83,10 @@ def _replace_output_value(
         }
         return type(value)(**key_values)
     if isinstance(value, tuple) and hasattr(value, "_fields"):
-        replaced_items = [
-            _replace_output_value(item, (*path, NamedField(field)), replacements)
-            for field, item in zip(value._fields, value)
-        ]
-        return type(value)(*replaced_items)
+        return type(value)(*_replace_named_items(value, value._fields, path, replacements))
+    torch_fields = _torch_return_type_fields(value)
+    if torch_fields:
+        return type(value)(_replace_named_items(value, torch_fields, path, replacements))
     if dataclasses.is_dataclass(value) and not isinstance(value, type):
         changes = {
             field.name: _replace_output_value(
@@ -112,6 +111,44 @@ def _replace_output_value(
             for key, item in value.items()
         }
     return value
+
+
+def _replace_named_items(
+    value: tuple[Any, ...],
+    fields: tuple[str, ...],
+    path: tuple[OutputPathComponent, ...],
+    replacements: dict[tuple[OutputPathComponent, ...], torch.Tensor],
+) -> list[Any]:
+    """Rebuild the items of a field-named tuple under ``NamedField`` paths.
+
+    A namedtuple exposes ``_fields``; a ``torch.return_types`` structseq
+    (``max(dim=)``, ``topk``, ...) does not, but the container walker records
+    its children under ``NamedField`` paths too, so a hook result keyed by
+    ``NamedField("values")`` must be matched here and never fall through to
+    the positional-tuple branch, whose ``TupleIndex`` paths would silently
+    drop the edit. (A structseq constructs from one sequence, not ``*items``.)
+
+    Parameters
+    ----------
+    value
+        The tuple being rebuilt.
+    fields
+        Its ordered field names.
+    path
+        Path to ``value``.
+    replacements
+        Replacement tensors keyed by full output path.
+
+    Returns
+    -------
+    list[Any]
+        The rebuilt items in field order.
+    """
+
+    return [
+        _replace_output_value(item, (*path, NamedField(field)), replacements)
+        for field, item in zip(fields, value, strict=True)
+    ]
 
 
 def _replace_output_tensors_by_path(
@@ -470,6 +507,7 @@ from ._ops_capture_records import (  # noqa: E402
 )
 from ._ops_container_base import (  # noqa: E402
     _is_hf_model_output,
+    _torch_return_type_fields,
 )
 from .ops import (  # noqa: E402
     _BULK_ALIAS_FREE_TORCH_FUNCTIONS,

@@ -143,7 +143,7 @@ def test_overwrite_false_on_existing_raises(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError) as info:
         _build_bundle(1).save(target, overwrite=False)
-    assert info.value.fields.get("code") == "bundle_save_failed"
+    assert info.value.fields.get("code") == "bundle_path_exists"
 
     # The refusal left the original bundle exactly as it was.
     assert list(tl.load(target).members) == ["m0"]

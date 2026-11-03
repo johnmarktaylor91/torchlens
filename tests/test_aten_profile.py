@@ -17,7 +17,6 @@ from torchlens._data_classes.aten_op import AtenOp, OpRef
 from torchlens._io import ArtifactError
 from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
-from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.bundle import SuperAtenOp
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
@@ -198,16 +197,15 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
     """
 
     capture = tl.options.CaptureOptions(
-        backward_ready=backward_ready, **({"save_mode": "reference"} if backward_ready else {})
+        backward_ready=backward_ready,
+        aten_ops=True,
+        **({"save_mode": "reference"} if backward_ready else {}),
     )
-    kwargs: dict[str, object] = {}
-    with _activate_aten_recording_for_tests():
-        return tl.trace(
-            _TwoOpModel(),
-            torch.ones(2, requires_grad=backward_ready),
-            capture=capture,
-            **kwargs,
-        )
+    return tl.trace(
+        _TwoOpModel(),
+        torch.ones(2, requires_grad=backward_ready),
+        capture=capture,
+    )
 
 
 def test_documented_unstable_aten_surface_matches_glossary_index() -> None:
@@ -276,8 +274,9 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
 
     from torchlens._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
 
-    with _activate_aten_recording_for_tests():
-        trace = tl.trace(_SubclassCtorModel(), torch.ones(2, 3))
+    trace = tl.trace(
+        _SubclassCtorModel(), torch.ones(2, 3), capture=tl.options.CaptureOptions(aten_ops=True)
+    )
     profile = trace._primitive_op_profile
 
     expected_gap_count = 1 if HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE else 4
@@ -298,8 +297,7 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     """The shared observer attributes engine dispatches to active GradFn calls."""
 
     trace = _armed_trace(backward_ready=True)
-    with _activate_aten_recording_for_tests():
-        trace.log_backward(trace.output_ops[0].out.sum())
+    trace.log_backward(trace.output_ops[0].out.sum())
 
     backward_rows = [
         row for row in trace._primitive_op_profile.primitive_ops if row.capture_phase == "backward"
@@ -328,14 +326,9 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
 ) -> None:
     """Delayed links remain typed across CopySlices and in-place/view cases."""
 
-    capture = tl.options.CaptureOptions(backward_ready=True)
-    with _activate_aten_recording_for_tests():
-        trace = tl.trace(
-            model,
-            torch.ones(2, 3, requires_grad=True),
-            capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
-        )
-        trace.log_backward(trace.output_ops[0].out)
+    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True, save_mode="reference")
+    trace = tl.trace(model, torch.ones(2, 3, requires_grad=True), capture=capture)
+    trace.log_backward(trace.output_ops[0].out)
 
     rows = trace._primitive_op_profile.primitive_ops
     assert any(row.operator == expected_operator for row in rows)
@@ -350,8 +343,7 @@ def test_primitive_rows_retain_no_tensor_grad_fn_or_callable_objects() -> None:
     """The value-free profile holds no strong runtime object references."""
 
     trace = _armed_trace(backward_ready=True)
-    with _activate_aten_recording_for_tests():
-        trace.log_backward(trace.output_ops[0].out.sum())
+    trace.log_backward(trace.output_ops[0].out.sum())
 
     def assert_value_free(value: object) -> None:
         """Recursively reject tensors, autograd nodes, and callables.
@@ -386,8 +378,9 @@ def test_retention_does_not_change_completeness_census_counts(
     torch.manual_seed(7)
     plain = tl.trace(_TwoOpModel(), torch.randn(4))
     torch.manual_seed(7)
-    with _activate_aten_recording_for_tests():
-        armed = tl.trace(_TwoOpModel(), torch.randn(4))
+    armed = tl.trace(
+        _TwoOpModel(), torch.randn(4), capture=tl.options.CaptureOptions(aten_ops=True)
+    )
 
     fields = (
         "num_witness_events",
@@ -403,8 +396,9 @@ def test_retention_does_not_change_completeness_census_counts(
 def test_slash_module_address_does_not_enter_parent_or_opaque_aten_labels() -> None:
     """Slash remains legal in module addresses and absent from wave-0 parent labels."""
 
-    with _activate_aten_recording_for_tests():
-        trace = tl.trace(_SlashModuleModel(), torch.ones(2))
+    trace = tl.trace(
+        _SlashModuleModel(), torch.ones(2), capture=tl.options.CaptureOptions(aten_ops=True)
+    )
 
     module_addresses = list(trace.modules.keys())
     assert any("a/b" in address for address in module_addresses)

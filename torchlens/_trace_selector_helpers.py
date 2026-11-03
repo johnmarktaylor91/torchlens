@@ -146,7 +146,7 @@ def _route_save_label_selection(
     """
 
     if isinstance(save_value, str) and save_value.lower() == "stats":
-        # The reduce-and-discard save level: one Spine per op, no payload.
+        # Reduce-and-discard save level: one Spine per op. deferred: cycle stats (layering follow-up)
         from .stats._capture_stats import stats_save_options
 
         return stats_save_options(), _flatten_stage_names_in_options(capture_options, model)

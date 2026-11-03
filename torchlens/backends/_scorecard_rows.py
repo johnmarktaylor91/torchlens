@@ -17,12 +17,12 @@ from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._doctor_types import DoctorCheck, Severity, Status
 from .._io import _json
 from .registry import registered_backend_specs
 
 if TYPE_CHECKING:
     from ..conformance._scorecard import PreviewScorecard
-    from ..report._doctor import DoctorCheck, Severity, Status
 
 __tl_layer__ = "L2"
 
@@ -105,8 +105,6 @@ def backend_scorecard_rows() -> tuple[DoctorCheck, ...]:
 
 def _row_for_spec(spec: Any) -> DoctorCheck:
     """Build the row for one registered spec from its shipped record."""
-
-    from ..report._doctor import DoctorCheck
 
     record = read_shipped_scorecard(spec.name)
     framework = _framework_requirement(spec)

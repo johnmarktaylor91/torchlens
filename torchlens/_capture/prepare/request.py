@@ -234,6 +234,7 @@ def _run_plan_policy_rows(state: _DoorState) -> dict[str, Any]:
         "structure_only": opts.structure_only,
         "log_injections": opts.log_injections,
         "measure_host_peak_memory": opts.measure_host_peak_memory,
+        "aten_ops": opts.aten_ops,
         "transform": opts.input_transform,
         "raw_input": state.raw_input,
         "save_raw_input": state.save_raw_input_policy,

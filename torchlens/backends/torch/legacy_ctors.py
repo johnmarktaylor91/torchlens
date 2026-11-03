@@ -8,7 +8,7 @@ wraps tensors in ``torch.autograd.Variable``. Their C constructors dispatch
 stack and are invisible to ``TorchFunctionMode``, so such a forward left an
 unowned dispatch and failed validation completeness.
 
-Each class in ``LEGACY_TENSOR_CONSTRUCTOR_SITES`` (below) gets its
+Each class in ``_legacy_ctor_sites.LEGACY_TENSOR_CONSTRUCTOR_SITES`` gets its
 ``__new__`` replaced IN PLACE (``utils/_type_new_slot.py``): the class object,
 its identity, ``isinstance`` and ``x.type(torch.FloatTensor)`` are unchanged,
 and any alias bound before the first capture reaches the same patched class.
@@ -27,6 +27,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..._legacy_ctor_sites import LEGACY_TENSOR_CONSTRUCTOR_SITES
 from ..._utils import _torch_compat
 from ..._utils._type_new_slot import (
     TypeNewPatch,
@@ -39,36 +40,6 @@ from ..._utils._type_new_slot import (
     recover_c_new_from_bases,
     reinstate_original_new,
     restore_new_override,
-)
-
-# Legacy tensor constructors (2017-2019 idioms): ``torch.FloatTensor(size)``,
-# ``torch.LongTensor(data)``, a module attribute bound to the class at init
-# (``self.FloatTensor = torch.FloatTensor``), and ``torch.autograd.Variable(t)``.
-# Their C ``tp_new`` dispatches ``aten.empty`` / ``aten.detach`` with no Python
-# wrapper on the stack, so a forward that uses them left an unowned dispatch and
-# failed validation completeness. The CLASS OBJECTS are patched in place (their
-# ``__new__``), never the namespace attributes: identity, ``isinstance`` and
-# ``x.type(torch.FloatTensor)`` keep working, and an alias bound before the
-# first capture reaches the same patched class. Rows are (namespace, class
-# name); this module installs and restores them.
-# ``torch.Tensor`` itself is not listed: ``torch.Tensor.__new__`` is already an
-# ``IGNORED_FUNCS`` roster row.
-LEGACY_TENSOR_DTYPE_CLASS_NAMES: tuple[str, ...] = (
-    "FloatTensor",
-    "DoubleTensor",
-    "HalfTensor",
-    "BFloat16Tensor",
-    "LongTensor",
-    "IntTensor",
-    "ShortTensor",
-    "CharTensor",
-    "ByteTensor",
-    "BoolTensor",
-)
-LEGACY_TENSOR_CONSTRUCTOR_SITES: tuple[tuple[str, str], ...] = (
-    *(("torch", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
-    *(("torch.cuda", name) for name in LEGACY_TENSOR_DTYPE_CLASS_NAMES),
-    ("torch.autograd", "Variable"),
 )
 
 __all__ = [

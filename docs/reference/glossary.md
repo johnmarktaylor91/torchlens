@@ -308,12 +308,14 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 ### Documented-unstable ATen profile INDEX
 
-The wave-0 ATen execution-profile core is gated off for ordinary callers. As of the tlspec v8
-coordinated bump its fields persist (`FieldPolicy.KEEP`) and loaded profiles validate their
-foreign keys whenever present; older v6/v7 artifacts contain no primitive profile. The public recorder, entity accessors, and absent-profile
-refusal remain unavailable until the S2-owned capability amendment lands. The names below are the
-exact surface already introduced by the gated core. Each is documented unstable and may be renamed
-or removed without a compatibility alias. No validation or honesty tripwire may be weakened.
+The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)` and
+served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`, `Trace.aten_gaps` and
+`Op.aten_ops` (entries below this index); an absent profile refuses typed with
+`AtenOpsUnavailableError` (`aten_ops_unavailable`). As of the tlspec v8 coordinated bump the
+profile's fields persist (`FieldPolicy.KEEP`) and loaded profiles validate their foreign keys
+whenever present; older v6/v7 artifacts contain no primitive profile. The names below are the
+row-level surface the profile exposes. Each is documented unstable and may be renamed or removed
+without a compatibility alias. No validation or honesty tripwire may be weakened.
 
 <!-- ATEN-UNSTABLE-INDEX:START -->
 
@@ -341,6 +343,46 @@ or removed without a compatibility alias. No validation or honesty tripwire may 
 | Temporary label grammar | `aten_<sequence>` | unstable -- no deprecation shim owed |
 
 <!-- ATEN-UNSTABLE-INDEX:END -->
+
+**aten_ops (CaptureOptions)**
+: Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
+  dispatched to, as value-free `AtenOp` rows, through a dispatch mode installed for the forward
+  and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
+  no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
+  `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
+  loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
+  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
+
+**Trace.has_aten_ops**
+: `True` when the trace carries recorded ATen operations: after a capture with
+  `CaptureOptions(aten_ops=True)` (a present-but-empty profile counts) and after loading an
+  artifact saved from one; `False` otherwise. The one accessor that never raises. Spelling:
+  velocity walk builds.3 (1 Nov 2026; booleans take `is_`/`has_`).
+
+**Trace.aten_ops**
+: Every recorded `AtenOp` in dispatch order, forward rows then backward rows, as a tuple. Raises
+  `AtenOpsUnavailableError` (`aten_ops_unavailable`) when the capture recorded none, so an empty
+  answer never stands in for "recording was off".
+
+**Trace.aten_gaps**
+: The disclosed interiors where ATen rows are missing by construction (the profile's
+  `mode_paused_interior` records): each names the capture phase, the dispatch sequence it spans
+  and the owning op references of a stretch where the dispatch mode was paused, for example inside
+  a user-injected intervention. An empty tuple means the recorded rows are complete. Raises
+  `AtenOpsUnavailableError` when the capture recorded none.
+
+**Op.aten_ops**
+: The ATen operations this op's torch call dispatched to, in dispatch order: the rows whose
+  resolved owner references carry the op's label. An op whose call dispatched nothing observable
+  yields an empty tuple while the trace still `has_aten_ops`. Raises `AtenOpsUnavailableError`
+  when the owning trace recorded none.
+
+**AtenOpsUnavailableError**
+: `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code
+  `aten_ops_unavailable` in `exc.fields["code"]`: `Trace.aten_ops`, `Trace.aten_gaps` or
+  `Op.aten_ops` was read on a capture that recorded no ATen operations (the switch was off, the
+  artifact was saved without it, or the trace is a `run(fast=True)` result). The message names the
+  remedy, `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first to avoid it.
 
 `AtenOp` is one value-free dispatcher call measured during a concrete capture. Its label is opaque,
 capture-local, and intentionally excluded from universal Trace string lookup. `OpRef` is a redundant
@@ -559,8 +601,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   because a run would re-capture every payload into RAM while the bundle kept the first
   capture; capture again with `to_disk` to a new path, or without `to_disk`, and run that trace
   (a trace loaded from the bundle runs through its loaded providers). A `path` that already
-  exists refuses with `bundle_save_failed`, as does `Trace.save` or `Bundle.save` to an existing
-  path without `overwrite=True`.
+  exists refuses with `bundle_path_exists`, as does `Trace.save` or `Bundle.save` to an existing
+  path without `overwrite=True`. A `path` whose final component is a symlink refuses (the same
+  final-component rule `Trace.save` and `tl.load` apply; a symlinked parent passes).
 
 **Capture cache**
 : The opt-in `cache=True` content-hash store of finished captures. A hit requires the model's
@@ -1177,7 +1220,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   module;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
-  `transform_kind="autograd.grad"`, `autogradfunction`, a custom `autograd.Function`
+  `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
+  `torch.autograd.backward` call, with `transform_kind="autograd.backward"`, one op per leaf
+  gradient the pass writes, parented on the roots and, when the leaf already held a grad, on
+  that previous grad as its in-place receiver, so a later `param.grad` read has a producer;
+  `autogradfunction`, a custom `autograd.Function`
   whose forward left torch through a numpy or dlpack round trip, with
   `transform_kind="autograd.Function"`, and `jitscript`, one call to a
   `torch.jit.ScriptFunction` from an eager forward, with `transform_kind="jit.script"`);
@@ -1359,10 +1406,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   predicate through the capture door instead, and refuses
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
-  (a staged steer edited since capture). A staged edit addressed by a finalized label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
-  forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
-  unchanged). A staged edit whose selector matches sites on the trace but fires at none
+  (a staged steer edited since capture). A staged edit addressed by a finalized exact label
+  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) is translated before the forward to
+  the raw capture labels of the ops it names, the translation a mixed gradient plan's
+  activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
+  its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
+  A substring or regex selector on a finalized label still refuses through the live matcher
+  (`LiveModeLabelError`, with its authoring remedy). A staged edit whose selector matches sites on the trace but fires at none
   during a rerun of the same graph on the same inputs refuses with
   `rerun_selector_unmatchable_live` (trace unchanged), and so does, on any inputs, a
   `tl.where` predicate that matches sites on the rerun's own trace but fired at none during
@@ -1394,7 +1444,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
   `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
   `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
-  it is an edited forward, and no hook-aware check exists yet. Output leaves (the model's and each saved module's) are paired
+  it is an edited forward, and no hook-aware check exists yet. On a live trace the
+  `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
+  Trace untouched (JMT, Sun 1 Nov 2026); the legacy rerun door (`run(model, inputs)` with
+  `engine="rerun"`) still refreshes the source in place. Output leaves (the model's and each saved module's) are paired
   with the captured output ops by container path through capture's own output walker, so a
   stock Hugging Face forward returning a `DynamicCache` of per-layer key/value tensors reruns
   fast; a changed leaf count or an unmatched path still refuses
@@ -1507,6 +1560,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
+  3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
+  at load, on its manifest, metadata and blobs entries): a symlink there refuses
+  (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
+  and save and load use the same rule; `storage=tl.to_disk(...)` and `save_intervention`
+  apply it to their own targets (documented as is, JMT, Sun 1 Nov 2026).
   The staged intervention spec is session-only: `Trace.save` keeps the intervened
   values and their per-op provenance, and every legacy rerun door of a loaded intervened trace
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`, and an edit
@@ -2238,23 +2297,6 @@ S2-gated*
   `structure_only_refuted_hypothesis`, `structure_only_discharge_precondition`,
   `structure_only_type_invalid`.
 
-**PredicateProtocol** — *unstable — no deprecation shim owed*
-: `torchlens._ir.predicate_registry.PredicateProtocol` — the frozen callable
-  signature for the capture-lifecycle `save`/`halt`/`until` predicate slots:
-  one positional concrete `RecordContext`, returning a normalized decision.
-  The S4 seam contract; normative page:
-  [predicate_runtime.md](predicate_runtime.md). The `intervene=` and grad
-  slots are outside the protocol.
-
-**coerce_predicate(value, \*, slot)** — *unstable — no deprecation shim owed*
-: The single documented coercion door for predicate consumers
-  (`torchlens._ir.predicate_registry`). Closed value domain {raw callable,
-  registered-name str}; raw callables (including `BaseSelector` instances and
-  `followed_by` composites) return BY IDENTITY, registered names return a
-  slot-aware enforcing wrapper carrying
-  `__torchlens_cache_key__ = ("registered", name, version)`. Slot vocabulary
-  `save | halt | until` is closed (S2-owned); unknown slots refuse typed.
-
 **Selector / Selection / `__selection__`** — *unstable — no
 deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
 : `tl.Selector` is the composable selection QUERY — a frozen AST over leaf
@@ -2281,6 +2323,7 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   (`exact | upper_bound | lower_bound | unknown`). `tl.Selection` is
   session-time only, never persisted. Selection kinds `ACT | PARAM | EDGE`
   are a closed vocabulary; mixed kinds refuse `selection_kind_incompatible`.
+  See also: [Completeness of the selection algebra](selection_completeness.md).
 
 **Selection operators `| & - ~` (+ reflected)** — *ratified set (slate 5.4);
 semantics unstable-documented*
@@ -2369,7 +2412,8 @@ no deprecation shim owed*
   `no_index_space`. Both producers are pure functions over the ONE
   executed-DAG graph substrate (`torchlens._selection.graph._TraceGraph`,
   shared with the influence-geometry path machinery), the seam a future
-  graph-MOTIF producer plugs into.
+  graph-MOTIF producer plugs into. See also: [Completeness of the selection
+  algebra](selection_completeness.md) (why `tl.neighborhood` and `tl.between` are necessary).
 
 **TraceSlice / trace.between / trace.subgraph** — *unstable — no
 deprecation shim owed*
@@ -2486,7 +2530,9 @@ deprecation shim owed*
   tensor sidecar), the bound `axis`, the rows' `basis_sha256` and the basis
   provenance (`origin`, `method`, `origin_sha256`, `source_dtype`), so
   `tl.io.save_intervention(trace, path, level="portable")` reloads it as the
-  same projection, never as the plain verb over the whole site. A rotation
+  same projection, never as the plain verb over the whole site (the target path
+  follows the save/load symlink rule: its final component may not be a
+  symlink, a symlinked parent passes). A rotation
   learned elsewhere (DAS, ReFT) is applied as `tl.subspace(site, R[:k],
   origin=...)`; TorchLens applies it and does not fit it. At load a malformed
   field refuses `subspace_spec_invalid`, rows changed after saving refuse
@@ -2665,16 +2711,6 @@ deprecation shim owed*
 : `tap(resolved_selection)` stores each firing site's mask on the
   `TapRecord`; `values(masked=True)` returns fresh masked copies (selected
   elements). `values()` stays exactly the shipped full-snapshot behavior.
-
-**register_predicate(name, \*, replace=False)** — *unstable — no deprecation
-shim owed*
-: Registers a plain predicate callable under a name for later
-  `coerce_predicate` acceptance; returns the function truly unchanged (no
-  attribute stamped, nothing the restricted loader consults). Duplicate user
-  names refuse `predicate_name_conflict` without `replace=True`; builtin
-  names are never replaceable; name misses at coercion refuse
-  `predicate_unregistered`. The registry is INERT until consuming surfaces
-  adopt name acceptance.
 
 **color_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
 : The v1 encoding-channel value source on `Trace.draw` (L5 channel core). See
@@ -3062,8 +3098,9 @@ deprecation shim owed*
   the default save, the regime is `live_stop_after`, the output and the later saved
   sites read `None` for that run (the next full run refreshes them), and the verdict
   is `unverifiable` because the whole-forward call fingerprint cannot be compared.
-  The fast run refreshes the live trace in place, so that verdict marks the trace as
-  every truncated run product is marked (monotonic: save, export or validate it before
+  The fast run refreshes its result trace (`trace.run(..., fast=True)` on a live trace
+  returns a new Trace and leaves the source untouched; JMT, Sun 1 Nov 2026), so that
+  verdict marks the result trace as every truncated run product is marked (monotonic: save, export or validate it before
   training through `until=`).
   A loaded artifact's fast tier still refuses `run_fast_until_unsupported`. Full
   contract: [the runnable tlspec contract](runnable_tlspec_contract.md).
@@ -3976,7 +4013,7 @@ The sections above describe each surface in depth.
 | `tl.errors.ReplayValueMismatchError` | A recomputed selected activation differed from its archived bytes |
 | `tl.errors.SidecarError` | Raised for sidecar-family registration and payload refusals |
 | `tl.errors.TensorSubclassUnsupportedError` | A strict Tensor subclass could not be constructed while a mode was active here |
-| `tl.errors.TraceCaptureError` | Raised by every capture door when the forward raises a non-TorchLens exception; a `CaptureError` chained `from` the original (`exc.__cause__`, traceback intact, never mutated). `TraceCaptureError.partial_trace`: the `PartialTrace` captured before the failure (or `None`); `TraceCaptureError.origin`: the outcome's `FailureOrigin`. `fields` carries `cause_type`, `last_captured_op` and `num_captured_ops`. TorchLens's own errors propagate unwrapped and carry `partial_trace` too |
+| `tl.errors.TraceCaptureError` | Raised by every capture door when the forward raises a non-TorchLens exception; a `CaptureError` chained `from` the original (`exc.__cause__`, traceback intact, never mutated). `TraceCaptureError.partial_trace`: the `PartialTrace` captured before the failure (or `None`); `TraceCaptureError.origin`: the outcome's `FailureOrigin`. `fields['code']` is `forward_raised` (origin `user_op` or `unknown`) or `capture_internal_error` (origin `torchlens`); `fields` also carries `cause_type`, `last_captured_op` and `num_captured_ops`. TorchLens's own errors propagate unwrapped and carry `partial_trace` too |
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
@@ -3991,6 +4028,7 @@ The sections above describe each surface in depth.
 | `tl.grad` | Address the gradient of a site's output: `tl.grad("relu_3")`; builds a `GradSelector` |
 | `tl.intervention.BundleComparisonError` | The same class as `tl.errors.BundleComparisonError` |
 | `tl.intervention.Population` | A prepared, provenance-stamped donor population: `members`, `datums`, `origin`, `kind`, `content_digest`, `digest_kind`, `identity`, `eligible_indices(...)`, `mean(dim=None, ...)`, `std(dim=None, ...)`; built by `tl.intervention.population` |
+| `tl.intervention.SamplingRecord` | One realized draw of a stochastic edit, exported beside `FireRecord` (a `FireRecord.sampling` entry): a frozen record with `verb`, `base_seed`, `derived_seed`, `share_draw`, `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`, `donor_group_id`, `draw_indices` and `realized_draw_digest`; the field rows below define each |
 | `tl.intervention.label_contains` | Create a label-substring selector |
 | `tl.intervention.label_matches` | Create a label regex-pattern selector |
 | `tl.intervention.model_input` | Create a nested model-input path selector |
@@ -4104,8 +4142,8 @@ The sections above describe each surface in depth.
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
 | `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
-| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=` |
-| `Bundle.rank_changes` | Rank sites by their distance from a baseline member |
+| `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
+| `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `BundleComparisonError.severity` | The error's severity class |
 | `CapabilityRow.is_available` | Whether the capability is available in this environment |
 | `CaptureFacts.is_structure_only` | Whether the capture kept structure only, without payloads |

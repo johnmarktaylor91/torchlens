@@ -14,6 +14,7 @@ import torch
 from ..._capture.outcome import require_capture_capability
 from ..._capture.structure_only import require_structure_only_capability
 from ..._errors import PayloadUnavailableError
+from ..._trace_state import is_stats_capture
 from ...errors import RunCapabilityUnavailableError
 from .._backend_protocol import refuse_backward_capture_unsupported
 from ..registry import get_backend_spec
@@ -70,8 +71,6 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
     outcome (a missing payload must never read as a pass).
     """
 
-    from ...stats._capture_stats import is_stats_capture
-
     if not is_stats_capture(trace):
         return
 
@@ -84,6 +83,19 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
         f"{action} on that trace; tl.validate(model, x, scope='forward') runs its own full capture",
         purpose=purpose,
     )
+
+
+def _require_live_replay(trace: Any) -> None:
+    """Refuse a live replay that the trace's capture cannot drive.
+
+    The gates every push runs before touching the graph, shared by ``Trace.push``
+    and the ``do()`` push that starts only from its own hooks: a halted or failed
+    capture, a structure-only capture, and a ``save="stats"`` trace.
+    """
+
+    require_capture_capability(trace, "live_replay")
+    require_structure_only_capability(trace, "live_replay")
+    _refuse_stats_capture(trace, "live_replay")
 
 
 def log_backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:

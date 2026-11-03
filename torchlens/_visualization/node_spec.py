@@ -238,7 +238,7 @@ def _forward_site(site: Any) -> Any:
     """
 
     from .._data_classes.grad_fn import GradFn
-    from .._ir.selector_eval import _grad_fn_forward_op
+    from .._ir._selector_universe import _grad_fn_forward_op
 
     if isinstance(site, GradFn):
         return _grad_fn_forward_op(site)
