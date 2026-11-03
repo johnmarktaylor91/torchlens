@@ -89,6 +89,33 @@ def _uop_name(uop: Any) -> str:
     return str(getattr(op, "name", op)).removeprefix("Ops.")
 
 
+def _op_func_name(observed_names: Sequence[str], op_name: str) -> str:
+    """The function name an op is recorded under.
+
+    The observer reports the callable tinygrad passed to ``Tensor._apply_uop``.
+    tinygrad routes most ops through internal helpers (``_mop`` for movement
+    ops, ``_rop`` for reductions, a ``lambda`` for elementwise math), and those
+    names do not say what the op computes. The last observed name that is not
+    such a helper is used; otherwise the UOp's op name (``add``, ``reshape``,
+    ``reduce``).
+
+    Parameters
+    ----------
+    observed_names
+        Names the observer recorded for the UOp, in call order.
+    op_name
+        The UOp's op name (:func:`_uop_name`).
+
+    Returns
+    -------
+    str
+        The recorded function name.
+    """
+
+    informative = [name for name in observed_names if not name.startswith(("_", "<"))]
+    return informative[-1] if informative else op_name.lower()
+
+
 def _data_flow_uops(
     uops: Sequence[Any],
     outputs: Sequence[Any],

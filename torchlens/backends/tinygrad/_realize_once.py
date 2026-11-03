@@ -12,9 +12,10 @@ Random-init weights. A ``tinygrad.nn`` layer's default init leaves each weight
 as a lazy Threefry graph until something realizes it. A UOp that a live tensor
 already held before the forward ran, and whose graph carries RNG state, is such
 a pre-forward random value: the capture records it as a parentless value
-realized in the same single call and does not walk into its generator subgraph.
-After the call the weight is the buffer tinygrad realized, so the capture
-records the same ops it records for a model whose weights were realized first.
+realized in the same single call and does not walk into its generator subgraph,
+so the capture records the same ops it records for a model whose weights were
+realized first. The forward's outputs are computed as the eager forward
+computes them, so they equal the eager forward of the same seed.
 Random state drawn inside the forward has no such boundary: its value would
 change if anything evaluated it again, so the capture refuses
 ``rng_state_in_graph`` before anything is realized.
@@ -210,9 +211,8 @@ def realize_recorded_values(
     the UOp itself a buffer boundary, so every consumer, the outputs included,
     is computed exactly as the eager forward computes it (tinygrad fuses
     elementwise and reduce chains, and storing an intermediate would change
-    the rounding downstream). A pre-forward random value is listed as itself,
-    so tinygrad points the model's weight tensor at the realized buffer and
-    later reads see the values the capture recorded instead of drawing again.
+    the rounding downstream). A pre-forward random value is listed the same
+    way, so the forward's outputs equal the eager forward of the same seed.
 
     Parameters
     ----------
@@ -256,11 +256,13 @@ def _realization_targets(
 ) -> tuple[dict[int, Any], frozenset[int]]:
     """The tensors :func:`realize_recorded_values` lists, before realizing.
 
-    A forward value is listed as ``CONTIGUOUS(uop)``; when tinygrad returns the
+    Every value is listed as ``CONTIGUOUS(uop)``; when tinygrad returns the
     UOp itself (it already has a buffer, is already contiguous, or has no
     device) the buffer is shared, so the key is not owned. A pre-forward
-    random value is listed as itself so tinygrad repoints the model's weight
-    tensor at the realized buffer: it is drawn once, here.
+    random value is listed the same way: its consumers keep computing it
+    inline as the eager forward does, and its random bits (``Tensor.rand`` is
+    a buffer boundary) are drawn once in the same schedule, after which
+    tinygrad points the weight's graph at that buffer.
     """
 
     from tinygrad import Tensor
@@ -270,7 +272,7 @@ def _realization_targets(
     for uop in (*source_uops, *plan.recorded):
         if id(uop) in realized:
             continue
-        target = uop if id(uop) in plan.random_values else uop.contiguous()
+        target = uop.contiguous()
         realized[id(uop)] = Tensor(target)
         if target is not uop:
             owned.add(id(uop))
@@ -308,8 +310,8 @@ def realize_capture(
 ) -> RealizedCapture:
     """Read the forward's graph, plan the capture, and realize it once.
 
-    Every UOp is read before the single realization, which repoints the input,
-    output and random-init weight tensors at their buffers.
+    Every UOp is read before the single realization, which repoints the
+    output tensors at their buffers.
 
     Parameters
     ----------
@@ -360,8 +362,7 @@ def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any, b
         ``(uop, realized_tensor, model_uop, owned)``: the recorded UOp (its
         ``src`` gives the parent edges), the tensor holding its value, the UOp
         the model, the observer and consumers know the value by, and whether
-        the capture owns the tensor's buffer (else the payload is a copy; a
-        random-init weight's buffer is the model's own).
+        the capture owns the tensor's buffer (else the payload is a copy).
     """
 
     from tinygrad import Tensor
@@ -371,8 +372,9 @@ def recorded_values(capture: RealizedCapture) -> Iterator[tuple[Any, Any, Any, b
         if id(uop) not in capture.plan.random_values:
             yield uop, tensor, uop, id(uop) in capture.owned
             continue
+        owned = id(uop) in capture.owned
         for value_uop in realized_value_uops(tensor):
             if value_uop is tensor.uop:
-                yield value_uop, tensor, uop, False
+                yield value_uop, tensor, uop, owned
             else:
-                yield value_uop, Tensor(value_uop), value_uop, False
+                yield value_uop, Tensor(value_uop), value_uop, owned

@@ -93,7 +93,7 @@ from ._rules import (
     constant_kind_for_uop,
     refuse_constant_unrealizable,
 )
-from ._uop_graph import _data_flow_uops, _unique_uops, _uop_name
+from ._uop_graph import _data_flow_uops, _op_func_name, _unique_uops, _uop_name
 
 _ACTIVE_TINYGRAD_MODULE_STACK: list[TinygradModuleFrame] = []
 
@@ -888,7 +888,7 @@ class TinygradBackend:
             trace=trace,
             kind="op",
             layer_type=constant_func_name(constant_kind, op_name.lower()),
-            func_name=constant_func_name(constant_kind, (names or (op_name.lower(),))[-1]),
+            func_name=constant_func_name(constant_kind, _op_func_name(names, op_name)),
             output=payload,
             parents=parents,
             parent_arg_positions={

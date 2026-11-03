@@ -84,7 +84,15 @@ def test_random_init_weights_record_their_realized_values() -> None:
 
 
 def test_random_init_capture_equals_capture_after_realizing_weights() -> None:
-    """Capturing lazy random weights records what capturing pre-realized ones records."""
+    """Capturing lazy random weights records what capturing pre-realized ones records.
+
+    The same ops, shapes and dtypes, and the same input and weight values.
+    Values computed from the weights are compared with the eager forward in
+    ``test_random_init_layer_captures_like_one_eager_forward``: tinygrad
+    computes lazy weights inline in their consumers, so a forward over lazy
+    weights and one over realized weights may round differently, in eager
+    tinygrad as in the capture.
+    """
 
     lazy_layer = _random_linear()
     lazy_trace = tl.trace(lambda value: lazy_layer(value).relu(), Tensor(_X), backend="tinygrad")
@@ -95,20 +103,18 @@ def test_random_init_capture_equals_capture_after_realizing_weights() -> None:
         lambda value: realized_layer(value).relu(), Tensor(_X), backend="tinygrad"
     )
 
-    lazy_ops = _op_payloads(lazy_trace)
-    realized_ops = _op_payloads(realized_trace)
-    assert [name for name, _ in lazy_ops] == [name for name, _ in realized_ops]
-    for (_, left), (_, right) in zip(lazy_ops, realized_ops, strict=True):
-        np.testing.assert_array_equal(left, right)
+    lazy_ops = list(lazy_trace._layer_list)
+    realized_ops = list(realized_trace._layer_list)
+    assert [op.func_name for op in lazy_ops] == [op.func_name for op in realized_ops]
+    for left, right in zip(lazy_ops, realized_ops, strict=True):
+        left_value, right_value = np.asarray(left.out.numpy()), np.asarray(right.out.numpy())
+        assert (left_value.shape, left_value.dtype) == (right_value.shape, right_value.dtype)
+        if not left.parents:
+            np.testing.assert_array_equal(left_value, right_value)
 
 
 def test_capture_realizes_the_forward_graph_once(monkeypatch: pytest.MonkeyPatch) -> None:
-    """One ``realize_once`` call; nothing outside it evaluates RNG or a recorded op again.
-
-    Reading a realized buffer back (the payload copy of a weight the model
-    holds) evaluates nothing, so a recorded value that is a view of a buffer
-    may appear in a later read; a recorded computation may not.
-    """
+    """One ``realize_once`` call; nothing outside it evaluates RNG or a recorded op again."""
 
     from torchlens.backends._protocols.tinygrad import TinygradProtocol
 
@@ -145,7 +151,6 @@ def test_capture_realizes_the_forward_graph_once(monkeypatch: pytest.MonkeyPatch
         id(capture.uop)
         for capture in trace.tinygrad_uop_captures
         if capture.parent_labels
-        and capture.uop.base.op.name != "BUFFER"
         and any(node.op.name == "BUFFER" for node in capture.uop.toposort())
     }
     assert recorded
