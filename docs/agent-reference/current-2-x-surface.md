@@ -992,7 +992,7 @@
   dataflow edge family (EdgeUseRecords; replayable-gated, refusal
   `edge_provenance_unavailable`); canonical occurrence address
   `(child_func_call_id, arg_kind, arg_path)`. `do(edge_selection, edit)`
-  replaces the value CONSUMED on the edge on the replay/push engine ONLY
+  replaces the value CONSUMED on the edge on the replay engine ONLY
   (rerun/set_only refuse `edge_intervention_engine_unsupported`; rerun-side
   design is an escalated named future) — the child re-executes from the
   substituted input (node-level `is_edited` never fires for
@@ -1032,17 +1032,31 @@
   `substitution_kind="param"`, edit-then-scatter masking over the param
   space, ONE replay pass over all consumer origins whose cone recomputation
   RE-SPLICES every tier-(ii) entry (param, region, and edge kinds), so later
-  pushes never silently revert any edit; chained param edits compose), and the SAME
+  replays never silently revert any edit; chained param edits compose), and the SAME
   validation boundary (`edge_intervention_boundary`; uncorroborated FAIL).
-  Replay/push engine ONLY: rerun/set_only refuse
+  Replay engine ONLY: rerun/set_only refuse
   `param_substitution_engine_unsupported`. The audit record (kind `PARAM`)
   discloses "substituted at consumption ... live parameters unchanged".
+- ONE EDITING VERB: `Trace.do` stages an edit and propagates it in one call.
+  `trace.do(site, value)` sets the site and replays its downstream cone;
+  `trace.do(site, hook)` attaches a sticky hook or helper and replays;
+  `trace.do({a: h1, b: h2})` applies several edits in one propagation; an
+  `InterventionSpec` or `Recipe` applies its rules.
+  `InterventionOptions(engine="set_only")` stages without propagating (the next
+  `run` or `backward` fires it); `InterventionOptions(differentiable=True)` (replay
+  engine only; rerun and set-only ignore it) replays onto a new fork whose outputs
+  stay differentiable and returns it. `do` returns the trace, never a handle:
+  `trace.clear_edits(site)` detaches staged edits. `Trace.set` stays the one-shot
+  staging write. The removed stage, propagate and detach spellings are mapped in
+  `docs/reference/deprecations.md`; `ReplayOptions` carries no hook or
+  differentiable field.
 - CHANGED PARAMETERS REFUSE REPLAY (spellings DOCUMENTED-UNSTABLE): a
   replay template holds the live `nn.Parameter`, and capture records its
   version counter, storage pointer and shape on the template literal
   (session-only, `torchlens/intervention/_param_fingerprint.py`). Every
-  replay door (`do()` on the replay engine, `push`, `push_from`,
-  differentiable replay, later replays of every fork kind) refuses
+  replay door (`do()` on the replay engine, for a single site, a mapping of
+  several edits or a resolved selection; `InterventionOptions(differentiable=True)`;
+  later replays of every fork kind) refuses
   `replay_param_changed_since_capture` (`ReplayPreconditionError`, fields
   `param`/`op`/`changed`) when a consumed parameter changed since capture
   (optimizer step, `load_state_dict`, in-place op under `no_grad`,
@@ -1053,7 +1067,7 @@
   parameter object is never read (the template keeps the captured one).
   The rerun engine runs the live model and ignores the option.
 - PASS-QUALIFIED REPLAY (decided 2026-08-17; refusal spelling
-  DOCUMENTED-UNSTABLE): the replay/push engine operates on pass-qualified
+  DOCUMENTED-UNSTABLE): the replay engine operates on pass-qualified
   op labels (`Op.label`, the `label:pass` spelling — single-pass ops carry
   `:1`). Cone traversal, the replay overlay, hook targets, origin sets, and
   pending commits are all keyed per pass, so `fork.do(...)` on multi-pass
@@ -1072,7 +1086,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/attach_hooks/push_from/`trace[selector]`), `selection_unresolvable` /
+  (`do`/`set`/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1340,7 +1354,7 @@
   profiler, and related tools. `bridge.sae.splice(model_or_log, inputs, site=, sae=,
   latents_edit=, tokens=, exclude_bos=False, keep_latents=True, log_latents=False)` (DOCUMENTED-UNSTABLE) is
   the packaged SAE splice experiment: fork +
-  `tl.splice_module` + push swaps a duck-typed SAE's reconstruction (`encode`/`decode`
+  `tl.splice_module` + `do` swaps a duck-typed SAE's reconstruction (`encode`/`decode`
   pair, no SAE package required) in at one site and reports reconstruction fidelity plus
   output-level causal effect; `latents_edit=` is the per-feature causal knob (demo:
   `notebooks/sae_splice_tutorial.ipynb`). `SpliceResult` metrics are float64 and follow
@@ -1358,7 +1372,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
+  (`Trace.set`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
@@ -1517,7 +1531,7 @@
   16-slot float64 vector per op) and no payload is kept. `tl.stats.site_stats(trace)` returns
   `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
   `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
-  `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
+  `validate_forward_pass`, `save_new_outs`, `do` on the replay engine on the trace),
   `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
 - Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,

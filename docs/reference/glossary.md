@@ -642,8 +642,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Trace.recipe and Trace.clear_edits**
 : `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
-  sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
+  sticky edits that `Trace.do` attached (a hook or helper edit, including one staged with
+  `InterventionOptions(engine="set_only")`) by site or by handle, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+  It is the one way to detach an edit: `do` returns the trace, not a removable handle.
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
@@ -660,14 +662,22 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   step, `load_state_dict`, an in-place op under `torch.no_grad()`, `param.data = t`), every replay
   door refuses `replay_param_changed_since_capture` (`ReplayPreconditionError`, naming the
   parameter and the op) rather than silently compute with the new value: `do()` on the replay
-  engine, `push`, `push_from`, differentiable replay, and later replays of every fork (a rerun
-  fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
+  engine (a single site, a mapping of several edits, or a resolved selection),
+  `do(..., intervention=InterventionOptions(differentiable=True))`, and later replays of every
+  fork (a rerun fork checks against the weights its rerun ran with). `allow_changed_params=True` (default
   `False`) replays with the current values and records the parameter names in
   `trace.last_run["replayed_with_changed_params"]`. Not detected: an in-place write through
   `param.data` or through a numpy or raw-storage alias. A replaced parameter object
   (`module.weight = nn.Parameter(t)`) is not used by replay at all: the template keeps the
   captured object. For an as-if weight edit use `fork.do(tl.param(name), edit)`. The rerun
   engine runs the live model and ignores the option.
+
+**differentiable** (`InterventionOptions`) *(spelling documented-unstable)*
+: `InterventionOptions(differentiable=True)` (default `False`) on `Trace.do`. Only the replay
+  engine reads it; rerun and set-only ignore it; the replay lands on a new fork whose outputs
+  stay differentiable (fresh frontier leaves), and `do` returns that fork instead of replaying
+  the trace it was called on in place. `ReplayOptions` carries no `differentiable` field. Which edits keep
+  the graph under which door: docs/gradient_contract.md.
 
 **torchlens.intervention.subspace_ablate(basis, *, mode="zero", dim=-1, mean=None, seed=None)** — *documented-unstable*
 : Edit acting on the component of a site value inside the span of a `[k, d]` basis (rows need
@@ -703,8 +713,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   graph-keeping zero; `keep_grad(tl.intervention.compose(tl.scale(0.0), tl.add(value)))` the
   graph-keeping fixed value. A wrapped `Edit` carries `("keep_grad", True)` in its metadata and
   `portability="opaque_audit"`. A backward edit or a non-edit refuses `keep_grad_edit_invalid`.
-  Under differentiable replay (`push(replay=ReplayOptions(differentiable=True))`) a passing
-  check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
+  Under differentiable replay
+  (`do(site, edit, intervention=InterventionOptions(differentiable=True))`) a passing check warns once per session with code `keep_grad_replay_frontier`: parameters upstream of the
   replay frontier get no gradient; the live door `tl.when(site, keep_grad(edit)).bind(model)(x)`
   reaches them. Which verbs keep the graph under which door: docs/gradient_contract.md.
 
@@ -1361,20 +1371,28 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   in the same call. A non-callable refuses `do_loss_not_callable`, a plan with no gradient site
   refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
   detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
-  on the trace itself for its own `trace.backward(loss)`. `attach_hooks(tl.grad(s), edit)`
-  registers the sticky rule without a rerun; when the trace holds no live backward graph its
-  `attach_hooks` history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
-  backward). A saved trace keeps the armed rules and records their
+  on the trace itself for its own `trace.backward(loss)`:
+  `do(tl.grad(s), edit, intervention=InterventionOptions(engine="set_only"))` registers the
+  sticky rule without a rerun; when the trace holds no live backward graph the history row it
+  records (kind `"attach_hooks"` in `state_history`) carries `armed_for="next_rerun"` (the rule
+  waits for the next rerun's backward). A saved trace keeps the armed rules and records their
   count in `annotations["armed_gradient_edits"]`.
 
 **Replay verbs**
-: `Trace.do` applies a one-shot intervention to a captured log; `Trace.push` pushes an edit
-  downstream through the recorded graph (DAG replay) and `Trace.push_from` pushes from a
-  pre-mutated site; `Trace.run` performs a full-forward run with the log's active
-  intervention spec; `tl.sweep` captures one intervened trace per swept replacement
-  value. (The former `replay`/`replay_from`/`rerun` aliases are removed.) Replay re-executes
-  forward ops only, so a gradient site on `do` without `model=`/`x=`, on `engine="replay"`, or in
-  `push` refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
+: `Trace.do` is the one editing verb on a captured log, and it propagates what it stages: a
+  non-callable value sets the site, a hook or helper attaches as a sticky rule, a mapping of
+  sites to edits (`trace.do({a: h1, b: h2})`) applies several edits in one propagation, and an
+  `InterventionSpec` or `Recipe` applies its rules. On the replay engine the edit is pushed
+  downstream through the recorded graph (DAG replay of the affected cone);
+  `InterventionOptions(engine="set_only")` stages the edit without propagating;
+  `InterventionOptions(differentiable=True)` replays onto a new fork whose outputs stay
+  differentiable and returns it; `Trace.clear_edits` detaches staged edits. `Trace.run`
+  performs a full-forward run with the log's active intervention spec; `tl.sweep` captures one
+  intervened trace per swept replacement value. (The former `replay`/`replay_from`/`rerun`
+  aliases are removed, and so are the separate stage, propagate and detach verbs that `do`
+  folded in; docs/reference/deprecations.md maps each.) Replay re-executes
+  forward ops only, so a gradient site on `do` without `model=`/`x=` or on `engine="replay"`
+  refuses `replay_gradient_edit_unsupported` before any mutation ("Pass model= and x= to
   rerun with the edit armed, then call result.backward(loss) (or pass loss=), or stage it with
   engine='set_only' and call trace.backward(loss) on this trace"); differentiable replay of
   gradient edits is out of scope this release. The replay engine operates on pass-qualified op labels
@@ -1392,7 +1410,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
   (a staged steer edited since capture). A staged edit addressed by a finalized exact label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) is translated before the forward to
+  (`Trace.set(label, ...)`, `do(tl.label(...), hook)`) is translated before the forward to
   the raw capture labels of the ops it names, the translation a mixed gradient plan's
   activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
   its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
@@ -1421,8 +1439,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
   non-module target, `run_capability_unavailable:fast_rerun_graph_unsteered` when a staged
-  entry has never fired in the trace's recorded graph, as after `attach_hooks()` on a plain
-  capture, or when the graph records a fire no staged entry accounts for, as after
+  entry has never fired in the trace's recorded graph, as after a hook staged
+  with `InterventionOptions(engine="set_only")` on a plain capture, or when the graph records a fire no staged entry accounts for, as after
   `clear_hooks()` on a steered capture, so the capture engine reruns once to record the current
   plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
@@ -1974,7 +1992,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
-  `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
+  `tl.head` selector serves (`Trace.set`, `Trace.do`,
   `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
   `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
@@ -2582,7 +2600,7 @@ S2/S3-gated*
   selections (whole-edge granularity; `~` complements within the trace's
   edge family). `do(edge_selection, edit)` replaces the value CONSUMED on
   the edge — only the child's consumption changes; `parent.out` stays
-  producer truth. Ships on the replay/push engine ONLY
+  producer truth. Ships on the replay engine ONLY
   (`edge_intervention_engine_unsupported` otherwise; the rerun-engine design
   is an escalated named future). Storage fork: the substituted value lives
   in the `Op.edge_substitutions` store, persisted as of the tlspec v8 bump (+
@@ -2642,11 +2660,11 @@ deprecation shim owed*
   `substitution_kind="param"`, edit-then-scatter masking over the param
   index space, one replay pass over all consumer origins (cone
   recomputation RE-SPLICES every tier-(ii) entry — param, region, AND
-  edge kinds — so later pushes never silently revert any edit; a chained
+  edge kinds — so later replays never silently revert any edit; a chained
   `do(tl.param(p), scale(0.5))` COMPOSES on the staged "as if" value,
   0.25, keeping both FireRecords), and the same validation boundary
   (`edge_intervention_boundary` — a different check, never no check;
-  uncorroborated entries FAIL). Replay/push engine ONLY:
+  uncorroborated entries FAIL). Replay engine ONLY:
   rerun/set_only refuse `param_substitution_engine_unsupported`. The audit
   record (kind `PARAM`) discloses "substituted at consumption … live
   parameters unchanged" — the product is DERIVED-class, never a blessed
@@ -4539,7 +4557,6 @@ alphabetical order.
 | `Trace.profile_enabled` | Whether this capture was run with profiling requested |
 | `Trace.reconstruct_container` | Rebuild a captured container selected by site and role from saved Op values |
 | `Trace.reconstruct_output` | Rebuild the traced model's final Python output object from saved Op values |
-| `Trace.remove` | Detach the hook attachments made by the most recent single-hook `attach_hooks` call |
 | `Trace.render_dagua_graph` | Render this trace with the experimental Dagua backend |
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
@@ -4552,7 +4569,7 @@ alphabetical order.
 | `Trace.saved_module_calls` | Accessor for the ModuleCalls whose outputs include saved activations |
 | `Trace.saved_modules` | Accessor for the Modules with at least one saved-activation ModuleCall |
 | `Trace.show_call_tree` | Print this Trace's `ModuleCall` tree as an ASCII tree, with options for depth, atomic calls and call indices |
-| `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, push, run and direct write |
+| `Trace.state_history` | Append-only list of lifecycle events for this trace, such as fork, do, run and direct write |
 | `Trace.tlspec_version` | Integer version of the `.tlspec` format, used for save and load compatibility |
 | `Trace.to_dagua_graph` | Translate this trace into an experimental Dagua graph |
 | `Trace.transforms` | Tuple of the Op records that mark transform boundaries |
