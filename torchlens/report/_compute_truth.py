@@ -29,7 +29,7 @@ from .._errors import InvalidArgumentError
 from .._quantities import Flops, Macs
 from .._record_type import record_type
 from .._utils._display_card import render_card
-from .._utils._display_constructor import clipped
+from .._utils._display_constructor import clipped, display_guard
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -269,11 +269,13 @@ class ComputeAggregation:
     by_dtype: tuple[tuple[str, int], ...]
     execution_modes: tuple[tuple[str, int], ...]
 
+    @display_guard
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
         return clipped(f"ComputeAggregation {self.scope}: {len(self.rows)} rows")
 
+    @display_guard
     def __str__(self) -> str:
         """Show compute totals with their convention and scope."""
 

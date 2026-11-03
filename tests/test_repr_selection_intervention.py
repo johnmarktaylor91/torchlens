@@ -66,6 +66,7 @@ def test_recipe_spelling_rebuilds_exactly_or_discloses_rule_count() -> None:
     recipe = tl.when(tl.func("relu"), tl.zero_ablate())
     assert repr(recipe) == "tl.when(tl.func('relu'), tl.zero_ablate())"
     assert eval(repr(recipe), {"tl": tl}) == recipe
+    assert str(recipe).splitlines()[0] == repr(recipe)
     opaque = tl.when(tl.func("relu"), lambda x: x)
     assert repr(opaque) == "Recipe: 1 rule"
     merged = recipe & tl.when(tl.func("tanh"), tl.scale(2.0))
@@ -140,3 +141,7 @@ def test_candidate_rows_use_five_stored_display_keys() -> None:
         "  candidates 'relu_1', '0', '1', '2', '3'; and 4 more",
         "  remedy    choose a key.",
     ]
+    error = tl.errors.InvalidArgumentError(message, code="example", remedy="choose a key.")
+    assert str(error) == message
+    assert error.fields["code"] == "example"
+    assert error.fields["remedy"] == "choose a key."

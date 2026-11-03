@@ -87,7 +87,7 @@ def recipe_card(recipe: Recipe) -> str:
     ]
     if len(recipe.rules) > LIST_LIMIT:
         rows.append(("rules", f"... and {len(recipe.rules) - LIST_LIMIT} more rules"))
-    return render_card(f"Recipe: {plural(len(recipe.rules), 'rule')}", rows, (".rules",))
+    return render_card(repr(recipe), rows, (".rules",))
 
 
 @display_guard
@@ -158,6 +158,22 @@ def edge_repr(edge: Any) -> str:
     relation = f", {edge.view_or_copy}" if edge.view_or_copy in ("view", "copy") else ""
     return clipped(
         f"EdgeUseRecord: {edge.parent_label} -> {edge.child_label}, {edge.arg_kind} {path}{relation}"
+    )
+
+
+@display_guard
+def edge_card(edge: Any) -> str:
+    """Expose the stored occurrence address without printing nested payloads."""
+
+    return render_card(
+        edge_repr(edge),
+        [
+            ("parent", edge.parent_label),
+            ("child", edge.child_label),
+            ("argument", f"{edge.arg_kind} {value_text(edge.arg_path)}"),
+            ("relation", edge.view_or_copy or "not recorded"),
+        ],
+        (".parent_label", ".child_label", ".child_func_call_id", ".arg_path"),
     )
 
 

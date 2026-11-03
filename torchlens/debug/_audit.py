@@ -126,7 +126,7 @@ class HealthReport(Report):
     def __str__(self) -> str:
         """Show a bounded set of findings and skipped checks."""
 
-        rows = [
+        rows: list[tuple[str, str]] = [
             (finding.severity, f"{finding.check}: {finding.message}; {finding.follow_up}")
             for finding in self.findings[:LIST_LIMIT]
         ]

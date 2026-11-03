@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._audit import HealthReport
 from torchlens.debug._graph import _compare_rows, dead_neurons_rows as _dead_neurons_rows
 from torchlens.options import CaptureOptions
 from torchlens.report._report_protocol import REPORT_MAX_FINDINGS, BoundedReport
@@ -129,7 +130,10 @@ def test_helper_returns_the_debug_report(helper: str, fixtures: dict[str, Any]) 
     assert isinstance(report.to_pandas(), pd.DataFrame)
 
     text = str(report)
-    if type(report)._prints_repr:
+    if isinstance(report, HealthReport):
+        assert text.splitlines()[0] == repr(report)
+        assert text.splitlines()[-1].startswith("  more ")
+    elif type(report)._prints_repr:
         assert text == repr(report)
     else:
         lines = text.splitlines()

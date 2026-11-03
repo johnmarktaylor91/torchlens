@@ -11,6 +11,7 @@ from torch import Tensor
 from torch.nn import Module
 from torch.utils.hooks import RemovableHandle
 
+from torchlens._utils._display_errors import lookup_message
 from torchlens.attribution._core import (
     _DOCS_POINTER as _INTEGER_DOCS_POINTER,
     Attribution,
@@ -306,7 +307,7 @@ def _feeding_original_leaves(
     return tuple(feeding)
 
 
-def _format_layer_options(model: Module) -> str:
+def _format_layer_options(model: Module) -> list[str]:
     """Return a compact list of useful layer-name suggestions.
 
     Parameters
@@ -316,8 +317,8 @@ def _format_layer_options(model: Module) -> str:
 
     Returns
     -------
-    str
-        Comma-separated module names suitable for an error message.
+    list[str]
+        Module names suitable for a bounded candidate row.
     """
 
     named_modules = dict(model.named_modules())
@@ -326,12 +327,7 @@ def _format_layer_options(model: Module) -> str:
         for name, module in named_modules.items()
         if name and ("conv" in name.lower() or "conv" in type(module).__name__.lower())
     ]
-    options = conv_like[:5]
-    if not options:
-        options = [name for name in named_modules if name][:5]
-    if not options:
-        return "<no named child modules>"
-    return ", ".join(options)
+    return conv_like or [name for name in named_modules if name]
 
 
 def _resolve_named_layer(model: Module, layer: str) -> Module:
@@ -362,7 +358,11 @@ def _resolve_named_layer(model: Module, layer: str) -> Module:
     if layer not in named_modules:
         options = _format_layer_options(model)
         raise AttributionError(
-            f"layer {layer!r} was not found; available conv-like layers include: {options}"
+            lookup_message(
+                f"layer {layer!r} was not found.",
+                options,
+                "Pass a layer name from dict(model.named_modules()).",
+            )
         )
     return named_modules[layer]
 

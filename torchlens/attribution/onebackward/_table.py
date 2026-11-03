@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from ..._io import _json as _bounded_json
+from ..._utils._display_errors import lookup_message
 from ._errors import ReadError
 
 __all__ = ["ReadRow", "ReadTable", "TableProvenance", "load_read_table"]
@@ -457,10 +458,9 @@ class ReadTable(Mapping):
 
         rows = {key: row for key, row in self._rows.items() if row.target_id == target_id}
         if not rows:
+            problem = f"No rows for target_id {target_id!r}."
             raise ReadError(
-                f"No rows for target_id {target_id!r}; known targets: "
-                f"{list(self.target_ids())!r}. Remedy: pick a target_id from "
-                "target_ids()",
+                lookup_message(problem, self.target_ids(), "Pick from target_ids()."),
                 code="read_table_target_unknown",
                 target_id=target_id,
                 known=list(self.target_ids()),

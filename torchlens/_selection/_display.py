@@ -21,6 +21,12 @@ def _selected(site: Site) -> int | None:
     return None if site._mask.form == "dense" else site.num_selected
 
 
+def _safe_selected(site: Site) -> int | None:
+    """Guard metadata access without reading a dense mask."""
+
+    return fail_open(lambda: _selected(site), lambda _error: None)
+
+
 def _site_key(site: Site) -> str:
     """Find a cached operation by its stored key, without walking the trace."""
 
@@ -72,10 +78,7 @@ def site_card(site: Site) -> str:
 def selection_repr(selection: Selection) -> str:
     """Display the concrete selection's kind, size and producing selector."""
 
-    counts = [
-        fail_open(lambda entry=entry: _selected(entry), lambda _error: None)
-        for entry in selection._entries
-    ]
+    counts = [_safe_selected(entry) for entry in selection._entries]
     total = None if None in counts else sum(count for count in counts if count is not None)
     n = len(selection)
     values = "values not computed" if total is None else _value_count(total)

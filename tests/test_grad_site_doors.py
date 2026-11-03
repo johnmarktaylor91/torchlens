@@ -149,7 +149,7 @@ def test_rule_signal_is_derived_and_rule_has_no_direction() -> None:
     # Walk names.5 (JMT 2026-11-01): Rule.direction is removed; the site decides.
     assert not hasattr(forward_rule, "direction")
     assert not hasattr(mixed_rule, "direction")
-    assert "signal='forward'" in repr(forward_rule)
+    assert ", forward, structural" in repr(forward_rule)
 
 
 # ---------------------------------------------------------------------------

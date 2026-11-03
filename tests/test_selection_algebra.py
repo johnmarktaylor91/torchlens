@@ -669,7 +669,7 @@ def test_selection_repr_stability(log):
     box = log["relu_2_4"].receptive_field.at((3, 3))
     assert repr(box.__selection__()) == "Selection[ACT](rf_box('relu_2_4:1' -> 'input.x'))"
     resolved = log[unit]
-    assert repr(resolved).startswith("Selection ACT: 1 site, 1 value")
+    assert repr(resolved).startswith("Selection ACT: 1 site, values not computed")
 
 
 def test_selection_is_frozen(log):

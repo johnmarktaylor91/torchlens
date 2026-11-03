@@ -42,6 +42,8 @@ from .._semantic.patching import (
     _run_patch,
     _warn_if_campaign_all_identical,
 )
+from .._utils._display_errors import lookup_message
+from .._utils._display_keys import display_key
 from ._errors import refuse
 from ._grids import PatchGrid, _baseline_metrics, _disclose_cost_and_enforce_budget
 
@@ -342,10 +344,13 @@ def _locate_expansion(  # noqa: PLR0913 -- the module's identity plus its head c
     if len(candidates) > 1:
         refuse(
             code="mi_kv_expansion_ambiguous",
-            message=f"Module {address!r} has {len(candidates)} ops that each expand its "
-            f"grouped {_SITE_WORDS[site]} tensor to the query heads "
-            f"({[str(op.label) for op in candidates]}); patching one would leave the "
-            "others unpatched.",
+            message=lookup_message(
+                f"Module {address!r} has {len(candidates)} ops that each expand its "
+                f"grouped {_SITE_WORDS[site]} tensor to the query heads; patching one "
+                "would leave the others unpatched.",
+                [display_key(op) for op in candidates],
+                "Patch the whole group or simplify the module so it expands once.",
+            ),
             remedy="patch the whole group with mechinterp.patch_grid(..., sites=site, "
             "axes=('layer', 'head')), or simplify the module so it expands once",
             module=address,

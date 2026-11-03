@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from typing import Any, NoReturn
 
+from .._errors import _actionable_message
 from ..errors._base import TorchLensError
 
 __all__ = ["MechInterpError", "refuse"]
@@ -55,4 +56,7 @@ def refuse(code: str, message: str, remedy: str, **payload: Any) -> NoReturn:
         retention plans) surfaced on ``exc.fields``.
     """
 
-    raise MechInterpError(f"{message} Remedy: {remedy}", code=code, remedy=remedy, **payload)
+    rendered = f"{message} Remedy: {remedy}"
+    if "\n  candidates " in message:
+        rendered = _actionable_message(message, remedy)
+    raise MechInterpError(rendered, code=code, remedy=remedy, **payload)

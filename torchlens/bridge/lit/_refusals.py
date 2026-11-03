@@ -16,6 +16,7 @@ from torchlens._errors import (
     MissingDependencyError,
     RecordBindingError,
 )
+from torchlens._utils._display_errors import lookup_message
 
 
 def refuse_lit_missing(cause: BaseException) -> NoReturn:
@@ -130,13 +131,19 @@ def refuse_sites_unspecified(candidates: tuple[str, ...]) -> NoReturn:
         Always; code ``lit_sites_unspecified``.
     """
 
-    listing = ", ".join(candidates) if candidates else "(no repeated-module stack found)"
+    remedy = (
+        'Pass sites="blocks" for the gate-passed repeated-block preset, an '
+        "explicit tuple of module addresses, or sites=() for no embedding fields."
+    )
     raise InvalidArgumentError(
-        "tl.bridge.lit.model() requires an explicit sites= selection; the bridge never "
-        f"guesses which activations to expose. Candidate block stacks: {listing}.",
+        lookup_message(
+            "tl.bridge.lit.model() requires an explicit sites= selection; "
+            "the bridge never guesses which activations to expose.",
+            candidates,
+            remedy,
+        ),
         code="lit_sites_unspecified",
-        remedy='Pass sites="blocks" for the gate-passed repeated-block preset, an '
-        "explicit tuple of module addresses, or sites=() for no embedding fields.",
+        remedy=remedy,
         candidates=candidates,
     )
 
@@ -157,13 +164,18 @@ def refuse_blocks_preset_unavailable(detail: str, candidates: tuple[str, ...]) -
         Always; code ``lit_blocks_preset_unavailable``.
     """
 
-    listing = ", ".join(candidates) if candidates else "(none)"
+    remedy = (
+        "Pass explicit module addresses via sites=(...); candidates above are "
+        "the module-call metadata this probe saw."
+    )
     raise InvalidArgumentError(
-        f'sites="blocks" could not discover one homogeneous repeated-module stack: '
-        f"{detail}. Candidate addresses: {listing}.",
+        lookup_message(
+            f'sites="blocks" could not discover one homogeneous repeated-module stack: {detail}.',
+            candidates,
+            remedy,
+        ),
         code="lit_blocks_preset_unavailable",
-        remedy="Pass explicit module addresses via sites=(...); candidates above are "
-        "the module-call metadata this probe saw.",
+        remedy=remedy,
         candidates=candidates,
     )
 
@@ -184,11 +196,15 @@ def refuse_site_unresolvable(site: str, available: tuple[str, ...]) -> NoReturn:
         Always; code ``lit_site_unresolvable``.
     """
 
+    remedy = "Pass a module address from the traced module tree, optionally as 'address:N'."
     raise InvalidArgumentError(
-        f"sites entry {site!r} matched no module-output op on the probe trace.",
+        lookup_message(
+            f"sites entry {site!r} matched no module-output op on the probe trace.",
+            available,
+            remedy,
+        ),
         code="lit_site_unresolvable",
-        remedy="Pass a module address from the traced module tree (for example "
-        f"one of: {', '.join(available)}), optionally pass-qualified as 'address:N'.",
+        remedy=remedy,
         site=site,
         available=available,
     )

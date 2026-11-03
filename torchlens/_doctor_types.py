@@ -259,6 +259,7 @@ _REPR_LINE_CAP = 100
 def _cap_line(line: str) -> str:
     """Return ``line`` truncated to the repr cap with a disclosed ellipsis."""
 
+    line = line.replace("\n", " ")
     if len(line) <= _REPR_LINE_CAP:
         return line
     return line[: _REPR_LINE_CAP - 3] + "..."
