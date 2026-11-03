@@ -435,7 +435,7 @@ def test_sibling_spouse_fields(small_input):
     for label in mh.layer_labels:
         entry = mh[label]
         assert isinstance(entry.graph.siblings, list)
-        assert isinstance(entry.co_parents, list)
+        assert isinstance(entry.graph.co_parents, list)
 
 
 def test_layer_siblings_tolerate_orphan_relation_labels():
