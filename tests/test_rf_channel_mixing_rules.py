@@ -39,13 +39,16 @@ def built_in_rule_pack() -> Iterator[None]:
 
 
 def _ops(trace: Any, name: str) -> list[Any]:
-    """Return captured operations with one normalized function name."""
+    """Return the captured operations with one function name, refusing an empty match."""
 
-    return [
+    key = _normalize_func_name(name)
+    found = [
         op
         for op in trace._layer_list
-        if op.func_name is not None and _normalize_func_name(op.func_name) == name
+        if op.func_name is not None and _normalize_func_name(op.func_name) == key
     ]
+    assert found, f"trace has no {name!r} operation"
+    return found
 
 
 def _box_mask(box: Any) -> torch.Tensor:
