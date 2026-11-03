@@ -21,7 +21,6 @@ from ..._ir.events import (
 )
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ..._state import pause_logging
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
@@ -273,12 +272,16 @@ def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> Non
     op, and the write-back ``__setitem__`` then recorded ONE parent at slot 0 (the whole
     tensor) and slot 2 (the slice): one label for two different values, which a
     per-(parent, child) version snapshot cannot carry, so argument logging failed on
-    every such call. In exactly that write-back (slot 2 IS the view the in-place op
-    wrote through and ``x[idx]`` addresses the same elements) every element the call
-    leaves untouched still holds the pre-mutation producer's value and the mutated
-    region is overwritten from slot 2, so slot 0 binds to the pre-mutation label for
-    this call; the setitem's own label then advances ``x`` like any in-place op. Any
-    other shape (another region, advanced indexing, a later relabel) is left as is.
+    every such call. When slot 2 IS the view the in-place op wrote through, slot 0
+    binds to the pre-mutation label for this call, so each slot has its own label:
+    the value slot the mutation op, the receiver slot the base's own lineage. For a
+    same-region write-back the binding is exact on its own (the call overwrites
+    precisely the region the mutation wrote); when the view is written to ANOTHER
+    region of its base (``v = m[:, 0:2]; v.mul_(3); m[:, 2:4] = v``) the receiver
+    slot consumes a later version of that label and its actual content reaches
+    replay through the per-child version snapshot. The setitem's own label then
+    advances ``x`` like any in-place op. Advanced indexing or a later relabel of
+    the receiver is left as is.
 
     Parameters
     ----------
@@ -311,20 +314,7 @@ def _bind_writeback_receiver_label(func_name: str, args: tuple[Any, ...]) -> Non
         or get_tensor_label(value) != mutation_label
     ):
         return
-    with pause_logging(), internal_scalar_read():
-        try:
-            region = receiver[args[1]]
-            same_region = (
-                region.untyped_storage().data_ptr() == value.untyped_storage().data_ptr()
-                and region.storage_offset() == value.storage_offset()
-                and tuple(region.shape) == tuple(value.shape)
-                and tuple(region.stride()) == tuple(value.stride())
-            )
-        except (IndexError, RuntimeError, TypeError, ValueError):
-            # An index this receiver cannot re-address proves nothing about the region.
-            return
-    if same_region:
-        set_tensor_label(receiver, prior_label)
+    set_tensor_label(receiver, prior_label)
 
 
 def _label_version_baseline(t: Any) -> int | None:

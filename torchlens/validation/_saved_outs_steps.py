@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from ._non_pass_record import finish_validation_status
 from .diagnostics import (
     CHECK_COMPLETENESS,
     CHECK_GROUND_TRUTH,
@@ -33,10 +34,13 @@ if TYPE_CHECKING:
 def _finish_run_status(
     self: Trace, decision_recorder: ValidationDecisionRecorder
 ) -> ValidationStatus:
-    """Freeze the recorder into this run's status and stash it on the trace."""
-    status = decision_recorder.as_status(backend=str(self._provenance_backend))
-    setattr(self, "_validation_replay_status", status)
-    return status
+    """Freeze the recorder into this run's status and stash it on the trace.
+
+    A non-passing status that no site typed with a recorded failure gets one
+    here (``_non_pass_record.finish_validation_status``), so a ``False`` always
+    carries a ``get_validation_failure`` record; the status itself is unchanged.
+    """
+    return finish_validation_status(self, decision_recorder)
 
 
 def _reset_run_diagnostics(self: Trace) -> None:
