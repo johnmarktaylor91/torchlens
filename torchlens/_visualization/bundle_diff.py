@@ -278,6 +278,14 @@ def _build_dot(
         {
             "rankdir": "TB",
             "compound": "true",
+            # One global ranking across clusters. Without it, dot pulls every
+            # node named in a ``rank=same`` pair subgraph (_add_pair_alignment)
+            # OUT of its side cluster ("already in a rankset, deleted from
+            # cluster"), drops both side clusters as empty, and lays the pairs
+            # out as loose node pairs: the column frames and member titles
+            # vanish and the white baseline column reads as an unlabeled
+            # duplicate of the marked one.
+            "newrank": "true",
             "splines": "ortho",
             "nodesep": "0.32",
             "ranksep": "0.34",
