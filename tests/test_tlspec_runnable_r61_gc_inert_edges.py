@@ -50,6 +50,7 @@ r63 completes the numeric-payload branch structurally (r62 findings):
 
 from __future__ import annotations
 
+import inspect
 import queue
 import random
 import shutil
@@ -66,8 +67,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng import host_nondeterminism_monitor, inventory_types as rng_inventory_types
 from torchlens._utils.rng.inventory_types import (
+    _AMBIENT_BRIDGE_LEAF_TYPES,
+    _NUMERIC_PAYLOAD_LEAF_TYPES,
     _resolve_slot_member,
     _rng_exempt_instances,
 )
@@ -507,6 +510,53 @@ def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
     assert counters == {"property": 0, "getattr": 0, "descriptor": 0}, (
         f"inventory executed user code: {counters}"
     )
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_source_tripwire_numeric_payloads_not_hard_leaves() -> None:
+    """Structural pin: tensors / ndarrays / numpy scalars must appear in NO tuple used as a
+    hard pre-instance-state skip, and the numeric-payload branch must route through the
+    inert ``_custom_holder_children`` protocol; ambient-bridge walls stay severed."""
+
+    for numeric_type in (torch.Tensor, np.ndarray, np.generic):
+        assert numeric_type not in _AMBIENT_BRIDGE_LEAF_TYPES
+        assert not any(issubclass(numeric_type, bridge) for bridge in _AMBIENT_BRIDGE_LEAF_TYPES)
+        assert numeric_type in _NUMERIC_PAYLOAD_LEAF_TYPES
+    src_children = inspect.getsource(host_nondeterminism_monitor._inert_gc_children)
+    assert "_NUMERIC_PAYLOAD_LEAF_TYPES" in src_children, (
+        "numeric-payload branch missing from _inert_gc_children (r61 hon_1 regression)"
+    )
+    assert "_custom_holder_children" in src_children, (
+        "numeric-payload nodes no longer walk instance state (r61 hon_1 regression)"
+    )
+    src_holder = inspect.getsource(host_nondeterminism_monitor._custom_holder_children)
+    assert "_resolve_slot_member" in src_holder, (
+        "mangled-slot resolution missing from _custom_holder_children (r61 corr_1 regression)"
+    )
+    # behavioral: a tensor node contributes EXACTLY its instance state plus its
+    # class-surface edge (r63) -- nothing else; stock classes are trusted leaves in
+    # the downstream class branch, so no implementation-class internals ever expand
+    shared_ids = host_nondeterminism_monitor._shared_namespace_dict_ids()
+    gen = np.random.default_rng(0)
+    tensor = torch.zeros(2)
+    tensor.rng = gen
+    assert host_nondeterminism_monitor._inert_gc_children(tensor, shared_ids) == [gen, torch.Tensor]
+    assert host_nondeterminism_monitor._inert_gc_children(torch.zeros(2), shared_ids) == [
+        torch.Tensor
+    ]
+    assert host_nondeterminism_monitor._inert_gc_children(np.float64(1.0), shared_ids) == [
+        np.float64
+    ]
+    for stock_class in (torch.Tensor, nn.Parameter, np.ndarray, np.float64, np.generic):
+        assert host_nondeterminism_monitor._is_trusted_leaf_class(stock_class), (
+            f"{stock_class!r} must stay a trusted leaf (no implementation-class expansion)"
+        )
+    # ambient walls unchanged: modules and code objects stay severed to []
+    assert host_nondeterminism_monitor._inert_gc_children(torch, shared_ids) == []
+    assert host_nondeterminism_monitor._inert_gc_children((lambda: None).__code__, shared_ids) == []
+    # the r61 split must not resurrect ambient members inside the payload tuple
+    assert not set(_NUMERIC_PAYLOAD_LEAF_TYPES) & set(_AMBIENT_BRIDGE_LEAF_TYPES)
+    assert rng_inventory_types._INVENTORY_LEAF_TYPES  # element-iteration wall still declared
 
 
 # --- source tripwires + ambient walls ----------------------------------------------------------

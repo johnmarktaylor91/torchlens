@@ -21,6 +21,7 @@ Whole-class immunizers pinned here:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -285,6 +286,105 @@ def _materialized_aten_op_names() -> set[str]:
     return set(dir(torch.ops.aten))
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_uninit_family_table_matches_live_aten_registry() -> None:
+    """Family-drift immunizer: torch gives uninit allocation NO Tag, so the
+    closed name table is defended by enumeration -- an ``empty*``/``resize*``
+    aten name that is neither in the family table nor in the justified
+    non-family allowlist below FAILS this test on any torch upgrade."""
+
+    from torchlens._utils._uninit_alloc import (
+        _UNINIT_ALLOC_FACTORY_TAILS,
+        _UNINIT_ALLOC_RESIZE_TAILS,
+    )
+
+    # Justified NON-family names matching the patterns:
+    # - ``_resize_output``/``_resize_output_``: internal ``out=`` plumbing whose
+    #   destination is always fully overwritten by the kernel (out= sanitizer).
+    # - ``_copy_from_and_resize``: internal copy plumbing that resizes only to
+    #   copy the complete source value; it does not expose the destination tail.
+    # - sparse resizes (functional packet and in-place spellings): they mutate
+    #   sparse sizes/indices metadata; stored values remain explicit, absent
+    #   coordinates are implicit zeros, and ``and_clear`` removes stored values.
+    #   None exposes newly allocated dense bytes as tensor values.
+    allowlist = {
+        "_copy_from_and_resize",
+        "_resize_output",
+        "_resize_output_",
+        "sparse_resize",
+        "sparse_resize_",
+        "sparse_resize_and_clear",
+        "sparse_resize_and_clear_",
+        "resize_as_sparse",
+        "resize_as_sparse_",
+    }
+    aten_names = _materialized_aten_op_names()
+    empty_pattern = {
+        name
+        for name in aten_names
+        if name.lstrip("_") == "empty"
+        or name.lstrip("_").startswith("empty_")
+        or name.endswith("_empty")
+        or "_empty_" in name
+    }
+    resize_pattern = {name for name in aten_names if "resize" in name}
+    family = _UNINIT_ALLOC_FACTORY_TAILS | _UNINIT_ALLOC_RESIZE_TAILS
+    unaccounted = (empty_pattern | resize_pattern) - family - allowlist
+    assert not unaccounted, (
+        "New uninitialized-allocation-pattern aten ops are neither in the "
+        f"closed family table nor in the justified allowlist: {sorted(unaccounted)}"
+    )
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_uninit_family_python_tensor_method_surface() -> None:
+    """r55 hon_1 drift immunizer: the aten test above cannot see a Python-level
+    ``torch.Tensor`` method with NO aten spelling (``Tensor.new``:
+    ``hasattr(torch.ops.aten, "new")`` is ``False`` -- the r54 hon_1 blind spot).
+    Enumerate the Python-``torch.Tensor``-method surface by the same allocation
+    name patterns: every candidate must be tabled as family (unconditional,
+    resize, or SIZE-GATED) or justified non-family below -- a future
+    ``Tensor.<x>()`` uninit factory with no aten name FAILS this test."""
+
+    from torchlens._utils._uninit_alloc import (
+        _UNINIT_ALLOC_FACTORY_TAILS,
+        _UNINIT_ALLOC_RESIZE_TAILS,
+        _UNINIT_ALLOC_SIZE_GATED_TAILS,
+    )
+
+    # Justified NON-family Python-method names matching the patterns:
+    # - ``new_full``/``new_ones``/``new_zeros``: fully initialized (total write
+    #   by construction) -- deterministic values, never allocator garbage.
+    # - ``new_tensor``: data-copying constructor (values come from the operand).
+    # - sparse resizes: layout metadata growth materializes implicit zeros
+    #   (``and_clear_`` zeroes), never dense stale bytes (same justification as
+    #   the aten-surface allowlist).
+    allowlist = {
+        "new_full",
+        "new_ones",
+        "new_zeros",
+        "new_tensor",
+        "resize_as_sparse_",
+        "sparse_resize_",
+        "sparse_resize_and_clear_",
+    }
+    candidates = {
+        name
+        for name in dir(torch.Tensor)
+        if name == "new" or name.startswith("new_") or "empty" in name or "resize" in name
+    }
+    family = (
+        _UNINIT_ALLOC_FACTORY_TAILS | _UNINIT_ALLOC_RESIZE_TAILS | _UNINIT_ALLOC_SIZE_GATED_TAILS
+    )
+    unaccounted = candidates - family - allowlist
+    assert not unaccounted, (
+        "Python-level torch.Tensor allocation-pattern methods are neither in a "
+        f"closed family table nor in the justified allowlist: {sorted(unaccounted)}"
+    )
+    # The r54 hon_1 subject itself is TABLED (size-gated), never allowlisted away.
+    assert "new" in _UNINIT_ALLOC_SIZE_GATED_TAILS
+
+
 # Kept: sole branch coverage of _utils/_uninit_alloc.py.
 def test_size_gated_new_recognition_and_arg_form() -> None:
     """r55 hon_1: ``Tensor.new`` recognition is size-gated -- the size form is
@@ -378,6 +478,48 @@ def test_new_size_form_redispatches_uninit_family_aten() -> None:
     with _Spy():
         t.new([1.0, 2.0])
     assert not any(_operator_uninit_family_tail(func) is not None for func in calls)
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_single_classifier_owns_qualname_derivation() -> None:
+    """Source-scan immunizer: inside the execution module, the uninit family
+    predicates are consulted for NONDETERMINISM DERIVATION only by
+    ``_nondeterministic_value_sources`` -- no second call site can re-derive
+    uninit nondeterminism and drift from the single classifier (the r52
+    raise-vs-not_applicable inconsistency class).
+
+    r55 hon_1/C3: the scan additionally covers the size-gated ``Tensor.new``
+    predicates (``qualname_is_uninit_size_gated_alloc``/
+    ``uninit_new_call_is_size_form``). r57 C3 DELETED ``_call_is_size_driving``
+    (the allocation preflight now gates on a numeric-literal predicate + the
+    op-agnostic ``FakeTensorMode`` projection, consulting NONE of the uninit
+    family predicates), so this decouples back to a SINGLE justified reader --
+    ``_nondeterministic_value_sources`` (a strengthening-back). Any SECOND reader
+    re-derives uninit nondeterminism from the family predicates and trips this
+    tripwire (the r52 raise-vs-not_applicable inconsistency class)."""
+
+    package_root = Path(__file__).resolve().parents[1] / "torchlens"
+    source = "\n".join(
+        path.read_text()
+        for path in sorted((package_root / "_runnable").glob("*.py"))
+        if path.name != "__init__.py"
+    )
+    functions = re.split(r"(?m)^def ", source)
+    predicates = (
+        "qualname_is_uninitialized_alloc(",
+        "qualname_is_uninit_growth_resize(",
+        "qualname_is_uninit_total_writer(",
+        "qualname_is_uninit_size_gated_alloc(",
+        "uninit_new_call_is_size_form(",
+    )
+    users = sorted(
+        {
+            chunk.split("(", 1)[0]
+            for chunk in functions
+            if any(predicate in chunk for predicate in predicates)
+        }
+    )
+    assert users == ["_nondeterministic_value_sources"], users
 
 
 class SeededRandModel(nn.Module):

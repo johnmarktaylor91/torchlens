@@ -30,10 +30,16 @@ from torchlens._runnable import PathFaithfulness
 from torchlens._runnable.state import (
     _state_placement_canonical,
 )
+from torchlens.backends.torch import completeness_witness as cw
 from torchlens.backends.torch._completeness_escape_state import host_escape_state_source_names
 from torchlens.backends.torch._completeness_metadata import (
     host_escape_state_metadata_observations,
     host_escape_state_metadata_reads,
+)
+from torchlens.backends.torch.completeness_witness import (
+    _STORAGE_WRAPPED_DISPOSITIONS,
+    STORAGE_BRIDGE_ESCAPE_FUNCS,
+    STORAGE_METADATA_ACCESSOR_DISPOSITIONS,
 )
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
@@ -58,6 +64,44 @@ def _assert_refuses(trace: tl.Trace, path: Path, *needles: str) -> None:
     diagnostics = str(excinfo.value.fields.get("diagnostics"))
     for needle in needles:
         assert needle in diagnostics, needle
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+@pytest.mark.parametrize("class_name", ["UntypedStorage", "TypedStorage"])
+def test_r67_storage_disposition_table_covers_public_surface(class_name: str) -> None:
+    """Every public (non-underscore) ``dir()`` member of each storage class has a row.
+
+    A torch upgrade that adds a public storage accessor turns this RED until the new
+    member is explicitly classified -- never a silent witness gap. Named private/dunder
+    rows (``_cdata``, ``__len__``, ``__getitem__``, ``__setitem__``, ``__iter__``) are
+    additionally required.
+    """
+
+    storage_cls = getattr(torch, class_name)
+    rows = STORAGE_METADATA_ACCESSOR_DISPOSITIONS[class_name]
+    public = {name for name in dir(storage_cls) if not name.startswith("_")}
+    unclassified = public - set(rows)
+    assert not unclassified, f"unclassified public storage members: {sorted(unclassified)}"
+    for named_extra in ("_cdata", "__len__", "__getitem__", "__setitem__", "__iter__"):
+        assert named_extra in rows, named_extra
+    # Every row carries a KNOWN disposition class.
+    known = _STORAGE_WRAPPED_DISPOSITIONS | {
+        cw._STORAGE_ACCESSOR_INERT,
+        cw._STORAGE_ACCESSOR_STRUCTURAL,
+        cw._STORAGE_ACCESSOR_CONTAMINATED_PROPERTY,
+    }
+    for member, (disposition, why) in rows.items():
+        assert disposition in known, member
+        assert why, member
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_r67_acquisition_bridges_cover_typed_storage_spelling() -> None:
+    """``_typed_storage`` joined the origin+watch bridge set (r66b R3 spelling)."""
+
+    assert {"untyped_storage", "storage", "_typed_storage", "data_ptr"} == set(
+        STORAGE_BRIDGE_ESCAPE_FUNCS
+    )
 
 
 # ======================================================================================

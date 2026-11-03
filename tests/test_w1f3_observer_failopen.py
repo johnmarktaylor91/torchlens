@@ -199,6 +199,107 @@ def _blocks_with_guards(
                 yield from _blocks_with_guards(statement, guard)
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_every_install_skip_is_fail_closed_or_classified_benign() -> None:
+    """Every install-loop ``continue`` marks the trace failed, bar the closed allowlist.
+
+    Returns
+    -------
+    None
+        Asserts the full install inventory (>= ``_MIN_INSTALL_LOOPS`` loops) has no
+        unclassified silent skip and that the benign allowlist is used exactly twice.
+    """
+
+    install_section, _ = _install_section_and_finally(_observer_function_ast())
+    loops = [
+        node
+        for statement in install_section
+        for node in ast.walk(statement)
+        if isinstance(node, ast.For)
+    ]
+    assert len(loops) >= _MIN_INSTALL_LOOPS, (
+        f"observer install inventory shrank: {len(loops)} < {_MIN_INSTALL_LOOPS}"
+    )
+    benign_hits = 0
+    seen_continue = 0
+    checked_blocks: set[int] = set()
+    for loop in loops:
+        for block, guard in _blocks_with_guards(loop):
+            if id(block) in checked_blocks:
+                continue
+            checked_blocks.add(id(block))
+            for index, statement in enumerate(block):
+                if not isinstance(statement, ast.Continue):
+                    continue
+                seen_continue += 1
+                if index > 0 and _is_fail_closed_mark(block[index - 1]):
+                    continue
+                assert guard in _BENIGN_INSTALL_SKIP_GUARDS, (
+                    f"unclassified fail-open install skip under guard {guard!r}"
+                )
+                benign_hits += 1
+    assert seen_continue >= _MIN_INSTALL_LOOPS, "install loops lost their guarded skip arms"
+    assert benign_hits == len(_BENIGN_INSTALL_SKIP_GUARDS), (
+        f"benign install-skip allowlist drifted: {benign_hits} arms matched, expected "
+        f"{len(_BENIGN_INSTALL_SKIP_GUARDS)}"
+    )
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_every_scan_family_fails_closed_on_empty_scan() -> None:
+    """Each scan-enumerated observer family marks the trace failed on an empty scan.
+
+    Returns
+    -------
+    None
+        Asserts one fail-closed ``if not <scan>`` guard exists per scan family.
+    """
+
+    install_section, _ = _install_section_and_finally(_observer_function_ast())
+    guarded: set[str] = set()
+    for statement in install_section:
+        for node in ast.walk(statement):
+            if not isinstance(node, ast.If):
+                continue
+            test_expr = ast.unparse(node.test)
+            if test_expr in _EMPTY_SCAN_GUARDS and any(
+                _is_fail_closed_mark(body_stmt) for body_stmt in node.body
+            ):
+                guarded.add(test_expr)
+    missing = _EMPTY_SCAN_GUARDS - guarded
+    assert not missing, f"scan families with fail-open empty scans: {sorted(missing)}"
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_every_restore_handler_is_fail_closed() -> None:
+    """Every restore exception handler in the ``finally`` marks the trace failed.
+
+    Returns
+    -------
+    None
+        Asserts the full restore inventory (>= ``_MIN_RESTORE_HANDLERS`` handlers) has no
+        ``pass``-swallowed restore failure.
+    """
+
+    _, finally_section = _install_section_and_finally(_observer_function_ast())
+    handlers = [
+        node
+        for statement in finally_section
+        for node in ast.walk(statement)
+        if isinstance(node, ast.ExceptHandler)
+    ]
+    assert len(handlers) >= _MIN_RESTORE_HANDLERS, (
+        f"observer restore inventory shrank: {len(handlers)} < {_MIN_RESTORE_HANDLERS}"
+    )
+    for handler in handlers:
+        assert not any(isinstance(statement, ast.Pass) for statement in handler.body), (
+            "restore handler swallows failure with pass"
+        )
+        assert any(_is_fail_closed_mark(statement) for statement in handler.body), (
+            "restore handler is not fail-closed"
+        )
+
+
 # Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_absent_observer_member_marks_trace_failed(monkeypatch: pytest.MonkeyPatch) -> None:
     """A version-drift-absent tensor observer member downgrades the capture.

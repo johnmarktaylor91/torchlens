@@ -254,3 +254,13 @@ def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
 
     for index in range(3):
         _save(tmp_path / f"cached_{index}.tlspec", cache=True)
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_pending_live_fire_records_is_registered() -> None:
+    """The field must be in the catalog, so the tripwire stays armed for others."""
+
+    from torchlens._data_classes.trace import FieldPolicy, Trace
+
+    spec: dict[str, Any] = Trace._PORTABLE_STATE_SPEC
+    assert spec["_pending_live_fire_records"] is FieldPolicy.DROP

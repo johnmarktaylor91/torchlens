@@ -288,6 +288,36 @@ def test_canonical_json_bytes_is_key_order_invariant() -> None:
     assert canonical_json_bytes({"a": 1}) != canonical_json_bytes({"a": 2})
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_fresh_seed_leg_stays_wired_into_ci() -> None:
+    """r7 R73 (6th pass): the fuzz leg keeps getting unwired -- pin it.
+
+    ``TORCHLENS_FUZZ_SEED`` existed for six review passes with ZERO workflow
+    references; the sweeps ran only their fixed default seed. The nightly
+    fast-tier job now injects run-id-derived fresh seeds; this pin makes
+    unwiring it a red instead of a seventh rediscovery.
+    """
+
+    from pathlib import Path
+
+    nightly = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "nightly.yml"
+    if not nightly.exists():
+        pytest.skip("no nightly workflow in this tree (sdist/test-only layout)")
+    text = nightly.read_text(encoding="utf-8")
+    assert "TORCHLENS_FUZZ_SEED" in text, (
+        "nightly.yml no longer injects fresh TORCHLENS_FUZZ_SEED values; the "
+        "generative sweeps are back to a fixed regression corpus"
+    )
+    assert "test_generative_properties_r73.py" in text, (
+        "the fresh-seed leg no longer targets the generative property suite"
+    )
+    assert "test_tlspec_parse_fuzz.py" in text, (
+        "the fresh-seed leg no longer targets the tlspec parse-fuzz suite; its "
+        "truncation/byte-flip sweeps honor TORCHLENS_FUZZ_SEED and must keep "
+        "getting fresh seeds (r7 R73)"
+    )
+
+
 # Kept: sole branch coverage of _merged/_artifact.py, _merged/_errors.py; smoke tier id (frozen).
 @pytest.mark.smoke
 def test_canonical_json_bytes_refuses_noncanonical_inputs_typed() -> None:

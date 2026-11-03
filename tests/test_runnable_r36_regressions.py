@@ -562,6 +562,27 @@ class TestCorr22DeviceIndependentEnumeration:
         )
 
 
+@pytest.mark.heavy
+class TestCorr23ScopedDefaultDevice:
+    """Applying a recorded default device never leaks a process-level DeviceContext."""
+
+    # Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+    def test_consumer_mode_stack_is_untouched(self, tmp_path: Path) -> None:
+        artifact = tmp_path / "meta_default.tlspec"
+        for snippet, args in (
+            (_CORR2_3_PRODUCE, [str(artifact)]),
+            (_CORR2_3_CONSUME, [str(artifact)]),
+        ):
+            proc = subprocess.run(
+                [sys.executable, "-c", snippet, *args],
+                capture_output=True,
+                text=True,
+                timeout=600,
+                cwd=str(Path(__file__).resolve().parents[1]),
+            )
+            assert proc.returncode == 0, proc.stderr
+
+
 # ======================================================================================
 # corr2-3 -- scoped default-device restore (no DeviceContext leak)
 # ======================================================================================
@@ -997,9 +1018,118 @@ class TestClassClosureMetaGates:
     def _repo_root(self) -> Path:
         return Path(__file__).resolve().parents[1]
 
+    # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+    def test_run_report_constructed_only_by_finalizer(self) -> None:
+        """corr2-5 / 3-ADJ-7: every provider routes through the one report finalizer."""
+
+        root = self._repo_root()
+        offenders: list[str] = []
+        for path in (root / "torchlens").rglob("*.py"):
+            text = path.read_text()
+            for lineno, line in enumerate(text.split("\n"), start=1):
+                stripped = line.strip()
+                if "RunReport(" not in stripped or stripped.startswith("#"):
+                    continue
+                if "return RunReport(" in stripped and path.as_posix().endswith(
+                    "torchlens/_runnable/path_faithfulness.py"
+                ):
+                    continue  # the _run_report finalizer itself
+                if "class RunReport" in stripped or "RunReport(`" in stripped:
+                    continue
+                if "-> RunReport" in stripped or ": RunReport" in stripped:
+                    continue
+                if "``RunReport(" in stripped:
+                    continue  # docstring reference
+                offenders.append(f"{path.relative_to(root)}:{lineno}: {stripped}")
+        assert not offenders, offenders
+
+    # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+    def test_no_pointer_equality_disjointness_outside_engine(self) -> None:
+        """INV-2: storage-pointer (in)equality never proves disjointness locally."""
+
+        root = self._repo_root()
+        banned_fragments = (
+            "left_footprint[0] != right_footprint[0]",
+            ".data_ptr() != ",
+            ".data_ptr() !=\n",
+        )
+        offenders: list[str] = []
+        for rel in _COUPLED_WITNESS_EXEC_FILES:
+            text = (root / rel).read_text()
+            for fragment in banned_fragments:
+                if fragment in text:
+                    offenders.append(f"{rel}: {fragment!r}")
+        assert not offenders, offenders
+
+    # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+    def test_banned_discharge_helpers_are_gone(self) -> None:
+        """INV-1: the value-collision and autograd-purity helpers stay deleted."""
+
+        root = self._repo_root()
+        banned_names = (
+            "_HOST_ESCAPE_UNATTRIBUTABLE_VALUES",
+            "_autograd_leaf_storage_ptrs",
+            "unmatched_unattr",
+            "matched_value_here",
+        )
+        offenders: list[str] = []
+        for rel in _COUPLED_WITNESS_EXEC_FILES:
+            text = (root / rel).read_text()
+            for name in banned_names:
+                for lineno, line in enumerate(text.split("\n"), start=1):
+                    stripped = line.strip()
+                    if name in stripped and not stripped.startswith("#"):
+                        offenders.append(f"{rel}:{lineno}: {stripped[:100]}")
+        assert not offenders, offenders
+
 
 class TestOutputCapabilityMetaGates:
     """R11 meta-guards: one table, all kinds covered, forged flags impotent."""
+
+    # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+    def test_capability_table_covers_every_container_kind(self) -> None:
+        """A kind added to ContainerSpec without a capability row must fail here."""
+
+        import re
+        import typing
+
+        from torchlens._ir import container as container_module
+        from torchlens._ir.container import CONTAINER_KIND_CAPABILITIES, ContainerSpec
+
+        declared = set(typing.get_args(ContainerSpec.__dataclass_fields__["kind"].type))
+        table = set(CONTAINER_KIND_CAPABILITIES)
+        if declared:
+            assert table == declared
+        # Belt: every kind literal CONSTRUCTED at the capture site has a row.
+        ops_source = (
+            Path(container_module.__file__).resolve().parents[2]
+            / "torchlens"
+            / "backends"
+            / "torch"
+            / "ops.py"
+        ).read_text()
+        constructed = set(re.findall(r'ContainerSpec\(\s*kind="([a-z_]+)"', ops_source))
+        assert constructed <= table, constructed - table
+        assert table == {
+            "tuple",
+            "list",
+            "dict",
+            "namedtuple",
+            "dataclass",
+            "hf_model_output",
+            "literal",
+            "opaque",
+            "registered",
+            "distribution",
+        }
+        for row in CONTAINER_KIND_CAPABILITIES.values():
+            assert {
+                "children",
+                "literal_support",
+                "exact_type",
+                "instance_state_rule",
+                "addressable",
+            } <= set(row)
 
     # Kept: sole branch coverage of backends/torch/_ops_containers.py; a sole mutation kill.
     def test_registered_container_without_declaration_refuses_stateful_instance(
@@ -1033,6 +1163,30 @@ class TestOutputCapabilityMetaGates:
             )
         finally:
             _CONTAINER_REGISTRY.pop(_Holder, None)
+
+
+class TestContractLockstep:
+    """The contract document IS the spec: its frozen tables track the code exactly."""
+
+    # Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+    def test_contract_error_table_matches_enum_exactly(self) -> None:
+        import re
+
+        from torchlens._runnable import RunnableErrorCode
+
+        doc = (
+            Path(__file__).resolve().parents[1]
+            / "docs"
+            / "reference"
+            / "runnable_tlspec_contract.md"
+        ).read_text()
+        match = re.search(
+            r"The exact `RunnableErrorCode` values are:\n\n```text\n(.*?)```", doc, re.S
+        )
+        assert match is not None
+        doc_codes = [line.strip() for line in match.group(1).strip().split("\n")]
+        enum_codes = [member.value for member in RunnableErrorCode]
+        assert doc_codes == enum_codes
 
 
 class TestAliasEngineUnit:

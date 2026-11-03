@@ -6,6 +6,7 @@ fields), plus the mechanical float-``torch.equal`` grep lock.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
@@ -61,6 +62,43 @@ def test_r35_tied_nan_state_binds_and_saves(tmp_path: Path) -> None:
     result = loaded.run(inputs=x)
     assert result.report.state_source is StateSource.USER_STATE_DICT
     assert torch.isnan(result.output).all()
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_r35_no_float_torch_equal_in_runnable_modules() -> None:
+    """Mechanical class lock: no float ``torch.equal(`` in the runnable core.
+
+    The only allowed occurrences are explicit whole-storage uint8-view byte
+    comparisons, annotated ``# byte-exact uint8 view``.
+    """
+
+    import torchlens
+
+    package_root = Path(torchlens.__file__).parent
+    runnable_modules = (
+        *sorted(
+            path.relative_to(package_root)
+            for path in (package_root / "_runnable").glob("*.py")
+            if path.name != "__init__.py"
+        ),
+        Path("_io/runnable.py"),
+        Path("backends/torch/completeness_witness.py"),
+        Path("backends/torch/backend.py"),
+        Path("backends/torch/_outputs.py"),
+        Path("backends/torch/_failed_session.py"),
+        Path("backends/torch/ops.py"),
+    )
+    offenders: list[str] = []
+    for relative in runnable_modules:
+        lines = (package_root / relative).read_text().splitlines()
+        for index, line in enumerate(lines):
+            if not re.search(r"\btorch\.equal\(", line):
+                continue
+            # The annotation may sit on a continuation line after formatting.
+            statement = " ".join(lines[index : index + 3])
+            if "# byte-exact uint8 view" not in statement:
+                offenders.append(f"{relative}:{index + 1}: {line.strip()}")
+    assert offenders == []
 
 
 # ---------------------------------------------------------------------------
@@ -194,3 +232,48 @@ def test_r35_seeded_run_restores_produced_only_cuda_rng(tmp_path: Path) -> None:
 class _MaxModel(nn.Module):
     def forward(self, x: torch.Tensor) -> Any:
         return torch.max(x, dim=1)
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_r35_structseq_helper_is_repr_independent() -> None:
+    """Unit rows: exact fields for every family; repr text cannot influence."""
+
+    from torchlens._utils._torch_compat import torch_structseq_field_names
+
+    x = torch.randn(6, 7).to(torch.float64)
+    assert torch_structseq_field_names(torch.max(x, dim=1)) == ("values", "indices")
+    assert torch_structseq_field_names(torch.min(x, dim=0)) == ("values", "indices")
+    assert torch_structseq_field_names(torch.median(x, dim=1)) == ("values", "indices")
+    assert torch_structseq_field_names(torch.topk(x, k=2, dim=1)) == ("values", "indices")
+    assert torch_structseq_field_names(torch.sort(x, dim=1)) == ("values", "indices")
+    assert torch_structseq_field_names(torch.linalg.slogdet(x[:6, :6])) == (
+        "sign",
+        "logabsdet",
+    )
+    # Plain tuples and namedtuples are not structseqs.
+    assert torch_structseq_field_names((1, 2)) == ()
+    # No repr involvement: the module source must not parse repr for fields.
+    import inspect
+
+    from torchlens._utils import _torch_compat
+
+    helper_source = inspect.getsource(_torch_compat.torch_structseq_field_names)
+    assert "repr(" not in helper_source
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_r35_repr_parsers_are_deleted() -> None:
+    """The two repr regex parsers are gone with no fallback-to-repr path."""
+
+    import inspect
+
+    import torchlens._runnable.witness_contracts
+    import torchlens.backends.torch._ops_container_base
+
+    for source in (
+        inspect.getsource(torchlens.backends.torch._ops_container_base._torch_return_type_fields),
+        inspect.getsource(torchlens._runnable.witness_contracts._torch_structseq_field_names),
+    ):
+        assert "re.findall" not in source
+        assert "re.finditer" not in source
+        assert "repr(value)" not in source

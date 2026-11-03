@@ -7560,6 +7560,9 @@ test-docstrings	tests/test_capture_cache_impl_fingerprint.py	39
 test-docstrings	tests/test_capture_failure_reporting.py	3.10
 test-docstrings	tests/test_capture_failure_reporting.py	3.11
 test-docstrings	tests/test_capture_failure_reporting.py	678
+test-docstrings	tests/test_capture_guard_transactionality.py	3.12
+test-docstrings	tests/test_capture_guard_transactionality.py	60
+test-docstrings	tests/test_capture_guard_transactionality.py	617
 test-docstrings	tests/test_capture_outcome_characterization.py	17
 test-docstrings	tests/test_capture_outcome_characterization.py	20
 test-docstrings	tests/test_capture_outcome_gates.py	3.6
@@ -7846,6 +7849,7 @@ test-docstrings	tests/test_factcore_tensor_stats.py	64
 test-docstrings	tests/test_failed_capture_transients.py	11
 test-docstrings	tests/test_failed_capture_transients.py	32
 test-docstrings	tests/test_fast_run_faithfulness.py	22
+test-docstrings	tests/test_fast_run_faithfulness.py	71
 test-docstrings	tests/test_fast_until.py	18
 test-docstrings	tests/test_fast_until.py	18.
 test-docstrings	tests/test_fast_until.py	32
@@ -7980,10 +7984,13 @@ test-docstrings	tests/test_infer_input_shape_hardening.py	224
 test-docstrings	tests/test_input_boundary_guards.py	100
 test-docstrings	tests/test_input_boundary_guards.py	11
 test-docstrings	tests/test_input_boundary_guards.py	12
+test-docstrings	tests/test_input_boundary_guards.py	200,
 test-docstrings	tests/test_input_boundary_guards.py	3.0,
 test-docstrings	tests/test_input_boundary_guards.py	4.0
 test-docstrings	tests/test_input_boundary_guards.py	5.0
 test-docstrings	tests/test_input_boundary_guards.py	5.0,
+test-docstrings	tests/test_input_boundary_guards.py	64
+test-docstrings	tests/test_input_boundary_guards.py	65..200
 test-docstrings	tests/test_input_boundary_guards.py	95
 test-docstrings	tests/test_input_boundary_guards.py	95926175
 test-docstrings	tests/test_input_walk_inert_authority.py	12
@@ -8960,6 +8967,7 @@ test-docstrings	tests/test_tl_meta.py	85
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	160
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	2.0
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	51
+test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	55
 test-docstrings	tests/test_tlspec_alloc_preflight_fake.py	64
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	55
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	56
@@ -9060,12 +9068,15 @@ test-docstrings	tests/test_tlspec_runnable_r41_crossthread_witness.py	53
 test-docstrings	tests/test_tlspec_runnable_r41_crossthread_witness.py	57
 test-docstrings	tests/test_tlspec_runnable_r41_crossthread_witness.py	65
 test-docstrings	tests/test_tlspec_runnable_r53_alloc_bomb.py	10
+test-docstrings	tests/test_tlspec_runnable_r53_alloc_bomb.py	53
 test-docstrings	tests/test_tlspec_runnable_r53_alloc_bomb.py	64
 test-docstrings	tests/test_tlspec_runnable_r53_ambient_grad.py	52
 test-docstrings	tests/test_tlspec_runnable_r53_ambient_grad.py	53
 test-docstrings	tests/test_tlspec_runnable_r53_uninit_alloc.py	52
 test-docstrings	tests/test_tlspec_runnable_r53_uninit_alloc.py	53
+test-docstrings	tests/test_tlspec_runnable_r53_uninit_alloc.py	54
 test-docstrings	tests/test_tlspec_runnable_r53_uninit_alloc.py	55
+test-docstrings	tests/test_tlspec_runnable_r53_uninit_alloc.py	57
 test-docstrings	tests/test_tlspec_runnable_r59_alloc_ceiling.py	32.7
 test-docstrings	tests/test_tlspec_runnable_r59_alloc_ceiling.py	58
 test-docstrings	tests/test_tlspec_runnable_r59_slots_rng.py	58

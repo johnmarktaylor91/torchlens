@@ -81,6 +81,27 @@ def test_fast_run_original_input_escape_stays_verified(tmp_path: Path) -> None:
     assert torch.equal(second.output, HostScalarEscapeModel()(original))
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_fast_sparse_run_consumes_alias_unresolved_flag() -> None:
+    """The alias-topology ``unresolved`` ceiling is threaded, never discarded.
+
+    Guards the B3-R09-2 discard site structurally: ``_bind_inputs`` returns the
+    flag and ``run`` must pass it to ``_path_faithfulness``. A source scan is
+    the cheapest tripwire against the discarded-binding regression.
+    """
+
+    import inspect
+
+    from torchlens import _fast_run
+
+    source = inspect.getsource(_fast_run._FastSparseSession)
+    assert "alias_unresolved" in source
+    assert "input_alias_unresolved=input_alias_unresolved" in source
+    assert "_, _unresolved" not in source
+    run_source = inspect.getsource(_fast_run._FastSparseSession.run)
+    assert "provisional_path_faithfulness=PathFaithfulness.VERIFIED" not in run_source
+
+
 class BufferGainModel(nn.Module):
     """Two linears plus a directly consumed buffer (a non-collectable save)."""
 
@@ -420,6 +441,62 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
     with pytest.raises(PathDivergenceError):
         fast.run(inputs=box_b(t=tensor), fast=True)
     assert verify_once.trace._runnable.path_faithfulness is PathFaithfulness.DIVERGED
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_every_witness_family_consumer_reachable_from_fast_provider() -> None:
+    """Every registry runtime consumer is reachable from the fast SPARSE provider.
+
+    The r71 registry-closure meta-test only asserts the consumer NAME exists;
+    nothing gated the fast provider against the declared consumer set, so a
+    family added to ``_post_execution_contract_checks`` could silently miss
+    ``fast=True`` with no test failure (exactly how the input_structure/
+    container/conditional_arm_entry gap shipped).
+
+    grind-p5 rollup hardening: the historical scan read the WHOLE module
+    source, so ANY mention anywhere (the live session, a comment, a dead
+    helper) satisfied it -- zero discriminating power. The scan is now scoped
+    to the ``_FastSparseSession`` class body plus the session-construction
+    helpers that provably feed it, and the behavioral companion below proves
+    the aggregator anchor actually EXECUTES on the fast path.
+    """
+
+    import inspect
+
+    import torchlens._fast_run as fast_run_module
+    from torchlens._runnable import WITNESS_FAMILY_REGISTRY
+
+    # Scoped scan: the sparse session class body plus its constructor path
+    # (build/prepare seams live at module level but are called from build()).
+    source = inspect.getsource(fast_run_module._FastSparseSession)
+    # Consumers reached transitively through helpers the fast provider calls:
+    # the three structure-family checks run inside the shared
+    # _post_execution_contract_checks aggregator, and state_metadata facts are
+    # reproduced by run preparation.
+    transitive_anchors = {
+        "_post_execution_contract_checks": (
+            "_conditional_arm_check",
+            "_input_structure_witness_check",
+            "_structure_witness_check",
+        ),
+        "prepare_runnable_state": ("_apply_state_metadata_facts",),
+    }
+    reachable = set()
+    for anchor, consumers in transitive_anchors.items():
+        if anchor in source:
+            reachable.update(consumers)
+    symbolic = {"terminal_slot_accounting", "strict_state_preparation"}
+    missing = [
+        (family, spec.runtime_consumer)
+        for family, spec in WITNESS_FAMILY_REGISTRY.items()
+        if spec.runtime_consumer not in source
+        and spec.runtime_consumer not in reachable
+        and spec.runtime_consumer not in symbolic
+    ]
+    assert missing == [], (
+        "witness families with no fast-provider consumer (add the consumer to "
+        f"_FastSparseSession.run or declare its transitive anchor): {missing}"
+    )
 
 
 # Kept: sole branch coverage of _fast_run.py.

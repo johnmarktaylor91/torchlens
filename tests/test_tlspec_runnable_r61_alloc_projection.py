@@ -438,3 +438,37 @@ def test_has_tensor_operand_is_isinstance_only_and_fails_closed() -> None:
         deep = [deep]
     assert _has_tensor_operand(deep)  # over-depth -> True (project)
     assert not _has_tensor_operand(["x", 3, None])  # literals are the OTHER predicate's job
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_source_tripwires_gate_and_clone_routing() -> None:
+    """(a) ``_preflight_call_allocation`` no longer contains the has-literal-only early
+    return; (b) every routed re-materialization site contains no raw ``.detach().clone()``
+    and routes through the guard core; (c) the capture-side save-time snapshot stays
+    deliberately UNROUTED (live-model values, no artifact amplification)."""
+
+    gate_src = inspect.getsource(torchlens._runnable.call_arguments._preflight_call_allocation)
+    assert "_projection_required_by_arguments(" in gate_src
+    assert "if not (_has_numeric_literal" not in gate_src
+    for fn in (
+        torchlens._runnable.input_metadata._runtime_mirror_clone,
+        torchlens._runnable.input_aliases._clone_state_values,
+    ):
+        src = inspect.getsource(fn)
+        assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
+        assert "guarded_clone(" in src
+    # r63 C1 relocated the byte guard: state binding stages through ``_staged_state_clone``
+    # (which calls ``_byte_guarded_clone``), not a direct guard call or raw clone. The r61
+    # corr_2 guarantee is unchanged -- every state-binding clone is still byte-guarded -- it
+    # just lives in the one staging helper now (see
+    # test_r63_source_tripwire_state_binding_uses_staging_helper).
+    for fn in (
+        rstate._validate_named_slot_mapping,
+        rstate.bind_embedded_trace_state,
+        rstate.bind_embedded_nonpersistent_buffers,
+    ):
+        src = inspect.getsource(fn)
+        assert ".detach().clone()" not in src, f"{fn.__name__} has a raw unguarded clone"
+        assert "_staged_state_clone(" in src, f"{fn.__name__} must route through the staging helper"
+    assert "_byte_guarded_clone(" in inspect.getsource(rstate._staged_state_clone)
+    assert ".detach().clone()" in inspect.getsource(rstate.snapshot_capture_state)
