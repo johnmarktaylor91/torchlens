@@ -181,7 +181,7 @@
   and v and which replays through the Function's `apply`, so `tl.validate(scope="forward")`
   passes and the armed completeness witness verifies the trace; before, the trace recorded the
   output allocation in place of the attention and validation failed on `bfs_completeness`.
-  `torchlens.utils.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
+  `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116

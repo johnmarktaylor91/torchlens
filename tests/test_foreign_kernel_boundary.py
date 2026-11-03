@@ -24,19 +24,16 @@ from tests import example_models
 from torchlens._errors import CaptureGapWarning
 from torchlens._record_type import record_type
 from torchlens._utils import _torch_compat as tc
-from torchlens._utils._foreign_kernel_packages import (
+from torchlens.backends.torch._foreign_data import (
+    FLASH_ATTENTION_4_EXIT,
     FLASH_ATTENTION_4_INTERFACE_MODULE,
-    probe_flash_attention_4_interface,
+    known_foreign_kernel_exits,
 )
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
     FOREIGN_FUNCTION_WRAPPER_NAME,
     is_foreign_function_recorder,
-)
-from torchlens.backends.torch._known_foreign_kernels import (
-    FLASH_ATTENTION_4_EXIT,
-    known_foreign_kernel_exits,
 )
 from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import wrap_torch
@@ -478,4 +475,4 @@ def test_known_foreign_kernel_table_matches_the_interface_module_only() -> None:
     assert known_foreign_kernel_exits(_Submodule) == (
         (FLASH_ATTENTION_4_EXIT,) if tc.HAS_FLASH_ATTENTION_4_INTERFACE else ()
     )
-    assert probe_flash_attention_4_interface() is tc.HAS_FLASH_ATTENTION_4_INTERFACE
+    assert tc._probe_flash_attention_4_interface() is tc.HAS_FLASH_ATTENTION_4_INTERFACE  # noqa: SLF001

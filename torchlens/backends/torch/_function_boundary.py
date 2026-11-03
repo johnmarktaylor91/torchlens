@@ -44,9 +44,9 @@ from ._foreign_data import (
     FOREIGN_DATA_EXPORT_WRAPPER_NAME,
     FOREIGN_DATA_FUNC_NAME,
     TOLIST_EXPORT_FUNC_NAME,
+    known_foreign_kernel_exits,
     note_plain_export,
 )
-from ._known_foreign_kernels import known_foreign_kernel_exits
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -653,8 +653,9 @@ def record_function_apply(
     """Run one ``Function.apply`` under capture, collapsing it if the forward left torch.
 
     A forward leaves torch when the frame saw an export or host re-entry, or when the
-    Function is a known foreign kernel (``_known_foreign_kernels``: FlashAttention 4 hands its
-    tensors to a CuTe kernel through TVM FFI, which no export patch sees).
+    Function is a known foreign kernel (``_foreign_data.known_foreign_kernel_exits``:
+    FlashAttention 4 hands its tensors to a CuTe kernel through TVM FFI, which no export
+    patch sees).
 
     Parameters
     ----------

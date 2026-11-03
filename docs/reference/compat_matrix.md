@@ -76,7 +76,7 @@ with the completeness witness armed for every capture
 (`torchlens.backends.torch.wrappers.wrap_torch(completeness_witness=True)`) the trace
 is verified (`trace.provenance.verified is True`, no `CaptureGapWarning`). The same
 model on `sdpa` or `eager` attention, same GPU and dtype (bfloat16), captures and
-validates op by op. `torchlens.utils.doctor()` reports whether the package is
+validates op by op. `tl.report.doctor()` reports whether the package is
 installed as `HAS_FLASH_ATTENTION_4_INTERFACE` (read from the package's search path;
 nothing is imported). The row's test asserts the boundary ops, the exact output and
 the passing validation; a companion test pins the verified marking under the armed

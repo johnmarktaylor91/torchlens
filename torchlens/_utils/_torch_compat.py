@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import importlib.machinery
 import inspect
 import sys
 import types
@@ -52,9 +53,7 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._foreign_kernel_packages import probe_flash_attention_4_interface
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-from ._script_call_slot import probe_script_function_call_hook
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
 
@@ -829,6 +828,33 @@ def _probe_tensor_sequence_slot_fix() -> bool:
     from ._type_sequence_slot import sequence_slot_layout_problem
 
     return sequence_slot_layout_problem(torch.Tensor, b"Tensor") is None
+
+
+def _probe_script_function_call_hook() -> bool:
+    """Return whether ``ScriptFunction.__call__`` can be replaced (leaf imported at probe time)."""
+
+    from ._script_call_slot import probe_script_function_call_hook
+
+    return probe_script_function_call_hook()
+
+
+def _probe_flash_attention_4_interface() -> bool:
+    """Return whether the flash-attn-4 distribution is installed (not a torch surface).
+
+    ``flash_attn.cute.interface`` is located by the path finder and never imported
+    (``flash_attn.cute`` loads the CUTLASS DSL); FlashAttention 2 and 3 ship no ``cute``
+    package. ``backends/torch/_foreign_data.py`` records its Functions as boundary ops.
+    """
+
+    try:
+        spec = importlib.util.find_spec("flash_attn")
+    except (ImportError, ValueError):
+        return False
+    for name in ("cute", "interface"):
+        if spec is None or not spec.submodule_search_locations:
+            return False
+        spec = importlib.machinery.PathFinder.find_spec(name, list(spec.submodule_search_locations))
+    return spec is not None
 
 
 def _probe_safe_weights_only_load() -> bool:
@@ -1669,8 +1695,8 @@ HAS_TENSOR_SEQUENCE_SLOT_FIX: bool = _probe_tensor_sequence_slot_fix()
 HAS_LEGACY_CONSTRUCTOR_NEW_PATCH: bool = _probe_legacy_constructor_new_patch()
 HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE: bool = _probe_parameter_as_subclass_in_dispatch_mode()
 HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE: bool = _probe_subclass_ctor_in_dispatch_mode()
-HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = probe_script_function_call_hook()
-HAS_FLASH_ATTENTION_4_INTERFACE: bool = probe_flash_attention_4_interface()
+HAS_SCRIPT_FUNCTION_CALL_HOOK: bool = _probe_script_function_call_hook()
+HAS_FLASH_ATTENTION_4_INTERFACE: bool = _probe_flash_attention_4_interface()
 # ROLL_TENSOR_SHIFTS_SUPPORTED is a TEST HELPER, not a published capability (r-b4
 # R26-5a): torch.roll with a bare 0-dim tensor `shifts` (2.8 rejects, 2.13 accepts) is
 # a user-side limit TorchLens never degrades on, so doctor does not report it.
@@ -1923,14 +1949,8 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_C10D_GROUP_REGISTRY_PROBED": ("HAS_C10D_GROUP_REGISTRY",),
     "_C10D_GROUP_SEQ_PROBED": ("HAS_C10D_GROUP_SEQ",),
     "_DEVICE_MESH_PROBED": ("HAS_DEVICE_MESH", "_DEVICE_MESH_TYPE"),
-    "_DISABLE_TORCH_FUNCTION_PROBED": (
-        "HAS_DISABLE_TORCH_FUNCTION",
-        "_DISABLE_TORCH_FUNCTION_CLS",
-    ),
-    "_DISPATCH_MODE_STACK_PROBED": (
-        "HAS_DISPATCH_MODE_STACK_QUERY",
-        "_DISPATCH_MODE_STACK_FN",
-    ),
+    "_DISABLE_TORCH_FUNCTION_PROBED": ("HAS_DISABLE_TORCH_FUNCTION", "_DISABLE_TORCH_FUNCTION_CLS"),
+    "_DISPATCH_MODE_STACK_PROBED": ("HAS_DISPATCH_MODE_STACK_QUERY", "_DISPATCH_MODE_STACK_FN"),
     "_DTENSOR_PROBED": ("HAS_DTENSOR", "_DTENSOR_TYPE"),
     "_GRADIENT_EDGE_PROBED": ("HAS_GRADIENT_EDGE",),
     "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
@@ -1939,10 +1959,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
-    "_FUNCOL_GROUP_RESOLUTION_PROBED": (
-        "HAS_FUNCOL_GROUP_RESOLUTION",
-        "_FUNCOL_GROUP_RESOLVERS",
-    ),
+    "_FUNCOL_GROUP_RESOLUTION_PROBED": ("HAS_FUNCOL_GROUP_RESOLUTION", "_FUNCOL_GROUP_RESOLVERS"),
     "_FUNCOL_WAIT_INTERPOSITION_PROBED": (
         "HAS_FUNCOL_WAIT_INTERPOSITION",
         "_FUNCOL_WAIT_REDISPATCH",
@@ -1952,10 +1969,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
         "HAS_ASYNC_COLLECTIVE_TENSOR",
         "_ASYNC_COLLECTIVE_TENSOR_TYPE",
     ),
-    "_CHECKPOINT_HOOK_CLASS_PROBED": (
-        "HAS_CHECKPOINT_HOOK_CLASS",
-        "_CHECKPOINT_HOOK_CLASS",
-    ),
+    "_CHECKPOINT_HOOK_CLASS_PROBED": ("HAS_CHECKPOINT_HOOK_CLASS", "_CHECKPOINT_HOOK_CLASS"),
     "_CHECKPOINT_INTERNAL_HOOK_CLASS_PROBED": (
         "HAS_CHECKPOINT_INTERNAL_HOOK_CLASS",
         "_CHECKPOINT_INTERNAL_HOOK_CLASS",
@@ -1967,14 +1981,8 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_KINETO_INMEMORY_EVENTS_PROBED": ("HAS_KINETO_INMEMORY_EVENTS",),
     "_KINETO_EVENT_SCOPE_PROBED": ("HAS_KINETO_EVENT_SCOPE",),
     "_MEMORY_PROFILE_PROBED": ("HAS_MEMORY_PROFILE",),
-    "_DTENSOR_SHARD_GEOMETRY_PROBED": (
-        "HAS_DTENSOR_SHARD_GEOMETRY",
-        "_DTENSOR_SHARD_GEOMETRY_FN",
-    ),
-    "_DYNAMO_COMPILE_COUNTERS_PROBED": (
-        "HAS_DYNAMO_COMPILE_COUNTERS",
-        "_DYNAMO_COMPILE_COUNTERS",
-    ),
+    "_DTENSOR_SHARD_GEOMETRY_PROBED": ("HAS_DTENSOR_SHARD_GEOMETRY", "_DTENSOR_SHARD_GEOMETRY_FN"),
+    "_DYNAMO_COMPILE_COUNTERS_PROBED": ("HAS_DYNAMO_COMPILE_COUNTERS", "_DYNAMO_COMPILE_COUNTERS"),
     "_DYNAMO_IS_COMPILING_PROBED": ("HAS_DYNAMO_IS_COMPILING", "_DYNAMO_IS_COMPILING_FN"),
     "_DYNAMO_OPTIMIZED_MODULE_PROBED": (
         "HAS_DYNAMO_OPTIMIZED_MODULE",
@@ -1984,10 +1992,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_FAKE_TENSOR_MODE_PROBED": ("HAS_FAKE_TENSOR_MODE", "_FAKE_TENSOR_MODE_CLS"),
     "_FP8_DTYPES_PROBED": ("HAS_FP8_DTYPES", "_FP8_DTYPES"),
     "_FSDP_WRAPPER_PROBED": ("HAS_FSDP_WRAPPER", "_FSDP_WRAPPER_TYPE"),
-    "_JIT_SCHEMA_ENUMERATION_PROBED": (
-        "HAS_JIT_SCHEMA_ENUMERATION",
-        "_JIT_SCHEMA_ENUMERATION_FN",
-    ),
+    "_JIT_SCHEMA_ENUMERATION_PROBED": ("HAS_JIT_SCHEMA_ENUMERATION", "_JIT_SCHEMA_ENUMERATION_FN"),
     "_PIPELINING_PROBED": ("HAS_PIPELINING", "_PIPELINING_TYPES"),
     "_TENSORBASE_CLASS_PROBED": ("HAS_TENSORBASE_CLASS", "_TENSORBASE_CLASS"),
     "_TRACING_TENSOR_TYPES_PROBED": ("HAS_TRACING_TENSOR_TYPES", "_TRACING_TENSOR_TYPES"),
@@ -3942,10 +3947,7 @@ def get_dynamo_explain() -> Callable[..., Any] | None:
         return None
     explain = _import_module_attr_or_none("torch._dynamo", "explain")
     if not callable(explain):
-        mark_torch_capability_missing(
-            "HAS_DYNAMO_EXPLAIN",
-            "graph-break diagnostics are disabled",
-        )
+        mark_torch_capability_missing("HAS_DYNAMO_EXPLAIN", "graph-break diagnostics are disabled")
         return None
     return explain
 

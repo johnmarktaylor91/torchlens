@@ -33,13 +33,15 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens._utils._foreign_kernel_packages import FLASH_ATTENTION_4_INTERFACE_MODULE
+from torchlens.backends.torch._foreign_data import (
+    FLASH_ATTENTION_4_EXIT,
+    FLASH_ATTENTION_4_INTERFACE_MODULE,
+)
 from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_FUNC_NAME,
     FOREIGN_FUNCTION_TRANSFORM_KIND,
     FOREIGN_FUNCTION_WRAPPER_NAME,
 )
-from torchlens.backends.torch._known_foreign_kernels import FLASH_ATTENTION_4_EXIT
 
 transformers = pytest.importorskip("transformers")
 

@@ -105,7 +105,7 @@
     `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
     `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
     `as_tensor` / `asarray` op, inside its `apply`), or that is a known foreign kernel
-    (`backends/torch/_known_foreign_kernels.py`: every Function of `flash_attn.cute.interface`,
+    (`backends/torch/_foreign_data.py`: every Function of `flash_attn.cute.interface`,
     FlashAttention 4, hands its tensors to a CuTe kernel through TVM FFI, which no export patch
     sees; gated by `HAS_FLASH_ATTENTION_4_INTERFACE`, a filesystem probe that never imports the
     package), is one
