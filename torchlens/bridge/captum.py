@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import functools
 import inspect
 import weakref
 from collections.abc import Iterator
@@ -102,14 +103,12 @@ def attribute(
     inputs: Any | None = None,
     **kwargs: Any,
 ) -> Any:
-    """Run a Captum attribution method using inputs retained by a TorchLens log.
+    """Run a Captum attribution method using inputs retained by a TorchLens trace.
 
-    When ``method.layer`` is a site probe from :func:`layer` (an op that no
-    module returns, or one pass of a repeated module), the method's forward
-    function is routed through a TorchLens capture that splices the probe at
-    that site for the duration of the call, so Captum's layer hooks fire on
-    exactly that tensor. A live module from :func:`layer` runs the model
-    directly, as before.
+    When ``method.layer`` is a site probe from :func:`layer`, the method's
+    forward function runs through a TorchLens capture that splices the probe
+    at that site for the duration of the call, so Captum's layer hooks fire
+    on exactly that tensor; a live module runs the model directly.
 
     Parameters
     ----------
@@ -118,13 +117,11 @@ def attribute(
     method:
         Captum attribution object exposing ``attribute``.
     target:
-        Captum target, forwarded as ``target=`` only when given: the
-        activation and neuron classes (``LayerActivation``, ``NeuronGradient``,
-        ...) take no ``target`` and reject one.
+        Captum target, forwarded as ``target=`` only when given (the
+        activation and neuron classes take no ``target`` and reject one).
     inputs:
-        Optional explicit Captum input (a tensor or a tuple of tensors). When
-        omitted, every logged forward input is forwarded: the single tensor,
-        or the tuple of positional tensors in ``forward`` order.
+        Optional explicit Captum input (a tensor or a tuple of tensors); when
+        omitted, every logged forward input is forwarded in ``forward`` order.
     **kwargs:
         Additional keyword arguments forwarded to Captum (``baselines``,
         ``neuron_selector``, ``additional_forward_args``, ...).
@@ -142,14 +139,12 @@ def attribute(
         If ``method`` does not expose ``attribute``.
     InvalidArgumentError
         ``bridge_captum_inputs_unresolved`` when ``inputs`` is omitted and the
-        logged inputs cannot be replayed positionally (a keyword-only or
-        nested input, a missing positional tensor, or no saved input);
+        logged inputs cannot be replayed positionally;
         ``bridge_captum_multi_probe_unsupported`` when ``method.layer`` lists
         more than one site probe (one spliced site per call).
     """
 
     _require_captum()
-
     if not hasattr(method, "attribute"):
         raise TypeError("Captum bridge expected a method object with an attribute(...) method.")
 
@@ -403,29 +398,16 @@ def _single_probe(method: Any) -> _SiteProbe | None:
 def _spliced_forward(probe: _SiteProbe) -> Any:
     """Build the forward function that splices ``probe`` at its site.
 
-    Parameters
-    ----------
-    probe:
-        Site probe to splice.
-
-    Returns
-    -------
-    Callable
-        ``forward(*args, **kwargs)`` running the source model through the
-        capture lane (``tl.trace`` retaining nothing) with the probe called on
-        the ``probe.ordinal``-th op at its site key, and returning the model's
-        own output with its autograd graph intact. The same lane minted the
-        site key the probe carries, so the key resolves exactly as it did in
-        the originating trace (``tl.record`` tracks no module stack and
-        ``spec.bind`` names a ``+=`` ``add`` where capture names it ``iadd``,
-        so neither can serve a nested or in-place site).
-
-    Raises
-    ------
-    InvalidArgumentError
-        ``bridge_captum_site_not_reached`` (from the returned forward) when a
-        forward ran fewer ops at the site than the probe's ordinal, so the
-        probe never saw its tensor.
+    The returned ``forward(*args, **kwargs)`` runs the source model through
+    the capture lane (``tl.trace`` retaining nothing) with the probe called on
+    the ``probe.ordinal``-th op at its site key, and returns the model's own
+    output with its autograd graph intact. The same lane minted the site key
+    the probe carries, so the key resolves exactly as it did in the
+    originating trace (``tl.record`` tracks no module stack and ``spec.bind``
+    names a ``+=`` ``add`` where capture names it ``iadd``, so neither can
+    serve a nested or in-place site). The forward refuses
+    ``bridge_captum_site_not_reached`` when it fires the site fewer times than
+    the probe's ordinal.
     """
 
     import torchlens as tl
@@ -450,43 +432,51 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
         return result.clone() if isinstance(result, torch.Tensor) else result
 
     spec = tl.when(site_selector(probe.site_key), splice)
+    return functools.partial(_run_spliced, model, probe, spec, seen)
 
-    def forward(*args: Any, **kwargs: Any) -> Any:
-        """Run one capture with the site counter reset; refuse a forward that misses the site."""
 
-        seen["count"] = 0
-        raw_output: dict[str, Any] = {}
+def _run_spliced(
+    model: nn.Module, probe: _SiteProbe, spec: Any, seen: dict[str, int], *args: Any, **kwargs: Any
+) -> Any:
+    """Run one capture with the site counter reset; refuse a forward that misses the site."""
 
-        def keep_output(_module: nn.Module, _inputs: Any, output: Any) -> None:
-            """Keep the model's own return value (autograd graph intact)."""
+    import torchlens as tl
 
-            raw_output["value"] = output
+    seen["count"] = 0
+    raw_output: dict[str, Any] = {}
 
-        handle = model.register_forward_hook(keep_output)
-        try:
-            captured = tl.trace(
-                model,
-                list(args) if args else None,
-                dict(kwargs) if kwargs else None,
-                save=_save_nothing,
-                intervene=spec,
-            )
-        finally:
-            handle.remove()
-        captured.cleanup()
-        output = raw_output["value"]
-        if seen["count"] < probe.ordinal:
-            raise InvalidArgumentError(
-                f"Captum site probe {probe.label!r} (site_key {probe.site_key!r}, call "
-                f"{probe.ordinal}) was never reached: this forward ran the site "
-                f"{seen['count']} time(s)",
-                code="bridge_captum_site_not_reached",
-                remedy="attribute with inputs that take the same path as the trace the "
-                "site was picked from, or pick a site on the path these inputs take",
-            )
-        return output
+    def keep_output(_module: nn.Module, _inputs: Any, output: Any) -> None:
+        """Keep the model's own return value (autograd graph intact)."""
 
-    return forward
+        raw_output["value"] = output
+
+    handle = model.register_forward_hook(keep_output)
+    try:
+        captured = tl.trace(
+            model,
+            list(args) if args else None,
+            dict(kwargs) if kwargs else None,
+            save=_save_nothing,
+            intervene=spec,
+        )
+    finally:
+        handle.remove()
+    captured.cleanup()
+    if seen["count"] < probe.ordinal:
+        _refuse_unreached(probe, seen["count"])
+    return raw_output["value"]
+
+
+def _refuse_unreached(probe: _SiteProbe, count: int) -> None:
+    """Raise ``bridge_captum_site_not_reached`` for a forward that fired the site ``count`` times."""
+
+    raise InvalidArgumentError(
+        f"Captum site probe {probe.label!r} (site_key {probe.site_key!r}, call "
+        f"{probe.ordinal}) was never reached: this forward ran the site {count} time(s)",
+        code="bridge_captum_site_not_reached",
+        remedy="attribute with inputs that take the same path as the trace the "
+        "site was picked from, or pick a site on the path these inputs take",
+    )
 
 
 def _save_nothing(ctx: Any) -> bool:
