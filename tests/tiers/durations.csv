@@ -1202,7 +1202,6 @@ tests/test_site_join.py,14,7.38,3.66,heavy
 tests/test_site_key.py,22,5.09,1.71,heavy
 tests/test_site_key_portability.py,8,5.55,1.09,unmarked
 tests/test_site_sweep_unit_candidates.py,4,2.01,1.09,heavy
-tests/test_sites.py,2,0.17,0.15,unmarked
 tests/test_skeleton_recipe_docs.py,5,2.95,2.89,heavy
 tests/test_skip_audit.py,15,11.61,3.94,missing
 tests/test_snoop_core.py,10,1.07,0.21,smoke

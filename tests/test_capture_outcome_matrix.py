@@ -182,7 +182,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
     )
     gate_calls = re.findall(r'require_capture_capability\(trace, "([a-z_]+)"\)', validation_source)
     # save_new_outs, push, push_from, run (entry pre-gate + loaded-sparse +
-    # analysis-load pre-gate + unified-live + legacy-live), log_backward,
+    # analysis-load pre-gate + unified-live + legacy-live), backward,
     # recording_backward, validate_forward_pass, check_metadata_invariants.
     assert sorted(gate_calls) == sorted(
         [
@@ -196,7 +196,7 @@ def test_gated_entries_consult_the_chokepoint() -> None:
             # generic analysis refusal's dead-end remedy)
             "live_replay",  # run(): unified live provider
             "live_replay",  # run(): legacy rerun surface
-            "backward",  # log_backward
+            "backward",  # backward
             "backward",  # recording_backward
             "validation_entry",  # validate_forward_pass
             "validation_entry",  # check_metadata_invariants

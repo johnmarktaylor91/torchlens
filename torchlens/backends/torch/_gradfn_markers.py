@@ -67,7 +67,7 @@ def _push_gradfn_marker(
     if profiler is None:
         return
     try:
-        pass_index = int(trace._active_backward_pass_index or 0)
+        pass_index = int(trace._active_backward_pass_number or 0)
     except AttributeError:
         pass_index = 0
     try:

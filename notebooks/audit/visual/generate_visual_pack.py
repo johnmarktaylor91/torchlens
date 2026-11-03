@@ -93,7 +93,7 @@ def get_trace(model_key: str, variant: str = "plain", trace_builder=None):
         elif variant == "backward":
             trace = tl.trace(m, xs, capture=tl.options.CaptureOptions(backward_ready=True))
             out = trace[-1].out
-            trace.log_backward(out)
+            trace.backward(out)
         else:
             raise ValueError(f"Unknown trace variant {variant!r} without trace_builder")
     _TRACE_CACHE[ck] = trace
@@ -112,7 +112,11 @@ def _intervened_trace(model_key: str):
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         relu = next(layer for layer in trace.ops if layer.func_name == "relu")
-        trace.set(tl.func("relu"), torch.zeros(relu.shape))
+        trace.do(
+            tl.func("relu"),
+            torch.zeros(relu.shape),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
         return trace
 
     return _build
@@ -750,7 +754,7 @@ NA_AXES: dict[str, str] = {
     "html_repr": "Trace._repr_html_() is a bespoke HTML identity card (layers/ops/"
     "save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz "
     "render, so it cannot appear in this PDF.",
-    "animate_ops": "trace.animate(site) returns an HTML play/pause Drawing for "
+    "animate": "trace.animate(site) returns an HTML play/pause Drawing for "
     "repeated-pass ops; interactive HTML, out of scope for a static PDF.",
     "code_panel:callable": "code_panel=<callable> reuses the same panel box styling "
     "as the string modes; only the text source differs.",
@@ -1952,7 +1956,7 @@ SECTIONS: list[Section] = [
                 label="h1_backward",
                 title="draw_backward: the grad_fn graph",
                 caption=(
-                    "After log_backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
+                    "After backward(), draw_backward renders the captured autograd graph: grad_fn nodes "
                     "(AddmmBackward, ReluBackward, ...) connected by gradient-flow edges. Default vis_mode "
                     "is 'rolled'; 'unrolled' shows per-call grad_fn instances.\n"
                     "CHECK: grad_fn names match the forward ops they differentiate; edge direction follows "
@@ -2136,7 +2140,7 @@ SECTIONS: list[Section] = [
                 title="vis_intervention_mode: 'node_mark' vs 'as_node'",
                 caption=(
                     "An intervention-ready trace with a PLANNED zero intervention registered at the relu "
-                    "site (trace.set(tl.func('relu'), zeros) -- the renderer visualizes planned "
+                    "site (trace.do(tl.func('relu'), zeros, intervention=tl.options.InterventionOptions(engine='set_only')) -- the renderer visualizes planned "
                     "intervention sites). 'node_mark' (default) "
                     "marks the edited op node itself (purple ring and a bold purple edit row such as "
                     "'\u0394 set(v)'); 'as_node' inserts explicit "

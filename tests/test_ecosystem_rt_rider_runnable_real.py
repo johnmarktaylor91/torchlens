@@ -89,8 +89,8 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
 
 
 # Kept: sole branch coverage of backends/torch/_trace_backward.py; a sole mutation kill.
-def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inputs):
-    """Row 21 at real-model tier: ``log_backward`` on a bundle-loaded real HF
+def test_gpt2_loaded_backward_refuses_before_mutation(tmp_path, gpt2_and_inputs):
+    """Row 21 at real-model tier: ``backward`` on a bundle-loaded real HF
     trace refuses typed BEFORE mutating backward state."""
 
     model, input_ids = gpt2_and_inputs
@@ -99,7 +99,7 @@ def test_gpt2_loaded_log_backward_refuses_before_mutation(tmp_path, gpt2_and_inp
     loaded = tl.load(tmp_path / "gpt2_bundle")
     live_loss = model(input_ids=input_ids).logits.sum()
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):
-        loaded.log_backward(live_loss)
+        loaded.backward(live_loss)
     assert len(loaded.autograd.backward_passes or []) == 0
     assert len(loaded.autograd.grad_fns) == 0
     with pytest.raises(RunCapabilityUnavailableError, match="bundle-loaded"):

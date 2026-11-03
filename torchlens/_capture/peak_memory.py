@@ -58,7 +58,7 @@ def reset_peak_rss() -> bool:
     first -- the brainpipe memo's sweep-scale instrument defect). Only the
     peak-RSS counter is touched; no page state relevant to correctness
     changes. The reset is process-wide and cannot be undone: after a capture
-    (forward bracket) or a CPU ``log_backward`` (each pass), a caller's own
+    (forward bracket) or a CPU ``backward`` (each pass), a caller's own
     ``VmHWM`` and ``ru_maxrss`` reads report the high-water since that bracket
     began, not since process start. Nothing in TorchLens reads it across
     brackets. Called only under ``CaptureOptions(measure_host_peak_memory=True)``.

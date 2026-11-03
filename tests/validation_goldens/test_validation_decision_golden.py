@@ -490,7 +490,11 @@ def build_validation_decision_snapshot() -> dict[str, Any]:
     clean = tl.trace(intervention, x_intervention, capture=full_capture, save="all")
     edited = clean.fork("zero_relu")
     relu_pass = next(layer for layer in edited._layer_list if layer.func_name == "relu")
-    edited.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
+    edited.do(
+        tl.func("relu"),
+        torch.zeros_like(relu_pass.out),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     edited.run(intervention, x_intervention)
 
     torch.manual_seed(15)

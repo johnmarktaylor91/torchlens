@@ -124,22 +124,38 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
 
     log, _ = _capture()
     with pytest.warns(TraceMutationWarning):
-        log.set(tl.func("relu"), torch.zeros(2, 3))
+        log.do(
+            tl.func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        log.set(tl.func("relu"), torch.ones(2, 3))
+        log.do(
+            tl.func("relu"),
+            torch.ones(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert warnings_record == []
 
     confirmed, _ = _capture()
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        confirmed.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
+        confirmed.do(
+            tl.func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     assert warnings_record == []
 
     session, _ = _capture()
     with suppress_mutate_warnings(), warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
-        session.set(tl.func("relu"), torch.zeros(2, 3))
+        session.do(
+            tl.func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     assert warnings_record == []
 
     callable_session, _ = _capture()
@@ -151,7 +167,11 @@ def test_mutate_warning_fires_once_and_can_be_suppressed() -> None:
         assert suppress_mutate_warnings.is_suppressed is True
         with warnings.catch_warnings(record=True) as warnings_record:
             warnings.simplefilter("always")
-            callable_session.set(tl.func("relu"), torch.zeros(2, 3))
+            callable_session.do(
+                tl.func("relu"),
+                torch.zeros(2, 3),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
+            )
         assert warnings_record == []
     finally:
         suppress_mutate_warnings(False)
@@ -216,12 +236,20 @@ def test_direct_write_propagation_warning_is_one_time() -> None:
     with pytest.warns(DirectActivationWriteWarning):
         relu_pass.out = relu_pass.out
 
-    log.set(tl.func("relu"), torch.zeros_like(relu_pass.out), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.zeros_like(relu_pass.out),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     with pytest.warns(DirectActivationWriteWarning):
         log.push()
 
     relu_pass.out = relu_pass.out
-    log.set(tl.func("relu"), torch.ones_like(relu_pass.out), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.ones_like(relu_pass.out),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     with warnings.catch_warnings(record=True) as warnings_record:
         warnings.simplefilter("always")
         log.push()

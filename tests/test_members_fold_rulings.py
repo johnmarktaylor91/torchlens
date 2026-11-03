@@ -110,7 +110,7 @@ def test_backward_drawing_refuses_collapse_diagnostics(tmp_path: Any) -> None:
     model = LinearRelu()
     trace = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(save_grads="all"))
     try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
         drawing = trace.draw(path=str(tmp_path / "g"), graph="backward", file_format="dot")
         for member in ("collapse_plan", "collapse_schedule"):
             with pytest.raises(TorchLensError) as excinfo:

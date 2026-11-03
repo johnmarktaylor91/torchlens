@@ -84,12 +84,9 @@ def _state(stat: Any) -> str:
 
 
 def _final(stat: Any) -> Any:
-    """Return a statistic's final value (``result()`` or ``compute()``, per type).
+    """Return a statistic's final value (``compute()``, one verb across the family)."""
 
-    ``Histogram`` keeps ``result()``; the rest, ``RunningStats`` included, use ``compute()``.
-    """
-
-    return stat.result() if isinstance(stat, tl.stats.Histogram) else stat.compute()
+    return stat.compute()
 
 
 def _assert_same(left: Any, right: Any) -> None:

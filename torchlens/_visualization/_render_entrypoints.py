@@ -147,7 +147,7 @@ def render_backward_graph(
         raise PayloadUnavailableError(
             "No backward graph is available",
             code="backward_graph_unavailable",
-            remedy="call log_backward(loss) first",
+            remedy="call backward(loss) first",
         )
     _ = collapsed_node_spec_fn, vis_node_mode
     if vis_mode not in {"rolled", "unrolled"}:
@@ -412,7 +412,7 @@ def render_combined_graph(
         raise PayloadUnavailableError(
             "No backward graph is available",
             code="backward_graph_unavailable",
-            remedy="call log_backward(loss) first",
+            remedy="call backward(loss) first",
         )
     if not self._layers_logged:
         raise PayloadUnavailableError(
