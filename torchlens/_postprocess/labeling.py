@@ -29,7 +29,7 @@ from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
 from .._record_type import record_type
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import op_attr, record_member
 from ..intervention.types import ParentRef
 
 if TYPE_CHECKING:
@@ -487,14 +487,14 @@ def _replace_layer_names_for_layer_entry(
         if internal_set is not None:
             internal_set(field_name, value)
             return
-        setattr(layer_entry, field_name, value)
+        setattr(layer_entry, op_attr(field_name), value)
 
     for field in _LIST_FIELDS_TO_RENAME:
         if field == "equivalent_ops":
             # Read the RAW slot: the public read is copy-on-read, and a copy has
             # a fresh identity that would defeat the memo on every Op.
             slot_read = getattr(layer_entry, "_slot", None)
-            orig = slot_read(field) if slot_read is not None else getattr(layer_entry, field, None)
+            orig = slot_read(field) if slot_read else record_member(layer_entry, field, None)
             if not orig:
                 continue
             cached = equivalent_ops_memo.get(id(orig))
@@ -509,7 +509,7 @@ def _replace_layer_names_for_layer_entry(
             # Read the RAW slot: the public read is copy-on-read, and a copy
             # would defeat both sharing and the memo hit-rate.
             slot_read = getattr(layer_entry, "_slot", None)
-            orig = slot_read(field) if slot_read is not None else getattr(layer_entry, field, None)
+            orig = slot_read(field) if slot_read else record_member(layer_entry, field, None)
             if not orig:
                 continue
             if isinstance(orig, list):

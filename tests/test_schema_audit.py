@@ -108,7 +108,7 @@ def test_postprocess_internal_writes_do_not_mark_direct_write_dirty() -> None:
     assert log._has_direct_writes is False
     assert log.state is TraceState.PRISTINE
     for layer in log:
-        assert hasattr(layer, "func_call_id")
+        assert hasattr(layer.call, "call_id")
         assert hasattr(layer, "container_path")
         assert hasattr(layer, "edits")
         assert hasattr(layer, "_edge_uses")

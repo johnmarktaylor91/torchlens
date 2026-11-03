@@ -23,6 +23,7 @@ from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._data_classes.trace import Trace
 from torchlens._io._small_raw import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
+from torchlens._utils._record_group_table import OP_GROUP_VIEWS
 
 
 class _TinyIOModel(nn.Module):
@@ -457,9 +458,9 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     return {
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
-        "grad_for": lambda o: o.autograd.grad_for(bwd=0),
-        "materialize_grad": lambda o: o.payload.materialize_grad(),
-        "materialize_out": lambda o: o.payload.materialize_out(),
+        "autograd.grad_for": lambda o: o.autograd.grad_for(bwd=0),
+        "payload.materialize_grad": lambda o: o.payload.materialize_grad(),
+        "payload.materialize_out": lambda o: o.payload.materialize_out(),
         "show": lambda o: o.show(),
         "to_pandas": lambda o: o.to_pandas(),
     }
@@ -592,6 +593,11 @@ def _public_methods(cls: type) -> set[str]:
             continue
         if callable(static):
             names.add(name)
+    if cls is Op:
+        # Concern-group methods (``op.autograd.grad_for``) are Op methods reached
+        # through the group, so they are classified under their dotted spelling.
+        for group, view in OP_GROUP_VIEWS.items():
+            names |= {f"{group}.{name}" for name in _public_methods(view)}
     return names
 
 

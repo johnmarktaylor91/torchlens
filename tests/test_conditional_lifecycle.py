@@ -287,6 +287,9 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
         }
     }
     parent_layer._control_flow_branch_stack_ops = {((0, "then"),): [1, 2]}
+    # A real Layer keeps its conditional fields under their persisted keys in
+    # ``__dict__``; the Layer scrub keys on that, so the stub carries the key too.
+    parent_layer.__dict__["conditional_entry_children"] = parent_layer.control_flow.entry_children
 
     trace = _StubTrace(layer_list=[parent_pass], layer_logs={"parent": parent_layer})
     trace._graph_conditional_branch_edges = [

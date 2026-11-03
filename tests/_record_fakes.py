@@ -20,6 +20,7 @@ from torchlens._data_classes._record_groups_module_context import OpModuleContex
 from torchlens._data_classes._record_groups_payload import OpPayload
 from torchlens._data_classes._record_groups_source import OpSource
 from torchlens._utils._record_group_table import (
+    _RECORD_KIND_BY_TYPE,
     ACTIVE_GROUPS,
     LAYER_MEMBER_MOVES,
     OP_MEMBER_MOVES,
@@ -110,6 +111,11 @@ class _FlatGroupView:
         if old is None:
             raise AttributeError(leaf)
         return getattr(self._record, old)
+
+
+# ``record_member`` follows a former flat name only on an Op or Layer; the fake
+# stores fields exactly like an Op, so it reads like one too.
+_RECORD_KIND_BY_TYPE[FakeRecord] = "Op"
 
 
 class FlatGroups:

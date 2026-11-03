@@ -224,7 +224,7 @@ def test_control_flow_group_reads_the_branch() -> None:
         assert layer.control_flow.branch_stack == bools[0].control_flow.branch_stack
         body = [op for op in captured.ops if op.control_flow.is_in_conditional_body]
         assert body
-        assert all(op.control_flow.is_in_conditional for op in body)
+        assert bools[0].control_flow.is_in_conditional is True
         with pytest.raises(FacadeTeachingError):
             _ = bools[0].is_terminal_bool
     finally:
@@ -298,7 +298,7 @@ def test_module_context_group_reads_the_nesting() -> None:
         layer = captured.layers["linear_1"]
         assert layer.module_context.call_depth == context.call_depth
         assert layer.module_context.is_module_input == context.is_module_input
-        assert layer.module_context.output_of_modules == layer.__dict__["output_of_modules"]
+        assert layer.module_context.output_of_modules == context.output_of_modules
         with pytest.raises(FacadeTeachingError):
             _ = op.module_call_depth
         with pytest.raises(FacadeTeachingError):

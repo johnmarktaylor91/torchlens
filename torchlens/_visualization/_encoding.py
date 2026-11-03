@@ -323,15 +323,10 @@ _NON_NUMERIC_FIELDS = frozenset(
         "projective_field",
         "source_trace",
         "trace",
-        # Concern-group views (``layer.cost``, ``layer.control_flow``,
-        # ``layer.call``): their members classify under their former flat names.
-        "call",
-        "cost",
-        "control_flow",
-        "source",
-        "autograd",
-        "module_context",
-        "payload",
+        # Concern-group views (``layer.cost``, ``layer.call``, ...): their members
+        # classify under their former flat names.
+        *("call", "cost", "control_flow", "source", "autograd", "module_context"),
+        *("payload", "graph"),
         # Private stored state.
         "_source_trace_ref",
         "_is_in_conditional_body",

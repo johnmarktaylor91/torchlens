@@ -253,7 +253,9 @@ def test_to_pandas_raises_on_ambiguous_multi_backward_grad() -> None:
 
     trace = _trace_with_two_backward_passes()
     try:
-        with pytest.raises(ValueError, match=r"use op\.grads\[\.\.\.\] / op\.grad_for\(bwd=k\)"):
+        with pytest.raises(
+            ValueError, match=r"use op\.autograd\.grads\[\.\.\.\] / op\.autograd\.grad_for\(bwd=k\)"
+        ):
             trace.to_pandas()
     finally:
         trace.cleanup()

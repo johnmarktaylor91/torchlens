@@ -41,7 +41,7 @@ from example_models import BufferRewriteModel
 
 import torchlens as tl
 from torchlens._state import pause_logging
-from torchlens._utils._record_group_table import record_member
+from torchlens._utils._record_group_table import op_attr
 from torchlens.backends.torch import rescue
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
@@ -345,8 +345,8 @@ def test_w33_derived_flag_properties_are_read_only_truths() -> None:
     trace, _ = _capture(_Diamond(), torch.randn(3, 4))
     op_type = type(trace._layer_list[1])
     for name in ("has_parents", "has_siblings", "has_co_parents"):
-        assert isinstance(getattr(op_type, name), property)
-    assert not isinstance(record_member(op_type, "has_children", None), property)
+        assert isinstance(getattr(op_type, op_attr(name)), property)
+    assert not isinstance(getattr(op_type, op_attr("has_children")), property)
 
 
 # ---------------------------------------------------------------------------

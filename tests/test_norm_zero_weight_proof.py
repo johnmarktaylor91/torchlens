@@ -87,7 +87,7 @@ def test_rms_norm_zero_weight_is_proved() -> None:
     """``rms_norm(input, normalized_shape, weight, eps)`` reads weight at args[2]."""
 
     op = _FakeNormOp("rms_norm", torch.zeros(4), arg_labels={0: "x", 2: "weight"})
-    op._call_saved_args = (torch.randn(2, 4), (4,), torch.zeros(4), None)
+    op.saved_args = (torch.randn(2, 4), (4,), torch.zeros(4), None)
     assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is True
 
 
@@ -147,8 +147,8 @@ def test_weight_keyword_is_read_when_not_positional() -> None:
     """``F.group_norm(x, 2, weight=w)`` records the weight as a keyword."""
 
     op = _FakeNormOp("group_norm", None)
-    op._call_saved_args = (torch.randn(2, 4, 3), 2)
-    op._call_saved_kwargs = {"weight": torch.zeros(4)}
+    op.saved_args = (torch.randn(2, 4, 3), 2)
+    op.saved_kwargs = {"weight": torch.zeros(4)}
     assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is True
-    op._call_saved_kwargs = {"weight": torch.ones(4)}
+    op.saved_kwargs = {"weight": torch.ones(4)}
     assert norm_input_annihilated_by_zero_weight(op, ["x"], op.call.saved_args) is False
