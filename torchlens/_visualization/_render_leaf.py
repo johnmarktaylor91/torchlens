@@ -677,7 +677,7 @@ def _compute_backward_node_lines(
         lines.append(f"grad {_format_backward_output_shape(grad_fn_handle)}")
     rows = _BACKWARD_ROWS.get()
     if rows is not None:
-        from ._backward_rows import backward_opt_in_rows
+        from ._backward_rows import backward_opt_in_rows  # deferred: cycle _visualization
 
         lines.extend(backward_opt_in_rows(grad_fn_handle, call, rows))
     return lines

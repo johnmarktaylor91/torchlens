@@ -211,7 +211,7 @@ def run_bounded_subprocess(
         # The single most common cold-user viz failure: the Graphviz BINARY
         # is not installed (the python 'graphviz' package alone does not
         # ship it); the class carries the install remedy.
-        from ._render_common import GraphvizUnavailableError
+        from ._render_common import GraphvizUnavailableError  # deferred: cycle _visualization
 
         raise GraphvizUnavailableError(
             f"TorchLens could not render this graph: the Graphviz executable "

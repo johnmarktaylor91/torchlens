@@ -59,7 +59,7 @@ def build_source_graph(trace: Trace, request: ResolvedRenderRequest) -> SourceGr
     """
 
     from ._render_flow import _build_module_focus_entries, _build_skip_filtered_edge_map
-    from ._render_nodes import _normalize_buffer_visibility
+    from ._render_nodes import _normalize_buffer_visibility  # deferred: cycle _visualization
 
     if request.vis_mode == "unrolled":
         entries_to_plot: dict[str, Any] = dict(trace._layer_dict_main_keys)

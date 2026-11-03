@@ -78,7 +78,7 @@ def _annotation_image_path_for_node(trace: Trace, node: Any) -> str | None:
         Image path stored in ``annotations["user"]["image"]``, if present.
     """
 
-    from ._render_nodes import BoundaryNode, _layer_log_for_node
+    from ._render_nodes import BoundaryNode, _layer_log_for_node  # deferred: cycle _visualization
 
     if isinstance(node, BoundaryNode):
         return None
@@ -118,7 +118,7 @@ def render_lines_to_html(lines: list[str]) -> str:
         A string suitable for Graphviz ``label=<...>`` syntax.
     """
 
-    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html
+    from ._edit_marks import EDIT_GAP_ROW, EditRow, edit_row_html  # deferred: cycle _visualization
 
     rows = []
     gap_drawn = False
@@ -368,7 +368,7 @@ def make_intervention_node_spec_fn(
         intervention overlay to apply.
     """
 
-    from ._edit_marks import (
+    from ._edit_marks import (  # deferred: cycle _visualization
         DOWNSTREAM_NODE_CLASS,
         EDIT_RING_PENWIDTH,
         EDITED_NODE_CLASS,

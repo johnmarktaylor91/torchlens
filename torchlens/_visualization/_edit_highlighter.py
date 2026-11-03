@@ -330,7 +330,7 @@ def render_highlighted(run_svg: Callable[[str], Any], output_path: str, job: Hig
     and PNG keep raw-input pictures and key swatches.
     """
 
-    from ._svg_compose import _inline_svg_local_images
+    from ._svg_compose import _inline_svg_local_images  # deferred: cycle _visualization
 
     svg_path = f"{output_path}.highlight.svg"
     try:

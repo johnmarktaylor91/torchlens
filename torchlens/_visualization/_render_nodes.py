@@ -630,7 +630,7 @@ def _build_layer_node(
     if theme is not None:
         default_spec = apply_theme_to_spec(default_spec, theme)
     if encoding is not None:
-        from ._encoding import channel_wrapped_node_spec_fn
+        from ._encoding import channel_wrapped_node_spec_fn  # deferred: cycle _visualization
 
         node_spec_fn = channel_wrapped_node_spec_fn(encoding, node, node_spec_fn)
     spec = _apply_node_spec_fn(self, node, default_spec, node_mode, node_spec_fn)

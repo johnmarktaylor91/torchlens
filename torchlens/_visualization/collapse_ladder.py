@@ -144,7 +144,7 @@ def _reported_collapsed_addresses(result: Any) -> frozenset[str]:
 def _optimizer() -> Any:
     """Return the optimizer module (runtime import; breaks the cycle)."""
 
-    from . import collapse_optimizer
+    from . import collapse_optimizer  # deferred: cycle _visualization
 
     return collapse_optimizer
 

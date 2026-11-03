@@ -235,7 +235,7 @@ def _resolve_perf_source(
             remedy=family.capture_remedy,
             argument="lens",
         )
-    from ._families import records_for_member, safe_label
+    from ._families import records_for_member, safe_label  # deferred: cycle _visualization
 
     values: dict[str, float] = {}
     for record in records_for_member(trace, source.member):
@@ -291,7 +291,7 @@ def _speed_callout_spec_fn(values: dict[str, float], unit_wording: str) -> Any:
     def _apply(layer: Any, spec: Any) -> Any:
         """Append the top-5 rank callout line to a ranked layer's spec."""
 
-        from ._families import safe_label
+        from ._families import safe_label  # deferred: cycle _visualization
 
         for candidate in (safe_label(layer), getattr(layer, "layer_label", None)):
             if candidate in ranks:

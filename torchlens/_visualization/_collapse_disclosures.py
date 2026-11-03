@@ -46,7 +46,7 @@ def _warn_undisclosed_floor(
     visible notice.
     """
 
-    from .collapse_optimizer import _optimizer_total_units
+    from .collapse_optimizer import _optimizer_total_units  # deferred: cycle _visualization
 
     if result.planner == "floor_fallback":
         detail = result.reason or "no optimizer frontier was produced"
@@ -62,7 +62,7 @@ def _warn_undisclosed_floor(
             stacklevel=user_stacklevel(),
         )
         return
-    from .auto_collapse import _readable_band_high
+    from .auto_collapse import _readable_band_high  # deferred: cycle _visualization
 
     total_units = _optimizer_total_units(trace, context)
     # F11 auto unfreeze (memo D8): an in-band full graph is the CORRECT auto
@@ -93,7 +93,7 @@ def _quality_budget_ms() -> float:
 def _defensive_constant() -> int:
     """Return the defensive U constant (runtime import: no module cycle)."""
 
-    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS  # deferred: cycle _visualization
 
     return int(COLLAPSE_OPTIMIZER_MAX_OPS)
 

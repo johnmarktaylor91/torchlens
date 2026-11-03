@@ -838,7 +838,7 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
     (:func:`torchlens._visualization._encoding.interpolate_hex`).
     """
 
-    from ._encoding import interpolate_hex
+    from ._encoding import interpolate_hex  # deferred: cycle _visualization
 
     return interpolate_hex(start, end, fraction)
 

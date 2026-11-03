@@ -404,7 +404,7 @@ def _format_value(value: Any) -> str:
 def _param_items(params: Any) -> list[Any]:
     """Extract parameter-like items from a node or iterable."""
 
-    from torchlens._visualization._render_common import BoundaryNode, FocusNode
+    from torchlens._visualization._render_common import BoundaryNode, FocusNode  # deferred: cycle
 
     barcodes = getattr(params, "_param_barcodes", None)
     if barcodes is not None and len(barcodes) == 0:
@@ -518,6 +518,6 @@ def compute_selected_node_lines(
     # Empty selection (every requested row skipped) falls back to the
     # default label rows; lazy import avoids a module cycle with the
     # node renderer that calls this picker.
-    from ._render_nodes import compute_default_node_lines
+    from ._render_nodes import compute_default_node_lines  # deferred: cycle _visualization
 
     return list(compute_default_node_lines(layer_log, node_address, vis_mode))

@@ -628,7 +628,7 @@ def render_surgery(trace: Trace, **user_kwargs: Any) -> Any:
     the exported picture.
     """
 
-    from .lenses._resolve import draw_with_lens
+    from .lenses._resolve import draw_with_lens  # deferred: cycle _visualization
 
     result = draw_with_lens(trace, "surgery", **user_kwargs)
     if not user_kwargs.get("return_graph", False):

@@ -504,7 +504,7 @@ def collapse_order(
             remedy="pass mode='auto' or 'max'",
             argument="mode",
         )
-    from .collapse_optimizer import select_collapse_plan
+    from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
     result = select_collapse_plan(trace, RenderContext(), mode=mode)
     if result.declined:
@@ -540,7 +540,7 @@ def _v2_selected_module_scores(
 ) -> dict[str, float]:
     """Return same-shape scores derived from the v2 selected module set."""
 
-    from .collapse_optimizer import select_collapse_plan
+    from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
     if result is None:
         result = select_collapse_plan(trace, RenderContext(), mode=mode)
@@ -598,7 +598,7 @@ def resolve_collapse_fn(
             )
         if collapse == 0.0:
             return None
-        from .collapse_optimizer import select_collapse_level
+        from .collapse_optimizer import select_collapse_level  # deferred: cycle _visualization
 
         result = select_collapse_level(trace, resolved_context, collapse)
         if not result.declined:
@@ -625,7 +625,7 @@ def resolve_collapse_fn(
             argument="collapse",
         )
     if collapse in {"auto", "max"}:
-        from .collapse_optimizer import select_collapse_plan
+        from .collapse_optimizer import select_collapse_plan  # deferred: cycle _visualization
 
         result = select_collapse_plan(trace, resolved_context, mode=collapse)
         if result.declined and "collapse_ops_ceiling" in (result.reason or ""):
@@ -633,7 +633,7 @@ def resolve_collapse_fn(
             # bounded top-level overview plus an expansion manifest, never an
             # uncollapsed wall (a flat trace with no child modules has no
             # coarser legal plan and stays as it is, disclosed by the skip).
-            from .collapse_fallback import pathological_overview_fn
+            from .collapse_fallback import pathological_overview_fn  # deferred: cycle
 
             return pathological_overview_fn(trace, result.reason)
         if not result.declined:
@@ -693,7 +693,7 @@ def resolve_repeat_folds(
         return {}
     if collapse_fn is None and fold_repeats is not True:
         return {}
-    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS
+    from .collapse_optimizer import COLLAPSE_OPTIMIZER_MAX_OPS  # deferred: cycle _visualization
 
     if len(trace._layer_list) > COLLAPSE_OPTIMIZER_MAX_OPS:
         # Compute-ceiling parity (r8 R60-9): ``draw(fold_repeats=True)`` with

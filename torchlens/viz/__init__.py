@@ -127,7 +127,7 @@ def causal_trace_heatmap(
 
     import numpy as np
 
-    from ._tensor_display import _clip_outliers, _prepare_signed_data
+    from ._tensor_display import _clip_outliers, _prepare_signed_data  # deferred: cycle viz
 
     try:
         import matplotlib.pyplot as plt

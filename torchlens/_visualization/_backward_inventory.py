@@ -64,6 +64,7 @@ def compute_backward_style_inventory(
 
     # Call-time import: the filter and grad-shape helpers live in
     # ``_render_leaf``, which imports THIS module at load time.
+    # deferred: cycle _visualization
     from ._render_leaf import _format_backward_output_shape, _grad_fn_matches_backward_filter
 
     visible = [

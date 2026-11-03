@@ -1610,7 +1610,7 @@ def populate_encoding_state(state: EncodingState, trace: Trace, universe: Any) -
         _compute_size_geometry(state)
 
     if state.stack_spec is not None:
-        from ._stacking import compute_stack_groups
+        from ._stacking import compute_stack_groups  # deferred: cycle _visualization
 
         compute_stack_groups(state, trace, universe)
 
