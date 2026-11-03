@@ -105,6 +105,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/feature_visualisation.md",
         "examples/recipes/train_tuned_lens_recipe.ipynb",
         "docs/recipes/prisma_clip_sae.md",
+        "docs/gallery/causal_tracing.md",  # 5.37 s in the test call, one core (OMP_NUM_THREADS=1)
     }
 )
 
