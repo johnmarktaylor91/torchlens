@@ -138,7 +138,7 @@
     for eager entries via `tl.backends.tf.GradOptions` with divergence refusal, and graph-only
     captures refuse `grad_options` typed; static-label `intervene=` ships for eager entries
     through the two-level writable layer (module-boundary + curated functional wrap) with
-    fail-closed site reachability; `halt=`, `recipes=`, and true backward capture are deferred.
+    fail-closed site reachability; `stop_after=`, `recipes=`, and true backward capture are deferred.
     All four eager previews (tf/mlx/tinygrad/paddle) group recurrent calls into multi-pass
     layers through the neutral grouper; `recurrence_detection` stores the EFFECTIVE value
     (the TF static FuncGraph path stays ungrouped at `False`), validation sidecars stay keyed

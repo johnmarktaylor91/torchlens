@@ -52,7 +52,7 @@ capture's `TraceCaptureError` (chained `from` the forward's exception; TorchLens
 propagate as themselves). `on_forward_error="attach_partial"` attaches a failed `Recording`
 to that raised error as `exc.partial_recording` and re-raises it.
 `on_forward_error="return_partial"` swallows the forward exception and returns the failed
-partial; with `return_output=True` the output slot is `None`, and manual `Recorder(...)`
+partial (its `output` refuses with `output_forward_failed`), and manual `Recorder(...)`
 returns `None` while `recorder.recording` holds the partial. Failed partials set
 `status="partial_error"`, `failed=True`, `error_repr`, `error_traceback`,
 `num_committed_ops`, `last_successful_op_label`, and best-effort `last_event_*` fields.

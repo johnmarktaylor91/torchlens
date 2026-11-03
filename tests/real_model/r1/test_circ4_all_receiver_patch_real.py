@@ -38,9 +38,9 @@ def test_every_gpt2_small_receiver_in_one_call_costs_one_replay_per_stage(
     model = copy.deepcopy(loaded["model"]).to(torch.float64).eval()
     model.set_attn_implementation("eager")
     clean_ids, corrupt_ids, *_ = _ioi_batch(loaded["tokenizer"], 2)
-    capture = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
-    clean = tl.trace(model, clean_ids, capture=capture)
-    corrupt_trace = tl.trace(model, corrupt_ids, capture=capture)
+    capture = tl.options.CaptureOptions(replayable=True)
+    clean = tl.trace(model, clean_ids, capture=capture, save="all")
+    corrupt_trace = tl.trace(model, corrupt_ids, capture=capture, save="all")
     try:
         graph = torchlens.mechinterp.component_graph(clean)
         corrupt = torchlens.mechinterp.component_graph(corrupt_trace)

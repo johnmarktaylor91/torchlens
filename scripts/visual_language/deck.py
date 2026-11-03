@@ -476,7 +476,9 @@ def generated_names() -> list[str]:
         if slide.id in ALPHABET:
             stems.append(f"{slide.id}-a")
         names += [f"{stem}.{ext}" for stem in stems for ext in ("svg", "dot", "json")]
-    names += [f"{stem}.{ext}" for stem in capture.EXPORT_STEMS for ext in ("png", "svg", "pdf")]
+    names += [
+        f"{stem}.{ext}" for stem in capture.EXPORT_STEMS for ext in ("png", "svg", "pdf", "html")
+    ]
     return names
 
 

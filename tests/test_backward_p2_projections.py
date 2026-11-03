@@ -53,9 +53,7 @@ def _captured_two_pass_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _TwoPassModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)
@@ -501,8 +499,7 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     try:
         trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)

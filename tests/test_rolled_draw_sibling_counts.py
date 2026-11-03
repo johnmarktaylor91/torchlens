@@ -69,7 +69,7 @@ def test_rolled_draw_reuses_atomic_module_sibling_counts(
     monkeypatch.setattr(_render_nodes, "_atomic_module_sibling_counts", spy_build)
     monkeypatch.setattr(_render_nodes, "_atomic_module_split_range", spy_split)
 
-    trace.draw(vis_mode="rolled", return_graph=True, vis_save_only=True)
+    trace.draw(rolled=True)
 
     assert len(built_counts) == 1
     assert len(received_counts) > 1

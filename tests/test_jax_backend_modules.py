@@ -648,9 +648,8 @@ def _assert_pytree_draw_surface(trace: Any, tmp_path: Path) -> None:
 
     dot = trace.draw(
         path=str(tmp_path / "pytree_graph"),
-        vis_save_only=True,
         file_format="dot",
-    )
+    ).dot
     assert isinstance(dot, str)
 
 

@@ -284,7 +284,7 @@ def _run_capture_cells(
     def full_trace() -> tl.Trace:
         """Run exhaustive trace."""
 
-        return tl.trace(workload.model, list(workload.args), workload.kwargs or None)
+        return tl.trace(workload.model, list(workload.args), input_kwargs=workload.kwargs or None)
 
     wall, rss = _timed_median(full_trace, warmups=warmups, repeats=repeats)
     results.append(BenchResult(workload.name, "full trace", wall, rss))
@@ -308,7 +308,7 @@ def _run_capture_cells(
         return tl.trace(
             workload.model,
             list(workload.args),
-            workload.kwargs or None,
+            input_kwargs=workload.kwargs or None,
             save=lambda ctx: ctx.kind == "op" and ctx.raw_index % 20 == 0,
         )
 
@@ -321,8 +321,8 @@ def _run_capture_cells(
         return tl.trace(
             workload.model,
             list(workload.args),
-            workload.kwargs or None,
-            capture=tl.options.CaptureOptions(layers_to_save=["relu"]),
+            input_kwargs=workload.kwargs or None,
+            save=["relu"],
         )
 
     try:
@@ -376,10 +376,9 @@ def _run_capture_cells(
         return tl.trace(
             workload.model,
             list(workload.args),
-            workload.kwargs or None,
+            input_kwargs=workload.kwargs or None,
             save=tl.func("linear"),
-            lookback=4,
-            lookback_payload_policy="detached_raw",
+            capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
         )
 
     wall, rss = _timed_median(lookback_payload, warmups=warmups, repeats=repeats)
@@ -394,7 +393,7 @@ def _run_capture_cells(
             return tl.trace(
                 workload.model,
                 list(workload.args),
-                workload.kwargs or None,
+                input_kwargs=workload.kwargs or None,
                 save=lambda ctx: ctx.kind == "op" and ctx.raw_index % 20 == 0,
                 storage=tl.to_disk(bundle),
             )
@@ -491,10 +490,10 @@ def test_gradient_selector_deferred_retention_peak_memory(
             model,
             x,
             capture=tl.options.CaptureOptions(
-                layers_to_save="all",
                 save_grads=["linear"],
                 backward_ready=True,
             ),
+            save="all",
         )
         trace[trace.output_layers[0]].out.sum().backward()
         assert any(op.has_grad and op.type == "linear" for op in trace._layer_list)

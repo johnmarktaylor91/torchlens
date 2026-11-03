@@ -299,10 +299,9 @@ PADDLE_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "inference_only": False,
         "cache": False,
         "stop_after": None,
-        "raise_on_nan": False,
+        "on_nonfinite": "ignore",
         "profile": False,
         "payload_policy": None,
-        "save_preview": None,
         "chunk_size": None,
         "chunk_paths": None,
     },
@@ -338,11 +337,10 @@ MLX_EXTRA_KWARG_POLICY = ExtraKwargPolicy(
         "inference_only": False,
         "cache": False,
         "stop_after": None,
-        "raise_on_nan": False,
+        "on_nonfinite": "ignore",
         "profile": False,
         "facets": None,
         "payload_policy": None,
-        "save_preview": None,
         "chunk_size": None,
         "chunk_paths": None,
         "save_outs_to": None,
@@ -631,7 +629,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     if flat_value is not None:
         return flat_value
-    if capture is not None and capture.is_field_explicit(field_name):
+    if capture is not None and capture._is_field_explicit(field_name):
         return getattr(capture, field_name)
     return None
 

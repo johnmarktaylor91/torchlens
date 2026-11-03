@@ -317,19 +317,20 @@ Output:
 AttributionResult(method='layer_conductance', values=Tensor(shape=(1, 2), dtype=torch.float32, device='cpu'), target_repr='index=0', extra_keys=['attribution_sum', 'completeness_caveat', 'completeness_residual', 'integer_input_layers', 'layer', 'n_steps', 'path_evaluations_logical', 'physical_forward_calls', 'residual_rel', 'step_audit', 'step_batch_size', 'target_delta', 'target_delta_abs'])
 ```
 
-## `overlay` — drawing attribution on the graph
+## Drawing attribution on the graph (`trace.draw(color_by=result)`)
 
-`tl.attribution.overlay(trace, source, *, reduce="abs_sum")` bridges attribution numbers onto
-the graph: it returns a callable for `Trace.draw(color_by=...)` that paints each attributed
-layer's reduced magnitude onto its module-output node and leaves every other node unencoded
-(the legend carries the `n/a = unencoded` note). `source` is one layer-scoped
-`Attribution` (its `extra["layer"]` anchors it), an iterable of them, or an explicit
-mapping from `model.named_modules()` name or trace layer label to a result, tensor, or real
-scalar. `reduce` is closed vocabulary: `"abs_sum"` (default), `"abs_mean"`, `"sum"`, `"max"`.
-Unknown keys and unknown reductions raise `AttributionError` naming the fix. A module fired
-several times paints its per-layer total on every one of its nodes; per-pass splits are not
-claimed. `source` may also be an `AttributionGraph`; see [Drawing a graph on
-its trace](#drawing-a-graph-on-its-trace-overlay).
+`trace.draw(color_by=result)` paints attribution numbers onto the graph: each attributed
+layer's `abs_sum` magnitude fills its module-output node and every other node stays unencoded
+(the legend carries the `n/a = unencoded` note and names the source `attribution`). `color_by`
+takes one layer-scoped `Attribution` (its `extra["layer"]` anchors it), an iterable of them,
+or an explicit mapping from `model.named_modules()` name or trace layer label to a value
+(another reduction is a mapping you compute: `{"2": result.values.abs().mean()}`). Unknown
+keys raise `AttributionError` naming the fix. A module fired several times paints its
+per-layer total on every one of its nodes; per-pass splits are not claimed. `color_by` may
+also be an `AttributionGraph`; see [Drawing a graph on its trace](#drawing-a-graph-on-its-trace).
+
+The callable the picture resolves to is `torchlens.attribution._viz.attribution_color_by(trace, source)`;
+the example below reads it directly to show the values.
 
 ```python
 import torch
@@ -344,7 +345,9 @@ results = [
     for name in ("0", "2")
 ]
 trace = tl.trace(model, inputs)
-color_by = tl.attribution.overlay(trace, results)
+from torchlens.attribution._viz import attribution_color_by
+
+color_by = attribution_color_by(trace, results)
 print(round(color_by(trace["linear_1_1"]), 6) == round(results[0].values.abs().sum().item(), 6))
 print(color_by(trace["relu_1_2"]))
 ```
@@ -356,11 +359,11 @@ True
 None
 ```
 
-To render, pass the callable to the ordinary encoding channel — the legend discloses the
-callable source and the min/mid/max ramp:
+To render, pass the results to the ordinary encoding channel — the legend discloses the
+source and the min/mid/max ramp:
 
 ```text
-trace.draw(color_by=tl.attribution.overlay(trace, results), path="attribution_graph")
+trace.draw(color_by=results, path="attribution_graph")
 ```
 
 ## `layer_attribution`
@@ -1152,7 +1155,9 @@ exported = graph.to_neuronpedia(slug="tiny-graph", model_id="tiny", tokenizer=Le
 print(exported["metadata"]["prompt_tokens"], len(exported["nodes"]), len(exported["links"]))
 assert json.loads(path.read_text()) == exported
 
-color_by = tl.attribution.overlay(trace, graph)  # each node's influence, totalled per site
+from torchlens.attribution._viz import attribution_color_by
+
+color_by = attribution_color_by(trace, graph)  # each node's influence, totalled per site
 painted = [label for label in trace.layer_labels if color_by(trace[label]) is not None]
 print(painted)
 ```
@@ -1187,21 +1192,16 @@ opens in Neuronpedia's graph viewer the way a circuit-tracer graph does.
   infinite values, or whose logits nothing influences; keyword values the schema cannot carry
   raise `attribution_graph_export_argument_invalid`.
 
-### Drawing a graph on its trace (`overlay`)
+### Drawing a graph on its trace
 
-`tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints an
-attribution graph onto the trace it was built from, for `trace.draw(color_by=...)`.
+`trace.draw(color_by=graph)` paints an attribution graph onto the trace it was built from.
 Documented-unstable. Each site holding feature or error nodes (the MLP a feature's transcoder
-reads, the MLP output an error node completes) gets the `reduce` total of its nodes' values
-over every position, on that module's output nodes; every other node stays unencoded.
+reads, the MLP output an error node completes) gets the `abs_sum` of its nodes' influence on
+the logits over every position (the quantity `to_neuronpedia` prunes by), on that module's
+output nodes; every other node stays unencoded. Token and logit nodes paint nothing. To paint
+another quantity (feature activations, another reduction), pass a mapping of site to value.
 
-- `graph_value=None` (the same as `"influence"`) paints each node's influence on the logits,
-  the quantity `to_neuronpedia` prunes by; `graph_value="activation"` paints the feature
-  activations, so sites holding only error nodes stay unencoded. Token and logit nodes paint
-  nothing.
-- A graph built from another trace is refused (`attribution_overlay_graph_mismatch`), as is a
-  `graph_value` that is unknown or given with a source that is not a graph
-  (`attribution_overlay_argument_invalid`).
+- A graph built from another trace is refused (`attribution_overlay_graph_mismatch`).
 
 The example above ends with the overlay; `trace.draw(color_by=color_by, path="graph")`
 renders it.

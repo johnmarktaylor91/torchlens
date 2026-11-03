@@ -28,7 +28,6 @@ _PUBLIC_SPINE_OPTION_VALUES: dict[str, Any] = {
     "jax_max_control_flow_unroll": 4,
     "module_identity_mode": "object_module",
     "payload_policy": "full",
-    "save_preview": True,
     "capture_container_structure": True,
     "inference_only": True,
     "chunk_size": 2,

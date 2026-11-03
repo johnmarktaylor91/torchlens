@@ -258,7 +258,7 @@ def test_tf_halt_keeps_typed_refusal() -> None:
 
     x = tf.constant([1.0, -1.0, 2.0])
     with pytest.raises(BackendUnsupportedError, match="halt"):
-        tl.trace(_relu_plus_ten, x, backend="tf", halt=tl.func("relu"))
+        tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
 
 
 def test_tf_recipes_snapshot_dispatches() -> None:
@@ -317,7 +317,7 @@ def test_tf_intervene_with_grad_options_refuses_typed() -> None:
             tf.ones((2,)),
             backend="tf",
             intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 

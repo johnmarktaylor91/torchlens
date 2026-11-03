@@ -94,8 +94,10 @@ CAPABILITY_REQUESTS: dict[str, CapabilityRequest] = {
     "structure_only_capture": CapabilityRequest("capture_option", "structure_only", lambda: True),
     "has_validation_replay": CapabilityRequest("validate"),
     "payload_materialization": CapabilityRequest("save"),
+    # grad_options is a CaptureOptions field (the options restructure); the dispatcher
+    # refuses an explicit field a backend lacks with its capability code.
     "intermediate_derived_grads": CapabilityRequest(
-        "trace_option", "grad_options", lambda: {"derived": True}
+        "capture_option", "grad_options", lambda: {"derived": True}
     ),
 }
 
@@ -105,7 +107,6 @@ TRACE_OPTION_PROBES: dict[str, Callable[[], Any]] = {
     "jax_max_control_flow_unroll": lambda: 2,
     "module_identity_mode": lambda: "object_identity",
     "payload_policy": lambda: "materialize",
-    "save_preview": lambda: True,
     "capture_container_structure": lambda: True,
     "inference_only": lambda: True,
     "chunk_size": lambda: 1,
@@ -127,7 +128,6 @@ CAPTURE_OPTION_SPINE_FIELDS: frozenset[str] = frozenset(
         "jax_max_control_flow_unroll",
         "module_identity_mode",
         "payload_policy",
-        "save_preview",
         "capture_container_structure",
         "inference_only",
     }

@@ -50,7 +50,8 @@ def test_a1_two_pass_selective_save_output_layer_keeps_grad(two_layer_mlp: TwoLa
     trace = tl.trace(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
-        capture=CaptureOptions(layers_to_save=[output_label], seed=0),
+        capture=CaptureOptions(seed=0),
+        save=[output_label],
     )
 
     saved = trace[output_label].out

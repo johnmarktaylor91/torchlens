@@ -16,7 +16,9 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   `jax_max_control_flow_unroll`.
 - Typed entry refusals: `_reject_transformed_callable` (jit/grad/vmap-wrapped
   models), `_reject_tracer_inputs`, `_reject_closed_over_host_state`, and
-  `_raise_nnx_trace_context_error`.
+  `_raise_nnx_trace_context_error`; `_readable_closure_consts` (in
+  `_closure_consts.py`) refuses a function-root closure constant with no
+  readable buffer (`constant_unrealizable`).
 - Recurrence grouping calls `group_recurrent_nodes` directly (the same neutral
   grouper torch uses), gated by `recurrence_detection` (default True).
 
@@ -43,7 +45,7 @@ Jaxpr-first JAX backend preview. It fills the backend protocol (`maturity="previ
   streaming all False, `payload_policy="array_payloads"`.
 
 ## Local Invariants
-- `intervene=` / `halt=` are NOT supported on jax (unlike the tf/mlx/paddle
+- `intervene=` / `stop_after=` are NOT supported on jax (unlike the tf/mlx/paddle
   previews); do not claim intervention parity.
 - The capture is static (jaxpr interpretation), not eager wrapper capture;
   taken-branch honesty depends on the control-flow mode, and rejected nested
