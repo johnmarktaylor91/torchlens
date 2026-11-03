@@ -65,10 +65,10 @@ the current components; `__init__` provides their thin package entry.
 | `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | Pure wire descriptor and state families; save preparation and runtime binding remain above the carrier |
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
-| `codec_policy.py` | Tensor carrier roles and backend agreement checked before codec lookup | 100 | reader |
-| `summaries.py` | Closed model-identity and backward-summary schemas | 200 | reader |
 | `codec_policy.py` | the payload codec boundary (section 9): payload columns take the artifact's codec, raw-value cells the array codec, disagreeing hints refuse before codec lookup | 100 | reader |
 | `summaries.py` | closed shapes of the optional manifest summaries (`model_fingerprint`, `backward_summary`), refused `manifest_schema_invalid` when present and malformed | 150 | reader |
+| `carried.py` | shapes of the tlspec 11 fields a 3.0 manifest still carries for blind readers (`contract.MANIFEST_CARRIED_FIELDS`, required in a trace manifest; `MANIFEST_CARRIED_OPTIONAL_FIELDS`), refused `manifest_schema_invalid` when missing or malformed | 250 | reader |
+| `inventory.py` | the inert persisted-state inventory of a 3.0 save (`state_contract.inspect_state_contract`): unknown record columns by owning class, read from the JSON tables, nothing built or refused | 100 | reader |
 
 Public doors do not move: `tl.load`, `Trace.save`, `Bundle.save`, `tl.io`
 (`torchlens/io/__init__.py`), `Trace.save_intervention`. `_io/bundle.py` becomes the dispatch

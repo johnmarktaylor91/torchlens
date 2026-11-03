@@ -96,7 +96,7 @@ def _assert_refused_before_unpickling(raised: BaseException | None) -> None:
     """
 
     assert isinstance(raised, ArtifactError), "load-time gadget was not refused typed"
-    assert raised.code == "artifact_version_below_floor", raised
+    assert raised.fields.get("code") == "artifact_version_below_floor", raised
     assert not _has_unpickling_error(raised), "the planted pickle was opened"
 
 
