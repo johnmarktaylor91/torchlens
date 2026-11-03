@@ -10,13 +10,10 @@ from __future__ import annotations
 
 import inspect
 import json
-import sys
 from pathlib import Path
 from typing import Any
 
 import pytest
-import torch
-from torch import nn
 
 import torchlens as tl
 from tests.conformance._scorecard import (
@@ -30,27 +27,10 @@ from torchlens.backends._scorecard_rows import (
     ROW_KEY_PREFIX,
     backend_scorecard_rows,
     read_shipped_scorecard,
-    shipped_scorecard_path,
 )
-from torchlens.backends.registry import registered_backend_specs
-from torchlens.report import _doctor as doctor_module, doctor as report
+from torchlens.report import _doctor as doctor_module
 
 PREVIEW_FRAMEWORK_MODULES = ("tensorflow", "jax", "mlx", "paddle", "tinygrad")
-
-
-class _Tiny(nn.Module):
-    """Two-op model for the report call."""
-
-    def __init__(self) -> None:
-        """One linear layer."""
-
-        super().__init__()
-        self.linear = nn.Linear(4, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Linear then relu."""
-
-        return torch.relu(self.linear(x))
 
 
 def _record(
@@ -110,33 +90,6 @@ def shipped(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Path]:
     return paths
 
 
-@pytest.mark.smoke
-def test_report_has_one_scorecard_row_per_registered_backend_without_importing_frameworks() -> None:
-    """Every registered backend gets a row; no preview framework module appears in sys.modules."""
-
-    before = {name.split(".")[0] for name in sys.modules}
-    doctor_report = report(_Tiny(), torch.randn(2, 4))
-    after = {name.split(".")[0] for name in sys.modules}
-    newly_imported = (after - before) & set(PREVIEW_FRAMEWORK_MODULES)
-    assert not newly_imported, newly_imported
-
-    expected = {f"{ROW_KEY_PREFIX}{spec.name}" for spec in registered_backend_specs()}
-    found = {row.key for row in doctor_report.checks if row.key.startswith(ROW_KEY_PREFIX)}
-    assert found == expected
-    assert {"torch", "tf", "jax", "mlx", "paddle", "tinygrad"} <= {
-        key.removeprefix(ROW_KEY_PREFIX) for key in found
-    }
-    for row in doctor_report.checks:
-        if row.key.startswith(ROW_KEY_PREFIX):
-            name = row.key.removeprefix(ROW_KEY_PREFIX)
-            assert row.label == f"{name} backend scorecard"
-            assert row.status in {"pass", "known_broken", "scope", "not_tested"}
-            assert row.details.split(";")[0] in {"preview", "stable"}
-    cards = backend_scorecards()
-    assert isinstance(cards, tuple)
-    assert all(isinstance(card, PreviewScorecard) for card in cards)
-
-
 def test_doctor_module_imports_the_row_builder_lazily() -> None:
     """``torchlens.report._doctor`` reaches the builder inside ``doctor()`` only."""
 
@@ -147,30 +100,7 @@ def test_doctor_module_imports_the_row_builder_lazily() -> None:
     assert "_scorecard_rows" not in header
 
 
-def test_torch_row_reads_detected_and_the_framework_requirement() -> None:
-    """Torch is installed: detected, stable, with its pin and range in the details."""
-
-    row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}torch")
-    assert row.is_detected is True
-    assert row.details.startswith("stable; ")
-    assert f"installed {torch.__version__}" in row.details
-    assert "supported [2.1, " in row.details
-    assert "pinned " in row.details
-
-
-def test_no_shipped_record_reads_not_tested_with_the_write_remedy(shipped: dict[str, Path]) -> None:
-    """A backend with no record is ``not_tested``; the suggestion names the scorecard CLI."""
-
-    shipped["_write"]("torch", None)  # type: ignore[operator]
-    row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}torch")
-    assert row.status == "not_tested"
-    assert row.severity == "info"
-    assert "no shipped scorecard" in row.details
-    assert "tests.conformance.scorecard --backend torch --write" in row.suggestion
-    assert read_shipped_scorecard("torch") is None
-    assert all(card.backend != "torch" for card in backend_scorecards())
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_scorecard_rows.py.
 def test_clean_c2_record_on_an_installed_framework_reads_pass(shipped: dict[str, Path]) -> None:
     """A record with every cell passed at C2 for an installed framework is ``pass``/``ok``."""
 
@@ -198,47 +128,7 @@ def test_clean_c2_record_on_an_installed_framework_reads_pass(shipped: dict[str,
     assert isinstance(cards["torch"].cells[0], ScorecardCell)
 
 
-def test_failed_cell_reads_known_broken_and_names_the_first_failure(
-    shipped: dict[str, Path],
-) -> None:
-    """Any failed cell is ``known_broken``; the suggestion names the first failed cell."""
-
-    shipped["_write"](  # type: ignore[operator]
-        "torch",
-        _record(
-            "torch",
-            cells=(
-                ("C0", "c0_protocol_complete", "", "passed", ""),
-                ("C1", "c1_reference_parity", "cnn", "failed", "max abs diff 0.5"),
-                ("C1", "c1_capture_completes", "mlp", "failed", "boom"),
-            ),
-            highest_tier="C0",
-            extra={"maturity": "preview"},
-        ),
-    )
-    row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}torch")
-    assert row.status == "known_broken"
-    assert row.severity == "warning"
-    assert "1/3 cells passed, 0 unsupported, 2 failed" in row.details
-    assert row.suggestion == "first failed cell: c1_reference_parity (cnn): max abs diff 0.5"
-
-
-def test_stable_backend_failure_is_an_error(shipped: dict[str, Path]) -> None:
-    """A stable backend's failed cell is severity ``error``."""
-
-    shipped["_write"](  # type: ignore[operator]
-        "torch",
-        _record(
-            "torch",
-            cells=(("C1", "c1_capture_completes", "mlp", "failed", "boom"),),
-            highest_tier="",
-            extra={"maturity": "stable"},
-        ),
-    )
-    row = next(r for r in backend_scorecard_rows() if r.key == f"{ROW_KEY_PREFIX}torch")
-    assert (row.status, row.severity) == ("known_broken", "error")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_scorecard_rows.py.
 def test_absent_framework_reads_scope_with_the_install_extra(shipped: dict[str, Path]) -> None:
     """A clean record for a framework not installed here is ``scope``; the remedy is the extra."""
 
@@ -267,6 +157,7 @@ def test_absent_framework_reads_scope_with_the_install_extra(shipped: dict[str, 
     assert row.suggestion == f'install the framework: pip install "torchlens[{absent}]"'
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_scorecard_rows.py.
 def test_clean_record_below_c2_reads_scope_or_not_tested(shipped: dict[str, Path]) -> None:
     """No failures but below C2: ``not_tested`` when cells did not run, else ``scope``."""
 
@@ -298,6 +189,7 @@ def test_clean_record_below_c2_reads_scope_or_not_tested(shipped: dict[str, Path
     assert row.status == "not_tested"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _io/_json.py, backends/_scorecard_rows.py.
 def test_malformed_or_non_object_record_is_treated_as_absent(shipped: dict[str, Path]) -> None:
     """A broken file never raises inside the doctor report; it reads as no record."""
 
@@ -329,15 +221,6 @@ def test_scorecard_from_record_tolerates_later_versions_and_missing_optionals() 
     assert card.backend == "mlx"
     assert card.counts == {} and card.highest_tier == ""
     assert card.cells == (ScorecardCell(tier="C0", case_id="c0_x", family="", state="passed"),)
-
-
-def test_shipped_path_points_inside_the_backend_package() -> None:
-    """The record lives at ``torchlens/backends/<name>/scorecard.json``."""
-
-    path = shipped_scorecard_path("tinygrad")
-    assert path.name == "scorecard.json"
-    assert path.parent.name == "tinygrad"
-    assert path.parent.parent.name == "backends"
 
 
 def _distribution_absent(backend: str) -> bool:

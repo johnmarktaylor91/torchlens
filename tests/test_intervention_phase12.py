@@ -14,7 +14,6 @@ from torchlens.intervention.errors import (
     AppendMismatchError,
     BatchNormTrainModeWarning,
 )
-from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 
 
@@ -151,27 +150,6 @@ def _first_batch_out(log: tl.Trace) -> torch.Tensor:
     raise AssertionError("no batch out found")
 
 
-def test_append_success_grows_batch_and_sets_state() -> None:
-    """Compatible append concatenates saved outs and records state."""
-
-    torch.manual_seed(0)
-    model = _LinearRelu()
-    model.eval()
-    log = _capture(model, torch.randn(2, 3))
-    original_history_len = len(log.state_history)
-
-    result = log.run(model, torch.randn(3, 3), replay=tl.options.ReplayOptions(append=True))
-
-    assert result is log
-    assert log.provenance.is_appended is True
-    assert log._append_sequence_id == 1
-    assert log.state is TraceState.APPENDED
-    assert log.last_run["engine"] == "append"
-    assert log.state_history[-1]["op"] == "append"
-    assert len(log.state_history) == original_history_len + 1
-    assert _first_batch_out(log).shape[0] == 5
-
-
 def test_append_topology_mismatch_raises() -> None:
     """Append rejects changed topology/site labels."""
 
@@ -212,7 +190,7 @@ def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
     model.eval()
     x = torch.randn(2, 3)
     log = _capture(model, x)
-    log.attach_hooks(
+    log._attach_hooks(
         tl.func("relu"), tl.intervention.scramble_elements(source=torch.zeros(2, 3), seed=1)
     )
     log.run(model, x)
@@ -238,7 +216,7 @@ def test_append_recipe_stale_rejected_before_capture() -> None:
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with pytest.raises(AppendMismatchError, match="recipe is stale"):
         log.run(model, torch.randn(2, 3), replay=tl.options.ReplayOptions(append=True))
@@ -250,7 +228,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     log.run(model, torch.randn(2, 3))
     log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
 

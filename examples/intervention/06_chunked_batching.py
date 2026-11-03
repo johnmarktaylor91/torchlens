@@ -46,8 +46,13 @@ def main() -> None:
     second = torch.randn(3, 8)
 
     log = tl.trace(model, first, capture=tl.options.CaptureOptions(replayable=True))
-    log.attach_hooks(tl.func("relu"), tl.scale(1.0), confirm_mutation=True)
-    log.run(model, first)
+    log.do(
+        tl.func("relu"),
+        tl.scale(1.0),
+        model=model,
+        inputs=first,
+        intervention=tl.options.InterventionOptions(confirm_mutation=True),
+    )
     log.run(model, second, replay=tl.options.ReplayOptions(append=True))
 
     output = log.output_ops[-1].out

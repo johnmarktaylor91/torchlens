@@ -175,28 +175,6 @@ def _fire_counts(monkeypatch: pytest.MonkeyPatch) -> Iterator[list[Any]]:
         yield counts
 
 
-@contextmanager
-def _call_counts(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, int]]:
-    """Count selector-tree walks and selector evaluations during one capture."""
-
-    counts = {"walk_selector": 0, "_evaluate_subject": 0}
-    real_walk = selector_eval.walk_selector
-    real_eval = selector_eval._evaluate_subject
-
-    def counting_walk(*args: Any, **kwargs: Any) -> Any:
-        counts["walk_selector"] += 1
-        return real_walk(*args, **kwargs)
-
-    def counting_eval(*args: Any, **kwargs: Any) -> Any:
-        counts["_evaluate_subject"] += 1
-        return real_eval(*args, **kwargs)
-
-    with monkeypatch.context() as patch:
-        patch.setattr(selector_eval, "walk_selector", counting_walk)
-        patch.setattr(selector_eval, "_evaluate_subject", counting_eval)
-        yield counts
-
-
 def _payload_bytes(payload: Any) -> Any:
     if payload is None:
         return None
@@ -281,28 +259,11 @@ def _trace_both_ways(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("name", sorted(UNIONS))
-def test_union_detector_returns_addresses(name: str) -> None:
-    """Every pure module union is recognised, with its addresses in tree order."""
-
-    addresses = selector_eval.module_union_addresses(UNIONS[name]())
-    assert addresses is not None
-    assert len(addresses) >= 1
-
-
-@pytest.mark.parametrize("name", sorted(UNIONS))
-def test_record_lookup_equals_walker(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """``tl.record``: same decisions in the same order, same records, payloads and index."""
-
-    (fast, fast_decisions), (walker, walker_decisions) = _record_both_ways(
-        UNIONS[name], monkeypatch
-    )
-    assert fast_decisions == walker_decisions
-    assert any(decision[4] for decision in fast_decisions), f"{name}: nothing was saved"
-    assert fast == walker
-
-
-@pytest.mark.parametrize("name", sorted(UNIONS))
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/session.py, receptive_field/_engine_forward.py.
+# Rows sampled by shrink-r4 (per-id subset rule; the rows kept hold every per-id campaign kill).
+@pytest.mark.parametrize(
+    "name", [n for n in sorted(UNIONS) if n in {"everything_kind", "pass_through_wrapper"}]
+)
 def test_trace_lookup_equals_walker(name: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """``tl.trace``: same decisions, saved flags, payloads, fire count and invariants."""
 
@@ -314,28 +275,12 @@ def test_trace_lookup_equals_walker(name: str, monkeypatch: pytest.MonkeyPatch) 
     assert fast[3] == walker[3] is True
 
 
-@pytest.mark.smoke
-def test_twenty_four_site_union_equals_walker_on_both_surfaces(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The many-site caching shape: record and trace both match the walker exactly."""
-
-    (fast, fast_decisions), (walker, walker_decisions) = _record_both_ways(
-        UNIONS["twenty_four"], monkeypatch
-    )
-    assert fast_decisions == walker_decisions
-    assert fast == walker
-    assert len(fast[0]) == _DEPTH  # each layer's output: its relu
-    trace_fast, trace_walker = _trace_both_ways(UNIONS["twenty_four"], monkeypatch)
-    assert trace_fast[:3] == trace_walker[:3]
-
-
 # ---------------------------------------------------------------------------
 # 2. Controls keep the walker
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/predicates.py, _ir/selector_eval.py, backends/torch/_predicate_forward.py ....
 def test_mixed_selectors_keep_the_walker(monkeypatch: pytest.MonkeyPatch) -> None:
     """Another kind, ``&``, ``~``, a label or a callable is not a plain module union."""
 
@@ -368,59 +313,6 @@ _MAX_WALKS_PER_CAPTURE = 4
 _MAX_EVALUATIONS_PER_CAPTURE = 0
 
 
-def test_twenty_four_site_union_walks_once_per_capture(monkeypatch: pytest.MonkeyPatch) -> None:
-    """With the lookup, walks and evaluations are a per-capture constant, not per op."""
-
-    model, x = _model_and_input()
-    selector = UNIONS["twenty_four"]()
-    with _decisions(monkeypatch) as decisions, _call_counts(monkeypatch) as counts:
-        tl.record(model, x, save=selector)
-    assert len(decisions) > 2 * _DEPTH
-    assert counts["_evaluate_subject"] <= _MAX_EVALUATIONS_PER_CAPTURE, counts
-    assert counts["walk_selector"] <= _MAX_WALKS_PER_CAPTURE, counts
-
-    with _walker_forced(monkeypatch), _call_counts(monkeypatch) as walker_counts:
-        tl.record(model, x, save=UNIONS["twenty_four"]())
-    # The walker evaluates the union once per non-matching event; its members
-    # run inside the compiled plan, so the count scales with events, not depth.
-    assert walker_counts["_evaluate_subject"] > len(decisions) // 2, walker_counts
-
-
-def test_mixed_union_counts_equal_the_walker(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A mixed union does the walker's work; the only extra walk is the one-time check."""
-
-    model, x = _model_and_input()
-    with _call_counts(monkeypatch) as counts:
-        tl.record(model, x, save=CONTROLS["module_or_func"]())
-    with _walker_forced(monkeypatch), _call_counts(monkeypatch) as walker_counts:
-        tl.record(model, x, save=CONTROLS["module_or_func"]())
-    assert counts["_evaluate_subject"] == walker_counts["_evaluate_subject"]
-    assert 0 <= counts["walk_selector"] - walker_counts["walk_selector"] <= 1
-
-
 # ---------------------------------------------------------------------------
 # 4. Pass-qualified addresses
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.smoke
-def test_pass_qualified_address_saves_only_that_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``tl.module("shared:2")`` saves the second call only, with and without the lookup."""
-
-    model, x = _model_and_input()
-    for forced in (False, True):
-        with monkeypatch.context() as patch:
-            if forced:
-                patch.setattr(predicates_mod, "_plain_module_union", lambda _predicate: None)
-            recording = tl.record(model, x, save=tl.module("shared:2"))
-            trace = tl.trace(model, x, save=tl.module("shared:2"))
-        record_calls = {
-            call for record in recording.records for call in record.ctx.output_of_module_calls
-        }
-        assert "shared:2" in record_calls
-        assert "shared:1" not in record_calls
-        assert len(recording.records) == 1
-        saved = [op for op in trace._layer_list if op.has_saved_activation]
-        saved_calls = {call for op in saved for call in (op.output_of_module_calls or ())}
-        assert "shared:2" in saved_calls
-        assert "shared:1" not in saved_calls

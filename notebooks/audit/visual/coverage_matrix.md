@@ -42,7 +42,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `containers:nodes` | show_containers='nodes' container overlay nodes (renderer-internal) | p15 |
 | `container_max_inline` | container_max_inline threshold | p16 |
 | `module_focus` | module= submodule focus with boundary stubs | p17 |
-| `vis_call_depth` | vis_call_depth module-box nesting cutoff | p18 |
+| `vis_call_depth` | depth= module-box nesting cutoff | p18 |
 | `skip_fn` | skip_fn layer-hiding predicate (edges chain through) | p19 |
 | `collapse_fn` | collapse_fn custom module-collapse predicate | p20 |
 | `node_spec_fn` | node_spec_fn per-node customization callback | p21 |
@@ -70,7 +70,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `cone:on` | show_cone=True downstream highlighter | p63 |
 | `cone:off` | show_cone=False (default) | p63 |
 | `input_transform_summary` | show_input_transform_summary=True input xlabel | p51 |
-| `raw_io_render` | save_raw_input/save_raw_output thumbnails on boundary nodes | p50 |
+| `raw_io_render` | save_raw_input/save_transformed_output thumbnails on boundary nodes | p50 |
 | `draw_backward:rolled` | draw_backward default rolled grad_fn graph | p55 |
 | `draw_backward:unrolled` | draw_backward rolled=False | p55 |
 | `draw_backward:bwd` | draw_backward bwd= pass selection | p56 |
@@ -117,8 +117,8 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `degenerate` | degenerate graphs (single op, no modules, scalar out) | p69 |
 | `regression:large_bbox` | large-graph bbox non-blank regression | p12 |
 | `artifact:apparent_cycle` | interleaved repeat-fold apparent-cycle artifact (known) | p39 |
-| `diag:collapse_plan` | Trace.collapse_plan() diagnostic | p40 |
-| `diag:collapse_schedule` | Trace.collapse_schedule() diagnostic | p40 |
+| `diag:collapse_plan` | Drawing.collapse_plan diagnostic | p40 |
+| `diag:collapse_schedule` | Drawing.collapse_schedule diagnostic | p40 |
 | `labels:checked_suppression` | default-on checked suppression of constructor args proven equal to captured shape dims | p47 |
 | `labels:show_redundant_args` | show_redundant_args=True opt-out (every captured arg) | p47 |
 | `channel:color_by` | color_by= fill encoding (field / scalar builtin / callable) | p74 |
@@ -130,14 +130,14 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 
 | Axis | Rationale |
 |------|-----------|
-| `vis_mode:none` | vis_mode='none' renders nothing by definition. |
+| `vis_mode:none` | a trace with no picture requested draws nothing by definition. |
 | `vis_renderer:dagua` | Experimental opt-in backend (torchlens.experimental.dagua); not part of the stable visual language. |
 | `placement:auto` | 'auto' just selects dot or rank by cost estimate; both concrete engines are shown on the placement page. |
 | `code_panel:forward_class` | code_panel='forward' and 'class' use the same panel machinery as True / 'init+forward' (shown); only the excerpt differs. |
 | `overlay:others` | node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same generic numeric-row + bold-border machinery as the overlays shown ('nan' and 'intervention', the two color-coded overlays, both have pages). |
 | `combined:cluster_rest` | intervening_cluster 'outside'/'downstream' mirror the two placements shown ('upstream'/'own') with different cluster targets. |
 | `overrides:grad_edge` | vis_grad_edge_overrides styles gradient edges via the same override dict machinery as vis_edge_overrides (shown). |
-| `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides and the draw() short-form params (view, depth, renderer, layout, node_style) have no visual identity of their own. |
+| `plumbing` | path / file_format / open_viewer / graph_overrides and the draw() view params (rolled, depth, renderer, layout, node_style) have no visual identity of their own. |
 | `show:dispatcher` | Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
 | `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
 | `animate` | trace.animate(site) returns an HTML play/pause Drawing for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
@@ -160,7 +160,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes | `dict_input`, `dict_output`, `nested_containers`, `tuple_output` | 5 |
 | 16 | C | `c2_container_max_inline` | container_max_inline: when 'collapsed' stops inlining | `tuple_output` | 2 |
 | 17 | C | `c3_module_focus` | module=: focus on one submodule | `demo_model` | 1 |
-| 18 | C | `c4_call_depth` | vis_call_depth: limiting module-box nesting | `demo_model` | 2 |
+| 18 | C | `c4_call_depth` | depth=: limiting module-box nesting | `demo_model` | 2 |
 | 19 | C | `c5_skip_fn` | skip_fn: hiding layers while chaining edges through | `tiny_mlp` | 2 |
 | 20 | C | `c6_collapse_fn` | collapse_fn: custom module collapse + remainder labels | `block_stack` | 1 |
 | 21 | C | `c7_node_spec_fn` | node_spec_fn / collapsed_node_spec_fn: per-node customization | `block_stack`, `tiny_mlp` | 2 |
@@ -173,14 +173,14 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 29 | D | `d6_branching_loop` | Loop with internal branching | `branching_loop` | 2 |
 | 30 | D | `d7_back_edge_midpoint` | REGRESSION: back-edge midpoint placement | `rnn_cell_loop` | 1 |
 | 32 | E | `e1_collapse_modes` | collapse: 'none' vs 'auto' vs 'max' on ResNet-18 | `resnet18` | 3 |
-| 33 | E | `e2_float_filmstrip` | Float collapse slider: t = 0.0 to 1.0 filmstrip | `resnet18` | 5 |
+| 33 | E | `e2_float_filmstrip` | Float collapse slider: level 0.0 to 1.0 filmstrip | `resnet18` | 5 |
 | 34 | E | `e3_fold_repeats` | fold_repeats: None / True / False on a repeated block stack | `block_stack` | 3 |
 | 35 | E | `e4_standalone_fold` | Standalone folding: fold_repeats=True with collapse='none' | `block_stack` | 2 |
 | 36 | E | `e5_ellipsis_grammar` | The '+N more' ellipsis, up close | `block_stack` | 1 |
 | 37 | E | `e6_segments` | Segment boxes: max-mode condensed ranges | `resnet50` | 1 |
 | 38 | E | `e7_remainder_labels` | Remainder labels: 'N ops + M buffers' accounts for buffer leaves | `block_stack` | 2 |
 | 39 | E | `e8_interleaved_artifact` | KNOWN ARTIFACT: interleaved repeat-folds can look like a cycle | `interleaved_stack` | 2 |
-| 40 | E | `e9_collapse_diagnostics` | Diagnostics: Trace.collapse_plan() and Trace.collapse_schedule() | `(text page)` | - |
+| 40 | E | `e9_collapse_diagnostics` | Diagnostics: Drawing.collapse_plan and Drawing.collapse_schedule | `(text page)` | - |
 | 42 | F | `f1_node_modes` | node_mode: 'default' vs 'profiling' | `tiny_mlp` | 2 |
 | 43 | F | `f2_domain_modes` | node_spec_fn: vision_node_mode and attention_node_mode | `mini_inception`, `tiny_transformer` | 2 |
 | 44 | F | `f3_overlays` | node_overlay: builtin metrics and custom scores | `tiny_mlp` | 4 |

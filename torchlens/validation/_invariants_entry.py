@@ -351,9 +351,7 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
         If backend identity fields are invalid or unsupported by the registry.
     """
 
-    from torchlens.backends.registry import UnknownBackendError
-
-    from ..backends.registry import get_backend_spec
+    from ..backends.registry import UnknownBackendError, get_backend_spec
 
     name = "backend_identity_invariants"
     backend = trace._provenance_backend

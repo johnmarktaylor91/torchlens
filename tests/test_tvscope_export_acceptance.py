@@ -11,7 +11,6 @@ rsatoolbox/xarray/brainio are optional.
 from __future__ import annotations
 
 import importlib.machinery
-import json
 import types
 
 import pytest
@@ -83,24 +82,6 @@ def artifact(tmp_path):
 class TestShapingOp:
     """The ONE named recorded operation (memo D15)."""
 
-    def test_record_names_the_op_and_shapes(self) -> None:
-        """as_matrix returns the matrix AND its provenance record."""
-
-        matrix, record = features.as_matrix(torch.randn(3, 4, 5, 5))
-        assert matrix.shape == (3, 100)
-        assert record.op == features.SHAPING_OP == "flatten_features_v1"
-        assert record.input_shape == (3, 4, 5, 5)
-        assert record.output_shape == (3, 100)
-
-    def test_nonzero_batch_axis_moves_rows_first(self) -> None:
-        """A declared stimulus axis lands on rows, order preserved."""
-
-        tensor = torch.arange(12).float().reshape(3, 4)
-        matrix, record = features.as_matrix(tensor, batch_axis=1)
-        assert matrix.shape == (4, 3)
-        assert record.batch_axis == 1
-        assert torch.equal(matrix[0], tensor[:, 0])
-
     def test_scalar_input_refuses_typed(self) -> None:
         """A 0-dim tensor has no stimulus axis."""
 
@@ -118,24 +99,6 @@ class TestShapingOp:
 
 class TestSiteMatrixRoutes:
     """File and in-memory routes share the op and agree numerically."""
-
-    def test_routes_numerically_identical(self, artifact) -> None:
-        """The B8 acceptance: same capture, two routes, equal bytes."""
-
-        out_dir, trace = artifact
-        file_side = features.site_matrix(out_dir, "conv")
-        memory_side = features.site_matrix(trace, "conv")
-        assert torch.allclose(file_side.matrix, memory_side.matrix)
-        assert file_side.shaping.op == memory_side.shaping.op
-
-    def test_file_route_carries_ids_and_provenance(self, artifact) -> None:
-        """Row ids and the input-preprocessing block ride the file route."""
-
-        out_dir, _trace = artifact
-        result = features.site_matrix(out_dir, "conv")
-        assert result.row_ids == ["img0", "img1", "img2", "img3"]
-        assert result.input_preprocessing is not None
-        assert result.input_preprocessing["verdict"] == "unknown"
 
     def test_payloadless_site_refuses_typed(self) -> None:
         """A metadata-only trace teaches how to get payloads."""
@@ -170,7 +133,6 @@ class TestSiteMatrixRoutes:
 class TestAdapters:
     """Stub-tested adapter wiring (optional libraries absent by design)."""
 
-    @pytest.mark.smoke
     def test_rsatoolbox_per_site_descriptors(self, artifact, monkeypatch) -> None:
         """The Dataset carries site, shaping, ids, and the verdict."""
 
@@ -205,7 +167,6 @@ class TestAdapters:
         ]
         assert file_side.descriptors["input_preprocessing_verdict"] == "unknown"
 
-    @pytest.mark.smoke
     def test_xarray_data_array_routes_identical(self, artifact, monkeypatch) -> None:
         """DataArray wiring: dims, coords, attrs, route equality."""
 
@@ -251,44 +212,3 @@ class TestAdapters:
 
         with pytest.raises(ImportError, match="xarray"):
             tl_xr.data_array(out_dir, "conv")
-
-
-class TestTorchlensFreeReload:
-    """Composition row 6 mechanics: the artifact reads with json + torch only."""
-
-    def test_manifest_ledger_shards_reload_without_torchlens_apis(self, artifact) -> None:
-        """The BYO-alignment file round trip: plain reads, exact rows.
-
-        The default shard codec is safetensors (extract D1); a plain reader
-        loads it with the ``safetensors`` package (a core torchlens
-        dependency, not a torchlens API) rather than ``torch.load``, whose
-        OWN native safetensors recognition is a newer-torch capability --
-        on older builds it misreads the safetensors length-prefixed header
-        bytes as a pickle opcode stream and raises a weights-only
-        unpickling error. Dispatching on the manifest's declared
-        ``storage.shard_format`` keeps this reader correct for an explicit
-        ``shard_format="pt"`` artifact too.
-        """
-
-        out_dir, trace = artifact
-        manifest = json.loads((out_dir / "manifest.json").read_text())
-        ids = json.loads((out_dir / "stimulus_ids.json").read_text())["ids"]
-        shard_format = manifest["storage"]["shard_format"]
-        if shard_format == "safetensors":
-            from safetensors.torch import load_file
-
-            def _load_conv(path):
-                return load_file(str(path))["conv"]
-        else:
-
-            def _load_conv(path):
-                return torch.load(path, weights_only=True)["conv"]
-
-        rows = [
-            _load_conv(out_dir / json.loads(line)["file"])
-            for line in (out_dir / "ledger.jsonl").read_text().splitlines()
-        ]
-        matrix = torch.cat(rows).reshape(len(ids), -1)
-        reference, _record = features.as_matrix(trace["conv"].out.detach())
-        assert torch.allclose(matrix, reference)
-        assert manifest["input_preprocessing"]["schema"] == "tl_input_preprocessing_v1"

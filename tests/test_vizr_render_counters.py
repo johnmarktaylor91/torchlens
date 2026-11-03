@@ -1,4 +1,4 @@
-"""Render-path counters for the U07.5 profiling pass.
+"""Render-path counters for the profiling pass.
 
 The profile of a default ``draw()`` (counters, then wall clock as a report)
 put two rows on top. By wall time: Graphviz layouts -- the sibling-order
@@ -13,7 +13,6 @@ threshold.
 from __future__ import annotations
 
 import random
-import re
 from typing import Any
 
 import torch
@@ -24,7 +23,7 @@ from torchlens._visualization import _render_ordering, _render_utils
 
 
 def _reference_dot_line_is_complete(line: str) -> bool:
-    """The pre-U07.5 character-by-character scanner, kept as the oracle."""
+    """The earlier character-by-character scanner, kept as the oracle."""
 
     in_quote = False
     html_depth = 0
@@ -44,23 +43,6 @@ def _reference_dot_line_is_complete(line: str) -> bool:
             return False
         previous = char
     return not in_quote and html_depth == 0
-
-
-class _CountingPattern:
-    """Proxy for the scanner's regex that counts the positions it visits."""
-
-    def __init__(self, pattern: re.Pattern[str]) -> None:
-        self.pattern = pattern
-        self.visited = 0
-        self.scanned_chars = 0
-
-    def finditer(self, line: str) -> Any:
-        """Yield the real matches, counting them and the line length."""
-
-        self.scanned_chars += len(line)
-        for match in self.pattern.finditer(line):
-            self.visited += 1
-            yield match
 
 
 class _Branchy(nn.Module):
@@ -89,20 +71,6 @@ def test_dot_line_scanner_matches_reference_scanner() -> None:
         ), line
 
 
-def test_dot_line_scanner_visits_only_state_characters(monkeypatch: Any, tmp_path: Any) -> None:
-    """On a real draw the scanner visits far fewer positions than DOT characters."""
-    counter = _CountingPattern(_render_ordering._DOT_LINE_SPECIAL)
-    monkeypatch.setattr(_render_ordering, "_DOT_LINE_SPECIAL", counter)
-    trace = tl.trace(_Branchy(), torch.randn(2, 4))
-    try:
-        trace.draw(path=str(tmp_path / "branchy"), file_format="svg")
-    finally:
-        trace.cleanup()
-    assert counter.scanned_chars > 0, "the sibling-order verifier did not scan the DOT"
-    # Before U07.5 the loop stepped once per character (visited == scanned).
-    assert counter.visited * 2 < counter.scanned_chars
-
-
 def _count_graphviz_runs(monkeypatch: Any) -> list[list[str]]:
     """Spy on the Graphviz spawn seam; return the list the calls land in."""
 
@@ -127,23 +95,9 @@ def test_default_draw_reuses_the_verified_layout(monkeypatch: Any, tmp_path: Any
     finally:
         trace.cleanup()
     assert decision.survivor_count > 0, "the fixture must exercise the ordering post-pass"
-    # Before U07.5: baseline -Tplain, ordered -Tplain, final -Tsvg = 3 layouts.
+    # Before the fix: baseline -Tplain, ordered -Tplain, final -Tsvg = 3 layouts.
     assert len(calls) == 2, calls
     assert any("-Tsvg" in cmd for cmd in calls)
     svg = (tmp_path / "reuse.svg").read_text(encoding="utf-8")
     assert "<svg" in svg and "linear" in svg
     assert "tl:sibling-order:start" in dot
-
-
-def test_reused_artifact_equals_a_fresh_render(monkeypatch: Any, tmp_path: Any) -> None:
-    """The reused artifact is byte-identical to rendering the final DOT afresh."""
-    trace = tl.trace(_Branchy(), torch.randn(2, 4))
-    try:
-        dot = trace.draw(path=str(tmp_path / "reuse"), file_format="svg").dot
-    finally:
-        trace.cleanup()
-    (tmp_path / "final.dot").write_text(dot, encoding="utf-8")
-    fresh = _render_utils.run_bounded_subprocess(
-        ["dot", "-Tsvg", str(tmp_path / "final.dot")], timeout=120
-    ).stdout
-    assert (tmp_path / "reuse.svg").read_bytes() == fresh

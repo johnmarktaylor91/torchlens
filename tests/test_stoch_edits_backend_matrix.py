@@ -97,7 +97,6 @@ def test_tf_curated_chain_admits_no_new_family_name() -> None:
     assert not (compared & _NEW_FAMILY_NAMES)
 
 
-@pytest.mark.smoke
 def test_construction_and_identity_are_backend_free() -> None:
     """D36: construction, repr, equality, and pickle identity need no backend."""
 
@@ -120,13 +119,31 @@ def test_construction_and_identity_are_backend_free() -> None:
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 
+@pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_mlx_live_leg_refuses_new_family() -> None:
     """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
 
-    mlx = pytest.importorskip("mlx.core")
-    del mlx
-    from torchlens.backends.mlx.interventions import resolve_helper_applier
+    mx = pytest.importorskip("mlx.core")
+    mlx_nn = pytest.importorskip("mlx.nn")
     from torchlens.errors import BackendUnsupportedError
 
+    class Tiny(mlx_nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.fc = mlx_nn.Linear(3, 3)
+            self.calls = 0
+
+        def __call__(self, x):  # noqa: D102
+            self.calls += 1
+            return mlx_nn.relu(self.fc(x))
+
+    model = Tiny()
     with pytest.raises(BackendUnsupportedError):
-        resolve_helper_applier(permute_batch(seed=1, axis=0))
+        tl.trace(
+            model,
+            mx.ones((2, 3)),
+            backend="mlx",
+            intervene=tl.when(tl.func("relu"), permute_batch(seed=1, axis=0)),
+        )
+    assert model.calls == 0

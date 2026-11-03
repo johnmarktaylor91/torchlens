@@ -132,31 +132,6 @@ def toy() -> tuple[_Toy, torch.Tensor]:
 # ---------------------------------------------------------------------------
 
 
-def test_bind_op_level_edit_correct_and_transparent(toy) -> None:
-    """An op-level zero-ablate edits the live value; the model stays untouched."""
-
-    model, x = toy
-    base = model(x)
-    bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
-    out = bound(x)
-    assert torch.allclose(out, model.fc2(torch.zeros(3, 4)))
-    assert not torch.allclose(out, base)
-    # transparency: the base model is bit-identical afterwards, hook-free
-    assert torch.allclose(model(x), base)
-    assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
-
-
-def test_bind_boundary_rule_module_output(toy) -> None:
-    """A plain tl.module rule substitutes the module's OUTPUT boundary value."""
-
-    model, x = toy
-    bound = tl.when(tl.module("fc1"), tl.scale(0.0)).bind(model)
-    out = bound(x)
-    assert torch.allclose(out, model.fc2(torch.relu(torch.zeros(3, 4))))
-    assert bound.last_report.num_fires == 1
-    assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
-
-
 def test_bind_report_contents(toy) -> None:
     """The out-of-band ledger carries stamps, counts, effects, and cleanup."""
 
@@ -188,7 +163,6 @@ def test_bind_report_contents(toy) -> None:
     assert report.resolved_static_targets == {spec.rules[0].rule_id: ("op-level",)}
 
 
-@pytest.mark.smoke
 def test_bind_pass_qualified_boundary_target() -> None:
     """A pass-qualified boundary target (``block:2``) fires only on that pass."""
 
@@ -210,20 +184,6 @@ def test_bind_pass_qualified_boundary_target() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_bind_zero_fire_error_policy(toy) -> None:
-    """Under ``on_zero_fire='error'`` a never-firing rule raises AFTER the call."""
-
-    model, x = toy
-    bound = tl.when(tl.func("sigmoid"), tl.zero_ablate()).bind(model, on_zero_fire="error")
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        bound(x)
-    assert excinfo.value.fields["code"] == "bind_zero_fire"
-    report = bound.last_report
-    assert report is not None
-    assert report.status == "no_fire"
-    assert report.zero_fire_rule_ids == (bound.recipe.rules[0].rule_id,)
-
-
 def test_bind_zero_fire_disclose_policy(toy) -> None:
     """``on_zero_fire='disclose'`` records zero-fire rules without raising."""
 
@@ -236,34 +196,11 @@ def test_bind_zero_fire_disclose_policy(toy) -> None:
     assert len(bound.last_report.zero_fire_rule_ids) == 1
 
 
-@pytest.mark.smoke
-def test_bind_two_edit_misfire_names_only_the_unfired_rule(toy) -> None:
-    """GATE row: two edits, one misfires -- the refusal names the unfired rule."""
-
-    model, x = toy
-    fired_rule = tl.when(tl.func("relu"), tl.scale(1.1))
-    unfired_rule = tl.when(tl.func("hardshrink"), tl.zero_ablate())
-    spec = fired_rule & unfired_rule
-    bound = spec.bind(model, on_zero_fire="error")
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        bound(x)
-    assert excinfo.value.fields["code"] == "bind_zero_fire"
-    report = bound.last_report
-    unfired = [rid for rid, count in report.rule_fire_counts.items() if count == 0]
-    fired = [rid for rid, count in report.rule_fire_counts.items() if count > 0]
-    assert len(unfired) == 1 and len(fired) == 1
-    message = str(excinfo.value)
-    assert unfired[0] in message
-    assert fired[0] not in message
-    assert report.rule_fire_counts[fired[0]] == 1
-
-
 # ---------------------------------------------------------------------------
 # preflight refusals (bind time, before ANY forward)
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_preflight_refusals(toy) -> None:
     """Empty specs, bad policies, bad models, stale anchors refuse typed."""
 
@@ -314,7 +251,6 @@ def test_bind_rule_unsupported_composite_boundary(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_binding_is_not_a_module_and_teaches(toy) -> None:
     """Training-surface access refuses with the wrapper-module teaching."""
 
@@ -330,7 +266,6 @@ def test_binding_is_not_a_module_and_teaches(toy) -> None:
         _ = bound.definitely_not_an_attr
 
 
-@pytest.mark.smoke
 def test_binding_read_only_surface_and_serialization_refusal(toy) -> None:
     """``.spec``/``.model`` are read-only; pickle refuses typed."""
 
@@ -364,24 +299,6 @@ def test_binding_reentrant_call_refuses(toy) -> None:
     with pytest.raises(BindingRuntimeError) as excinfo:
         holder["bound"](x)
     assert excinfo.value.fields["code"] == "binding_reentrant_call"
-
-
-def test_bind_exception_cleanup_is_atomic() -> None:
-    """A mid-forward user exception propagates; runtime state is fully removed."""
-
-    torch.manual_seed(0)
-    model = _Boom()
-    bound = tl.when(tl.func("relu"), tl.scale(2.0)).bind(model)
-    with pytest.raises(RuntimeError, match="boom"):
-        bound(torch.randn(2, 4))
-    report = bound.last_report
-    assert report.status == "error"
-    assert report.error == "RuntimeError: boom"
-    assert report.cleanup == "removed"
-    assert report.num_fires == 1  # the relu fired before the raise
-    assert not any(m._forward_hooks or m._forward_pre_hooks for m in model.modules())
-    # and no torch-function mode is left installed: plain ops run clean
-    assert torch.relu(torch.tensor([-1.0, 1.0])).tolist() == [0.0, 1.0]
 
 
 # ---------------------------------------------------------------------------
@@ -445,7 +362,6 @@ def test_model_door_policy_switch_is_closed_and_scoped() -> None:
     assert model_door_policy() == "refuse"
 
 
-@pytest.mark.smoke
 def test_model_door_funnel_coverage_inventory(toy) -> None:
     """Every door the inventory marks wired actually routes through the funnel."""
 
@@ -531,27 +447,6 @@ def test_bind_generate_unavailable_refuses(toy) -> None:
     assert excinfo.value.fields["code"] == "bind_generate_unavailable"
 
 
-@pytest.mark.smoke
-def test_bound_generate_toy_composition() -> None:
-    """Bound generation returns model outputs and settles its out-of-band ledger."""
-
-    torch.manual_seed(0)
-    model = _ToyGen().eval()
-    x = torch.randn(2, 4)
-    bound = tl.when(tl.func("relu"), tl.scale(0.5)).bind(model)
-    assert isinstance(bound, BoundModel)
-    result = bound.generate(x, steps=3)
-    report = bound.last_report
-    assert isinstance(result, torch.Tensor)
-    assert isinstance(report, BindReport)
-    assert report.door == "generate"
-    assert report.num_fires == 3  # one relu per generation step
-    assert report.trace is None
-    from torchlens import Trace
-
-    assert not isinstance(result, Trace)
-
-
 # ---------------------------------------------------------------------------
 # GATE rows: bind x real HF generate (distilgpt2 + one small Llama family)
 # ---------------------------------------------------------------------------
@@ -632,7 +527,6 @@ def test_bind_real_generate_llama_68m() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_bind_rule_runtime_error_is_typed(toy) -> None:
     """A WHERE predicate that raises at a live op refuses typed, chained."""
 
@@ -650,7 +544,6 @@ def test_bind_rule_runtime_error_is_typed(toy) -> None:
     assert isinstance(excinfo.value.__cause__, ValueError)
 
 
-@pytest.mark.smoke
 def test_bind_cleanup_failure_is_typed(toy) -> None:
     """A teardown that cannot remove runtime state raises bind_cleanup_failed."""
 

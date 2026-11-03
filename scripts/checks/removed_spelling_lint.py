@@ -317,10 +317,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         frozenset({"node_style_domain"}),
         "pytest.raises absence pin: 'vision'/'attention' presets refuse typed",
     ),
-    "tests/test_trace_autoroute_kwarg_forwarding.py": (
-        frozenset({"trace_flat"}),
-        "docstring records the 2026-08-19 incident in its then-live spelling",
-    ),
     "notebooks/audit/09_fastlog_record.ipynb": (
         frozenset({"keep_op"}),
         "audit cell demos the removal: try/except TypeError on keep_op=",
@@ -360,12 +356,7 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
         "teaching redirect table: the paper-era rows raise a typed "
         "facade_redirect AttributeError naming the canonical home (AUD-CODE "
         "3.14; GATE-FIX row 1) -- a redirect for a removed name is the table's "
-        "purpose, never a resurrection; tests/test_w051_capt3_paper_era_redirects.py pins them",
-    ),
-    "tests/test_w051_capt3_paper_era_redirects.py": (
-        frozenset({"paper_era"}),
-        "pytest.raises teaching pin: the three paper-era redirect rows refuse "
-        "typed and name their canonical spelling",
+        "purpose, never a resurrection; tests/test_api_surface_deprecation.py pins them",
     ),
     "tests/test_packaging_docs_a12.py": (
         frozenset({"tl_moved"}),

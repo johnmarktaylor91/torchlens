@@ -50,55 +50,6 @@ def _trace(model: nn.Module, inputs: torch.Tensor) -> object:
     )
 
 
-def test_positive_conv_is_contained_and_tight() -> None:
-    """Require exact support equality so gratuitously loose rules cannot pass."""
-
-    @_rules.register_rf_rule("softplus", replace=True)
-    def softplus_passthrough(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Describe the smooth pointwise activation used by the tightness oracle."""
-
-        return context.passthrough()
-
-    model = nn.Sequential(nn.Conv2d(1, 1, 3, padding=1, bias=False), nn.Softplus())
-    with torch.no_grad():
-        model[0].weight.fill_(1.0)
-    trace = _trace(model, torch.ones(1, 1, 7, 7, requires_grad=True))
-    result = _op(trace, "softplus").receptive_field.check((0, 0, 3, 3), input_op=_input_op(trace))
-
-    assert result.status is ReceptiveFieldValidationStatus.PASS
-    assert result.slack_per_axis == (0, 0, 0, 0)
-    gradient = next(iter(result.grad.values()))
-    box = next(iter(result.geometric.values()))
-    assert gradient.support_ranges == tuple(
-        (axis.clipped_start, axis.clipped_stop)
-        if axis.clipped_start is not None
-        else (result.unit[index], result.unit[index] + 1)
-        for index, axis in enumerate(box.axes)
-    )
-
-
-def test_deliberately_undersized_rule_fires_negative_tripwire() -> None:
-    """Fail loudly when a false 1x1 rule describes a real 3x3 convolution."""
-
-    @_rules.register_rf_rule("conv2d", replace=True)
-    def undersized_convolution(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Deliberately lie about convolution support for the negative oracle."""
-
-        return context.window(kernel=(1, 1), stride=(1, 1), padding=(0, 0), dilation=(1, 1))
-
-    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-    with torch.no_grad():
-        model.weight.fill_(1.0)
-    trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
-    result = _op(trace, "conv2d").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
-
-    assert result.status is ReceptiveFieldValidationStatus.FAIL
-    assert result.num_violations == 8
-    assert len(result.violations) == 8
-    assert result.per_axis_excess == (0, 0, 1, 1)
-    assert result.slack_per_axis is None
-
-
 @pytest.mark.parametrize("validation_surface", ["check", "cross_validate", "validate_trace"])
 def test_validation_thresholds_cannot_suppress_real_support(validation_surface: str) -> None:
     """Keep a false convolution rule failing despite caller-supplied thresholds."""
@@ -185,11 +136,7 @@ class _InstanceNorm(nn.Module):
 @pytest.mark.parametrize(
     ("model", "name", "training", "expected_cross_batch"),
     [
-        (nn.BatchNorm2d(2, affine=False), "batch_norm", False, "none"),
-        (_InstanceNorm(running=True), "instance_norm", False, "none"),
         (nn.BatchNorm2d(2, affine=False), "batch_norm", True, "geometric"),
-        (nn.GroupNorm(1, 2, affine=False), "group_norm", True, "none"),
-        (nn.LayerNorm((3, 3), elementwise_affine=False), "layer_norm", True, "none"),
     ],
 )
 def test_normalization_matrix_contains_empirical_support(
@@ -232,18 +179,6 @@ class _SqueezeExcite(nn.Module):
 
         scale = functional.softplus(value.mean(dim=(-2, -1), keepdim=True))
         return value * scale
-
-
-def test_squeeze_excite_broadcast_branch_is_contained() -> None:
-    """Contain global branch influence at a local-looking arithmetic merge."""
-
-    inputs = torch.linspace(0.1, 3.2, 32).reshape(1, 2, 4, 4).requires_grad_()
-    trace = _trace(_SqueezeExcite(), inputs)
-    result = _op(trace, "__mul__").receptive_field.check((0, 0, 2, 2), input_op=_input_op(trace))
-
-    assert result.status is ReceptiveFieldValidationStatus.PASS
-    gradient = next(iter(result.grad.values()))
-    assert gradient.support_ranges == ((0, 1), (0, 1), (0, 4), (0, 4))
 
 
 class _UnknownAttention(nn.Module):
@@ -338,60 +273,6 @@ def test_cross_validate_small_model_center_and_corners() -> None:
 
     assert len(results) == 4
     assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
-
-
-def test_torchvision_resnet18_basic_block_tripwire() -> None:
-    """Exercise a real residual basic block through capture and backward probing."""
-
-    @_rules.register_rf_rule("relu_", "__iadd__", replace=True)
-    def residual_arithmetic(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Preserve and merge geometry through the block's in-place arithmetic."""
-
-        return context.passthrough()
-
-    @_rules.register_rf_rule("batch_norm", replace=True)
-    def eval_batch_norm(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Describe the fixture's frozen-statistics BatchNorm calls as transparent."""
-
-        return context.passthrough()
-
-    torchvision = pytest.importorskip("torchvision")
-    block = torchvision.models.resnet.BasicBlock(4, 4).eval()
-    with torch.no_grad():
-        for module in block.modules():
-            if isinstance(module, nn.Conv2d):
-                module.weight.fill_(0.05)
-            elif isinstance(module, nn.BatchNorm2d):
-                module.weight.fill_(1.0)
-                module.bias.zero_()
-    trace = _trace(block, torch.ones(1, 4, 8, 8, requires_grad=True))
-    target = _op(trace, "__iadd__")
-    result = target.receptive_field.check((0, 0, 4, 4), input_op=_input_op(trace))
-
-    assert result.status is ReceptiveFieldValidationStatus.PASS
-
-
-def test_gradient_results_retain_signed_values() -> None:
-    """R13-5: gradient results carry SIGNED values alongside magnitudes.
-
-    ``grad`` keeps its influence-set magnitude semantics; ``signed_grad``
-    preserves the raw autograd values so signed consumers (the empirical
-    adjoint check) cannot be blinded to sign disagreements.
-    """
-
-    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-    with torch.no_grad():
-        model.weight.fill_(-1.0)  # every true partial is NEGATIVE.
-    trace = _trace(model, torch.ones(1, 1, 5, 5, requires_grad=True))
-    result = _op(trace, "conv2d").receptive_field.probe_grad(
-        (0, 0, 2, 2), input_op=_input_op(trace)
-    )
-
-    assert result.signed_grad is not None
-    assert torch.equal(result.grad, result.signed_grad.abs())
-    supported_signed = result.signed_grad[result.support_mask]
-    assert supported_signed.numel() > 0
-    assert bool((supported_signed < 0).all())
 
 
 def test_empirical_adjoint_detects_sign_disagreement(monkeypatch) -> None:

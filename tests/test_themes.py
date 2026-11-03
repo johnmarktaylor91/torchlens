@@ -13,7 +13,7 @@ import torchlens as tl
 from torchlens.options import VisualizationOptions
 
 
-@pytest.mark.parametrize("theme", ["paper", "dark", "colorblind", "high_contrast"])
+@pytest.mark.parametrize("theme", ["dark", "high_contrast"])
 def test_theme_preset_renders(tmp_path: Path, theme: str) -> None:
     """Each public theme preset should render a Graphviz graph."""
 

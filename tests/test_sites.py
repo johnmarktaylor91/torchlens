@@ -47,11 +47,11 @@ def test_sites_can_expand_to_hook_pairs() -> None:
         del ctx
         return out
 
-    handle = log.attach_hooks(
+    handle = log._attach_hooks(
         _sites("relu", ops=["relu"], modes=["observe"]),
         hook_fn,
         confirm_mutation=True,
     )
     assert len(log._intervention_spec.hook_specs) == 1
-    handle.remove()
+    log.clear_edits(handle=handle, confirm_mutation=True)
     assert log._intervention_spec.hook_specs == []

@@ -1,4 +1,4 @@
-"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, ``show``, the chronology ledger and the effect table."""
+"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, the chronology ledger and the effect table."""
 
 from __future__ import annotations
 
@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from torch import nn
 
     from .._data_classes.trace import Trace
-    from ..viz._drawing import Drawing
     from . import Bundle
 
 __all__ = [
@@ -22,7 +21,6 @@ __all__ = [
     "bundle_fork",
     "bundle_map",
     "bundle_run",
-    "bundle_show",
     "effects_table",
     "record_bundle_operation",
 ]
@@ -198,24 +196,6 @@ def _call_with_member_name(
     if mode == "keyword":
         return fn(member, name=name)
     return fn(member)
-
-
-def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
-    """Render each bundle member graph as a member-keyed strip."""
-
-    base_outpath = kwargs.get("path")
-    results: dict[str, Drawing | str] = {}
-    for name, member in self._members.items():
-        member_kwargs = dict(kwargs)
-        if isinstance(base_outpath, str):
-            member_kwargs["path"] = f"{base_outpath}_{name}"
-        if kind == "repr":
-            results[name] = repr(member)
-        elif kind == "html":
-            results[name] = member._repr_html_()
-        else:
-            results[name] = member.draw(**member_kwargs)
-    return results
 
 
 def effects_table(self: Bundle, history_id: str | None = None) -> Any:

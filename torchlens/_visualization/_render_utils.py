@@ -24,8 +24,6 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import graphviz
-
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
 from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
@@ -147,7 +145,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
 
 
 if TYPE_CHECKING:
-    pass
+    import graphviz
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
@@ -255,6 +253,38 @@ def relativize_visualizer_image(path: str) -> str:
     if separator_index == -1:
         return path
     return path[separator_index + 1 :]
+
+
+def resolve_draw_outpath(
+    vis_outpath: str | None, fileformat: str, announce_path: bool | None
+) -> tuple[str, bool]:
+    """Return the stem a draw writes under and whether it announces the path.
+
+    Parameters
+    ----------
+    vis_outpath:
+        User-provided render output path, or ``None`` for a bare draw.
+    fileformat:
+        Rendered file format.
+    announce_path:
+        Explicit announce choice, or ``None`` to announce exactly for a bare draw.
+
+    Returns
+    -------
+    tuple[str, bool]
+        Output stem without a render extension, and the announce flag.
+    """
+    # a bare draw (no vis_outpath) writes a collision-safe file and
+    # always prints where; an explicit path is written exactly, as before.
+    # ``Trace.draw`` resolves the collision-safe path itself and says so.
+    if announce_path is None:
+        announce_path = vis_outpath is None
+    resolved_outpath = (
+        collision_safe_outpath(DEFAULT_DRAW_STEM, fileformat)
+        if vis_outpath is None
+        else strip_known_extension(vis_outpath)
+    )
+    return resolved_outpath, announce_path
 
 
 def collision_safe_outpath(stem: str, fileformat: str) -> str:

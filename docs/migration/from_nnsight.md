@@ -77,7 +77,7 @@ RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_chan
 | Assign into a traced value | `log.fork().do(site, value)` (replay the recorded graph) or `.run(model, x)` (run the model again) | TorchLens recipes are explicit and auditable. |
 | Invoke with intervention in one block | `tl.trace(model, x, intervene=tl.when(site, helper_or_value), save=site)` | Capture-time intervention is the direct one-forward path. |
 | Scan modules by path | `tl.in_module("path")`, `tl.module("path")`, `log.find_sites(...)` | Similar workflow; labels differ. |
-| Cross-prompt patching | Capture separate traces and patch with `tl.patch_from(source_trace)` or `attach_hooks` | Equivalent for local PyTorch models. |
+| Cross-prompt patching | Capture separate traces and patch with `tl.patch_from(source_trace)` or `do` | Equivalent for local PyTorch models. |
 | Repeated interventions from one base | `fork()` first, then edit each branch | TorchLens uses fork-first branch isolation. |
 | Save an intervention for sharing | `log.save_intervention(path, level="portable")` | TorchLens has `.tlspec/` recipes. |
 | Intervene inside fused attention internals | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.patch_head` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
@@ -104,7 +104,8 @@ PyTorch model (see [landscape.md](landscape.md)).
   local eager forward; for serving-scale capture see
   [where to go instead](where_to_go_instead.md#capture-at-serving-scale-on-remote-gpus-or-across-devices)
   and [landscape.md](landscape.md), which lists
-  Neuronpedia's interp-engine and vllm-lens beside nnsight.
+  Neuronpedia's interp-engine and vllm-lens beside nnsight. To check those hooks against
+  TorchLens on a small model, see [cross-engine checks](cross_engine.md).
 - Source-local tracing syntax: edits are written inline inside a `with model.trace(...)` block and
   read as ordinary indexing. TorchLens separates capture from edit, so the same task is two steps.
 

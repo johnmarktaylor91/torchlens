@@ -301,11 +301,13 @@ def _restore_layers(
 
     rows = corrupted.shape[0] // len(positions)
     restored = corrupt.fork("restore_" + "_".join(addresses))
+    hooks = []
     for address in addresses:
         clean_out = clean.modules[address].facets["down_out"].value.detach()
-        hook = _restore_hook(clean_out, positions, rows)
-        restored.attach_hooks(tl.facet("down_out").in_module(address), hook)
-    restored.run(wrapped, corrupted)
+        hooks.append(
+            (tl.facet("down_out").in_module(address), _restore_hook(clean_out, positions, rows))
+        )
+    restored.do(hooks, model=wrapped, inputs=corrupted)
     return restored
 
 

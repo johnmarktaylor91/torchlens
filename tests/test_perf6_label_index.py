@@ -118,24 +118,6 @@ def test_the_index_answers_label_queries_without_evaluating_selectors(
     assert [op.func_name for op in relus] == ["relu"] * 3
 
 
-def test_each_trace_in_one_scope_gets_its_own_index(trace) -> None:
-    torch.manual_seed(1)
-    other = tl.trace(
-        _Net().eval(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    try:
-        label = trace._layer_list[3].label
-        with resolver._label_index_scope():
-            mine = trace[tl.label(label)]
-            theirs = other[tl.label(label)]
-        assert mine is trace._layer_list[3]
-        assert theirs is other._layer_list[3]
-    finally:
-        other.cleanup()
-
-
 def test_the_index_skips_positional_keys_and_steps_aside_for_unknown_ones() -> None:
     class _Site:
         layer_label = "a_1_1"

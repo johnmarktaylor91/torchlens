@@ -55,6 +55,25 @@ def pointwise(context: ReceptiveFieldRuleContext) -> _RuleResult:
     )
 
 
+@register_rf_rule("identity")
+def identity(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """A module-boundary identity returns its one input tensor unchanged.
+
+    TorchLens records ``nn.Identity`` modules, and modules that return an input
+    tensor as is, through an ``identity`` op so the module boundary has its own
+    node. Its output is its input, so the field passes through exactly. Any
+    other shape (no parent, several parents, a changed shape) is refused as
+    unknown rather than guessed: backends that use the name for a creation op
+    (an identity matrix) have no traced parent.
+    """
+
+    parents = tuple(context.op.parents or ())
+    shapes = context.in_shapes
+    if len(parents) != 1 or len(shapes) != 1 or shapes[0] != context.out_shape:
+        return context.unknown("identity op is not a one-input, shape-preserving pass-through")
+    return context.passthrough(note="identity: the output is the input tensor itself")
+
+
 @register_rf_rule(
     "add",
     "iadd",

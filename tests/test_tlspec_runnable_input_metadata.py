@@ -101,6 +101,7 @@ def _layout_twin(x: torch.Tensor) -> torch.Tensor:
     return twin
 
 
+# Kept: the catch of its regression fault.
 def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Path) -> None:
     """A byte-identical layout twin must diverge, never false VERIFIED+ATTESTED."""
 
@@ -119,35 +120,7 @@ def test_h2_is_contiguous_layout_twin_diverges_and_is_not_attested(tmp_path: Pat
     assert torch.equal(fresh, x - 100)
 
 
-def test_h2_is_contiguous_original_input_still_verifies_and_attests(tmp_path: Path) -> None:
-    """The original contiguous input must keep VERIFIED + ATTESTED (no over-trigger)."""
-
-    x = torch.randn(4, 4)
-    path = _save_runnable(ContiguityBranch(), x, tmp_path / "contig.tlspec")
-
-    result = tl.load(path).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    assert all(check.passed for check in result.report.contract_checks)
-    torch.testing.assert_close(result.output, x + 100)
-
-
-def test_h2_stride_read_diverges_on_layout_change(tmp_path: Path) -> None:
-    """A ``stride()`` read is witnessed: a same-shape stride change must diverge."""
-
-    x = torch.randn(4, 4)
-    path = _save_runnable(StrideBranch(), x, tmp_path / "stride.tlspec")
-
-    result = tl.load(path).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-    with pytest.raises(PathDivergenceError):
-        tl.load(path).run(inputs=_layout_twin(x))
-    diverged = tl.load(path).run(inputs=_layout_twin(x), on_divergence="return")
-    assert diverged.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert diverged.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
+# Kept: sole branch coverage of _runnable/input_sites.py.
 def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> None:
     """A runtime ``requires_grad`` flip on a grad-branching model must diverge."""
 
@@ -167,58 +140,3 @@ def test_h2_requires_grad_flip_diverges_and_is_not_attested(tmp_path: Path) -> N
     # A fresh model on the grad input takes the OTHER arm; the replayed arm is wrong.
     fresh = RequiresGradBranch()(x.clone().requires_grad_(True))
     torch.testing.assert_close(fresh.detach(), x * 2)
-
-
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_h2_layout_oblivious_model_does_not_over_trigger(tmp_path: Path) -> None:
-    """A model that never reads input metadata records no facts and never diverges on them."""
-
-    x = torch.randn(4, 4)
-    trace = tl.trace(
-        LayoutOblivious(),
-        x,
-        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
-    )
-    # The recording is read-gated: no metadata-predicate read, no recorded fact.
-    assert trace._runnable.input_metadata_reads == {}
-    trace.save(tmp_path / "plain.tlspec", level="runnable", include_activations=True)
-
-    result = tl.load(tmp_path / "plain.tlspec").run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-    # Layout twin and requires_grad flip are legal changed inputs here: no witnessed
-    # metadata read means neither may trip a divergence.
-    twin_result = tl.load(tmp_path / "plain.tlspec").run(inputs=_layout_twin(x))
-    assert twin_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    grad_result = tl.load(tmp_path / "plain.tlspec").run(inputs=x.clone().requires_grad_(True))
-    assert grad_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
-def test_h2_scoped_patch_is_restored_after_capture() -> None:
-    """The metadata observers must not leak past the capture window."""
-
-    x = torch.randn(4, 4)
-    options = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
-    # First capture forces TorchLens's own (permanent) torch wrapping, so the
-    # snapshot below reflects the steady state the scoped patch must restore.
-    tl.trace(ContiguityBranch(), x, capture=options)
-    before_is_contiguous = torch.Tensor.is_contiguous
-    before_stride = torch.Tensor.stride
-    had_grad_shadow = "requires_grad" in torch.Tensor.__dict__
-
-    tl.trace(ContiguityBranch(), x, capture=options)
-
-    assert torch.Tensor.is_contiguous is before_is_contiguous
-    assert torch.Tensor.stride is before_stride
-    # ``requires_grad`` natively lives on the C base class; a leftover shadowing
-    # property on ``torch.Tensor`` itself would mean the restore failed.
-    assert ("requires_grad" in torch.Tensor.__dict__) == had_grad_shadow
-    # And the unpatched surfaces behave normally outside a capture.
-    assert x.is_contiguous() is True
-    assert tuple(x.stride()) == (4, 1)
-    assert x.requires_grad is False

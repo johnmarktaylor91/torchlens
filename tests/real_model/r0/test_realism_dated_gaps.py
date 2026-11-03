@@ -1,4 +1,4 @@
-"""Dated known gaps stay honest: each still cannot run here, or is stale (U42.1)."""
+"""Dated known gaps stay honest: each still cannot run here, or is stale."""
 
 from __future__ import annotations
 
