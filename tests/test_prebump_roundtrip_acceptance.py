@@ -665,6 +665,12 @@ def _tampered_refuses(
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         trace.save(str(path), level=level)
+    return _load_field_refusal(path, field)
+
+
+def _load_field_refusal(path: Path, field: str) -> ArtifactError:
+    """Keep every original typed field, reason and remedy assertion on the load door."""
+
     with pytest.raises(ArtifactError) as excinfo:
         tl.load(str(path))
     refusal = excinfo.value
@@ -674,6 +680,19 @@ def _tampered_refuses(
     assert field in str(refusal)
     assert "Remedy:" in str(refusal)
     return refusal
+
+
+def _tamper_written_trace(
+    trace: tl.Trace, tmp_path: Path, name: str, *, field: str, mutate
+) -> ArtifactError:
+    """Forge one already-written record so save-side preflight remains fully enforced."""
+
+    path = tmp_path / f"{name}_tampered.tlspec"
+    trace.save(path)
+    record = read_record(path, "trace")
+    mutate(record["fields"])
+    write_record(path, "trace", record)
+    return _load_field_refusal(path, field)
 
 
 def test_tamper_site_key_refuses_typed(tmp_path) -> None:
@@ -700,12 +719,14 @@ def test_tamper_distributed_scope_refuses_typed(tmp_path) -> None:
     assert FORGERY_SURFACE_LEDGER["Trace.provenance.distributed_scope"] == "validated_refuse_typed"
     lifecycle.disarm()
     trace = _tiny_trace()
-    trace._provenance_distributed_scope = "forged_scope_value"
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "distributed_scope",
         field="Trace.provenance.distributed_scope",
+        mutate=lambda state: state.__setitem__(
+            "_provenance_distributed_scope", "forged_scope_value"
+        ),
     )
     assert refusal.fields["code"] == "artifact_distributed_scope_invalid"
 
@@ -715,12 +736,12 @@ def test_tamper_timing_provenance_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.grad_fn_timing_provenance"] == "validated_refuse_typed"
     trace = _backward_trace()
-    object.__setattr__(trace, "grad_fn_timing_provenance", "forged_clock_source")
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "timing",
         field="Trace.grad_fn_timing_provenance",
+        mutate=lambda state: state.__setitem__("grad_fn_timing_provenance", "forged_clock_source"),
     )
     assert refusal.fields["code"] == "artifact_grad_fn_timing_provenance_invalid"
 
@@ -730,14 +751,14 @@ def test_tamper_checkpoint_witness_refuses_typed(tmp_path) -> None:
 
     assert FORGERY_SURFACE_LEDGER["Trace.checkpoint_invocation_witness"] == "validated_refuse_typed"
     trace = _checkpoint_trace()
-    witness = dict(trace.checkpoint_invocation_witness)
-    witness["token_count"] = "forty-two"  # type-forged: count is not even an int
-    object.__setattr__(trace, "checkpoint_invocation_witness", witness)
-    refusal = _tampered_refuses(
+    refusal = _tamper_written_trace(
         trace,
         tmp_path,
         "checkpoint",
         field="Trace.checkpoint_invocation_witness",
+        mutate=lambda state: state["checkpoint_invocation_witness"].__setitem__(
+            "token_count", "forty-two"
+        ),
     )
     assert refusal.fields["code"] == "artifact_checkpoint_witness_invalid"
 

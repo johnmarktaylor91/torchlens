@@ -92,6 +92,8 @@ def test_defaultdict_with_code_exec_factory_survives_round_trip(tmp_path) -> Non
     bundle = tmp_path / "b.tlspec"
     trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)  # must not raise UnpicklingError
+    assert loaded.ops[0].annotations["k"] == 1
+    assert type(loaded.ops[0].annotations) is dict
     assert any(
         row["kind"] == "unencodable_values_stringified"
         for row in loaded.annotations["capture_advisories"]
