@@ -65,7 +65,6 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_r19d_hash_scalar.py",
         "test_r19f_rf_view_table.py",
         "test_r20a_extras.py",
-        "test_r20capprov_witness.py",
         "test_r20i_ir_livelane.py",
         "test_r20j_container.py",
         "test_r20l_ir_refs.py",

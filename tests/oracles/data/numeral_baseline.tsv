@@ -7785,7 +7785,6 @@ test-docstrings	tests/test_flops4_multiroot_markers.py	2.7
 test-docstrings	tests/test_flops4_multiroot_markers.py	3,2
 test-docstrings	tests/test_flops4_multiroot_markers.py	60
 test-docstrings	tests/test_fork_retention_disclosure.py	83
-test-docstrings	tests/test_fork_serialization.py	14
 test-docstrings	tests/test_forward_created_parameters.py	77
 test-docstrings	tests/test_fp8_guard.py	12.5
 test-docstrings	tests/test_fp8_guard.py	16
@@ -8516,8 +8515,6 @@ test-docstrings	tests/test_r19d_hash_scalar.py	256
 test-docstrings	tests/test_r19d_hash_scalar.py	60416438
 test-docstrings	tests/test_r19d_hash_scalar.py	64
 test-docstrings	tests/test_r19d_hash_scalar.py	86
-test-docstrings	tests/test_r20capprov_witness.py	24
-test-docstrings	tests/test_r20capprov_witness.py	31
 test-docstrings	tests/test_r20i_ir_livelane.py	10
 test-docstrings	tests/test_r20j_container.py	99
 test-docstrings	tests/test_r20l_ir_refs.py	11
