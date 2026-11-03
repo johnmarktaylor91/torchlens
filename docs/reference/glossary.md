@@ -1557,6 +1557,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
   promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
   RNG state.
+  Under `scope="backward"`, when torch reports a backward through a graph an earlier backward
+  freed and a module attribute holds a tensor with autograd history, the model is refused with
+  `ValidationError` code `backward_validation_carried_graph`, naming those attributes; without
+  that evidence torch's own error propagates unchanged.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
@@ -2135,6 +2139,14 @@ shims, by declared contract. Each carries the same tag at its definition.
   `higher`, the site each metric scores higher (`None` for a tie or a
   missing score). `table()` gives the plain-text report and
   `to_dict()` the data form.
+
+**neuro dependency conflict (refusal code `neuro_dependency_conflict`)** — *unstable — no deprecation shim owed*
+: When rsatoolbox is installed but cannot import because another installed package
+  pins scikit-learn below what it needs (the `torchlens[neuro,brainscore]` install),
+  `tl.neuro` leaves `rdms` and `datasets` out of `__all__` and `dir()`, and touching
+  them raises `MissingDependencyError` with this code. The diagnosis reads package
+  metadata only. `exc.fields` carries `dependency_version`, `conflicting`,
+  `conflicting_version` and `pinned_by` (`None` when no pinning package is found).
 
 **neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
 : One call that scores every site of one extraction against one target with
