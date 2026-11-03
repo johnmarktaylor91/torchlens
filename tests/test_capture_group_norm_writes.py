@@ -10,6 +10,9 @@ running-statistic writes.
 
 from __future__ import annotations
 
+import copy
+from typing import Any
+
 import pytest
 import torch
 from torch import nn
@@ -70,25 +73,34 @@ class _BatchNormControl(nn.Module):
         return self.bn(x)
 
 
-def _journal(model: nn.Module, train: bool) -> tuple[set[str], set[str]]:
-    """Return (journaled buffer addresses, buffers whose bytes or version counter changed).
+def _plain_forward_writes(model: nn.Module, x: torch.Tensor) -> set[str]:
+    """Buffers the eager forward itself rewrites (bytes or version counter), with no capture."""
 
-    A fused kernel may rewrite a buffer without touching its version counter, so
-    the witness compares bytes as well.
-    """
-
-    model.train(train)
     before = {name: (buf._version, buf.detach().clone()) for name, buf in model.named_buffers()}
-    torch.manual_seed(0)
-    trace = tl.trace(model, torch.rand(2, 4, 3, 3))
-    changed = {
+    model(x)
+    return {
         name
         for name, buf in model.named_buffers()
         if buf._version != before[name][0] or not torch.equal(buf, before[name][1])
     }
-    journaled = {event.address for event in trace._buffer_write_events}
+
+
+def _journal(model: nn.Module, train: bool) -> tuple[set[str], set[str], list[Any]]:
+    """Return (journaled buffer addresses, buffers the plain forward writes, journal events).
+
+    The capture rolls module state back after the forward, so the ground truth
+    comes from a plain forward on a copy of the model.
+    """
+
+    model.train(train)
+    torch.manual_seed(0)
+    x = torch.rand(2, 4, 3, 3)
+    written = _plain_forward_writes(copy.deepcopy(model), x)
+    trace = tl.trace(model, x)
+    events = list(trace._buffer_write_events)
+    journaled = {event.address for event in events}
     assert bool(trace.buffer_write_ops) == bool(journaled)
-    return journaled, changed
+    return journaled, written, events
 
 
 @pytest.mark.parametrize(
@@ -99,12 +111,13 @@ def _journal(model: nn.Module, train: bool) -> tuple[set[str], set[str]]:
 def test_group_norm_journals_only_real_buffer_writes(
     model_cls: type[nn.Module], train: bool
 ) -> None:
-    journaled, changed = _journal(model_cls(), train)
-    assert changed == set()
+    journaled, written, _events = _journal(model_cls(), train)
+    assert written == set()
     assert journaled == set()
 
 
 def test_batch_norm_control_still_journals_running_statistics() -> None:
-    journaled, changed = _journal(_BatchNormControl(), train=True)
-    assert changed >= {"bn.running_mean", "bn.running_var"}
+    journaled, written, events = _journal(_BatchNormControl(), train=True)
+    assert written >= {"bn.running_mean", "bn.running_var"}
     assert journaled >= {"bn.running_mean", "bn.running_var"}
+    assert all(event.value_changed for event in events if event.address != "bn.num_batches_tracked")

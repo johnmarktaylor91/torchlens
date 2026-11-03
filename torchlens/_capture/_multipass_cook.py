@@ -316,9 +316,11 @@ def _relabeled_graph(
 ) -> Any:
     if graph is None:
         return None
+    # ``parent_arg_positions`` is keyed by argument kind ("args", "kwargs");
+    # the inner values are the parent labels.
     positions = {
-        _mapped_label(parent, label_map): dict(slots)
-        for parent, slots in graph.parent_arg_positions.items()
+        kind: {slot: _mapped_label(parent, label_map) for slot, parent in slots.items()}
+        for kind, slots in graph.parent_arg_positions.items()
     }
     return replace(
         graph,
