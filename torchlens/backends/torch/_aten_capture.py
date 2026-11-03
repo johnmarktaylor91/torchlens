@@ -503,14 +503,31 @@ def _finish_aten_call(
             flop_formula_source=None,
             flop_formula_version=None,
             outcome="raised" if exception is not None else "returned",
-            exception_type=(
-                None
-                if exception is None
-                else f"{type(exception).__module__}.{type(exception).__qualname__}"
-            ),
+            exception_type=_exception_type_name(exception),
             execution_context=pending.execution_context,
             output_values=values,
         )
+    )
+
+
+def _exception_type_name(exception: BaseException | None) -> str | None:
+    """Return the qualified type name of a failed call's exception.
+
+    Parameters
+    ----------
+    exception
+        Raised exception for a failed call, or ``None`` for a successful one.
+
+    Returns
+    -------
+    str | None
+        ``module.QualName`` of the exception's type; ``None`` when nothing was raised.
+    """
+
+    return (
+        None
+        if exception is None
+        else f"{type(exception).__module__}.{type(exception).__qualname__}"
     )
 
 
