@@ -289,6 +289,7 @@ def _geometric_pair(
             "mask_shape_mismatch",
             f"influence geometry space {tuple(descriptor.input_shape)!r} does not match "
             f"site {target.label!r} output space {shape!r}.",
+            code="selection_unresolvable",
             site=target.label,
         )
     rectangles, decomposed_exactly = _rectangles(mask)
@@ -307,33 +308,38 @@ def _geometric_pair(
 def _pair_descriptor(trace: Any, seed_op: Any, target: Any, direction: str) -> Any:
     """Return ``(descriptor, query)`` for one (seed, target) pair, or ``None`` if unreachable.
 
-    ``query(seed_sets, memo)`` runs the engine's set sibling for the pair;
-    an unreachable pair (no descriptor) means no influence, an exact answer.
+    ``query(seed_sets, memo)`` runs the engine's set sibling for the pair on
+    the very descriptor returned here (the one the caller checks for geometry
+    and shape); an unreachable pair (no descriptor) means no influence, an
+    exact answer.
     """
 
     if direction == "projective":
         projective = solve_projective(trace, (target,))
-        descriptor = _descriptor_for(projective.per_op.get(seed_op.label), target.label)
-        if descriptor is None:
+        found = _descriptor_for(projective.per_op.get(seed_op.label), target.label)
+        if found is None:
             return None
-        return descriptor, lambda sets, memo: box_for_source_units(
-            projective, seed_op, sets, target=target, memo=memo
-        )
+        return found, _source_units_query(projective, seed_op, found)
     if bool(getattr(target, "is_input", False)):
         solution = _engine.solve(trace)
-        descriptor = _descriptor_for(solution.per_op.get(seed_op.label), target.label)
-        if descriptor is None:
-            return None
-        return descriptor, lambda sets, memo: box_for_units(
-            solution, seed_op, sets, far=target, memo=memo
-        )
-    solution = _engine.solve_from(trace, target)
-    descriptor = _descriptor_for(solution.per_op.get(seed_op.label), target.label)
-    if descriptor is None:
+    else:
+        solution = _engine.solve_from(trace, target)
+    found = _descriptor_for(solution.per_op.get(seed_op.label), target.label)
+    if found is None:
         return None
-    return descriptor, lambda sets, memo: box_for_units(
-        solution, seed_op, sets, far=target, memo=memo
-    )
+    return found, _units_query(solution, seed_op, found)
+
+
+def _units_query(solution: Any, seed_op: Any, descriptor: ReceptiveField) -> Any:
+    """Bind the receptive set query for one (seed, far endpoint) descriptor."""
+
+    return lambda sets, memo: box_for_units(solution, seed_op, descriptor, sets, memo=memo)
+
+
+def _source_units_query(solution: Any, seed_op: Any, descriptor: ReceptiveField) -> Any:
+    """Bind the projective set query for one (seed, target) descriptor."""
+
+    return lambda sets, memo: box_for_source_units(solution, seed_op, descriptor, sets, memo=memo)
 
 
 def _descriptor_for(descriptors: Any, far_label: str) -> ReceptiveField | None:
@@ -358,6 +364,7 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
             f"unavailable (field status {descriptor.status.value!r}): {error} "
             "Use method='gradient' on a backward-ready trace for an empirical answer.",
+            code="selection_unresolvable",
             seed_site=seed_op.label,
             target_site=target.label,
             field_status=descriptor.status.value,
@@ -530,6 +537,7 @@ def _gradient_influence(
             f"the gradient method would run {total} autograd probes ({len(probes)} seed "
             f"unit(s) x {len(targets)} target site(s)), over probe_budget={node.probe_budget}. "
             "Narrow the seed or the targets, raise probe_budget=, or use the geometric method.",
+            code="selection_unresolvable",
             probes=total,
             probe_budget=node.probe_budget,
         )
@@ -549,6 +557,7 @@ def _gradient_influence(
                     "mask_shape_mismatch",
                     f"gradient support shape {tuple(support.shape)!r} does not match site "
                     f"{target.label!r} output space {shapes[target.label]!r}.",
+                    code="selection_unresolvable",
                     site=target.label,
                 )
             supports[target.label] |= support

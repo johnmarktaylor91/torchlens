@@ -19,10 +19,10 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, cast
 
+from .._selection.selection import _unresolvable
 from . import _engine
 from ._engine_forward import _ProjectiveFieldSolution
-from ._errors import ReceptiveFieldError
-from ._forward_query import _labels_reaching, _select_target_descriptor, _walk_to_target
+from ._forward_query import _labels_reaching, _walk_to_target
 from ._query import (
     _ancestor_labels,
     _AxisSets,
@@ -30,7 +30,6 @@ from ._query import (
     _IndexSet,
     _query_graph,
     _query_memo_scope,
-    _select_descriptor,
     _shared_reach,
     _TerminalState,
     _union_optional,
@@ -70,27 +69,42 @@ def _seed_axis_sets(op: Op, descriptor: ReceptiveField, seed: _AxisSets) -> _Axi
     one ``_IndexSet`` or ``None`` per output axis. Every windowed axis must
     carry a non-empty in-range set; other axes may be ``None`` (unconstrained,
     the per-unit convention) or a set, which the walk routes exactly as
-    ``complete_unit`` coordinates are routed.
+    ``complete_unit`` coordinates are routed. A seed that does not fit the
+    seed operation's output space refuses as ``selection_unresolvable`` with
+    reason ``mask_shape_mismatch`` (the influence engine is the one caller).
     """
+
+    problem = _seed_problem(op, descriptor, seed)
+    if problem is not None:
+        raise _unresolvable(
+            "mask_shape_mismatch",
+            f"influence seed for {op.label!r} does not fit its output space {tuple(op.shape)!r}: "
+            f"{problem}",
+            code="selection_unresolvable",
+            site=op.label,
+        )
+    return tuple(seed)
+
+
+def _seed_problem(op: Op, descriptor: ReceptiveField, seed: _AxisSets) -> str | None:
+    """Name the first way ``seed`` misses the seed operation's output space, else ``None``."""
     # Complexity (C): one validation pass over four seed conditions reads clearer than four loops.
     assert descriptor.axes is not None
     if len(seed) != len(op.shape):
-        raise ReceptiveFieldError("seed rank does not match the seed operation.")
+        return "seed rank does not match the seed operation."
     windowed = {cast(int, axis.output_axis) for axis in _windowed_axes_in_unit_order(descriptor)}
     for axis, index_set in enumerate(seed):
         if index_set is None:
             if axis in windowed:
-                raise ReceptiveFieldError(f"seed leaves windowed output axis {axis} unconstrained.")
+                return f"seed leaves windowed output axis {axis} unconstrained."
             continue
         if index_set.is_empty:
-            raise ReceptiveFieldError(f"seed is empty on output axis {axis}.")
+            return f"seed is empty on output axis {axis}."
         minimum, maximum = index_set.minimum, index_set.maximum
         assert minimum is not None and maximum is not None
         if minimum < 0 or maximum >= int(op.shape[axis]):
-            raise ReceptiveFieldError(
-                f"seed indices {minimum}..{maximum} are out of bounds for output axis {axis}."
-            )
-    return tuple(seed)
+            return f"seed indices {minimum}..{maximum} are out of bounds for output axis {axis}."
+    return None
 
 
 def _index_set_box(
@@ -129,27 +143,21 @@ def _index_set_box(
 def box_for_units(
     solution: _engine._ReceptiveFieldSolution,
     op: Op,
+    descriptor: ReceptiveField,
     seed: _AxisSets,
     *,
-    far: Op | str | None = None,
     memo: _WalkMemo | None = None,
 ) -> _IndexSetBox:
     """Compute the receptive hull of an axis-aligned block of target units.
 
     The set sibling of ``_query.box_for_unit``: same solution, same
-    descriptor selection and validation, same reverse walk, one seed block
-    instead of one coordinate. ``far`` is the far endpoint (a model input or
-    io role, as ``input_op=`` there, or an interior source operation, as
-    ``source=``; the descriptor selection is one and the same). ``memo``
-    lets the rectangles of one query share the walk memo.
+    validation, same reverse walk, one seed block instead of one coordinate.
+    ``descriptor`` is the one the caller already resolved from
+    ``solution.per_op[op.label]`` for its far endpoint (a model input or an
+    interior source operation), so the descriptor walked is the descriptor
+    the caller checked. ``memo`` lets the rectangles of one query share the
+    walk memo.
     """
-    descriptors = solution.per_op.get(op.label)
-    if not descriptors:
-        endpoint = far.label if far is not None and not isinstance(far, str) else op.label
-        raise ReceptiveFieldError(
-            f"No receptive-field solution is available from {endpoint} to {op.label}."
-        )
-    descriptor = _select_descriptor(descriptors, far)
     _validate_descriptor_for_query(descriptor)
     initial = _seed_axis_sets(op, descriptor, seed)
     operations, by_reference = _query_graph(op.source_trace, solution)
@@ -175,23 +183,19 @@ def box_for_units(
 def box_for_source_units(
     solution: _ProjectiveFieldSolution,
     op: Op,
+    descriptor: ReceptiveField,
     seed: _AxisSets,
     *,
-    target: Op | str | None = None,
     memo: _WalkMemo | None = None,
 ) -> _IndexSetBox:
     """Compute the projective support of an axis-aligned block of source units.
 
     The set sibling of ``_forward_query.box_for_source_unit``: same
-    target-anchored solution, same descriptor selection and validation, same
-    forward transposition walk, one seed block instead of one coordinate.
+    target-anchored solution, same validation, same forward transposition
+    walk, one seed block instead of one coordinate. ``descriptor`` is the one
+    the caller already resolved from ``solution.per_op[op.label]`` for its
+    target, as in :func:`box_for_units`.
     """
-    descriptors = solution.per_op.get(op.label)
-    if not descriptors:
-        raise ReceptiveFieldError(
-            f"No projective-field solution is available from source {op.label!r}."
-        )
-    descriptor = _select_target_descriptor(descriptors, target)
     _validate_descriptor_for_query(descriptor)
     initial = _seed_axis_sets(op, descriptor, seed)
     operations, by_reference = _query_graph(op.source_trace, solution)

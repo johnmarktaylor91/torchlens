@@ -1097,7 +1097,6 @@ docs-md	docs/maintainers/where.md	114
 docs-md	docs/maintainers/where.md	1144
 docs-md	docs/maintainers/where.md	1145
 docs-md	docs/maintainers/where.md	1146
-docs-md	docs/maintainers/where.md	11483
 docs-md	docs/maintainers/where.md	1149
 docs-md	docs/maintainers/where.md	115
 docs-md	docs/maintainers/where.md	117
@@ -1116,6 +1115,7 @@ docs-md	docs/maintainers/where.md	122
 docs-md	docs/maintainers/where.md	1225
 docs-md	docs/maintainers/where.md	1226
 docs-md	docs/maintainers/where.md	123
+docs-md	docs/maintainers/where.md	12305
 docs-md	docs/maintainers/where.md	1237
 docs-md	docs/maintainers/where.md	124
 docs-md	docs/maintainers/where.md	125
@@ -1140,7 +1140,7 @@ docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
-docs-md	docs/maintainers/where.md	1355
+docs-md	docs/maintainers/where.md	1357
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
 docs-md	docs/maintainers/where.md	137
@@ -1704,6 +1704,7 @@ docs-md	docs/maintainers/where.md	6.3
 docs-md	docs/maintainers/where.md	6.4
 docs-md	docs/maintainers/where.md	60
 docs-md	docs/maintainers/where.md	600
+docs-md	docs/maintainers/where.md	601
 docs-md	docs/maintainers/where.md	602
 docs-md	docs/maintainers/where.md	603
 docs-md	docs/maintainers/where.md	604
@@ -1724,10 +1725,10 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629378
 docs-md	docs/maintainers/where.md	6299
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
+docs-md	docs/maintainers/where.md	630200
 docs-md	docs/maintainers/where.md	6303
 docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	633
@@ -8852,6 +8853,17 @@ test-docstrings	tests/test_selection_gallery.py	12.
 test-docstrings	tests/test_selection_gallery.py	4.6
 test-docstrings	tests/test_selection_gallery.py	64
 test-docstrings	tests/test_selection_gallery.py	7.7
+test-docstrings	tests/test_selection_influence.py	1..5.
+test-docstrings	tests/test_selection_influence.py	1..7
+test-docstrings	tests/test_selection_influence.py	16
+test-docstrings	tests/test_selection_influence.py	2..12.
+test-docstrings	tests/test_selection_influence.py	2..3
+test-docstrings	tests/test_selection_influence.py	2..5
+test-docstrings	tests/test_selection_influence.py	2..6
+test-docstrings	tests/test_selection_influence.py	3..11.
+test-docstrings	tests/test_selection_influence.py	3..5,
+test-docstrings	tests/test_selection_influence.py	6..9,
+test-docstrings	tests/test_selection_influence.py	7..8
 test-docstrings	tests/test_selector_composition_scaling.py	500
 test-docstrings	tests/test_selector_semantics_matrix.py	278
 test-docstrings	tests/test_selector_semantics_matrix.py	45
