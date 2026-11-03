@@ -92,9 +92,9 @@ PACKAGE_LAYERS: dict[str, str] = {
     "backends": "L2",
     "_ir": "L2",
     "recording": "L2",
-    "recording.types": "L1",
-    "recording.recover": "L3",
-    "recording.cleanup": "L3",
+    "recording._types": "L1",
+    "recording._recover": "L3",
+    "recording._cleanup": "L3",
     "options": "L2",
     "observers": "L2",
     "_state": "L2",
@@ -242,7 +242,7 @@ def layer_for_module(dotted: str) -> str | None:
     Parameters
     ----------
     dotted:
-        Module path relative to ``torchlens`` (e.g. ``"recording.recover"``).
+        Module path relative to ``torchlens`` (e.g. ``"recording._recover"``).
 
     Returns
     -------

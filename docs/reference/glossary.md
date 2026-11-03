@@ -3630,6 +3630,13 @@ describe each surface in depth.
 | `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
 | `AttributionGraph.frozen_sites` | Labels of the sites held at their captured values |
 | `AttributionGraph.has_demeaned_logits` | Whether a logit node's value is its logit minus the mean logit |
+| `BindReport.duration_s` | Wall time of the bound call in seconds, or `None` when it was not measured |
+| `BindReport.execution_effect` | How a bound call's helpers act: always `"values_replaced_after_execution"` (outputs are replaced after each op runs) |
+| `BindReport.fire_records` | The `FireRecord` objects of every firing during the bound call |
+| `BindReport.module_aliases` | Canonical module address to the other addresses the same module object is registered under |
+| `BindReport.resolved_static_targets` | Rule id to the module addresses its static anchor resolved to at bind time |
+| `BindReport.rule_fire_counts` | Rule id to the number of times it fired during the bound call |
+| `BindReport.spec_digest` | Digest of the intervention spec the call was bound with |
 | `CausalAuditSet.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
 | `CausalAuditSet.draw_index` | Index of the random draw (``0`` for ``"top"`` and ``"bottom"``) |
 | `CausalAuditUnit.build_interventions` | The ``(tl.units(label, mask), edit)`` pair that produced ``measured_effect`` |
@@ -3684,6 +3691,9 @@ describe each surface in depth.
 | `FacetView.invalidate` | Clear cached computed facet values |
 | `FamilyEvidence.policy` | `exact`, `sampled`, `unavailable`, or nonfinite presence-only `verdict`; unavailable evidence carries a reason |
 | `FamilyEvidence.is_sampled` | Whether this family rode the seeded gathered sample |
+| `FireRecord.call_label` | Label of the call the firing belongs to, or `None` when it is not a call-level site |
+| `FireRecord.target_label` | Label of the op the firing edited |
+| `FireRecord.timing` | Whether the firing ran before (`"pre"`) or after (`"post"`) its op, or `None` when not recorded |
 | `GraphNode.token_id` | Token id: the input token at ``position`` (token nodes) or the target vocabulary id (logit nodes) |
 | `HeadScores.eligible_rows` | field of `HeadScores` |
 | `HeadScores.module_addresses` | field of `HeadScores` |
@@ -3691,6 +3701,7 @@ describe each surface in depth.
 | `HeadWeightViews.num_kv_heads` | field of `HeadWeightViews` |
 | `HistoryView.run_record` | field of `HistoryView` |
 | `InputProvenance.has_semantic_values` | True only when the values are caller-supplied real data. Gates derived-semantics claims |
+| `InterventionValidationReport.passed` | Return the aggregate pass/fail result |
 | `LogitLens.entries` | Per-layer projections in block execution order |
 | `LogitLens.final_logits` | The model's captured real output logits when readable, else ``None`` |
 | `LogitLens.is_validated` | Whether the reconstructed lens was numerically validated against the captured last-block ``resid_post`` -> logits pair |
@@ -3721,11 +3732,37 @@ describe each surface in depth.
 | `PlanSite.transformed_shape` | Post-transform shape at the probe batch, when a transform ran |
 | `ProjectionSource.has_fused_qkv` | Whether the role is a column slice of a fused QKV weight |
 | `RandomizationTest.module_addresses` | Randomized modules, top (output side) first |
+| `ReadRow.frozen_reached` | Whether a requested freeze actually fired in the target's backward cone; `None` when no backward touched the site |
 | `ReadRow.is_detached` | ``True`` when ``value`` is a detached copy (always true in v1 for carried tensors) |
 | `ReadRow.is_frozen_requested` | field of `ReadRow` |
 | `ReadRow.is_frozen_resolved` | field of `ReadRow` |
 | `ReadRow.is_rescorable` | ``False`` on loaded tables (the runtime registry is not serialized) |
+| `ReadRow.policy_digest` | Digest of the resolved frozen policy this row was measured under |
+| `ReadRow.reduction` | Named scalar reduction that produced `score`, or `None` |
+| `ReadRow.retention` | `'saved'` or `'unsaved'` payload retention at the site |
+| `ReadRow.status_reason` | Closed reason detail for the row's status (for example `not_upstream_of_target`), or `None` |
+| `ReadRow.target_id` | Stable id of the target this row answers, or `None` for target-free rows |
+| `ReadTable.aggregate_targets` | Fold multi-target rows into one row per address, explicitly |
+| `ReadTable.collapse_alias_groups` | Explicitly collapse alias groups to one row per `(node, slot)` |
+| `ReadTable.column` | Return one row field as `key -> value` |
 | `ReadTable.is_rescorable` | Whether the table can be re-scored against its live trace |
+| `ReadTable.status_counts` | Return the status histogram over all rows |
+| `ReadTable.trace_token` | Return the trace validity token captured at read time |
+| `Recording.by_pass` | Map from pass number to indexes of its retained records |
+| `Recording.orphan_records` | Records that arrived without a matching pass, kept for diagnosis |
+| `RegionBoundary.exits` | The region's exit edges, ordered by consuming-op execution order then occurrence order |
+| `RegionEdge.addresses` | The canonical edge occurrence addresses |
+| `RegionEdge.nested` | Whether any occurrence address has a nested (container) argument |
+| `RegionInstance.exits` | The exit edges of this pass instance; they commit atomically |
+| `RegionTarget.region_digest` | Stable digest over members and exit addresses (audit identity) |
+| `RegionTarget.source_slice` | The `TraceSlice` this region was derived from |
+| `Relationship.DIFF_MODEL` | Evidence level: the bundle members come from different models |
+| `Relationship.SAME_MODEL_OBJECT_AT_CAPTURE` | Evidence level: the members were captured from the same model object |
+| `Relationship.SAME_OBJECT` | Evidence level: the members are the same object |
+| `Relationship.SAME_PARAM_SHAPES` | Evidence level: the members' models share parameter shapes only |
+| `Relationship.SHARED_ARCHITECTURE` | Evidence level: the members' models share an architecture |
+| `Relationship.SHARED_GRAPH_DIFFERENT_INPUT` | Evidence level: the members share a graph but ran on different inputs |
+| `Relationship.SHARED_GRAPH_SAME_INPUT` | Evidence level: the members share a graph and ran on the same input |
 | `RunningStats.compute` | Return the finalized spine statistics (`RunningStatsResult`) |
 | `RunningStats.merge` | Fold another spine into this one |
 | `RunningStatsResult.num_finite` | field of `RunningStatsResult` |
@@ -3747,6 +3784,14 @@ describe each surface in depth.
 | `SavePlan.estimated_bytes` | Return the summed payload estimate for the named sites |
 | `SavePlan.module_subtrees` | field of `SavePlan` |
 | `SeriesPoint.is_coarsened` | field of `SeriesPoint` |
+| `SpecCompat.site_diff` | Human-readable site-level diff; empty when neither side has site keys |
+| `TargetManifestDiff.matched_site_keys` | Site keys present in both the saved manifest and the new trace |
+| `TargetManifestDiff.missing_labels` | Labels in the saved manifest that the new trace lacks |
+| `TargetManifestDiff.missing_site_keys` | Site keys in the saved manifest that the new trace lacks |
+| `TargetManifestDiff.new_labels` | Labels in the new trace that the saved manifest lacks |
+| `TargetManifestDiff.new_site_keys` | Site keys in the new trace that the saved manifest lacks |
+| `TargetManifestDiff.selector_resolution_diffs` | Selector to how its resolution differs between the saved manifest and the new trace |
+| `TargetManifestDiff.site_diff_lines` | Render the printed site-level diff (one line per changed site) |
 | `TensorStats.mean_evidence` | `FamilyEvidence` with policy, population, sample size, and reason for the mean |
 | `TensorStats.nonfinite_evidence` | Exact census evidence, unavailable with a reason, or presence-only `verdict` with counts unknown |
 | `TensorStats.finite_min` | Minimum finite value, or `None`; read `extrema_evidence` for its policy |
@@ -3786,6 +3831,16 @@ describe each surface in depth.
 | `TrajectoryStats.module_addresses` | Block addresses in depth order (one row per layer) |
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
 | `TrajectoryStats.num_positions` | Sequence length every batch shared |
+| `ValidationFailure.inf_mismatch` | Whether the saved and recomputed tensors disagree on infinities, or `None` |
+| `ValidationFailure.max_abs_diff` | Largest absolute difference between saved and recomputed values, or `None` |
+| `ValidationFailure.max_rel_diff` | Largest relative difference between saved and recomputed values, or `None` |
+| `ValidationFailure.nan_mismatch` | Whether the saved and recomputed tensors disagree on NaNs, or `None` |
+| `ValidationFailure.recomputed_dtype` | Dtype of the recomputed tensor, or `None` |
+| `ValidationFailure.recomputed_shape` | Shape of the recomputed tensor, or `None` |
+| `ValidationFailure.reduction_depth` | Reduction depth of the failing op used to scale the tolerance, or `None` |
+| `ValidationFailure.saved_dtype` | Dtype of the saved tensor, or `None` |
+| `ValidationFailure.saved_shape` | Shape of the saved tensor, or `None` |
+| `ValidationStatus.passed` | Return whether replay validation ran and passed |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
 | `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
 | `VisualizationOptions.rolled` | ``True`` draws each repeated module once (the rolled graph); ``False`` (default) draws every pass |
