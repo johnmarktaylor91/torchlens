@@ -88,3 +88,9 @@ clean environment (home, path, locale and shell variables only); pass the variab
 credential with `--keep-env NAME`. A failure is a docs or
 index finding: fix the card's `avoid` line, the read-first rules or the page, regenerate with
 `tools/docs/build_agent_index.py`, and rerun.
+
+## Agent benchmark
+
+`bench/` holds the harness for the agent benchmark: coding agents reimplement interpretability
+methods from primitives in separate arms (plain PyTorch, or plain PyTorch plus one library),
+scored by deterministic oracles that a separate author writes. See `bench/README.md`.
