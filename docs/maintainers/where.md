@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1403 modules, 629892 lines, 0 modules without a docstring.
+83 packages, 1403 modules, 629887 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 32036 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 72 | 32033 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -30,7 +30,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 504 |
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17185 |
-| `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1961 |
+| `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1959 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14761 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 18 | 9741 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (72 modules, 32036 lines)
+TorchLens - extract outs and metadata from PyTorch models. (72 modules, 32033 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -161,7 +161,7 @@ TorchLens - extract outs and metadata from PyTorch models. (72 modules, 32036 li
 | `_trace_state` | Trace-state vocabulary and the capture-state predicates shared across layers. | 49 |
 | `_training_validation` | Shared validation helpers for training-compatible capture modes. | 203 |
 | `_transport` | Device/layout-aware host transport for tensor digest and codec paths. | 98 |
-| `_user_funcs` | Public API entry points for TorchLens. | 571 |
+| `_user_funcs` | Public API entry points for TorchLens. | 568 |
 | `_user_funcs_guards` | Entry-time refusals shared by the public ''trace'' door. | 85 |
 | `_user_public_impls` | Private implementations for public user-facing utility commands. | 1827 |
 | `_validation_argument_references` | Parameter arguments that forward validation's own capture keeps by reference. | 405 |
@@ -632,7 +632,7 @@ Postprocessing pipeline for cleaning up the model log after the forward pass. (2
 
 ### `torchlens._quickstart`
 
-TorchLens quickstart: one input ladder, one provenance record, one render door. (9 modules, 1961 lines)
+TorchLens quickstart: one input ladder, one provenance record, one render door. (9 modules, 1959 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -643,7 +643,7 @@ TorchLens quickstart: one input ladder, one provenance record, one render door. 
 | `_plan` | Input-rung law and the normalized pre-capture call description (quickstart B4). | 171 |
 | `_primitive` | The private concrete-input capture primitive (quickstart B5). | 216 |
 | `_provenance` | The ONE persistent input-provenance record (quickstart ). | 313 |
-| `_render` | The one-call picture door ''tl.draw'' (B15, -). | 234 |
+| `_render` | The one-call picture door ''tl.draw'' (B15, -). | 232 |
 | `_resolve` | The ONE input resolver behind summary / render / trace (quickstart -). | 248 |
 
 ### `torchlens._registry`
