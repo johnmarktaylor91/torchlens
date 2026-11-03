@@ -3995,3 +3995,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 64bf79da82c45a8816491d19b808564b063a37ba (clean)
 recorded: 2026-11-03T10:35:44.472932+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-values fixq3 C-060: _make_raw_index_save_predicate moved from intervention/rerun.py to intervention/_rerun_predicate.py (code move, no behaviour change)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a73071024dc9ea610051d008015afcb19a162d4f (dirty)
+recorded: 2026-11-03T12:09:00.046706+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-values fixq3 C-060: _make_raw_index_save_predicate moved from intervention/rerun.py to intervention/_rerun_predicate.py (code move, no behaviour change)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a73071024dc9ea610051d008015afcb19a162d4f (dirty)
+recorded: 2026-11-03T12:09:03.770189+00:00

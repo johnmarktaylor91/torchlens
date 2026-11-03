@@ -309,6 +309,34 @@ def _make_layer_log_entry(
             call_ref_box=call_ref_box,
         ),
     )
+    _settle_lookback_and_aten_values(self, predicate_ctx, save_this_activation, fields_dict, t)
+    _record_nonfinite_if_requested(self, t, new_entry)
+    # Echo narrator slot (snoop D1): exactly once per committed op, after the
+    # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
+    # so the minting op is the last narrated line when the tripwire trips.
+    _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
+    _raise_if_nonfinite_requested(self, t, new_entry)
+
+    return new_entry
+
+
+def _settle_lookback_and_aten_values(
+    self: "Trace",
+    predicate_ctx: Any,
+    save_this_activation: bool,
+    fields_dict: dict[str, Any],
+    t: torch.Tensor,
+) -> None:
+    """Park an unsaved op as a lookback candidate, then settle its ATen values.
+
+    Args:
+        self: Trace under capture.
+        predicate_ctx: The op's save-predicate context, or ``None`` without a predicate.
+        save_this_activation: Whether the op's output was saved at commit time.
+        fields_dict: The committed op's field values.
+        t: The op's output tensor.
+    """
+
     deferred = False
     if predicate_ctx is not None and not save_this_activation:
         deferred = _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
@@ -324,14 +352,6 @@ def _make_layer_log_entry(
             if fields_dict.get("has_saved_activation")
             else ("deferred" if deferred else "drop"),
         )
-    _record_nonfinite_if_requested(self, t, new_entry)
-    # Echo narrator slot (snoop D1): exactly once per committed op, after the
-    # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
-    # so the minting op is the last narrated line when the tripwire trips.
-    _emit_op_echo(self, fields_dict, t, predicate_ctx, fire_results)
-    _raise_if_nonfinite_requested(self, t, new_entry)
-
-    return new_entry
 
 
 def _record_nonfinite_if_requested(self: Any, tensor: torch.Tensor, entry: Any) -> None:

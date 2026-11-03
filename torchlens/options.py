@@ -35,6 +35,7 @@ from ._literals import (
 from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
+    _build_option,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
@@ -359,17 +360,6 @@ def _merge_grouped_options(
         values[group_field] = flat_value
         specified_fields = frozenset((*specified_fields, group_field))
     return _build_option(option_factory, values, specified_fields)
-
-
-def _build_option(
-    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
-) -> Any:
-    """Build an option object from resolved values through its (possibly private) builder."""
-
-    builder = getattr(option_factory, "_from_values", None)
-    if builder is None:
-        builder = option_factory.from_values
-    return builder(values, specified_fields)
 
 
 @dataclass(frozen=True, init=False)

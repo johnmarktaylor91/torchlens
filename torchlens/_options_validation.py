@@ -342,6 +342,27 @@ def _validate_capture_values(values: Mapping[str, Any]) -> None:
             remedy="pass on_nonfinite='ignore', 'track', 'warn' or 'raise'",
             argument="on_nonfinite",
         )
+    _validate_capture_flag_values(values)
+
+
+def _validate_capture_flag_values(values: Mapping[str, Any]) -> None:
+    """Validate the ``aten_ops`` and ``structure_only`` capture flags.
+
+    The last checks of :func:`_validate_capture_values`, run in the same order.
+
+    Parameters
+    ----------
+    values:
+        Resolved capture field values keyed by canonical field name.
+
+    Raises
+    ------
+    InvalidArgumentError
+        If ``aten_ops`` is not ``True``, ``False`` or ``"values"``.
+    ArgumentTypeError
+        If ``structure_only`` is not a bool.
+    """
+
     aten_ops = values["aten_ops"]  # identity checks: 1 == True would admit an int
     if aten_ops is not True and aten_ops is not False and aten_ops != "values":
         raise InvalidArgumentError(

@@ -378,9 +378,26 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
-    plan = {k: v for k, v in locals().items() if k not in _REQUEST_POSITIONALS}
+    return _run_keyword_capture(locals())
+
+
+def _run_keyword_capture(arguments: dict[str, Any]) -> Trace:
+    """Build the capture request from the keyword adapter's arguments and run it.
+
+    Args:
+        arguments: ``locals()`` of ``_run_model_and_save_specified_outs`` taken
+            before it binds any name of its own, so exactly its parameters.
+
+    Returns:
+        Fully-populated Trace.
+    """
+
+    plan = {k: v for k, v in arguments.items() if k not in _REQUEST_POSITIONALS}
     request = CaptureRequest(
-        model=model, input_args=input_args, input_kwargs=input_kwargs, plan=plan
+        model=arguments["model"],
+        input_args=arguments["input_args"],
+        input_kwargs=arguments["input_kwargs"],
+        plan=plan,
     )
     return run_capture(request).trace
 

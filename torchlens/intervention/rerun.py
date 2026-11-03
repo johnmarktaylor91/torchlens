@@ -6,7 +6,7 @@ import time
 import warnings
 import weakref
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal, cast
@@ -32,6 +32,7 @@ from ._live_hook_plan import (
 )
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
+    _make_raw_index_save_predicate,
     plan_rerun_spec,
     settle_predicate_rerun,
     translate_staged_final_labels,
@@ -1386,31 +1387,6 @@ def _refuse_shifted_raw_index_resave(old_log: Trace, new_log: Trace) -> None:
         remedy=remedy,
         first_differing_position=first,
     )
-
-
-def _make_raw_index_save_predicate(selected_indices: set[int]) -> Callable[[Any], bool]:
-    """Build a predicate that mirrors a static raw-index save subset.
-
-    Parameters
-    ----------
-    selected_indices:
-        Raw operation indices selected by the original capture.
-
-    Returns
-    -------
-    Callable[[Any], bool]
-        Predicate returning ``True`` for matching capture contexts.
-    """
-
-    def keep_selected_raw_index(ctx: Any) -> bool:
-        """Return whether a predicate context matches the selected raw indices."""
-
-        raw_index = getattr(ctx, "raw_index", None)
-        if raw_index is None:
-            raw_index = getattr(ctx, "event_index", None)
-        return raw_index in selected_indices
-
-    return keep_selected_raw_index
 
 
 def _reconcile_rerun_hook_fires(
