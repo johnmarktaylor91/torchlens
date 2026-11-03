@@ -1008,21 +1008,30 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``ArtifactError``."""
+    """An active raw-value codec lookup wraps registry failures as typed IO refusals."""
 
-    import torchlens._io.bundle as bundle_module
+    import numpy as np
 
-    path = tmp_path / "mlx_registry_error.tlspec"
-    _captured_log().save(path)
-    _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
+    import torchlens._io.payload_codec as payload_module
 
-    def _exploding_codec_lookup(backend_name: str) -> Any:
+    raw = {"array": np.arange(6, dtype=np.float32), "x": torch.randn(2, 3)}
+    trace = tl.trace(
+        UnifiedTinyModel(),
+        raw,
+        capture=CaptureOptions(input_transform=lambda value: value["x"], save_raw_input=True),
+    )
+    path = tmp_path / "array_registry_error.tlspec"
+    trace.save(path)
+    assert isinstance(tl.load(path).input["array"], np.ndarray)
+
+    def exploding_lookup(backend_name: str) -> Any:
         raise RuntimeError("registry exploded")
 
-    monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
-
-    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
+    monkeypatch.setattr(payload_module, "get_payload_codec", exploding_lookup)
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec") as caught:
         tl.load(path)
+    assert caught.value.fields["code"] == "bundle_load_failed"
+    assert isinstance(caught.value.__cause__, RuntimeError)
 
 
 @pytest.mark.parametrize(
