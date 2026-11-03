@@ -38,7 +38,8 @@ import torch
 from torch import nn
 
 from . import _state
-from ._fast_live_steer import apply_steer_paused, session_is_active
+from ._call_fingerprint import install_module_token_hooks
+from ._fast_live_steer import apply_steer_paused, install_steer_hooks, session_is_active
 from ._runnable import RunnableErrorCode
 from ._runnable.verification import _contract_check
 from ._utils.introspection import get_vars_of_type_from_obj
@@ -61,6 +62,7 @@ __all__ = [
     "build_module_plans",
     "collected_function_output",
     "install_collection_hooks",
+    "install_session_hooks",
     "recorded_module_call_counts",
     "repeats_last_function_output",
     "require_distinct_plan_modules",
@@ -419,7 +421,8 @@ def _drop_uncollected_payloads(trace: Any, supported_labels: set[str]) -> None:
     Parameters
     ----------
     trace:
-        Source trace whose ops are updated in place.
+        Result trace whose ops are updated (the fast door's fork, or the
+        live trace itself on the legacy rerun door).
     supported_labels:
         Op labels the session's module and function plans collect, plus the
         model's boundary ops.
@@ -602,6 +605,31 @@ def install_collection_hooks(
                 session.capture_module(module_address, output)
 
         handles.append(module.register_forward_hook(hook))
+
+
+def install_session_hooks(
+    session: Any,
+    model: nn.Module,
+    modules: Mapping[str, nn.Module],
+    plan_addresses: tuple[str, ...],
+) -> weakref.finalize[Any, Any]:
+    """Install a fast live session's steer, token and collection hooks on ``model``.
+
+    Handles append to ``session.handles``. Returns the finalizer that removes
+    them; it runs when the session is collected, and at once when an install
+    raises, so a failed build leaves no hook on the user's modules.
+    """
+
+    finalizer = weakref.finalize(session, _remove_fast_live_hooks, session.handles)
+    session_ref = weakref.ref(session)
+    try:
+        session.handles.extend(install_steer_hooks(session.steer_plan, session_ref))
+        session.handles.extend(install_module_token_hooks(model, session_is_active(session_ref)))
+        install_collection_hooks(session.handles, modules, plan_addresses, session_ref)
+    except BaseException:
+        finalizer()
+        raise
+    return finalizer
 
 
 @dataclass(frozen=True)

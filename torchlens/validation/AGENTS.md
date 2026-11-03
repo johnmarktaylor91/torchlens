@@ -27,6 +27,7 @@ metadata invariants, intervention readiness, and unified `.tlspec` manifest sche
 | `_saved_value_proofs.py` | Posthoc value proofs keyed on one op family and slot: zero dividend, and-by-zero, in-place bool or with an all-True partner, zero exponent and unit base, size-1 `__setitem__` index dim, and the additive mask of a single-key `scaled_dot_product_attention` (the operand, sdpa and norm proofs decide first) |
 | `_integer_mod_proof.py` | Saved-call proof that an integer `% +-1` is identically zero (used by the `integer_mod_unit_divisor` posthoc decision) |
 | `_replay_device.py` | Replay device alignment when an `output_device` capture keeps saved payloads off the op's device: parent payloads move to the slot's saved-argument device, recomputed outputs to the saved output's device |
+| `_perturb.py` | `_perturb_layer_outs` and its per-dtype strategies (integer, bool, complex, float, sparse through the values component), bounded by `MAX_PERTURB_ATTEMPTS`: the random wrong parent value the forward replay requires to move the output; torch-only leaf |
 | `_grad_flags.py` | Captured `requires_grad` flags of replay arguments (`_mirror_captured_requires_grad`, `_snapshot_grad_flags`): torch-only helpers shared by `_replay_grad_fidelity.py` and `_replay_storage_context.py` |
 | `_replay_storage_context.py` | Replay of `as_strided_` / `resize_` / `resize_as_` on a clone of the receiver's saved storage context (whole storage, offset, strides), with the swapped-in parent values written into the view; no effect on any other op or slot |
 | `_shift_probe.py` | `VALUE_STEP_STRATEGIES` (the value-step retry rungs, in order) and `lift_min_entry_values`: the non-uniform `lift_min_entry` perturbation retry (lifts one entry above the max), the probe uniform steps cannot give a shift-invariant child such as a saturated softmax |
@@ -153,7 +154,9 @@ inf/NaN tensors, and special-value args.
 ## __init__.py Schema Checks
 
 - `validate_tlspec()` only validates unified `.tlspec` manifests.
-- Only legacy 2.16 intervention formats skip schema validation; model-log bundles below tlspec v6 refuse to load.
+- Intervention specs skip schema validation (their format has no schema document); the
+  format_version-1 spec, the 2.16 model-log bundle and a unified manifest below the current
+  tlspec were saved by torchlens 2.x and refuse with `ArtifactTooOldError`.
 - Manifest schemas live at `torchlens/schemas/tlspec_manifest_v{schema_version}.json`;
   validation selects the version declared by each artifact.
 

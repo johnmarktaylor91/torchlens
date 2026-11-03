@@ -25,8 +25,8 @@ To see what your environment supports, run the environment report:
 ```python
 import torchlens as tl
 
-print(tl.utils.doctor())     # installed extras, torch capability flags, degraded probes
-print(tl.compat.report())    # the compatibility view of the same facts
+print(tl.report.doctor())                 # installed extras, torch capability flags, degraded probes
+print(tl.report.doctor(model, inputs))    # adds the model-specific compatibility checks
 ```
 
 Include its output in any bug report about capture or torch compatibility.

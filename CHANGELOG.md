@@ -5,6 +5,15 @@
 
 ### Behavior changes
 
+- **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
+  pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
+  merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
+  `tl.validation.validate_tlspec` and the extraction readers) with one error,
+  `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`), whose message names the 2.x
+  origin and the remedy: load the file with torchlens 2.36.x (`pip install 'torchlens>=2.36,<3'`) or
+  capture the model again with this release. Nothing migrates a 2.x file, and there is no
+  `tl.migrate`. The promise made with 2.16.0 that its `.tlspec` files would always load is
+  withdrawn; `MIGRATIONS.md` (".tlspec Compatibility") lists every case.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
@@ -425,6 +434,20 @@
 
 ### Bug Fixes
 
+- **capture**: a model with a sparse registered buffer (a `to_sparse()` adjacency fed to
+  `torch.sparse.mm`) can be captured again; the buffer-write tracker's whole-storage snapshot
+  read `untyped_storage()`, which a sparse tensor does not have, so every capture failed before
+  the forward ran. Sparse buffers are now snapshot through their index and value components,
+  and the `torch.sparse` tensor ops (`mm`, `addmm`, `sampled_addmm`, `sum`, `softmax`,
+  `log_softmax`, `spdiags`, `spsolve`) are wrapped: torch re-exports them from `torch._C._sparse`
+  into a namespace the function crawl never visited, so `torch.sparse.mm` ran unrecorded and
+  its output refused with `output_attribution_failed`.
+- **errors**: `TraceCaptureError` carries a stable `fields["code"]`: `forward_raised` when the
+  model's own code raised, `capture_internal_error` when the innermost attributable frame was
+  TorchLens's. `LiveModeLabelError` defaults to `label_selector_not_live`, so a live selector
+  naming a finalized postprocess label refuses with a code from every raise site.
+  A strict portable save that meets a tensor the codec cannot store (a sparse buffer, for one)
+  refuses with `artifact_tensor_unsupported` instead of an uncoded `ArtifactError`.
 - **capture**: call-site chains no longer include TorchLens's own frames when the package is
   imported through a relative `sys.path` entry such as `PYTHONPATH=.`; those frames had merged
   distinct call sites into false loops. The TorchLens-frame test now compares normalised file

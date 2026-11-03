@@ -630,9 +630,9 @@ def output_dtype_and_rank(value: Any) -> tuple[str | None, int | None]:
 def refuse_unfired_fast_run(trace: Any) -> None:
     """Refuse a recorded fast run whose staged entries fired nowhere, under ``"error"``.
 
-    The fast engine refreshes the live trace in place, so the refusal comes after
-    the run and its ``last_run`` record (``hooks_unfired``) are settled: the
-    refusal carries the fact, and the trace holds the run that happened.
+    The refusal comes after the run and its ``last_run`` record (``hooks_unfired``)
+    on the result trace are settled: the refusal carries the fact, and the result
+    trace holds the run that happened.
 
     Raises
     ------

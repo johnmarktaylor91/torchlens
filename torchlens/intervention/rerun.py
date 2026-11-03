@@ -28,8 +28,8 @@ from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
     plan_rerun_spec,
-    refuse_unmatchable_staged_labels,
     settle_predicate_rerun,
+    translate_staged_final_labels,
 )
 from ._zero_fire import (
     current_zero_fire_policy,
@@ -126,18 +126,18 @@ def run(
     spec = getattr(trace, "_intervention_spec", None)
     refuse_changed_staged_helpers(spec, door="rerun")
     spec_plan = plan_rerun_spec(trace, spec)
-    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
+    capture_spec = translate_staged_final_labels(trace, spec_plan.capture_spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(capture_spec))
     started_at = time.monotonic()
     old_hash = trace._provenance_fingerprint
     old_raw_hash = getattr(trace, "_raw_event_shape_hash", None)
 
-    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             trace,
             model,
             inputs,
-            intervention_spec=spec_plan.capture_spec,
+            intervention_spec=capture_spec,
             hook_plan=hook_plan,
             output_transform=output_transform,
             intervene_predicate=spec_plan.intervene_predicate,
@@ -430,17 +430,17 @@ def _append_rerun(
     # predicate-door entries the capture below re-arms instead of planning.
     _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
     spec_plan = plan_rerun_spec(log, spec)
-    refuse_unmatchable_staged_labels(spec_plan.capture_spec)
-    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(spec_plan.capture_spec))
+    capture_spec = translate_staged_final_labels(log, spec_plan.capture_spec)
+    hook_plan = _assign_unique_plan_ids(normalize_hooks_from_spec(capture_spec))
     started_at = time.monotonic()
     old_hash = log._provenance_fingerprint
 
-    with active_intervention_context(intervention_spec=spec_plan.capture_spec, hook_plan=hook_plan):
+    with active_intervention_context(intervention_spec=capture_spec, hook_plan=hook_plan):
         new_log = _capture_with_active_spec(
             log,
             model,
             x,
-            intervention_spec=spec_plan.capture_spec,
+            intervention_spec=capture_spec,
             hook_plan=hook_plan,
             output_transform=getattr(log, "_output_transform", None),
             intervene_predicate=spec_plan.intervene_predicate,

@@ -7,8 +7,10 @@ size of the largest strongly connected component and the number of
 in-function internal import statements. Either rising above its baseline
 fails.
 
-``check_contracts`` runs import-linter over ``.importlinter`` when it is
-installed and reports a skip when it is not.
+``check_contracts`` runs import-linter over ``.importlinter``. The ``dev``
+extra declares import-linter, so every environment built from it (CI's
+repository-checks job, ``scripts/smoke_ci_parity.py``) reports OK or FAIL; the
+skip remains only for a bare environment without the tool.
 """
 
 from __future__ import annotations
@@ -58,14 +60,16 @@ def check(repo: Path) -> Outcome:
 
 
 def check_contracts(repo: Path) -> Outcome:
-    """Run ``lint-imports`` over ``.importlinter``; skip when it is not installed."""
+    """Run ``lint-imports`` over ``.importlinter``; skip only without import-linter."""
 
     config = repo / ".importlinter"
     if not config.is_file():
         return Outcome(SKIP, "import-contracts: no .importlinter config")
     executable = shutil.which("lint-imports")
     if executable is None or importlib.util.find_spec("importlinter") is None:
-        return Outcome(SKIP, "import-contracts: import-linter not installed")
+        return Outcome(
+            SKIP, 'import-contracts: import-linter not installed (pip install -e ".[dev]")'
+        )
     proc = subprocess.run(
         [executable, "--config", str(config), "--no-cache"],
         cwd=repo,

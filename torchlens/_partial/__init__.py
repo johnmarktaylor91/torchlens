@@ -127,7 +127,7 @@ class PartialTrace:
             Rendered narration block (no trailing newline).
         """
 
-        from torchlens._snoop._narrate import narrate_partial
+        from torchlens.debug._snoop._narrate import narrate_partial
 
         return narrate_partial(self, last=last, select=select)
 
@@ -251,7 +251,7 @@ class PartialTrace:
             in the always-visible header, never folded.
         """
 
-        from .._notebook.cards import partial_repr_html
+        from ..report._notebook.cards import partial_repr_html
 
         return partial_repr_html(self)
 
