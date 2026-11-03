@@ -957,12 +957,8 @@ tests/test_r28_capture_attribution.py,14,17.19,2.74,unmarked
 tests/test_r28_rebuild_dotted_walk_rce.py,18,0.29,0.03,unmarked
 tests/test_r28_validation_identity_witness.py,9,13.85,2.15,unmarked
 tests/test_r29_capval_hardening.py,17,26.41,3.10,unmarked
-tests/test_r31_stdlib_deny.py,67,1.98,0.05,unmarked
-tests/test_r33_operator_gadget_carveout.py,73,2.12,0.04,smoke
 tests/test_r34_security_io.py,47,1.04,0.18,smoke
 tests/test_r36_cuda_hygiene.py,12,0.82,0.36,smoke
-tests/test_r36_tensor_method_smuggling.py,23,2.41,0.22,unmarked
-tests/test_r39_callable_invoke_denylist.py,47,0.68,0.02,unmarked
 tests/test_r3_torch_namespace_rce.py,16,7.12,3.66,unmarked
 tests/test_r41_gate_completeness.py,42,0.78,0.10,unmarked
 tests/test_r43_gate_inversion.py,88,1.76,0.28,smoke

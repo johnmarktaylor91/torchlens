@@ -331,7 +331,7 @@ class TestWrapperPickleLadder:
         # deliberately KEEP the honest torchlens wrappers module: stamping
         # them "torch" would make a wrapped storage-unsafe method claim torch
         # purity to string-based safety gates — the r36 smuggling defense
-        # (tests/test_r36_tensor_method_smuggling.py, LOCKED) pins that
+        # (tests/test_resolver_refusal_rows.py walk rows, LOCKED) pin that
         # surface. Security disclosure wins over introspection fidelity here.
         _ensure_wrapped()
         assert torch.cos.__module__ == "torch"
