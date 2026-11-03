@@ -19,7 +19,7 @@ import warnings
 
 import pytest
 
-pytestmark = pytest.mark.backend_parity
+pytestmark = [pytest.mark.backend_parity, pytest.mark.rare]
 
 
 def _assert_depths(trace, expect_recurrence: bool, expected_max_depth: int) -> None:

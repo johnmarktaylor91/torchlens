@@ -311,6 +311,7 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     assert set(merge_rows["input_role"]) == {"input.left", "input.right"}
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
     """Keep geometry backend-neutral while rejecting non-torch gradient probes."""

@@ -16,7 +16,7 @@ from torchlens.backends.paddle.backend import (  # noqa: E402
 )
 from torchlens.errors import BackendUnsupportedError  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 def _assert_close(actual: Any, expected: Any) -> None:

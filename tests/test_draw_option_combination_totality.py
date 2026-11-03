@@ -23,11 +23,13 @@ This suite owns crash/refusal totality; warning hygiene is owned by the
 dedicated deprecation and advisory suites, so draws run with warnings
 visible-but-not-fatal.
 
-Tiering (the smoke family-aggregate budget rules the full sweep out of the
-5s tier): the signature tripwire and the pinned refusal rows run at smoke on
-every commit; the CORE pair family moved to ``heavy`` when the merged tree's
-per-cell draw cost outgrew the cell-scaled smoke budget (T67d), joining the
-exhaustive singles + all-pairs sweep in the ``not slow`` tiers.
+Sampling (test-shape ruling tests.4): the parametrized cells are the
+documented combinations: every pinned refusal, every option alone, the CORE
+structural pairs whose combinations have historically crashed, and the pairs
+that alone reach a library branch (``_COVERAGE_PAIRS``). One property test
+walks the whole generator (every single and every unordered pair, about 260
+seconds of draws, so ``slow``) and names every combination that neither
+draws nor refuses with its pinned code.
 """
 
 from __future__ import annotations
@@ -282,11 +284,10 @@ def _draw(trace: Any, tmp_path: Path, kwargs: dict[str, Any]) -> None:
 _SINGLES = [(name,) for name in PAIRED_OPTIONS]
 _PAIRS = list(itertools.combinations(PAIRED_OPTIONS, 2))
 
-#: Structural axes that reshape the rendered graph — the axes whose
+#: Structural axes that reshape the rendered graph: the axes whose
 #: combinations have historically crashed (profiling x vis_call_depth,
-#: rolled x show_containers). Their pairs run at SMOKE on every commit;
-#: the exhaustive sweep below covers everything at the heavy tier (the
-#: smoke family-aggregate budget rules 741 draw cells out of the 5s tier).
+#: rolled x show_containers). Every pair among them is a documented cell; the
+#: slow property test below walks every other pair.
 CORE_OPTIONS: tuple[str, ...] = (
     "vis_mode",
     "vis_call_depth",
@@ -306,25 +307,59 @@ _REFUSAL_COMBOS: list[tuple[str, ...]] = [("scale",)] + [
 ]
 
 
-def _exercise_combo(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> None:
-    """Draw one option combination; assert its pinned verdict."""
+#: Pairs outside the CORE family whose cells alone reached a library branch
+#: in the full sweep (per-test branch coverage, test-shape lane evidence).
+_COVERAGE_PAIRS: tuple[tuple[str, str], ...] = (
+    ("vis_node_placement", "code_panel"),
+    ("vis_mode", "fold_patterns"),
+    ("vis_call_depth", "show_legend"),
+    ("collapse_fn", "fold_repeats"),
+    ("vis_mode", "size_by"),
+    ("collapse_fn", "collapse"),
+    ("module", "vis_node_placement"),
+    ("vis_mode", "node_label_fields"),
+    ("vis_graph_overrides", "vis_node_placement"),
+    ("size_by", "scale"),
+    ("vis_node_placement", "show_orphans"),
+    ("vis_mode", "collapse"),
+    ("vis_call_depth", "fold_patterns"),
+    ("vis_call_depth", "collapsed_node_spec_fn"),
+    ("node_spec_fn", "color_by"),
+    ("vis_node_placement", "show_legend"),
+    ("vis_mode", "vis_node_placement"),
+    ("vis_mode", "show_saved_for_backward"),
+    ("vis_graph_overrides", "vis_intervention_mode"),
+    ("vis_call_depth", "stack_by"),
+    ("module", "skip_fn"),
+    ("module", "fold_patterns"),
+    ("vis_mode", "show_buffers"),
+)
+
+
+def _combo_problem(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> str | None:
+    """How one option combination breaks its pinned verdict, else ``None``."""
 
     kwargs = {name: DECLARED[name][1] for name in combo}
     code = expected_refusal(frozenset(combo))
-    if code is None:
+    try:
         _draw(trace, tmp_path, kwargs)
-        return
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        _draw(trace, tmp_path, kwargs)
-    assert excinfo.value.fields["code"] == code
+    except InvalidArgumentError as error:
+        got = error.fields.get("code")
+        if got == code:
+            return None
+        return f"refused with {got!r}, expected {code or 'a successful draw'}"
+    except Exception as error:  # noqa: BLE001 -- any other exception IS the defect
+        return f"{type(error).__name__}: {error}"
+    if code is not None:
+        return f"drew, expected the typed refusal {code!r}"
+    return None
 
 
-@pytest.mark.heavy
-@pytest.mark.parametrize("combo", _CORE_PAIRS, ids=["+".join(c) for c in _CORE_PAIRS])
-def test_draw_core_option_pairs(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
-    """High-risk structural option pairs stay legal (or refuse typed) at commit time."""
+def _exercise_combo(combo: tuple[str, ...], trace: Any, tmp_path: Path) -> None:
+    """Draw one option combination; assert its pinned verdict."""
 
-    _exercise_combo(combo, sweep_trace, tmp_path)
+    problem = _combo_problem(combo, trace, tmp_path)
+    assert problem is None, ("+".join(combo), problem)
 
 
 @pytest.mark.parametrize("combo", _REFUSAL_COMBOS, ids=["+".join(c) for c in _REFUSAL_COMBOS])
@@ -335,11 +370,26 @@ def test_draw_pinned_refusals(combo: tuple[str, ...], sweep_trace: Any, tmp_path
     _exercise_combo(combo, sweep_trace, tmp_path)
 
 
+_SAMPLED = _SINGLES + _CORE_PAIRS + [pair for pair in _COVERAGE_PAIRS if pair not in _CORE_PAIRS]
+
+
 @pytest.mark.heavy
-@pytest.mark.parametrize(
-    "combo", _SINGLES + _PAIRS, ids=["+".join(combo) for combo in _SINGLES + _PAIRS]
-)
+@pytest.mark.parametrize("combo", _SAMPLED, ids=["+".join(combo) for combo in _SAMPLED])
 def test_draw_option_combination(combo: tuple[str, ...], sweep_trace: Any, tmp_path: Path) -> None:
-    """Exhaustive sweep: each declared combination succeeds or refuses typed."""
+    """Documented combination: each option alone and each structural pair draws or refuses typed."""
 
     _exercise_combo(combo, sweep_trace, tmp_path)
+
+
+@pytest.mark.slow
+def test_every_declared_option_combination_draws_or_refuses_typed(
+    sweep_trace: Any, tmp_path: Path
+) -> None:
+    """Property: every single and every unordered pair draws, or refuses with its pinned code."""
+
+    broken = {
+        "+".join(combo): problem
+        for combo in _SINGLES + _PAIRS
+        if (problem := _combo_problem(combo, sweep_trace, tmp_path)) is not None
+    }
+    assert not broken, broken

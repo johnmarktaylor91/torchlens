@@ -561,6 +561,7 @@ def test_paddle_detector_returns_false_without_paddle(
         assert "paddle" not in sys.modules
 
 
+@pytest.mark.rare
 def test_paddle_detector_accepts_layer_and_nested_tensor() -> None:
     """Paddle detector accepts Paddle layers and nested Paddle tensor inputs."""
 
@@ -826,6 +827,7 @@ def test_tf_backend_rejects_seed_without_importing_tensorflow() -> None:
         TFBackend().capture_trace(lambda x: x, object(), seed=123)
 
 
+@pytest.mark.rare
 def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
     """Paddle shared-orchestration lookup raises the canonical unsupported error."""
 
@@ -843,6 +845,7 @@ def test_paddle_shared_capture_backend_is_unsupported_typed_error() -> None:
         _capture_backend_from_registry("paddle", _PaddleLayer(), paddle.to_tensor([1.0]), None)
 
 
+@pytest.mark.rare
 def test_explicit_paddle_backend_resolves_to_spec() -> None:
     """Explicit Paddle backend and alias resolve to the Paddle spec."""
 
@@ -862,6 +865,7 @@ def test_explicit_paddle_backend_resolves_to_spec() -> None:
     assert tl.backends.resolve("paddlepaddle", _PaddleLayer(), x) is spec
 
 
+@pytest.mark.rare
 def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
     """Paddle preview rejects unsupported options with canonical typed errors."""
 
@@ -884,6 +888,7 @@ def test_paddle_preview_unsupported_options_raise_typed_error() -> None:
         )
 
 
+@pytest.mark.rare
 def test_paddle_preview_applies_static_label_save_selector() -> None:
     """Paddle accepts advertised static save selectors and filters public payloads."""
 

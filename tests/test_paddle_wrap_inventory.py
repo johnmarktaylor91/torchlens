@@ -10,6 +10,8 @@ import pytest
 from torchlens.backends.paddle import wrappers as paddle_wrappers
 from torchlens.backends.paddle.wrappers import PaddleInventory, _PaddleWrapperRegistry
 
+pytestmark = pytest.mark.rare
+
 paddle = pytest.importorskip("paddle")
 
 SNAPSHOT_MESSAGE = (

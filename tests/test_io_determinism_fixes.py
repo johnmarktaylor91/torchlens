@@ -483,6 +483,7 @@ def test_tlspec_writer_refuses_nonstandard_nan_tokens(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+@pytest.mark.rare
 def test_jax_codec_refuses_unknown_logical_dtype() -> None:
     """JAX decode fails closed instead of silently retaining the transport dtype."""
 
@@ -495,6 +496,7 @@ def test_jax_codec_refuses_unknown_logical_dtype() -> None:
         JaxPayloadCodec().from_numpy(np.ones(1, dtype=np.float32), entry, map_location=None)
 
 
+@pytest.mark.rare
 def test_jax_codec_restores_weak_type() -> None:
     """JAX weak scalar semantics survive codec encode/decode when JAX is available."""
 

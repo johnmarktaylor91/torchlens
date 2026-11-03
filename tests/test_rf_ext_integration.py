@@ -412,6 +412,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
         loaded_source.projective_field.probe_grad((0, 0, 3, 3), target=loaded_target)
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     """Keep rule-backed geometry backend-neutral and empirical methods torch-only."""

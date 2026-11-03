@@ -16,7 +16,7 @@ import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
 from torchlens.backends.mlx.backend import GradOptions  # noqa: E402
 
-pytestmark = pytest.mark.backend_mlx
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 
 def _weight() -> Any:

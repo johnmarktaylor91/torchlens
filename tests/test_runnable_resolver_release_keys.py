@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import functools
 import importlib
 from dataclasses import replace
 from pathlib import Path
@@ -21,6 +22,7 @@ from torchlens._runnable import (
     SparseRunDescriptor,
 )
 from torchlens._utils._callable_safety import is_pure_forward_callable
+from torchlens._utils._foreign_data_replay import foreigndata
 from torchlens._utils.display import identity
 from torchlens.errors import RunnablePreflightError
 from torchlens.intervention._resolver_registry import function_registry_key_from_callable
@@ -44,6 +46,12 @@ _FFT_NAMES = (
 _LEGACY_CTOR_KEY = FunctionRegistryKey("torch.Tensor", "__new__", "method")
 _BOUNDARY_IDENTITY_KEY = FunctionRegistryKey(
     "custom", "identity", "function", import_path="torchlens._utils.display:identity"
+)
+_FOREIGN_DATA_REPLAY_KEY = FunctionRegistryKey(
+    "custom",
+    "foreigndata",
+    "function",
+    import_path="torchlens._utils._foreign_data_replay:foreigndata",
 )
 
 
@@ -263,7 +271,15 @@ def test_boundary_identity_table_key_is_the_minted_key() -> None:
     """The resolver table spells exactly the key capture mints for the boundary op."""
 
     assert function_registry_key_from_callable(identity) == _BOUNDARY_IDENTITY_KEY
-    assert set(runnable_load._TORCHLENS_SYNTHETIC_CALLABLES) == {_BOUNDARY_IDENTITY_KEY}
+    # The foreign data round trip mints per-op aliases of the shared replay function
+    # (``functools.wraps``); every alias keys to the one table entry.
+    assert function_registry_key_from_callable(foreigndata) == _FOREIGN_DATA_REPLAY_KEY
+    alias = functools.wraps(foreigndata)(lambda *args: foreigndata(*args))
+    assert function_registry_key_from_callable(alias) == _FOREIGN_DATA_REPLAY_KEY
+    assert set(runnable_load._TORCHLENS_SYNTHETIC_CALLABLES) == {
+        _BOUNDARY_IDENTITY_KEY,
+        _FOREIGN_DATA_REPLAY_KEY,
+    }
 
 
 def test_identity_boundary_op_resolves_exactly() -> None:
