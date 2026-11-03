@@ -27,6 +27,8 @@ import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends.mlx import GradOptions  # noqa: E402
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
+pytestmark = pytest.mark.rare
+
 
 class TinyMLP(nn.Module):
     """Small MLX MLP used by backend hardening tests."""

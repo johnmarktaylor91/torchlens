@@ -93,6 +93,7 @@ def test_paddle_hook_cleanup_sweeps_past_failing_remove() -> None:
     assert tree.hook_handles == []
 
 
+@pytest.mark.rare
 @pytest.mark.optional
 @pytest.mark.backend_mlx
 def test_mlx_teardown_failure_escapes_productless(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -125,6 +126,7 @@ def test_mlx_teardown_failure_escapes_productless(monkeypatch: pytest.MonkeyPatc
     assert is_mlx_wrapped() is False
 
 
+@pytest.mark.rare
 @pytest.mark.optional
 @pytest.mark.backend_paddle
 def test_paddle_teardown_failure_escapes_productless(

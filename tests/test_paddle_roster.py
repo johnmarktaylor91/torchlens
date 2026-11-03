@@ -18,7 +18,7 @@ import torchlens as tl  # noqa: E402
 from torchlens.backends.registry import get_backend_spec  # noqa: E402
 from torchlens.conformance._rosters import paddle as paddle_roster  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 _SPECS = {row.family: row for row in paddle_roster.roster(include_ecosystem=True)}
 _ROW_SPECS = {spec.family: spec for spec in paddle_roster.config_built_specs()}

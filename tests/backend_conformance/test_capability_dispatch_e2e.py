@@ -15,7 +15,7 @@ import dataclasses
 
 import pytest
 
-pytestmark = pytest.mark.backend_parity
+pytestmark = [pytest.mark.backend_parity, pytest.mark.rare]
 
 
 def _spec_flipped_true(name: str, flag: str):

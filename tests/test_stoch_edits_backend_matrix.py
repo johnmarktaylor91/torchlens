@@ -120,6 +120,7 @@ def test_construction_and_identity_are_backend_free() -> None:
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 
+@pytest.mark.rare
 def test_mlx_live_leg_refuses_new_family() -> None:
     """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
 
