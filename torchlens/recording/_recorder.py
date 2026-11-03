@@ -227,7 +227,7 @@ class Recorder:
             a spec with ``save_grad=True`` stays attached either way, disk payloads are
             always detached, and ``backward_ready=True`` refuses an explicit ``True``.
         episode:
-            Refused typed (``episode_unsupported_on_record``); episode capture runs on ``tl.trace``.
+            Refused typed (``record_episode_unsupported``); episode capture runs on ``tl.trace``.
         """
 
         flat = _unfold_capture_options(capture, api_name="torchlens.recording.Recorder")

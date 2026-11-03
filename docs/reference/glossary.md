@@ -85,7 +85,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `tl.export.xarray(recording)` and the bundle writer behind `Trace.save` when handed a Recording;
   a typed `to_trace` refusal propagates unchanged, and a failed recording refuses as a capture
   outcome (code `N1`) rather than cooking. `tl.record(..., episode=)` refuses typed
-  (`episode_unsupported_on_record`): episode capture runs on `tl.trace(model, x, episode=...)`.
+  (`record_episode_unsupported`): episode capture runs on `tl.trace(model, x, episode=...)`.
 
 **Trace.output / Recording.output**
 : The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
@@ -3644,7 +3644,7 @@ deprecation shim owed*
 
 **Recording keywords**
 : `tl.record(...)` and `Recorder(...)` accept `episode=` only to refuse it typed
-  (`episode_unsupported_on_record`, teaching `tl.trace(model, x, episode=...)`). They take `narrate=` (a
+  (`record_episode_unsupported`, teaching `tl.trace(model, x, episode=...)`). They take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
   `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`);
   `save_raw_grads` is a `CaptureOptions` field (`capture=CaptureOptions(save_raw_grads=...)`
@@ -6094,7 +6094,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `encoder=` | constructor keyword of `tl.stats.Quantile` (keyword-only; default `None`): Optional callable applied to each batch before it is folded, for example an SAE's encoder to estimate per-latent quantiles; constructor keyword of `tl.stats.TopK` (keyword-only; default `None`): Optional callable applied to each batch before it is folded, for example an SAE's encoder to rank examples per latent; keyword of `tl.stats.load_fitted` (keyword-only; default `None`): The `encoder=` callable the saved accumulator was built with (it is not stored in the file); required exactly when one was set |
 | `engine=` | keyword of `tl.experiment.sweep_grid` (keyword-only; default `'live_hook'`); keyword of `tl.experiment.sweep_sites` (keyword-only; default `'live_hook'`): `"live_hook"` (default; fork + do(site, hook, model=model, inputs=x), a real forward) or `"replay"` (fork + do on saved payloads). The lane is stamped in the envelope and the effect table; keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'rerun'`): `"rerun"` (live-hook route). `"replay"` refuses typed until the known HF replay crash (FIX-A) lands; keyword of `tl.neuro.plan_extraction` (keyword-only; default `'trace'`): `"trace"` only at launch; constructor keyword of `tl.options.InterventionOptions` (optional): Propagation engine: `"auto"`, `"replay"`, `"rerun"`, or `"set_only"` |
 | `entries=` | constructor keyword of `tl.intervention.RegionBoundary` (required) |
-| `episode=` | keyword of `tl.trace` (keyword-only; default `None`): Torch-only episode capture declaration (`EpisodeOptions`); keyword of `tl.record` (keyword-only; default `None`): Refused typed (`episode_unsupported_on_record`); episode capture runs on `tl.trace`; constructor keyword of `tl.recording.Recorder` (keyword-only; default `None`): Refused typed (`episode_unsupported_on_record`); episode capture runs on `tl.trace` |
+| `episode=` | keyword of `tl.trace` (keyword-only; default `None`): Torch-only episode capture declaration (`EpisodeOptions`); keyword of `tl.record` (keyword-only; default `None`): Refused typed (`record_episode_unsupported`); episode capture runs on `tl.trace`; constructor keyword of `tl.recording.Recorder` (keyword-only; default `None`): Refused typed (`record_episode_unsupported`); episode capture runs on `tl.trace` |
 | `episode_id=` | keyword of `Bundle.episode_status` (required): Episode entity named by `episode_member` relation rows |
 | `episode_ledger=` | keyword of `Bundle.episode_status` (keyword-only; default `None`): Optional episode ledger; supplies `n_steps_declared` and the driver-halt geometry (fold arms 2 and 4 are ledger-only facts and degrade fail-closed to `episode_unknown` without it) |
 | `eps=` | constructor keyword of `tl.transforms.SrpSizing` (required): Requested maximum pairwise-L2 distortion; keyword of `tl.transforms.srp_dims_for` (default `0.1`): Maximum pairwise-L2 distortion target, in `(0, 1)`; keyword of `tl.transforms.unit_norm` (default `1e-12`): Norm floor guarding division by zero |

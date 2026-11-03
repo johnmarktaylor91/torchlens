@@ -222,7 +222,7 @@ def record(
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
     episode:
-        Refused typed (``episode_unsupported_on_record``); episode capture runs on ``tl.trace``.
+        Refused typed (``record_episode_unsupported``); episode capture runs on ``tl.trace``.
 
     Returns
     -------

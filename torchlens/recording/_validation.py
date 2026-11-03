@@ -114,7 +114,7 @@ def refuse_episode_on_record(episode: object) -> None:
     Raises
     ------
     RecordingConfigError
-        ``episode_unsupported_on_record`` when an episode declaration was given.
+        ``record_episode_unsupported`` when an episode declaration was given.
     """
 
     if episode is None:
@@ -124,6 +124,6 @@ def refuse_episode_on_record(episode: object) -> None:
         "at_step selectors and coupled replay) runs on the exhaustive door. "
         "Remedy: tl.trace(model, x, episode=...) with the same declaration, "
         "and save= to keep the capture sparse.",
-        code="episode_unsupported_on_record",
+        code="record_episode_unsupported",
         remedy="use tl.trace(model, x, episode=..., save=...)",
     )

@@ -72,11 +72,11 @@ def test_record_episode_keyword_refuses_typed() -> None:
     x = torch.randn(2, 3)
     with pytest.raises(RecordingConfigError) as info:
         tl.record(model, x, save=tl.func("relu"), episode=object())
-    assert info.value.fields["code"] == "episode_unsupported_on_record"
+    assert info.value.fields["code"] == "record_episode_unsupported"
     assert "tl.trace(model, x, episode=" in str(info.value)
     with pytest.raises(RecordingConfigError) as info:
         tl.recording.Recorder(model, save=tl.func("relu"), episode=object())
-    assert info.value.fields["code"] == "episode_unsupported_on_record"
+    assert info.value.fields["code"] == "record_episode_unsupported"
 
 
 def test_cooked_trace_carries_the_recorder_identity_facts(

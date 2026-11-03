@@ -57,7 +57,7 @@ EPISODE_OPTION_TABLE: tuple[tuple[str, str, str], ...] = (
     ("structure_only", TYPED_REFUSED, "structure_only_episode_unsupported"),
     ("raise_on_nan", ORTHOGONAL, ""),
     ("log_injections", ORTHOGONAL, ""),
-    ("record_entry", TYPED_REFUSED, "episode_unsupported_on_record"),
+    ("record_entry", TYPED_REFUSED, "record_episode_unsupported"),
     ("module_root_without_stepped_module", TYPED_REFUSED, "episode_declaration_invalid"),
     ("forced_tokens_on_float_root", TYPED_REFUSED, "episode_declaration_invalid"),
     ("bound_method_default_owner", COUPLED, ""),
@@ -304,7 +304,7 @@ def test_episode_x_log_injections_is_orthogonal(episode_rig: dict[str, Any]) -> 
 
 
 def test_episode_kwarg_on_record_refuses_typed(episode_rig: dict[str, Any]) -> None:
-    """tl.record has no episode arm: it refuses typed (``episode_unsupported_on_record``)
+    """tl.record has no episode arm: it refuses typed (``record_episode_unsupported``)
     and teaches ``tl.trace(model, x, episode=...)``."""
 
     import torchlens as tl

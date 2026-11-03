@@ -154,7 +154,7 @@ model returned it. Call `recording.to_trace()` later only if you need graph stru
 `Recording` has no `draw()` and no facets, and the cooked `Trace` takes every `Trace.draw`
 option and groups a reused layer into passes the way `tl.trace` does. Episode capture stays on
 `tl.trace(..., episode=...)`; `tl.record(..., episode=...)` refuses with the typed code
-`episode_unsupported_on_record`.
+`record_episode_unsupported`.
 
 ```python
 import torch
