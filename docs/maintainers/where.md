@@ -694,7 +694,7 @@ Selection: naming sites and resolving them on a trace. (20 modules, 9916 lines)
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Selection: naming sites and resolving them on a trace. | 17 |
-| `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector (RC-252). | 50 |
+| `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector. | 50 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
 | `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |
 | `align` | Cross-run selection alignment (L6 stage 4a). | 269 |

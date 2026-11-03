@@ -1,4 +1,4 @@
-"""``module(address) & facet``: folding a module scope into a facet selector (RC-252).
+"""``module(address) & facet``: folding a module scope into a facet selector.
 
 ``_compose`` in :mod:`torchlens._selection.selector_base` calls ``_fold_module_facet``
 before building an ``&`` composite. Kept beside ``selector_base.py`` so that module
