@@ -1670,31 +1670,35 @@ def _has_run_fold_multiplicity_label(source: str, multiplicity: int) -> bool:
 def _select_first_stage_unit(module: object) -> bool:
     """Return whether ``module`` is the first unit inside a synthetic stage."""
 
-    return re.match(r"^stages\.\d+\.blocks\.0$", str(getattr(module, "address", ""))) is not None
+    return (
+        re.match(r"^stages\.\d+\.blocks\.0$", str(record_member(module, "address", ""))) is not None
+    )
 
 
 def _select_blocks_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``blocks`` container."""
 
-    return re.match(r"^blocks\.\d+$", str(getattr(module, "address", ""))) is not None
+    return re.match(r"^blocks\.\d+$", str(record_member(module, "address", ""))) is not None
 
 
 def _select_features_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``features`` container."""
 
-    return re.match(r"^features\.\d+$", str(getattr(module, "address", ""))) is not None
+    return re.match(r"^features\.\d+$", str(record_member(module, "address", ""))) is not None
 
 
 def _select_branches_child(module: object) -> bool:
     """Return whether ``module`` is a direct child of a ``branches`` container."""
 
-    return re.match(r"^branches\.\d+$", str(getattr(module, "address", ""))) is not None
+    return re.match(r"^branches\.\d+$", str(record_member(module, "address", ""))) is not None
 
 
 def _select_backbone_stage(module: object) -> bool:
     """Return whether ``module`` is a direct stage child of ``backbone``."""
 
-    return re.match(r"^backbone\.stages\.\d+$", str(getattr(module, "address", ""))) is not None
+    return (
+        re.match(r"^backbone\.stages\.\d+$", str(record_member(module, "address", ""))) is not None
+    )
 
 
 def _edge_count(source: str, tail: str, head: str) -> int:
@@ -2672,7 +2676,7 @@ def test_max_collapsed_box_labels_exclude_surfaced_own_output_ops(
         def collapse_block(module: Any) -> bool:
             """Select the fixture block as a v2 max collapsed module."""
 
-            return getattr(module, "address", None) == "block"
+            return record_member(module, "address", None) == "block"
 
         setattr(collapse_block, "_torchlens_v2_mode", "max")
         source = str(
@@ -2715,7 +2719,7 @@ def test_auto_plan_remainder_honesty_does_not_require_max_level() -> None:
         def collapse_block(module: Any) -> bool:
             """Select the fixture block as a collapsed module."""
 
-            return getattr(module, "address", None) == "block"
+            return record_member(module, "address", None) == "block"
 
         setattr(
             collapse_block,

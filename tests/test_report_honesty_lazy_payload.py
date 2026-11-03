@@ -81,7 +81,7 @@ def test_corrupt_blob_raises_typed_not_none(lazy_artifact: tuple[Path, tl.Trace]
     path, _ = lazy_artifact
     loaded = tl.load(path, lazy=True)
     label = _saved_labels(loaded)[0]
-    ref = loaded[label].ops[0].out_ref
+    ref = loaded[label].ops[0]._out_ref
     blob_path = ref.blob_path()
     blob_path.write_bytes(b"corrupted" + blob_path.read_bytes()[9:])
     with pytest.raises(ArtifactError, match="sha256 mismatch"):

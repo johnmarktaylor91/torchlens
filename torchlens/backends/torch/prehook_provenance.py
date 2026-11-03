@@ -24,6 +24,7 @@ from ..._data_classes.prehook import (
     TensorInputObservation,
     TypedInputPath,
 )
+from ..._utils._record_group_table import record_member
 from ._tl import get_tensor_label
 
 if TYPE_CHECKING:
@@ -999,5 +1000,5 @@ def _module_address(module: nn.Module) -> str:
     """Return the prepared module address for interrupted event diagnostics."""
 
     meta = getattr(module, "_tl", None)
-    address = getattr(meta, "address", None)
+    address = record_member(meta, "address", None)
     return "self" if not address else str(address)

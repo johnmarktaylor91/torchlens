@@ -4624,7 +4624,6 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
-| `Op.activation_transform` | The callable applied to this Op's output before it is saved, or `None` |
 | `Op.source.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
 | `Op.call.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
@@ -4635,6 +4634,7 @@ alphabetical order.
 | `Op.atomic_module_call_label` | Stable `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.backend_address` | The Op's locator in the backend's own graph, such as `jaxpr:<label>` |
 | `Op.control_flow.bool_value` | The Python value of this Op's output when it is a scalar bool |
+| `Op.buffer_address` | Module address of the buffer this Op reads or writes, such as `bn.running_mean`, or `None` for a non-buffer Op |
 | `Op.buffer_pass` | Pass number of this Op's buffer, as used in the `address:pass` lookup key |
 | `Op.buffer_replay_validated` | Whether replaying this buffer write as an identity from its source matched the recorded value |
 | `Op.graph.buffer_sink_ops` | Accessor over the buffer-write Ops that directly consume this Op |
@@ -4710,9 +4710,7 @@ alphabetical order.
 | `Op.autograd.grad_fn_class_name` | Class name of this Op's autograd node |
 | `Op.autograd.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
 | `Op.autograd.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
-| `Op.grad_fn_object_id` | Python `id()` of the autograd node object; valid only within the same session |
 | `Op.autograd.grad_for` | Return the saved gradient tensor for one backward pass |
-| `Op.grad_ref` | Lazy reference to this Op's gradient blob in a saved bundle, or `None`; the gradient loads only when read |
 | `Op.autograd.grad_shape` | Shape of this Op's saved output gradient |
 | `Op.gradient_memory` | Bytes used by this Op's saved output gradient |
 | `Op.gradient_transform` | Transform used for this Op's saved gradient, or `None` when unset |
@@ -4795,7 +4793,6 @@ alphabetical order.
 | `Op.num_params_trainable` | Total number of trainable parameter elements consumed by this Op |
 | `Op.call.num_pos_args` | Number of positional arguments in this Op's function call |
 | `Op.ordinal_index` | 0-based position of this Op in `trace.ops`; `trace[op.ordinal_index]` returns it |
-| `Op.out_ref` | Lazy reference to this Op's saved output blob in a saved bundle, or `None`; the tensor loads only when read |
 | `Op.output_containers` | Output container views associated with this Op |
 | `Op.output_descendants` | Labels of the model outputs that are descendants of this Op |
 | `Op.module_context.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
@@ -4836,10 +4833,10 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
-| `Layer.activation_transform` | The callable applied to saved activations before they are stored, or `None` when no transform was set |
 | `Layer.call.arg_names` | Parameter names from the signature of the function this layer calls |
 | `Layer.backend_address` | Backend-native address of the op or state this layer stands for, as the capturing backend names it, or `None` |
 | `Layer.control_flow.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
+| `Layer.buffer_address` | Module address of the buffer this layer stands for, such as `bn.running_mean`, or `None` for a non-buffer layer |
 | `Layer.buffer_overwrite_index` | Which overwrite of its buffer this layer represents |
 | `Layer.graph.buffer_pass` | Sequential number of this buffer write among the writes to the same buffer address, starting at 1, or `None` for non-writes |
 | `Layer.buffer_replay_validated` | Whether replaying this buffer write from its source layer reproduced the saved value, or `None` when not a buffer write |
@@ -4903,7 +4900,6 @@ alphabetical order.
 | `Layer.autograd.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
 | `Layer.autograd.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
 | `Layer.autograd.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |
-| `Layer.grad_fn_object_id` | The Python `id` of the autograd node object for this layer's output |
 | `Layer.graph.has_children` | Whether any pass of this layer has child layers |
 | `Layer.graph.has_co_parents` | Whether this layer has any co-parent layers besides itself |
 | `Layer.has_frozen_params` | Whether this layer uses at least one frozen parameter |

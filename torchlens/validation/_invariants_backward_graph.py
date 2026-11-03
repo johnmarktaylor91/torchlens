@@ -309,7 +309,7 @@ def _check_backward_layer_backpointers(trace: Trace, name: str) -> None:
     """
 
     for layer in trace._layer_list:
-        grad_fn_object_id = layer.grad_fn_object_id
+        grad_fn_object_id = layer._grad_fn_object_id
         if grad_fn_object_id is None:
             continue
         if layer.autograd.grad_fn is None:

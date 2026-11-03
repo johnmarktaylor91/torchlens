@@ -336,7 +336,7 @@ class Layer(_SelectionOperand):
         is_inplace: Any
         _autograd_grad_fn_class_name: Any
         _autograd_grad_fn_class_qualname: Any
-        grad_fn_object_id: Any
+        _grad_fn_object_id: Any
         _autograd_grad_fn_handle: Any
         _autograd_grad_fn: Any
         _call_arg_names: Any
@@ -359,11 +359,11 @@ class Layer(_SelectionOperand):
         _cost_autograd_memory: Any
         _cost_total_autograd_memory: Any
         _autograd_num_autograd_tensors: Any
-        output_device: Any
+        _output_device: Any
         visualizer_path: Any
-        activation_transform: Any
+        _activation_transform: Any
         is_edited: Any
-        detach_saved_activations: Any
+        _detach_saved_activations: Any
         save_grads: Any
         _payload_transformed_grad_shape: Any
         _payload_transformed_grad_dtype: Any
@@ -384,7 +384,7 @@ class Layer(_SelectionOperand):
         is_output: Any
         _graph_is_final_output: Any
         _graph_is_buffer: Any
-        address: Any
+        buffer_address: Any
         _graph_buffer_source: Any
         buffer_write_kind: Any
         buffer_value_changed: Any

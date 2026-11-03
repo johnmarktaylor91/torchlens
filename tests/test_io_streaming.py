@@ -165,9 +165,9 @@ def test_step_19_finalizes_bundle_and_keeps_outs_in_memory(tmp_path: Path) -> No
     assert saved_layers
     for layer in saved_layers:
         assert isinstance(layer.out, torch.Tensor)
-        assert layer.out_ref is not None
-        assert layer.out_ref.source_bundle_path == bundle_path
-        assert ".tmp." not in str(layer.out_ref.source_bundle_path)
+        assert layer._out_ref is not None
+        assert layer._out_ref.source_bundle_path == bundle_path
+        assert ".tmp." not in str(layer._out_ref.source_bundle_path)
 
     manifest = Manifest.read(bundle_path / "manifest.json")
     assert manifest.tensors
@@ -190,8 +190,8 @@ def test_step_20_evicts_streamed_outs_when_requested(tmp_path: Path) -> None:
     assert saved_layers
     for layer in saved_layers:
         assert layer.out is None
-        assert layer.out_ref is not None
-        assert layer.out_ref.source_bundle_path == bundle_path
+        assert layer._out_ref is not None
+        assert layer._out_ref.source_bundle_path == bundle_path
 
 
 def test_streaming_mid_pass_exception_marks_partial_tmp_dir(tmp_path: Path) -> None:
@@ -515,9 +515,9 @@ def test_lazy_refs_point_at_final_bundle_path_after_streaming_save(tmp_path: Pat
     )
 
     first_saved_layer = _saved_layers(trace)[0]
-    assert first_saved_layer.out_ref is not None
-    assert first_saved_layer.out_ref.source_bundle_path == bundle_path
-    assert ".tmp." not in str(first_saved_layer.out_ref.source_bundle_path)
+    assert first_saved_layer._out_ref is not None
+    assert first_saved_layer._out_ref.source_bundle_path == bundle_path
+    assert ".tmp." not in str(first_saved_layer._out_ref.source_bundle_path)
 
 
 def test_streaming_bundle_manifest_is_unified_and_schema_valid(tmp_path: Path) -> None:
@@ -641,7 +641,7 @@ def test_streamed_bundle_blob_ids_never_alias_an_orphan_shifted_stream(tmp_path:
     output_op = trace.output_ops[0]
     assert tuple(output_op.payload.materialize_out().shape) == (2, 3)
     assert torch.equal(output_op.payload.materialize_out(), expected)
-    refs = [op.out_ref.blob_id for op in trace.ops if op.out_ref is not None]
+    refs = [op._out_ref.blob_id for op in trace.ops if op._out_ref is not None]
     assert len(refs) == len(set(refs))
     loaded = tl.load(bundle_path)
     assert torch.equal(loaded.output_ops[0].payload.materialize_out(), expected)

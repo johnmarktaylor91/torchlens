@@ -34,6 +34,7 @@ from typing import Any
 
 import torch
 
+from .._utils._record_group_table import record_member
 from ..options import CaptureOptions
 from ._artifact import HistoryWriter, RamRing
 from ._collector import PlanRow, StepTruth, WatchPlan, WatchSettings
@@ -567,7 +568,7 @@ class OpTierCollector:
             site_id=site_id,
             kind=kind,
             display_label=label,
-            module_path=parent if parent is not None else getattr(ctx, "address", None),
+            module_path=parent if parent is not None else record_member(ctx, "address", None),
             shape=shape if kind == "op" else None,
             first_step=step,
         )

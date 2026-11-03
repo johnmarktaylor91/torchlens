@@ -28,6 +28,7 @@ from typing import Any
 import pytest
 
 from tests._record_fakes import FlatNamespace
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation._invariants_buffers import _check_buffer_xrefs
 from torchlens.validation._invariants_conditional_base import _check_recurrence_invariants
 from torchlens.validation._invariants_conditional_modules import (
@@ -94,7 +95,7 @@ class _AddrIndexed(list):
     def __getitem__(self, key: Any) -> Any:
         if isinstance(key, str):
             for item in self:
-                if getattr(item, "address", None) == key:
+                if record_member(item, "address", None) == key:
                     return item
             raise KeyError(key)
         return list.__getitem__(self, key)

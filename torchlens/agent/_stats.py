@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 from .._errors import InvalidArgumentError
 
 #: Result schema id.
@@ -109,7 +111,7 @@ def _read_payload(op: Any, target: str) -> Any:
     resident = slot("grad") if callable(slot) else getattr(op, "grad", None)
     if resident is not None:
         return resident
-    ref = slot("grad_ref") if callable(slot) else getattr(op, "grad_ref", None)
+    ref = slot("grad_ref") if callable(slot) else record_member(op, "grad_ref", None)
     if ref is not None:
         return ref.materialize(map_location="cpu")
     return None

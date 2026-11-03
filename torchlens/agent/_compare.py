@@ -13,6 +13,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 #: Result schema id.
 COMPARE_SCHEMA = "torchlens.agent.compare.v1"
 
@@ -114,7 +116,7 @@ def _payload_readable(op: Any) -> bool:
     slot = getattr(op, "_slot", None)
     if callable(slot):
         return slot("out") is not None or slot("out_ref") is not None
-    return getattr(op, "out_ref", None) is not None or getattr(op, "out", None) is not None
+    return record_member(op, "out_ref", None) is not None or getattr(op, "out", None) is not None
 
 
 def _matched_pair_row(ref_op: Any, sub_op: Any, rtol: float, atol: float) -> dict[str, Any]:

@@ -27,7 +27,7 @@ def test_buffer_layers_list_each_buffer_layer_once_in_first_seen_order() -> None
     try:
         labels = list(trace.buffer_layers)
         assert len(labels) == len(set(labels)) == 4
-        assert [trace.layers[label].address for label in labels] == FIRST_SEEN
+        assert [trace.layers[label].buffer_address for label in labels] == FIRST_SEEN
         assert int(trace.num_buffer_layers) == 4
         modules = {module.address: module for module in trace.modules}
         assert list(modules["self"].buffer_layers) == labels

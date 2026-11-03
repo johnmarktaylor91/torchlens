@@ -382,6 +382,19 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Layer.transformed_out` | `Layer.payload.transformed_out` | removed |
 | `Layer.transformed_out_dtype` | `Layer.payload.transformed_out_dtype` | removed |
 | `Layer.transformed_out_shape` | `Layer.payload.transformed_out_shape` | removed |
+| `Op.address` | `Op.buffer_address` | removed |
+| `Op.activation_transform` | `trace.options.activation_transform` (a capture setting) | removed |
+| `Op.detach_saved_activations` | `trace.options.detach_saved_activations` (a capture setting) | removed |
+| `Op.output_device` | `trace.options.output_device` (a capture setting) | removed |
+| `Op.grad_fn_object_id` | `Op.autograd.grad_fn` | removed |
+| `Layer.address` | `Layer.buffer_address` | removed |
+| `Layer.activation_transform` | `trace.options.activation_transform` (a capture setting) | removed |
+| `Layer.detach_saved_activations` | `trace.options.detach_saved_activations` (a capture setting) | removed |
+| `Layer.output_device` | `trace.options.output_device` (a capture setting) | removed |
+| `Layer.grad_fn_object_id` | `Layer.autograd.grad_fn` | removed |
+| `Op.out_ref` | `Op.out` / `Op.payload.materialize_out()` | removed |
+| `Op.grad_ref` | `Op.grad` / `Op.payload.materialize_grad()` | removed |
+| `Op.grad_fn_cls` | `Op.autograd.grad_fn_class_name` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 

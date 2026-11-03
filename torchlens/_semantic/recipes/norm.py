@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ..facets import AbsenceReason, FacetSpec, register
 from ._helpers import (
     add_if_present,
@@ -50,7 +51,7 @@ def rms_norm(module: Any) -> dict[str, Any]:
 def _inv_rms_spec(module: Any, recipe_id: str) -> FacetSpec | AbsenceReason:
     """Return the module's single ``rsqrt`` op as the ``inv_rms`` facet, or an absence."""
 
-    label = getattr(module, "address", "<unknown>")
+    label = record_member(module, "address", "<unknown>")
     ops = [op for op in module_op_records(module) if getattr(op, "func_name", None) == "rsqrt"]
     if len(ops) != 1:
         return structural(

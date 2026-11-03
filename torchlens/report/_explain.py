@@ -9,6 +9,8 @@ from typing import Any, Literal
 
 import torch
 
+from torchlens._utils._record_group_table import record_member
+
 from .._capture_honesty import (
     capture_advisories,
     capture_verification,
@@ -1007,8 +1009,8 @@ def _operational_status_line(log: Any) -> str:
     streamed = sum(
         1
         for layer in (log._layer_list if is_live_trace(log) else None) or []
-        if getattr(layer, "out_ref", None) is not None
-        or getattr(layer, "grad_ref", None) is not None
+        if record_member(layer, "out_ref", None) is not None
+        or record_member(layer, "grad_ref", None) is not None
     )
     return f"- Operational status: cache_hit={cache_hit}, streamed_ops={streamed}."
 

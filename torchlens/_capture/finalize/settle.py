@@ -110,7 +110,7 @@ def _refresh_under_backward_ready(
     model_detach_saved_activations = self._options_detach_saved_activations
     model_train_mode = self._options_backward_ready
     layer_detach_saved_activations = {
-        layer_log_entry: layer_log_entry.detach_saved_activations for layer_log_entry in self
+        layer_log_entry: layer_log_entry._detach_saved_activations for layer_log_entry in self
     }
     target_detach_saved_activations = (
         False if backward_ready else self._options_detach_saved_activations
@@ -119,7 +119,7 @@ def _refresh_under_backward_ready(
         self._options_detach_saved_activations = target_detach_saved_activations
         self._options_backward_ready = backward_ready
         for layer_log_entry in layer_detach_saved_activations:
-            layer_log_entry.detach_saved_activations = target_detach_saved_activations
+            layer_log_entry._detach_saved_activations = target_detach_saved_activations
         save_new_outs(
             self,
             model=model,
@@ -135,7 +135,7 @@ def _refresh_under_backward_ready(
         self._options_detach_saved_activations = model_detach_saved_activations
         self._options_backward_ready = model_train_mode
         for layer_log_entry, detach_saved_activations in layer_detach_saved_activations.items():
-            layer_log_entry.detach_saved_activations = detach_saved_activations
+            layer_log_entry._detach_saved_activations = detach_saved_activations
 
 
 def _refresh_and_project(self: "Trace", request: _RefreshRequest) -> None:

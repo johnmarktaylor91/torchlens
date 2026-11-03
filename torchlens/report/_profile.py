@@ -862,7 +862,7 @@ def _assemble_level_rows(
             # the recorded call LABELS.
             row, one_evidence = _rollup_row(
                 (
-                    str(getattr(module, "address", "")),
+                    str(record_member(module, "address", "")),
                     "module",
                     getattr(module, "num_params", None),
                 ),

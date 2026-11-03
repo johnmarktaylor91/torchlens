@@ -236,7 +236,7 @@ def test_lazy_ref_metadata_access_does_not_materialize(
     restored = load(bundle_path, lazy=True)
     layer = _first_saved_layer(restored)
     live_layer = _first_saved_layer(live_log)
-    ref = layer.out_ref
+    ref = layer._out_ref
 
     assert ref is not None
     assert isinstance(live_layer.out, torch.Tensor)
@@ -427,7 +427,7 @@ def test_lazy_materialize_does_not_leak_file_descriptors(tmp_path: Path) -> None
 
     bundle_path, _ = _save_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
-    ref = _first_saved_layer(lazy_log).out_ref
+    ref = _first_saved_layer(lazy_log)._out_ref
     assert ref is not None
 
     # Collect first: garbage left by earlier tests may still hold a file that

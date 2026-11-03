@@ -593,7 +593,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `Op.gradient_transform`, `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace` and 40 more |
 | `_tracing_finished` | interned | required: every level | keep | fact | `Trace.input_ops`, `Trace.output_ops` |
 | `activation_memory` | interned | required: every level | keep | fact | `Op.cost.activation_memory` (field) |
-| `address` | interned | required: every level | keep | fact | `Op.address` (field) |
+| `address` | interned | required: every level | keep | fact | `Op.buffer_address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |
 | `arg_names` | interned | required: every level | keep | fact | `Op.call.arg_names` (field) |
 | `atomic_module_call` | interned | required: every level | keep | fact | `Op.module_context.atomic_module_call` (field) |
@@ -768,7 +768,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `_param_logs` | scalar | required: every level | keep | fact | `Layer.num_param_tensors_frozen`, `Layer.num_param_tensors_trainable`, `Layer.param_dtypes`, `Layer.param_names` and 8 more |
 | `_source_trace_ref` | scalar | required: every level | weakref_strip | fact | `BackwardPass.aten_ops`, `BackwardPass.flops_attribution`, `BackwardPass.trace`, `GradFn.trace` and 40 more |
 | `activation_memory` | scalar | required: every level | keep | fact | `Layer.cost.activation_memory` (field) |
-| `address` | scalar | required: every level | keep | fact | `Layer.address` (field) |
+| `address` | scalar | required: every level | keep | fact | `Layer.buffer_address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Layer.annotations` (field) |
 | `arg_names` | scalar | required: every level | keep | fact | `Layer.call.arg_names` (field) |
 | `autograd_memory` | scalar | required: every level | keep | fact | `Layer.cost.autograd_memory` (field) |

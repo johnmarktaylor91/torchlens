@@ -16,6 +16,7 @@ from torch import nn
 
 import torchlens as tl
 from tests.test_agent_surface_helpers import RepeatedBlockNet, deterministic_input
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization._trace_collapse import collapse_plan as _trace_collapse_plan
 from torchlens.agent._budgets import OVERVIEW_MAX_TOKENS
 from torchlens.agent._fold import FOLD_KEY_VERSION, fold_trace, normalize_module_path
@@ -218,7 +219,7 @@ def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
         node
         for node in plan.nodes
         if type(node).__name__ == "ModuleBox"
-        and ".h." in str(getattr(node, "module", getattr(node, "address", "")))
+        and ".h." in str(getattr(node, "module", record_member(node, "address", "")))
     ]
     fold = fold_trace(log)
     assert fold.membership().keys() == {str(op.label) for op in log._layer_list}

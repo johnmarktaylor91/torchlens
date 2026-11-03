@@ -80,7 +80,7 @@ def sdpa_reconstruction_spec(
     if sdpa_op is None:
         return MissingFacet(
             f"{facet} reconstruction missing prerequisite: eager attention op or fused "
-            f"scaled_dot_product_attention op inside module {getattr(module, 'address', '<unknown>')!r}."
+            f"scaled_dot_product_attention op inside module {record_member(module, 'address', '<unknown>')!r}."
         )
     missing = _missing_sdpa_prerequisite(sdpa_op)
     if missing is not None:

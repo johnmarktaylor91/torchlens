@@ -502,7 +502,7 @@ def test_plain_pickle_preserves_in_memory_outs(tmp_path: Path) -> None:
     assert restored._output_slot is None
     restored_layer = _first_saved_layer(restored)
     assert isinstance(restored_layer.out, torch.Tensor)
-    assert restored_layer.out_ref is None
+    assert restored_layer._out_ref is None
     assert torch.equal(restored_layer.out, source_layer.out)
 
 
@@ -522,7 +522,7 @@ def test_plain_pickle_survives_a_lambda_activation_transform() -> None:
     )
     restored = pickle.loads(pickle.dumps(log))
     assert restored.options.activation_transform is None
-    assert restored._layer_list[0].activation_transform is None
+    assert restored._layer_list[0]._activation_transform is None
 
 
 def test_plain_pickle_survives_a_lambda_input_transform() -> None:

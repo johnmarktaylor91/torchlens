@@ -59,7 +59,7 @@ def _layer(trace: tl.Trace, prefix: str) -> tl.Op:
 def test_requires_grad_leaf_records_no_grad_fn_handle() -> None:
     trace = tl.trace(InputGradientInForward(), [torch.randn(2, 4)])
     leaf = _layer(trace, "requiresgrad")
-    assert leaf.grad_fn_object_id is None
+    assert leaf._grad_fn_object_id is None
     assert leaf.autograd.grad_fn_class_name is None
     assert leaf.autograd.grad_fn_class_qualname is None
 
@@ -73,5 +73,5 @@ def test_in_forward_input_gradient_validates() -> None:
 def test_same_object_inplace_on_non_leaf_keeps_its_real_node() -> None:
     trace = tl.trace(InplaceOnNonLeaf(), [torch.randn(2, 4)])
     add = _layer(trace, "add_")
-    assert add.grad_fn_object_id is not None
+    assert add._grad_fn_object_id is not None
     assert add.autograd.grad_fn_class_name == "AddBackward0"

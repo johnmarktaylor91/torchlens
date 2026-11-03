@@ -275,7 +275,7 @@ def _link_forward_grad_fn_rows(trace: Any, profile: _PrimitiveOpProfile) -> None
             partitions[row.owner_func_call_id].append(row)
     for rows in partitions.values():
         grad_fn_ids = {
-            getattr(ops[ref.op_row_index], "grad_fn_object_id", None)
+            record_member(ops[ref.op_row_index], "grad_fn_object_id", None)
             for row in rows
             for ref in row.parent_op_refs
             if 0 <= ref.op_row_index < len(ops)

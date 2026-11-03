@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from .._constants import BUFFER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import TLSPEC_VERSION, FieldPolicy, default_fill_state, read_tlspec_version
+from .._utils._record_group_table import record_member
 from ._accessor_base import Accessor
 from ._runtime_handles import runtime_handle_from_trace
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -356,7 +357,7 @@ class Buffer:
 
         return fail_open(
             lambda: buffer_repr_line(self),
-            lambda _error: f"<Buffer {getattr(self, 'address', '<unbound>')}: repr degraded>",
+            lambda _error: f"<Buffer {record_member(self, 'address', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:

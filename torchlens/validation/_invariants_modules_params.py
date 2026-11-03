@@ -49,7 +49,7 @@ def _check_module_call_boundary_and_tree(
     """
 
     call_label = getattr(module_call, "label", None)
-    address = getattr(module_call, "address", None)
+    address = record_member(module_call, "address", None)
     call_index = getattr(module_call, "call_index", None)
     expected_call_label = f"{address}:{call_index}"
     if call_label != expected_call_label:
@@ -389,7 +389,7 @@ def _check_param_usage_reciprocal_links(ml: Trace, param: object, name: str) -> 
         If a used operation or layer does not point back to ``param``.
     """
 
-    address = getattr(param, "address", "<unknown>")
+    address = record_member(param, "address", "<unknown>")
     for op_label in getattr(param, "used_by_ops", ()):
         op = ml[op_label]
         if not _param_log_list_contains_param(op._param_logs, param):
@@ -428,7 +428,7 @@ def _check_param_co_parent_links(
         If a co-parent address is unresolved or not reciprocal.
     """
 
-    address = getattr(param, "address", "<unknown>")
+    address = record_member(param, "address", "<unknown>")
     for co_parent_address in getattr(param, "co_parent_params", ()) or ():
         co_parent = param_address_index.get(co_parent_address)
         if co_parent is None:

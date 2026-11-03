@@ -408,7 +408,7 @@ def _module_facts(
     """Build the module-fact table, including declared-unexecuted modules."""
 
     facts: dict[str, _ModuleFact] = {}
-    root_address = str(getattr(getattr(trace, "root_module", None), "address", "self"))
+    root_address = str(record_member(getattr(trace, "root_module", None), "address", "self"))
     for record in getattr(trace, "modules", ()) or ():
         for address in getattr(record, "all_addresses", None) or [record.address]:
             address = str(address)

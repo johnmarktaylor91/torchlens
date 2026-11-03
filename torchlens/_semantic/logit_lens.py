@@ -39,6 +39,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from .._utils._record_group_table import record_member
 from ..errors._base import TorchLensError, TorchLensWarning
 from .facets import Facet, MissingFacet
 
@@ -820,7 +821,7 @@ def _facet_views(trace: Any) -> list[tuple[str, Any]]:
     for module in trace.modules:
         if len(tuple(getattr(module, "calls", ()) or ())) > 1:
             continue
-        views.append((str(getattr(module, "address", "")), module.facets))
+        views.append((str(record_member(module, "address", "")), module.facets))
     return views
 
 

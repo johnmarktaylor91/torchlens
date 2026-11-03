@@ -1245,8 +1245,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _graph_is_orphan: bool
         _source_fx_path: str | None
         _source_fx_call_index: int
-        out_ref: "LazyActivationRef" | None
-        grad_ref: "LazyActivationRef" | None
+        _out_ref: "LazyActivationRef" | None
+        _grad_ref: "LazyActivationRef" | None
         _pending_blob_id: str | None
         _pending_transformed_out_blob_id: str | None
         _pending_grad_blob_id: str | None
@@ -1271,11 +1271,11 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         lookup_keys: Any
         out: Any
         has_saved_activation: Any
-        output_device: Any
-        activation_transform: Any
+        _output_device: Any
+        _activation_transform: Any
         edits: Any
         is_edited: Any
-        detach_saved_activations: Any
+        _detach_saved_activations: Any
         _call_has_saved_args: Any
         _call_saved_args: Any
         _call_saved_kwargs: Any
@@ -1312,7 +1312,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         is_inplace: Any
         _autograd_grad_fn_class_name: Any
         _autograd_grad_fn_class_qualname: Any
-        grad_fn_object_id: Any
+        _grad_fn_object_id: Any
         _autograd_grad_fn_handle: Any
         _autograd_grad_fn: Any
         in_multi_output: Any
@@ -1365,7 +1365,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _graph_min_distance_to_output: Any
         _graph_max_distance_to_output: Any
         _graph_is_buffer: Any
-        address: Any
+        buffer_address: Any
         buffer_pass: Any
         _graph_buffer_source: Any
         buffer_write_kind: Any

@@ -41,7 +41,7 @@ def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
         ``True`` when any log has the same address or barcode as ``param``.
     """
 
-    address = getattr(param, "address", None)
+    address = record_member(param, "address", None)
     barcode = getattr(param, "barcode", None)
     if not isinstance(param_logs, Iterable):
         return False
@@ -49,7 +49,7 @@ def _param_log_list_contains_param(param_logs: object, param: object) -> bool:
         candidate is param
         or (
             address is not None
-            and getattr(candidate, "address", None) == address
+            and record_member(candidate, "address", None) == address
             and getattr(candidate, "barcode", None) == barcode
         )
         for candidate in param_logs or ()
@@ -98,7 +98,7 @@ def _param_address_index(ml: Trace) -> dict[object, object]:
     # the check did not already perform.
     index: dict[object, object] = {}
     for param in ml._param_logs:
-        address = getattr(param, "address", None)
+        address = record_member(param, "address", None)
         if address not in index:
             index[address] = param
         for alias in getattr(param, "all_addresses", None) or ():
@@ -166,7 +166,7 @@ def _check_buffer_static_versions(ml: Trace, buf: object, name: str) -> None:
         mismatched version addresses, or no acceptable ancestor module.
     """
 
-    address = getattr(buf, "address", None)
+    address = record_member(buf, "address", None)
     layer_label = getattr(buf, "layer_label", None)
     if not address:
         raise MetadataInvariantError(
@@ -186,11 +186,11 @@ def _check_buffer_static_versions(ml: Trace, buf: object, name: str) -> None:
                 name,
                 f"Buffer '{address}' version '{label}' is not a buffer Op",
             )
-        if getattr(version, "address", None) != address:
+        if record_member(version, "address", None) != address:
             raise MetadataInvariantError(
                 name,
                 f"Buffer '{address}' version '{label}' has address "
-                f"{getattr(version, 'address', None)!r}",
+                f"{record_member(version, 'address', None)!r}",
             )
         if label not in ml._layer_dict_all_keys:
             raise MetadataInvariantError(
@@ -248,7 +248,7 @@ def _check_buffer_semantic_ownership(ml: Trace, buf: object, name: str) -> None:
         registered buffer owner and unrelated to any active consumer op.
     """
 
-    address = getattr(buf, "address", None)
+    address = record_member(buf, "address", None)
     if not isinstance(address, str) or not address:
         return
     owner_address = _owner_module_address_for_buffer(address)
@@ -361,7 +361,7 @@ def _check_buffer_write_versions(ml: Trace, buf: object, name: str) -> None:
     """
 
     valid_write_kinds = {"reassign", "inplace", "fused", "data_reassign"}
-    address = getattr(buf, "address", None)
+    address = record_member(buf, "address", None)
     versions = list(getattr(buf, "versions", ()) or ())
     write_versions = [
         version for version in versions if getattr(version, "buffer_write_kind", None) is not None
@@ -469,7 +469,7 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
         postprocessing.
     """
 
-    address = getattr(buf, "address", None)
+    address = record_member(buf, "address", None)
     for version in getattr(buf, "versions", ()) or ():
         if getattr(version, "buffer_write_kind", None) is None:
             continue

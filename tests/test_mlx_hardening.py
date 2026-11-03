@@ -149,7 +149,7 @@ def _assert_static_save_summary(trace: tl.Trace, expected_func_names: set[str]) 
     assert {op.func_name for op in saved_ops} == expected_func_names
     assert unsaved_ops
     assert all(op.out is not None for op in saved_ops)
-    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.out is None and op._out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
@@ -694,9 +694,9 @@ def test_mlx_save_load_lazy_ref_materializes_public_payloads(tmp_path: Path) -> 
     assert loaded_saved_ops
     for op in loaded_saved_ops:
         assert op.out is None
-        assert op.out_ref is not None
-        assert op.out_ref.logical_backend == "mlx"
-        materialized = op.out_ref.materialize()
+        assert op._out_ref is not None
+        assert op._out_ref.logical_backend == "mlx"
+        materialized = op._out_ref.materialize()
         _assert_mlx_array_equal(materialized, expected_outs[op.layer_label])
 
 
@@ -727,14 +727,14 @@ def test_mlx_save_load_missing_runtime_falls_back_to_audit_metadata(
     assert loaded_saved_ops
     for op in loaded_saved_ops:
         assert op.out is None
-        assert op.out_ref is not None
+        assert op._out_ref is not None
         assert op.shape is not None
         assert op.dtype_ref is not None
         with pytest.raises(
             BackendRuntimeCompatibilityError,
             match="mlx-runtime-missing",
         ):
-            op.out_ref.materialize()
+            op._out_ref.materialize()
 
 
 @pytest.mark.optional

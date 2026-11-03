@@ -111,7 +111,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     trace = tl.trace(model, (x, y), save="all")
     add_pass = next(layer for layer in trace._layer_list if layer.type == "add")
 
-    assert add_pass.grad_fn_object_id is not None
+    assert add_pass._grad_fn_object_id is not None
     assert add_pass.cost.autograd_memory == 0
     assert add_pass.autograd.num_autograd_tensors == 0
     assert trace._layer_logs[add_pass.layer_label].cost.autograd_memory == 0

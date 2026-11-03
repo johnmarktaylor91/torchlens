@@ -408,7 +408,7 @@ def _buffer_read_addresses(trace: tl.Trace) -> list[str]:
     """
 
     return sorted(
-        trace[label].address
+        trace[label].buffer_address
         for label in trace.buffer_layers
         if not record_member(trace[label], "is_internal_sink")
     )

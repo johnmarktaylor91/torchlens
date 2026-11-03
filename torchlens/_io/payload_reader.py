@@ -17,6 +17,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens._utils._record_group_table import record_member
+
 from .._errors import PayloadUnavailableError
 
 
@@ -49,7 +51,7 @@ def read_op_payload(op: Any, *, map_location: Any = "cpu") -> Any:
     resident = slot("out") if callable(slot) else None
     if resident is not None:
         return resident
-    ref = slot("out_ref") if callable(slot) else getattr(op, "out_ref", None)
+    ref = slot("out_ref") if callable(slot) else record_member(op, "out_ref", None)
     if ref is not None:
         # LazyActivationRef.materialize sha256-verifies before decode and
         # closes the blob file; the result is returned WITHOUT _internal_set.

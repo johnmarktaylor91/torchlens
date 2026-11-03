@@ -2664,7 +2664,7 @@ def _paddle_replay_module_stack(value: object) -> tuple[str, ...]:
 
     labels: list[str] = []
     for item in value if isinstance(value, Sequence) else ():
-        address = getattr(item, "address", None)
+        address = record_member(item, "address", None)
         call_index = getattr(item, "call_index", None)
         if address is not None and call_index is not None:
             labels.append(f"{address}:{int(call_index)}")

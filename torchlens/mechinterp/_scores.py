@@ -32,6 +32,7 @@ from typing import Any
 import torch
 
 from .._errors import PayloadUnavailableError
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._heads import _attention_modules
 
@@ -256,7 +257,7 @@ def head_scores(
         if not isinstance(pattern, torch.Tensor):
             refuse(
                 code="mi_payload_missing",
-                message=f"The pattern at {getattr(module, 'address', '?')} is not readable.",
+                message=f"The pattern at {record_member(module, 'address', '?')} is not readable.",
                 remedy="save the attention interior (retention_plan(analyses=['head_scores'])); "
                 "fused SDPA needs capture=CaptureOptions(save_args=True)",
                 analysis="head_scores",
@@ -267,7 +268,7 @@ def head_scores(
         mask = _mask_for(kind, tokens, src_len, period).to(pattern.dtype)  # [b, dst, src]
         row_eligible = mask.sum(dim=-1) > 0  # [b, dst]
         n_eligible = int(row_eligible.sum())
-        addresses.append(str(getattr(module, "address", "")))
+        addresses.append(str(record_member(module, "address", "")))
         eligible_counts.append(n_eligible)
         if n_eligible == 0:
             all_scores.append(tuple([None] * n_heads))

@@ -28,6 +28,7 @@ from typing import Any, NoReturn
 
 from .._semantic.facets import AbsenceReason
 from .._semantic.recipes.lm_head import _external_parents, _norm_input_spec
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._residual import _deepest_value_ancestor, _module_stack
 from ._walk import (
@@ -95,7 +96,7 @@ def pre_norm_input(trace: Any, module: Any, *, receiver: str) -> tuple[Any, Any]
     """
 
     externals = _external_parents(trace, module)
-    address = str(getattr(module, "address", ""))
+    address = str(record_member(module, "address", ""))
     if isinstance(externals, AbsenceReason):
         refuse(
             code="mi_edge_graph_nonadditive",

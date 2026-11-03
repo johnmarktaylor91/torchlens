@@ -7,6 +7,7 @@ from typing import Any
 import torch
 from torch.nn import functional as F
 
+from ..._utils._record_group_table import record_member
 from ..facets import _MISSING_CONTRIBUTION_KEY, AbsenceReason, Facet, FacetSpec, MissingFacet
 from ..reconstruction import ReconstructionFacet, sdpa_reconstruction_spec
 
@@ -459,7 +460,7 @@ def fused_sdpa_facet(module: Any, facet: ReconstructionFacet, recipe_id: str) ->
 def fused_sdpa_pattern(module: Any) -> Any:
     """Return a reconstructed fused attention pattern or an absence reason."""
 
-    label = getattr(module.calls[0], "label", getattr(module, "address", "<unknown>"))
+    label = getattr(module.calls[0], "label", record_member(module, "address", "<unknown>"))
     value = fused_sdpa_facet(module, "pattern", "attention_reconstruction")
     if not isinstance(value, AbsenceReason):
         return value
@@ -492,5 +493,5 @@ def op_output_readable(op: Any) -> bool:
     """Return whether an op-backed facet can read its home output now."""
 
     return bool(
-        getattr(op, "has_saved_activation", False) or getattr(op, "out_ref", None) is not None
+        getattr(op, "has_saved_activation", False) or record_member(op, "out_ref", None) is not None
     )

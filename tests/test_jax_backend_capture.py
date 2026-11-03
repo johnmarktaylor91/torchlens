@@ -1405,7 +1405,7 @@ def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"dot_general"}
     assert unsaved_ops
-    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.out is None and op._out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(

@@ -380,12 +380,12 @@ def _pruned_params(trace: Any) -> PrunedParamFacts | None:
 
     buffers: dict[str, Any] = {}
     for buffer in getattr(trace, "buffers", ()) or ():
-        buffers[str(getattr(buffer, "address", ""))] = buffer
+        buffers[str(record_member(buffer, "address", ""))] = buffer
     paths: list[str] = []
     raw = 0
     masked: int | None = 0
     for param in getattr(trace, "params", ()) or ():
-        address = str(getattr(param, "address", ""))
+        address = str(record_member(param, "address", ""))
         if not address.endswith("_orig"):
             continue
         mask = buffers.get(address[: -len("_orig")] + "_mask")

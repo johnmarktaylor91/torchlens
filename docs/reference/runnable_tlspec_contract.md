@@ -761,7 +761,7 @@ consumed before a same-shaped registered buffer CLAIMED that buffer's address, w
 the `address not in buffer_names` refusal, and was bound to the WRONG state at replay under
 `verified` + `COMPLETE` with no diagnostic (a four-line ImageNet normalizer with one
 constant registered and one a plain attribute sufficed). It also corrupted plain,
-save-free public metadata: `trace[...].address` reported a name that was not that tensor's.
+save-free public metadata: `trace[...].buffer_address` reported a name that was not that tensor's.
 A recorded address that is not a registered buffer now reaches the honest
 `tensor_constant_unsupported` refusal, which is the correct outcome -- a non-registered
 constant is not part of the declared state model. Registered buffers, including nested ones

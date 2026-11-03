@@ -167,9 +167,9 @@ def test_tinygrad_codec_fixture_loads_lazy_refs_as_tensors(tmp_path: Path) -> No
     loaded_op = _first_saved_op(loaded)
 
     assert loaded_op.out is None
-    assert loaded_op.out_ref is not None
-    assert loaded_op.out_ref.logical_backend == "tinygrad"
-    materialized = loaded_op.out_ref.materialize()
+    assert loaded_op._out_ref is not None
+    assert loaded_op._out_ref.logical_backend == "tinygrad"
+    materialized = loaded_op._out_ref.materialize()
     assert isinstance(materialized, Tensor)
     assert str(materialized.dtype) == expected_dtype
     assert str(materialized.device) == expected_device
@@ -685,7 +685,7 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"where"}
     assert unsaved_ops
-    assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
+    assert all(op.out is None and op._out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
     assert len(trace.saved_ops) == len(saved_ops)
     assert int(trace.cost.saved_activation_memory) == sum(

@@ -154,7 +154,7 @@ def _wiring_degrade_sentinel(module: Module, error: Exception) -> tuple[str, str
 
     return (
         "__torchlens_wiring_unresolved__",
-        str(getattr(module, "address", "") or id(module)),
+        str(record_member(module, "address", "") or id(module)),
         type(error).__name__,
     )
 

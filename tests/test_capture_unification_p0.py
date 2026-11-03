@@ -213,7 +213,7 @@ def test_phase0_dtype_device_refs_round_trip(monkeypatch: pytest.MonkeyPatch) ->
     assert isinstance(DeviceRef.from_value(output_op.out.device), DeviceRef)
     assert output_op.dtype_ref == DtypeRef.from_value(output_op.dtype)
     assert output_op.device_ref == DeviceRef.from_value(output_op.out.device)
-    assert output_op.backend_address == output_op.address
+    assert output_op.backend_address == output_op.buffer_address
     assert output_op.resolver_status == "resolved"
     assert trace.layers[output_op.layer_label].dtype_ref == output_op.dtype_ref
     assert trace.layers[output_op.layer_label].device_ref == output_op.device_ref

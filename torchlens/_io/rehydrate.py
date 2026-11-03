@@ -21,6 +21,7 @@ import torch
 from safetensors import SafetensorError
 from safetensors.torch import load_file
 
+from torchlens._utils._record_group_table import record_member
 from torchlens.backends.registry import BackendRuntimeCompatibilityError
 
 from .._data_classes._state_adapter import state_items
@@ -1501,10 +1502,10 @@ def _source_bundle_path_for_trace(trace: Trace) -> Path:
         return bundle_path
 
     for layer in trace._layer_list:
-        out_ref = getattr(layer, "out_ref", None)
+        out_ref = record_member(layer, "out_ref", None)
         if isinstance(out_ref, LazyActivationRef):
             return out_ref.source_bundle_path
-        grad_ref = getattr(layer, "grad_ref", None)
+        grad_ref = record_member(layer, "grad_ref", None)
         if isinstance(grad_ref, LazyActivationRef):
             return grad_ref.source_bundle_path
 

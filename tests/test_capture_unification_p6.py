@@ -62,7 +62,7 @@ def test_trace_predicate_save_to_disk_loads_layer_out(tmp_path: Path) -> None:
     )
     saved = _saved_linear(log)
 
-    assert saved.out_ref is not None
+    assert saved._out_ref is not None
     assert saved._slot("out") is None
     assert torch.equal(saved.out, expected)
 
@@ -99,7 +99,7 @@ def test_trace_predicate_storage_none_remains_ram_backed() -> None:
     log = tl.trace(EncoderBlock(), torch.ones(1, 4), save=tl.func("linear"), storage=None)
     saved = _saved_linear(log)
 
-    assert saved.out_ref is None
+    assert saved._out_ref is None
     assert isinstance(saved.out, torch.Tensor)
 
 

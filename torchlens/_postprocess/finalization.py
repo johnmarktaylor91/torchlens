@@ -45,7 +45,12 @@ from .._io.scrub import BlobSpec
 from .._io.streaming import BundleStreamWriter
 from .._ir.container_registry import _iter_tensor_leaves
 from .._quantities import Bytes, Duration, Flops
-from .._utils._record_group_table import layer_attr, op_attr, record_member
+from .._utils._record_group_table import (
+    layer_attr,
+    op_attr,
+    record_member,
+    record_storage_attr,
+)
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.hashing import sha256_file
 from ..backends.torch._tl import clear_meta
@@ -857,9 +862,9 @@ def _build_module_param_info(
             bl
             for bl in self.buffer_layers
             if bl in self._layer_dict_all_keys
-            and hasattr(self._layer_dict_all_keys[bl], "address")
-            and self._layer_dict_all_keys[bl].address is not None
-            and self._layer_dict_all_keys[bl].address.rsplit(".", 1)[0] == address
+            and hasattr(self._layer_dict_all_keys[bl], "buffer_address")
+            and self._layer_dict_all_keys[bl].buffer_address is not None
+            and self._layer_dict_all_keys[bl].buffer_address.rsplit(".", 1)[0] == address
         ]
 
     return ModuleParamInfo(
@@ -918,8 +923,8 @@ def _build_module_logs(self: "Trace") -> None:
     for bl in self.buffer_layers:
         if bl in self._layer_dict_all_keys:
             bl_entry = self._layer_dict_all_keys[bl]
-            if hasattr(bl_entry, "address") and bl_entry.address is not None:
-                module_addr = bl_entry.address.rsplit(".", 1)[0]
+            if hasattr(bl_entry, "buffer_address") and bl_entry.buffer_address is not None:
+                module_addr = bl_entry.buffer_address.rsplit(".", 1)[0]
                 _buffer_layers_by_module[module_addr].append(bl)
 
     # Pre-compute input layers for each module call.  Large traces may have
@@ -1618,7 +1623,7 @@ def _evict_streamed_outs(self: "Trace") -> None:
     """
 
     for layer_entry in self._layer_list:
-        if getattr(layer_entry, "out_ref", None) is not None:
+        if record_member(layer_entry, "out_ref", None) is not None:
             layer_entry._internal_set("out", None)
         if getattr(layer_entry, "_pending_transformed_out_blob_id", None) is not None:
             layer_entry._internal_set("transformed_out", None)
@@ -1634,7 +1639,7 @@ def _evict_streamed_grads(self: "Trace") -> None:
     """
 
     for layer_entry in self._layer_list:
-        if getattr(layer_entry, "grad_ref", None) is not None:
+        if record_member(layer_entry, "grad_ref", None) is not None:
             layer_entry._internal_set("grad", None)
         if getattr(layer_entry, "_pending_transformed_grad_blob_id", None) is not None:
             layer_entry._internal_set("transformed_grad", None)
@@ -1815,7 +1820,7 @@ def _attach_streamed_tensor_refs(
             manifest_entry = writer.get_entry(tensor_blob.blob_id)
             setattr(
                 live_layer,
-                ref_field,
+                record_storage_attr(live_layer, ref_field),
                 LazyActivationRef(
                     blob_id=manifest_entry.blob_id,
                     shape=tuple(manifest_entry.shape),

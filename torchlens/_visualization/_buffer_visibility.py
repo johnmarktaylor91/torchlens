@@ -5,6 +5,7 @@ Split out of ``_render_edges.py`` under the R43 file-size ratchet
 ``_render_edges`` re-exports the names for its historical importers.
 """
 
+from .._utils._record_group_table import record_member
 from ._render_common import _NOISE_BUFFER_NAMES, BufferVisibilityLiteral, GraphNode
 from ._render_leaf import _unwrap_focus_node
 
@@ -52,7 +53,7 @@ def _is_noise_buffer(node: GraphNode) -> bool:
     source_node = _unwrap_focus_node(node)
     if not source_node.graph.is_buffer:
         return False
-    address = getattr(source_node, "address", None)
+    address = record_member(source_node, "address", None)
     return _buffer_name_segment(address) in _NOISE_BUFFER_NAMES
 
 

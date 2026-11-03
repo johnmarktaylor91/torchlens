@@ -31,6 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._label_format import format_memory
 from ._render_utils import html_escape
 
@@ -255,7 +256,7 @@ def module_reuse_note(trace: Trace, request: ResolvedRenderRequest) -> str | Non
     reused = {
         str(module.address): int(module.num_calls)
         for module in trace.modules
-        if str(getattr(module, "address", "")) not in ("", "self")
+        if str(record_member(module, "address", "")) not in ("", "self")
         and int(getattr(module, "num_calls", 1) or 1) > 1
     }
     outermost = {

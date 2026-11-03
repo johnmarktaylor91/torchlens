@@ -17,6 +17,8 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
+from .._utils._record_group_table import record_member
+
 __all__ = ["FacetCoverageReport", "ModuleCoverageRow", "facet_coverage"]
 
 
@@ -172,7 +174,7 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
             # accessor typed; the audit discloses the row instead of dying.
             rows.append(
                 ModuleCoverageRow(
-                    address=str(getattr(module, "address", "")),
+                    address=str(record_member(module, "address", "")),
                     class_name=str(getattr(module, "class_name", "")),
                     recipes=(),
                     available=(),
@@ -200,7 +202,7 @@ def facet_coverage(trace: Any) -> FacetCoverageReport:
         )
         rows.append(
             ModuleCoverageRow(
-                address=str(getattr(module, "address", "")),
+                address=str(record_member(module, "address", "")),
                 class_name=str(getattr(module, "class_name", "")),
                 recipes=recipes,
                 available=available,

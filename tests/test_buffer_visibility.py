@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
+from torchlens._utils._record_group_table import record_member
 
 
 class _BatchNormOnly(nn.Module):
@@ -204,7 +205,7 @@ def _collapse_batchnorm(module: object) -> bool:
         Whether the module is the BatchNorm child.
     """
 
-    return getattr(module, "address", None) == "bn"
+    return record_member(module, "address", None) == "bn"
 
 
 def _collapse_module_at_address(module: object, address: str) -> bool:
@@ -224,7 +225,7 @@ def _collapse_module_at_address(module: object, address: str) -> bool:
         Whether the module has the requested address.
     """
 
-    return getattr(module, "address", None) == address
+    return record_member(module, "address", None) == address
 
 
 def _node_line(dot_source: str, graph_node_label: str) -> str:
@@ -289,7 +290,7 @@ def _child_ops_for_buffer(log: Trace, address: str) -> list[str]:
     """
 
     for node in log._layer_dict_main_keys.values():
-        if node.graph.is_buffer and node.address == address:
+        if node.graph.is_buffer and node.buffer_address == address:
             return [child.replace(":", "pass") for child in node.children]
     raise AssertionError(f"Buffer {address!r} was not found in the log.")
 

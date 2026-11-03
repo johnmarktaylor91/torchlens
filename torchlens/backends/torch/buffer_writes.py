@@ -13,6 +13,7 @@ from torch import nn
 from ... import _state
 from ..._capture_state_helpers import _is_uninitialized_param
 from ..._ir import BufferWriteEvent
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import tensor_version_or_none
 from ..._utils.tensor_utils import safe_copy
 from ._identity_cache import IdentityCache, identity_cached
@@ -1597,7 +1598,7 @@ def _module_address_from_meta(module: nn.Module) -> str:
     """Return the TorchLens module address stored during model prep."""
 
     meta = get_module_meta(module)
-    address = getattr(meta, "address", None)
+    address = record_member(meta, "address", None)
     if address in {None, "self"}:
         return ""
     return str(address)

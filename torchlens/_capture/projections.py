@@ -1557,7 +1557,7 @@ def _grad_record_context_from_op_grad_event(
         event_index=ordinal,
         shape=event.shape,
         dtype=_torch_dtype_from_string(event.dtype),
-        tensor_device=_torch_device_from_string(getattr(op, "output_device", None)),
+        tensor_device=_torch_device_from_string(record_member(op, "output_device", None)),
     )
 
 

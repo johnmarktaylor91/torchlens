@@ -226,7 +226,7 @@ def _capture_module_candidates(ctx: Any) -> tuple[Any, ...]:
     """
 
     candidates: list[str] = []
-    address = getattr(ctx, "address", None)
+    address = record_member(ctx, "address", None)
     if address is not None:
         candidates.append(str(address))
     source_trace: Any = getattr(ctx, "source_trace", None)
@@ -519,7 +519,7 @@ def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
     for layer in trace._layer_list:
         if getattr(layer, "layer_label", None) == paired_label:
             continue
-        if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
+        if record_member(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
             continue
         if _shares_grad_fn_tensor(layer, accepted, paired_parents):
             aliases.append(layer)

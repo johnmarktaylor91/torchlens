@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
 from .request import RenderContext
 
 if TYPE_CHECKING:
@@ -997,7 +998,7 @@ def _build_regions(
         region_keys = {
             module.address
             for module in trace.modules
-            if getattr(module, "address", "self") != "self"
+            if record_member(module, "address", "self") != "self"
         }
     return tuple(
         RenderIRRegion(

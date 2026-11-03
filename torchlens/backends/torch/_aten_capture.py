@@ -23,6 +23,7 @@ from ..._ir.events import (
     _AtenTensorFact,
     _ModePausedInteriorEvent,
 )
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
 
@@ -67,7 +68,7 @@ def _module_call_stack(trace: Any) -> tuple[tuple[str, int], ...]:
     frames = getattr(workspace, "exhaustive_module_stack", ()) or ()
     rows: list[tuple[str, int]] = []
     for frame in frames:
-        address = getattr(frame, "address", None)
+        address = record_member(frame, "address", None)
         pass_number = getattr(frame, "pass_number", None)
         if isinstance(address, str) and isinstance(pass_number, int):
             rows.append((address, pass_number))

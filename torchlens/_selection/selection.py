@@ -1174,7 +1174,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
     target = None
     for param in getattr(trace, "params", ()):
-        if getattr(param, "address", None) == node.name or param.name == node.name:
+        if record_member(param, "address", None) == node.name or param.name == node.name:
             target = param
             break
     if target is None:
@@ -1201,7 +1201,7 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
                 site=node.name,
             )
         mask = _mask_from_dense(shape, node.mask.bool())
-    address = getattr(target, "address", None) or target.name
+    address = record_member(target, "address", None) or target.name
     entry = Site(
         kind="PARAM",
         key=(address,),

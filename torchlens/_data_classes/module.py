@@ -2344,7 +2344,7 @@ class Module:
 
         return fail_open(
             lambda: module_repr_line(self),
-            lambda _error: f"<Module {getattr(self, 'address', '<unbound>')}: repr degraded>",
+            lambda _error: f"<Module {record_member(self, 'address', '<unbound>')}: repr degraded>",
         )
 
     def __str__(self) -> str:

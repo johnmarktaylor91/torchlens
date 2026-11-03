@@ -22,6 +22,7 @@ from .._semantic.recipes.lm_head import (
     _head_child_name,
     _norm_input_spec,
 )
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 
 __all__ = ["LMHeadAnchor", "resolve_lm_head"]
@@ -98,7 +99,7 @@ class LMHeadAnchor:
             gamma=gamma_param.value if gamma_param is not None else None,
             beta=beta_param.value if beta_param is not None else None,
             eps=None if isinstance(eps, AbsenceReason) else float(eps),
-            module_address=str(getattr(self.norm, "address", "")),
+            module_address=str(record_member(self.norm, "address", "")),
             class_name=str(getattr(self.norm, "class_name", "")),
         )
 

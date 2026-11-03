@@ -475,8 +475,8 @@ def _add_output_layers(
                 actual_output_raw = output_node.out
             else:
                 actual_output_raw = safe_copy(output_tensor, detach_tensor=_detach_payload)
-                if output_node.output_device not in [str(actual_output_raw.device), "same"]:
-                    actual_output_raw = safe_to(actual_output_raw, output_node.output_device)
+                if output_node._output_device not in [str(actual_output_raw.device), "same"]:
+                    actual_output_raw = safe_to(actual_output_raw, output_node._output_device)
             actual_output_transformed = None
             if self._options_activation_transform is not None:
                 actual_output_transformed = output_node._apply_transform(
@@ -629,8 +629,8 @@ def _remove_orphan_nodes(self: "Trace") -> None:
         {
             "raw_label": orphan._label_raw,
             "label": orphan.label,
-            "payload_ref": orphan.out_ref
-            if getattr(orphan, "out_ref", None) is not None
+            "payload_ref": orphan._out_ref
+            if record_member(orphan, "out_ref", None) is not None
             else orphan.out,
         }
         for orphan in self._orphan_logs

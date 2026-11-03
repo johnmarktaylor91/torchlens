@@ -612,7 +612,7 @@ def _module_state_variables(xr: Any, buffers: list[tuple[Any, Any]]) -> dict[str
             attrs={
                 _XARRAY_KIND_ATTR: _XARRAY_MODULE_STATE,
                 "layer_label": label,
-                "buffer_address": str(getattr(layer, "address", None) or ""),
+                "buffer_address": str(record_member(layer, "address", None) or ""),
             },
         )
     return variables

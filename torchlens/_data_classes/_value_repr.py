@@ -68,7 +68,7 @@ def _payload_state(op: Any) -> str:
         if slot("out_ref") is not None:
             return "lazy"
         return "unsaved"
-    if getattr(op, "out_ref", None) is not None:
+    if record_member(op, "out_ref", None) is not None:
         return "lazy"
     return "present" if getattr(op, "has_saved_activation", False) else "unsaved"
 
@@ -364,7 +364,7 @@ def param_repr_line(param: Any) -> str:
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     if isinstance(live, torch.Tensor):
-        stats = tensor_stats(live, identity=getattr(param, "address", None))
+        stats = tensor_stats(live, identity=record_member(param, "address", None))
         version = stats.tensor_version
         core = render_core_line(stats)
         if version is not None:
@@ -376,7 +376,7 @@ def param_repr_line(param: Any) -> str:
     status = "trainable" if getattr(param, "is_trainable", False) else "frozen"
     return envelope_line(
         f"{core} {status}",
-        address=getattr(param, "address", None),
+        address=record_member(param, "address", None),
         bracket=("param",),
     )
 
@@ -423,7 +423,9 @@ def buffer_repr_line(buffer: Any) -> str:
         from ..stats._stats_render import render_core_line
         from ..stats._tensor_stats import tensor_stats
 
-        core = render_core_line(tensor_stats(initial, identity=getattr(buffer, "address", None)))
+        core = render_core_line(
+            tensor_stats(initial, identity=record_member(buffer, "address", None))
+        )
         basis = "snapshot at capture"
     else:
         core = _metadata_core(buffer)
@@ -515,7 +517,7 @@ def module_repr_line(module: Any) -> str:
     if getattr(module, "has_multiple_addresses", False):
         tokens.append("(aliased)")
     return envelope_line(
-        " ".join(tokens), address=getattr(module, "address", None), bracket=("module",)
+        " ".join(tokens), address=record_member(module, "address", None), bracket=("module",)
     )
 
 

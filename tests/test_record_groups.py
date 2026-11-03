@@ -25,13 +25,21 @@ from torchlens._utils._record_group_table import (
     LAYER_MOVED_MEMBERS,
     OP_MEMBER_MOVES,
     OP_MOVED_MEMBERS,
+    PENDING_REMOVALS,
     record_member,
 )
 
 _OP_COST_ROWS = [row for row in OP_MEMBER_MOVES if row[1] == "cost"]
 _LAYER_COST_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] == "cost"]
-_OP_ACTIVE_ROWS = [row for row in OP_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
-_LAYER_ACTIVE_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
+_FLAT = ("rename", "removed")
+_OP_ACTIVE_ROWS = [row for row in OP_MEMBER_MOVES if row[1] in ACTIVE_GROUPS - set(_FLAT)]
+_LAYER_ACTIVE_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] in ACTIVE_GROUPS - set(_FLAT)]
+_FLAT_ROWS = [
+    (record, old, group, leaf)
+    for record, moves in (("Op", OP_MEMBER_MOVES), ("Layer", LAYER_MEMBER_MOVES))
+    for old, group, leaf in moves
+    if group in _FLAT and (record, old) not in PENDING_REMOVALS
+]
 
 
 @pytest.fixture(scope="module")
@@ -113,6 +121,45 @@ def test_layer_flat_spelling_refuses_typed(
     assert f"layer.{group}.{leaf}" in str(excinfo.value)
     assert not hasattr(layer, old)
     getattr(getattr(layer, group), leaf)
+
+
+@pytest.mark.parametrize(("record", "old", "group", "leaf"), _FLAT_ROWS)
+def test_renamed_and_removed_spellings_refuse_typed(
+    trace: tl.Trace, record: str, old: str, group: str, leaf: str
+) -> None:
+    """A renamed spelling names its new flat name; a removed one names its remedy."""
+
+    target = trace.ops["linear_1_1"] if record == "Op" else trace.layers["linear_1"]
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        getattr(target, old)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    moved = OP_MOVED_MEMBERS if record == "Op" else LAYER_MOVED_MEMBERS
+    assert moved[old] in str(excinfo.value)
+    assert not hasattr(target, old)
+    if group == "rename":
+        assert f".{leaf}" in moved[old]
+        getattr(target, leaf)
+
+
+def test_renamed_buffer_address_reads_the_persisted_column() -> None:
+    """``buffer_address`` serves the persisted ``address`` column on a buffer Op and Layer."""
+
+    class _Buffered(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.register_buffer("scale", torch.ones(3))
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x * self.scale
+
+    captured = tl.trace(_Buffered(), torch.ones(2, 3))
+    try:
+        buffers = [op for op in captured.ops if op.graph.is_buffer]
+        assert buffers
+        assert buffers[0].buffer_address.endswith("scale")
+        assert record_member(buffers[0], "address") == buffers[0].buffer_address
+    finally:
+        captured.cleanup()
 
 
 def test_layer_flat_spelling_refuses_writes(trace: tl.Trace) -> None:

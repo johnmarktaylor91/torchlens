@@ -981,7 +981,7 @@ def _install_replay_tensor_hook(log: Trace, site: Op, tensor: torch.Tensor) -> N
     raw_label = getattr(site, "_label_raw", site.layer_label)
     site._autograd_grad_fn_handle = tensor.grad_fn
     if tensor.grad_fn is not None:
-        site.grad_fn_object_id = id(tensor.grad_fn)
+        site._grad_fn_object_id = id(tensor.grad_fn)
     _add_tensor_backward_hook(log, tensor, raw_label)
 
 

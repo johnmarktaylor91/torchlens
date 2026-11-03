@@ -238,7 +238,7 @@ def _pass_op_for_grad_fn(record: Any, grad_fn_object_id: int) -> Any:
     if len(passes) <= 1:
         return record
     for pass_op in passes:
-        if getattr(pass_op, "grad_fn_object_id", None) == grad_fn_object_id:
+        if record_member(pass_op, "grad_fn_object_id", None) == grad_fn_object_id:
             return pass_op
     return None
 

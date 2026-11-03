@@ -38,6 +38,8 @@ from typing import Any, NamedTuple
 
 import torch
 
+from torchlens._utils._record_group_table import record_member
+
 from .._state import pause_logging
 from .._utils._torch_compat import get_fp8_dtypes
 from .._utils.tensor_utils import fp8_widen_for_numeric_ops
@@ -116,7 +118,7 @@ def _saved_out(layer: Any) -> Any:
 
     if not bool(getattr(layer, "has_saved_activation", False)):
         return None
-    if getattr(layer, "out_ref", None) is not None:
+    if record_member(layer, "out_ref", None) is not None:
         slot = getattr(layer, "_slot", None)
         if callable(slot):
             try:
@@ -504,7 +506,7 @@ def _unmaterialized_disk_payload_count(log: Any, *, kind: str) -> int:
     for layer in sequence(log):
         if not bool(getattr(layer, "has_saved_activation", False)):
             continue
-        if getattr(layer, "out_ref", None) is None:
+        if record_member(layer, "out_ref", None) is None:
             continue
         slot = getattr(layer, "_slot", None)
         if not callable(slot):

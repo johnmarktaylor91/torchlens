@@ -96,8 +96,8 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
     for entry in trace._layer_list:
         for grad_record in getattr(entry, "_grad_records", ()):
             grad_record.owner = entry
-        if record_member(entry, "is_buffer", False) and entry.address is not None:
-            buffer_versions.setdefault(entry.address, []).append(entry)
+        if record_member(entry, "is_buffer", False) and entry.buffer_address is not None:
+            buffer_versions.setdefault(entry.buffer_address, []).append(entry)
     buffer_dict = {
         address: Buffer(
             address,

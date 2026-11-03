@@ -6257,7 +6257,7 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
             position for position in trigger_positions if position is not None
         )
         assert any(
-            layer.grad_fn_object_id is not None
+            layer._grad_fn_object_id is not None
             and layer.autograd.grad_fn is None
             and layer.step_index > last_trigger_position
             for layer in log._layer_list
@@ -6307,7 +6307,7 @@ def test_backward_invariants_exempt_dead_branch_layers() -> None:
         try:
             log.backward(log.output_ops[0].out.sum())
             dead = next(layer for layer in log._layer_list if layer.label.startswith("mean"))
-            assert dead.grad_fn_object_id is not None
+            assert dead._grad_fn_object_id is not None
             assert dead.autograd.grad_fn is None
             assert check_metadata_invariants(log) is True
         finally:
@@ -6359,7 +6359,7 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
         victim = next(
             layer
             for layer in log._layer_list
-            if layer.grad_fn_object_id is not None and layer.autograd.grad_fn is not None
+            if layer._grad_fn_object_id is not None and layer.autograd.grad_fn is not None
         )
         victim._autograd_grad_fn = None
 
