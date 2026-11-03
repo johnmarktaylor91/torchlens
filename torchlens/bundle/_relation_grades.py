@@ -1,4 +1,4 @@
-"""Derived relation-row grades: the ladder plus the ``broken`` finding (FK-2, FK-4, FK-5).
+"""Derived relation-row grades: the ladder plus the ``broken`` finding.
 
 A relation row's grade is DERIVED at read from its evidence items and its
 declared params; nothing here is persisted (F-REL derives, never stores).
@@ -6,7 +6,7 @@ The ladder, weakest to strongest checked rung: ``unchecked`` (no check ran),
 ``disclosed`` (declared, nothing checked), ``consistent`` (every check that
 ran agrees, not proven), ``verified`` (every item verified). Any divergent
 item grades the row ``divergent``; ``broken`` fires on EXACTLY two premises
-(FK-2):
+(the two broken premises):
 
 - ``bulk_origin_failure``: more than half of the member-origin items that
   were checked diverge;
@@ -18,12 +18,12 @@ A divergence at a DECLARED seam (the item's ``seam`` is in the row's
 revision at a declared seam grades ``divergent`` on record without
 escalating a healthy chain to ``broken``.
 
-``carry_mode="none"`` with no evidence grades ``disclosed`` (FK-5): a
+``carry_mode="none"`` with no evidence grades ``disclosed``: a
 declared fresh-start claim, checkable as a class. A ``declared_carry`` item
 that diverges on such a row is detected secretly-carried history and grades
 the row ``divergent``.
 
-``exogenous`` (FK-3) is the count of items whose class lies outside the
+``exogenous`` is the count of items whose class lies outside the
 member-measured kinds; it is reported here and never written to an item.
 """
 
@@ -51,7 +51,7 @@ __all__ = ["RELATION_BROKEN_PREMISES", "RELATION_ROW_GRADES", "RelationGrade"]
 #: Closed row-grade vocabulary: the item ladder plus the derived ``broken`` finding.
 RELATION_ROW_GRADES = RELATION_CLAIM_GRADES | frozenset({"broken"})
 
-#: The two premises on which ``broken`` fires (FK-2); nothing else escalates.
+#: The two premises on which ``broken`` fires; nothing else escalates.
 RELATION_BROKEN_PREMISES = frozenset({"bulk_origin_failure", "verbatim_carry_failure"})
 
 _CHECKED_GRADES = frozenset({"verified", "consistent", "divergent"})
@@ -71,7 +71,7 @@ class RelationGrade:
     grade:
         One of :data:`RELATION_ROW_GRADES`.
     broken_premises:
-        The FK-2 premises that fired, in sorted order; empty unless ``grade``
+        The broken premises that fired, in sorted order; empty unless ``grade``
         is ``broken``.
     unchecked_reasons:
         The contracted reasons of the row's unchecked items (or the opaque
@@ -79,7 +79,7 @@ class RelationGrade:
     seam_local_divergences:
         Divergent items at a declared seam: on record, never a premise.
     exogenous_items:
-        Items whose class lies outside the member-measured kinds (FK-3,
+        Items whose class lies outside the member-measured kinds (exogenous,
         derived).
     items_by_class:
         Item counts per origin class; classless items count under ``""``.
@@ -151,7 +151,7 @@ def grade_relation_params(
 def _broken_premises(
     items: list[Mapping[str, Any]], escalating: list[Mapping[str, Any]], *, carry_mode: Any
 ) -> tuple[str, ...]:
-    """Return the FK-2 premises that fire, given the non-seam-local divergent items."""
+    """Return the broken premises that fire, given the non-seam-local divergent items."""
 
     fired: list[str] = []
     checked_origin = [
@@ -183,7 +183,7 @@ def _ladder(by_grade: Counter[str], premises: tuple[str, ...]) -> str:
     total = sum(by_grade.values())
     if checked == 0:
         # A bare row, a declared carry_mode and disclosed-only items are all
-        # declarations on record (FK-5: never a blank unavailable).
+        # declarations on record (never a blank unavailable).
         return "unchecked" if by_grade["unchecked"] else "disclosed"
     return "verified" if by_grade["verified"] == total else "consistent"
 

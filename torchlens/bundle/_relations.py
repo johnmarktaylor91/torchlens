@@ -359,7 +359,7 @@ def _validate_param_value(kind: str, key: str, value: Any) -> None:
         )
     elif key in ("carry_mode", "state_source"):
         # D16 spellings, reserved at amendment time. ``carry_mode`` is the
-        # closed FK-5 vocabulary (``none`` is a declared fresh start that
+        # closed carry-mode vocabulary (``none`` is a declared fresh start that
         # grades disclosed); ``state_source`` keeps the type envelope only.
         if not isinstance(value, str) or not value:
             raise ValueError(

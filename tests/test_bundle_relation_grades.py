@@ -1,4 +1,4 @@
-"""Derived relation-row grades (FK-2 broken premises, FK-5 carry_mode none, FK-6 item class).
+"""Derived relation-row grades (broken premises, carry_mode none, item class).
 
 ``Bundle.relation_grades`` is a derivation over the relation table: nothing is
 stored, and the same rows grade the same way after a save/load round trip.
@@ -102,7 +102,7 @@ def test_seven_origin_kinds_split_into_member_and_exogenous() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FK-5: carry_mode is closed; ``none`` grades disclosed.
+# carry_mode is closed; ``none`` grades disclosed.
 # ---------------------------------------------------------------------------
 
 
@@ -128,7 +128,7 @@ def test_carry_mode_none_with_divergent_declared_carry_grades_divergent_never_br
 
 
 # ---------------------------------------------------------------------------
-# FK-2: broken fires on exactly two premises; seams suppress the escalation.
+# broken fires on exactly two premises; seams suppress the escalation.
 # ---------------------------------------------------------------------------
 
 
@@ -233,7 +233,7 @@ def test_unchecked_reasons_are_listed_sorted_and_distinct() -> None:
 
 
 # ---------------------------------------------------------------------------
-# FK-6: item class is a load-validated closed vocabulary, scoped per schema.
+# item class is a load-validated closed vocabulary, scoped per schema.
 # ---------------------------------------------------------------------------
 
 

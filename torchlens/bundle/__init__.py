@@ -501,7 +501,7 @@ class Bundle:
     # completion, no longer __getattr__-only dynamic lookups).
     relate = _bundle_relate
     episode_status = _bundle_derive_episode_status
-    relation_grades = _bundle_relation_grades  # derived FK-2/FK-5 grades, never stored
+    relation_grades = _bundle_relation_grades  # derived row grades, never stored
     # The provenance join (F03 item 4): pure derived views, never stored.
     why = _bundle_why
     provenance = _bundle_provenance
