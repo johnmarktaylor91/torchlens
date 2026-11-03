@@ -121,11 +121,15 @@ def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
     """Return whether an in-place write to ``value`` becomes a Parameter's provenance.
 
     True for a prepared Parameter initialized at prep (its reads after the write
-    bind to the mutation op) and for a Parameter the forward itself created: a
-    module built inside ``forward`` initializes its Parameters with in-place
-    writes (``uniform_`` family) that are their only origin, so the live Parameter
-    takes the op's label and the later read is attributed instead of orphaning
-    the initializer ops. A prepared lazy Parameter's in-forward materialization
+    bind to the mutation op) and for an attributed Parameter the forward itself
+    created: a module built inside ``forward`` initializes its Parameters with
+    in-place writes (``uniform_`` family) on storage a logged allocation produced
+    (``adopt_minted_parameter_label``), so the live Parameter takes the op's label
+    and the later read is attributed instead of orphaning the initializer ops. A
+    forward-created Parameter with no TorchLens label (a lazy module outside the
+    model tree, a Parameter minted from a captured value) has no provenance to
+    carry: its writes keep the plain-capture treatment and its read fails source
+    provenance honestly. A prepared lazy Parameter's in-forward materialization
     stays out (see ``is_prepared_parameter_receiver``).
 
     Parameters
@@ -138,13 +142,15 @@ def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
     Returns
     -------
     bool
-        ``True`` for an initialized-at-prep or forward-created Parameter.
+        ``True`` for an initialized-at-prep or attributed forward-created Parameter.
     """
 
     if not isinstance(value, torch.nn.Parameter):
         return False
     lazy_at_prep = _prepared_parameter_lazy_flag(trace, value)
-    return lazy_at_prep is None or not lazy_at_prep
+    if lazy_at_prep is None:
+        return get_tensor_label(value) is not None
+    return not lazy_at_prep
 
 
 def same_object_logging_copy(out_orig: Any) -> Any:
