@@ -518,7 +518,10 @@ def _steps(
 
 
 def _keep_nothing(ctx: Any) -> bool:
-    """Keep no activation: a KV-sites-only recording reads only the cache."""
+    """Keep no activation: a KV-sites-only recording reads only the cache.
+
+    A plain callable, not a selector: a selector that fires zero times warns.
+    """
 
     return False
 
@@ -529,7 +532,7 @@ def _generation_save(save: Any, generation: GenerationOptions) -> Any:
     if generation.reducers:
         return _save_with_sites(save, tuple(generation.reducers))
     if save is None and generation.kv_sites:
-        return where(_keep_nothing, name_hint="kv sites only")
+        return _keep_nothing
     return save
 
 
