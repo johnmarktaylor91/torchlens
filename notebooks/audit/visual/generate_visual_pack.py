@@ -77,13 +77,13 @@ torch.manual_seed(1234)
 _TRACE_CACHE: dict = {}
 
 
-def get_trace(model_key: str, variant: str = "plain", builder=None):
+def get_trace(model_key: str, variant: str = "plain", trace_builder=None):
     """Return a cached trace for (model_key, variant)."""
     ck = (model_key, variant)
     if ck in _TRACE_CACHE:
         return _TRACE_CACHE[ck]
-    if builder is not None:
-        trace = builder()
+    if trace_builder is not None:
+        trace = trace_builder()
     else:
         m, x = MODELS[model_key]()
         # Multi-input models supply a tuple; tl.trace takes input_args as a list.
@@ -95,7 +95,7 @@ def get_trace(model_key: str, variant: str = "plain", builder=None):
             out = trace[-1].out
             trace.log_backward(out)
         else:
-            raise ValueError(f"Unknown trace variant {variant!r} without builder")
+            raise ValueError(f"Unknown trace variant {variant!r} without trace_builder")
     _TRACE_CACHE[ck] = trace
     return trace
 
