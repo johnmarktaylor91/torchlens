@@ -191,6 +191,13 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> style = node_spec(trace["conv2d_2_3"])
+    >>> callable(style)
+    True
     """
 
     _ = overlay, grad, box_color, alpha, cmap

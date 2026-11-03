@@ -54,7 +54,17 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class EmpiricalAdjointCheck:
-    """One sampled comparison of receptive and projective empirical derivatives."""
+    """One sampled comparison of receptive and projective empirical derivatives.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> checks = tl.receptive_field.verify(armed, units="center").empirical_adjoint
+    >>> (len(checks) > 0, all(isinstance(check, EmpiricalAdjointCheck) for check in checks))
+    (True, True)
+    """
 
     source_label: str
     target_label: str
@@ -68,7 +78,17 @@ class EmpiricalAdjointCheck:
 
 @dataclass(frozen=True)
 class ReceptiveFieldVerification:
-    """Combined containment and empirical-adjoint diagnostic report."""
+    """Combined containment and empirical-adjoint diagnostic report.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> report = tl.receptive_field.verify(armed, units="center")
+    >>> (isinstance(report, ReceptiveFieldVerification), len(report.containment) > 0)
+    (True, True)
+    """
 
     containment: tuple[ReceptiveFieldValidation, ...]
     empirical_adjoint: tuple[EmpiricalAdjointCheck, ...]
@@ -339,6 +359,15 @@ def verify(
     ReceptiveFieldVerification
         Containment results together with one empirical-adjoint report for each
         sampled receptive gradient.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> report = verify(armed, units="center")
+    >>> (report.verdict.value, report.passed)
+    ('pass', True)
     """
 
     if (empirical_adjoint_atol is not None and empirical_adjoint_atol < 0) or (

@@ -353,6 +353,18 @@ def mlp_neuron_contributions(
         selected layers within the reconstruction tolerance. Grading is
         ``complete`` / ``closed_constant`` when every remainder is proven,
         else ``closed_unresolved`` and diagnostic-only.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> neurons = tl.mechinterp.mlp_neuron_contributions(trace)
+    >>> len(neurons) > 0
+    True
     """
 
     modules = _mlp_modules(trace)

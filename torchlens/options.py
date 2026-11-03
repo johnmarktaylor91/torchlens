@@ -1563,7 +1563,17 @@ def to_disk(
     Returns
     -------
     StorageOptions
-        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
+        Storage options for ``trace(..., storage=...)`` and ``record(..., storage=...)``.
+
+    Examples
+    --------
+    >>> to_disk("run.tlspec").retain_in_memory
+    False
+    >>> import os, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     trace = tl.trace(model, x, storage=to_disk(os.path.join(tmp, "run.tlspec")))
+    ...     print(os.path.exists(os.path.join(tmp, "run.tlspec")))
+    True
     """
 
     return StorageOptions(

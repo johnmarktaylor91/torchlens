@@ -302,6 +302,14 @@ class Layer(_SelectionOperand):
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
     reads from ``ops[0].out``).
+
+    Examples
+    --------
+    >>> layer = tl.trace(model, x)["relu_1_2"]
+    >>> type(layer).__name__, layer.func_name
+    ('Layer', 'relu')
+    >>> tuple(layer.out.shape)
+    (1, 4, 8, 8)
     """
 
     if TYPE_CHECKING:

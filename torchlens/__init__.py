@@ -511,6 +511,12 @@ def pluck(
     InvalidArgumentError
         ``op_lookup_not_found`` if ``layer`` does not resolve;
         ``activation_not_saved`` if it produced no saved tensor.
+
+    Examples
+    --------
+    >>> relu_out = pluck(model, x, "relu")
+    >>> tuple(relu_out.shape)
+    (1, 4, 8, 8)
     """
 
     # an explicit site rides the door's stop_after=, where the trace
@@ -666,6 +672,12 @@ def extract(
     dict[str, torch.Tensor]
         Mapping from user labels to outs for mapping inputs, or from
         resolved layer labels to outs for list inputs.
+
+    Examples
+    --------
+    >>> outs = extract(model, x, {"stem": "0", "head": "2"})
+    >>> sorted((name, tuple(out.shape)) for name, out in outs.items())
+    [('head', (1, 2, 8, 8)), ('stem', (1, 4, 8, 8))]
     """
 
     _trace, outputs, _views = _extract_layers_with_trace(

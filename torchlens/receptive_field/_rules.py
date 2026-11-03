@@ -43,7 +43,17 @@ class _RuleResult:
 
 
 class ReceptiveFieldRule(Protocol):
-    """Protocol implemented by one receptive-field operation rule."""
+    """Protocol implemented by one receptive-field operation rule.
+
+    Examples
+    --------
+    >>> builtin = tl.receptive_field.rules()["conv2d"]
+    >>> def delegating_rule(context):
+    ...     return builtin(context)
+    >>> op = tl.trace(model, x)["conv2d_1_1"]
+    >>> delegating_rule(tl.receptive_field.ReceptiveFieldRuleContext(op)) is not None
+    True
+    """
 
     def __call__(self, context: ReceptiveFieldRuleContext) -> _RuleResult:
         """Build the operation's geometry specification.
@@ -76,7 +86,16 @@ def _loaded_parent_shapes(op: Op) -> tuple[Any, ...]:
 
 
 class ReceptiveFieldRuleContext:
-    """Metadata and result constructors available to receptive-field rules."""
+    """Metadata and result constructors available to receptive-field rules.
+
+    Examples
+    --------
+    >>> context = ReceptiveFieldRuleContext(tl.trace(model, x)["conv2d_1_1"])
+    >>> context.in_shapes[0]
+    (1, 3, 8, 8)
+    >>> tl.receptive_field.rules()["conv2d"](context) is not None
+    True
+    """
 
     def __init__(self, op: Op) -> None:
         """Create a context for one captured operation.
@@ -415,6 +434,16 @@ def register_rf_rule(
     ValueError
         If no names are supplied, a name is invalid, or a duplicate is
         registered without ``replace=True``.
+
+    Examples
+    --------
+    >>> builtin = tl.receptive_field.rules()["linear"]
+    >>> @register_rf_rule("linear", replace=True)
+    ... def delegating_rule(context):
+    ...     return builtin(context)
+    >>> tl.receptive_field.rules()["linear"] is delegating_rule
+    True
+    >>> _ = register_rf_rule("linear", replace=True)(builtin)
     """
 
     if not func_names:
@@ -446,7 +475,14 @@ def register_rf_rule(
 
 
 def rules() -> Mapping[str, ReceptiveFieldRule]:
-    """Return an immutable snapshot of the registered receptive-field rules."""
+    """Return an immutable snapshot of the registered receptive-field rules.
+
+    Examples
+    --------
+    >>> registered = rules()
+    >>> ("conv2d" in registered, "linear" in registered)
+    (True, True)
+    """
 
     return MappingProxyType(dict(_RF_RULES))
 

@@ -2064,6 +2064,13 @@ class TorchCapabilityWarning(TorchLensWarning):
     into a suite-wide error under ``error::UserWarning:torchlens``). Subclasses
     ``TorchLensWarning`` (itself a ``UserWarning``), so existing category
     filters keep matching and the documented root covers it (R64-1).
+
+    Examples
+    --------
+    >>> issubclass(TorchCapabilityWarning, tl.errors.TorchLensWarning)
+    True
+    >>> issubclass(TorchCapabilityWarning, UserWarning)
+    True
     """
 
 

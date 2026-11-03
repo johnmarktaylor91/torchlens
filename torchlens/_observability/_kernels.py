@@ -110,6 +110,14 @@ class HistogramDescriptor:
     ``(base, bins_per_octave, lo_exp, hi_exp, signed, encoding)`` so a
     resolution or window change is a VALUE change, never a format change.
     Merging refuses across unequal descriptors; there is no rebinning path.
+
+    Examples
+    --------
+    >>> grid = HistogramDescriptor(bins_per_octave=2, lo_exp=-4, hi_exp=4)
+    >>> grid.bins_per_side
+    16
+    >>> len(grid.bucket_edges())
+    17
     """
 
     base: int = 2
@@ -178,6 +186,14 @@ class RunningStatsResult:
     Integer counts are exact. Floating fields carry the recorded reduction
     dtype and merge with a documented stable pairwise algorithm; they are
     never claimed exact across merges (D8).
+
+    Examples
+    --------
+    >>> stats = tl.stats.RunningStats()
+    >>> stats.update(torch.tensor([1.0, -2.0, float("nan")]))
+    >>> result = stats.compute()
+    >>> result.numel, result.num_negative, result.num_nan
+    (3, 1, 1)
     """
 
     numel: int
@@ -216,6 +232,16 @@ class RunningStats:
 
     ``num, min, max, sum, sum_squares`` map verbatim onto five of
     TensorBoard ``add_histogram_raw``'s nine arguments.
+
+    Examples
+    --------
+    >>> stats = RunningStats("acts")
+    >>> stats.update(torch.tensor([1.0, -2.0, 0.0, 4.0]))
+    >>> stats.update(torch.tensor([3.0]))
+    >>> stats.compute().counts()["total"]
+    5
+    >>> stats.compute().counts()["zero"]
+    1
     """
 
     def __init__(self, name: str | None = None) -> None:
@@ -391,6 +417,16 @@ class HistogramResult:
     side is present only on signed grids. ``specials`` carries the EXACT
     zero / per-side under-overflow / NaN / +/-inf counts, which render as
     annotated bands (never silently folded into edge bins).
+
+    Examples
+    --------
+    >>> hist = tl.stats.Histogram()
+    >>> hist.update(torch.tensor([1.0, -1.0, 0.0]))
+    >>> result = hist.result()
+    >>> sum(result.pos_counts), sum(result.neg_counts), result.specials["zero"]
+    (1, 1, 1)
+    >>> result.numel
+    3
     """
 
     descriptor: HistogramDescriptor
@@ -412,7 +448,18 @@ class HistogramResult:
 
 
 class Histogram:
-    """Fixed signed-log2 grid histogram accumulator (StreamingStat; D9)."""
+    """Fixed signed-log2 grid histogram accumulator (StreamingStat; D9).
+
+    Examples
+    --------
+    >>> hist = Histogram(tl.stats.HistogramDescriptor(bins_per_octave=1, lo_exp=-4, hi_exp=4))
+    >>> hist.update(torch.tensor([0.5, -1.0, 0.0, 3.0]))
+    >>> other = Histogram(hist.descriptor)
+    >>> other.update(torch.tensor([2.0]))
+    >>> hist.merge(other)
+    >>> hist.result().numel
+    5
+    """
 
     def __init__(
         self,

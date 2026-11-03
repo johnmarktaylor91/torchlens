@@ -76,6 +76,16 @@ def bundle_diff(
     -------
     str
         Graphviz DOT source for the rendered bundle diff.
+
+    Examples
+    --------
+    >>> # requires: graphviz
+    >>> import os, tempfile
+    >>> bundle = tl.Bundle({"clean": tl.trace(model, x), "again": tl.trace(model, x)})
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     dot = bundle_diff(bundle, path=os.path.join(tmp, "diff"), vis_save_only=True)
+    >>> "digraph" in dot
+    True
     """
 
     if layout != "paired":

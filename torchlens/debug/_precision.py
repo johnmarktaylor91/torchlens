@@ -93,6 +93,14 @@ class BisectPrecisionReport(FoundReport):
         region cannot be excluded.
     message:
         Human-readable summary.
+
+    Examples
+    --------
+    >>> report = tl.debug.bisect_precision(model, x)
+    >>> isinstance(report, BisectPrecisionReport), report.found
+    (True, False)
+    >>> len(report.rows) > 0
+    True
     """
 
     found: bool
@@ -166,6 +174,14 @@ def bisect_precision(
     -------
     BisectPrecisionReport
         First divergence plus the full per-op comparison table.
+
+    Examples
+    --------
+    >>> report = bisect_precision(model, x)
+    >>> report.found, len(report.rows) > 0
+    (False, True)
+    >>> report.max_abs_err is None
+    True
     """
 
     from ..options import CaptureOptions

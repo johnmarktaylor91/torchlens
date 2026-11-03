@@ -43,6 +43,15 @@ class LineageReport(Report):
         Tuples of ``(label, depth, source_line, shape, dtype)``.
     message:
         Human-readable status.
+
+    Examples
+    --------
+    >>> run = tl.trace(model, x)
+    >>> report = tl.debug.lineage(run, "conv2d_2_3")
+    >>> isinstance(report, LineageReport), report.direction
+    (True, 'ancestors')
+    >>> len(report.nodes) > 1
+    True
     """
 
     start_label: str | None
@@ -98,6 +107,15 @@ def lineage(
     -------
     LineageReport
         Traversal result with unavailable lookups reported in ``message``.
+
+    Examples
+    --------
+    >>> run = tl.trace(model, x)
+    >>> report = lineage(run, "conv2d_2_3", max_depth=1)
+    >>> report.start_label.startswith("conv2d_2_3"), len(report.nodes)
+    (True, 2)
+    >>> len(lineage(run, "conv2d_1_1", direction="descendants").nodes) > 1
+    True
     """
 
     start_op, error = _resolve_op(trace, op_or_label)
@@ -347,6 +365,14 @@ def compare(
         DataFrame described here.
         One row per pass-qualified op with summary counts in ``df.attrs``.
         The optional view over :func:`_compare_rows` (the pandas-free core).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> first, second = tl.trace(model, x), tl.trace(model, x)
+    >>> frame = compare(first, second).to_pandas()
+    >>> frame.attrs["matched"] > 0, frame.attrs["value_diverged"]
+    (True, 0)
     """
 
     rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
@@ -405,6 +431,14 @@ def first_divergence(
     dict[str, Any] | None
         The first diverging row in execution order, or ``None`` when no
         compared row diverged.
+
+    Examples
+    --------
+    >>> first, shifted = tl.trace(model, x), tl.trace(model, x + 1)
+    >>> first_divergence(first, shifted) is not None
+    True
+    >>> first_divergence(first, first) is None
+    True
     """
 
     rows, _attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
@@ -533,6 +567,13 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
         Columns are ``op``, ``total_units``, ``dead_count``, ``dead_frac``,
         ``sample_dead_idx``, and ``reason``. The optional view over
         :func:`dead_neurons_rows` (the pandas-free core).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> frame = dead_neurons(tl.trace(model, x), dim=1).to_pandas()
+    >>> {"op", "dead_count"}.issubset(frame.columns)
+    True
     """
 
     rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)

@@ -28,6 +28,14 @@ class ExplainReport(str):
 
     A ``str``: print it, search it or slice it like the prose it is. The
     machine-readable projection of the same facts is ``trace.to_agent_json()``.
+
+    Examples
+    --------
+    >>> report = tl.trace(model, x).explain()
+    >>> isinstance(report, str)
+    True
+    >>> "Capture status" in report
+    True
     """
 
     __slots__ = ()

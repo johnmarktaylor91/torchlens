@@ -98,6 +98,16 @@ class HookContext:
         Frozen positional tensor arguments at the hook site.
     kwargs:
         Mapping proxy of tensor keyword arguments at the hook site.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> def hook(out, *, ctx):
+    ...     seen.append((isinstance(ctx, HookContext), ctx.signal))
+    ...     return out
+    >>> _ = tl.trace(model, x, intervene=tl.when(tl.func("relu"), hook))
+    >>> seen
+    [(True, 'forward')]
     """
 
     name: str

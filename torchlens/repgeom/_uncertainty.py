@@ -60,6 +60,14 @@ class ScoreInterval:
         ``score`` computes (``measure/*/cka-kernel=linear-hsic=gretton-score``
         for :func:`cka_interval`); ``None`` when the caller does not name one
         (an RSA comparison of precomputed RDMs, whose RDM metric is unknown here).
+
+    Examples
+    --------
+    >>> iv = tl.repgeom.cka_interval(torch.randn(10, 4), torch.randn(10, 4), num_resamples=20)
+    >>> iv.num_resamples
+    20
+    >>> iv.width >= 0
+    True
     """
 
     score: float
@@ -345,6 +353,15 @@ def compare_rdms_interval(  # noqa: PLR0913 -- the spec'd row-1 door: two RDMs, 
     ValueError
         On RDMs of different sizes, fewer than 3 stimuli, an unknown
         method, or invalid bootstrap settings.
+
+    Examples
+    --------
+    >>> d = tl.repgeom.rdm(torch.randn(8, 4))
+    >>> iv = tl.repgeom.compare_rdms_interval(d, d, num_resamples=20)
+    >>> iv.num_resamples
+    20
+    >>> iv.score > 0.999
+    True
     """
 
     from ._geometry import compare_rdms
@@ -455,6 +472,15 @@ def cka_interval(
     ValueError
         On mismatched stimulus counts, fewer than 3 stimuli, non-finite
         input, or invalid bootstrap settings.
+
+    Examples
+    --------
+    >>> feats = torch.randn(10, 4)
+    >>> iv = tl.repgeom.cka_interval(feats, feats, num_resamples=20)
+    >>> iv.score > 0.999
+    True
+    >>> iv.confidence
+    0.95
     """
 
     settings = BootstrapSettings(num_resamples=num_resamples, seed=seed, confidence=confidence)

@@ -64,7 +64,14 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class DryRun:
-    """Predicate dry-run trace without retained tensor payloads."""
+    """Predicate dry-run trace without retained tensor payloads.
+
+    Examples
+    --------
+    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
+    >>> type(plan).__name__, len(plan.contexts) > 0
+    ('DryRun', True)
+    """
 
     contexts: tuple[RecordContext, ...]
     decisions: tuple[bool, ...] = ()
@@ -290,6 +297,13 @@ class RecordingSettings:
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> settings = recording.options
+    >>> type(settings).__name__, settings.history_size
+    ('RecordingSettings', 8)
     """
 
     keep_op: PredicateFn | None
@@ -359,6 +373,13 @@ class Recording(TraceLike):
     recorders, ``n_ops_completed`` is the total count of op-kind events captured
     across all completed passes in the recorder before the failure, not just
     the count from the failing pass.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> type(recording).__name__, recording.status, len(recording.records)
+    ('Recording', 'complete', 1)
+
     """
 
     # Sanctioned outcome-gate marker (torchlens/_capture/outcome.py): this slots-backed product's

@@ -301,6 +301,14 @@ def project(basis: torch.Tensor, center: torch.Tensor | None = None) -> Transfor
     TransformSpec
         The frozen project step (params carry digest + geometry, never
         values).
+
+    Examples
+    --------
+    >>> step = tl.transforms.project(torch.eye(2, 4))
+    >>> step.name, step.params_dict()["out_extent"]
+    ('project', 2)
+    >>> step.apply(torch.randn(3, 4)).shape
+    torch.Size([3, 2])
     """
 
     if not isinstance(basis, torch.Tensor) or basis.dim() != 2 or basis.numel() == 0:
@@ -364,6 +372,14 @@ def pca_apply(fitted: Any) -> TransformSpec:
     TransformSpec
         A centered project step whose params record the fit scope and the
         fitted payload's content digest.
+
+    Examples
+    --------
+    >>> pca = tl.stats.PCA(num_components=2)
+    >>> pca.update(torch.randn(30, 6))
+    >>> step = tl.transforms.pca_apply(pca.fitted(fit_scope="pilot"))
+    >>> step.name, step.apply(torch.randn(5, 6)).shape
+    ('project', torch.Size([5, 2]))
     """
 
     from ..stats._fitted import FittedPCA, fitted_digest

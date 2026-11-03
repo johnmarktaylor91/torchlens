@@ -36,6 +36,14 @@ class GraphNode:
     token
         Token id: the input token at ``position`` (token nodes) or the
         target vocabulary id (logit nodes).
+
+    Examples
+    --------
+    >>> node = tl.attribution.GraphNode(kind="token", site="embed", position=0, token_id=3)
+    >>> node.kind
+    'token'
+    >>> node.token_id
+    3
     """
 
     kind: str
@@ -111,6 +119,42 @@ class AttributionGraph:
         The capture's completeness verdict, as the trace reports it.
     disclosures
         Plain-language notes about what the graph does not cover.
+
+    Examples
+    --------
+    >>> class TinyLM(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.embed = nn.Embedding(5, 4)
+    ...         self.mlp = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 4))
+    ...         self.unembed = nn.Linear(4, 5)
+    ...     def forward(self, tokens):
+    ...         x = self.embed(tokens)
+    ...         return self.unembed(x + self.mlp(x))
+    >>> class Transcoder:
+    ...     def __init__(self, up, down):
+    ...         self.W_enc = up.weight.detach().T.clone()
+    ...         self.b_enc = up.bias.detach().clone()
+    ...         self.W_dec = down.weight.detach().T.clone()
+    ...         self.b_dec = down.bias.detach().clone()
+    ...     def encode(self, x):
+    ...         return torch.relu(x @ self.W_enc + self.b_enc)
+    >>> lm = TinyLM().eval()
+    >>> _ = lm.mlp[0].bias.data.fill_(1.0)
+    >>> trace = tl.trace(lm, torch.tensor([[1, 3, 2]]))
+    >>> graph = tl.attribution.build_graph(
+    ...     trace,
+    ...     {"mlp": Transcoder(lm.mlp[0], lm.mlp[2])},
+    ...     embedding_module="embed",
+    ...     target=[0, 1],
+    ...     frozen=(),
+    ... )
+    >>> len(graph.nodes) == graph.adjacency_matrix.shape[0]
+    True
+    >>> graph.adjacency_matrix.shape[0] == graph.adjacency_matrix.shape[1]
+    True
+    >>> len(graph.node_indices("logit"))
+    2
     """
 
     nodes: tuple[GraphNode, ...]

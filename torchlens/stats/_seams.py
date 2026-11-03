@@ -130,6 +130,15 @@ class NarrationObserver:
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
     the echo can never contaminate the capture with its own torch ops.
+
+    Examples
+    --------
+    >>> echo = tl.stats.narrate(tl.func("relu"))
+    >>> isinstance(echo, NarrationObserver)
+    True
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(echo.lines)
+    1
     """
 
     site: Any = None
@@ -210,6 +219,14 @@ def narrate(
     -------
     EchoObserver
         Callable observer for the ``hooks=`` surface.
+
+    Examples
+    --------
+    >>> lines = []
+    >>> echo = tl.stats.narrate(tl.func("relu"), sink=lines.append)
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(lines), "->" in lines[0]
+    (1, True)
     """
 
     return NarrationObserver(site=site, sink=sink, style=style)

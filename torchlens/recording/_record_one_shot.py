@@ -237,6 +237,15 @@ def record(
         The recording (a ``GenerationRecording`` with ``generate_kwargs``). Its
         ``output`` is the model's return value (``generate()``'s own return value
         with ``generate_kwargs``), held in memory only.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> recording.status, len(recording.records)
+    ('complete', 1)
+    >>> tuple(recording.records[0].ram_payload.shape)
+    (1, 4, 8, 8)
+
     """
 
     _require_torch_fastlog_backend(backend)

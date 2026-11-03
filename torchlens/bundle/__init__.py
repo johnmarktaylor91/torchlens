@@ -163,6 +163,13 @@ class Bundle:
         Load-side carriage for the persisted container identity (F03
         lineage). ``None`` (the user door) mints a fresh random id; the
         artifact loader passes the saved id verbatim.
+
+    Examples
+    --------
+    >>> bundle = Bundle({"clean": tl.trace(model, x), "shifted": tl.trace(model, x + 1)},
+    ...                 baseline="clean")
+    >>> len(bundle), bundle.names, bundle.baseline_name
+    (2, ['clean', 'shifted'], 'clean')
     """
 
     # Bundle outcome authority (foldB D9, instance three of the two-answers
