@@ -9,7 +9,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention import population, resample_rows_from
-from torchlens.intervention.population import PerRowDatums
+from torchlens.intervention._population import PerRowDatums
 
 
 class _OneBlock(nn.Module):

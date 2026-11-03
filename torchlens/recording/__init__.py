@@ -7,21 +7,25 @@ import sys as _sys
 from types import ModuleType as _ModuleType
 from typing import Any
 
+from torchlens._utils._private_submodules import (
+    refuse_private_submodule as _refuse_private_submodule,
+)
+
 _LAZY_ATTRS = {
-    "ActivationRecord": ("torchlens.recording.types", "ActivationRecord"),
-    "CaptureSpec": ("torchlens.recording.types", "CaptureSpec"),
-    "GradRecord": ("torchlens.recording.types", "GradRecord"),
-    "GradRecordContext": ("torchlens.recording.types", "GradRecordContext"),
+    "ActivationRecord": ("torchlens.recording._types", "ActivationRecord"),
+    "CaptureSpec": ("torchlens.recording._types", "CaptureSpec"),
+    "GradRecord": ("torchlens.recording._types", "GradRecord"),
+    "GradRecordContext": ("torchlens.recording._types", "GradRecordContext"),
     "StopSignal": ("torchlens.recording._halt", "StopSignal"),
-    "ModuleStackFrame": ("torchlens.recording.types", "ModuleStackFrame"),
+    "ModuleStackFrame": ("torchlens.recording._types", "ModuleStackFrame"),
     "Recorder": ("torchlens.recording._recorder", "Recorder"),
-    "DryRun": ("torchlens.recording.types", "DryRun"),
-    "RecordContext": ("torchlens.recording.types", "RecordContext"),
+    "DryRun": ("torchlens.recording._types", "DryRun"),
+    "RecordContext": ("torchlens.recording._types", "RecordContext"),
     "_DEFERRED_VALUE": ("torchlens._ir.predicate", "_DEFERRED_VALUE"),
-    "cleanup_partial": ("torchlens.recording.cleanup", "cleanup_partial"),
-    "dry_run": ("torchlens.recording.dry_run", "dry_run"),
+    "cleanup_partial": ("torchlens.recording._cleanup", "cleanup_partial"),
+    "dry_run": ("torchlens.recording._dry_run", "dry_run"),
     "stop": ("torchlens.recording._halt", "stop"),
-    "recover": ("torchlens.recording.recover", "recover"),
+    "recover": ("torchlens.recording._recover", "recover"),
 }
 
 __all__ = [
@@ -95,6 +99,8 @@ def __getattr__(name: str) -> Any:
     AttributeError
         If ``name`` is not part of the fastlog public surface.
     """
+
+    _refuse_private_submodule(__name__, name)
 
     if name in _LAZY_ATTRS:
         module_path, attr_name = _LAZY_ATTRS[name]

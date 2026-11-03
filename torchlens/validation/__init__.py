@@ -14,14 +14,14 @@ from .._user_funcs import (
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
-from .diagnostics import (
+from ._diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,
     last_validation_failure,
     last_validation_peak_memory,
 )
-from .invariants import check_metadata_invariants
-from .status import ValidationReplayState as ValidationReplayState
+from ._invariants import check_metadata_invariants
+from ._status import ValidationReplayState as ValidationReplayState
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -84,7 +84,7 @@ def validate_tlspec(
         "v2.16_intervention_with_kind",
         "v2.16_intervention",
     }:
-        from ..intervention import _spec_codec as _codec, save as _spec_save
+        from ..intervention import _save as _spec_save, _spec_codec as _codec
 
         # The spec format torchlens 2.x wrote (format_version 1) refuses with the one 2.x
         # error here as it does at load; the current format has no schema document.

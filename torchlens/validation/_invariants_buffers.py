@@ -522,10 +522,10 @@ def _check_buffer_replay_validated_versions(ml: Trace, buf: object, name: str) -
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_entry import (  # noqa: E402
     _module_claim_address,
     _module_claims,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

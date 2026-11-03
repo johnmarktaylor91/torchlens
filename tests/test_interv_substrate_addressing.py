@@ -113,7 +113,7 @@ def test_parent_site_key_signature_change_is_visible() -> None:
 def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> None:
     import os
 
-    from torchlens.intervention.save import check_spec_compat, load_intervention_spec
+    from torchlens.intervention._save import check_spec_compat, load_intervention_spec
 
     base_model = _Insertable(extra=False)
     inserted_model = _Insertable(extra=True)
@@ -157,7 +157,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 
     import os
 
-    from torchlens.intervention.save import load_intervention_spec
+    from torchlens.intervention._save import load_intervention_spec
 
     model = _Insertable(extra=False)
     log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(tl.func("relu"), tl.scale(0.5)))

@@ -1,6 +1,6 @@
 """Removal matching for sticky hook specs, used by ``InterventionSpec.remove_hook``.
 
-Split from :mod:`torchlens.intervention.types` so that module stays under its size cap.
+Split from :mod:`torchlens.intervention._types` so that module stays under its size cap.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .._selection.target import TargetSpec
-    from .types import HookSpec
+    from ._types import HookSpec
 
 
 def _hook_spec_matches(

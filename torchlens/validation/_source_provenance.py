@@ -26,11 +26,11 @@ from .._capture_honesty import (
     ADVISORY_ORPHAN_UNATTRIBUTED_ARGS,
     ADVISORY_UNRECORDED_OPERATOR_MUTATION,
 )
-from .diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
+from ._diagnostics import CHECK_SOURCE_PROVENANCE, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .core import ValidationDecisionRecorder
+    from ._core import ValidationDecisionRecorder
 
 _GAP_ADVISORY_KINDS = (
     ADVISORY_MODULE_BOUNDARY_ADOPTION,
@@ -55,7 +55,7 @@ def source_provenance_gaps(trace: "Trace") -> list[tuple[str, str | None, str]]:
         source-less tensor arguments first, then gap advisories.
     """
 
-    from .core import _is_intentional_intervention_replacement
+    from ._core import _is_intentional_intervention_replacement
 
     gaps: list[tuple[str, str | None, str]] = []
     for op in trace._layer_list:

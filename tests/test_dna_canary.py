@@ -34,7 +34,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.io import TraceState
 
-_replay_module = importlib.import_module("torchlens.intervention.replay")
+_replay_module = importlib.import_module("torchlens.intervention._replay")
 
 #: Demo 2 discriminating-twin perturbation (documented epsilon).
 EPSILON = 10.0

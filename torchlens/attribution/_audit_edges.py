@@ -64,7 +64,7 @@ EDGES_REMEDY = (
 def _is_edge_table(claim: Any) -> bool:
     """Return whether ``claim`` is a one-backward ``ReadTable`` holding ``EDGE`` rows."""
 
-    from torchlens.attribution.onebackward._table import ReadTable
+    from torchlens.attribution._onebackward._table import ReadTable
 
     return isinstance(claim, ReadTable) and any(row.kind == "EDGE" for row in claim.rows())
 

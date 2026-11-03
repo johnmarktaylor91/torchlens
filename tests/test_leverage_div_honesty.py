@@ -84,7 +84,7 @@ def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
 
 
 def test_cone_of_effect_string_origin_refuses():
-    from torchlens.intervention.replay import cone_of_effect
+    from torchlens.intervention._replay import cone_of_effect
 
     _, _, trace = _traced_toy()
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -96,7 +96,7 @@ def test_cone_of_effect_string_origin_refuses():
 
 
 def test_cone_of_effect_op_origins_still_work():
-    from torchlens.intervention.replay import cone_of_effect
+    from torchlens.intervention._replay import cone_of_effect
 
     _, _, trace = _traced_toy()
     # grouping rule row 28: the reused relu instance is one Layer with 2 passes;

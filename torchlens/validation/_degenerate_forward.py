@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from ..backends.torch._autograd_grad_marker import is_autograd_grad_recorder
-from .diagnostics import (
+from ._diagnostics import (
     CHECK_DEGENERATE_FORWARD,
     CHECK_PERTURBATION,
     ValidationFailure,

@@ -32,11 +32,10 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation._index_domain import index_domain_rotation_values
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
-from torchlens.validation.exemptions import (
+from torchlens.validation._exemptions import (
     CUSTOM_EXEMPTION_CHECKS,
     STRUCTURAL_ARG_KWARG_ALIASES,
     STRUCTURAL_ARG_POSITIONS,
@@ -45,6 +44,7 @@ from torchlens.validation.exemptions import (
     _posthoc_structural_output_decision,
     posthoc_perturb_check,
 )
+from torchlens.validation._index_domain import index_domain_rotation_values
 
 
 def _capture(model: nn.Module, x: torch.Tensor, seed: int = 0):
@@ -576,7 +576,7 @@ def test_size_only_tensor_new_stays_exempt() -> None:
 def test_uninitialized_by_design_proof_is_fail_closed() -> None:
     """The per-call proof rejects every non-size-only shape."""
 
-    from torchlens.validation.exemptions import uninitialized_by_design_applies
+    from torchlens.validation._exemptions import uninitialized_by_design_applies
 
     healthy = SimpleNamespace(
         func_name="new", parents=("input_1",), non_tensor_kwargs={}, non_tensor_pos_args=[2, 3]
@@ -791,7 +791,7 @@ def test_meshgrid_perturbation_decisions_are_real_not_whole_op_skipped() -> None
     running the check.
     """
 
-    from torchlens.validation import core as validation_core
+    from torchlens.validation import _core as validation_core
 
     model = _MeshgridModel()
     inputs = [torch.randn(3), torch.randn(4)]

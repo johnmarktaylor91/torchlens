@@ -457,7 +457,7 @@ class Manifest:
         Bundle container format: ``"directory"`` for standard portable
         bundles written by ``trace.save()``, or
         ``"fastlog-directory"`` for fastlog ring-buffer disk storage
-        (see ``torchlens/recording/storage_disk.py``).
+        (see ``torchlens/recording/_storage_disk.py``).
     n_layers:
         Total number of ``Op`` entries in the saved log.
     n_out_blobs:

@@ -23,8 +23,8 @@ from .._io.sidecar import (
     unregister_sidecar_family,
 )
 from .._trace_state import TraceState
-from ..intervention.save import save_intervention
-from ..intervention.types import InterventionSpec
+from ..intervention._save import save_intervention
+from ..intervention._types import InterventionSpec
 from ..options import suppress_mutate_warnings
 
 

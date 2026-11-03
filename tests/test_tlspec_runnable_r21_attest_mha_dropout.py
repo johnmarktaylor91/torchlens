@@ -32,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.errors.runnable import ReplayValueMismatchError
+from torchlens.errors._runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(

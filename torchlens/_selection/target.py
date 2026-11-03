@@ -3,7 +3,7 @@
 ``TargetSpec`` and ``FrozenTargetSpec`` are the persisted spelling of a site
 selector; they live below :mod:`torchlens.intervention` so selectors can
 build them without importing upward. Their public home stays
-``torchlens.intervention.types`` (re-exported there), and the pickled module
+``torchlens.intervention._types`` (re-exported there), and the pickled module
 path is pinned to that spelling below so saved artifacts and the unpickle
 allowlist are unchanged by the source move.
 """
@@ -156,7 +156,7 @@ class FrozenTargetSpec:
 
 
 # Persisted identity: metadata.pkl names these classes by module path and the
-# unpickle allowlist admits exactly ("torchlens.intervention.types", <name>).
+# unpickle allowlist admits exactly ("torchlens.intervention._types", <name>).
 for _cls in (TensorSliceSpec, TargetSpec, FrozenTargetSpec):
-    _cls.__module__ = "torchlens.intervention.types"
+    _cls.__module__ = "torchlens.intervention._types"
 del _cls

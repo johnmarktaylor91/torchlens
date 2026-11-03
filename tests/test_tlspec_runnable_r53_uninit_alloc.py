@@ -32,7 +32,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
-from torchlens.errors.runnable import ReplayValueMismatchError
+from torchlens.errors._runnable import ReplayValueMismatchError
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -355,7 +355,7 @@ def _resize_disposition(model: nn.Module, x: torch.Tensor, tmp_path: Path):
     accept either disposition but NEVER a false VERIFIED.
     """
 
-    from torchlens.errors.runnable import RunnablePreflightError
+    from torchlens.errors._runnable import RunnablePreflightError
 
     trace = tl.trace(model, x.clone(), capture=_CAPTURE)
     path = tmp_path / f"{type(model).__name__}.tlspec"

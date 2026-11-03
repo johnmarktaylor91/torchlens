@@ -5,6 +5,17 @@
 
 ### Behavior changes
 
+- **surface**: untaught submodules are private (surface ruling surface.6). Every submodule that its
+  parent does not list in `__all__`, other than the taught `torchlens.backends.torch`,
+  `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`,
+  `torchlens.intervention.stochastic` and the per-framework backend namespaces
+  (`torchlens.backends.jax`, `mlx`, `paddle`, `tf`, `tinygrad`), now has a leading underscore (50
+  modules, for example `torchlens.intervention.types`, `torchlens.recording.options` and
+  `torchlens.validation.core`). Import public names from the parent namespace. The old attribute
+  spelling refuses with the typed `facade_redirect` error; `docs/reference/deprecations.md` (Module
+  Paths) lists every one.
+- **records**: `Op.gpu_kernels` and `AtenOp.gpu_kernels` are removed; they refuse with the
+  typed `facade_redirect` error. Saved artifacts keep their kernel annotation.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
   pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
   merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at

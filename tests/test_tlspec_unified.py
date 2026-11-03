@@ -17,7 +17,7 @@ import torchlens as tl
 from torchlens._io import TLSPEC_VERSION, ArtifactError
 from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.errors import BackendPayloadUnsupportedError
-from torchlens.intervention.types import Edit, FireRecord, InterventionSpec
+from torchlens.intervention._types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
 from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
 

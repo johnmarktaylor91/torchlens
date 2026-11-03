@@ -34,7 +34,7 @@ from torchlens.errors import (
     MetadataInvariantError,
     TraceNotReproducibleWarning,
 )
-from torchlens.intervention.types import DictKey
+from torchlens.intervention._types import DictKey
 from torchlens.options import CaptureOptions
 from torchlens.recording import RecordContext
 from torchlens.report import ValidationDiagnostic
@@ -46,6 +46,25 @@ from torchlens.validation import (
     validate_forward_pass,
 )
 from torchlens.validation._completeness_backstop import completeness_backstop_counts
+from torchlens.validation._core import (
+    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
+    ValidationDecisionRecorder,
+    _check_perturbation_exemptions,
+    _check_whether_func_on_saved_parents_yields_saved_tensor,
+    _deep_numeric_replay_matches_saved,
+    _dispatch_op_count_matches_capture,
+    _execute_func_with_restored_state,
+    _op_reduction_depth,
+    _restore_live_parameter_args_for_replay,
+    validate_parents_of_saved_layer,
+)
+from torchlens.validation._exemptions import (
+    CUSTOM_EXEMPTION_CHECKS,
+    SKIP_PERTURBATION_ENTIRELY,
+    SKIP_VALIDATION_ENTIRELY,
+    STRUCTURAL_ARG_POSITIONS,
+    posthoc_perturb_check,
+)
 from torchlens.validation._invariants_connectivity import (
     _check_graph_connectivity,
     _check_lookup_key_consistency,
@@ -62,26 +81,7 @@ from torchlens.validation._invariants_topology import (
     _check_graph_topology,
     _check_special_layer_lists,
 )
-from torchlens.validation.core import (
-    DEEP_NUMERIC_REPLAY_MIN_REDUCTION_DEPTH,
-    ValidationDecisionRecorder,
-    _check_perturbation_exemptions,
-    _check_whether_func_on_saved_parents_yields_saved_tensor,
-    _deep_numeric_replay_matches_saved,
-    _dispatch_op_count_matches_capture,
-    _execute_func_with_restored_state,
-    _op_reduction_depth,
-    _restore_live_parameter_args_for_replay,
-    validate_parents_of_saved_layer,
-)
-from torchlens.validation.exemptions import (
-    CUSTOM_EXEMPTION_CHECKS,
-    SKIP_PERTURBATION_ENTIRELY,
-    SKIP_VALIDATION_ENTIRELY,
-    STRUCTURAL_ARG_POSITIONS,
-    posthoc_perturb_check,
-)
-from torchlens.validation.status import (
+from torchlens.validation._status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
@@ -1107,7 +1107,7 @@ def test_pure_out_kwarg_destination_perturbation_is_exempt_only_when_pure() -> N
     keyword, feeds real values and must NOT be exempt.
     """
 
-    from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
+    from torchlens.validation._core import _perturbed_parents_only_occupy_out_kwarg
 
     pure_out = SimpleNamespace(
         parent_arg_positions={"args": {0: "data_1"}, "kwargs": {"out": "dest_1"}}
@@ -3978,7 +3978,7 @@ def test_runtime_tensor_fill_value_is_replayed_and_perturbation_sensitive(
 
 
 # ---------------------------------------------------------------------------
-# Reduction-depth band-C eligibility predicate (validation/core.py)
+# Reduction-depth band-C eligibility predicate (validation/_core.py)
 #
 # Band C grants a relaxed deep-numeric replay tolerance ONLY to ops that are
 # reductions with per-output accumulation depth >= 64 (the depth at which FP32
@@ -4478,7 +4478,7 @@ def test_ground_truth_output_check_is_dtype_aware() -> None:
     rounding difference (~7800x tighter than bf16 eps).
     """
 
-    from torchlens.validation.core import _ground_truth_output_matches_saved
+    from torchlens.validation._core import _ground_truth_output_matches_saved
 
     # fp64: 5e-7 relative divergence must now FAIL.
     f64 = torch.tensor([1.0, 2.0], dtype=torch.float64)
@@ -4514,7 +4514,7 @@ def test_ground_truth_fp8_doctrine_stays_strict() -> None:
     """
 
     from torchlens._utils.tensor_utils import get_fp8_dtypes
-    from torchlens.validation.core import _ground_truth_output_matches_saved
+    from torchlens.validation._core import _ground_truth_output_matches_saved
 
     fp8_dtypes = get_fp8_dtypes()
     if not fp8_dtypes:
@@ -7061,7 +7061,7 @@ def test_raw_label_survival_roster_is_closed():
     """
 
     from torchlens import _constants as constants
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants import (
         _RAW_LABEL_BEARING_DICT_FIELDS,
         _RAW_LABEL_BEARING_LIST_FIELDS,
         _RAW_LABEL_BEARING_SCALAR_FIELDS,
@@ -7109,7 +7109,7 @@ def test_raw_label_survival_roster_is_closed():
     log.cleanup()
     assert not offenders, (
         "label-bearing fields outside the raw-label survival roster (add them "
-        f"to a roster shape in validation/invariants.py): {offenders}"
+        f"to a roster shape in validation/_invariants.py): {offenders}"
     )
 
 
@@ -7960,7 +7960,7 @@ def _where_layer(saved_args, saved_kwargs, dtype=torch.int64):
 def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
     """One-arg positional ``torch.where(cond)`` (nonzero index form) is recognized."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((torch.tensor([1, 0, 1, 0], dtype=torch.int64),), {})
     assert _check_one_arg_where_index_exempt(layer) is True
@@ -7969,7 +7969,7 @@ def test_one_arg_where_positional_nonzero_is_index_exempt() -> None:
 def test_one_arg_where_keyword_nonzero_is_index_exempt() -> None:
     """Keyword ``torch.where(condition=cond)`` nonzero index form is recognized."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((), {"condition": torch.tensor([1, 0, 1, 0], dtype=torch.int64)})
     assert _check_one_arg_where_index_exempt(layer) is True
@@ -7980,7 +7980,7 @@ def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
     kwargs, captured as len(saved_args)==1 with int output) must NOT be treated as the
     one-arg index form -- the tripwire must stay armed for a genuine value-dependent branch."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer(
         (torch.tensor([True, False, True, False]),),
@@ -7995,7 +7995,7 @@ def test_mixed_kwarg_value_select_where_is_not_one_arg_exempt() -> None:
 def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None:
     """A 3-arg positional value-select ``where`` is never the one-arg index form."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer(
         (
@@ -8011,7 +8011,7 @@ def test_three_arg_positional_value_select_where_is_not_one_arg_exempt() -> None
 def test_float_output_where_is_not_one_arg_index_exempt() -> None:
     """A non-integer output ``where`` is never treated as the one-arg index form."""
 
-    from torchlens.validation.exemptions import _check_one_arg_where_index_exempt
+    from torchlens.validation._exemptions import _check_one_arg_where_index_exempt
 
     layer = _where_layer((torch.tensor([1.0, 0.0, 1.0, 0.0]),), {}, dtype=torch.float32)
     assert _check_one_arg_where_index_exempt(layer) is False

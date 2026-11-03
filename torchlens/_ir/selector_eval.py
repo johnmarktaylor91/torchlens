@@ -708,7 +708,7 @@ def _match_site_key(subject: Any, *, selector: BaseSelector) -> bool:
 def _match_site_capture(subject: Any, *, selector: BaseSelector) -> bool:
     """Match the live site key the armed minter renders for a capture context."""
 
-    from torchlens.intervention.site_keys import active_live_minter
+    from torchlens.intervention._site_keys import active_live_minter
 
     minter = active_live_minter()
     if minter is None:

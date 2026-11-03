@@ -20,7 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 from torchlens.validation._loaded_callables import (
     release_loaded_callables,

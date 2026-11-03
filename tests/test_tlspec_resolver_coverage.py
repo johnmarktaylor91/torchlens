@@ -16,7 +16,7 @@ import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens._io.runnable import build_sparse_run_descriptor, preflight_sparse_run_descriptor
 from torchlens._runnable import ResolverRecord, ResolverStatus, RunnableErrorCode
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 RELEASE_MAX_UNRESOLVED_TORCH_KEYS = 0

@@ -263,7 +263,7 @@ def _row_state(op: Any) -> tuple[str, str | None]:
 def _parent_mark(trace: Trace, op: Any) -> tuple[str | None, str | None]:
     """Derive the D28 ``= parent`` mark for one op, fail-closed."""
 
-    from ..intervention.edge_semantics import distribution_relation
+    from ..intervention._edge_semantics import distribution_relation
 
     for record in getattr(op, "edge_uses", ()) or ():
         verdict = distribution_relation(trace, record)

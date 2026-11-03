@@ -24,7 +24,7 @@ from torch import nn
 import torchlens as tl
 from tests.classics_corpus._loader import load_model_module
 from torchlens.validation import _layer_grad_report as layer_grad_report, last_validation_failure
-from torchlens.validation.diagnostics import CHECK_BACKWARD
+from torchlens.validation._diagnostics import CHECK_BACKWARD
 
 
 def _validate_backward(model: nn.Module, inputs: Any, **kwargs: Any) -> bool:

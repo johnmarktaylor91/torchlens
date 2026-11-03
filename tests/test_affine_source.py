@@ -18,7 +18,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention.helpers import rebuild_builtin_helper
+from torchlens.intervention._helpers import rebuild_builtin_helper
 
 _SITE = "linear_1_1"
 _ORIGIN = "LoReFT trained elsewhere"

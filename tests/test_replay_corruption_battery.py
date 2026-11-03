@@ -24,7 +24,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens import trace as trace_fn
-from torchlens.validation.diagnostics import TRACE_FAILURE_ATTR
+from torchlens.validation._diagnostics import TRACE_FAILURE_ATTR
 
 
 def _capture(model: nn.Module, x: torch.Tensor):

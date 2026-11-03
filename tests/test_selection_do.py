@@ -20,9 +20,9 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.errors import SelectionError
-from torchlens.intervention.types import Edit
+from torchlens.intervention._types import Edit
 
-_replay_module = importlib.import_module("torchlens.intervention.replay")
+_replay_module = importlib.import_module("torchlens.intervention._replay")
 
 
 class _TwoConv(nn.Module):
@@ -53,7 +53,7 @@ def test_edit_is_the_public_type_and_the_old_spelling_is_gone():
     """tl.Edit is the public edit-object type; the old class spelling is removed (U00)."""
 
     import torchlens.intervention as intervention
-    import torchlens.intervention.types as types
+    import torchlens.intervention._types as types
 
     assert tl.Edit is Edit
     old = "Helper" + "Spec"  # the removed spelling, built so the old-name grep stays clean

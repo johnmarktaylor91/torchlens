@@ -960,7 +960,7 @@ def test_float_ambiguity_margin_scales_with_magnitude() -> None:
 
     from fractions import Fraction
 
-    from torchlens.receptive_field.rules.interpolation import (
+    from torchlens.receptive_field._builtin_rules.interpolation import (
         _FLOAT_AMBIGUITY_MARGIN,
         _ambiguity_margin,
         _antialias_filter_verdict,

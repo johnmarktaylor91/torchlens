@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.injection import InjectedOp, InjectionProvenance
+from torchlens.intervention._injection import InjectedOp, InjectionProvenance
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 

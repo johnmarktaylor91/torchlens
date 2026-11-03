@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from torchlens.intervention.types import SamplingRecord
+from torchlens.intervention._types import SamplingRecord
 
 
 def sampling_draws(trace: Any) -> tuple[SamplingRecord, ...]:

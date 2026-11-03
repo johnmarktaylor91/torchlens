@@ -30,7 +30,7 @@ from ..._ir.semantics import BackendSemantics
 from ..._utils.tensor_utils import (
     safe_copy,
 )
-from ...recording.types import (
+from ...recording._types import (
     ActivationRecord,
     CaptureSpec,
 )

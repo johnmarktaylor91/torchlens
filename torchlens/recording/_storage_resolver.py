@@ -13,8 +13,8 @@ from .._ir.summary_role import ensure_summary_output_owns_storage, is_summary_tr
 from .._state import pause_logging
 from .._training_validation import TrainingModeConfigError
 from .._utils.tensor_utils import SaveMode, safe_copy
-from .exceptions import InvalidStorageError, PredicateError
-from .types import CaptureSpec, RecordContext, StorageIntent
+from ._exceptions import InvalidStorageError, PredicateError
+from ._types import CaptureSpec, RecordContext, StorageIntent
 
 if TYPE_CHECKING:
     from ..types import _ActivationPostfunc

@@ -30,11 +30,11 @@ from .._utils._torch_compat import (
     resolve_runnable_torch_alias,
 )
 from .._utils._torch_symbols import torch_attr
+from ._types import FunctionRegistryKey
 from .errors import (
     ReplayPreconditionError,
     UntrustedCallableError,
 )
-from .types import FunctionRegistryKey
 
 _TORCH_INTERNAL_BUILTIN_NAMESPACE = "torch._C._VariableFunctionsClass"
 

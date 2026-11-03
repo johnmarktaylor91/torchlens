@@ -44,13 +44,13 @@ from torchlens.backends.torch import rescue
 from torchlens.errors import TraceNotReproducibleWarning
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.exemptions import (
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._exemptions import (
     _addcmul_zero_annihilator_decision,
     _check_norm_zero_weight_annihilates,
     _multiplicative_zero_annihilator_decision,
 )
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants import (
     MetadataInvariantError,
     check_metadata_invariants,
 )
@@ -248,7 +248,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
     ``_tl_live_fire_results`` leak cannot launder a placeholder.
     """
 
-    from torchlens.intervention.types import FireRecord
+    from torchlens.intervention._types import FireRecord
     from torchlens.validation._invariants_backward_flow import (
         _intervention_spec_is_armed,
         op_has_genuine_replacement_evidence,
@@ -265,7 +265,7 @@ def test_w32_stale_fire_leak_in_plain_capture_stays_refused() -> None:
 
 def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
     """Returning an already-traced tensor only rewires the module boundary."""
-    from torchlens.validation.core import _is_intentional_intervention_replacement
+    from torchlens.validation._core import _is_intentional_intervention_replacement
 
     model = nn.Linear(4, 4)
     handle = model.register_forward_hook(lambda _module, _args, out: (out,))
@@ -287,7 +287,7 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
 def test_callable_op_needs_own_live_fire_to_use_replacement_exemption() -> None:
     """A raw-hook ledger stamp alone cannot exempt a replayable callable op."""
     from torchlens.backends.torch.model_prep import _note_replacement_event
-    from torchlens.validation.core import _is_intentional_intervention_replacement
+    from torchlens.validation._core import _is_intentional_intervention_replacement
 
     trace, _ground_truth = _capture(_Tiny(), torch.randn(3, 4))
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
@@ -543,7 +543,7 @@ def test_w34_public_path_census_still_fails_dropped_aten_op() -> None:
 def test_w34_census_unverified_outcome_is_recorded_not_discarded() -> None:
     """An unverified census outcome now leaves an auditable diagnostic."""
 
-    from torchlens.validation.diagnostics import get_validation_diagnostics
+    from torchlens.validation._diagnostics import get_validation_diagnostics
 
     # Bind the model: replay reads parameters through TorchLens' weak model
     # reference, so a temporary model can be collected mid-test and turn the
@@ -766,7 +766,7 @@ def test_nan_multiplication_proof_still_covers_plain_mul() -> None:
     dispatcher after the addcmul branch was added beside it.
     """
 
-    from torchlens.validation.exemptions import _posthoc_value_proof_decision
+    from torchlens.validation._exemptions import _posthoc_value_proof_decision
 
     class _FakeMulOp:
         func_name = "mul"
@@ -939,7 +939,7 @@ def test_sdpa_zero_query_decision_scoped_correctly() -> None:
     the output), and never exempts anything when query is nonzero.
     """
 
-    from torchlens.validation.exemptions import _sdpa_zero_query_decision
+    from torchlens.validation._exemptions import _sdpa_zero_query_decision
 
     class _FakeSdpaOp:
         out = torch.zeros(2)  # a finite saved output
@@ -982,7 +982,7 @@ def test_linear_zero_input_annihilates_weight_perturbation() -> None:
     gives plain ``mul``).
     """
 
-    from torchlens.validation.exemptions import _linear_zero_weight_input_decision
+    from torchlens.validation._exemptions import _linear_zero_weight_input_decision
 
     class _FakeLinearOp:
         out = torch.zeros(2)  # a finite saved output
@@ -1040,7 +1040,7 @@ def test_softmax_singleton_reduction_dim_validates() -> None:
 def test_softmax_singleton_dim_decision_scoped_correctly() -> None:
     """Armed-proof: only exempts when the reduced dim's size is exactly 1."""
 
-    from torchlens.validation.exemptions import _softmax_singleton_dim_decision
+    from torchlens.validation._exemptions import _softmax_singleton_dim_decision
 
     class _FakeSoftmaxOp:
         def __init__(self, out_shape, dim) -> None:
@@ -1126,7 +1126,7 @@ def test_layer_norm_singleton_normalized_shape_validates() -> None:
 def test_layer_norm_singleton_shape_decision_scoped_correctly() -> None:
     """Armed-proof: only exempts when normalized_shape's element count is exactly 1."""
 
-    from torchlens.validation.exemptions import _layer_norm_singleton_shape_decision
+    from torchlens.validation._exemptions import _layer_norm_singleton_shape_decision
 
     class _FakeLayerNormOp:
         out = torch.zeros(2)  # a finite saved output
@@ -1199,7 +1199,7 @@ def test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output() -> 
 
     from types import SimpleNamespace
 
-    from torchlens.validation.exemptions import (
+    from torchlens.validation._exemptions import (
         _conv_zero_weight_input_decision,
         _layer_norm_singleton_shape_decision,
         _linear_zero_weight_input_decision,
@@ -1333,7 +1333,7 @@ def test_f3_tuple_out_destination_keys_accepted() -> None:
     stays strict.
     """
 
-    from torchlens.validation.core import _perturbed_parents_only_occupy_out_kwarg
+    from torchlens.validation._core import _perturbed_parents_only_occupy_out_kwarg
 
     class _FakeOp:
         def __init__(self, args_map: dict, kwargs_map: dict) -> None:
@@ -1467,7 +1467,7 @@ def test_w35_perturbation_net_still_fails_true_insensitivity() -> None:
     still fail it with ``perturbation_insensitive``.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1537,7 +1537,7 @@ def test_unit_step_retry_still_fails_true_insensitivity() -> None:
     without weakening real-bug detection.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1603,7 +1603,7 @@ def test_geometric_ladder_still_fails_spurious_discretizing_edge() -> None:
     ADDED influence-detection attempts and introduced no false-VERIFIED path.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1632,7 +1632,7 @@ def test_geometric_ladder_scoped_to_value_discretizing_children() -> None:
     exemption.
     """
 
-    from torchlens.validation.core import _perturbation_retry_strategies
+    from torchlens.validation._core import _perturbation_retry_strategies
 
     bucketize_trace, _ = _capture(_WideBucketize(), torch.randn(4, 5))
     bucketize_op = [op for op in bucketize_trace._layer_list if op.func_name == "bucketize"][0]
@@ -1697,7 +1697,7 @@ def test_saturated_softmax_validates_for_the_unlucky_ci_seed() -> None:
 def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
     """The uniform retries cannot move a saturated softmax; the lift always can."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _execute_func_with_restored_state,
         _perturbation_retry_strategies,
         _prepare_input_args_for_validating_layer,
@@ -1730,7 +1730,7 @@ def test_uniform_steps_are_null_for_softmax_and_the_lift_is_not() -> None:
 def test_lift_min_entry_moves_one_entry_above_the_max() -> None:
     """The lift changes exactly one entry, to a strict maximum, and keeps dtype."""
 
-    from torchlens.validation.core import _directional_step_perturb
+    from torchlens.validation._core import _directional_step_perturb
 
     tensor = torch.tensor([[3.0, -2.0], [5.0, 1.0]], dtype=torch.float16)
     lifted = _directional_step_perturb(tensor, "lift_min_entry")
@@ -1757,7 +1757,7 @@ def test_lift_retry_still_fails_a_disconnected_softmax_parent() -> None:
     ``perturbation_insensitive`` for the same unlucky seed's model.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -1801,7 +1801,7 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
     """
 
     from torchlens._ir.events import InterventionAppliedEvent
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     model = _Tiny()
     injected = torch.ones(3, 4) * 7.0

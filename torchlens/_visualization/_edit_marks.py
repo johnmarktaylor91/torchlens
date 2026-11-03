@@ -38,7 +38,7 @@ from ._typography import EDIT_GAP_SIZE, format_pt
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-    from ..intervention.types import Edit, FireRecord
+    from ..intervention._types import Edit, FireRecord
     from .themes import VisualizationTheme
 
 __all__ = [
@@ -227,7 +227,7 @@ def _parameter_order(constructor: Callable[..., Any] | None) -> dict[str, int]:
 def short_edit_text(edit: Edit) -> str:
     """Return the edit text after the delta, for example ``zero_ablate`` or ``scale(0.5)``."""
 
-    from ..intervention.helpers import builtin_helper_constructor
+    from ..intervention._helpers import builtin_helper_constructor
 
     constructor = builtin_helper_constructor(edit.name)
     parts = [_stand_in(value) for value in edit.args]
@@ -240,7 +240,7 @@ def short_edit_text(edit: Edit) -> str:
 def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
     """Return the mark for a plain hook callable or a value replacement."""
 
-    from ..intervention.types import Edit
+    from ..intervention._types import Edit
 
     if isinstance(hook, Edit):
         return _helper_mark(hook, detail=detail)

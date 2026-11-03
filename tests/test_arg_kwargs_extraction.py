@@ -29,7 +29,7 @@ from torchlens._capture.arg_positions import (
     extract_tensors_and_params,
 )
 from torchlens.backends.torch._ops_predicate_events import _extract_arg_tensors_and_params
-from torchlens.intervention.types import ParentRef
+from torchlens.intervention._types import ParentRef
 from torchlens.options import CaptureOptions
 
 # ---------------------------------------------------------------------------

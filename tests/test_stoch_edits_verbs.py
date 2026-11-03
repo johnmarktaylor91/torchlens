@@ -35,8 +35,8 @@ from torchlens.intervention import (
     sample_from,
     set_direction_mean,
 )
+from torchlens.intervention._population import OneDatum, PerRowDatums
 from torchlens.intervention.hooks import make_hook_context
-from torchlens.intervention.population import OneDatum, PerRowDatums
 from torchlens.intervention.stochastic import _derived_seed
 
 

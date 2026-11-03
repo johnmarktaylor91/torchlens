@@ -325,7 +325,7 @@ def test_stream_finalize_door_refuses_on_records() -> None:
     defense-in-depth and provoked directly here.
     """
 
-    from torchlens.intervention.injection import (
+    from torchlens.intervention._injection import (
         injection_state,
         refuse_injection_logged_stream_finalize,
     )

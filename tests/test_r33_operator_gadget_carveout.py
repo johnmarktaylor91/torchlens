@@ -43,8 +43,8 @@ from torchlens.intervention._resolver_registry import (
     resolve_function_registry_key,
     resolve_import_ref,
 )
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 
 # Generic operator gadgets / mutators that MUST stay denied even under operator trust.
 _GADGET_NAMES = [

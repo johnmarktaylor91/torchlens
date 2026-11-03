@@ -2659,7 +2659,7 @@
     "record"
    ],
    "summary": "Recording.draw renders a flat event graph and takes bare kwargs; Trace.draw takes VisualizationOptions, collapse, encodings and layouts. Cooked structure needs Recording.to_trace().",
-   "evidence": "torchlens/recording/types.py",
+   "evidence": "torchlens/recording/_types.py",
    "recommendation": "document",
    "ruling": "pending"
   },

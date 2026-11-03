@@ -263,7 +263,7 @@ def resolver_key_hazard_outcomes() -> dict[str, dict[str, object]]:
         warnings.simplefilter("error", DeprecationWarning)
         import torch
         from torchlens.intervention._resolver_registry import resolve_function_registry_key
-        from torchlens.intervention.types import FunctionRegistryKey
+        from torchlens.intervention._types import FunctionRegistryKey
         lazy = {_LAZY_TORCH_SUBMODULES!r}
         outcomes = {{}}
         for hazard in {_RESOLVER_KEY_HAZARDS!r}:

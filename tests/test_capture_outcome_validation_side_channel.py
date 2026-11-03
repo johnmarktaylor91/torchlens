@@ -3,7 +3,7 @@
 ``validate_forward_pass`` / ``validate_saved_outs`` are public methods on a
 user-held Trace, and validation ENTRY unconditionally writes the failure side
 channel: ``reset_validation_failure`` sets ``_last_validation_failure = None``
-on every run (``validation/core.py``), and non-failing diagnostics accumulate
+on every run (``validation/_core.py``), and non-failing diagnostics accumulate
 in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
 ``_FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
@@ -25,7 +25,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.field_policy import FieldPolicy
-from torchlens.validation.diagnostics import (
+from torchlens.validation._diagnostics import (
     TRACE_DIAGNOSTICS_ATTR,
     TRACE_FAILURE_ATTR,
     ValidationDiagnostic,

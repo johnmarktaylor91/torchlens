@@ -29,8 +29,8 @@ from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils._torch_symbols import torch_dtype_named
 from .._utils.tensor_utils import get_memory_amount_from_metadata
-from ..recording.exceptions import PredicateError
-from ..recording.types import (
+from ..recording._exceptions import PredicateError
+from ..recording._types import (
     ActivationRecord,
     CaptureSpec,
     GradRecordContext,
@@ -45,7 +45,7 @@ from ._record_stores import _GradFnContextMap, _StorageBackend
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from .._ir.op_record import OpRecord
-    from ..recording.options import _RecordingConfig
+    from ..recording._options import _RecordingConfig
 
 _active_recording_state: RecordingState | None = None
 
@@ -84,7 +84,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 def _empty_recording(options: _RecordingConfig) -> Recording:
     """Create an empty lazy Recording for a predicate capture session."""
 
-    from ..recording.types import RecordingSettings
+    from ..recording._types import RecordingSettings
 
     return Recording._build(
         records=[],
@@ -152,11 +152,11 @@ class RecordingState:
 
         self.storage_intent = _resolve_storage_intent(self.options)
         if self.storage_intent.on_disk:
-            from ..recording.storage_disk import DiskStorageBackend
+            from ..recording._storage_disk import DiskStorageBackend
 
             self.storage_backend = DiskStorageBackend(self.options, self.recording)
         else:
-            from ..recording.storage_ram import RamStorageBackend
+            from ..recording._storage_ram import RamStorageBackend
 
             self.storage_backend = RamStorageBackend(self.recording)
 
@@ -1397,7 +1397,7 @@ def sync_recording_grad_records_from_sidecar(state: RecordingState) -> None:
     """
 
     from .._ir.events import GradFnFired, OpGradObserved
-    from ..recording.types import GradRecord
+    from ..recording._types import GradRecord
 
     trace = state.runtime_trace
     if trace is None:
@@ -1451,7 +1451,7 @@ def _maybe_add_grad_fn_metadata_record(
 ) -> None:
     """Append a metadata-only grad-fn record when the active policy selects it."""
 
-    from ..recording.types import GradRecord
+    from ..recording._types import GradRecord
 
     grad_fn = trace._grad_fn_logs.get(event.object_id)
     if grad_fn is None or getattr(grad_fn, "has_op", False):

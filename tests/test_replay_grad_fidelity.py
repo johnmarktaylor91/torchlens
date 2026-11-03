@@ -23,7 +23,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.validation import _autograd_grad_replay, validate_forward_pass
-from torchlens.validation.core import validate_saved_outs
+from torchlens.validation._core import validate_saved_outs
 
 
 def _tensor_leaves(value: Any) -> Iterator[torch.Tensor]:

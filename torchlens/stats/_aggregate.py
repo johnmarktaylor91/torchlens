@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 from .._errors import ArgumentTypeError, InvalidArgumentError
+from ..intervention._spec import is_gradient_site
 from ..intervention.errors import MultiMatchWarning
-from ..intervention.spec import is_gradient_site
 
 __tl_layer__ = "L5"
 

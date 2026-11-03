@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import exemptions
+from torchlens.validation import _exemptions as exemptions
 
 
 class _MaskedWrite(nn.Module):

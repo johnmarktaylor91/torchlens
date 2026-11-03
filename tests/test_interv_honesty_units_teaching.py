@@ -86,7 +86,7 @@ def test_note_keeps_public_labels_and_drops_internal_ones() -> None:
     public-label branch is pinned at the unit level here.)
     """
 
-    from torchlens.intervention.helpers import _enqueue_nondeterminism_note
+    from torchlens.intervention._helpers import _enqueue_nondeterminism_note
     from torchlens.intervention.hooks import make_hook_context
 
     public = make_hook_context(

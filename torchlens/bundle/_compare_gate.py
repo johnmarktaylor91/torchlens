@@ -28,8 +28,8 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._capture_state_helpers import _hash_input_tensor_value
+from ..intervention._types import Relationship
 from ..intervention.errors import BundleComparisonError
-from ..intervention.types import Relationship
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

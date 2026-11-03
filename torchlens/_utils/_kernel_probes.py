@@ -63,8 +63,8 @@ def probe_cpu_half_kernels() -> bool:
         for 'Half'"``); later torch ships them. Absence is a genuine torch CPU
         limitation on the floor, not a TorchLens degradation: tests that exercise
         a half-precision CPU forward, TorchLens's own ULP-step validation
-        machinery (``torch.nextafter`` in ``validation/core.py`` and
-        ``validation/exemptions.py``) or its dense tensor-stats kernel
+        machinery (``torch.nextafter`` in ``validation/_core.py`` and
+        ``validation/_exemptions.py``) or its dense tensor-stats kernel
         (``torch.aminmax`` in ``stats/_stats_kernel.py``) on a Half output skip
         on it.
     """

@@ -31,8 +31,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
-from torchlens.validation import exemptions as ex
-from torchlens.validation.core import (
+from torchlens.validation import _exemptions as ex
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
 

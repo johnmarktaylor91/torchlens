@@ -18,8 +18,8 @@ from _validation_capture import _quiet_validate
 from torch import nn
 from torch.nn import functional as F
 
+from torchlens.validation._exemptions import _posthoc_value_proof_decision
 from torchlens.validation._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
-from torchlens.validation.exemptions import _posthoc_value_proof_decision
 
 
 class _ConvThenNorm(nn.Module):

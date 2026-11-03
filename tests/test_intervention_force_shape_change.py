@@ -19,9 +19,9 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens.intervention._types import Edit
 from torchlens.intervention.errors import HookValueError
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.types import Edit
 
 
 class _ReluNet(nn.Module):

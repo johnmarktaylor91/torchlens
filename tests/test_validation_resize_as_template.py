@@ -17,8 +17,8 @@ import torch
 from _validation_capture import _capture, _quiet_validate
 from torch import nn
 
-from torchlens.validation.core import _check_perturbation_exemptions, validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import _check_perturbation_exemptions, validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 
 class _ResizeAsTemplate(nn.Module):

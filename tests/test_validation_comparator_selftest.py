@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import core as validation_core
+from torchlens.validation import _core as validation_core
 
 
 def _traced_linear() -> tuple[tl.Trace, list[torch.Tensor], nn.Module]:

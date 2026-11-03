@@ -13,7 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.edge_semantics import (
+from torchlens.intervention._edge_semantics import (
     classify_view_or_copy,
     distribution_relation,
 )

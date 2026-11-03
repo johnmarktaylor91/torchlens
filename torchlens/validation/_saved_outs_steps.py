@@ -9,8 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._non_pass_record import finish_validation_status
-from .diagnostics import (
+from ._diagnostics import (
     CHECK_COMPLETENESS,
     CHECK_GROUND_TRUTH,
     CHECK_OUTPUT_MISSING,
@@ -22,13 +21,14 @@ from .diagnostics import (
     reset_validation_diagnostics,
     reset_validation_failure,
 )
+from ._non_pass_record import finish_validation_status
 
 if TYPE_CHECKING:
     import torch
 
     from .._data_classes.trace import Trace
-    from .core import ValidationDecisionRecorder
-    from .status import ValidationStatus
+    from ._core import ValidationDecisionRecorder
+    from ._status import ValidationStatus
 
 
 def _finish_run_status(

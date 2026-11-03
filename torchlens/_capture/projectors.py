@@ -18,7 +18,7 @@ from .._record_type import record_type
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
-    from ..recording.types import ActivationRecord
+    from ..recording._types import ActivationRecord
 
 _REFRESH_SOURCES: WeakKeyDictionary[Any, Any] = WeakKeyDictionary()
 
@@ -471,7 +471,7 @@ class RefreshProjector:
 
         from .._partial import PartialTrace
         from .._runnable import RunnableErrorCode
-        from ..errors.runnable import BufferSinkRoutingError
+        from ..errors._runnable import BufferSinkRoutingError
 
         error = BufferSinkRoutingError(
             f"{_GRAPH_CHANGE_MESSAGE} Detail: {detail}. "

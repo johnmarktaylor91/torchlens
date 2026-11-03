@@ -836,12 +836,12 @@ def _metadata_invariant_applies(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists. The contracts tuple is read
 # through the hub module at call time: it is built after the hub imports this module.
-from . import invariants as _invariants_hub  # noqa: E402
+from . import _invariants as _invariants_hub  # noqa: E402
+from ._invariants import (  # noqa: E402
+    MetadataInvariantContract,
+    MetadataInvariantError,
+)
 from ._invariants_topology import (  # noqa: E402
     _retained_orphan_layer_labels,
     _retained_orphan_op_labels,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantContract,
-    MetadataInvariantError,
 )

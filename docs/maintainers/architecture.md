@@ -67,8 +67,8 @@ tl.trace(model, x)                       __init__.py -> user_funcs.trace
 trace.save(path)                         _io/bundle.py (metadata plus safetensors blobs)
 tl.load(path)                            _io/bundle.py (allowlist unpickler, manifest validation)
 trace.run(inputs=x)                      _runnable_*.py (sparse replay) or the live refresh path
-tl.validate(model, x)                    validation/consolidated.py -> validation/core.py (forward replay),
-                                         validation/backward.py, _invariants_*.py
+tl.validate(model, x)                    validation/_consolidated.py -> validation/_core.py (forward replay),
+                                         validation/_backward.py, _invariants_*.py
 ```
 
 The sparse path shares the front half: `tl.record(model, x, save=...)` runs the same wrappers
@@ -99,14 +99,14 @@ tests; `tests/AGENTS.md` has the full area table.
 | Save and load | `Trace.save`, `tl.load`, `tl.io` | `_io/`, `io/`, `schemas/` | `test_io_*.py`, `test_tlspec_*.py`, `release_goldens/` |
 | Replay | `Trace.run`, `torchlens._runnable` | `_runnable/`, `captured_run.py` | `test_runnable_*.py`, `test_run_*.py` |
 | Validation | `tl.validate`, `torchlens.validation.validate_forward_pass` | `validation/` | `test_validation*.py`, `test_backward*.py`, `validation_goldens/` |
-| Backward capture | `CaptureOptions(backward_ready=True)`, `trace.draw_backward` | `backends/torch/backward.py`, `validation/backward.py` | `test_backward*.py` |
+| Backward capture | `CaptureOptions(backward_ready=True)`, `trace.draw_backward` | `backends/torch/backward.py`, `validation/_backward.py` | `test_backward*.py` |
 | Intervention | `tl.run`, `tl.when`, `Trace.fork`, `fork.do`, `tl.sweep` | `intervention/`, `_trace_state.py` | `test_intervention*.py` |
 | Bundles and experiments | `tl.Bundle`, `torchlens.experiment` | `bundle/`, `intervention/` (Bundle), `experiment/` | `test_bundle_*.py` |
 | Selection algebra | `tl.Selection`, `tl.units`, `tl.params`, `tl.top_k` | `_selection.py`, `_selection_values.py`, `_selection_graph.py`, `_selection_subspace.py`, `_selection_compare.py` | `test_selection*.py` |
-| Attribution | `tl.attribution` | `attribution/`, `attribution/graph/`, `attribution/onebackward/` | `test_attribution*.py` |
+| Attribution | `tl.attribution` | `attribution/`, `attribution/_graph/`, `attribution/_onebackward/` | `test_attribution*.py` |
 | Mechanistic interpretability kit | `tl.mechinterp` | `mechinterp/` | `semantic/`, `test_mi_*.py` |
 | Facets | `tl.facets`, `torchlens.mechinterp` | `_semantic/`, `_semantic/recipes/` | `semantic/`, `test_semantic*.py` |
-| Receptive and projective fields | `tl.receptive_field`, `op.receptive_field` | `receptive_field/`, `receptive_field/rules/` | `test_receptive*.py` |
+| Receptive and projective fields | `tl.receptive_field`, `op.receptive_field` | `receptive_field/`, `receptive_field/_builtin_rules/` | `test_receptive*.py` |
 | Representation geometry and statistics | `tl.repgeom`, `tl.stats` | `repgeom/`, `stats/` | `test_repgeom*.py`, `test_stats*.py` |
 | Activation transforms | `tl.transforms` | `transforms/` | `test_transforms*.py`, `transforms_corpus/` |
 | Debugging helpers | `tl.debug` | `debug/` | `test_debug*.py` |
@@ -136,7 +136,7 @@ a lower layer calls upward: `Trace._postprocess` imports `postprocess` inside th
 `backends/torch/wrappers.py` and `_capture/trace.py` about 25 each. A module-level layer
 diagram therefore understates the coupling; read the in-function imports of any module
 before you move it. The four split hubs (`backends/torch/ops.py`,
-`backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable/execution.py`)
+`backends/torch/completeness_witness.py`, `validation/_invariants.py`, `_runnable/execution.py`)
 import their split modules at the bottom of the file, after their own definitions; a test
 patches a private name on the module that defines it and on every module that binds it
 (`docs/agent-reference/known-gotchas.md`).
@@ -148,7 +148,7 @@ selection lives in those destinations and in `_runnable/seam.py`. The torch
 capture entry is `_trace_torch_model` in `user_funcs.py`, one function of about 1,300
 lines outside the backend package; `torch_func_decorator` and its nested `wrapped_func` in
 `backends/torch/wrappers.py` are about 900 and 760 lines; the forward runner
-`run_and_log_inputs_through_model` in `_capture/trace.py` about 860. `validation/core.py` is
+`run_and_log_inputs_through_model` in `_capture/trace.py` about 860. `validation/_core.py` is
 5,200 lines and the host-nondeterminism monitor `_utils/rng/monitor.py` about 1,600. Changes to capture semantics usually touch three of
 these at once.
 

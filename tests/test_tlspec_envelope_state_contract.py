@@ -229,7 +229,7 @@ def test_dropped_edge_tensor_args_still_feeds_its_invariant() -> None:
     import inspect
 
     from torchlens._io.field_registry import persisted_field_names
-    from torchlens.validation import core as validation_core
+    from torchlens.validation import _core as validation_core
 
     assert "dropped_edge_tensor_args" in persisted_field_names("op")
     assert "dropped_edge_tensor_args" in inspect.getsource(validation_core)

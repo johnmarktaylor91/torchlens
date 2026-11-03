@@ -437,7 +437,7 @@ class TestModuleAccessorSummary:
         crash the per-pass columns.
         """
 
-        from torchlens.validation.invariants import check_metadata_invariants
+        from torchlens.validation._invariants import check_metadata_invariants
 
         model = example_models.RecurrentParamsSimple()
         # activation_transform=identity forces transformed_out to be populated

@@ -163,6 +163,63 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 | `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 
+## Module Paths
+
+Surface ruling surface.6 (31 Oct 2026): a submodule is a public import path only when its parent lists it in `__all__` or it is taught (`torchlens.backends.torch`, `torchlens.backends.registry`, `torchlens.intervention.errors`, `torchlens.intervention.hooks`, `torchlens.intervention.stochastic` and the per-framework backend namespaces `torchlens.backends.jax`, `mlx`, `paddle`, `tf` and `tinygrad`). Reading an old spelling as an attribute of its parent (`tl.intervention.types`) raises the typed `facade_redirect` error; an `import` statement of an old path fails with `ModuleNotFoundError`.
+
+| Old name | New name | Status |
+| --- | --- | --- |
+| `torchlens.agent.cli` | none public; import its names from `torchlens.agent` (private home `torchlens.agent._cli`) | private |
+| `torchlens.attribution.graph` | none public; import its names from `torchlens.attribution` (private home `torchlens.attribution._graph`) | private |
+| `torchlens.attribution.onebackward` | none public; import its names from `torchlens.attribution` (private home `torchlens.attribution._onebackward`) | private |
+| `torchlens.backends.default_specs` | none public; import its names from `torchlens.backends` (private home `torchlens.backends._default_specs`) | private |
+| `torchlens.bridge.hf_attention` | none public; import its names from `torchlens.bridge` (private home `torchlens.bridge._hf_attention`) | private |
+| `torchlens.errors.episode` | none public; import its names from `torchlens.errors` (private home `torchlens.errors._episode`) | private |
+| `torchlens.errors.runnable` | none public; import its names from `torchlens.errors` (private home `torchlens.errors._runnable`) | private |
+| `torchlens.intervention.audit` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._audit`) | private |
+| `torchlens.intervention.binding` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._binding`) | private |
+| `torchlens.intervention.bundle` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._bundle`) | private |
+| `torchlens.intervention.edge_semantics` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._edge_semantics`) | private |
+| `torchlens.intervention.edge_substitution` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._edge_substitution`) | private |
+| `torchlens.intervention.handles` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._handles`) | private |
+| `torchlens.intervention.helpers` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._helpers`) | private |
+| `torchlens.intervention.injection` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._injection`) | private |
+| `torchlens.intervention.masked_edit` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._masked_edit`) | private |
+| `torchlens.intervention.model_door` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._model_door`) | private |
+| `torchlens.intervention.param_substitution` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._param_substitution`) | private |
+| `torchlens.intervention.predicates` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._predicates`) | private |
+| `torchlens.intervention.regions` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._regions`) | private |
+| `torchlens.intervention.replay` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._replay`) | private |
+| `torchlens.intervention.rerun` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._rerun`) | private |
+| `torchlens.intervention.runtime` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._runtime`) | private |
+| `torchlens.intervention.save` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._save`) | private |
+| `torchlens.intervention.site_keys` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._site_keys`) | private |
+| `torchlens.intervention.spec` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._spec`) | private |
+| `torchlens.intervention.spec_compat` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._spec_compat`) | private |
+| `torchlens.intervention.sweep` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._sweep`) | private |
+| `torchlens.intervention.types` | none public; import its names from `torchlens.intervention` (private home `torchlens.intervention._types`) | private |
+| `torchlens.recording.cleanup` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._cleanup`) | private |
+| `torchlens.recording.exceptions` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._exceptions`) | private |
+| `torchlens.recording.options` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._options`) | private |
+| `torchlens.recording.storage_disk` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._storage_disk`) | private |
+| `torchlens.recording.storage_ram` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._storage_ram`) | private |
+| `torchlens.recording.types` | none public; import its names from `torchlens.recording` (private home `torchlens.recording._types`) | private |
+| `torchlens.validation.backward` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._backward`) | private |
+| `torchlens.validation.consolidated` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._consolidated`) | private |
+| `torchlens.validation.core` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._core`) | private |
+| `torchlens.validation.diagnostics` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._diagnostics`) | private |
+| `torchlens.validation.exemptions` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._exemptions`) | private |
+| `torchlens.validation.invariants` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._invariants`) | private |
+| `torchlens.validation.status` | none public; import its names from `torchlens.validation` (private home `torchlens.validation._status`) | private |
+| `torchlens.viz.batch_summary` | none public; import its names from `torchlens.viz` (private home `torchlens.viz._batch_summary`) | private |
+| `torchlens.viz.node_plots` | none public; import its names from `torchlens.viz` (private home `torchlens.viz._node_plots`) | private |
+| `torchlens.intervention.compose` (the module) | `torchlens.intervention.compose` is the public function or object; the module is `torchlens.intervention._compose` | private |
+| `torchlens.intervention.population` (the module) | `torchlens.intervention.population` is the public function or object; the module is `torchlens.intervention._population` | private |
+| `torchlens.receptive_field.rules` (the module) | `torchlens.receptive_field.rules` is the public function or object; the module is `torchlens.receptive_field._builtin_rules` | private |
+| `torchlens.recording.dry_run` (the module) | `torchlens.recording.dry_run` is the public function or object; the module is `torchlens.recording._dry_run` | private |
+| `torchlens.recording.recover` (the module) | `torchlens.recording.recover` is the public function or object; the module is `torchlens.recording._recover` | private |
+| `torchlens.viz.feature_maps` (the module) | `torchlens.viz.feature_maps` is the public function or object; the module is `torchlens.viz._feature_maps` | private |
+
 ## Intervention, Sweep, And Observer Aliases
 
 | Old name | New name | Status |

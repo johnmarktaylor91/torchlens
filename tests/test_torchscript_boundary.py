@@ -32,7 +32,7 @@ from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_B
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS
+from torchlens.validation._diagnostics import CHECK_COMPLETENESS
 
 pytestmark = pytest.mark.skipif(
     not HAS_SCRIPT_FUNCTION_CALL_HOOK, reason="torch build without a ScriptFunction call hook"

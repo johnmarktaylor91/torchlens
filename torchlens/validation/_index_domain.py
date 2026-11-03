@@ -6,7 +6,7 @@ argument's shape. These helpers locate that index slot, measure its domain, and
 build in-domain perturbations (full rotation, single-entry move) for the replay
 ladder. ``exemptions.py`` consumes the slot and domain facts for its degenerate-
 domain and value-irrelevance decisions; ``core.py`` consumes the perturbations.
-Split from ``validation/exemptions.py`` along this seam (R43 file-size
+Split from ``validation/_exemptions.py`` along this seam (R43 file-size
 ratchet); the logic is unchanged.
 """
 

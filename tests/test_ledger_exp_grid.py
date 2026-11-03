@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.errors._episode import BundleExperimentError
 from torchlens.experiment import GridCell, SweepGrid, sweep_grid, sweep_sites
 from torchlens.experiment._engine import top_k
 

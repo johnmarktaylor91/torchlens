@@ -33,7 +33,7 @@ from torchlens._utils._torch_compat import (
     resolve_runnable_torch_alias,
 )
 from torchlens.errors import ReattachError
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 

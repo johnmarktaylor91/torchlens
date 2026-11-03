@@ -32,7 +32,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
-from .types import Edit
+from ._types import Edit
 
 __all__ = ["keep_grad"]
 

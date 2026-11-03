@@ -64,10 +64,10 @@ from ..errors import (
 )
 from ..options import ReplayOptions, merge_replay_options
 from ._intervened_rerun_guard import refuse_unpersisted_intervention_rerun
+from ._replay import push as _push_impl, push_from as _push_from_impl
+from ._rerun import run as _rerun_impl
 from ._zero_fire import check_zero_fire_policy, zero_fire_policy_scope
 from .errors import EngineDispatchError, PendingValueEditsWarning
-from .replay import push as _push_impl, push_from as _push_from_impl
-from .rerun import run as _rerun_impl
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

@@ -19,8 +19,8 @@ from torchlens.backends.paddle._param_writes import (  # noqa: E402
 )
 from torchlens.backends.paddle.validation import _coverage_oracle  # noqa: E402
 from torchlens.errors import BackendUnsupportedError  # noqa: E402
-from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
-from torchlens.validation.status import ValidationStatus  # noqa: E402
+from torchlens.validation._invariants import check_metadata_invariants  # noqa: E402
+from torchlens.validation._status import ValidationStatus  # noqa: E402
 
 pytestmark = pytest.mark.backend_paddle
 

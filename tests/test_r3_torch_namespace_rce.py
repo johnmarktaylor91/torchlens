@@ -28,8 +28,8 @@ from torchlens._runnable import PathFaithfulness
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

@@ -14,12 +14,12 @@ from example_models import TinyReluAdd as ReluAdd
 import torchlens as tl
 from torchlens._capture_state_helpers import reset_compiled_model_unwrap_warning_state
 from torchlens.errors import TraceCaptureError
+from torchlens.intervention._rerun import run
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
 )
-from torchlens.intervention.rerun import run
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 from torchlens.types import Relationship
@@ -220,12 +220,12 @@ def test_rerun_colliding_hook_identifiers_do_not_hide_misses() -> None:
     from types import SimpleNamespace
 
     from torchlens._ir.intervention import FireResult
-    from torchlens.intervention.hooks import NormalizedHookEntry
-    from torchlens.intervention.rerun import (
+    from torchlens.intervention._rerun import (
         _assign_unique_plan_ids,
         _hook_plan_identifier,
         _reconcile_rerun_hook_fires,
     )
+    from torchlens.intervention.hooks import NormalizedHookEntry
 
     def same_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """Shared callable planned under two different targets."""
@@ -295,7 +295,7 @@ def test_rerun_keyboard_interrupt_during_build_leaves_original_log_unchanged(
 ) -> None:
     """Interruptions before validation do not partially swap rerun state."""
 
-    rerun_module = importlib.import_module("torchlens.intervention.rerun")
+    rerun_module = importlib.import_module("torchlens.intervention._rerun")
 
     x = torch.randn(2, 3)
     log = _capture(ReluAdd(), x)
@@ -657,11 +657,11 @@ def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
 
     from types import SimpleNamespace
 
-    from torchlens.intervention.hooks import NormalizedHookEntry
-    from torchlens.intervention.rerun import (
+    from torchlens.intervention._rerun import (
         _assign_unique_plan_ids,
         _reconcile_rerun_hook_fires,
     )
+    from torchlens.intervention.hooks import NormalizedHookEntry
 
     def shared_callable(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
         """One callable shared by two differently-targeted entries."""

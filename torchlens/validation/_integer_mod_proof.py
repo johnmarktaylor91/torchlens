@@ -4,7 +4,7 @@
 that the result is zero for every dividend value, so the dividend cannot reach
 the output; ``exemptions._integer_mod_unit_divisor_decision`` adds the
 perturbed-slot condition and emits the posthoc decision. Split from
-``validation/exemptions.py`` (R43 file-size ratchet); the checks are unchanged.
+``validation/_exemptions.py`` (R43 file-size ratchet); the checks are unchanged.
 """
 
 from typing import Any

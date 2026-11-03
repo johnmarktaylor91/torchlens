@@ -23,7 +23,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
+from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
 
 # Smallest failing chain: ReLUs sit at modules "1", "3", ..., "11".
 _DEPTH = 6

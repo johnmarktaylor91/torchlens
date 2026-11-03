@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import Final
 
-from .exceptions import RecordingConfigError
-from .options import _RecordingConfig
-from .types import CaptureSpec
+from ._exceptions import RecordingConfigError
+from ._options import _RecordingConfig
+from ._types import CaptureSpec
 
 _POSTPROCESS_PRESETS: Final[set[str]] = {
     "none",

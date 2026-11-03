@@ -22,7 +22,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.bundle._bytes import bundle_retained_bytes, preflight_retention_projection
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.errors._episode import BundleExperimentError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning
 
 

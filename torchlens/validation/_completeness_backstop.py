@@ -4,7 +4,7 @@
 signals of one forward (decompositions, captured ops, unaccounted-dispatch
 diagnostics) to the two censuses ``CHECK_COMPLETENESS`` compares, including the
 tripwire rule that counts a module-forward-owned dispatch like an unowned one
-(``_is_unowned_gap_diagnostic``). Split from ``validation/core.py`` along the
+(``_is_unowned_gap_diagnostic``). Split from ``validation/_core.py`` along the
 census seam (R43 file-size ratchet); the logic is unchanged.
 """
 

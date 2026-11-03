@@ -16,8 +16,8 @@ from torchlens.backends.torch.model_prep import (
     _prepare_model_session,
 )
 from torchlens.backends.torch.sources import log_source_tensor
-from torchlens.recording.options import _RecordingConfig
-from torchlens.recording.types import CaptureSpec, Recording
+from torchlens.recording._options import _RecordingConfig
+from torchlens.recording._types import CaptureSpec, Recording
 
 
 class TinyMlp(nn.Module):

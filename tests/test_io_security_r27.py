@@ -4,7 +4,7 @@ Threat model: a victim runs a DEFAULT ``tl.load`` on an attacker-controlled
 ``.tlspec`` DIRECTORY. These tests lock three fixes:
 
 * F-1 -- the intervention tensor-sidecar loader
-  (``torchlens/intervention/save.py::_load_tensor_refs``) must reject a manifest
+  (``torchlens/intervention/_save.py::_load_tensor_refs``) must reject a manifest
   ``relative_path`` that is absolute, escapes the spec directory with ``".."``,
   or targets an in-bundle symlink, BEFORE the checksum gate and safetensors read
   (the attacker also controls ``sha256``, so the checksum is not a defense).
@@ -32,9 +32,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens.intervention._save import load_intervention_spec
+from torchlens.intervention._types import InterventionSpec
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.save import load_intervention_spec
-from torchlens.intervention.types import InterventionSpec
 from torchlens.options import CaptureOptions
 
 

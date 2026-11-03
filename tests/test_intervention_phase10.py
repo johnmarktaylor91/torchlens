@@ -20,23 +20,23 @@ from torchlens._ir.selector_eval import selector_from_spec
 from torchlens._selection.selectors import output_at
 from torchlens.intervention import check_spec_compat
 from torchlens.intervention._resolver_registry import function_registry_key_from_callable
-from torchlens.intervention.errors import (
-    MultiMatchWarning,
-    OpaqueCallableError,
-    ReplayPreconditionError,
-    UntrustedCallableError,
-)
-from torchlens.intervention.save import (
+from torchlens.intervention._save import (
     _sync_spec_records_from_log,
     _write_tlspec_tensor_blob,
     resolve_function_registry_key,
     save_intervention,
 )
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     Edit,
     FireRecord,
     FunctionRegistryKey,
     InterventionSpec,
+)
+from torchlens.intervention.errors import (
+    MultiMatchWarning,
+    OpaqueCallableError,
+    ReplayPreconditionError,
+    UntrustedCallableError,
 )
 from torchlens.io import load_intervention_spec
 
@@ -987,7 +987,7 @@ def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
         namespace="custom",
         qualname="clamp",
         dispatch_kind="function",
-        import_path="torchlens.intervention.helpers:clamp",
+        import_path="torchlens.intervention._helpers:clamp",
     )
 
     resolved = resolve_function_registry_key(key)

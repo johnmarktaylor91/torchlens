@@ -292,7 +292,7 @@ def test_forged_raw_label_reddens_the_survival_tripwire() -> None:
 def test_ancestry_closure_runs_after_graph_connectivity() -> None:
     """A dropped op stays the dangling-node contract's finding to report."""
 
-    from torchlens.validation.invariants import METADATA_INVARIANT_CONTRACTS
+    from torchlens.validation._invariants import METADATA_INVARIANT_CONTRACTS
 
     names = [contract.name for contract in METADATA_INVARIANT_CONTRACTS]
     assert names.index("graph_connectivity") < names.index("ancestry_closure")

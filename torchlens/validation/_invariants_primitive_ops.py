@@ -362,7 +362,7 @@ def validate_loaded_primitive_profile(trace: Trace) -> None:
 
 
 # Bottom import: the hub defines this error before it imports its split modules.
-from .invariants import MetadataInvariantError  # noqa: E402
+from ._invariants import MetadataInvariantError  # noqa: E402
 
 __all__ = [
     "_check_non_torch_primitive_op_inert",

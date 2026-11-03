@@ -9,8 +9,8 @@ import pytest
 import torch
 
 import torchlens as tl
-import torchlens.validation.consolidated as consolidated_validation
-from torchlens.validation.consolidated import InterventionValidationReport
+import torchlens.validation._consolidated as consolidated_validation
+from torchlens.validation._consolidated import InterventionValidationReport
 
 
 class TinyModel(torch.nn.Module):
@@ -118,7 +118,7 @@ def test_scope_backward_with_metadata(model_and_input: tuple[TinyModel, torch.Te
 
     model, x = model_and_input
     with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
+        "torchlens.validation._consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
         assert tl.validate(model, x, scope="backward")
@@ -133,7 +133,7 @@ def test_scope_backward_with_metadata_forwards_false(
 
     model, x = model_and_input
     with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
+        "torchlens.validation._consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
         assert tl.validate(model, x, scope="backward", validate_metadata=False)
@@ -148,7 +148,7 @@ def test_validate_scope_backward_random_seed(
 
     model, x = model_and_input
     with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
+        "torchlens.validation._consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
         assert tl.validate(model, x, scope="backward", seed=42)
@@ -263,7 +263,7 @@ def test_validate_peak_instrumentation_is_opt_in(
 
     from torch import nn
 
-    from torchlens.validation.diagnostics import last_validation_peak_memory
+    from torchlens.validation._diagnostics import last_validation_peak_memory
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
 

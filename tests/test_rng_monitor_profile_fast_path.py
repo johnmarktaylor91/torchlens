@@ -23,7 +23,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._utils.rng as rng
-import torchlens.intervention.rerun as rerun_module
+import torchlens.intervention._rerun as rerun_module
 from torchlens._utils.rng import inventory_types as rng_inventory_types
 from torchlens.options import CaptureOptions, InterventionOptions
 

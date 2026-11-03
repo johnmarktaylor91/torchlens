@@ -20,7 +20,7 @@ import torch.nn.functional as F
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import core
+from torchlens.validation import _core as core
 from torchlens.validation._index_domain import (
     _INDEX_DOMAIN_ARG_SPECS,
     _index_domain_size,

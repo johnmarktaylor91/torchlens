@@ -6,7 +6,7 @@ rounding step, a zero base under a positive exponent, a Bernoulli probability
 already at its draw). ``_perturb_domain_sensitive_parent_values`` returns a
 valid alternate parent value for those ops so the perturbation check keeps
 its meaning; the helpers below build each family's values. Split from
-``validation/core.py`` (file-cap row), which calls the entry point from its
+``validation/_core.py`` (file-cap row), which calls the entry point from its
 parent perturbation.
 """
 

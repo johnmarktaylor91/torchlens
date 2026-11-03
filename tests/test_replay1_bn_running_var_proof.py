@@ -19,7 +19,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
     _execute_func_with_restored_state,
     _prepare_input_args_for_validating_layer,

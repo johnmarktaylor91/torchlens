@@ -32,16 +32,12 @@ from .._selection.errors import SelectionError
 from .._selection.selection import Selection, Selector, _apply_invalid, _lift
 from .._selection.selectors import label as label_selector
 from ..backends.torch._trace_backward import _require_live_replay
-from . import replay as replay_module
+from . import _replay as replay_module
+from ._audit import build_fire_record
+from ._edge_substitution import apply_edge_substitution_do
 from ._param_fingerprint import changed_param_scope
-from ._replay_context import journal_replay_state, restore_replay_state
-from ._replay_sites import _require_hook_origins
-from .audit import build_fire_record
-from .edge_substitution import apply_edge_substitution_do
-from .errors import EngineDispatchError
-from .hooks import _normalize_sticky_hook_specs, make_hook_context
-from .param_substitution import apply_param_substitution_do, buffer_operand_selection
-from .replay import (
+from ._param_substitution import apply_param_substitution_do, buffer_operand_selection
+from ._replay import (
     _commit_replay_updates,
     _normalize_replay_hooks,
     _origin_sites_for_hooks,
@@ -51,8 +47,12 @@ from .replay import (
     _warn_if_direct_writes_will_be_overlaid,
     push_from,
 )
+from ._replay_context import journal_replay_state, restore_replay_state
+from ._replay_sites import _require_hook_origins
+from ._types import Edit
+from .errors import EngineDispatchError
+from .hooks import _normalize_sticky_hook_specs, make_hook_context
 from .stochastic import assign_batch_donor_groups
-from .types import Edit
 
 
 def is_selection_batch(value: Any) -> bool:

@@ -20,7 +20,7 @@ from torch import nn
 import torchlens as tl
 from tests.classics_corpus._loader import build_entry, corpus_entries
 from torchlens.backends.torch import _aten_capture
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 _ATEN = tl.options.CaptureOptions(aten_ops=True)
 

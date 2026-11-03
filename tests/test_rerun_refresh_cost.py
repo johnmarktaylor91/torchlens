@@ -22,14 +22,14 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     CapturedArgTemplate,
     LiteralTensor,
     LiteralValue,
     ParentRef,
     Unsupported,
 )
+from torchlens.intervention.errors import ReplayPreconditionError
 from torchlens.options import CaptureOptions, InterventionOptions
 
 _CLONE_OPS = ("clone", "_to_copy", "copy_", "copy", "detach_copy", "contiguous")

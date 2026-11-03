@@ -22,7 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._fed_by import member_binding, retained_ids
 
 if TYPE_CHECKING:

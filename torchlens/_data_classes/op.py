@@ -97,12 +97,12 @@ from .._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     print_override,
 )
-from ..intervention.errors import DirectActivationWriteWarning
-from ..intervention.types import (
+from ..intervention._types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     EdgeUseRecord,
     FunctionRegistryKey,
 )
+from ..intervention.errors import DirectActivationWriteWarning
 from . import _doors, _labels, _op_cost, _op_relations, _op_save, _removed_members
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture

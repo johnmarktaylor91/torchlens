@@ -35,7 +35,7 @@ from torchlens import _user_public_impls, _validation_argument_references as arg
 from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
 from torchlens.validation import _replay_device
-from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
+from torchlens.validation._diagnostics import get_validation_diagnostics, get_validation_failure
 
 _TAG = arg_references.CONSUMED_DEVICE_ATTR
 

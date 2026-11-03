@@ -185,7 +185,7 @@ def test_wrong_storage_context_still_fails_replay() -> None:
             save="all",
         )
     try:
-        from torchlens.validation.core import validate_saved_outs
+        from torchlens.validation._core import validate_saved_outs
 
         op = next(layer for layer in trace._layer_list if layer.func_name == "as_strided_")
         saved = op.saved_args[0]

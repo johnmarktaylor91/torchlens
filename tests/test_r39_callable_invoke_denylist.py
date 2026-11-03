@@ -237,7 +237,7 @@ def test_r39_misses_denied_at_run_path_reattach(namespace: str, qualname: str) -
         CallableRegistryEntry,
         _resolve_registry_entry,
     )
-    from torchlens.intervention.types import FunctionRegistryKey
+    from torchlens.intervention._types import FunctionRegistryKey
 
     class _Compat:
         backend_version = str(torch.__version__)

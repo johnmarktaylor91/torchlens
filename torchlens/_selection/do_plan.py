@@ -47,8 +47,8 @@ def _build_selection_do_plan(
         raise needs_subspace(repr(selection_like), code="affine_source_needs_subspace")
     resolved = _resolve_do_target(trace, selection_like)
 
-    from ..intervention.masked_edit import _derive_masked_edit
-    from ..intervention.types import Edit
+    from ..intervention._masked_edit import _derive_masked_edit
+    from ..intervention._types import Edit
 
     if not isinstance(edit, Edit) and not callable(edit):
         # Raw replacement TENSORS route through the shipped replace_with helper and
@@ -63,7 +63,7 @@ def _build_selection_do_plan(
                 "(e.g. torch.full_like(site_out, c)), or use an edit helper such as "
                 "tl.zero_ablate() or tl.scale()."
             )
-        from ..intervention.predicates import replace_with
+        from ..intervention._predicates import replace_with
 
         edit = replace_with(edit)
 
@@ -159,7 +159,7 @@ def build_selection_do_plan(
 
     Returns ``(resolved, [{"op", "entry", "is_leaf", "edit"}, ...], audit_record)``.
     ACT selections only: PARAM edits route through parameter substitution
-    (``intervention/param_substitution.py`` — the value each consumer sees is
+    (``intervention/_param_substitution.py`` — the value each consumer sees is
     substituted on the replay engine, the live parameter is never written);
     EDGE selections are stage-3 edge-substitution territory.
     """

@@ -7,7 +7,7 @@ from the op's saved operands for every reduction category (convolution,
 matmul-family, scatter-reduce fan-in, dimension reductions, scaled dot-product
 attention); depth 0 means it could not be determined and the op stays
 ineligible (fail-toward-strict). ``core`` consumes ``_op_reduction_depth`` and
-re-exports it under its original name (split out of ``validation/core.py``
+re-exports it under its original name (split out of ``validation/_core.py``
 under the file-size ratchet).
 """
 

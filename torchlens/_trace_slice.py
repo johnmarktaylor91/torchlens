@@ -306,7 +306,7 @@ class TraceSlice(_SelectionOperand):
 
         Runs the derived admissibility checks (complete exits, convexity,
         pass-instance partition) and returns the typed
-        ``torchlens.intervention.regions.RegionTarget``, whose ``do()``
+        ``torchlens.intervention._regions.RegionTarget``, whose ``do()``
         lowering substitutes the region's EXIT values on the replay engine
         without replaying the interior. Contrast ``do(slice, edit)``, which
         keeps the shipped member-site family semantics (each member value
@@ -319,7 +319,7 @@ class TraceSlice(_SelectionOperand):
             (a leaking list refuses, naming the leaked edges).
         """
 
-        from .intervention.regions import region as _region
+        from .intervention._regions import region as _region
 
         return _region(self, exits=exits)
 

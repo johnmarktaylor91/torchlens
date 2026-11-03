@@ -518,13 +518,13 @@ def _check_module_hierarchy(ml: Trace) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_conditional_base import (  # noqa: E402
     _fail_conditional_invariant,
     _strip_pass_suffix,
 )
 from ._invariants_modules_params import (  # noqa: E402
     _check_module_call_boundary_and_tree,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

@@ -159,7 +159,7 @@ def test_episode_stepped_module_defaults_to_owner() -> None:
 
 
 def test_episode_stepped_module_none_refuses_on_module_roots() -> None:
-    from torchlens.errors.episode import EpisodeDeclarationError
+    from torchlens.errors._episode import EpisodeDeclarationError
 
     model = _ToyLM()
     with pytest.raises(EpisodeDeclarationError) as excinfo:
@@ -193,7 +193,7 @@ def test_rerun_identity_gate_still_passes_module_roots() -> None:
 
 
 def test_append_preflight_refuses_bound_method_captures() -> None:
-    from torchlens.intervention.rerun import _preflight_append
+    from torchlens.intervention._rerun import _preflight_append
 
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))

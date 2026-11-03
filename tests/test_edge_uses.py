@@ -10,7 +10,7 @@ import torch
 import torchlens as tl
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
-from torchlens.intervention.types import EdgeUseRecord, TupleIndex
+from torchlens.intervention._types import EdgeUseRecord, TupleIndex
 
 
 class _RepeatedEdgeModel(torch.nn.Module):

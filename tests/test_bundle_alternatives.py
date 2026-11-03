@@ -19,7 +19,7 @@ import torch
 
 import torchlens as tl
 from torchlens.bundle import AlternativeReport, Bundle, TokenDivergence
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 
 
 class _TinyCausalLM(torch.nn.Module):

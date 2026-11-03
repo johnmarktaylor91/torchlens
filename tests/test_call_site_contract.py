@@ -29,7 +29,7 @@ import torchlens as tl
 from torchlens._postprocess import _call_site_contract as contract, loop_detection
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.diagnostics import get_validation_diagnostics
+from torchlens.validation._diagnostics import get_validation_diagnostics
 
 
 class _TwoReluLines(nn.Module):

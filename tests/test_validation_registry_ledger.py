@@ -18,7 +18,7 @@ from dataclasses import dataclass
 import pytest
 from _exemption_contracts import VALIDATION_CONTRACTS
 
-from torchlens.validation import exemptions as ex
+from torchlens.validation import _exemptions as ex
 
 # ---------------------------------------------------------------------------
 # FINDING B1-06: per-entry closure for the two registries the ledger covered
@@ -100,7 +100,7 @@ class CustomCheckExemption:
     func_name:
         Captured function name, exactly as the registry keys it.
     check:
-        Attribute name in ``torchlens.validation.exemptions`` of the check the
+        Attribute name in ``torchlens.validation._exemptions`` of the check the
         registry must be bound to. Pinned by IDENTITY, so rebinding an op to a
         laxer predicate is red.
     contract:
@@ -1192,7 +1192,7 @@ def test_inline_pre_perturbation_predicates_still_exist() -> None:
     grow an unaudited ENTRY, but the citations must not rot.
     """
 
-    from torchlens.validation import core as validation_core
+    from torchlens.validation import _core as validation_core
 
     assert hasattr(validation_core, "_perturbed_parents_only_occupy_out_kwarg")
     assert hasattr(validation_core, "_check_perturbation_exemptions")

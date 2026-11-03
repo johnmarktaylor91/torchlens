@@ -5,6 +5,10 @@ from __future__ import annotations
 import importlib
 from typing import Any
 
+from torchlens._utils._private_submodules import (
+    refuse_private_submodule as _refuse_private_submodule,
+)
+
 from ._base import (
     CaptureError,
     CompatibilityError,
@@ -18,7 +22,7 @@ from ._base import (
     TraceNotReproducibleWarning,
     ValidationError,
 )
-from .episode import (
+from ._episode import (
     BundleExperimentError,
     BundleRelationError,
     EpisodeCaptureError,
@@ -28,7 +32,7 @@ from .episode import (
     EpisodeLedgerError,
     ParamEvidenceMissingError,
 )
-from .runnable import (
+from ._runnable import (
     BufferSinkRoutingError,
     CollectiveBoundaryReplayError,
     PathDivergenceError,
@@ -63,13 +67,13 @@ _LEGACY_EXCEPTION_PATHS = {
         "TensorSubclassUnsupportedError",
     ),
     "TrainingModeConfigError": ("torchlens._training_validation", "TrainingModeConfigError"),
-    "RecordingConfigError": ("torchlens.recording.exceptions", "RecordingConfigError"),
-    "InvalidStorageError": ("torchlens.recording.exceptions", "InvalidStorageError"),
-    "RecorderStateError": ("torchlens.recording.exceptions", "RecorderStateError"),
-    "RecoveryError": ("torchlens.recording.exceptions", "RecoveryError"),
-    "BundleNotFinalizedError": ("torchlens.recording.exceptions", "BundleNotFinalizedError"),
-    "RecordContextFieldError": ("torchlens.recording.exceptions", "RecordContextFieldError"),
-    "PredicateError": ("torchlens.recording.exceptions", "PredicateError"),
+    "RecordingConfigError": ("torchlens.recording._exceptions", "RecordingConfigError"),
+    "InvalidStorageError": ("torchlens.recording._exceptions", "InvalidStorageError"),
+    "RecorderStateError": ("torchlens.recording._exceptions", "RecorderStateError"),
+    "RecoveryError": ("torchlens.recording._exceptions", "RecoveryError"),
+    "BundleNotFinalizedError": ("torchlens.recording._exceptions", "BundleNotFinalizedError"),
+    "RecordContextFieldError": ("torchlens.recording._exceptions", "RecordContextFieldError"),
+    "PredicateError": ("torchlens.recording._exceptions", "PredicateError"),
     "TorchLensInterventionError": (
         "torchlens.intervention.errors",
         "TorchLensInterventionError",
@@ -188,7 +192,7 @@ _LEGACY_EXCEPTION_PATHS = {
     ),
     "NoParentError": ("torchlens.intervention.errors", "NoParentError"),
     "DeadParentError": ("torchlens.intervention.errors", "DeadParentError"),
-    "MetadataInvariantError": ("torchlens.validation.invariants", "MetadataInvariantError"),
+    "MetadataInvariantError": ("torchlens.validation._invariants", "MetadataInvariantError"),
 }
 
 _LAZY_EXCEPTION_PATHS = {
@@ -263,7 +267,7 @@ _LAZY_EXCEPTION_PATHS = {
     # Defined beside the eagerly-imported runnable vocabulary but registered
     # lazily: the class lands in the same fixwave as this registration, and a
     # lazy binding keeps this module importable at every commit interleaving.
-    "SparseCorePayloadError": ("torchlens.errors.runnable", "SparseCorePayloadError"),
+    "SparseCorePayloadError": ("torchlens.errors._runnable", "SparseCorePayloadError"),
     "StructuralHashMismatchError": ("torchlens.fingerprint", "StructuralHashMismatchError"),
     "TorchCapabilityWarning": ("torchlens._utils._torch_compat", "TorchCapabilityWarning"),
     "UncapturedCollectiveOpError": (
@@ -328,8 +332,8 @@ _LAZY_EXCEPTION_PATHS = {
     "CheckLifecycleError": ("torchlens.debug._checks._errors", "CheckLifecycleError"),
     "CheckViolationError": ("torchlens.debug._checks._errors", "CheckViolationError"),
     "AttributionError": ("torchlens.attribution._result", "AttributionError"),
-    "ReadError": ("torchlens.attribution.onebackward._errors", "ReadError"),
-    "ReadInternalError": ("torchlens.attribution.onebackward._errors", "ReadInternalError"),
+    "ReadError": ("torchlens.attribution._onebackward._errors", "ReadError"),
+    "ReadInternalError": ("torchlens.attribution._onebackward._errors", "ReadInternalError"),
     "GradFnWalkError": ("torchlens.debug._grad_fn_walk", "GradFnWalkError"),
     "ModelExplorerExportError": (
         "torchlens.export._model_explorer._errors",
@@ -413,6 +417,8 @@ def __getattr__(name: str) -> Any:
     AttributeError
         If ``name`` is not part of the public error surface.
     """
+
+    _refuse_private_submodule(__name__, name)
 
     if name in _LAZY_EXCEPTION_PATHS:
         class_module, attr_name = _LAZY_EXCEPTION_PATHS[name]

@@ -43,8 +43,8 @@ from ..._quantities import Duration
 from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
-from ...recording.types import CaptureSpec
-from ...validation.status import (
+from ...recording._types import CaptureSpec
+from ...validation._status import (
     ValidationReplaySource,
     ValidationStatus,
     count_importer_region_annotations,
@@ -635,7 +635,7 @@ class TinygradBackend:
             return status
         try:
             if kwargs.get("validate_metadata", True):
-                from ...validation.invariants import check_metadata_invariants
+                from ...validation._invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
             verdict = self._validate_uops(trace)

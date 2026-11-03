@@ -38,8 +38,8 @@ from torchlens.intervention._resolver_registry import (
     resolve_function_registry_key,
     resolve_import_ref,
 )
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 
 # The stdlib/builtin refs the r30 (and prior) audits proved resolvable under trust.
 # Every one must be DENIED on the default path, under broad trust, AND under an

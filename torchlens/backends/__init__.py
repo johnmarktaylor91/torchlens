@@ -2,8 +2,14 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
+from torchlens._utils._private_submodules import (
+    refuse_private_submodule as _refuse_private_submodule,
+)
+
 # Import for backend registration side effects.
-from . import default_specs as _default_specs  # noqa: F401
+from . import _default_specs as _default_specs  # noqa: F401
 from ._backend_protocol import (
     REFUSAL_CODES,
     VALIDATION_REASONS,
@@ -40,3 +46,26 @@ __all__ = [
     "unregister",
     "VALIDATION_REASONS",
 ]
+
+
+# Runtime only: under TYPE_CHECKING a module ``__getattr__`` would make every
+# name on this module type-check as Any.
+if not TYPE_CHECKING:
+
+    def __getattr__(name: str) -> Any:
+        """Refuse a submodule path that 3.0 made private, typed; miss plainly otherwise.
+
+        Parameters
+        ----------
+        name:
+            Attribute normal lookup did not find.
+
+        Raises
+        ------
+        AttributeError
+            Always; ``FacadeTeachingError`` (``facade_redirect``) for a private
+            submodule's old public spelling.
+        """
+
+        _refuse_private_submodule(__name__, name)
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

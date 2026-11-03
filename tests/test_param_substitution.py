@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._record_type import first_op
 from torchlens.errors import SelectionError
-from torchlens.validation.core import _check_edge_intervention_boundary
+from torchlens.validation._core import _check_edge_intervention_boundary
 
 
 class _Net(nn.Module):

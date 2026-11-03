@@ -23,7 +23,7 @@ from .._literals import (
     VisNodePlacementLiteral,
     VisRendererLiteral,
 )
-from ..intervention.types import FireRecord
+from ..intervention._types import FireRecord
 from ..viz._drawing import Drawing
 from ._color_sources import resolve_color_source
 from ._pass_animation import pass_animation_html

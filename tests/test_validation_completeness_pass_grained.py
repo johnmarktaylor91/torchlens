@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.validation.diagnostics import CHECK_COMPLETENESS, TRACE_FAILURE_ATTR
+from torchlens.validation._diagnostics import CHECK_COMPLETENESS, TRACE_FAILURE_ATTR
 
 
 class Loop(nn.Module):

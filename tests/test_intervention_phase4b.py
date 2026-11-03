@@ -12,7 +12,7 @@ import torch
 import torchlens as tl
 from torchlens.backends.torch._ops_containers import _walk_output_tensors_with_paths
 from torchlens.backends.torch._ops_interventions import _replace_output_tensors_by_path
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     ContainerSpec,
     DataclassField,
     DictKey,

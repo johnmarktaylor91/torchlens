@@ -698,11 +698,11 @@ def _check_call_site_contract_post_hoc(
         call_site_classes_for,
         call_site_contract_violation,
     )
-    from .invariants import MetadataInvariantError
+    from ._invariants import MetadataInvariantError
 
     classes = call_site_classes_for(trace)
     if classes is None:
-        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
+        from ._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(
             trace,
@@ -737,14 +737,14 @@ def _check_call_site_contract_post_hoc(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from ._invariants_topology import (  # noqa: E402
-    _retained_orphan_op_labels,
-)
-from .invariants import (  # noqa: E402
+from ._invariants import (  # noqa: E402
     _EQUIVALENT_OPS_UNAVAILABLE,
     _RAW_LABEL_BEARING_DICT_FIELDS,
     _RAW_LABEL_BEARING_LIST_FIELDS,
     _RAW_LABEL_BEARING_SCALAR_FIELDS,
     _RAW_LABEL_PATTERN,
     MetadataInvariantError,
+)
+from ._invariants_topology import (  # noqa: E402
+    _retained_orphan_op_labels,
 )

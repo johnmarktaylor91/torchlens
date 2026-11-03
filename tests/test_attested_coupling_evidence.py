@@ -28,7 +28,7 @@ from torchlens._capture._episode_coupling import (
     refuse_coupled_replay,
     settlement_fire_counts,
 )
-from torchlens.errors.episode import EpisodeCaptureError
+from torchlens.errors._episode import EpisodeCaptureError
 from torchlens.options import EpisodeOptions
 
 

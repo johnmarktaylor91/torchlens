@@ -2,7 +2,7 @@
 
 Also the capture decisions a predicate returns and the records a capture
 retains (``CaptureSpec``, ``ActivationRecord``, ``GradRecord`` and kin),
-published from ``torchlens.recording.types``.
+published from ``torchlens.recording._types``.
 """
 
 from __future__ import annotations
@@ -263,7 +263,7 @@ class RecordContext:
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
 
-        from ..recording.exceptions import RecordContextFieldError
+        from ..recording._exceptions import RecordContextFieldError
 
         raise RecordContextFieldError(name)
 
@@ -508,9 +508,9 @@ class PredicateFailure:
 
 
 # Preserve public type identity and pickle paths through the host's re-exports.
-CaptureSpec.__module__ = "torchlens.recording.types"
-StorageIntent.__module__ = "torchlens.recording.types"
-ActivationRecord.__module__ = "torchlens.recording.types"
-GradRecordContext.__module__ = "torchlens.recording.types"
-GradRecord.__module__ = "torchlens.recording.types"
-PredicateFailure.__module__ = "torchlens.recording.types"
+CaptureSpec.__module__ = "torchlens.recording._types"
+StorageIntent.__module__ = "torchlens.recording._types"
+ActivationRecord.__module__ = "torchlens.recording._types"
+GradRecordContext.__module__ = "torchlens.recording._types"
+GradRecord.__module__ = "torchlens.recording._types"
+PredicateFailure.__module__ = "torchlens.recording._types"

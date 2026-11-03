@@ -11,7 +11,7 @@ import pytest
 
 import torchlens as tl
 from torchlens.errors import BackendUnsupportedError
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 jax = pytest.importorskip("jax")
 jnp = pytest.importorskip("jax.numpy")

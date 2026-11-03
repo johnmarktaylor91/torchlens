@@ -14,8 +14,8 @@ from torchlens._ir import _DEFERRED_VALUE
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.intervention import FunctionEventInput
 from torchlens.errors import BackendUnsupportedError, MLXValueUnavailableError
-from torchlens.recording.storage_disk import _ctx_from_json, _ctx_to_json
-from torchlens.recording.types import CaptureSpec, RecordContext
+from torchlens.recording._storage_disk import _ctx_from_json, _ctx_to_json
+from torchlens.recording._types import CaptureSpec, RecordContext
 
 
 def _minimal_context(**updates: Any) -> RecordContext:

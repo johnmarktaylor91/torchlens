@@ -2061,8 +2061,8 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -2144,8 +2144,8 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -2439,7 +2439,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "gt_1_5_raw",
     "_layer_label_raw": "gt_1_5_raw",
@@ -2511,7 +2511,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -3784,7 +3784,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sigmoid_1_6_raw",
     "_layer_label_raw": "sigmoid_1_6_raw",
@@ -3868,7 +3868,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -4151,7 +4151,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sum_1_4_raw",
     "_layer_label_raw": "sum_1_4_raw",
@@ -4228,7 +4228,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -4637,7 +4637,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -5504,7 +5504,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "live": {
@@ -7569,8 +7569,8 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -7652,8 +7652,8 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -7947,7 +7947,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "gt_1_5_raw",
     "_layer_label_raw": "gt_1_5_raw",
@@ -8019,7 +8019,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -9292,7 +9292,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sigmoid_1_6_raw",
     "_layer_label_raw": "sigmoid_1_6_raw",
@@ -9376,7 +9376,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -9659,7 +9659,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sum_1_4_raw",
     "_layer_label_raw": "sum_1_4_raw",
@@ -9736,7 +9736,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -10145,7 +10145,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -11013,7 +11013,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "pickle": {
@@ -13078,8 +13078,8 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -13161,8 +13161,8 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -13456,7 +13456,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "gt_1_5_raw",
     "_layer_label_raw": "gt_1_5_raw",
@@ -13528,7 +13528,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -14801,7 +14801,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sigmoid_1_6_raw",
     "_layer_label_raw": "sigmoid_1_6_raw",
@@ -14885,7 +14885,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -15168,7 +15168,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sum_1_4_raw",
     "_layer_label_raw": "sum_1_4_raw",
@@ -15245,7 +15245,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -15654,7 +15654,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -16515,7 +16515,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "run": {
@@ -18580,8 +18580,8 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -18663,8 +18663,8 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -18958,7 +18958,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "gt_1_5_raw",
     "_layer_label_raw": "gt_1_5_raw",
@@ -19030,7 +19030,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -20303,7 +20303,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sigmoid_1_6_raw",
     "_layer_label_raw": "sigmoid_1_6_raw",
@@ -20387,7 +20387,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -20670,7 +20670,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sum_1_4_raw",
     "_layer_label_raw": "sum_1_4_raw",
@@ -20747,7 +20747,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -21156,7 +21156,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -22040,7 +22040,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "tlspec": {
@@ -24094,8 +24094,8 @@
     "_address_normalized": null,
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -24177,8 +24177,8 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -24445,7 +24445,7 @@
     "_address_normalized": null,
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "gt_1_5_raw",
     "_layer_label_raw": "gt_1_5_raw",
@@ -24517,7 +24517,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -25737,7 +25737,7 @@
     "_address_normalized": null,
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sigmoid_1_6_raw",
     "_layer_label_raw": "sigmoid_1_6_raw",
@@ -25819,7 +25819,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -26084,7 +26084,7 @@
     "_address_normalized": null,
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "sum_1_4_raw",
     "_layer_label_raw": "sum_1_4_raw",
@@ -26161,7 +26161,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -26552,7 +26552,7 @@
    "_health_num_expected_opaque_witness_events": null,
    "_health_num_unaccounted_witness_events": null,
    "_health_num_witness_events": null,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -27407,7 +27407,7 @@
    "unknown_flop_ops": [
     "<torchlens.report._compute_truth.UnknownOpGroup>"
    ],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  }
 }

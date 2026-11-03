@@ -16,7 +16,7 @@ import torchlens as tl
 from torchlens._io import BlobRef
 from torchlens.backends.torch import prehook_provenance as provenance
 from torchlens.errors import PredicateError, TraceCaptureError
-from torchlens.validation.core import validate_saved_outs
+from torchlens.validation._core import validate_saved_outs
 
 
 class _Unary(nn.Module):

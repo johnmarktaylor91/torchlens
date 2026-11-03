@@ -49,8 +49,8 @@ from torchlens.intervention._resolver_registry import (
     _is_torchlens_appliance_module as _resolver_is_appliance_module,
     resolve_function_registry_key,
 )
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.intervention.errors import ReplayPreconditionError, UntrustedCallableError
-from torchlens.intervention.types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

@@ -149,7 +149,7 @@ def _perturb_second_param_grad_census(monkeypatch: pytest.MonkeyPatch, scale: fl
     pipelines without touching either backward implementation.
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     real_param_grads = backward_validation._param_grads
     call_count = {"n": 0}
@@ -175,7 +175,7 @@ def test_fp64_param_grad_corruption_fails_the_backward_verdict(
     test FAILS before the dtype-aware wiring).
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     _perturb_second_param_grad_census(monkeypatch, 1.0 + 1e-6)
     model = torch.nn.Linear(4, 3).double().eval()
@@ -191,7 +191,7 @@ def test_fp64_param_grad_corruption_fails_the_backward_verdict(
 def test_fp64_param_grad_clean_run_still_passes() -> None:
     """The tightened fp64 row must not false-fail an honest fp64 capture."""
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     model = torch.nn.Linear(4, 3).double().eval()
     assert backward_validation.validate_backward_pass(
@@ -214,7 +214,7 @@ def test_fp16_few_ulp_param_grad_agreement_is_not_a_false_fail(
     a few storage ULPs (red-capable: this test FAILS before the wiring).
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     eps16 = float(torch.finfo(torch.float16).eps)
     _perturb_second_param_grad_census(monkeypatch, 1.0 + 2.0 * eps16)
@@ -233,7 +233,7 @@ def test_explicit_tolerances_still_override_every_dtype(
 ) -> None:
     """An explicit atol/rtol pair applies unchanged to every dtype."""
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     _perturb_second_param_grad_census(monkeypatch, 1.0 + 1e-6)
     model = torch.nn.Linear(4, 3).double().eval()
@@ -261,7 +261,7 @@ def test_fp64_layer_grad_corruption_fails_the_backward_verdict(
     ~4.5e9 fp64 ULPs -- was blessed (red-capable pre-wiring).
     """
 
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
     from torchlens.validation import _stock_layer_grads as stock_module
 
     real_stock_layer_grads = stock_module._stock_layer_grads
@@ -297,7 +297,7 @@ def test_legacy_public_spellings_default_to_dtype_derived_tolerances() -> None:
 
     import torchlens
     import torchlens._user_public_impls as user_public_impls
-    import torchlens.validation.backward as backward_validation
+    import torchlens.validation._backward as backward_validation
 
     for spelling in (
         torchlens.validation.validate_backward_pass,

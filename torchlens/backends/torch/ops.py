@@ -143,9 +143,8 @@ from ..._utils.tensor_utils import (
     safe_to,
     tensor_nanequal,
 )
-from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
-from ...intervention.runtime import active_intervention_context
-from ...intervention.types import (
+from ...intervention._runtime import active_intervention_context
+from ...intervention._types import (
     ArgComponent,
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -157,10 +156,11 @@ from ...intervention.types import (
     TargetSpec,
     Unsupported,
 )
+from ...intervention.hooks import make_live_site_proxy, normalize_hook_plan
+from ...recording._exceptions import PredicateError
 from ...recording._halt import StopSignal
 from ...recording._storage_resolver import _resolve_storage
-from ...recording.exceptions import PredicateError
-from ...recording.types import (
+from ...recording._types import (
     ActivationRecord,
     CaptureSpec,
     ModuleStackFrame,

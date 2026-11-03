@@ -13,8 +13,8 @@ from typing import TYPE_CHECKING, Any, Protocol
 import torch
 
 if TYPE_CHECKING:
-    from ..recording.options import _RecordingConfig
-    from ..recording.types import (
+    from ..recording._options import _RecordingConfig
+    from ..recording._types import (
         ActivationRecord,
         CaptureSpec,
         GradRecordContext,

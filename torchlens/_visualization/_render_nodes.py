@@ -793,7 +793,7 @@ def _render_raw_input(
             strings = strings[:max_items]
         # Lazy: ..viz top-imports this package, so an import-time edge back
         # into ..viz would mint a bidirectional package cycle (b5 R51).
-        from ..viz import batch_summary
+        from ..viz import _batch_summary as batch_summary
 
         return {
             "label": batch_summary.text_table(strings, max_items),
@@ -989,7 +989,7 @@ def _render_raw_input_image_batch(
     if more_count > 0:
         label_lines.append(f"+{more_count} more")
     # Lazy for the same package-cycle reason as the text-table branch above.
-    from ..viz import batch_summary
+    from ..viz import _batch_summary as batch_summary
 
     try:
         montage = batch_summary.montage(images, max_items)

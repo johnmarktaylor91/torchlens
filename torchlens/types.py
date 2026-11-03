@@ -32,7 +32,7 @@ from ._runnable import NumericAttestationStatus, PathFaithfulness, ReadinessStat
 from ._selection.selection import Site
 from ._selection.subspace import BasisProvenance
 from .intervention import SpecCompat, TargetManifestDiff
-from .intervention.types import Relationship
+from .intervention._types import Relationship
 
 if TYPE_CHECKING:
     from ._data_classes.container import Container
@@ -44,7 +44,7 @@ if TYPE_CHECKING:
     from ._quickstart._grammar import InputSpec
     from ._quickstart._provenance import InputProvenance
     from ._trace_slice import TraceSlice
-    from .recording.types import RecordingSettings
+    from .recording._types import RecordingSettings
 
 _ActivationPostfunc = Callable[[torch.Tensor], torch.Tensor]
 _GradientPostfunc = Callable[[torch.Tensor], torch.Tensor]
@@ -141,7 +141,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "MergeValueStatus": ("torchlens._merged._enums", "MergeValueStatus"),
     "MergedTrace": ("torchlens._merged._presenter", "MergedTrace"),
     "PartialTrace": ("torchlens._partial", "PartialTrace"),
-    "RecordingSettings": ("torchlens.recording.types", "RecordingSettings"),
+    "RecordingSettings": ("torchlens.recording._types", "RecordingSettings"),
     "TraceSlice": ("torchlens._trace_slice", "TraceSlice"),
     "register_container": ("torchlens._ir.container", "register_container"),
 }

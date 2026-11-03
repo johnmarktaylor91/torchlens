@@ -8,7 +8,7 @@ experiment API can produce — it reads as a null result.
 
 Contract:
 
-- mapping values are :class:`~torchlens.intervention.spec.InterventionSpec`
+- mapping values are :class:`~torchlens.intervention._spec.InterventionSpec`
   objects, ``(selection, edit)`` sugar (normalized immediately to one-clause
   specs), or ``None`` meaning INTENTIONALLY unchanged (recorded as an
   explicit identity outcome).
@@ -35,7 +35,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 
 if TYPE_CHECKING:
     from . import Bundle
@@ -84,7 +84,7 @@ def _normalize_values(assignments: dict[str, Any]) -> dict[str, Any]:
     one reused SamplingPlan object yields one donor group across members.
     """
 
-    from ..intervention.spec import Recipe, when
+    from ..intervention._spec import Recipe, when
     from ..intervention.stochastic import assign_batch_donor_groups
 
     pair_names = [
@@ -115,7 +115,7 @@ def _apply_member_specs(
 ) -> tuple[dict[str, str], dict[str, str | None], tuple[str, BaseException] | None]:
     """Apply one lowered spec (or identity) per member; stop at the first failure."""
 
-    from ..intervention.audit import append_event_audit_row
+    from ..intervention._audit import append_event_audit_row
 
     outcomes: dict[str, str] = {
         name: ("unstarted" if name in lowered else "unmentioned") for name in bundle._members

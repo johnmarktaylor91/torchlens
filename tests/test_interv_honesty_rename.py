@@ -20,14 +20,14 @@ import torch
 
 import torchlens as tl
 from torchlens.intervention import scramble_elements
-from torchlens.intervention.helpers import rebuild_builtin_helper
+from torchlens.intervention._helpers import rebuild_builtin_helper
 
 
 def test_old_spelling_is_gone() -> None:
     """Clean break: no alias survives in the helpers module, the package, or tl.*."""
 
     import torchlens.intervention as intervention
-    from torchlens.intervention import helpers
+    from torchlens.intervention import _helpers as helpers
 
     assert not hasattr(helpers, "resample_ablate")
     assert not hasattr(intervention, "resample_ablate")
@@ -42,7 +42,7 @@ def test_old_spelling_raises_typed_error_naming_the_replacement(owner: str) -> N
 
     import torchlens.intervention as intervention
     from torchlens._errors import FacadeTeachingError
-    from torchlens.intervention import helpers
+    from torchlens.intervention import _helpers as helpers
 
     module = {"torchlens": tl, "intervention": intervention, "helpers": helpers}[owner]
     with pytest.raises(FacadeTeachingError) as excinfo:
@@ -109,7 +109,7 @@ def test_a_pickled_edit_naming_the_old_helper_refuses_typed() -> None:
 
 
 def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
-    """An import ref ``torchlens.intervention.helpers:resample_ablate`` fails closed, teaching.
+    """An import ref ``torchlens.intervention._helpers:resample_ablate`` fails closed, teaching.
 
     Built-in helpers persist by NAME (above), so only a hand-wrapped
     import-ref helper saved before 2.35.0 could carry this path. Resolution
@@ -120,14 +120,14 @@ def test_import_ref_to_the_retired_name_fails_closed_typed() -> None:
     """
 
     from torchlens._errors import FacadeTeachingError
-    from torchlens.intervention import helpers
+    from torchlens.intervention import _helpers as helpers
     from torchlens.intervention._resolver_registry import resolve_import_ref
     from torchlens.intervention.errors import ReplayPreconditionError
 
-    current = resolve_import_ref("torchlens.intervention.helpers:scramble_elements")
+    current = resolve_import_ref("torchlens.intervention._helpers:scramble_elements")
     assert current is helpers.scramble_elements
     with pytest.raises(ReplayPreconditionError) as excinfo:
-        resolve_import_ref("torchlens.intervention.helpers:resample_ablate")
+        resolve_import_ref("torchlens.intervention._helpers:resample_ablate")
     cause = excinfo.value.__cause__
     assert isinstance(cause, FacadeTeachingError)
     assert cause.fields["code"] == "facade_redirect"

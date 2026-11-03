@@ -21,10 +21,10 @@ from torchlens.backends.torch.backward import (
     _make_grad_fn_hook,
     _make_grad_fn_prehook,
 )
+from torchlens.intervention._helpers import _helper_spec
+from torchlens.intervention._types import FireRecord, InterventionSpec, TargetSpec
 from torchlens.intervention.errors import HelperMountError, HookValueError, SelectorCompositionError
-from torchlens.intervention.helpers import _helper_spec
 from torchlens.intervention.hooks import normalize_hook_plan
-from torchlens.intervention.types import FireRecord, InterventionSpec, TargetSpec
 
 
 class _EncoderModel(nn.Module):

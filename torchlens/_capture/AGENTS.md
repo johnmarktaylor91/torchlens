@@ -22,7 +22,7 @@ partial diagnostics, and fastlog's lightweight `RecordContext` construction.
 | `flops.py` | Forward and backward FLOPs estimates with registry hooks |
 | `outcome.py` | SINGLE authority for terminal capture truth: `CaptureOutcome`/`CaptureStatus`/`CapturePhase`/`FailureOrigin` plus the N1-N5 capability chokepoint |
 | `session.py` | Capture-session lifecycle state |
-| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `_capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `recording/types.py`), not helper callables for `projections.py` |
+| `projectors.py` | Projector CLASSES over a sealed capture core — `RefreshProjector` (consumed by `_capture/trace.py` refresh runs) and `RecordingProjection`/`RecordingProjector` (consumed by `recording/_types.py`), not helper callables for `projections.py` |
 | `plan.py` | Capture planning helpers |
 | `__init__.py` | Empty package marker |
 
@@ -134,7 +134,7 @@ storage routing.
 
 - `followed_by` must stay correct-or-loud for unsupported predicate shapes.
 - Halt and nonfinite directives must return partials only through the explicit StopDirective policy.
-- Validation for backward lives in `validation/backward.py`.
+- Validation for backward lives in `validation/_backward.py`.
 
 ## Known Risks
 

@@ -1198,7 +1198,7 @@ def _compare_lens_identity(trace: Any, record: Mapping[str, Any]) -> tuple[str, 
         )
     from .._data_substrate import compare_model_identity, compute_model_identity
     from .._runnable.transaction import _require_live_source_model
-    from ..errors.runnable import RunCapabilityUnavailableError
+    from ..errors._runnable import RunCapabilityUnavailableError
 
     try:
         model = _require_live_source_model(trace)

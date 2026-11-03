@@ -22,7 +22,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention.edge_substitution import _consumed_value, tensor_content_digest
+from torchlens.intervention._edge_substitution import _consumed_value, tensor_content_digest
 
 _N_PASSES = 3
 

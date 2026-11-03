@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 import torchlens as tl
-from torchlens.intervention.types import InterventionSpec
+from torchlens.intervention._types import InterventionSpec
 
 
 def test_examples_load_returns_trace() -> None:

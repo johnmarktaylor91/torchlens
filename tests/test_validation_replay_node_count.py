@@ -14,8 +14,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import core as validation_core
-from torchlens.validation.core import ValidationDecisionRecorder
+from torchlens.validation import _core as validation_core
+from torchlens.validation._core import ValidationDecisionRecorder
 
 
 def _recorder_with_no_interior_replays() -> ValidationDecisionRecorder:

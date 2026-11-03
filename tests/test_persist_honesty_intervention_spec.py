@@ -19,11 +19,11 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.outcome import CaptureOutcomeError
 from torchlens.errors import TraceCaptureError
+from torchlens.intervention._save import SaveLevel, load_intervention_spec, save_intervention
 from torchlens.intervention._spec_codec import _deserialize_fire_record, _serialize_fire_record
 from torchlens.intervention._spec_values import _SerializedState
+from torchlens.intervention._types import FireRecord
 from torchlens.intervention.errors import ReplayPreconditionError
-from torchlens.intervention.save import SaveLevel, load_intervention_spec, save_intervention
-from torchlens.intervention.types import FireRecord
 
 
 def _spec_dir(tmp_path):

@@ -23,6 +23,7 @@ from typing import Any
 
 import pytest
 
+from torchlens.validation._invariants import MetadataInvariantError
 from torchlens.validation._invariants_conditional_modules import (
     _check_module_hierarchy,
     _check_module_layer_containment,
@@ -51,7 +52,6 @@ from torchlens.validation._invariants_topology import (
     _check_graph_topology,
     _check_special_layer_lists,
 )
-from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _FakeTrace(SimpleNamespace):

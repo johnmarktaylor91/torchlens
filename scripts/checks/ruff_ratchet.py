@@ -573,7 +573,7 @@ def check_ignored_codes_all_carry_ceilings() -> None:
 #: completeness_witness.py (three of the most change-heavy capture files) is
 #: permanently invisible to F401. SHRINK-ONLY: converting a blanket to
 #: per-line noqa (the repo's own preferred pattern, see
-#: validation/invariants.py) lowers this; adding a file may never pass
+#: validation/_invariants.py) lowers this; adding a file may never pass
 #: silently.
 _BLANKET_NOQA_CEILING = 9
 

@@ -10,7 +10,7 @@ from .._io._field_policy import FieldPolicy
 from .container import ContainerSpec
 
 if TYPE_CHECKING:
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
     from .intervention import FireResult, InterventionTemplateRef
     from .refs import ParamRef, TensorRef
     from .semantics import BackendSemantics, CapturePolicy

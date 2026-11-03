@@ -15,8 +15,8 @@ from .errors import HookSignatureError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from ._types import Edit
     from .hooks import HookCallable, HookDirection
-    from .types import Edit
 
 #: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
 _GRAD_SELECTOR_KIND = "grad"

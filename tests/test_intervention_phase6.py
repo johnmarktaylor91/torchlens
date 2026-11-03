@@ -10,15 +10,15 @@ import pytest
 import torch
 
 import torchlens as tl
+from torchlens.intervention._replay import cone_of_effect
 from torchlens.intervention.errors import (
     ControlFlowDivergenceWarning,
     MultiMatchWarning,
     ReplayPreconditionError,
 )
-from torchlens.intervention.replay import cone_of_effect
 from torchlens.io import TraceState
 
-replay_mod = importlib.import_module("torchlens.intervention.replay")
+replay_mod = importlib.import_module("torchlens.intervention._replay")
 
 
 def _zero_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:

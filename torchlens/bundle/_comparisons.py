@@ -17,7 +17,7 @@ import torch
 from .._errors import InvalidArgumentError
 from .._selection.resolver import _resolve_sites
 from .._selection.selectors import label as _exact_label
-from ..intervention.types import Relationship
+from ..intervention._types import Relationship
 from ._aligned_sites import aligned_site_labels, resolve_aligned_site, site_row_key
 from ._deltas import _distance_value
 

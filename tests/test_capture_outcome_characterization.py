@@ -326,7 +326,7 @@ def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
 def test_recorder_keyboard_interrupt_leaves_no_product() -> None:
     """Recorder BaseException: propagates; `.recording` raises typed."""
 
-    from torchlens.recording.exceptions import RecorderStateError
+    from torchlens.recording._exceptions import RecorderStateError
 
     recorder = Recorder(FailingForwardModel(KeyboardInterrupt()), save=lambda ctx: True)
     with pytest.raises(KeyboardInterrupt), recorder as active:

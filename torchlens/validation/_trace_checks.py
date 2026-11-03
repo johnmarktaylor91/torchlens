@@ -20,8 +20,8 @@ from .._utils.rng import restores_rng_streams
 from ..backends.registry import get_backend_spec
 from ..backends.torch._trace_backward import _refuse_stats_capture
 from . import _degenerate_forward
-from .invariants import check_metadata_invariants as _check_metadata_invariants_impl
-from .status import ValidationStatus
+from ._invariants import check_metadata_invariants as _check_metadata_invariants_impl
+from ._status import ValidationStatus
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

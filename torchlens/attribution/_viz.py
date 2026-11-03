@@ -19,7 +19,7 @@ def _graph_site_values(graph: Any, graph_value: str) -> dict[str, list[float]]:
 
     by_site: dict[str, list[float]] = {}
     if graph_value == "influence":
-        from torchlens.attribution.graph._neuronpedia import node_influence
+        from torchlens.attribution._graph._neuronpedia import node_influence
 
         influence = node_influence(graph).tolist()
         for index, node in enumerate(graph.nodes):
@@ -80,7 +80,7 @@ def attribution_color_by(trace: Any, source: Any) -> Callable[[Any], float | Non
     that module; per-pass splits are not claimed. Another reduction is a
     mapping the caller computes and passes to ``color_by`` directly.
 
-    An :class:`~torchlens.attribution.graph.AttributionGraph` source paints
+    An :class:`~torchlens.attribution._graph.AttributionGraph` source paints
     each site holding feature or error nodes with the ``abs_sum`` of its
     nodes' influence on the logits (circuit-tracer's rule, the quantity
     :meth:`AttributionGraph.to_neuronpedia` prunes by). Token and logit nodes

@@ -142,7 +142,7 @@ def _parent_slots_under(layer: Op, slot: tuple[str, Any]) -> dict[tuple[Any, ...
 def _concrete_label(trace: Trace, label: str) -> str:
     """Return the concrete op label a (possibly pass-less) graph label resolves to."""
 
-    from .core import _op_for_validation_label
+    from ._core import _op_for_validation_label
 
     return _op_for_validation_label(trace, label).label
 
@@ -183,7 +183,7 @@ def _perturbed_node(replayed: torch.Tensor, perturbed: torch.Tensor) -> torch.Te
 def _select_output(op: Op, output: Any) -> Any:
     """Pick the leaf one op represents out of its func's (possibly multi) return."""
 
-    from .core import _slice_recomputed_output_by_path
+    from ._core import _slice_recomputed_output_by_path
 
     container_path = tuple(getattr(op, "container_path", ()) or ())
     if container_path and not isinstance(output, torch.Tensor):
@@ -222,7 +222,7 @@ class _SubgraphReplay:
     def resolve(self, label: str) -> Op:
         """Resolve a parent label to its concrete op."""
 
-        from .core import _op_for_validation_label
+        from ._core import _op_for_validation_label
 
         return _op_for_validation_label(self.trace, label)
 
@@ -337,7 +337,7 @@ class _SubgraphReplay:
     def _replay_op(self, op: Op) -> torch.Tensor:
         """Re-execute one op from its saved arguments with replayed parents spliced in."""
 
-        from .core import (
+        from ._core import (
             _execute_func_with_restored_state,
             _prepare_input_args_for_validating_layer,
         )

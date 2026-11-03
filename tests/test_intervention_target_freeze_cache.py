@@ -7,7 +7,7 @@ import pickle
 import torch
 
 import torchlens as tl
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     FrozenTargetSpec,
     InterventionSpec,
     TargetSpec,

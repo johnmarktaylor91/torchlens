@@ -599,7 +599,7 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         # THE NodeSpec funnel (fixedsize key + width/height emissions).
         "_visualization/_render_leaf.py": 3,
         # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
-        "viz/feature_maps.py": 1,
+        "viz/_feature_maps.py": 1,
         # C01 architecture move: the three node-visual writer sites left
         # __init__.py for the dedicated submodule; same sites, same count.
         "repgeom/_node_visuals.py": 3,

@@ -65,16 +65,16 @@ from .backends.registry import (
 from .backends.torch.bound_root import (
     _reject_non_module_ladder_root,
 )
-from .intervention import model_door as _model_door
+from .intervention import _model_door as _model_door
+from .intervention._predicates import InterventionPredicate
 from .intervention._zero_fire import zero_fire_policy_scope
-from .intervention.predicates import InterventionPredicate
 from .options import (
     CaptureOptions,
     EpisodeOptions,
     StorageOptions,
     merge_capture_options,
 )
-from .recording.options import PredicateFn
+from .recording._options import PredicateFn
 
 
 def _facet_snapshot_provider(extra_recipes: Any) -> Any:

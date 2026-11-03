@@ -14,7 +14,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._data_classes.trace import ConditionalAccessor, ConditionalEvent, Trace
 from torchlens._postprocess.finalization import _build_conditional_records
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _EquivalentOpsModel(nn.Module):

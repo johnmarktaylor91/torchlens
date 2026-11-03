@@ -13,7 +13,7 @@ class _Opaque:
 
 
 def test_missing_attribution_graph_kit_is_not_an_attribution_source(monkeypatch) -> None:
-    """With ``torchlens.attribution.graph`` unimportable the probe answers False, not ImportError.
+    """With ``torchlens.attribution._graph`` unimportable the probe answers False, not ImportError.
 
     The attribution package is imported first so that only the graph kit is
     missing: a ``None`` entry in ``sys.modules`` makes the guarded import raise
@@ -21,12 +21,12 @@ def test_missing_attribution_graph_kit_is_not_an_attribution_source(monkeypatch)
     """
 
     importlib.import_module("torchlens.attribution")
-    monkeypatch.setitem(sys.modules, "torchlens.attribution.graph", None)
+    monkeypatch.setitem(sys.modules, "torchlens.attribution._graph", None)
     assert _is_attribution_source(_Opaque()) is False
 
 
 def test_present_attribution_graph_kit_still_rejects_opaque_sources() -> None:
     """The same opaque value is not a source when the kit imports."""
 
-    importlib.import_module("torchlens.attribution.graph")
+    importlib.import_module("torchlens.attribution._graph")
     assert _is_attribution_source(_Opaque()) is False

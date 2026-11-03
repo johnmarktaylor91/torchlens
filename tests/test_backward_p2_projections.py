@@ -11,7 +11,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens.backends.torch.backward import _assign_grad_fn_orders
-from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
+from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
 
 
 class _TwoPassModel(nn.Module):

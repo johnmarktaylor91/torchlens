@@ -388,7 +388,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
     """
 
     import torchlens._postprocess as pp
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants import (
         MetadataInvariantError,
         check_metadata_invariants,
     )
@@ -448,7 +448,7 @@ def test_f3b_postprocess_edge_drop_fails_invariants(monkeypatch: pytest.MonkeyPa
 def test_f3b_honest_capture_passes_invariants() -> None:
     """The capture-edge-survival invariant never fires on an honest capture."""
 
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     torch.manual_seed(0)
     trace = tl.trace(
@@ -490,7 +490,7 @@ def test_f1_final_slot_permutation_fails_invariants() -> None:
     to its exact slot.
     """
 
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants import (
         MetadataInvariantError,
         check_metadata_invariants,
     )
@@ -514,7 +514,7 @@ def test_f1_final_argpos_entry_drop_fails_invariants() -> None:
     metadata silently lost an edge.
     """
 
-    from torchlens.validation.invariants import (
+    from torchlens.validation._invariants import (
         MetadataInvariantError,
         check_metadata_invariants,
     )

@@ -11,20 +11,10 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import backward as backward_validation, core
+from torchlens.validation import _backward as backward_validation, _core as core
 from torchlens.validation._destination_coverage import _scatter_index_fully_overwrites_dim
-from torchlens.validation._invariants_conditional_base import _check_branching_invariants
-from torchlens.validation._invariants_conditional_modules import (
-    _check_layer_pass_to_layer_log_xrefs,
-    _check_pass_count_consistency,
-)
-from torchlens.validation._invariants_entry import (
-    _check_non_torch_backward_inert,
-    _check_receptive_field_metadata_invariants,
-)
-from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
-from torchlens.validation.diagnostics import get_validation_failure
-from torchlens.validation.exemptions import (
+from torchlens.validation._diagnostics import get_validation_failure
+from torchlens.validation._exemptions import (
     SKIP_VALIDATION_ENTIRELY,
     _binary_extrema_nonperturbed_arg_dominates,
     _check_getitem_exempt,
@@ -36,13 +26,23 @@ from torchlens.validation.exemptions import (
     _posthoc_overwrite_decision,
     perturbed_layer_at_structural_position,
 )
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants import (
     MetadataInvariantError,
     _check_non_torch_primitive_op_inert,
     _check_site_key_invariants,
     check_metadata_invariants,
 )
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._invariants_conditional_base import _check_branching_invariants
+from torchlens.validation._invariants_conditional_modules import (
+    _check_layer_pass_to_layer_log_xrefs,
+    _check_pass_count_consistency,
+)
+from torchlens.validation._invariants_entry import (
+    _check_non_torch_backward_inert,
+    _check_receptive_field_metadata_invariants,
+)
+from torchlens.validation._invariants_payloads import _check_backend_neutral_graph_topology
+from torchlens.validation._status import ValidationStatus
 
 
 def _trace_saving_args(model: Any, inputs: Any) -> Any:
@@ -1024,7 +1024,7 @@ def test_setitem_overwrite_proof_rejects_negative_index_aliasing() -> None:
     indexing semantics normalize negatives, slices, and masks exactly.
     """
 
-    from torchlens.validation.exemptions import _setitem_destination_coverage_is_total
+    from torchlens.validation._exemptions import _setitem_destination_coverage_is_total
 
     dest = torch.tensor([10.0, 20.0])
     aliasing = (dest, torch.tensor([0, -2]), torch.tensor([1.0, 2.0]))
@@ -1274,7 +1274,7 @@ def test_to_tensor_template_exemption_refuses_perturbed_data_source() -> None:
     the F2 ``*_like`` template-slot tightening.
     """
 
-    from torchlens.validation.exemptions import _posthoc_structural_output_decision
+    from torchlens.validation._exemptions import _posthoc_structural_output_decision
 
     layer = _fake_layer(
         func_name="to",

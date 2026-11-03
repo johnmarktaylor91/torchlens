@@ -35,7 +35,7 @@ DOCS: dict[str, str] = {
             on correct captures trains users to ignore it.
         verbose, validate_metadata:
             Forwarded unchanged to
-            :func:`torchlens.validation.core.validate_saved_outs`.
+            :func:`torchlens.validation._core.validate_saved_outs`.
         
         Returns
         -------

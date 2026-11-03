@@ -1,6 +1,6 @@
 """Cone-of-effect membership and site labelling for saved-DAG replay.
 
-Split from :mod:`torchlens.intervention.replay`: the cone walk, the label-to-replay-key
+Split from :mod:`torchlens.intervention._replay`: the cone walk, the label-to-replay-key
 map every replay step resolves through, origin validation, the user-facing
 disclosure spelling of a site and the dependency-ordered call-cone scheduler that
 replay and sparse runnable execution share. Nothing here mutates a trace; the

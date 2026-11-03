@@ -8,7 +8,7 @@ from .._capture.stages import InternalCaptureConfig
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
-    from .options import _RecordingConfig
+    from ._options import _RecordingConfig
 
 
 def _configure_predicate_capture(trace: Trace, options: _RecordingConfig) -> None:

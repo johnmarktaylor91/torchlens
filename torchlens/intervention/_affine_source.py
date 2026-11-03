@@ -26,8 +26,8 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .helpers import _helper_spec
-from .types import Edit
+from ._helpers import _helper_spec
+from ._types import Edit
 
 __all__ = ["SourceCall", "set_affine_coordinates", "check_source_shape", "needs_subspace"]
 

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .._io import ArtifactError
-from .types import Recording
+from ._types import Recording
 
 
 def write_pass_index(path: str | Path, recording: Recording) -> None:

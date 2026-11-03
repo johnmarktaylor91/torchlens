@@ -9,12 +9,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
 from ..errors import CaptureError
+from ..recording._exceptions import PredicateError
 from ..recording._halt import StopSignal
-from ..recording.exceptions import PredicateError
 
 if TYPE_CHECKING:
-    from ..recording.options import ForwardErrorMode, _RecordingConfig
-    from ..recording.types import RecordContext
+    from ..recording._options import ForwardErrorMode, _RecordingConfig
+    from ..recording._types import RecordContext
 
 ForwardStopDisposition = Literal["raise", "attach_partial", "return_partial"]
 

@@ -792,7 +792,7 @@ def _settle_live_graph_change(
     Interim typing bridge: ``PathDivergenceError`` does not (yet) carry
     ``ValueError`` in its lineage while the historical ``save_new_outs`` /
     ``run()`` callers pin ``except ValueError`` on this exact refusal. Until the
-    one-line lineage change lands in ``torchlens.errors.runnable`` (recorded
+    one-line lineage change lands in ``torchlens.errors._runnable`` (recorded
     OUT-OF-FENCE by lane W051-HONESTY; this bridge then dissolves on its own), the
     RAISE arm re-raises the projector's ``ValueError`` decorated with the SAME
     structured facts the typed error carries (``fields["code"]`` /

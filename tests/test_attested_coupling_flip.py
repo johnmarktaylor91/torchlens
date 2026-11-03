@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import at_step
 from torchlens.errors import TraceCaptureError
-from torchlens.errors.episode import EpisodeCaptureError
+from torchlens.errors._episode import EpisodeCaptureError
 from torchlens.options import EpisodeOptions
 
 SEED = 1234

@@ -21,13 +21,13 @@ from ..backends.registry import (
     get_backend_spec,
     require_capability_implementation,
 )
-from ..intervention.predicates import InterventionPredicate
+from ..intervention._predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions
 from ._generation import GenerationRecording, enrich_generation, record_generation
+from ._options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
 from ._recorder import Recorder
+from ._types import CaptureSpec, Recording
 from ._validation import validate_postprocess
-from .options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
-from .types import CaptureSpec, Recording
 
 _CAPTURE_DOOR_FIELDS: tuple[str, ...] = (
     "lookback",

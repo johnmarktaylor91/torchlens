@@ -155,7 +155,7 @@ def test_harvest_block_fail_closed_on_foreign_fields():
 def test_spec_persistence_carries_expression_and_resolution_disclosure():
     """Predicate-door saves carry the WHERE expression + site-key disclosure."""
 
-    import torchlens.intervention.save as intervention_save
+    import torchlens.intervention._save as intervention_save
 
     baseline_model, _, x = make_insertion_pair()
     spec = tl.when(tl.func("relu"), tl.zero_ablate())

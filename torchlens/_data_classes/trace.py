@@ -52,7 +52,7 @@ if TYPE_CHECKING:
     from .._output_slot import OutputSlot
     from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
-    from ..intervention.types import FrozenInterventionSpec, TargetSpec
+    from ..intervention._types import FrozenInterventionSpec, TargetSpec
     from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
@@ -93,7 +93,7 @@ from .._trace_state import TraceState
 from .._utils.fail_open import fail_open
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
-from ..intervention.types import (
+from ..intervention._types import (
     MODEL_LOG_FIELD_FORK_POLICY,
     InterventionSpec,
     Relationship,
@@ -172,7 +172,7 @@ if TYPE_CHECKING:
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
     from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
-    from ..intervention.types import FireRecord
+    from ..intervention._types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
         ReceptiveFieldProfile,
@@ -181,7 +181,7 @@ if TYPE_CHECKING:
     from ..report._explain import ExplainReport
     from ..report._profile import ProfileReport
     from ..report._trace_facts import _CallableDict
-    from ..validation.status import ValidationStatus
+    from ..validation._status import ValidationStatus
     from ..viz._drawing import Drawing
     from .aten_op import AtenOp, _ModePausedInteriorGap
     from .buffer import BufferAccessor

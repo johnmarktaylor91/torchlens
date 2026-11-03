@@ -195,7 +195,7 @@ def test_noise_std_distinguishes_audit_rows() -> None:
 def test_sweep_members_carry_distinguishable_values() -> None:
     """Swept members' envelopes differ by the typed swept value (no closures)."""
 
-    from torchlens.intervention.sweep import sweep
+    from torchlens.intervention._sweep import sweep
 
     model = _TinyModel()
     bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])

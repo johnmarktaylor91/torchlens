@@ -50,8 +50,8 @@ from ...backends.registry import (
     require_capability_implementation,
 )
 from ...recording._halt import StopSignal
-from ...recording.types import CaptureSpec
-from ...validation.status import ValidationReplaySource, ValidationStatus  # noqa: TC001
+from ...recording._types import CaptureSpec
+from ...validation._status import ValidationReplaySource, ValidationStatus  # noqa: TC001
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -1470,8 +1470,8 @@ class MLXBackend:
         failed_count = 0
         decisions: tuple[dict[str, Any], ...] = ()
         try:
-            from ...validation.invariants import check_metadata_invariants
-            from ...validation.status import count_importer_region_annotations
+            from ...validation._invariants import check_metadata_invariants
+            from ...validation._status import count_importer_region_annotations
             from .validation import MLX_VALIDATION_REASONS, validate_mlx_captures_detailed
 
             exempted: dict[str, int] = {}

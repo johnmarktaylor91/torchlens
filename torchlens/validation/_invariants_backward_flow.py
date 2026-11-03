@@ -572,9 +572,9 @@ def _plain_func_call_group_signature(layer: Op) -> tuple[object, ...]:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_backward_domain import (  # noqa: E402
     _resolve_op_grad_event_label,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

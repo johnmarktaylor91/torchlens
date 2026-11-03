@@ -42,7 +42,7 @@ from torchlens import _state
 from torchlens.errors import TorchLensError
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_METADATA_INVARIANT
+from torchlens.validation._diagnostics import CHECK_METADATA_INVARIANT
 
 from .generator import Cell, Inputs
 

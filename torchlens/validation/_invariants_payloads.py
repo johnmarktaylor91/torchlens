@@ -700,6 +700,9 @@ def _payload_memory(payload: object) -> int | None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_backward_flow import (  # noqa: E402
     op_has_genuine_replacement_evidence,
 )
@@ -708,7 +711,4 @@ from ._invariants_buffers import (  # noqa: E402
 )
 from ._invariants_conditional_base import (  # noqa: E402
     _dtype_values_match,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

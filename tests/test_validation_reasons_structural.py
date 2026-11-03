@@ -15,7 +15,7 @@ from types import SimpleNamespace
 import pytest
 
 from torchlens.backends._backend_protocol import VALIDATION_REASONS
-from torchlens.validation.status import known_validation_reasons
+from torchlens.validation._status import known_validation_reasons
 
 
 def test_structural_reasons_are_public_members() -> None:

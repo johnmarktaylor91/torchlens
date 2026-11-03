@@ -1035,7 +1035,7 @@ def test_context_invalid_degrades_analysis_only(
 def test_inexecutable_divergent_input_raises_path_divergence(tmp_path: Path) -> None:
     """corr2_4: an admitted-but-inexecutable divergent input raises PathDivergenceError."""
 
-    from torchlens.errors.runnable import PathDivergenceError
+    from torchlens.errors._runnable import PathDivergenceError
 
     x = torch.randn(2, 4)
     trace = _capture(_DeterministicLinear(), x)

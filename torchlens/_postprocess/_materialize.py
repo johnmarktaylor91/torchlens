@@ -21,7 +21,7 @@ from torchlens._ir.events import (
     ModulePrepEvent,
     OpEvent,
 )
-from torchlens.intervention.types import EdgeUseRecord
+from torchlens.intervention._types import EdgeUseRecord
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes._module_role_hints import (
@@ -766,7 +766,7 @@ def _normalize_edge_use_record(
     # F10 (lovely item 8): the storage verdict populates from the closed
     # function-semantics table when this event carries a function name;
     # keyword edges and unknown functions stay the honest "unknown".
-    from ..intervention.edge_semantics import classify_view_or_copy
+    from ..intervention._edge_semantics import classify_view_or_copy
 
     arg_path = _edge_arg_position_to_path(arg_position)
     event_func_name = getattr(getattr(event, "function", None), "func_name", None)

@@ -316,7 +316,7 @@ class TFBackend:
             trace._tf_static_region_labels = static_result.region_captures
             trace._tf_static_fallback_error = static_result.fallback_error
             if static_result.region_captures:
-                from ...validation.status import (
+                from ...validation._status import (
                     REGION_REPLAY_IMPORTER_PROVENANCE,
                     REGION_REPLAY_PROVENANCE_KEY,
                 )
@@ -499,7 +499,7 @@ class TFBackend:
             return status
         try:
             if kwargs.get("validate_metadata", True):
-                from ...validation.invariants import check_metadata_invariants
+                from ...validation._invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
             status_result = validate_tf_trace(
@@ -507,7 +507,7 @@ class TFBackend:
                 validate_metadata=bool(kwargs.get("validate_metadata", True)),
             )
         except Exception:
-            from ...validation.status import ValidationStatus
+            from ...validation._status import ValidationStatus
 
             status_result = ValidationStatus.result(
                 passed=False,

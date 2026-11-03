@@ -17,7 +17,7 @@ import torch
 
 from .._state import pause_logging
 from .._utils.tensor_leaves import flat_byte_view
-from .types import Edit, InterventionDecision
+from ._types import Edit, InterventionDecision
 
 #: Bounded memo of tensor content tokens keyed by ``id(tensor)``. Each entry
 #: holds a WEAK reference (it never keeps a user tensor alive, and a recycled

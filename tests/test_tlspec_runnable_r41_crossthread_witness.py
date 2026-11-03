@@ -80,7 +80,7 @@ from torchlens.backends.torch.completeness_witness import (
     INVISIBLE_HOST_ESCAPE_PROPERTIES,
     STORAGE_BRIDGE_ESCAPE_FUNCS,
 )
-from torchlens.errors.runnable import (
+from torchlens.errors._runnable import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
 )

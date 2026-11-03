@@ -9,7 +9,7 @@ import torch
 from PIL import Image, ImageDraw
 
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
-from ..viz import node_plots
+from ..viz import _node_plots as node_plots
 from ._errors import (
     AmbiguousInputError,
     ReceptiveFieldConfigurationError,

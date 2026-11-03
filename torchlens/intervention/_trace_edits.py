@@ -41,7 +41,7 @@ from ._trace_selection_edits import (
     is_selection_batch,
     push_from_handles,
 )
-from .types import InterventionSpec, TargetSpec
+from ._types import InterventionSpec, TargetSpec
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -54,18 +54,18 @@ from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
 from .._selection.selection import Selection, Selector, _trace_edge_records
 from .._selection.selectors import BaseSelector
-from ._param_fingerprint import changed_param_scope
-from .audit import (
+from ._audit import (
     fire_records_since,
     record_intervention_event,
     rules_payload,
     site_keys_for_labels,
 )
+from ._injection import injected_ops as _injected_op_records
+from ._param_fingerprint import changed_param_scope
+from ._save import save_intervention as _save_intervention_recipe
+from ._spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
 from .errors import EngineDispatchError, ModelMismatchError, SpecMutationError
 from .hooks import _validate_live_site_target, is_facet_target, lower_record_site_target
-from .injection import injected_ops as _injected_op_records
-from .save import save_intervention as _save_intervention_recipe
-from .spec import Recipe as PublicInterventionSpec, _canonical_repr, addresses_autograd_nodes
 
 
 def _prepare_do(
@@ -572,7 +572,7 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
     # substitutes the region's derived exit values without replaying the
     # interior. Distinct from the TraceSlice lift below, which keeps its shipped
     # member-site family semantics. sys.modules gate keeps do() free of the regions import.
-    regions_module = sys.modules.get("torchlens.intervention.regions")
+    regions_module = sys.modules.get("torchlens.intervention._regions")
     if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
         return (

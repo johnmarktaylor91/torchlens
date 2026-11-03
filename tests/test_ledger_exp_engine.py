@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors.episode import BundleExperimentError
+from torchlens.errors._episode import BundleExperimentError
 from torchlens.experiment import sweep_sites
 from torchlens.experiment._engine import top_k
 
@@ -104,7 +104,7 @@ def test_site_sweep_live_hook_lane_end_to_end() -> None:
     assert view.table.lane == "live_hook"
     assert "effects=[attempted=2" in repr(bundle)
     # Each candidate's transaction carries the canonical EVENT audit row.
-    from torchlens.intervention.audit import event_audit_rows
+    from torchlens.intervention._audit import event_audit_rows
 
     assert event_audit_rows(bundle["relu"])
     # The member axis ranks by |value - baseline|.

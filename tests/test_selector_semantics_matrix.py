@@ -70,7 +70,7 @@ from torchlens._selection.selectors import (
     grad_fn_label,
     output_at,
 )
-from torchlens.intervention.types import TargetSpec
+from torchlens.intervention._types import TargetSpec
 
 _GOLDEN_PATH = Path(__file__).parent / "golden" / "selector_semantics_matrix.json"
 _UPDATE_ENV = "TORCHLENS_UPDATE_SELECTOR_MATRIX"

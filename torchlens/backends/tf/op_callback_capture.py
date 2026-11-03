@@ -21,7 +21,7 @@ from ..._ir.events import (
 from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
 from ._tensor_probe import (
     _bool_value,
     _classify_source_tensor,

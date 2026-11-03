@@ -22,14 +22,14 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._save import check_spec_compat, load_intervention_spec
+from torchlens.intervention._types import InterventionSpec, TargetSpec
 from torchlens.intervention.errors import (
     GraphShapeMismatchError,
     OpaqueCallableError,
     ReplayPreconditionError,
 )
 from torchlens.intervention.hooks import normalize_hooks_from_spec
-from torchlens.intervention.save import check_spec_compat, load_intervention_spec
-from torchlens.intervention.types import InterventionSpec, TargetSpec
 
 
 class MultiHeadSelfAttention(nn.Module):

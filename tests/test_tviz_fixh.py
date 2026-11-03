@@ -15,7 +15,7 @@ import pytest
 from PIL import Image, ImageDraw
 
 from torchlens.viz import heatmap
-from torchlens.viz.node_plots import _axis_selection_with_marker
+from torchlens.viz._node_plots import _axis_selection_with_marker
 
 
 def _selection(

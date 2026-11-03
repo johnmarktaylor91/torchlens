@@ -22,13 +22,13 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._trace_grad_sites import settle_armed_gradient_edits
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention.spec import (
+from torchlens.intervention._spec import (
     addresses_autograd_nodes,
     is_gradient_site,
     site_signal,
     split_site_by_signal,
 )
-from torchlens.intervention.types import TargetSpec
+from torchlens.intervention._types import TargetSpec
 
 _X = torch.randn(3, 4, generator=torch.Generator().manual_seed(7))
 

@@ -1,7 +1,7 @@
 """r-b4 R27-1: capture-entry input walkers are depth-bounded and cycle-guarded.
 
 The four input-boundary walkers (``walk_input_boundary``, ``snapshot_input_boundary``,
-``backends.default_specs._simple_leaves``, ``utils.arg_handling.copy_arg_tree``) share
+``backends._default_specs._simple_leaves``, ``utils.arg_handling.copy_arg_tree``) share
 ONE nesting ceiling (``INPUT_TREE_MAX_DEPTH``) and refuse deep or self-referential
 input trees TYPED (``input_tree_depth_exceeded`` / ``input_tree_cycle``) instead of
 dying in a raw ``RecursionError`` (probe: ~350 user levels crossed the interpreter
@@ -33,7 +33,7 @@ from torchlens._input_walk import (
     walk_input_boundary,
 )
 from torchlens._utils.arg_handling import copy_arg_tree
-from torchlens.backends.default_specs import _simple_leaves
+from torchlens.backends._default_specs import _simple_leaves
 
 
 def _deep_list(depth: int, leaf: object) -> object:

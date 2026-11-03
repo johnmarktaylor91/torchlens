@@ -6,7 +6,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from .status import has_importer_region_provenance, is_region_replay_annotation
+from ._status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -559,6 +559,10 @@ def check_func_call_id_invariant(trace: Trace) -> InvariantResult:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    InvariantResult,
+    MetadataInvariantError,
+)
 from ._invariants_backward_flow import (  # noqa: E402
     _is_func_call_id_exempt,
     _plain_func_call_group_signature,
@@ -573,8 +577,4 @@ from ._invariants_connectivity import (  # noqa: E402
 )
 from ._invariants_modules_params import (  # noqa: E402
     _check_param_xrefs,
-)
-from .invariants import (  # noqa: E402
-    InvariantResult,
-    MetadataInvariantError,
 )

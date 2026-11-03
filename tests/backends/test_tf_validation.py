@@ -11,8 +11,8 @@ from conftest import tensorflow_backend_modules
 import torchlens as tl
 from torchlens.backends.tf import TFBackend
 from torchlens.backends.tf.validation import replay_allowlist
-from torchlens.validation.invariants import check_metadata_invariants
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._invariants import check_metadata_invariants
+from torchlens.validation._status import ValidationStatus
 
 tf, keras, _TF_BACKEND_SKIP_REASON = tensorflow_backend_modules()
 
@@ -171,7 +171,7 @@ def test_tf_validation_identity_annotation_passes_legitimate_passthrough() -> No
     a bare ``tf.identity`` call is the ONLY op, so with Identity exempted as
     an annotation ``num_replayed_ops`` would be 0 and validation would
     legitimately refuse to call that "passed" (exemptions alone cannot
-    produce a passing result -- see ``validation/status.py``'s
+    produce a passing result -- see ``validation/_status.py``'s
     ``no_nodes_replay_validated`` guard). Add a real op so the identity
     passthrough is checked alongside something replay actually verifies.
     """

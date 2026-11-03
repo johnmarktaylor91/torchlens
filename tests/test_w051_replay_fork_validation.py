@@ -24,7 +24,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._record_type import first_op
-from torchlens.intervention.replay import REPLAY_CAPTURE_DIGESTS_KEY
+from torchlens.intervention._replay import REPLAY_CAPTURE_DIGESTS_KEY
 from torchlens.validation._edge_boundary import _check_edge_intervention_boundary
 
 

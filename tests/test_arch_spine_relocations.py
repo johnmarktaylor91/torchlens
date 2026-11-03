@@ -88,7 +88,7 @@ class TestNodeSpecRelocation:
     def test_lower_layer_consumers_import_the_vocabulary_home(self) -> None:
         for consumer in (
             "torchlens/options.py",
-            "torchlens/viz/feature_maps.py",
+            "torchlens/viz/_feature_maps.py",
             "torchlens/receptive_field/_viz.py",
         ):
             source = (REPO / consumer).read_text()
@@ -141,7 +141,7 @@ class TestInterventionTripleHandoff:
         the C01/F35 amendment instead of deleting this pin.
         """
 
-        types_source = (REPO / "torchlens/intervention/types.py").read_text()
+        types_source = (REPO / "torchlens/intervention/_types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
         eager = re.compile(r"^from \.\._selection(\.\w+)? import", re.MULTILINE)
         assert eager.search(types_source)

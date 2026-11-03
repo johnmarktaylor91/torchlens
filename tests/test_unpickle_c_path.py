@@ -242,7 +242,7 @@ def _hostile_streams() -> dict[str, bytes]:
         "storage_ctor": _reduce("torch", "UntypedStorage", _int(16)),
         "file_reader": _reduce("torch._C", "PyTorchFileReader", pickle.SHORT_BINUNICODE + b"\x01x"),
         "dotted_rebuild": _reduce("torch._utils", "_rebuild_tensor_v2.__globals__.get"),
-        "lazy_import_ref": _newobj("torchlens.intervention.save", "LazyImportRef"),
+        "lazy_import_ref": _newobj("torchlens.intervention._save", "LazyImportRef"),
         "lazy_import_ref_current": _newobj("torchlens.intervention._spec_values", "LazyImportRef"),
         "pre3_module": _global("torchlens.data_classes.trace", "Trace") + pickle.STOP,
         # allocation belt: constructor types

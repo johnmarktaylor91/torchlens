@@ -26,7 +26,7 @@ from torchlens._utils._foreign_data_replay import foreigndata
 from torchlens._utils.display import identity
 from torchlens.errors import RunnablePreflightError
 from torchlens.intervention._resolver_registry import function_registry_key_from_callable
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _FFT_NAMES = (

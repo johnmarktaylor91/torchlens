@@ -390,7 +390,7 @@ def _run_predicate_forward_with_root_frame(
         Raw model output.
     """
 
-    from ..recording.types import CaptureSpec, ModuleStackFrame
+    from ..recording._types import CaptureSpec, ModuleStackFrame
     from .predicates import _is_halt_only_capture, _module_capture_spec
     from .projections import (
         _build_record_context,

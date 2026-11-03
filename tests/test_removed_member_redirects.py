@@ -166,7 +166,7 @@ _REPO = Path(__file__).resolve().parents[1]
 #: Redirect hooks added for removed names; each must be invisible to type
 #: checkers, or mypy would accept every attribute (removed or typo) as Any.
 _GUARDED_HOOKS: list[tuple[str, str | None]] = [
-    ("torchlens/intervention/helpers.py", None),
+    ("torchlens/intervention/_helpers.py", None),
     ("torchlens/validation/__init__.py", None),
     ("torchlens/io/__init__.py", None),
     ("torchlens/observers.py", None),
@@ -227,7 +227,7 @@ def test_root_resample_ablate_row_matches_the_shared_text() -> None:
 
     from torchlens import _REDIRECTS as root_redirects
     from torchlens.intervention import _REDIRECTS as package_redirects
-    from torchlens.intervention.helpers import _REDIRECTS as helper_redirects
+    from torchlens.intervention._helpers import _REDIRECTS as helper_redirects
 
     shared = helper_redirects["resample_ablate"]
     assert root_redirects["resample_ablate"] == shared

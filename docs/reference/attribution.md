@@ -1206,7 +1206,7 @@ renders it.
 
 ### Uploading to Neuronpedia (`upload_to_neuronpedia`)
 
-`tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes an exported graph
+`tl.attribution.upload_to_neuronpedia(exported, *, api_key)` publishes an exported graph
 on neuronpedia.org under the account that owns `api_key`, and returns the URL of its page.
 Documented-unstable. `exported` is the dict `to_neuronpedia` returned or the path of the file
 it wrote. It follows Neuronpedia's documented two-step upload
@@ -1237,7 +1237,7 @@ default steering strength Neuronpedia offers, from -100 to 100. Documented-unsta
 # Publishes the graph on neuronpedia.org under your account; continues the example above.
 import os
 
-url = tl.attribution.graph.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA_API_KEY"])
+url = tl.attribution.upload_to_neuronpedia(path, api_key=os.environ["NEURONPEDIA_API_KEY"])
 print(url)
 ```
 

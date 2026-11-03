@@ -44,7 +44,7 @@ from ..._trace_core.relation_views import freeze_trace_relation_views
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording._halt import StopSignal
-from ...validation.status import ValidationReplaySource, ValidationStatus
+from ...validation._status import ValidationReplaySource, ValidationStatus
 from .._finalize import (
     attach_function_root_module,
     attach_module_owned_op_params,
@@ -886,7 +886,7 @@ class PaddleBackend:
         source = _validation_source(trace)
         payload_load_status = getattr(trace, "payload_load_status", None)
         try:
-            from ...validation.status import count_importer_region_annotations
+            from ...validation._status import count_importer_region_annotations
 
             outcome = self._paddle_replay_outcome(
                 trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
@@ -948,7 +948,7 @@ class PaddleBackend:
                 (validation_decision(label, OUTCOME_FAILED, reason, detail),)
             )
         if validate_metadata:
-            from ...validation.invariants import check_metadata_invariants
+            from ...validation._invariants import check_metadata_invariants
 
             try:
                 invariants_ok = check_metadata_invariants(trace)

@@ -24,13 +24,13 @@ import torchlens as tl
 from torchlens._utils._torch_compat import HAS_SCRIPT_FUNCTION_CALL_HOOK
 from torchlens.backends.torch._script_boundary import SCRIPT_FUNCTION_FUNC_NAME
 from torchlens.validation import last_validation_failure
+from torchlens.validation._diagnostics import CHECK_PERTURBATION
 from torchlens.validation._script_metadata_proof import (
     METADATA_READ_NODE_KINDS,
     SCRIPT_METADATA_ONLY_REASON,
     metadata_only_arguments,
     script_metadata_only_proof,
 )
-from torchlens.validation.diagnostics import CHECK_PERTURBATION
 
 pytestmark = pytest.mark.skipif(
     not HAS_SCRIPT_FUNCTION_CALL_HOOK, reason="torch build without a ScriptFunction call hook"

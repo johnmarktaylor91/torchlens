@@ -22,7 +22,7 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.options import CaptureOptions
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 
 class BufferOnlyOutputModel(nn.Module):

@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..bundle._lineage import MemberEffectRow, MemberEffectTable
-from ..errors.episode import BundleExperimentError
+from ..errors._episode import BundleExperimentError
 
 if TYPE_CHECKING:
     from ..bundle import Bundle

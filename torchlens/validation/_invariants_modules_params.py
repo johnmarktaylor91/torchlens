@@ -577,6 +577,9 @@ def _check_layer_param_aggregate_dedup(ml: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_buffers import (  # noqa: E402
     _param_address_index,
     _param_log_list_contains_param,
@@ -584,7 +587,4 @@ from ._invariants_buffers import (  # noqa: E402
 )
 from ._invariants_conditional_base import (  # noqa: E402
     _strip_pass_suffix,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

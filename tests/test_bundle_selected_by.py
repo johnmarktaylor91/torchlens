@@ -18,7 +18,7 @@ import torch
 import torchlens as tl
 from torchlens.bundle import Bundle
 from torchlens.bundle._relations import MemberRelationRow, MemberRelationTable
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 from torchlens.intervention.errors import BundleComparisonError
 
 

@@ -17,7 +17,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens.intervention import population, sample_from
-from torchlens.intervention.population import OneDatum
+from torchlens.intervention._population import OneDatum
 from torchlens.intervention.stochastic import _mint_donor_group_id
 
 

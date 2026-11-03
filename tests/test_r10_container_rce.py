@@ -41,7 +41,7 @@ from torchlens._ir.container import (
     _resolve_container_type,
     rebuild_container_from_spec,
 )
-from torchlens.errors.runnable import RunPreconditionError
+from torchlens.errors._runnable import RunPreconditionError
 from torchlens.options import CaptureOptions
 
 _CAP = CaptureOptions(

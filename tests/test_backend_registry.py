@@ -24,7 +24,7 @@ from torchlens.backends import (
     BackendSpec,
     CaptureBackend,
 )
-from torchlens.backends.default_specs import (
+from torchlens.backends._default_specs import (
     _contains_other_backend_tensor,
     _jax_can_handle,
     _mlx_can_handle,
@@ -49,7 +49,7 @@ from torchlens.errors import (
     UnknownBackendError,
 )
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _TinyModel(nn.Module):

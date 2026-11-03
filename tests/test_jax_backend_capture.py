@@ -22,9 +22,9 @@ from torchlens.backends.jax.backend import (
     _data_parent_labels,
 )
 from torchlens.errors import BackendUnsupportedError
-from torchlens.intervention.types import EdgeUseRecord
-from torchlens.validation.invariants import MetadataInvariantError
-from torchlens.validation.status import (
+from torchlens.intervention._types import EdgeUseRecord
+from torchlens.validation._invariants import MetadataInvariantError
+from torchlens.validation._status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,

@@ -30,7 +30,7 @@ from ..._utils.introspection import (
 )
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
-from ...recording.types import ModuleStackFrame
+from ...recording._types import ModuleStackFrame
 from . import _tl
 from ._completeness_finalize import capture_completeness_witness
 from ._completeness_origins import internal_scalar_read
@@ -785,7 +785,7 @@ class TorchBackend:
         """Apply live hooks through the torch intervention runtime."""
         if not isinstance(value, torch.Tensor):
             return value, ()
-        from ...intervention.runtime import _apply_live_hooks
+        from ...intervention._runtime import _apply_live_hooks
 
         return _apply_live_hooks(value, site=site.site)
 

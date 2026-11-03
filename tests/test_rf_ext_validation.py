@@ -19,7 +19,7 @@ from torchlens.receptive_field._types import (
     ReceptiveFieldValidationStatus,
 )
 from torchlens.receptive_field._validation import cross_validate
-from torchlens.validation.invariants import (
+from torchlens.validation._invariants import (
     METADATA_INVARIANT_CONTRACTS,
     check_metadata_invariants,
 )

@@ -824,7 +824,7 @@ class _TableScoreTerm:
 def _is_read_table(candidate: Any) -> bool:
     """Return whether a ``by=`` operand is a one-backward ReadTable."""
 
-    from ..attribution.onebackward._table import ReadTable
+    from ..attribution._onebackward._table import ReadTable
 
     return isinstance(candidate, ReadTable)
 
@@ -848,7 +848,7 @@ def _table_rows_by_label(node: _TableScoreTerm, trace: Any) -> tuple[dict[str, A
             "read against this trace.",
             code="by_score_invalid",
         )
-    from ..attribution.onebackward._accessor import _validity_token
+    from ..attribution._onebackward._accessor import _validity_token
 
     if table.trace_token is not None and table.trace_token != _validity_token(trace):
         raise _unresolvable(

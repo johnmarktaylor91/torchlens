@@ -163,13 +163,13 @@ def _fire_boundary_predicate_hooks(
 
     from .._capture.predicates import _evaluate_intervene_op
     from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
-    from .hooks import normalize_hook_plan
-    from .runtime import (
+    from ._runtime import (
         _apply_live_hooks,
         _armed_injection_state,
         _current_injection_rule,
         active_intervention_context,
     )
+    from .hooks import normalize_hook_plan
 
     if boundary.predicate is None:
         return hooked, ()
@@ -258,7 +258,7 @@ def _apply_module_boundary_live_hooks(
         Module output with any tensor replacements applied.
     """
 
-    from .runtime import _apply_live_hooks
+    from ._runtime import _apply_live_hooks
 
     trace, _ = _state.active_capture()
     boundary = _BoundaryCall(

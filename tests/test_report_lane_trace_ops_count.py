@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.aten_op import OpRef
-from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
+from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
 
 
 def _sequential_trace() -> Any:

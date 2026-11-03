@@ -25,9 +25,9 @@ from typing import Any, cast
 import torch
 
 from .._errors import InvalidArgumentError
+from ._types import Edit
 from .errors import HookValueError
 from .hooks import HookContext
-from .types import Edit
 
 _MODES = ("zero", "mean", "resample")
 
@@ -194,7 +194,7 @@ def subspace_ablate(
 
         return _hook
 
-    from .helpers import _helper_spec
+    from ._helpers import _helper_spec
 
     return _helper_spec(
         "subspace_ablate",
@@ -237,7 +237,7 @@ def subspace_interchange(
 
     rows = _orthonormal_rows(basis, "subspace_interchange")
     axis = _validate_feature_axis(dim, "subspace_interchange")
-    from .helpers import _helper_spec, patch_from
+    from ._helpers import _helper_spec, patch_from
 
     donor_spec = patch_from(source)
 

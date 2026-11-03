@@ -286,7 +286,7 @@ def intervention_site_and_cone_labels(
     if not sites or not show_cone:
         return site_labels, set()
 
-    from ..intervention.replay import cone_of_effect
+    from ..intervention._replay import cone_of_effect
 
     cone = cone_of_effect(trace, sites)
     cone_labels = {site.layer_label for site in cone}
@@ -296,7 +296,7 @@ def intervention_site_and_cone_labels(
 def _cone_pass_labels(trace: Trace, sites: list[Op], site_pass_labels: set[str]) -> set[str]:
     """Return the pass-qualified labels downstream of ``sites``, sites excluded."""
 
-    from ..intervention.replay import cone_of_effect
+    from ..intervention._replay import cone_of_effect
 
     return {_site_sort_key(op) for op in cone_of_effect(trace, sites)} - site_pass_labels
 

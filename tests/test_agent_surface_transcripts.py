@@ -157,7 +157,7 @@ def test_gpt2_flagship_transcript_is_byte_reproducible(tmp_path: Path) -> None:
 def test_cli_triage_transcript(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
     """Transcript 2: ls -> preflight -> overview/audit -> query -> diff gate."""
 
-    from torchlens.agent import cli
+    from torchlens.agent import _cli as cli
 
     clean = save_clean_artifact(tmp_path)
     ablated = save_ablated_artifact(tmp_path)

@@ -238,7 +238,7 @@ def test_complete_capture_surfaces_stay_open(tmp_path) -> None:
     x = torch.ones(1, 3)
     trace = tl.trace(model, x)
     # Save first: validation stamps a PRE-EXISTING diagnostic attr
-    # (_last_validation_failure, torchlens/validation/diagnostics.py) that is
+    # (_last_validation_failure, torchlens/validation/_diagnostics.py) that is
     # absent from _PORTABLE_STATE_SPEC, so validate-then-save refuses -- a gap
     # that predates this lane and is out of its fence.
     trace.save(tmp_path / "ok.tlspec", overwrite=True)

@@ -686,7 +686,7 @@ def test_capability_warning_category_is_typed(monkeypatch: pytest.MonkeyPatch) -
 def test_tf_runtime_support_is_feature_probed() -> None:
     """r-b4 R26-6b: an odd version string no longer disables backend='tf'."""
 
-    from torchlens.backends.default_specs import _tf_runtime_supported
+    from torchlens.backends._default_specs import _tf_runtime_supported
 
     class _Backend:
         @staticmethod

@@ -9,7 +9,7 @@ sandbox.
 Five mutant families, one per disarming direction or granularity:
 
 * The METADATA-INVARIANT REGISTRY family is DERIVED at run time from
-  ``torchlens.validation.invariants.METADATA_INVARIANT_CONTRACTS`` inside the
+  ``torchlens.validation._invariants.METADATA_INVARIANT_CONTRACTS`` inside the
   sandbox (b9-opus R74-2: the hand-listed roster had enrolled 12 of 32
   contracts, so 20 tripwires were never margin-measured). One whole-function
   ``return None`` mutant per contract, id = the contract name; a contract
@@ -89,30 +89,30 @@ MUTANTS: dict[str, tuple[str, str]] = {
     # The flagship per-op replay comparator (R74/75-2): neutering the
     # comparison result at the callsite must be killed by the corruption
     # battery, not by a single diagnostics test.
-    "M13": ("torchlens/validation/core.py", "_deep_numeric_replay_matches_saved"),
+    "M13": ("torchlens/validation/_core.py", "_deep_numeric_replay_matches_saved"),
     # The b9-sol round-5 enrollment gap (R74-2): the direct roster covered
-    # exactly one validation comparator while validation/core.py carries five
+    # exactly one validation comparator while validation/_core.py carries five
     # more raise-on-violation entry points, all previously margin-unmeasured.
     # tests/test_mutation_driver_governance.py now censuses the check-shaped
     # functions in that file against this roster, so the next entry point
     # cannot ship unenrolled.
-    "M15": ("torchlens/validation/core.py", "_check_layer_arguments_logged_correctly"),
-    "M16": ("torchlens/validation/core.py", "_validate_layer_against_arg"),
-    "M17": ("torchlens/validation/core.py", "_check_arglocs_correct_for_arg"),
-    "M18": ("torchlens/validation/core.py", "_check_unattributed_arg_slots"),
+    "M15": ("torchlens/validation/_core.py", "_check_layer_arguments_logged_correctly"),
+    "M16": ("torchlens/validation/_core.py", "_validate_layer_against_arg"),
+    "M17": ("torchlens/validation/_core.py", "_check_arglocs_correct_for_arg"),
+    "M18": ("torchlens/validation/_core.py", "_check_unattributed_arg_slots"),
     "M19": (
-        "torchlens/validation/core.py",
+        "torchlens/validation/_core.py",
         "_check_whether_func_on_saved_parents_yields_saved_tensor",
     ),
     # The two steps extracted from _validate_saved_outs_run (wip/mp-pp-union
     # 459fbd9d5). ``return None`` on the first is "no output failed", on the
     # second "the metadata invariants never ran": both the disarming direction.
-    "M20": ("torchlens/validation/core.py", "_check_ground_truth_outputs"),
-    "M21": ("torchlens/validation/core.py", "_check_metadata_invariants_recorded"),
+    "M20": ("torchlens/validation/_core.py", "_check_ground_truth_outputs"),
+    "M21": ("torchlens/validation/_core.py", "_check_metadata_invariants_recorded"),
 }
 
 #: mutant id -> (relative file, core-validation checker). The checkers of
-#: ``validation/core.py`` OUTSIDE the metadata-invariant registry (b9-sol
+#: ``validation/_core.py`` OUTSIDE the metadata-invariant registry (b9-sol
 #: R74r5 finding 2: the non-registry roster held one comparator and one
 #: postprocess checker while core.py carried five more verdict-steering
 #: entry points with no mutant). Their dangerous neutral value is an
@@ -121,12 +121,12 @@ MUTANTS: dict[str, tuple[str, str]] = {
 #: core.py for every ``_check_*`` / ``_validate_*`` def and demands each be
 #: enrolled here or excluded with a reason in ``CORE_CHECK_EXCLUSIONS``.
 CORE_CHECK_MUTANTS: dict[str, tuple[str, str]] = {
-    "V01": ("torchlens/validation/core.py", "_check_layer_arguments_logged_correctly"),
-    "V02": ("torchlens/validation/core.py", "_validate_layer_against_arg"),
-    "V03": ("torchlens/validation/core.py", "_check_arglocs_correct_for_arg"),
-    "V04": ("torchlens/validation/core.py", "_check_unattributed_arg_slots"),
+    "V01": ("torchlens/validation/_core.py", "_check_layer_arguments_logged_correctly"),
+    "V02": ("torchlens/validation/_core.py", "_validate_layer_against_arg"),
+    "V03": ("torchlens/validation/_core.py", "_check_arglocs_correct_for_arg"),
+    "V04": ("torchlens/validation/_core.py", "_check_unattributed_arg_slots"),
     "V05": (
-        "torchlens/validation/core.py",
+        "torchlens/validation/_core.py",
         "_check_whether_func_on_saved_parents_yields_saved_tensor",
     ),
 }
@@ -173,7 +173,7 @@ def derive_core_check_roster(sandbox: Path) -> None:
     Parameters
     ----------
     sandbox:
-        Repo root whose ``torchlens/validation/core.py`` is scanned.
+        Repo root whose ``torchlens/validation/_core.py`` is scanned.
     """
 
     core = sandbox / "torchlens" / "validation" / "core.py"
@@ -219,22 +219,22 @@ BLOCK_MUTANTS: dict[str, tuple[str, str, str]] = {
 #: killed by the deliberately-named ``*_is_not_exempt`` negative tests
 #: (hand-run on the dispatcher during b9p3: 28 killers).
 EXEMPT_MUTANTS: dict[str, tuple[str, str]] = {
-    "X01": ("torchlens/validation/core.py", "_check_perturbation_exemptions"),
-    "X02": ("torchlens/validation/exemptions.py", "_check_getitem_exempt"),
-    "X03": ("torchlens/validation/exemptions.py", "_check_setitem_exempt"),
-    "X04": ("torchlens/validation/exemptions.py", "_check_index_put_exempt"),
-    "X05": ("torchlens/validation/exemptions.py", "_check_lstm_exempt"),
-    "X06": ("torchlens/validation/exemptions.py", "_check_interpolate_exempt"),
-    "X07": ("torchlens/validation/exemptions.py", "_check_scatter_exempt"),
-    "X08": ("torchlens/validation/exemptions.py", "_check_one_arg_where_index_exempt"),
-    "X09": ("torchlens/validation/exemptions.py", "_check_where_exempt"),
-    "X10": ("torchlens/validation/exemptions.py", "_check_masked_fill_exempt"),
-    "X11": ("torchlens/validation/exemptions.py", "_check_norm_running_stat_exempt"),
-    "X12": ("torchlens/validation/exemptions.py", "_check_scatter_or_index_domain_exempt"),
+    "X01": ("torchlens/validation/_core.py", "_check_perturbation_exemptions"),
+    "X02": ("torchlens/validation/_exemptions.py", "_check_getitem_exempt"),
+    "X03": ("torchlens/validation/_exemptions.py", "_check_setitem_exempt"),
+    "X04": ("torchlens/validation/_exemptions.py", "_check_index_put_exempt"),
+    "X05": ("torchlens/validation/_exemptions.py", "_check_lstm_exempt"),
+    "X06": ("torchlens/validation/_exemptions.py", "_check_interpolate_exempt"),
+    "X07": ("torchlens/validation/_exemptions.py", "_check_scatter_exempt"),
+    "X08": ("torchlens/validation/_exemptions.py", "_check_one_arg_where_index_exempt"),
+    "X09": ("torchlens/validation/_exemptions.py", "_check_where_exempt"),
+    "X10": ("torchlens/validation/_exemptions.py", "_check_masked_fill_exempt"),
+    "X11": ("torchlens/validation/_exemptions.py", "_check_norm_running_stat_exempt"),
+    "X12": ("torchlens/validation/_exemptions.py", "_check_scatter_or_index_domain_exempt"),
     "X13": ("torchlens/validation/_invariants_backward_flow.py", "_is_func_call_id_exempt"),
     # Landed after the b9p3 inventory (R08 exemption-narrowing wave); swept in
     # so the newest gate is margin-measured like its siblings.
-    "X14": ("torchlens/validation/exemptions.py", "_check_zipped_sibling_exempt"),
+    "X14": ("torchlens/validation/_exemptions.py", "_check_zipped_sibling_exempt"),
 }
 
 #: Bounded arming suite: the files whose job is to kill the mutants above.
@@ -353,7 +353,7 @@ SANDBOX_IGNORE = (
 #: implementation file.
 _REGISTRY_PROBE = """
 import json, os
-from torchlens.validation.invariants import METADATA_INVARIANT_CONTRACTS
+from torchlens.validation._invariants import METADATA_INVARIANT_CONTRACTS
 rows = {}
 for contract in METADATA_INVARIANT_CONTRACTS:
     code = contract.check.__code__

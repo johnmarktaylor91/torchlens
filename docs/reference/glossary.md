@@ -3398,7 +3398,7 @@ deprecation shim owed*
   (circuit-tracer's rule); a site-to-value mapping paints any other quantity, feature
   activations included. Refusal code `attribution_overlay_graph_mismatch`.
 
-**`tl.attribution.graph.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
+**`tl.attribution.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
 : `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned
   (or the file it wrote) on neuronpedia.org under the account that owns `api_key`, through
   Neuronpedia's documented two-step upload, and returns the graph page's URL. Standard

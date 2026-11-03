@@ -24,7 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import Edit
+from torchlens.intervention._types import Edit
 
 
 class _Net(nn.Module):
@@ -151,8 +151,8 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
     import pathlib
 
     from torchlens._errors import InvalidArgumentError
-    from torchlens.intervention import helpers as helpers_module, predicates as predicates_module
-    from torchlens.intervention.helpers import rebuild_builtin_helper
+    from torchlens.intervention import _helpers as helpers_module, _predicates as predicates_module
+    from torchlens.intervention._helpers import rebuild_builtin_helper
 
     minted: set[str] = set()
     for module in (helpers_module, predicates_module):

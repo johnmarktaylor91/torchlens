@@ -20,7 +20,7 @@ from torchlens.errors import (  # noqa: E402
     BackendRuntimeCompatibilityError,
 )
 from torchlens.validation import validate_tlspec  # noqa: E402
-from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
+from torchlens.validation._invariants import check_metadata_invariants  # noqa: E402
 
 pytestmark = [
     pytest.mark.tf_backend,

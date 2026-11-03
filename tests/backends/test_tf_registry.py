@@ -11,7 +11,7 @@ import torch
 from conftest import tensorflow_backend_modules
 
 import torchlens as tl
-from torchlens.backends.default_specs import _tf_can_handle
+from torchlens.backends._default_specs import _tf_can_handle
 from torchlens.backends.tf import TFBackend, capabilities as tf_capabilities
 from torchlens.errors import BackendMismatchError
 

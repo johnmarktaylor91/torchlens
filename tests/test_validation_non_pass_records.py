@@ -17,11 +17,11 @@ import pytest
 import torch
 import torch.nn as nn
 
-import torchlens.validation.core as core
+import torchlens.validation._core as core
 from torchlens._user_funcs import _run_model_and_save_specified_outs
 from torchlens.validation import get_validation_failure
-from torchlens.validation.core import ValidationCheckResult, validate_saved_outs
-from torchlens.validation.diagnostics import (
+from torchlens.validation._core import ValidationCheckResult, validate_saved_outs
+from torchlens.validation._diagnostics import (
     CHECK_PERTURBATION,
     CHECK_REPLAY,
     CHECK_REPLAY_UNVERIFIED,

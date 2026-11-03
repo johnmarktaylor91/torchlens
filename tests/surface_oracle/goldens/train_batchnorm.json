@@ -3787,7 +3787,7 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -3870,7 +3870,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -4146,9 +4146,9 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "batchnorm_1_7_raw",
     "_layer_label_raw": "batchnorm_1_7_raw",
@@ -4263,9 +4263,9 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -7314,7 +7314,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "relu_1_10_raw",
     "_layer_label_raw": "relu_1_10_raw",
@@ -7393,7 +7393,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -7989,7 +7989,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -9209,7 +9209,7 @@
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "live": {
@@ -13000,7 +13000,7 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -13083,7 +13083,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -13359,9 +13359,9 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "batchnorm_1_7_raw",
     "_layer_label_raw": "batchnorm_1_7_raw",
@@ -13476,9 +13476,9 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -16527,7 +16527,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "relu_1_10_raw",
     "_layer_label_raw": "relu_1_10_raw",
@@ -16606,7 +16606,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -17202,7 +17202,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -18431,7 +18431,7 @@
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "pickle": {
@@ -22200,7 +22200,7 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -22283,7 +22283,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -22559,9 +22559,9 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "batchnorm_1_7_raw",
     "_layer_label_raw": "batchnorm_1_7_raw",
@@ -22676,9 +22676,9 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -25727,7 +25727,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "relu_1_10_raw",
     "_layer_label_raw": "relu_1_10_raw",
@@ -25806,7 +25806,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -26348,7 +26348,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -27562,7 +27562,7 @@
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "run": {
@@ -31353,7 +31353,7 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -31436,7 +31436,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -31712,9 +31712,9 @@
     "_address_normalized": "bn",
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "batchnorm_1_7_raw",
     "_layer_label_raw": "batchnorm_1_7_raw",
@@ -31829,9 +31829,9 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -34880,7 +34880,7 @@
     "_address_normalized": null,
     "_construction_done": true,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "relu_1_10_raw",
     "_layer_label_raw": "relu_1_10_raw",
@@ -34959,7 +34959,7 @@
     "edge_replacement_stamps": null,
     "edge_substitutions": null,
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -35555,7 +35555,7 @@
    "_health_num_expected_opaque_witness_events": 0,
    "_health_num_unaccounted_witness_events": 0,
    "_health_num_witness_events": 0,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -36794,7 +36794,7 @@
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  },
  "tlspec": {
@@ -40550,7 +40550,7 @@
     "_address_normalized": "bn",
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "add_1_3_raw",
     "_layer_label_raw": "add_1_3_raw",
@@ -40631,7 +40631,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -40892,9 +40892,9 @@
     "_address_normalized": "bn",
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "batchnorm_1_7_raw",
     "_layer_label_raw": "batchnorm_1_7_raw",
@@ -40999,9 +40999,9 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>",
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>",
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -43908,7 +43908,7 @@
     "_address_normalized": null,
     "_construction_done": false,
     "_edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "_label_raw": "relu_1_10_raw",
     "_layer_label_raw": "relu_1_10_raw",
@@ -43985,7 +43985,7 @@
     "edge_replacement_stamps": {},
     "edge_substitutions": {},
     "edge_uses": [
-     "<torchlens.intervention.types.EdgeUseRecord>"
+     "<torchlens.intervention._types.EdgeUseRecord>"
     ],
     "edits": [],
     "episode_step": null,
@@ -44507,7 +44507,7 @@
    "_health_num_expected_opaque_witness_events": null,
    "_health_num_unaccounted_witness_events": null,
    "_health_num_witness_events": null,
-   "_intervention_spec": "<torchlens.intervention.types.InterventionSpec>",
+   "_intervention_spec": "<torchlens.intervention._types.InterventionSpec>",
    "_last_hook_handle_ids": [],
    "_layer_dict_all_keys": {
     "\"add_1\"": {
@@ -45715,7 +45715,7 @@
    "transforms": [],
    "uncalled_modules": [],
    "unknown_flop_ops": [],
-   "validation_replay_status": "<torchlens.validation.status.ValidationStatus>"
+   "validation_replay_status": "<torchlens.validation._status.ValidationStatus>"
   }
  }
 }

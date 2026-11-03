@@ -11,7 +11,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation as tl_validation
-from torchlens.intervention.types import ParentRef
+from torchlens.intervention._types import ParentRef
 
 
 class _TinyStimulusModel(nn.Module):

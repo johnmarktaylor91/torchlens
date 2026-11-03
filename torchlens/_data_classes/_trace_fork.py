@@ -59,7 +59,7 @@ from .._trace_core.op_store import (
 )
 from .._trace_core.record_rows import CORE_KEY, ROW_KEY
 from .._utils.env_flags import closed_bool_env
-from ..intervention.types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
+from ..intervention._types import MODEL_LOG_FIELD_FORK_POLICY, ForkFieldPolicy
 from ._accessor_base import Accessor
 from ._state_adapter import state_items, state_new, state_restore
 from .func_call_location import FuncCallLocation

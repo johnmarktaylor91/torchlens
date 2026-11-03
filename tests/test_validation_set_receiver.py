@@ -32,8 +32,8 @@ from torchlens._validation_state_snapshot import (
     snapshot_state_for_restore,
 )
 from torchlens.options import CaptureOptions
-from torchlens.validation.core import _check_perturbation_exemptions, validate_saved_outs
-from torchlens.validation.diagnostics import get_validation_failure
+from torchlens.validation._core import _check_perturbation_exemptions, validate_saved_outs
+from torchlens.validation._diagnostics import get_validation_failure
 
 
 class _SetToSource(nn.Module):

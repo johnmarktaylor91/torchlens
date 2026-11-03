@@ -16,7 +16,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import feature_maps
+from torchlens.viz._feature_maps import feature_maps
 
 
 class _TinyConv(nn.Module):

@@ -17,7 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.binding import bind_spec_to_model
+from torchlens.intervention._binding import bind_spec_to_model
 from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
 
 

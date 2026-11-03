@@ -570,6 +570,9 @@ def _check_grad_fn_relation_list(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_backward_domain import (  # noqa: E402
     _check_backward_pass_domain_invariants,
     _check_journal_seq_invariants,
@@ -578,7 +581,4 @@ from ._invariants_backward_domain import (  # noqa: E402
 )
 from ._invariants_backward_flow import (  # noqa: E402
     _check_backward_event_flow_invariants,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

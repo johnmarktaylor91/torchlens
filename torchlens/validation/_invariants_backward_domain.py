@@ -534,6 +534,6 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from .invariants import (  # noqa: E402
+from ._invariants import (  # noqa: E402
     MetadataInvariantError,
 )

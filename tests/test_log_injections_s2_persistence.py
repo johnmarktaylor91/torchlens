@@ -3,7 +3,7 @@
 foldA MEMO s5 item 12: the persistence codec rides the trusted-callable
 resolver and the C07 ``Op.injection_provenance`` slot (no schema bump);
 loads degrade to ``unattested`` -- never refusing on an unresolvable
-callable; :func:`torchlens.intervention.injection.attest_injected_ops`
+callable; :func:`torchlens.intervention._injection.attest_injected_ops`
 replays trusted injected callables and byte-compares; the runnable save
 level refuses typed. Ordinary validation is UNCHANGED (release gate).
 """
@@ -20,12 +20,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.injection import (
+from torchlens.intervention._injection import (
     InjectedOp,
     attest_injected_ops,
     injection_state,
 )
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 

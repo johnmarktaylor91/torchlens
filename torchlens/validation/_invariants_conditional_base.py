@@ -480,6 +480,9 @@ def _check_conditional_derived_child_views(
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from ._invariants import (  # noqa: E402
+    MetadataInvariantError,
+)
 from ._invariants_conditional_modules import (  # noqa: E402
     _check_conditional_arm_edges_match_graph,
     _check_conditional_branch_membership_records,
@@ -497,7 +500,4 @@ from ._invariants_conditionals import (  # noqa: E402
     _check_conditional_layer_aggregate_views,
     _check_conditional_rolled_edge_call_indices,
     _check_conditional_transient_bool_keys_removed,
-)
-from .invariants import (  # noqa: E402
-    MetadataInvariantError,
 )

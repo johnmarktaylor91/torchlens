@@ -11,13 +11,13 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation as tl_validation
-import torchlens.validation.backward as backward_validation
-import torchlens.validation.consolidated as consolidated_validation
+import torchlens.validation._backward as backward_validation
+import torchlens.validation._consolidated as consolidated_validation
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._ir.events import BackwardPassStart, OpGradObserved
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_BACKWARD
+from torchlens.validation._diagnostics import CHECK_BACKWARD
 
 _NO_GRAD_AUTOGRAD_ERROR = "element 0 of tensors does not require grad and does not have a grad_fn"
 
@@ -437,7 +437,7 @@ def test_backward_seq_invariants_fire_on_planted_mutations() -> None:
     """Each rewritten exact-seq assertion still fails on a planted misorder."""
     from torchlens._ir.events import BackwardPassEnd as _End
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -1189,7 +1189,7 @@ def test_validate_backward_pass_random_seed_kwarg_public_wrapper() -> None:
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
+        "torchlens.validation._consolidated.validate_backward_pass",
         wraps=consolidated_validation.validate_backward_pass,
     ) as validator:
         assert tl.validate(model, x, scope="backward", seed=42)
@@ -1203,7 +1203,7 @@ def test_validation_validate_backward_pass_random_seed_kwarg_user_funcs_path() -
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     with mock.patch(
-        "torchlens.validation.backward.validate_backward_pass",
+        "torchlens.validation._backward.validate_backward_pass",
         wraps=backward_validation.validate_backward_pass,
     ) as validator:
         assert tl_validation.validate_backward_pass(model, x, seed=42)
@@ -1447,7 +1447,7 @@ def test_param_grad_incremental_fold_matches_scratch_rebuild() -> None:
 
 def test_param_grad_reconciliation_counts_multiplicity() -> None:
     """Duplicating one projected param record now fails reconciliation."""
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -1466,7 +1466,7 @@ def test_param_grad_reconciliation_counts_multiplicity() -> None:
 
 def test_op_grad_reconciliation_counts_multiplicity() -> None:
     """Duplicating one projected op record now fails reconciliation."""
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -1499,7 +1499,7 @@ def test_higher_order_discovery_bracketing_is_armed() -> None:
     """A created_in_pass discovery moved past its pass end fails the invariant."""
     from torchlens._ir.events import BackwardPassEnd, GradFnDiscovered
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     class _HigherOrderModel(nn.Module):
         """Tiny nonlinear model with differentiable first gradients."""
@@ -1552,7 +1552,7 @@ def test_pass_brackets_reject_partial_interleaving() -> None:
     """Two pass brackets that partially overlap fail the invariant."""
     from torchlens._ir.events import BackwardPassEnd
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import MetadataInvariantError
+    from torchlens.validation._invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
@@ -1931,8 +1931,8 @@ def test_journal_seq_spans_forward_and_backward_lanes() -> None:
 def test_journal_seq_invariant_fires_on_planted_mutations() -> None:
     """The journal-wide seq invariant is independently armed per failure mode."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
+    from torchlens.validation._invariants import MetadataInvariantError
     from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
-    from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -2006,8 +2006,8 @@ def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     """
 
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
+    from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
     from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
-    from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -2058,8 +2058,8 @@ def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
     """
 
     from torchlens._ir.capture_events import CaptureEvents
+    from torchlens.validation._invariants import MetadataInvariantError
     from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
-    from torchlens.validation.invariants import MetadataInvariantError
 
     _model, _x, trace = _logged_model()
     stream = trace._capture_events
@@ -2136,7 +2136,7 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
 
     from torchlens._ir.events import OpGradObserved
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     class IdentityWrapper(nn.Module):
         def __init__(self) -> None:
@@ -2177,7 +2177,7 @@ def test_failed_backward_walk_keeps_start_and_gains_failed_end() -> None:
     from torchlens._ir.events import BackwardPassEnd as _End
     from torchlens.backends.torch import backward as backward_mod
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     _model, _x, trace = _logged_model()
     loss = _output_loss(trace)
@@ -2213,7 +2213,7 @@ def test_hook_registration_failure_records_typed_coverage_gap() -> None:
     from torchlens._ir.events import BackwardCoverageGap
     from torchlens.backends.torch import backward as backward_mod
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation.invariants import check_metadata_invariants
+    from torchlens.validation._invariants import check_metadata_invariants
 
     _model, _x, trace = _logged_model()
     with mock.patch.object(
@@ -2238,7 +2238,7 @@ def test_hook_registration_failure_records_typed_coverage_gap() -> None:
 def test_validate_backward_fails_closed_on_coverage_gaps() -> None:
     """validate_backward_pass returns False when any unexplained gap exists."""
     from torchlens.backends.torch import backward as backward_mod
-    from torchlens.validation import backward as backward_validation
+    from torchlens.validation import _backward as backward_validation
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3)

@@ -28,7 +28,7 @@ TOL = 1e-12
 DOC = Path(__file__).resolve().parents[1] / "docs" / "reference" / "attribution.md"
 
 
-def _build(name: str) -> tuple[object, tl.attribution.graph.AttributionGraph]:
+def _build(name: str) -> tuple[object, tl.attribution._graph.AttributionGraph]:
     n_layers = 3 if name == "F3" else 2
     model = fx.build_model(n_layers)
     transcoders = {"F1": fx.exact_transcoders, "F3": fx.cross_layer_transcoders}[name](model)
@@ -45,7 +45,7 @@ def _build(name: str) -> tuple[object, tl.attribution.graph.AttributionGraph]:
 
 
 @pytest.fixture(scope="module")
-def built() -> Iterator[dict[str, tuple[object, tl.attribution.graph.AttributionGraph]]]:
+def built() -> Iterator[dict[str, tuple[object, tl.attribution._graph.AttributionGraph]]]:
     pairs = {name: _build(name) for name in ("F1", "F3")}
     try:
         yield pairs

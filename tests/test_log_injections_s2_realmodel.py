@@ -13,7 +13,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention.injection import attest_injected_ops
+from torchlens.intervention._injection import attest_injected_ops
 
 transformers = pytest.importorskip("transformers")
 

@@ -38,9 +38,9 @@ from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
-from ..intervention.predicates import InterventionPredicate
-from ..recording.exceptions import PredicateError
-from ..recording.options import HaltPredicateFn, PredicateFn
+from ..intervention._predicates import InterventionPredicate
+from ..recording._exceptions import PredicateError
+from ..recording._options import HaltPredicateFn, PredicateFn
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._run_setup import (
     _configure_predicate_options,
@@ -443,7 +443,7 @@ def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: o
 
     from contextlib import nullcontext
 
-    from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
+    from ..intervention._site_keys import armed_live_minter, predicate_needs_live_site_keys
 
     live_minter_scope = (
         armed_live_minter()

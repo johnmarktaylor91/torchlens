@@ -29,7 +29,7 @@ from torchlens._postprocess.loop_grouping_adapter import (
     RecurrenceNode,
     group_recurrent_nodes,
 )
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 # This suite drives the structural grouper (grouper_v1), which serves captures
 # without call-site evidence; torch captures group by call site

@@ -14,7 +14,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.intervention import replay as replay_module
+from torchlens.intervention import _replay as replay_module
 
 
 class _TwoLinear(nn.Module):

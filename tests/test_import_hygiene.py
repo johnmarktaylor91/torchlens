@@ -367,7 +367,7 @@ assert collisions == {
     # F29: the agent inspection surface -- children are cli plus
     # underscore-private modules; __all__ never collides with a child.
     "agent": [],
-    # The visuals rename removed the tl.attribution.onebackward export; the
+    # The visuals rename removed the tl.attribution._onebackward export; the
     # child module stays importable by its full path.
     "attribution": [],
     "backends": [],

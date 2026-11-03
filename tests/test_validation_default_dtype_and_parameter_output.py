@@ -38,7 +38,7 @@ def float64_default_dtype():
 def test_comparator_self_test_passes_under_float64_default_dtype(float64_default_dtype) -> None:
     """A healthy comparator passes whatever the process default dtype is."""
 
-    from torchlens.validation.core import _comparator_self_test
+    from torchlens.validation._core import _comparator_self_test
 
     _comparator_self_test()
 
@@ -49,7 +49,7 @@ def test_comparator_self_test_still_rejects_poisoned_band_under_float64_default(
     """Pinning the sentinel dtype must not blind the band tripwire."""
 
     from torchlens._utils import tensor_utils as tensor_utils_mod
-    from torchlens.validation.core import _comparator_self_test
+    from torchlens.validation._core import _comparator_self_test
 
     monkeypatch.setitem(tensor_utils_mod._DTYPE_FLOAT_TOLERANCES, torch.float32, (0.33, 1e-5))
     with pytest.raises(RuntimeError, match="comparator self-test failed"):

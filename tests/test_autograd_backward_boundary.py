@@ -22,7 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-import torchlens.validation.core as validation_core
+import torchlens.validation._core as validation_core
 from torchlens._state import pause_logging
 from torchlens.validation import last_validation_failure
 

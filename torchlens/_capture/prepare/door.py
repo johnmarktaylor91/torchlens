@@ -61,7 +61,7 @@ from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
-from ...errors.episode import EpisodeDeclarationError
+from ...errors._episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
     CaptureOptions,
@@ -70,7 +70,7 @@ from ...options import (
     merge_capture_options,
     merge_streaming_options,
 )
-from ...recording.options import PredicateFn
+from ...recording._options import PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
 from .._episode_coupling import CouplingSession, rule_identity_of
 from .._episode_join import armed_capture

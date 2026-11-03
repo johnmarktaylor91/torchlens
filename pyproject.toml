@@ -330,7 +330,7 @@ test = [
 # tested through -m (tests/test_agent_cli*.py), and setuptools writes this to
 # dist-info/entry_points.txt (inside the wheel-diet allowlist).
 [project.scripts]
-torchlens = "torchlens.agent.cli:main"
+torchlens = "torchlens.agent._cli:main"
 
 [project.urls]
 Homepage = "https://github.com/johnmarktaylor91/torchlens"

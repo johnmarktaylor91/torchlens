@@ -41,7 +41,7 @@ from torchlens._utils._callable_safety import (
     is_pure_forward_callable,
 )
 from torchlens._utils._torch_compat import HAS_NAMED_TENSOR_API
-from torchlens.intervention.types import FunctionRegistryKey
+from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(

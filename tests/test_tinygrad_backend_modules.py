@@ -11,7 +11,7 @@ import pytest
 import torchlens as tl
 from torchlens.errors import BackendUnsupportedError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor

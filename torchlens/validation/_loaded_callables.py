@@ -2,7 +2,7 @@
 
 A saved bundle never carries callables (``Op.func`` is dropped at every level;
 executable callables are not portable). It does carry each op's
-``func_id``, the portable :class:`~torchlens.intervention.types.FunctionRegistryKey`
+``func_id``, the portable :class:`~torchlens.intervention._types.FunctionRegistryKey`
 a capture that saves arguments records. Replay validation is an execution
 boundary, so it resolves those keys there through the same purity-gated
 resolver intervention replay uses: only pure torch, ``torch.Tensor``,
@@ -50,7 +50,7 @@ def _is_resolution_exempt(layer: Any) -> bool:
 def _resolution_candidate(layer: Any) -> Any:
     """The op's resolvable key, or ``None`` when the op must not be resolved."""
 
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
     if _is_resolution_exempt(layer):
         return None
@@ -92,7 +92,7 @@ def _public_key_for_torch_c_function(key: Any) -> Any:
 
     import torch
 
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
     module_name, _, name = str(key.import_path or "").partition(":")
     public_name = _TORCH_C_PUBLIC_NAMESPACES.get(module_name)

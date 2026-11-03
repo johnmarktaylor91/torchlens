@@ -25,11 +25,11 @@ from torchlens._selection.selectors import (
     CompositeSelector,
     SelectorKind,
 )
+from torchlens.intervention._types import TargetSpec
 from torchlens.intervention.errors import (
     SelectorCapabilityError,
     SiteResolutionError,
 )
-from torchlens.intervention.types import TargetSpec
 
 
 class TinyConvNet(nn.Module):
@@ -609,8 +609,8 @@ def test_followed_by_target_spec_serializes_structurally() -> None:
 
     import json
 
+    from torchlens.intervention._save import SaveLevel
     from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
-    from torchlens.intervention.save import SaveLevel
 
     for selector in (
         tl.followed_by(tl.func("relu")),
@@ -633,9 +633,9 @@ def test_followed_by_opaque_inner_refuses_typed_never_mangles() -> None:
     """FIX: an opaque-callable temporal inner must refuse typed, never rebuild
     as a ``contains`` selector over its repr string."""
 
+    from torchlens.intervention._save import SaveLevel
     from torchlens.intervention._spec_codec import _target_spec_from_json, _target_spec_to_json
     from torchlens.intervention.errors import OpaqueCallableError
-    from torchlens.intervention.save import SaveLevel
 
     spec = tl.followed_by(lambda ctx: True).to_target_spec()
     with pytest.raises(OpaqueCallableError):

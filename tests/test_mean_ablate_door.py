@@ -180,7 +180,7 @@ def test_population_mean_records_a_deterministic_note() -> None:
 
 
 def test_saved_mean_fill_spec_refuses_as_renamed() -> None:
-    from torchlens.intervention.helpers import rebuild_builtin_helper
+    from torchlens.intervention._helpers import rebuild_builtin_helper
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         rebuild_builtin_helper("mean_fill", (), {"dim": "all", "allow_shape_change": False})
@@ -189,7 +189,7 @@ def test_saved_mean_fill_spec_refuses_as_renamed() -> None:
 
 
 def test_saved_self_token_spec_refuses_typed() -> None:
-    from torchlens.intervention.helpers import rebuild_builtin_helper
+    from torchlens.intervention._helpers import rebuild_builtin_helper
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         rebuild_builtin_helper("mean_ablate", (None,), {"dim": "self", "allow_shape_change": False})

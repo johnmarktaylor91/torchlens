@@ -17,7 +17,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.bridge import sae as sae_bridge
-from torchlens.intervention.types import LiteralValue, Unsupported
+from torchlens.intervention._types import LiteralValue, Unsupported
 
 transformers = pytest.importorskip("transformers")
 

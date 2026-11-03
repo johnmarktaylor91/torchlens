@@ -28,7 +28,7 @@ from torchlens._capture.structure_only import (
     StructureOnlyCapabilityError,
     require_structure_only_capability,
 )
-from torchlens.errors.runnable import StateBindingError
+from torchlens.errors._runnable import StateBindingError
 from torchlens.options import CaptureOptions
 
 _SENTINEL_GRAMMAR = re.compile(r"^unavailable:[A-Za-z_][A-Za-z0-9_]*$")

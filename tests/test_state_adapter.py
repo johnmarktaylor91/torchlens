@@ -11,7 +11,7 @@ from torchlens._data_classes._state_adapter import state_items, state_new, state
 from torchlens._io import ArtifactError, FieldPolicy
 from torchlens._io.runnable import assert_sparse_core_has_no_tensor_payload
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
-from torchlens.errors.runnable import SparseCorePayloadError
+from torchlens.errors._runnable import SparseCorePayloadError
 
 
 class _DictBackedState:

@@ -1980,7 +1980,7 @@ def _make_grad_fn_hook(  # noqa: PLR0913 -- one keyword per carrier the ONE regi
                     )
                 )
             return None
-        from ...intervention.runtime import _apply_live_backward_hooks
+        from ...intervention._runtime import _apply_live_backward_hooks
 
         result, fire_records = _apply_live_backward_hooks(
             grad_inputs, grad_outputs, grad_fn_handle, call_index
@@ -2088,7 +2088,7 @@ def _make_grad_fn_prehook(
             return None
         grad_inputs = hook_args[0] if len(hook_args) >= 1 else ()
         call_index = len(grad_fn_handle.calls) + 1
-        from ...intervention.runtime import _apply_live_backward_prehooks
+        from ...intervention._runtime import _apply_live_backward_prehooks
 
         result, fire_records = _apply_live_backward_prehooks(
             grad_inputs, grad_fn_handle, call_index
@@ -2770,7 +2770,7 @@ def _rewalk_higher_order_grad_fns(trace: Any) -> None:
 def _is_static_truthy_keep_grad(value: Any) -> bool:
     """Return whether a gradient capture decision is statically keep-grad true."""
 
-    from ...recording.types import CaptureSpec
+    from ...recording._types import CaptureSpec
 
     return value is True or (isinstance(value, CaptureSpec) and value.save_grad)
 
@@ -2840,7 +2840,7 @@ def log_recording_backward(
     """Run backward while capturing gradients for a fastlog ``Recording``."""
 
     from ..._capture.projections import sync_recording_grad_records_from_sidecar
-    from ...recording.exceptions import InvalidStorageError, RecorderStateError
+    from ...recording._exceptions import InvalidStorageError, RecorderStateError
 
     recording_state = getattr(recording, "_recording_state", None)
     if recording_state is None:

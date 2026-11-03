@@ -17,7 +17,7 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ..._validation_argument_references import active_argument_references
-from ...intervention.types import (
+from ...intervention._types import (
     ArgComponent,
     CapturedArgTemplate,
     EdgeUseRecord,
@@ -270,7 +270,7 @@ def _build_edge_use_records(
         Edge provenance records.
     """
 
-    from ...intervention.edge_semantics import classify_view_or_copy
+    from ...intervention._edge_semantics import classify_view_or_copy
 
     _edge_uses: list[EdgeUseRecord] = []
     for location, parent_label in parent_arg_positions["args"].items():

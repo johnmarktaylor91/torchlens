@@ -31,7 +31,7 @@ from .._utils._cuda_probe import _is_cuda_available
 from .._utils.collections import remove_entry_from_list
 from .._utils.display import cleanup_trace_visualizer_dir
 from .._utils.tensor_utils import capture_touched_cuda
-from ..intervention.types import ParentRef, Unsupported
+from ..intervention._types import ParentRef, Unsupported
 from ._state_adapter import state_items
 from .op import Op, _detach_op_husk
 

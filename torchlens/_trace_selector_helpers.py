@@ -15,8 +15,8 @@ from ._errors import AmbiguousOpLookupError, ArgumentTypeError
 from ._selection.selectors import BaseSelector
 from ._trace_selection_shape import _selector_component_is_final_only
 from .backends import registry as _backend_registry
-from .recording.options import PredicateFn
-from .recording.types import RecordContext
+from .recording._options import PredicateFn
+from .recording._types import RecordContext
 
 if TYPE_CHECKING:
     from .options import CaptureOptions

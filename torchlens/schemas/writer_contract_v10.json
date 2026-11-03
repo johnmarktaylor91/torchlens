@@ -1269,7 +1269,7 @@
     "_launches": "keep",
     "_relations": "keep"
    },
-   "torchlens.intervention.types.Edit": {
+   "torchlens.intervention._types.Edit": {
     "args": "keep",
     "batch_independent": "keep",
     "compatible_with_append": "keep",
@@ -1281,7 +1281,7 @@
     "selection_recipe": "blob_recursive",
     "signal": "keep"
    },
-   "torchlens.intervention.types.FireRecord": {
+   "torchlens.intervention._types.FireRecord": {
     "backward_pass_index": "keep",
     "call_index": "keep",
     "call_label": "keep",

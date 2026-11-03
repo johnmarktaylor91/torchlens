@@ -19,7 +19,7 @@ from tests.test_agent_surface_helpers import (
     save_clean_artifact,
     save_nan_artifact,
 )
-from torchlens.agent import cli
+from torchlens.agent import _cli as cli
 
 
 @pytest.fixture()

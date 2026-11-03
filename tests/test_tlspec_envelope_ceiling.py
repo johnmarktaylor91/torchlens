@@ -135,7 +135,7 @@ def test_manifest_policy_warns_not_raises_on_minor_mismatch() -> None:
 def test_recover_reraises_governed_refusals() -> None:
     """recover() salvages corruption, never a governed compatibility refusal."""
 
-    from torchlens.recording.recover import _GOVERNED_COMPATIBILITY_REFUSALS
+    from torchlens.recording._recover import _GOVERNED_COMPATIBILITY_REFUSALS
 
     assert ArtifactTooOldError in _GOVERNED_COMPATIBILITY_REFUSALS
     assert ArtifactTooNewError in _GOVERNED_COMPATIBILITY_REFUSALS

@@ -68,8 +68,8 @@ from ...backends._finalize import (
 )
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
-from ...recording.types import CaptureSpec
-from ...validation.status import (
+from ...recording._types import CaptureSpec
+from ...validation._status import (
     REGION_REPLAY_CLASS,
     REGION_REPLAY_CLASS_KEY,
     REGION_REPLAY_IMPORTER_PROVENANCE,
@@ -832,7 +832,7 @@ class JAXBackend:
         log = _JaxValidationLog()
         try:
             if validate_metadata:
-                from ...validation.invariants import check_metadata_invariants
+                from ...validation._invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
             passed = self._validate_jax_equations(trace, log)

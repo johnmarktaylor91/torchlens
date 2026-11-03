@@ -27,6 +27,7 @@ from torchlens.intervention._metrics import (
     cosine_distance,
     relative_l1,
 )
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
     _deserialize_value,
     _serialize_value,
@@ -34,7 +35,6 @@ from torchlens.intervention._spec_values import (
 )
 from torchlens.intervention._super._base import _TensorBearing
 from torchlens.intervention.errors import UnserializableDictKeyError
-from torchlens.intervention.save import SaveLevel
 from torchlens.options import ReplayOptions
 
 
@@ -137,7 +137,7 @@ def test_fork_policy_shares_optimizer_but_keeps_it_off_the_display_field_order()
     """MAJOR-1: ``_optimizer`` has a SHARE policy yet stays out of FIELD_ORDER."""
 
     from torchlens._constants import MODEL_LOG_FIELD_ORDER
-    from torchlens.intervention.types import (
+    from torchlens.intervention._types import (
         MODEL_LOG_FIELD_FORK_POLICY,
         ForkFieldPolicy,
     )

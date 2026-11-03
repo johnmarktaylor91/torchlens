@@ -17,7 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 transformers = pytest.importorskip("transformers")
 
@@ -51,7 +51,7 @@ class TestFacetBridge:
         """Both blocks' GPT2MLP output homes resolve; nothing else does."""
 
         index = ob.read_edge_index(gpt2_trace)
-        from torchlens.attribution.onebackward._facet_bridge import resolve_frozen_policy
+        from torchlens.attribution._onebackward._facet_bridge import resolve_frozen_policy
 
         resolution = resolve_frozen_policy(gpt2_trace, index, "mlp_out")
         assert resolution.attention_bearing
@@ -67,7 +67,7 @@ class TestFacetBridge:
         """
 
         index = ob.read_edge_index(gpt2_trace)
-        from torchlens.attribution.onebackward._facet_bridge import resolve_frozen_policy
+        from torchlens.attribution._onebackward._facet_bridge import resolve_frozen_policy
 
         resolution = resolve_frozen_policy(gpt2_trace, index, "mlp_out")
         substring_selected = {
@@ -93,7 +93,7 @@ class TestFacetBridge:
         """
 
         from torchlens._semantic.facets import FacetView
-        from torchlens.attribution.onebackward import _facet_bridge
+        from torchlens.attribution._onebackward import _facet_bridge
 
         original_has = FacetView.has
 
@@ -113,7 +113,7 @@ class TestFacetBridge:
         """No 'attribution_graph' preset name exists until R10 lands."""
 
         index = ob.read_edge_index(gpt2_trace)
-        from torchlens.attribution.onebackward._facet_bridge import resolve_frozen_policy
+        from torchlens.attribution._onebackward._facet_bridge import resolve_frozen_policy
 
         with pytest.raises(ob.ReadError) as excinfo:
             resolve_frozen_policy(gpt2_trace, index, "attribution_graph")
@@ -215,7 +215,7 @@ class TestDisclosureBranches:
     def test_branch_w_warns_once_per_process(self, gpt2_trace: tl.Trace) -> None:
         """The shipped branch: one warning, then silence; never with explicit."""
 
-        from torchlens.attribution.onebackward import _frozen
+        from torchlens.attribution._onebackward import _frozen
 
         _frozen._DISCLOSURE_WARNED.clear()
         target = _output_seed(gpt2_trace)
@@ -237,7 +237,7 @@ class TestDisclosureBranches:
     ) -> None:
         """The kept-buildable branch: typed refusal with the shared message."""
 
-        from torchlens.attribution.onebackward import _frozen
+        from torchlens.attribution._onebackward import _frozen
 
         monkeypatch.setattr(_frozen, "FROZEN_DEFAULT_DISCLOSURE_BRANCH", "refuse")
         target = _output_seed(gpt2_trace)
@@ -251,7 +251,7 @@ class TestDisclosureBranches:
     def test_detector_never_fires_on_attention_free_models(self) -> None:
         """ResNet-style graphs: empty default set, disclosed, no warning."""
 
-        from torchlens.attribution.onebackward import _frozen
+        from torchlens.attribution._onebackward import _frozen
 
         _frozen._DISCLOSURE_WARNED.clear()
         torch.manual_seed(0)

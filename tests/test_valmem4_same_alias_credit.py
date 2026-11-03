@@ -33,7 +33,7 @@ from torchlens import _user_public_impls, _validation_argument_references as arg
 from torchlens._save_budget import SaveBudget, SaveBudgetExceededError
 from torchlens.backends.torch import _ops_arguments, _ops_retention
 from torchlens.options import CaptureOptions
-from torchlens.validation.diagnostics import get_validation_diagnostics, get_validation_failure
+from torchlens.validation._diagnostics import get_validation_diagnostics, get_validation_failure
 
 _TIGHT = 64  # bytes: below every tensor these unit tests charge
 _BELOW_WEIGHTS = 1 << 16  # 64 KiB: far above every real copy, far below a 256x256 weight

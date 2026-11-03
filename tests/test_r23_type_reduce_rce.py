@@ -135,7 +135,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) ->
     "module",
     [
         "torchlens.intervention._spec_values",  # where the class lives
-        "torchlens.intervention.save",  # where it lived; the path resolves to nothing
+        "torchlens.intervention._save",  # where it lived; the path resolves to nothing
     ],
 )
 def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
@@ -155,7 +155,7 @@ def test_lazyimportref_type_denied_at_unpickler(module: str) -> None:
     ("module", "name"),
     [
         ("torchlens._data_classes.op", "TensorLog"),
-        ("torchlens.intervention.types", "HelperSpec"),
+        ("torchlens.intervention._types", "HelperSpec"),
     ],
 )
 def test_class_names_only_2x_wrote_refuse_as_2x(module: str, name: str) -> None:
@@ -179,8 +179,8 @@ def test_legit_data_types_and_snapshot_still_admit() -> None:
         ("torchlens._data_classes.trace", "Trace"),
         ("torchlens._data_classes.grad_fn_call", "GradFnCall"),  # rename target
         ("torchlens.intervention._super.super_op", "SuperOp"),  # rename target
-        ("torchlens.intervention.types", "InterventionSpec"),
-        ("torchlens.intervention.types", "Edit"),
+        ("torchlens.intervention._types", "InterventionSpec"),
+        ("torchlens.intervention._types", "Edit"),
         ("torchlens._semantic.facets", "FacetRegistrySnapshot"),
         ("torchlens._ir.container_registry", "ContainerRecord"),
     ]

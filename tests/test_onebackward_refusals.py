@@ -15,7 +15,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -300,7 +300,7 @@ class TestPopulationContract:
         # A site absent from the trace is normally refused by the selection
         # algebra before the read sees it, so the read-level guard is pinned
         # directly through a hand-built population:
-        from torchlens.attribution.onebackward._read import (
+        from torchlens.attribution._onebackward._read import (
             _explicit_preflight,
             _SitePayloads,
         )
@@ -435,7 +435,7 @@ class TestTorchBandGate:
     """The capability gate refuses typed when GradientEdge is absent."""
 
     def test_refusal_when_flag_is_off(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _accessor
+        from torchlens.attribution._onebackward import _accessor
 
         monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
@@ -454,7 +454,7 @@ class TestTypedDoorProvocations:
     """
 
     def test_onebackward_torch_unsupported(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _accessor
+        from torchlens.attribution._onebackward import _accessor
 
         monkeypatch.setattr(_accessor, "get_gradient_edge_support", lambda: False)
         trace = _trace()
@@ -607,7 +607,7 @@ class TestTypedDoorProvocations:
 
     @_requires_gradient_edge
     def test_read_engine_call_drift(self, monkeypatch) -> None:
-        from torchlens.attribution.onebackward import _engine
+        from torchlens.attribution._onebackward import _engine
 
         monkeypatch.setattr(_engine.math, "ceil", lambda value: 2)
         trace = _trace()
@@ -616,7 +616,7 @@ class TestTypedDoorProvocations:
         assert excinfo.value.fields["code"] == "read_engine_call_drift"
 
     def test_batched_attribution_unsupported(self) -> None:
-        from torchlens.attribution.onebackward._engine import _translate_engine_error
+        from torchlens.attribution._onebackward._engine import _translate_engine_error
 
         translated = _translate_engine_error(
             RuntimeError("Batching rule not implemented for aten::special_op"),

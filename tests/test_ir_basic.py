@@ -467,7 +467,7 @@ def test_container_leaf_import_order_has_no_cycle() -> None:
             "-c",
             (
                 "import torchlens._ir.container; "
-                "import torchlens.intervention.types; "
+                "import torchlens.intervention._types; "
                 "print('IMPORT_OK')"
             ),
         ],

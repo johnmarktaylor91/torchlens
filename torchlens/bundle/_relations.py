@@ -76,7 +76,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._fed_by import FED_BY_KIND, check_fed_by_params, validate_fed_by_param
 from ._selected_by import (
     SELECTED_BY_DECISION_PARAMS,

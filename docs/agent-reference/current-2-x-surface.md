@@ -1027,7 +1027,7 @@
   is substituted at its derived occurrence address and the live
   `nn.Parameter` is NEVER written (bit-identical pinned). Parameters are NOT
   in the edge family (LiteralTensor template components, not EdgeUseRecords),
-  so `intervention/param_substitution.py` DERIVES the addresses
+  so `intervention/_param_substitution.py` DERIVES the addresses
   (`Param.used_by_ops` + template identity/barcode match, FAIL-CLOSED:
   nested positions, released legacy captures, bare pass-ambiguous
   multi-pass consumer spellings, and consumer inventories omitting a pass
@@ -1649,7 +1649,7 @@
   `trace.draw(color_by=graph)` paints each site holding feature or error nodes with the
   `abs_sum` total of its nodes' influence (a site-to-value mapping paints feature activations
   or any other quantity).
-  `tl.attribution.graph.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
+  `tl.attribution.upload_to_neuronpedia(exported, *, api_key)` publishes the dict
   `to_neuronpedia` returned (or its file) through Neuronpedia's documented two-step upload and
   returns the page URL; `Direction.upload_to_neuronpedia(*, api_key, scan, vector_label,
   layer=None, hook_type="resid_post", default_steering_strength=1.0)` publishes a vector through "Create

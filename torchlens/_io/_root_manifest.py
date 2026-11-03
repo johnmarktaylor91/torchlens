@@ -98,7 +98,7 @@ def load_by_root_manifest(bundle_path: Path) -> Any:
 
         return load_merged(bundle_path)
     if candidate.get("bundle_format") == "fastlog-directory":
-        from ..recording.recover import load as load_fastlog
+        from ..recording._recover import load as load_fastlog
 
         return load_fastlog(bundle_path)
     if _is_extraction_manifest(candidate):

@@ -587,7 +587,7 @@ def _check_step_postcondition(ctx: StepContext, step: PipelineStep) -> None:
 
     violation = None if step.postcondition is None else step.postcondition(ctx)
     if violation is not None:
-        from ..validation.invariants import MetadataInvariantError
+        from ..validation._invariants import MetadataInvariantError
 
         raise MetadataInvariantError(
             "postprocess_step_postcondition",

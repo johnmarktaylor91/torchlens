@@ -16,7 +16,7 @@ import torchlens as tl
 from torchlens._snoop import normalize_echo
 from torchlens.errors import NarrationConfigError
 from torchlens.options import NarrationOptions
-from torchlens.recording.options import _RecordingConfig
+from torchlens.recording._options import _RecordingConfig
 
 
 class OneOp(nn.Module):
@@ -165,7 +165,7 @@ def test_echo_on_non_torch_backend_refuses_typed() -> None:
 def test_record_without_echo_or_save_still_refuses() -> None:
     """The pre-existing empty-capture refusal is untouched."""
 
-    from torchlens.recording.exceptions import RecordingConfigError
+    from torchlens.recording._exceptions import RecordingConfigError
 
     with pytest.raises(RecordingConfigError):
         tl.record(OneOp(), torch.randn(2, 4))

@@ -13,17 +13,17 @@ from typing import Any
 from torchlens._data_classes.trace import Trace
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
 from torchlens._selection.selectors import BaseSelector
-from torchlens.intervention._zero_fire import (
-    non_tensor_reason_fields,
-    recorded_non_tensor_details,
-    settle_capture_zero_fire,
-)
-from torchlens.intervention.audit import (
+from torchlens.intervention._audit import (
     EventStatus,
     record_intervention_event,
     rule_signal as _rule_signal,
     rules_payload,
     site_keys_for_labels,
+)
+from torchlens.intervention._zero_fire import (
+    non_tensor_reason_fields,
+    recorded_non_tensor_details,
+    settle_capture_zero_fire,
 )
 from torchlens.intervention.hooks import split_site_branches as _split_site_branches
 
@@ -39,10 +39,10 @@ from ..._trace_selector_helpers import (
     _is_selective_label_save,
     _make_layers_to_save_predicate,
 )
+from ...intervention._predicates import InterventionPredicate
+from ...intervention._spec import Recipe, Rule, _canonical_repr
+from ...intervention._types import InterventionDecision, InterventionSpec, TargetSpec
 from ...intervention.hooks import gradient_inners, normalize_hook_plan, split_site_branches
-from ...intervention.predicates import InterventionPredicate
-from ...intervention.spec import Recipe, Rule, _canonical_repr
-from ...intervention.types import InterventionDecision, InterventionSpec, TargetSpec
 from .request import _DoorArgs, _DoorState
 
 

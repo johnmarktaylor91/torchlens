@@ -26,7 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import _user_public_impls, _validation_argument_references as arg_references
 from torchlens.errors import TraceCaptureError
-from torchlens.validation.diagnostics import get_validation_diagnostics
+from torchlens.validation._diagnostics import get_validation_diagnostics
 
 
 def _validate(model: nn.Module, x: torch.Tensor) -> tuple[bool, list[Any], int]:

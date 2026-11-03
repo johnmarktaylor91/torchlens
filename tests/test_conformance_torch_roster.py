@@ -24,7 +24,7 @@ from tests.conformance._rosters import ECOSYSTEM_ENV, torch as torch_roster
 from torchlens._state import pause_logging
 from torchlens.backends.registry import BackendUnsupportedError, get_backend_spec
 from torchlens.options import CaptureOptions
-from torchlens.validation.status import ValidationStatus
+from torchlens.validation._status import ValidationStatus
 
 ROWS = {row.family: row for row in torch_roster.config_built_roster()}
 CLOSURE_ROW = "closure_constant"

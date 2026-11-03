@@ -1464,23 +1464,23 @@ _VETTED_INERT_FIRST_PARTY: frozenset[tuple[str, str]] = frozenset(
         # Pure display transform (raw-input/output transform saved by reference).
         ("torchlens._utils.display", "identity"),
         # Built-in intervention helper factories (import-ref-portable helper saves +
-        # the intervention resolver's ``torchlens.intervention.helpers:<name>`` refs).
-        ("torchlens.intervention.helpers", "zero_ablate"),
-        ("torchlens.intervention.helpers", "mean_ablate"),
+        # the intervention resolver's ``torchlens.intervention._helpers:<name>`` refs).
+        ("torchlens.intervention._helpers", "zero_ablate"),
+        ("torchlens.intervention._helpers", "mean_ablate"),
         # No resample_ablate row: the old alias carried scramble_elements's
         # qualname, so a row under the old name never matched. Name-saved specs
         # load via rebuild_builtin_helper; an import ref to the old name fails at
         # the helpers module's facade redirect (test_interv_honesty_rename).
-        ("torchlens.intervention.helpers", "scramble_elements"),
-        ("torchlens.intervention.helpers", "steer"),
-        ("torchlens.intervention.helpers", "scale"),
-        ("torchlens.intervention.helpers", "clamp"),
-        ("torchlens.intervention.helpers", "add_noise"),
-        ("torchlens.intervention.helpers", "project_onto"),
-        ("torchlens.intervention.helpers", "project_out"),
-        ("torchlens.intervention.helpers", "swap_with"),
-        ("torchlens.intervention.helpers", "splice_module"),
-        ("torchlens.intervention.helpers", "clip_norm"),
+        ("torchlens.intervention._helpers", "scramble_elements"),
+        ("torchlens.intervention._helpers", "steer"),
+        ("torchlens.intervention._helpers", "scale"),
+        ("torchlens.intervention._helpers", "clamp"),
+        ("torchlens.intervention._helpers", "add_noise"),
+        ("torchlens.intervention._helpers", "project_onto"),
+        ("torchlens.intervention._helpers", "project_out"),
+        ("torchlens.intervention._helpers", "swap_with"),
+        ("torchlens.intervention._helpers", "splice_module"),
+        ("torchlens.intervention._helpers", "clip_norm"),
     }
 )
 
@@ -1496,7 +1496,7 @@ def is_inert_first_party_callable(func: Callable[..., Any]) -> bool:
     its argument. The pre-r22 narrowing kept a "PUBLIC name proves inertness"
     fallthrough, which was STILL unsound: the verb denylist omitted the filesystem /
     registry / capability-mutation verb class, so PUBLIC side-effecting callables such
-    as ``torchlens.recording.cleanup.cleanup_partial`` (``shutil.rmtree`` of an
+    as ``torchlens.recording._cleanup.cleanup_partial`` (``shutil.rmtree`` of an
     attacker-named directory) and ``mark_torch_capability_missing`` (global HAS_*
     flag poison) were admitted and INVOKED on a plain ``tl.load(path)``.
 

@@ -51,7 +51,7 @@ import pytest
 from _exemption_contracts import VALIDATION_CONTRACTS
 from _source_corpus import package_files, package_source
 
-from torchlens.validation import exemptions as ex
+from torchlens.validation import _exemptions as ex
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _EXEMPTIONS_SRC = _REPO_ROOT / "torchlens" / "validation" / "exemptions.py"
@@ -137,7 +137,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="uninitialized_by_design",
         tier="early_exit",
         contract="C1 replay determinism",
-        proof="torchlens.validation.exemptions:SKIP_VALIDATION_ENTIRELY",
+        proof="torchlens.validation._exemptions:SKIP_VALIDATION_ENTIRELY",
         refuses=(
             "any op outside the six uninitialized-memory constructors; the table "
             "carries a per-entry justification string, not a bare name"
@@ -147,7 +147,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="not_saved_by_user",
         tier="early_exit",
         contract="C3 replay-surface completeness",
-        proof="torchlens.validation.core:_classify_user_excluded_replay_surface",
+        proof="torchlens.validation._core:_classify_user_excluded_replay_surface",
         refuses=(
             "an omission NOT attributable to the user's own save= predicate: an "
             "exhaustive capture missing a payload still fails"
@@ -157,7 +157,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="pre_perturbation_exemption",
         tier="early_exit",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.core:_check_perturbation_exemptions",
+        proof="torchlens.validation._core:_check_perturbation_exemptions",
         refuses=(
             "any op/arg pair outside the four declared registries; forward replay "
             "still runs for every op this only excuses from PERTURBATION"
@@ -182,7 +182,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="ulp_swamped_perturbation",
         tier="early_exit",
         contract="C4 numeric resolution",
-        proof="torchlens.validation.core:_perturbation_delta_below_output_spacing",
+        proof="torchlens.validation._core:_perturbation_delta_below_output_spacing",
         refuses=(
             "a delta at or above the output dtype's representable spacing, which "
             "must change the output and otherwise fails"
@@ -192,7 +192,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="parent_inplace_rng_bernoulli",
         tier="early_exit",
         contract="C1 replay determinism",
-        proof="torchlens.validation.core:_check_whether_func_on_saved_parents_yields_saved_tensor",
+        proof="torchlens.validation._core:_check_whether_func_on_saved_parents_yields_saved_tensor",
         refuses=(
             "a non-RNG in-place parent, and any mismatch the snapshot proof cannot "
             "explain: the exemption fires only when re-replaying the op from the "
@@ -205,7 +205,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="intentional_intervention_replacement",
         tier="recorder",
         contract="C3 replay-surface completeness",
-        proof="torchlens.validation.core:_is_intentional_intervention_replacement",
+        proof="torchlens.validation._core:_is_intentional_intervention_replacement",
         refuses=(
             "a replacement op appearing during PLAIN capture -- the intervention "
             "must be attributable to a user spec, which is the LOCKED narrowing"
@@ -215,7 +215,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="skip_perturbation_entirely",
         tier="recorder",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:SKIP_PERTURBATION_ENTIRELY",
+        proof="torchlens.validation._exemptions:SKIP_PERTURBATION_ENTIRELY",
         refuses=(
             "forward replay, which still runs for every member; and any op not "
             "literally named in the table"
@@ -226,7 +226,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="discrete_bool_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_discrete_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_discrete_output_decision",
         refuses=(
             "a floating/complex output, where a value perturbation must show up; "
             "(R08) an elementwise comparison whose threshold-straddle probe "
@@ -244,7 +244,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="discrete_index_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_discrete_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_discrete_output_decision",
         refuses=(
             "the VALUE half of an index-and-value op (topk/sort values), and any "
             "non-integer output dtype"
@@ -254,14 +254,14 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="discrete_value_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
+        proof="torchlens.validation._exemptions:_posthoc_value_proof_decision",
         refuses="a continuous output whose value carries the perturbed parent",
     ),
     Exemption(
         code="type_template_output",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_structural_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_structural_output_decision",
         refuses=(
             "a perturbed parent outside the template slot (args[1]/other=) -- in "
             "particular the perturbed data SOURCE of the cast, whose values flow "
@@ -272,14 +272,14 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="integer_cast_quantization",
         tier="posthoc",
         contract="C4 numeric resolution",
-        proof="torchlens.validation.exemptions:_posthoc_structural_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_structural_output_decision",
         refuses="a perturbation large enough to cross an integer quantization boundary",
     ),
     Exemption(
         code="structural_output_template",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_structural_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_structural_output_decision",
         refuses=(
             "a *_like/meshgrid/broadcast op whose output actually carries input "
             "VALUES rather than only shape/dtype/device"
@@ -289,14 +289,14 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="rng_probability_template",
         tier="posthoc",
         contract="C1 replay determinism",
-        proof="torchlens.validation.exemptions:_posthoc_structural_output_decision",
+        proof="torchlens.validation._exemptions:_posthoc_structural_output_decision",
         refuses="a non-RNG op, and the RNG state itself (which replay still pins)",
     ),
     Exemption(
         code="uninitialized_destination_overwrite",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_perturbed_parent_is_uninitialized_setitem_dest",
+        proof="torchlens.validation._exemptions:_perturbed_parent_is_uninitialized_setitem_dest",
         refuses=(
             "a destination holding REAL written data -- the walk deliberately does "
             "NOT chain through prior in-place writes (B1 review hole, TwoIndexCopyDim2)"
@@ -306,7 +306,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="full_destination_overwrite",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_setitem_destination_coverage_is_total",
+        proof="torchlens.validation._exemptions:_setitem_destination_coverage_is_total",
         refuses=(
             "a partial overwrite, and duplicate advanced indices that would fake "
             "total coverage via numel equality"
@@ -316,7 +316,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="scalar_destination_overwrite",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_setitem_destination_coverage_is_total",
+        proof="torchlens.validation._exemptions:_setitem_destination_coverage_is_total",
         refuses=(
             "the same partial-coverage and duplicate-index cases as the tensor "
             "right-hand side: scalar RHS is held to identical index rigor"
@@ -326,7 +326,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="index_domain_value_irrelevant",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_index_domain_value_irrelevance_decision",
+        proof="torchlens.validation._exemptions:_index_domain_value_irrelevance_decision",
         refuses=(
             "a perturbable index domain: indices are rotated IN-DOMAIN and only a "
             "provably degenerate domain (n<=1, or no in-range entry) is excused"
@@ -336,7 +336,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="multiplicative_zero_annihilator",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
+        proof="torchlens.validation._exemptions:_posthoc_value_proof_decision",
         refuses=(
             "a non-zero (or NaN/Inf-bearing) non-perturbed operand, where the "
             "product does carry the perturbed value"
@@ -346,7 +346,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="addcmul_zero_annihilator",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_addcmul_zero_annihilator_decision",
+        proof="torchlens.validation._exemptions:_addcmul_zero_annihilator_decision",
         refuses=(
             "a non-zero (or NaN/Inf-bearing) sibling multiplied operand or "
             "non-zero value=, where the product does carry the perturbed value; "
@@ -358,7 +358,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="binary_extrema_dominated",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_binary_extrema_nonperturbed_arg_dominates",
+        proof="torchlens.validation._exemptions:_binary_extrema_nonperturbed_arg_dominates",
         refuses=(
             "any element where the perturbed operand is not dominated; domination "
             "must hold at EVERY output element"
@@ -368,14 +368,14 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="mod_divisor_irrelevant",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
+        proof="torchlens.validation._exemptions:_posthoc_value_proof_decision",
         refuses="the DIVIDEND operand, keyed off parent_arg_positions not tensor equality",
     ),
     Exemption(
         code="integer_mod_unit_divisor",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_integer_mod_unit_divisor_decision",
+        proof="torchlens.validation._exemptions:_integer_mod_unit_divisor_decision",
         refuses=(
             "a float dividend, a divisor other than +-1 (compared after widening, so a "
             "uint8 255 is not -1), -1 when any operand or the result is unsigned (it "
@@ -403,7 +403,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="sdpa_zero_query_uniform_attention",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_sdpa_zero_query_decision",
+        proof="torchlens.validation._exemptions:_sdpa_zero_query_decision",
         refuses=(
             "a non-zero (or NaN/Inf-bearing) saved query, and a perturbed query or "
             "value operand -- both genuinely influence sdpa's output even when query "
@@ -414,7 +414,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="softmax_singleton_reduction_dim",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_softmax_singleton_dim_decision",
+        proof="torchlens.validation._exemptions:_softmax_singleton_dim_decision",
         refuses=(
             "a reduction dimension with more than one element, and a perturbed parent "
             "other than softmax's own (sole) logits input"
@@ -424,7 +424,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="layer_norm_singleton_normalized_shape",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_layer_norm_singleton_shape_decision",
+        proof="torchlens.validation._exemptions:_layer_norm_singleton_shape_decision",
         refuses=(
             "a normalized_shape spanning more than one element, and a perturbed parent "
             "other than layer_norm's own input"
@@ -539,7 +539,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         code="locally_constant_by_construction",
         tier="posthoc",
         contract="C2 perturbation sensitivity",
-        proof="torchlens.validation.exemptions:_posthoc_value_proof_decision",
+        proof="torchlens.validation._exemptions:_posthoc_value_proof_decision",
         refuses=(
             "a region where the saved values are NOT provably locally constant "
             "(finite operands, or a NaN/Inf pattern that does not absorb the delta)"
@@ -624,7 +624,7 @@ def posthoc_exempting_reasons(source: str) -> set[str]:
     Parameters
     ----------
     source:
-        Source text of ``torchlens/validation/exemptions.py``.
+        Source text of ``torchlens/validation/_exemptions.py``.
 
     Returns
     -------
@@ -722,7 +722,7 @@ def _string_constants(node: ast.expr, bindings: dict[str, set[str]]) -> set[str]
 
 
 def core_exempting_reasons(source: str) -> set[str]:
-    """Return reason codes ``validation/core.py`` can settle as exempted.
+    """Return reason codes ``validation/_core.py`` can settle as exempted.
 
     Covers both spellings: ``ValidationCheckResult.exempted("code", ...)`` and
     decision-recorder rows carrying ``decision="exempted"``. A recorder reason
@@ -732,7 +732,7 @@ def core_exempting_reasons(source: str) -> set[str]:
     Parameters
     ----------
     source:
-        Source text of ``torchlens/validation/core.py``.
+        Source text of ``torchlens/validation/_core.py``.
 
     Returns
     -------
@@ -1027,7 +1027,7 @@ class TestLedgerMechanismIsRedCapable:
         """A rotted citation fails rather than passing silently."""
 
         module = __import__(
-            "torchlens.validation.exemptions", fromlist=["SKIP_VALIDATION_ENTIRELY"]
+            "torchlens.validation._exemptions", fromlist=["SKIP_VALIDATION_ENTIRELY"]
         )
         assert hasattr(module, "SKIP_VALIDATION_ENTIRELY")
         assert not hasattr(module, "_definitely_not_a_real_predicate")

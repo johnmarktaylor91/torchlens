@@ -23,9 +23,9 @@ from ..._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import _get_code_context
 from ..._utils.rng import log_current_rng_states
 from ..._utils.tensor_utils import get_memory_amount_from_metadata
+from ...recording._exceptions import PredicateError
 from ...recording._halt import StopSignal
-from ...recording.exceptions import PredicateError
-from ...recording.types import ActivationRecord, CaptureSpec
+from ...recording._types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
 from ._tl import get_tensor_meta, set_tensor_label

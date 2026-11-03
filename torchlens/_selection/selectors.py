@@ -366,7 +366,7 @@ class SiteSelector(BaseSelector):
     The site-key-primary WHERE spelling (surgery memo Build 0a/0c): valid in
     EVERY lane under the address law -- post hoc against ``op.site_key``,
     and during a live capture against the streaming live minter
-    (``intervention/site_keys.py``). Every spelling DOCUMENTED-UNSTABLE
+    (``intervention/_site_keys.py``). Every spelling DOCUMENTED-UNSTABLE
     pending naming-session ratification.
     """
 

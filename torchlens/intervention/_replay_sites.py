@@ -1,9 +1,9 @@
 """Site-level replay decisions: source records, stochastic draws, buffer threading.
 
-Split from :mod:`torchlens.intervention.replay`. Each helper classifies one site or
+Split from :mod:`torchlens.intervention._replay`. Each helper classifies one site or
 answers one pure question about it (is it a source record, does a random draw keep
 its captured value, what value threads through a buffer version record); the replay
-loop in :mod:`~torchlens.intervention.replay` acts on the answers and raises the
+loop in :mod:`~torchlens.intervention._replay` acts on the answers and raises the
 typed refusals.
 """
 

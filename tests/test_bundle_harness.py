@@ -26,7 +26,7 @@ from torchlens.bundle._fed_by import (
     member_binding,
 )
 from torchlens.bundle._relations import MemberRelationRow
-from torchlens.errors.episode import BundleRelationError
+from torchlens.errors._episode import BundleRelationError
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.io import attach_sidecar
 

@@ -21,7 +21,7 @@ import torch
 from torchlens import trace as trace_fn
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _ValidationTimeout(Exception):

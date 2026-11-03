@@ -390,7 +390,7 @@ to `path`; the file opens in Neuronpedia's graph viewer. DOCUMENTED-UNSTABLE.
 `trace.draw(color_by=graph)` paints the graph onto its trace: each site holding feature or
 error nodes gets the total influence of its nodes (a mapping of site to value paints anything
 else, feature activations included).
-`tl.attribution.graph.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
+`tl.attribution.upload_to_neuronpedia("g.json", api_key=os.environ["NEURONPEDIA_API_KEY"])` publishes the exported
 file on neuronpedia.org under the key's account and returns its URL;
 `direction.upload_to_neuronpedia(api_key=os.environ["NEURONPEDIA_API_KEY"], model_id="gemma-2-2b", name="honesty")`
 publishes a `Direction` the same way. Both check every field before the first request and

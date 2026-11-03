@@ -19,8 +19,8 @@ from torchlens._io.prerelease import activate_prerelease_fields
 from torchlens._ir.events import _AtenExecutionContext, _AtenTensorFact
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.bundle import SuperAtenOp
+from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
 from torchlens.validation._invariants_primitive_ops import _check_primitive_op_invariants
-from torchlens.validation.invariants import MetadataInvariantError, check_metadata_invariants
 
 _DOCUMENTED_UNSTABLE_ATEN_TOKENS = {
     "AtenOp",

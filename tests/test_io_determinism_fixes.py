@@ -359,7 +359,7 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
             raise OSError("simulated intervention swap refusal")
         original_rename(source, target)
 
-    monkeypatch.setattr("torchlens.intervention.save.os.rename", fail_replacement)
+    monkeypatch.setattr("torchlens.intervention._save.os.rename", fail_replacement)
     with pytest.raises(OSError, match="swap refusal"):
         trace.save_intervention(path, level="audit", overwrite=True)
 

@@ -1,7 +1,7 @@
 """Round-12 security regression: ungated intervention ``import_ref`` resolver RCE.
 
 r3/r5/r6/r7/r9/r10/r11 hardened the container and function-key resolvers, but a THIRD
-ungated sink survived in ``torchlens/intervention/save.py``: ``_resolve_import_ref`` did a
+ungated sink survived in ``torchlens/intervention/_save.py``: ``_resolve_import_ref`` did a
 bare ``importlib.import_module(module_name)`` + attribute walk with NO trust gate, NO
 denylist, and NO purity check. It was reached from ``LazyImportRef.__call__`` and the
 import-ref helper factory, both materialized UNGATED from the bundle JSON during
@@ -33,9 +33,9 @@ import torch
 from example_models import TinyReluAdd as _ReluModel
 
 import torchlens as tl
+from torchlens.intervention._save import load_intervention_spec
 from torchlens.intervention._spec_values import LazyImportRef, _resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.intervention.save import load_intervention_spec
 
 
 def _write_evil_module(tmp_path: Path, sentinel: Path) -> str:
@@ -150,9 +150,9 @@ def test_torch_save_denied_by_purity_even_under_trust() -> None:
 def test_torchlens_owned_ref_always_resolves() -> None:
     """A TorchLens-owned custom helper resolves without trust (our own code)."""
 
-    from torchlens.intervention.helpers import zero_ablate
+    from torchlens.intervention._helpers import zero_ablate
 
-    assert _resolve_import_ref("torchlens.intervention.helpers:zero_ablate") is zero_ablate
+    assert _resolve_import_ref("torchlens.intervention._helpers:zero_ablate") is zero_ablate
 
 
 def test_trusted_and_allowlisted_import_ref_resolves(tmp_path: Path) -> None:
@@ -246,9 +246,9 @@ def test_no_ungated_import_module_remains_in_bundle_resolvers() -> None:
     ``_resolve_import_ref``) must not import directly -- they delegate to the shared gate.
     """
 
+    import torchlens.intervention._save as save_mod
     import torchlens.intervention._spec_codec as codec_mod
     import torchlens.intervention._spec_values as values_mod
-    import torchlens.intervention.save as save_mod
 
     for module in (save_mod, codec_mod, values_mod):
         assert "importlib.import_module" not in Path(module.__file__).read_text(), module.__name__
@@ -263,9 +263,9 @@ def test_lazy_import_ref_resaves_as_import_ref() -> None:
     legitimately saved executable -- without ever needing to import anything.
     """
 
+    from torchlens.intervention._save import SaveLevel
     from torchlens.intervention._spec_values import _serialize_callable
     from torchlens.intervention.errors import OpaqueCallableError
-    from torchlens.intervention.save import SaveLevel
 
     ref = LazyImportRef("my_trusted_module:my_fn")
     payload = _serialize_callable(ref, SaveLevel.EXECUTABLE_WITH_CALLABLES)

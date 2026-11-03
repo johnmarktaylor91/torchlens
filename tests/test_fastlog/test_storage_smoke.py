@@ -11,8 +11,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.recording import CaptureSpec
-from torchlens.recording.exceptions import PredicateError, RecordingConfigError
-from torchlens.recording.types import RecordContext
+from torchlens.recording._exceptions import PredicateError, RecordingConfigError
+from torchlens.recording._types import RecordContext
 
 
 class TinyModel(nn.Module):

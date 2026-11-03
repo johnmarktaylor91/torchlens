@@ -14,7 +14,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.validation import backward as backward_validation
+from torchlens.validation import _backward as backward_validation
 from torchlens.validation._layer_grad_report import (
     LayerGradReport,
     _compare_module_output_grads,

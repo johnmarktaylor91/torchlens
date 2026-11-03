@@ -96,7 +96,7 @@ def test_rerun_save_scope_reads_lookback_payload_policy_directly() -> None:
 
     import pytest
 
-    from torchlens.intervention.rerun import _rerun_save_scope
+    from torchlens.intervention._rerun import _rerun_save_scope
 
     drifted_options = SimpleNamespace(keep_op=lambda ctx: True, lookback=2)
     drifted_log = SimpleNamespace(_predicate_save_options=drifted_options)

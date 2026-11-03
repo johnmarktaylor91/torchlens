@@ -99,7 +99,7 @@ def test_save_grads_label_string_still_works() -> None:
 def test_save_grads_callable_non_bool_refuses_typed() -> None:
     """The predicate contract is strict bool: truthy junk refuses typed."""
 
-    from torchlens.recording.exceptions import PredicateError
+    from torchlens.recording._exceptions import PredicateError
 
     with pytest.raises(PredicateError) as excinfo:
         tl.trace(

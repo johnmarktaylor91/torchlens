@@ -18,7 +18,7 @@ from tests.test_agent_surface_helpers import (
     save_clean_artifact,
     save_nan_artifact,
 )
-from torchlens.agent import call_tool, cli
+from torchlens.agent import _cli as cli, call_tool
 
 REPO_ROOT = str(Path(__file__).resolve().parent.parent)
 

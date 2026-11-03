@@ -29,7 +29,7 @@ secC (LOW robustness) -- ``_io/runnable_load.py``: ``_parse_literal`` built
     the declared ``kind`` (a ``kind=int`` atom could carry a list/dict/str). The fix
     enforces value-type-per-kind at parse.
 
-fastlog (LOW defense-in-depth) -- ``recording/storage_disk.py``: ``_dtype_from_name``
+fastlog (LOW defense-in-depth) -- ``recording/_storage_disk.py``: ``_dtype_from_name``
     did ``getattr(torch, name)`` with no ``isinstance(_, torch.dtype)`` guard (the
     sibling dtype resolvers have one). The fix adds the guard for parity.
 """
@@ -63,7 +63,7 @@ from torchlens._runnable import LiteralAtom, LiteralAtomKind
 from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention.errors import UntrustedCallableError
-from torchlens.recording.storage_disk import _dtype_from_name
+from torchlens.recording._storage_disk import _dtype_from_name
 
 # --------------------------------------------------------------------------- #
 # secE-1 -- resolver torchlens-walk branch now applies the torch-purity gate.

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .diagnostics import (
+from ._diagnostics import (
     CHECK_GROUND_TRUTH,
     CHECK_METADATA_INVARIANT,
     CHECK_PERTURBATION,
@@ -31,7 +31,7 @@ from .diagnostics import (
 )
 
 if TYPE_CHECKING:
-    from .status import ValidationStatus
+    from ._status import ValidationStatus
 
 _CHECK_FOR_PHASE = {
     "replay": CHECK_REPLAY,

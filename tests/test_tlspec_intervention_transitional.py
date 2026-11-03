@@ -11,8 +11,8 @@ from example_models import TinyReluAdd as _ReluModel
 
 import torchlens as tl
 from torchlens._io import TLSPEC_VERSION
-from torchlens.intervention.save import load_intervention_spec as legacy_load_intervention_spec
-from torchlens.intervention.types import InterventionSpec
+from torchlens.intervention._save import load_intervention_spec as legacy_load_intervention_spec
+from torchlens.intervention._types import InterventionSpec
 from torchlens.options import CaptureOptions
 
 

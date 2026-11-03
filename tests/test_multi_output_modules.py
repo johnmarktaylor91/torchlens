@@ -13,7 +13,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import MultiOutputModuleError, TorchLensError
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     ContainerSpec,
     DataclassField,
     DictKey,
@@ -588,8 +588,8 @@ def test_opaque_in_list_module_output_structure_matches_output_paths() -> None:
     container depth, and the invariant holds legitimately.
     """
 
+    from torchlens.validation._invariants import check_metadata_invariants
     from torchlens.validation._invariants_modules_params import _container_tensor_leaf_paths
-    from torchlens.validation.invariants import check_metadata_invariants
 
     trace = tl.trace(_OpaqueInListModel(), torch.tensor([-1.0, 2.0]))
 

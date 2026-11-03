@@ -32,7 +32,7 @@ from torchlens.backends._backend_protocol import REFUSAL_CODES, VALIDATION_REASO
 from torchlens.backends.mlx import get_unwrapped_policy, unwrapped_policy  # noqa: E402
 from torchlens.backends.mlx.wrappers import is_mlx_wrapped  # noqa: E402
 from torchlens.backends.registry import BackendUnsupportedError  # noqa: E402
-from torchlens.validation.status import ValidationStatus  # noqa: E402
+from torchlens.validation._status import ValidationStatus  # noqa: E402
 
 _GLOBAL_SCALE = None
 

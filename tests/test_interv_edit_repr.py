@@ -6,7 +6,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention.types import Edit
+from torchlens.intervention._types import Edit
 
 
 @pytest.mark.parametrize(

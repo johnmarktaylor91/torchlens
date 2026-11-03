@@ -24,7 +24,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from ..errors.episode import BundleRelationError
+from ..errors._episode import BundleRelationError
 from ._relations import MemberRelationRow
 from ._token_divergence import TokenDivergence, capture_edit_rows, divergence
 

@@ -22,8 +22,8 @@ from test_circ3_multi_receiver_patch import _outside_random_circuit, _tiny_gpt2
 
 import torchlens as tl
 import torchlens.mechinterp as mi
-from torchlens.intervention import edge_substitution, replay as replay_module
-from torchlens.intervention.edge_substitution import _recompute_with_substitution
+from torchlens.intervention import _edge_substitution as edge_substitution, _replay as replay_module
+from torchlens.intervention._edge_substitution import _recompute_with_substitution
 from torchlens.mechinterp import _edges
 from torchlens.mechinterp._edge_patch import _head_spec, _input_edge_record
 

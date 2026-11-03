@@ -51,7 +51,7 @@ from torchlens.backends._finalize import (
     mark_output_label,
 )
 from torchlens.backends.registry import BackendUnsupportedError
-from torchlens.recording.types import CaptureSpec
+from torchlens.recording._types import CaptureSpec
 
 
 class _NumpyBackend:

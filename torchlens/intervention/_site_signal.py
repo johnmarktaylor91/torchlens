@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from .spec import SiteSignal
+    from ._spec import SiteSignal
 
 #: Selector kinds whose sites live in the backward pass: the gradient wrapper,
 #: the autograd-node selectors and the backward-pass qualifier.

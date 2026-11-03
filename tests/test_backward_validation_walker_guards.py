@@ -1,4 +1,4 @@
-"""grind-p3 T11: validation/backward.py input/output walkers are guarded.
+"""grind-p3 T11: validation/_backward.py input/output walkers are guarded.
 
 ``_clone_inputs_with_grad`` and ``_sum_tensors`` were unguarded recursion with
 no memo: a legal deep nest or a self-referential container died in a raw
@@ -16,7 +16,7 @@ import torch
 
 from torchlens._errors import InvalidArgumentError
 from torchlens._input_walk import INPUT_TREE_MAX_DEPTH
-from torchlens.validation.backward import _clone_inputs_with_grad, _sum_tensors
+from torchlens.validation._backward import _clone_inputs_with_grad, _sum_tensors
 
 
 def _deep_list(depth: int, leaf: object) -> object:

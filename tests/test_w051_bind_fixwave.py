@@ -21,8 +21,8 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
+from torchlens.intervention._injection import attest_injected_ops, injected_ops
 from torchlens.intervention.errors import BindingPreflightError
-from torchlens.intervention.injection import attest_injected_ops, injected_ops
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 _READY = tl.options.CaptureOptions(replayable=True)
@@ -226,7 +226,7 @@ def test_nan_output_injected_op_attests_and_value_mismatch_still_diverges() -> N
     assert report.passed, [(row.label, row.status, row.reason) for row in report.rows]
 
     # tripwire intact: a finite value edit on the recorded out diverges
-    from torchlens.intervention.injection import injection_state
+    from torchlens.intervention._injection import injection_state
 
     state = injection_state(logged)
     tampered = []

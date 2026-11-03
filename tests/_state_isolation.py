@@ -52,7 +52,7 @@ _WARN_ONCE_SENTINELS: tuple[tuple[str, str, object], ...] = (
     ("torchlens._quickstart._gate", "_WARNED_TRACE_IDS", set()),
     # F04 one-backward reads: the once-per-process frozen-default disclosure
     # (read_frozen_default_linearization) resets per test.
-    ("torchlens.attribution.onebackward._frozen", "_DISCLOSURE_WARNED", set()),
+    ("torchlens.attribution._onebackward._frozen", "_DISCLOSURE_WARNED", set()),
     ("torchlens._utils._torch_compat", "_warned_missing_capabilities", set()),
     # Capture-scoped CUDA RNG retry latch (grind p5, B2P3-16): re-armed per
     # capture in the package, and reset per test here so a test that trips it

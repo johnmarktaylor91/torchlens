@@ -39,7 +39,7 @@ this package mostly stateless and free of high-level TorchLens business logic.
   size methods once instead of toggling global logging state per tensor (hot-path perf).
 - `MAX_FLOATING_POINT_TOLERANCE` is a legacy fp32-only facade (the float32 row
   of `_DTYPE_FLOAT_TOLERANCES`); validation derives per-dtype tolerances via
-  `derive_float_tolerances`/`_tolerances_for_dtype` in `validation/core.py`
+  `derive_float_tolerances`/`_tolerances_for_dtype` in `validation/_core.py`
   and no longer consumes this symbol.
 
 ## RNG and Autocast

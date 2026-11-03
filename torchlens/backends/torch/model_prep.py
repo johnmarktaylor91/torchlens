@@ -1856,7 +1856,7 @@ def _record_module_exit_metadata(
     mod_id = id(module)
     module_call_index = trace._module_capture_ws.mod_call_index[mod_id]
     trace._module_capture_ws.mod_call_labels[mod_id].pop()
-    from ...intervention.runtime import (
+    from ...intervention._runtime import (
         _peek_module_intervention_parent_labels,
         _peek_tensor_live_fire_results,
         _record_module_intervention_parent_labels,
@@ -2089,7 +2089,7 @@ def module_forward_decorator(
                         out = orig_forward(*args, **kwargs)
                 else:
                     out = orig_forward(*args, **kwargs)
-                from ...intervention.runtime import _apply_module_boundary_live_hooks
+                from ...intervention._runtime import _apply_module_boundary_live_hooks
 
                 out = _apply_module_boundary_live_hooks(
                     out,

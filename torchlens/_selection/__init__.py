@@ -12,6 +12,6 @@ at module level, so every module imports standalone):
   ``compare``, ``graph``, ``subspace``, ``do_plan``: operations on a resolved selection.
 
 Public doors keep their spellings: ``torchlens.intervention`` re-exports the selector
-constructors and ``torchlens.intervention.types`` / ``.errors`` re-export the target
+constructors and ``torchlens.intervention._types`` / ``.errors`` re-export the target
 specs and refusal classes defined here.
 """

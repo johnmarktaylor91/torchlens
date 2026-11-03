@@ -35,15 +35,12 @@ from .._output_slot import (
 )
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.predicates import InterventionPredicate
+from ..intervention._predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
+from ._exceptions import RecorderStateError
 from ._halt import StopSignal
-from ._recorder_config import _configure_predicate_capture
-from ._recorder_streaming import _rank_prefixed_streaming_options
-from ._validation import validate_recording_options
-from .exceptions import RecorderStateError
-from .options import (
+from ._options import (
     ForwardErrorMode,
     GradPredicateFn,
     HaltPredicateFn,
@@ -53,7 +50,10 @@ from .options import (
     _RecordingConfig,
     _resolve_recording_config,
 )
-from .types import CaptureSpec, Recording, _mark_recording_halted
+from ._recorder_config import _configure_predicate_capture
+from ._recorder_streaming import _rank_prefixed_streaming_options
+from ._types import CaptureSpec, Recording, _mark_recording_halted
+from ._validation import validate_recording_options
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:

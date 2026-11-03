@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
 # Private builtin modules whose callables torch re-exports under a public namespace with
 # this name prefix dropped (``torch.fft.rfft is torch._C._fft.fft_rfft``).

@@ -29,13 +29,13 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .errors import HookSignatureError
-from .handles import HookHandle
-from .hooks import expand_facet_hook_entries, normalize_hook_plan
-from .spec import (
+from ._handles import HookHandle
+from ._spec import (
     Recipe as PublicInterventionSpec,
     entries_from_spec,
 )
+from .errors import HookSignatureError
+from .hooks import expand_facet_hook_entries, normalize_hook_plan
 
 
 def attach_hooks(  # noqa: PLR0913 - trace stands in for self on the moved method

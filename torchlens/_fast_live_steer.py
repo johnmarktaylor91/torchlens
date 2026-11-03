@@ -265,9 +265,9 @@ def module_boundary_plan(trace: Any) -> tuple[list[Any], tuple[str, ...]]:
         ``tl.module(address)`` boundary target, or stages a value replacement.
     """
 
+    from .intervention._rerun import _assign_unique_plan_ids
+    from .intervention._runtime import _is_plain_module_selector
     from .intervention.hooks import normalize_hooks_from_spec
-    from .intervention.rerun import _assign_unique_plan_ids
-    from .intervention.runtime import _is_plain_module_selector
 
     spec = trace._intervention_spec
     if spec is None or (not _staged_user_hook_specs(trace) and not spec.target_value_specs):
@@ -355,7 +355,7 @@ def require_graph_reflects_plan(trace: Any, hook_plan: list[Any]) -> None:
         )
     if not hook_plan:
         return
-    from .intervention.rerun import _hook_plan_identifier
+    from .intervention._rerun import _hook_plan_identifier
 
     missing = []
     for entry in hook_plan:
@@ -445,7 +445,7 @@ class SteerPlan:
 
         from contextlib import nullcontext
 
-        from .intervention.runtime import active_intervention_context
+        from .intervention._runtime import active_intervention_context
 
         if not self.hook_plan:
             return nullcontext()
@@ -478,7 +478,7 @@ class SteerPlan:
     def unfired_plan_ids(self) -> tuple[str, ...]:
         """Return the plan ids that fired nowhere during the last run."""
 
-        from .intervention.rerun import _hook_plan_identifier
+        from .intervention._rerun import _hook_plan_identifier
 
         planned = Counter(_hook_plan_identifier(entry) for entry in self.hook_plan)
         unfired: list[str] = []

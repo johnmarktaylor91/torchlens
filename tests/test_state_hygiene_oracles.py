@@ -619,7 +619,7 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     """Same ops, different rule identity: the refusal blames the changed steer, not the labels."""
 
     from torchlens.intervention._rerun_predicate import RerunSpecPlan, settle_predicate_rerun
-    from torchlens.intervention.types import HookSpec, InterventionSpec, TargetSpec
+    from torchlens.intervention._types import HookSpec, InterventionSpec, TargetSpec
 
     def door_hook(rule_id: str) -> HookSpec:
         return HookSpec(

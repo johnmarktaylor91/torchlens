@@ -10,8 +10,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import InvalidArgumentError
+from torchlens.intervention._types import TargetSpec
 from torchlens.intervention.errors import AmbiguousSiteError, SiteResolutionError
-from torchlens.intervention.types import TargetSpec
 
 
 class _TwoRelu(nn.Module):

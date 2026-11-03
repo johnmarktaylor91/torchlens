@@ -59,7 +59,7 @@ rules, not an internal refactor.
   values via `is_deferred_value()` / `coerce_deferred_value()`.
   It also holds what a predicate returns and what a capture retains (`CaptureSpec`,
   `StorageIntent`, `ActivationRecord`, `GradRecordContext`, `GradRecord`, `PredicateFailure`),
-  published from `torchlens.recording.types` (their `__module__` says so); torch types are
+  published from `torchlens.recording._types` (their `__module__` says so); torch types are
   annotation-only here.
 - `selector_eval.py`: selector walking and capability gating (`walk_selector()`,
   `ensure_supported()`, `contains_followed_by()`) and the compile-once evaluator:

@@ -192,8 +192,8 @@ _OWNER_CLASSES: dict[str, str] = {
     "_AtenExecutionContext": "torchlens._ir.events",
     "KernelLaunch": "torchlens._kernel_telemetry",
     "_TelemetryPayload": "torchlens._kernel_telemetry",
-    "Edit": "torchlens.intervention.types",
-    "FireRecord": "torchlens.intervention.types",
+    "Edit": "torchlens.intervention._types",
+    "FireRecord": "torchlens.intervention._types",
 }
 
 

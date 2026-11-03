@@ -86,7 +86,7 @@ COMPONENT_SPEC_MODULES: tuple[str, ...] = (
     "torchlens._data_classes.prehook",
     "torchlens._data_classes._trace_field_spec",
     "torchlens._data_classes.trace",
-    "torchlens.intervention.types",
+    "torchlens.intervention._types",
     "torchlens._ir.container",
     "torchlens._ir.container_registry",
     "torchlens._ir.events",

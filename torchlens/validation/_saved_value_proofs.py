@@ -24,7 +24,7 @@ Zero einsum operands, eval-mode batch norm at its running mean, unread
 proved by ``_operand_value_proofs`` and the overwrite decision before this
 module is consulted.
 
-Split from ``validation/exemptions.py`` (R43 file-size ratchet), which dispatches
+Split from ``validation/_exemptions.py`` (R43 file-size ratchet), which dispatches
 here from its posthoc value-proof decision.
 """
 

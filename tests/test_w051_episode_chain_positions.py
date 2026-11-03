@@ -37,7 +37,7 @@ from torchlens._capture._episode_ledger import (
     episode_ledger_for,
 )
 from torchlens.errors import TorchLensWarning
-from torchlens.errors.episode import EpisodeDeclarationError
+from torchlens.errors._episode import EpisodeDeclarationError
 from torchlens.options import EpisodeOptions
 
 V = 16

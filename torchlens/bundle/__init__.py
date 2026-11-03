@@ -25,7 +25,7 @@ from ..intervention._super.super_op import (
     SuperOpAccessor,
 )
 from ..intervention._topology.topology import Supergraph
-from ..intervention.types import Relationship
+from ..intervention._types import Relationship
 from . import (
     _aligned_sites,
     _card,

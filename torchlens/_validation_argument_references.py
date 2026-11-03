@@ -284,7 +284,7 @@ def _describe_change(name: str, before: int, after: int) -> str:
 def _record_fallback(trace: Any, reason: str) -> None:
     """Record on the rerun's trace that validation used copied parameter arguments."""
 
-    from .validation.diagnostics import ValidationDiagnostic, record_validation_diagnostic
+    from .validation._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
     record_validation_diagnostic(
         trace,

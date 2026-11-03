@@ -27,7 +27,7 @@ import torch
 
 import torchlens as tl
 from tests import _ag1_fixtures as fx
-from torchlens.attribution.graph._neuronpedia import check_contract
+from torchlens.attribution._graph._neuronpedia import check_contract
 
 INFLUENCE_TOL = 1e-12
 
@@ -42,7 +42,7 @@ class _Tokenizer:
 TOKENIZER = _Tokenizer()
 
 
-def _graph(name: str) -> tl.attribution.graph.AttributionGraph:
+def _graph(name: str) -> tl.attribution._graph.AttributionGraph:
     n_layers = 3 if name == "F3" else 2
     model = fx.build_model(n_layers)
     transcoders = {
@@ -61,7 +61,7 @@ def _graph(name: str) -> tl.attribution.graph.AttributionGraph:
 
 
 @pytest.fixture(scope="module")
-def graphs() -> Iterator[dict[str, tl.attribution.graph.AttributionGraph]]:
+def graphs() -> Iterator[dict[str, tl.attribution._graph.AttributionGraph]]:
     built = {name: _graph(name) for name in ("F1", "F2", "F3")}
     try:
         yield built

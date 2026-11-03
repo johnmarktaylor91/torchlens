@@ -27,6 +27,10 @@ from typing import Any
 
 import pytest
 
+from torchlens.validation._invariants import (
+    MetadataInvariantError,
+    _check_non_torch_primitive_op_inert,
+)
 from torchlens.validation._invariants_buffers import _check_buffer_xrefs
 from torchlens.validation._invariants_conditional_base import _check_recurrence_invariants
 from torchlens.validation._invariants_conditional_modules import (
@@ -61,10 +65,6 @@ from torchlens.validation._invariants_topology import (
     _check_graph_topology,
     _check_special_layer_lists,
     _check_trace_self_consistency,
-)
-from torchlens.validation.invariants import (
-    MetadataInvariantError,
-    _check_non_torch_primitive_op_inert,
 )
 
 

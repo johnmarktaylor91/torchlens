@@ -303,7 +303,7 @@ def test_recover_oversized_index_refuses_typed(
 
     # ``torchlens.recording.recover`` the ATTRIBUTE is the re-exported recover()
     # function; import_module reaches the shadowed submodule itself.
-    recover_module = importlib.import_module("torchlens.recording.recover")
+    recover_module = importlib.import_module("torchlens.recording._recover")
 
     bundle_path = _copy_bundle(
         _write_bundle(tmp_path / "source.tlfast").path, tmp_path / "oversized"
@@ -414,7 +414,7 @@ def test_disk_finalize_baseexception_marks_partial(
 ) -> None:
     """A KeyboardInterrupt mid-finalize must leave a PARTIAL-marked .tmp dir."""
 
-    from torchlens.recording import storage_disk as storage_disk_module
+    from torchlens.recording import _storage_disk as storage_disk_module
 
     def _interrupt(_entries: object) -> None:
         raise KeyboardInterrupt
@@ -441,7 +441,7 @@ def test_disk_finalize_refuses_concurrently_created_target(
 ) -> None:
     """Publish must refuse, not silently replace, a target created mid-record."""
 
-    from torchlens.recording import storage_disk as storage_disk_module
+    from torchlens.recording import _storage_disk as storage_disk_module
 
     bundle_path = tmp_path / "raced.tlfast"
     real_build = storage_disk_module._build_fastlog_manifest
@@ -494,7 +494,7 @@ def test_recover_index_read_allocates_the_file_not_the_ceiling(tmp_path: Path) -
     import importlib
     import tracemalloc
 
-    recover_module = importlib.import_module("torchlens.recording.recover")
+    recover_module = importlib.import_module("torchlens.recording._recover")
     index_path = tmp_path / "fastlog_index.jsonl"
     index_path.write_text('{"kind": "noop"}\n' * 10)
 

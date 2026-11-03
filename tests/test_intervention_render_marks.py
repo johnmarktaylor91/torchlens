@@ -34,7 +34,7 @@ from torchlens._visualization._edit_marks import (
 from torchlens._visualization.node_spec import intervention_sites_for_log, render_lines_to_html
 from torchlens._visualization.themes import THEME_PRESETS
 from torchlens.errors import TorchLensWarning
-from torchlens.intervention.types import Edit, FireRecord
+from torchlens.intervention._types import Edit, FireRecord
 from torchlens.options import VisualizationOptions
 
 PURPLE = "#7B1FA2"

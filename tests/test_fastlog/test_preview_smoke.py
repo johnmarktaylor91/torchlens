@@ -9,8 +9,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization.fastlog_preview import preview_fastlog
-from torchlens.recording.exceptions import RecordContextFieldError
-from torchlens.recording.types import RecordContext
+from torchlens.recording._exceptions import RecordContextFieldError
+from torchlens.recording._types import RecordContext
 
 
 def _mlp() -> nn.Module:

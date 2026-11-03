@@ -403,7 +403,7 @@ def copy_rerun_value(trace: Trace, value: Any) -> Any:
             copy_rerun_value(trace, key): copy_rerun_value(trace, item)
             for key, item in value.items()
         }
-    from ..intervention.types import REPLAY_TEMPLATE_TYPES
+    from ..intervention._types import REPLAY_TEMPLATE_TYPES
 
     if type(value) in REPLAY_TEMPLATE_TYPES:
         # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).

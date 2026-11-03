@@ -16,7 +16,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._utils._torch_compat import get_gradient_edge_support
-from torchlens.attribution import onebackward as ob
+from torchlens.attribution import _onebackward as ob
 
 _requires_gradient_edge = pytest.mark.skipif(
     not get_gradient_edge_support(),
@@ -164,7 +164,7 @@ class TestDeferredSiblingSeams:
     def test_frozen_policy_registry_is_the_r10_seam(self) -> None:
         """New policies register once; duplicates refuse typed."""
 
-        from torchlens.attribution.onebackward import _facet_bridge
+        from torchlens.attribution._onebackward import _facet_bridge
 
         with pytest.raises(ob.ReadError) as excinfo:
             _facet_bridge.register_frozen_policy("mlp_out", lambda trace, index: None)

@@ -30,8 +30,8 @@ from torchlens._postprocess._site_key import (
     site_axis,
     unescape_site_component,
 )
+from torchlens.validation._invariants import MetadataInvariantError
 from torchlens.validation._invariants_sites import _check_site_key_uniqueness
-from torchlens.validation.invariants import MetadataInvariantError
 
 
 class _Tied(nn.Module):

@@ -11,8 +11,8 @@ from .._capture.predicates import _normalize_capture_decision
 from .._capture.projections import _build_record_context
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ..recording.exceptions import RecordContextFieldError
-from ..recording.types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
+from ..recording._exceptions import RecordContextFieldError
+from ..recording._types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
 from .node_spec import NodeSpec
 
 

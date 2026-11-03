@@ -27,7 +27,7 @@ from torchlens.validation import (
     backward as backward_validation,
     last_validation_failure,
 )
-from torchlens.validation.diagnostics import (
+from torchlens.validation._diagnostics import (
     CHECK_BACKWARD,
     ValidationFailure,
     record_validation_failure,

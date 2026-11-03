@@ -38,7 +38,7 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.errors import MetadataInvariantError
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.diagnostics import CHECK_ARG_LOGGING, TRACE_FAILURE_ATTR
+from torchlens.validation._diagnostics import CHECK_ARG_LOGGING, TRACE_FAILURE_ATTR
 
 
 class _TwoStage(nn.Module):

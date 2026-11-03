@@ -13,7 +13,7 @@ from torchlens._capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
     resolve_episode_declaration,
 )
-from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
+from torchlens.errors._episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeOptions
 from torchlens.types import PartialTrace
 

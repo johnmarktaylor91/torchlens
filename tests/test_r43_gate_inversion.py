@@ -473,7 +473,7 @@ def test_safe_tensor_property_getters_admitted() -> None:
 
     from torchlens._io.runnable_load import _safe_tensor_property_getter
     from torchlens._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
-    from torchlens.intervention.types import FunctionRegistryKey
+    from torchlens.intervention._types import FunctionRegistryKey
 
     # The shipped canonical allowlist IS the audited frozen surface (drift goes RED).
     assert _PURE_TENSOR_PROPERTY_NAMES == _PROPERTY_NAMES

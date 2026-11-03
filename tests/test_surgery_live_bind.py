@@ -26,14 +26,14 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention import BindReport, BoundModel
-from torchlens.intervention.binding import bind_spec_to_model
-from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
-from torchlens.intervention.model_door import (
+from torchlens.intervention._binding import bind_spec_to_model
+from torchlens.intervention._model_door import (
     MODEL_DOOR_INVENTORY,
     door_policy,
     model_door_policy,
     resolve_model_operand,
 )
+from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
 
 HF_HUB_CACHE = Path(os.environ.get("HF_HOME", str(Path.home() / ".cache" / "huggingface"))) / "hub"
 
@@ -268,7 +268,7 @@ def test_bind_preflight_refusals(toy) -> None:
     """Empty specs, bad policies, bad models, stale anchors refuse typed."""
 
     model, _x = toy
-    from torchlens.intervention.spec import Recipe
+    from torchlens.intervention._spec import Recipe
 
     with pytest.raises(BindingPreflightError) as excinfo:
         Recipe(rules=()).bind(model)
@@ -481,7 +481,7 @@ def test_model_door_funnel_coverage_inventory(toy) -> None:
 def test_execution_effect_vocabulary_is_closed() -> None:
     """The audit chokepoint refuses effects outside the closed two-value set."""
 
-    from torchlens.intervention.audit import EXECUTION_EFFECTS
+    from torchlens.intervention._audit import EXECUTION_EFFECTS
 
     assert {
         "values_replaced_after_execution",
@@ -495,7 +495,7 @@ def test_execution_effect_chokepoint_refuses_invalid(toy) -> None:
     """``record_intervention_event`` refuses a non-vocabulary effect typed."""
 
     model, x = toy
-    from torchlens.intervention.audit import record_intervention_event
+    from torchlens.intervention._audit import record_intervention_event
 
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     common: dict = {
@@ -654,7 +654,7 @@ def test_bind_rule_runtime_error_is_typed(toy) -> None:
 def test_bind_cleanup_failure_is_typed(toy) -> None:
     """A teardown that cannot remove runtime state raises bind_cleanup_failed."""
 
-    from torchlens.intervention import binding as binding_module
+    from torchlens.intervention import _binding as binding_module
 
     model, _x = toy
     bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)

@@ -299,7 +299,7 @@ def test_m3_dropped_zipped_edge_still_fails_validation() -> None:
     so the narrow foreach exemption does not apply.
     """
 
-    from torchlens.validation.core import validate_saved_outs
+    from torchlens.validation._core import validate_saved_outs
 
     inputs = [
         torch.tensor([1.0]),

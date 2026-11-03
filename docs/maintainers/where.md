@@ -50,8 +50,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 14 | 4871 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 240 |
 | `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 14632 |
-| `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
-| `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3772 |
+| `torchlens.attribution._graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2408 |
+| `torchlens.attribution._onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3772 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 16 | 6474 |
 | `torchlens.backends._protocols` | Per-backend ''BackendProtocol'' objects, kept import-light. | 8 | 917 |
 | `torchlens.backends.jax` | JAX backend preview exports. | 10 | 8675 |
@@ -104,7 +104,7 @@ TorchLens - extract outs and metadata from PyTorch models. (71 modules, 31980 li
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 775 |
-| `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
+| `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent._cli). | 15 |
 | `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 260 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
@@ -1056,7 +1056,7 @@ Input-attribution methods for TorchLens. (31 modules, 14632 lines)
 | `_text` | The token-attribution two-liner (attrib -). | 1092 |
 | `_viz` | The ''color_by='' resolution of attribution results on ''Trace.draw''. | 115 |
 
-### `torchlens.attribution.graph`
+### `torchlens.attribution._graph`
 
 Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. (7 modules, 2408 lines)
 
@@ -1070,7 +1070,7 @@ Attribution graphs: direct linear effects between transcoder features, errors, t
 | `_result` | The attribution-graph result: typed nodes, a dense adjacency, and its accounting. | 249 |
 | `_transcoders` | Transcoder specs for the attribution graph: what each feature reads and writes. | 168 |
 
-### `torchlens.attribution.onebackward`
+### `torchlens.attribution._onebackward`
 
 One-backward attribution reads (M(reads) memo). (11 modules, 3772 lines)
 

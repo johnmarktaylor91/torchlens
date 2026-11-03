@@ -24,12 +24,38 @@ from .._selection.selectors import (
     model_output,
 )
 from ._affine_source import set_affine_coordinates
+
+# F01 surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
+# returns a ``BoundModel`` whose ``.generate`` is the generation door; the
+# ``steer`` attribute is the helper from .helpers) and the region noun (derived
+# admissibility on the existing verbs).
+from ._binding import BindReport, BoundModel
+from ._compose import compose
 from ._directions import Direction, fit_direction
 from ._gradient_contract import keep_grad
+from ._helpers import (
+    _RESAMPLE_ABLATE_REDIRECT,
+    scramble_elements,
+)
 from ._metrics import (
     METRIC_REGISTRY as METRIC_REGISTRY,
     pearson_correlation_distance as pearson_correlation_distance,
     resolve_metric as resolve_metric,
+)
+from ._population import Population, population
+from ._regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
+
+# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
+# claims the package-level ``InterventionSpec`` name. The historical mutable
+# sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
+# internal code and persisted pickles are untouched.
+from ._spec import (
+    Rule,
+)
+from ._spec_compat import (
+    SpecCompat,
+    TargetManifestDiff,
+    check_spec_compat,
 )
 from ._subspace_edits import subspace_ablate, subspace_interchange
 from ._super.super_op import (
@@ -44,39 +70,19 @@ from ._topology.topology import (
     TopologyDiff as TopologyDiff,
     build_supergraph as build_supergraph,
 )
-
-# F01 surgery live lanes: the capture-free bound executor (``recipe.bind(model)``
-# returns a ``BoundModel`` whose ``.generate`` is the generation door; the
-# ``steer`` attribute is the helper from .helpers) and the region noun (derived
-# admissibility on the existing verbs).
-from .binding import BindReport, BoundModel
-from .compose import compose
+from ._types import (
+    ArgComponent as ArgComponent,
+    FireRecord,
+    FrozenInterventionSpec as FrozenInterventionSpec,
+    SamplingRecord,
+)
 from .errors import (
     BundleComparisonError,
     SpecPortabilityError,
 )
-from .helpers import (
-    _RESAMPLE_ABLATE_REDIRECT,
-    scramble_elements,
-)
 from .hooks import (
     HookContext,
     normalize_hook as normalize_hook,
-)
-from .population import Population, population
-from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
-
-# The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
-# claims the package-level ``InterventionSpec`` name. The historical mutable
-# sticky-hook recipe keeps its identity at ``.types.InterventionSpec`` --
-# internal code and persisted pickles are untouched.
-from .spec import (
-    Rule,
-)
-from .spec_compat import (
-    SpecCompat,
-    TargetManifestDiff,
-    check_spec_compat,
 )
 from .stochastic import (
     SamplingPlan,
@@ -84,12 +90,6 @@ from .stochastic import (
     resample_rows_from,
     sample_from,
     set_direction_mean,
-)
-from .types import (
-    ArgComponent as ArgComponent,
-    FireRecord,
-    FrozenInterventionSpec as FrozenInterventionSpec,
-    SamplingRecord,
 )
 
 __all__ = [

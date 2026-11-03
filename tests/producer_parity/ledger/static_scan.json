@@ -5082,7 +5082,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/attribution/graph/_build.py",
+  "file": "torchlens/attribution/_graph/_build.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -5090,7 +5090,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/attribution/graph/_read_sites.py",
+  "file": "torchlens/attribution/_graph/_read_sites.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -5098,7 +5098,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/attribution/graph/_read_sites.py",
+  "file": "torchlens/attribution/_graph/_read_sites.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -5106,7 +5106,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/graph/_result.py",
+  "file": "torchlens/attribution/_graph/_result.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -5114,7 +5114,7 @@
  {
   "ambiguous": false,
   "field": "grad_fn_handle",
-  "file": "torchlens/attribution/onebackward/_accessor.py",
+  "file": "torchlens/attribution/_onebackward/_accessor.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -5122,7 +5122,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/attribution/onebackward/_facet_bridge.py",
+  "file": "torchlens/attribution/_onebackward/_facet_bridge.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -5130,7 +5130,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/onebackward/_frozen.py",
+  "file": "torchlens/attribution/_onebackward/_frozen.py",
   "has_default": false,
   "sites": 3,
   "via_getattr": false
@@ -5138,7 +5138,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/onebackward/_frozen.py",
+  "file": "torchlens/attribution/_onebackward/_frozen.py",
   "has_default": true,
   "sites": 3,
   "via_getattr": true
@@ -5146,7 +5146,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/onebackward/_read.py",
+  "file": "torchlens/attribution/_onebackward/_read.py",
   "has_default": false,
   "sites": 3,
   "via_getattr": false
@@ -5154,7 +5154,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/attribution/onebackward/_read.py",
+  "file": "torchlens/attribution/_onebackward/_read.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -5162,7 +5162,7 @@
  {
   "ambiguous": true,
   "field": "policy",
-  "file": "torchlens/attribution/onebackward/_read.py",
+  "file": "torchlens/attribution/_onebackward/_read.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -5170,7 +5170,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/attribution/onebackward/_table.py",
+  "file": "torchlens/attribution/_onebackward/_table.py",
   "has_default": false,
   "sites": 6,
   "via_getattr": false
@@ -7818,7 +7818,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/audit.py",
+  "file": "torchlens/intervention/_audit.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7826,7 +7826,7 @@
  {
   "ambiguous": false,
   "field": "module_stack",
-  "file": "torchlens/intervention/binding.py",
+  "file": "torchlens/intervention/_binding.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -7834,7 +7834,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/intervention/binding.py",
+  "file": "torchlens/intervention/_binding.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7842,7 +7842,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/intervention/edge_semantics.py",
+  "file": "torchlens/intervention/_edge_semantics.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7850,7 +7850,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/edge_substitution.py",
+  "file": "torchlens/intervention/_edge_substitution.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -7858,7 +7858,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/intervention/edge_substitution.py",
+  "file": "torchlens/intervention/_edge_substitution.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7882,7 +7882,7 @@
  {
   "ambiguous": false,
   "field": "is_edited",
-  "file": "torchlens/intervention/injection.py",
+  "file": "torchlens/intervention/_injection.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7890,7 +7890,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/intervention/injection.py",
+  "file": "torchlens/intervention/_injection.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7898,7 +7898,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/param_substitution.py",
+  "file": "torchlens/intervention/_param_substitution.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -7906,7 +7906,7 @@
  {
   "ambiguous": true,
   "field": "params",
-  "file": "torchlens/intervention/param_substitution.py",
+  "file": "torchlens/intervention/_param_substitution.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -7914,7 +7914,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/intervention/population.py",
+  "file": "torchlens/intervention/_population.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -7922,7 +7922,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/regions.py",
+  "file": "torchlens/intervention/_regions.py",
   "has_default": false,
   "sites": 3,
   "via_getattr": false
@@ -7930,7 +7930,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/intervention/regions.py",
+  "file": "torchlens/intervention/_regions.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -7938,7 +7938,7 @@
  {
   "ambiguous": false,
   "field": "_edge_uses",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7946,7 +7946,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -7954,7 +7954,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -7962,7 +7962,7 @@
  {
   "ambiguous": false,
   "field": "is_edited",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7970,7 +7970,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -7978,7 +7978,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/intervention/replay.py",
+  "file": "torchlens/intervention/_replay.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -7986,7 +7986,7 @@
  {
   "ambiguous": false,
   "field": "capture_spec",
-  "file": "torchlens/intervention/rerun.py",
+  "file": "torchlens/intervention/_rerun.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -7994,7 +7994,7 @@
  {
   "ambiguous": false,
   "field": "fire_results",
-  "file": "torchlens/intervention/rerun.py",
+  "file": "torchlens/intervention/_rerun.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8002,7 +8002,7 @@
  {
   "ambiguous": false,
   "field": "grad_fn_handle",
-  "file": "torchlens/intervention/rerun.py",
+  "file": "torchlens/intervention/_rerun.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8010,7 +8010,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/intervention/rerun.py",
+  "file": "torchlens/intervention/_rerun.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -8018,7 +8018,7 @@
  {
   "ambiguous": false,
   "field": "raw_index",
-  "file": "torchlens/intervention/rerun.py",
+  "file": "torchlens/intervention/_rerun.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8026,7 +8026,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8034,7 +8034,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8042,7 +8042,7 @@
  {
   "ambiguous": false,
   "field": "is_output_parent",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8050,7 +8050,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -8058,7 +8058,7 @@
  {
   "ambiguous": true,
   "field": "output",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8066,7 +8066,7 @@
  {
   "ambiguous": false,
   "field": "pass_index",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8074,7 +8074,7 @@
  {
   "ambiguous": false,
   "field": "raw_index",
-  "file": "torchlens/intervention/runtime.py",
+  "file": "torchlens/intervention/_runtime.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -8082,7 +8082,7 @@
  {
   "ambiguous": false,
   "field": "layer_type",
-  "file": "torchlens/intervention/site_keys.py",
+  "file": "torchlens/intervention/_site_keys.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8090,7 +8090,7 @@
  {
   "ambiguous": false,
   "field": "module_stack",
-  "file": "torchlens/intervention/site_keys.py",
+  "file": "torchlens/intervention/_site_keys.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8098,7 +8098,7 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/intervention/site_keys.py",
+  "file": "torchlens/intervention/_site_keys.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8762,7 +8762,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/receptive_field/rules/attention.py",
+  "file": "torchlens/receptive_field/_builtin_rules/attention.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -8770,7 +8770,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/receptive_field/rules/norms.py",
+  "file": "torchlens/receptive_field/_builtin_rules/norms.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -8882,7 +8882,7 @@
  {
   "ambiguous": false,
   "field": "predicate_matched",
-  "file": "torchlens/recording/dry_run.py",
+  "file": "torchlens/recording/_dry_run.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8890,7 +8890,7 @@
  {
   "ambiguous": false,
   "field": "bool_value",
-  "file": "torchlens/recording/storage_disk.py",
+  "file": "torchlens/recording/_storage_disk.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8898,7 +8898,7 @@
  {
   "ambiguous": false,
   "field": "is_scalar_bool",
-  "file": "torchlens/recording/storage_disk.py",
+  "file": "torchlens/recording/_storage_disk.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8906,7 +8906,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/recording/storage_disk.py",
+  "file": "torchlens/recording/_storage_disk.py",
   "has_default": false,
   "sites": 4,
   "via_getattr": false
@@ -8914,7 +8914,7 @@
  {
   "ambiguous": false,
   "field": "module_stack",
-  "file": "torchlens/recording/storage_disk.py",
+  "file": "torchlens/recording/_storage_disk.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -8922,7 +8922,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/recording/types.py",
+  "file": "torchlens/recording/_types.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -8930,7 +8930,7 @@
  {
   "ambiguous": true,
   "field": "label_raw",
-  "file": "torchlens/recording/types.py",
+  "file": "torchlens/recording/_types.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -8938,7 +8938,7 @@
  {
   "ambiguous": true,
   "field": "label_raw",
-  "file": "torchlens/recording/types.py",
+  "file": "torchlens/recording/_types.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -8946,7 +8946,7 @@
  {
   "ambiguous": false,
   "field": "predicate_matched",
-  "file": "torchlens/recording/types.py",
+  "file": "torchlens/recording/_types.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10066,7 +10066,7 @@
  {
   "ambiguous": false,
   "field": "_edge_uses",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10074,7 +10074,7 @@
  {
   "ambiguous": false,
   "field": "dropped_edge_tensor_args",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10082,7 +10082,7 @@
  {
   "ambiguous": false,
   "field": "fire_results",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10090,7 +10090,7 @@
  {
   "ambiguous": false,
   "field": "func_call_id",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 2,
   "via_getattr": true
@@ -10098,7 +10098,7 @@
  {
   "ambiguous": false,
   "field": "is_edited",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10106,7 +10106,7 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -10114,7 +10114,7 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": true,
   "sites": 3,
   "via_getattr": true
@@ -10122,7 +10122,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/validation/core.py",
+  "file": "torchlens/validation/_core.py",
   "has_default": false,
   "sites": 5,
   "via_getattr": false
@@ -10130,7 +10130,7 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
-  "file": "torchlens/validation/exemptions.py",
+  "file": "torchlens/validation/_exemptions.py",
   "has_default": false,
   "sites": 11,
   "via_getattr": false
@@ -10138,7 +10138,7 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
-  "file": "torchlens/validation/exemptions.py",
+  "file": "torchlens/validation/_exemptions.py",
   "has_default": true,
   "sites": 8,
   "via_getattr": true
@@ -10146,7 +10146,7 @@
  {
   "ambiguous": true,
   "field": "parents",
-  "file": "torchlens/validation/exemptions.py",
+  "file": "torchlens/validation/_exemptions.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -10162,7 +10162,7 @@
  {
   "ambiguous": false,
   "field": "source_trace",
-  "file": "torchlens/viz/feature_maps.py",
+  "file": "torchlens/viz/_feature_maps.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true

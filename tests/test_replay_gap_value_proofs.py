@@ -30,7 +30,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation.core import _check_whether_func_on_saved_parents_yields_saved_tensor
+from torchlens.validation._core import _check_whether_func_on_saved_parents_yields_saved_tensor
 
 #: Near zero but not zero: a normal float32, far below anything the proofs could miss.
 TINY = 1e-30

@@ -24,8 +24,8 @@ from torchlens.backends.torch import param_mutation, wrappers
 from torchlens.errors import TorchLensWarning, TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
-from torchlens.validation.diagnostics import CHECK_BACKWARD
-from torchlens.validation.invariants import MetadataInvariantError
+from torchlens.validation._diagnostics import CHECK_BACKWARD
+from torchlens.validation._invariants import MetadataInvariantError
 
 
 class _ParamMutator(nn.Module):

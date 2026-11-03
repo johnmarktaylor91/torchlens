@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..backends.torch._foreign_data import FOREIGN_DATA_REPLAY_REASON, is_unresolved_foreign_data
-from .diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
+from ._diagnostics import CHECK_REPLAY, ValidationFailure, record_validation_failure
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op

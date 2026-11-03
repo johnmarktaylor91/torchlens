@@ -10,7 +10,9 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.intervention import runtime as intervention_runtime
+from torchlens.intervention import _runtime as intervention_runtime
+from torchlens.intervention._runtime import _execute_hook
+from torchlens.intervention._types import Edit
 from torchlens.intervention.errors import (
     HookSignatureError,
     HookSiteCoverageError,
@@ -18,8 +20,6 @@ from torchlens.intervention.errors import (
     SpliceModuleDtypeError,
 )
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
-from torchlens.intervention.runtime import _execute_hook
-from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
 
@@ -108,7 +108,7 @@ def test_phase3_helpers_import_and_return_specs() -> None:
         tl.add_noise(0.1, seed=1),
         tl.project_onto(torch.ones(3), dim=-1),
         tl.project_out(torch.ones(3), dim=-1),
-        tl.intervention.helpers.swap_with(torch.ones(2, 3)),
+        tl.intervention._helpers.swap_with(torch.ones(2, 3)),
         tl.splice_module(torch.nn.Identity()),
         tl.clip_norm(1.0),
     ]

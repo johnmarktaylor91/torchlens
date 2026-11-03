@@ -27,8 +27,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention._rerun import _same_rerun_inputs
 from torchlens.intervention.errors import LiveModeLabelError
-from torchlens.intervention.rerun import _same_rerun_inputs
 from torchlens.options import CaptureOptions, InterventionOptions
 
 

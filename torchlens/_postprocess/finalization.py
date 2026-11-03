@@ -1521,7 +1521,7 @@ def _finalize_streamed_bundle(self: "Trace") -> None:
         return
 
     from .._capture.outcome import outcome_for
-    from ..intervention.injection import refuse_injection_logged_stream_finalize
+    from ..intervention._injection import refuse_injection_logged_stream_finalize
 
     # F44: the streamed writer stages its own bundle and never passes the
     # analysis save door that appends the injected family; refusing here

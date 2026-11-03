@@ -24,7 +24,7 @@ from ..._utils._torch_compat import get_current_graph_task_id_fn
 from ..._utils.display import _record_phase_timing
 from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
 from ..._utils.tensor_utils import SaveMode, safe_copy
-from ...recording.types import CaptureSpec
+from ...recording._types import CaptureSpec
 from ._tl import (
     get_param_meta,
     get_tensor_label,

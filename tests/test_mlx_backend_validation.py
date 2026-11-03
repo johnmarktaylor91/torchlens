@@ -12,7 +12,7 @@ import mlx.nn as nn  # noqa: E402
 
 import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
-from torchlens.validation.status import ValidationStatus  # noqa: E402
+from torchlens.validation._status import ValidationStatus  # noqa: E402
 
 
 class _TwoLayerMLP(nn.Module):

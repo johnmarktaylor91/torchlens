@@ -8,7 +8,7 @@ and posthoc overwrite decision; the checks themselves stay there. The pure ``out
 destination predicate (registry 2 of ``core._check_perturbation_exemptions``) lives here
 too: a write-only ``out=`` target is the same overwrite-destination contract.
 
-Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
+Split from ``validation/_exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
 """
 

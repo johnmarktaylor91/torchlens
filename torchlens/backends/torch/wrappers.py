@@ -1425,7 +1425,7 @@ def torch_func_decorator(
             func_call_id=func_call_id,
             event_index=func_call_id,
         )
-        from ...intervention.runtime import snapshot_call_inputs_for_inplace_intervention_site
+        from ...intervention._runtime import snapshot_call_inputs_for_inplace_intervention_site
 
         call_input_snapshots = snapshot_call_inputs_for_inplace_intervention_site(
             func_name=func_name,

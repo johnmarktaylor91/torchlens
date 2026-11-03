@@ -140,19 +140,19 @@ if TYPE_CHECKING:
     from torchlens._observability._native_profile import KernelProfileReport, kernel_profile
     from torchlens.differential import DiffReport, diff
     from torchlens.report._doctor import DoctorCheck, DoctorReport, doctor
-    from torchlens.validation.consolidated import InterventionValidationReport
-    from torchlens.validation.diagnostics import ValidationDiagnostic, ValidationFailure
-    from torchlens.validation.status import ValidationStatus
+    from torchlens.validation._consolidated import InterventionValidationReport
+    from torchlens.validation._diagnostics import ValidationDiagnostic, ValidationFailure
+    from torchlens.validation._status import ValidationStatus
 
 _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "doctor": ("torchlens.report._doctor", "doctor"),
     "DoctorReport": ("torchlens.report._doctor", "DoctorReport"),
     "DoctorCheck": ("torchlens.report._doctor", "DoctorCheck"),
-    "ValidationStatus": ("torchlens.validation.status", "ValidationStatus"),
-    "ValidationFailure": ("torchlens.validation.diagnostics", "ValidationFailure"),
-    "ValidationDiagnostic": ("torchlens.validation.diagnostics", "ValidationDiagnostic"),
+    "ValidationStatus": ("torchlens.validation._status", "ValidationStatus"),
+    "ValidationFailure": ("torchlens.validation._diagnostics", "ValidationFailure"),
+    "ValidationDiagnostic": ("torchlens.validation._diagnostics", "ValidationDiagnostic"),
     "InterventionValidationReport": (
-        "torchlens.validation.consolidated",
+        "torchlens.validation._consolidated",
         "InterventionValidationReport",
     ),
     "kernel_profile": ("torchlens._observability._native_profile", "kernel_profile"),

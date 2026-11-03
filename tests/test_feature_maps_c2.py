@@ -14,7 +14,7 @@ from PIL import Image, ImageChops, ImageDraw
 from torch import nn
 
 import torchlens as tl
-from torchlens.viz.feature_maps import (
+from torchlens.viz._feature_maps import (
     _feature_map_payload_for_node,
     _render_feature_map_grid,
     feature_map_node_spec,
@@ -377,7 +377,7 @@ def test_render_grid_cap_marker_is_contained() -> None:
 def test_stored_maps_preserve_nonfinite_values() -> None:
     """Storage never launders NaN/Inf: users draw feature maps to FIND them."""
 
-    from torchlens.viz.feature_maps import _select_maps
+    from torchlens.viz._feature_maps import _select_maps
 
     activations = torch.arange(2 * 3 * 4 * 4, dtype=torch.float32).reshape(2, 3, 4, 4)
     activations[0, 0, 1, 2] = float("nan")
@@ -411,8 +411,8 @@ def test_evolution_preserves_nan_from_activations() -> None:
 def test_heatmap_cells_mark_nonfinite_and_keep_finite_scale() -> None:
     """Non-finite pixels use the nan color; Inf never hijacks the color scale."""
 
-    from torchlens.viz.feature_maps import _map_to_heatmap_image
-    from torchlens.viz.node_plots import _apply_colormap
+    from torchlens.viz._feature_maps import _map_to_heatmap_image
+    from torchlens.viz._node_plots import _apply_colormap
 
     map_tensor = torch.tensor([[0.0, 1.0], [float("nan"), float("inf")]])
     image = _map_to_heatmap_image(map_tensor, cmap="magma", cell_size=72)

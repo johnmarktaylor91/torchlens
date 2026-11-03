@@ -27,7 +27,7 @@ Shape rules (normative, from the fold):
 - **Never ghosted-as-deleted**: execution removal exists in no lane, so no
   wording here (marks, boxes, census) ever uses the banned
   execution-removal verbs -- that vocabulary is unrepresentable by construction
-  (:data:`torchlens.intervention.audit.EXECUTION_EFFECTS`).
+  (:data:`torchlens.intervention._audit.EXECUTION_EFFECTS`).
 - **The census travels with exported figures**: the per-lane census renders
   into the figure's disclosure caption (C05's rendered-artifact rule) and
   :func:`render_surgery` writes the full text beside every saved figure.

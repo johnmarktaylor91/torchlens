@@ -72,7 +72,7 @@ def test_arm_derivation_addresses_every_invariant_raise() -> None:
 
     import os
 
-    from torchlens.validation.invariants import METADATA_INVARIANT_CONTRACTS
+    from torchlens.validation._invariants import METADATA_INVARIANT_CONTRACTS
 
     driver = _load_driver_module()
     registry = {}
@@ -186,7 +186,7 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     """Check-shaped functions in the direct-target scope are all mutant targets.
 
     b9-sol round-5 R74-2: the direct roster covered exactly one validation
-    comparator while validation/core.py carried five more raise-on-violation
+    comparator while validation/_core.py carried five more raise-on-violation
     entry points — claimed-exhaustive tripwire coverage derived from the
     metadata-contract registry alone. Registry contracts are enrolled by
     construction; this census makes the DIRECT scope structural too: a new
@@ -204,9 +204,9 @@ def test_every_direct_check_entry_point_is_enrolled() -> None:
     excluded: set[tuple[str, str]] = {
         # The public validate_saved_outs entry's whole-run body, split out for its
         # scratch-clearing finally; the reason lives in CORE_CHECK_EXCLUSIONS.
-        ("torchlens/validation/core.py", "_validate_saved_outs_run"),
+        ("torchlens/validation/_core.py", "_validate_saved_outs_run"),
     }
-    scope = ("torchlens/validation/core.py",)
+    scope = ("torchlens/validation/_core.py",)
     unenrolled = []
     for rel in scope:
         source = (_REPO_ROOT / rel).read_text(encoding="utf-8")
@@ -273,7 +273,7 @@ def test_real_cycle_guard_arm_is_break_disarmed() -> None:
 
     import os
 
-    from torchlens.validation.invariants import METADATA_INVARIANT_CONTRACTS
+    from torchlens.validation._invariants import METADATA_INVARIANT_CONTRACTS
 
     driver = _load_driver_module()
     contract = next(c for c in METADATA_INVARIANT_CONTRACTS if c.name == "module_containment_logic")
@@ -333,7 +333,7 @@ def test_core_check_roster_refuses_enrollment_drift(tmp_path: Path) -> None:
     """A core.py checker in neither ledger refuses the campaign loudly.
 
     b9-sol R74r5 finding 2: exhaustive-coverage claims rested on the
-    metadata-contract registry alone while ``validation/core.py`` carried
+    metadata-contract registry alone while ``validation/_core.py`` carried
     five verdict-steering checkers with no mutant. The derivation makes that
     drift a refusal, not a silent gap.
     """

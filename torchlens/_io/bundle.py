@@ -97,7 +97,7 @@ if TYPE_CHECKING:
         StateByteDigest,
     )
     from ..bundle import Bundle
-    from ..intervention.types import InterventionSpec
+    from ..intervention._types import InterventionSpec
 
 PARTIAL_SENTINEL = "PARTIAL"
 REASON_SENTINEL = "REASON.txt"
@@ -481,10 +481,10 @@ def save(
     # computation. Appended after (5); owners disjoint, nothing reordered.
     # The records-presence guard keeps level coercion at its historical
     # raise site for every unlogged trace (refusal order unchanged there).
-    from ..intervention.injection import peek_injection_state, refuse_injection_logged_runnable_save
+    from ..intervention import _injection
 
-    if (peek_injection_state(trace) or {}).get("records"):
-        refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
+    if (_injection.peek_injection_state(trace) or {}).get("records"):
+        _injection.refuse_injection_logged_runnable_save(trace, coerce_tlspec_save_level(level))
     # A PartialTrace is a failed-capture inspection wrapper, never a savable
     # product (its _FIELD_POLICY declares both fields session-time DROP). Every
     # SHIPPED wrapper settles FAILED and refuses through the gate above; this
@@ -1390,7 +1390,7 @@ def load(
 
         tlspec_format = detect_tlspec_format(bundle_path)
         if tlspec_format in {"v2.16_intervention", "v2.16_intervention_with_kind"}:
-            from ..intervention.save import load_intervention_spec
+            from ..intervention._save import load_intervention_spec
 
             # Typed boundary (r7 R73): a trace manifest whose ``tlspec_version``
             # key was lost still carries ``kind``, so format detection
@@ -1429,7 +1429,7 @@ def load(
                 unknown_relations=unknown_relations,
             )
     if bundle_path.is_dir() and (bundle_path / "spec.json").exists():
-        from ..intervention.save import load_intervention_spec
+        from ..intervention._save import load_intervention_spec
 
         return load_intervention_spec(
             bundle_path,
@@ -2080,7 +2080,7 @@ def _load_unified_tlspec(
     # introduced, never an unsupported-kind refusal.
     kind = manifest.get("kind", "trace")
     if kind == "intervention":
-        from ..intervention.save import load_intervention_spec
+        from ..intervention._save import load_intervention_spec
 
         return load_intervention_spec(
             bundle_path,

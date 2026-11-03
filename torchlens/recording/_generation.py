@@ -29,7 +29,7 @@ from torch import nn
 
 from .._errors import InvalidArgumentError
 from ._recorder import Recorder
-from .types import ActivationRecord, Recording
+from ._types import ActivationRecord, Recording
 
 #: Generation settings that decide which tokens are produced, recorded with the result.
 TOKEN_CHOICE_SETTINGS: tuple[str, ...] = (

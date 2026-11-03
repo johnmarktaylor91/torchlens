@@ -17,9 +17,9 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
-from torchlens.intervention import helpers as helper_module
-from torchlens.intervention.audit import rule_signal, rules_payload
-from torchlens.intervention.types import Edit, FireRecord
+from torchlens.intervention import _helpers as helper_module
+from torchlens.intervention._audit import rule_signal, rules_payload
+from torchlens.intervention._types import Edit, FireRecord
 
 _CAPTURE = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
 

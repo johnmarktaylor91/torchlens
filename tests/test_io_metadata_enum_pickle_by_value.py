@@ -154,8 +154,8 @@ def test_every_enum_kind_pickles_by_value_regardless_of_interpreter(
 _EXPECTED_ADMITTED_ENUMS = frozenset(
     {
         ("torchlens._trace_state", "TraceState"),
-        ("torchlens.intervention.types", "Relationship"),
-        ("torchlens.intervention.types", "ForkFieldPolicy"),
+        ("torchlens.intervention._types", "Relationship"),
+        ("torchlens.intervention._types", "ForkFieldPolicy"),
         ("torchlens._ir.container_registry", "Role"),
         ("torchlens._ir.container_registry", "Phase"),
     }
@@ -248,7 +248,7 @@ def _getattr_stream(module: str, name: str, attr: str) -> bytes:
     ("module", "name", "attr"),
     [
         ("torchlens._trace_state", "TraceState", "PRISTINE"),  # Enum class, member name
-        ("torchlens.intervention.types", "Relationship", "not_a_member"),  # non-member name
+        ("torchlens.intervention._types", "Relationship", "not_a_member"),  # non-member name
         ("torchlens._ir.container_registry", "Phase", "__dict__"),  # dunder off an Enum class
         ("torchlens._io", "BlobRef", "__init__"),  # admitted non-Enum class
     ],

@@ -207,8 +207,8 @@ def test_intervention_spec_deep_json_refuses_typed(tmp_path: Path) -> None:
     arrays with an untyped ``RecursionError`` escaping the public loader.
     """
 
+    from torchlens.intervention._save import load_intervention_spec
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.save import load_intervention_spec
 
     spec_dir = tmp_path / "deep_spec"
     spec_dir.mkdir()

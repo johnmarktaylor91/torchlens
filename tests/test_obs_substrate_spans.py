@@ -89,7 +89,7 @@ class TestOneProfilerDoor:
         # the engine itself drives (never the capture's own observed backward
         # pass observe's bisector watches), installed and removed around that
         # one engine call. Not a parallel stack on the same pass.
-        "attribution/onebackward/_frozen.py",
+        "attribution/_onebackward/_frozen.py",
     }
 
     def test_no_parallel_grad_fn_hook_stack(self) -> None:

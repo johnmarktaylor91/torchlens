@@ -26,7 +26,7 @@ from torch import nn
 import torchlens as tl
 from torchlens.backends.torch import backward as backward_module
 from torchlens.report import backward_status
-from torchlens.validation.invariants import check_metadata_invariants
+from torchlens.validation._invariants import check_metadata_invariants
 
 _OPTIONS = tl.options.CaptureOptions(backward_ready=True)
 _REFERENCE_OPTIONS = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")

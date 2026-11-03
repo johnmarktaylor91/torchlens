@@ -26,13 +26,13 @@ import torch
 
 import torchlens as tl
 from torchlens.bundle import _distance_value
+from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
     _deserialize_value,
     _is_reserved_wrapper_key,
     _serialize_value,
     _SerializedState,
 )
-from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:
@@ -178,7 +178,7 @@ def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
 def test_op_log_fork_policy_source_trace_is_reconstruct_only() -> None:
     """MINOR: ``source_trace`` resolves to RECONSTRUCT and is not double-listed."""
 
-    from torchlens.intervention.types import (
+    from torchlens.intervention._types import (
         LAYER_PASS_LOG_FIELD_FORK_POLICY,
         ForkFieldPolicy,
     )

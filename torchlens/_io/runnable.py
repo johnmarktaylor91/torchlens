@@ -86,8 +86,8 @@ from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
-from ..errors.runnable import SparseCorePayloadError
-from ..intervention.types import (
+from ..errors._runnable import SparseCorePayloadError
+from ..intervention._types import (
     CapturedArgTemplate,
     FunctionRegistryKey,
     LiteralTensor,

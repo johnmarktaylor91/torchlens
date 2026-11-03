@@ -12,7 +12,7 @@ bias, eps)``, ``F.layer_norm(input, normalized_shape, weight, bias, eps)``,
 ``zero_init_last`` zero-initializes the last GroupNorm of every residual block
 (``resnet50_gn``, ``regnety_040_sgn``, ``vit_small_r26_s32_224``), so an
 untrained instance hits this at validation time. Split from
-``validation/exemptions.py`` (R43 file-size ratchet).
+``validation/_exemptions.py`` (R43 file-size ratchet).
 
 Narrow by construction: only a perturbed parent that occupies the input slot
 (``args[0]``) and no other slot is ever exempted; perturbing ``weight`` or
@@ -83,7 +83,7 @@ def _perturbed_parent_is_only_the_input(layer: Any, layers_to_perturb: list[str]
     # The first requires exactly one perturbed label at positional slot 0 and
     # nowhere else among the args; the second (no keyword spellings allowed)
     # rejects any keyword occurrence.
-    from .exemptions import (
+    from ._exemptions import (
         _perturbed_parent_arg_positions,
         _perturbed_parents_only_occupy_template_slot,
     )

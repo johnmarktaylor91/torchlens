@@ -18,7 +18,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.types import TargetSpec
+from torchlens.intervention._types import TargetSpec
 
 
 def _ctx(signal: str, label: str = "relu_1_2", **kwargs: Any) -> Any:

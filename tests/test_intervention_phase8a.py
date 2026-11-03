@@ -10,9 +10,9 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
+from torchlens.intervention._handles import HookHandle
+from torchlens.intervention._types import FireRecord, TargetSpec
 from torchlens.intervention.errors import SpecMutationError
-from torchlens.intervention.handles import HookHandle
-from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 

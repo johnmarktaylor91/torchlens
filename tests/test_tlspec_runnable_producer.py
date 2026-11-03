@@ -26,7 +26,7 @@ from torchlens._runnable import (
     TensorSlotRole,
 )
 from torchlens.errors import RunnablePreflightError
-from torchlens.intervention.types import CapturedArgTemplate, LiteralValue
+from torchlens.intervention._types import CapturedArgTemplate, LiteralValue
 from torchlens.options import CaptureOptions
 
 

@@ -52,7 +52,7 @@ from ...options import (
     _SaveTransforms,
     merge_capture_options,
 )
-from ...recording.options import PredicateFn
+from ...recording._options import PredicateFn
 from ...types import _ActivationPostfunc, _GradientPostfunc
 
 _MLX_STATIC_LABEL_SAVE_SELECTOR_KINDS = frozenset(

@@ -10,7 +10,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.recording.types import Recording
+from torchlens.recording._types import Recording
 
 
 class _Tiny(nn.Module):

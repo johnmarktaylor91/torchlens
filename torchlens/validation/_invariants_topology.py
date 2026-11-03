@@ -394,7 +394,7 @@ def _check_op_label_resolution(ml: Trace) -> None:
         # has no second lookup that could disagree with ``ml[label]``. A real
         # ``Trace`` always defines ``ops``, so this never applies to one. The
         # check is reported as not run, never passed silently.
-        from .diagnostics import ValidationDiagnostic, record_validation_diagnostic
+        from ._diagnostics import ValidationDiagnostic, record_validation_diagnostic
 
         record_validation_diagnostic(
             ml,
@@ -741,7 +741,7 @@ def _check_sibling_relation_derivation(ml: Trace, name: str, label_aliases: Any)
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
-from .invariants import (  # noqa: E402
+from ._invariants import (  # noqa: E402
     _SPECIAL_LIST_FLAG_PAIRS,
     MetadataInvariantError,
 )

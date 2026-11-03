@@ -29,7 +29,7 @@ from test_validation_exemption_ledger import (
     posthoc_exempting_reasons,
 )
 
-from torchlens.validation import exemptions as ex
+from torchlens.validation import _exemptions as ex
 from torchlens.validation._exemption_schema import DECISION_KINDS, REGISTRY_KINDS
 from torchlens.validation._exemption_table import (
     EXEMPTION_TABLE,
@@ -41,13 +41,13 @@ from torchlens.validation._exemption_table import (
     skip_perturbation_justifications,
     skip_validation_justifications,
 )
-from torchlens.validation._replay_warnings import replay_warnings_ignored
-from torchlens.validation.exemptions import (
+from torchlens.validation._exemptions import (
     _check_index_domain_degenerate,
     _check_interpolate_exempt,
     _check_norm_zero_weight_annihilates,
     _posthoc_overwrite_decision,
 )
+from torchlens.validation._replay_warnings import replay_warnings_ignored
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _THIS_FILE = "tests/test_validation_exemption_table.py::"

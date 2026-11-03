@@ -47,9 +47,9 @@ from ..._utils.display import _timed_phase
 from ..._utils.introspection import (
     _get_tensors_and_params_from_obj,
 )
+from ...recording._exceptions import PredicateError
 from ...recording._halt import StopSignal
-from ...recording.exceptions import PredicateError
-from ...recording.types import (
+from ...recording._types import (
     CaptureSpec,
 )
 from ._tl import (

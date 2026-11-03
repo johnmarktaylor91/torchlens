@@ -40,8 +40,8 @@ from torchlens.intervention import (
     hooks as _intervention_hooks,
     runtime as intervention_runtime,
 )
+from torchlens.intervention._spec import Recipe
 from torchlens.intervention.hooks import NormalizedHookEntry
-from torchlens.intervention.spec import Recipe
 
 _MAGNITUDE = 2.0
 _VOLATILE_KEYS = ("time", "duration", "elapsed", "_at", "timestamp", "memory", "pid", "id(")

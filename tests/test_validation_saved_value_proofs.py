@@ -24,10 +24,10 @@ from torch import nn
 import torchlens as tl
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
-from torchlens.validation._destination_coverage import _setitem_index_targets_are_unique
-from torchlens.validation.core import (
+from torchlens.validation._core import (
     _check_whether_func_on_saved_parents_yields_saved_tensor,
 )
+from torchlens.validation._destination_coverage import _setitem_index_targets_are_unique
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:

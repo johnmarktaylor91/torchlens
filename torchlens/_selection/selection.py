@@ -1529,7 +1529,7 @@ def _apply_invalid(
 
 
 # _validate_edited / _masked_factory / _derive_masked_edit live in
-# torchlens/intervention/masked_edit.py; the plan builder itself
+# torchlens/intervention/_masked_edit.py; the plan builder itself
 # (_build_selection_do_plan, _resolve_do_target) lives in
 # torchlens/_selection/do_plan.py and is imported lazily below.
 

@@ -2,7 +2,7 @@
 
 Persistence rides the C07-declared tlspec v9 entry-dark slot
 ``Op.injection_provenance`` -- NO schema bump: each recorded
-:class:`~torchlens.intervention.injection.InjectedOp` is written into the
+:class:`~torchlens.intervention._injection.InjectedOp` is written into the
 artifact as one synthesized op ROW carrying the slot verbatim, appended to
 the scrubbed ``layer_list`` AFTER every 1:1 live/scrubbed consumer has run.
 Codec extras (the ``module:qualname`` callable reference resolved through
@@ -19,7 +19,7 @@ refuses, never degrades -- and finalized after the blob machinery is ready
 (the ``rehydrate_trace`` seam) into ordinary injected-op records with
 ``attestation="unattested"``: loading NEVER attests a claim
 (degrade-to-unattested); the replay door is
-:func:`torchlens.intervention.injection.attest_injected_ops`.
+:func:`torchlens.intervention._injection.attest_injected_ops`.
 
 Every spelling DOCUMENTED-UNSTABLE pending naming-session ratification.
 """
@@ -94,7 +94,7 @@ def append_injected_op_rows(
         Logical backend for the minted payload specs.
     """
 
-    from ..intervention.injection import injected_ops
+    from ..intervention._injection import injected_ops
 
     records = injected_ops(trace)
     if not records:
@@ -308,7 +308,7 @@ def split_restored_injected_rows(trace: Any) -> None:
     remaining = [op for op in rows if getattr(op, "injection_provenance", None) is None]
     _validate_split_rows(injected, remaining, _recorded_rule_ids(trace))
     rows[:] = remaining
-    from ..intervention.injection import injection_state
+    from ..intervention._injection import injection_state
 
     state = injection_state(trace)
     state["pending_loaded_rows"] = injected
@@ -681,7 +681,7 @@ def finalize_loaded_injected_ops(
     pending = state.pop("pending_loaded_rows", None)
     if not pending:
         return
-    from ..intervention.injection import InjectedOp, InjectionProvenance
+    from ..intervention._injection import InjectedOp, InjectionProvenance
 
     records: list[InjectedOp] = []
     for row in pending:
@@ -762,7 +762,7 @@ def _decode_registry_key(encoded: dict[str, Any] | None) -> Any:
 
     if encoded is None:
         return None
-    from ..intervention.types import FunctionRegistryKey
+    from ..intervention._types import FunctionRegistryKey
 
     return FunctionRegistryKey(
         namespace=encoded["namespace"],
@@ -778,7 +778,7 @@ def _classify_callable(callable_ref: Any) -> str | None:
 
     ``None`` means the reference resolves through the fixed trusted
     namespaces and awaits explicit replay
-    (:func:`torchlens.intervention.injection.attest_injected_ops`);
+    (:func:`torchlens.intervention._injection.attest_injected_ops`);
     foreign references classify ``callable_untrusted`` (the resolver
     default-denies their import) and unresolvable trusted-namespace
     references ``callable_missing`` -- the degrade-to-unattested arms.

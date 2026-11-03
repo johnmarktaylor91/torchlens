@@ -310,7 +310,7 @@ Key entry points:
   eager TF preview (static-label, two-level writable layer, fail-closed site reachability;
   see invariant 15). `trace(stop_after=...)` runs on torch and Paddle; the remaining previews
   refuse typed.
-  Spec persistence is one path: `intervention/save.py` owns the `.tlspec` directory,
+  Spec persistence is one path: `intervention/_save.py` owns the `.tlspec` directory,
   tensors and manifest; `intervention/_spec_codec.py` holds the one spec-document
   encoder and decoder with the `format_version` table (`SPEC_FORMAT_VERSIONS`);
   `intervention/_spec_values.py` holds the value wrapper grammar and the import-ref

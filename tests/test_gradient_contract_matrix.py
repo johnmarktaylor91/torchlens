@@ -52,8 +52,8 @@ from torchlens.intervention import (
     subspace_ablate,
     subspace_interchange,
 )
-from torchlens.intervention.helpers import swap_with
-from torchlens.intervention.types import InterventionDecision
+from torchlens.intervention._helpers import swap_with
+from torchlens.intervention._types import InterventionDecision
 
 _PAGE = Path(__file__).resolve().parent.parent / "docs" / "gradient_contract.md"
 _SITE = "linear_1_1"

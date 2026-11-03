@@ -23,8 +23,8 @@ from typing import Any
 from ..._ir.selector_eval import first_selector_kind_outside, selector_contains_kind
 from ..._postprocess._selective_save import _STATIC_INTERVENTION_SELECTOR_KINDS
 from ..._selection.selectors import BaseSelector
+from ...intervention._types import Edit, InterventionDecision
 from ...intervention.hooks import make_hook_context, normalize_hook
-from ...intervention.types import Edit, InterventionDecision
 from ..registry import BackendUnsupportedError
 
 #: Refusal code for gradient-universe sites (registered in `_protocols.mlx`).

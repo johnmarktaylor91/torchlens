@@ -38,7 +38,7 @@ def test_bool_comparison_spurious_edge_now_fails() -> None:
     tripwire fires.
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -60,7 +60,7 @@ def test_far_threshold_comparison_keeps_evidence_backed_exemption() -> None:
     and the exemption now carries straddle-probe evidence instead of being a
     blanket dtype pass (red-capable: pre-fix the justification was None)."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -81,7 +81,7 @@ def test_isnan_edge_validates_via_nan_probe() -> None:
     VALIDATED (red-capable: pre-fix the finite draws never flipped the output
     and the blanket bool exemption absorbed it)."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -157,7 +157,7 @@ def test_bool_predicate_spurious_edge_now_fails(func_name: str) -> None:
     parametrization settles ``exempted``).
     """
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -179,7 +179,7 @@ def test_bool_predicate_honest_edge_stays_green(func_name: str) -> None:
     """Honest control: the real edge validates (rungs) or exempts WITH
     battery evidence -- never the evidence-free blanket, never a failure."""
 
-    from torchlens.validation.core import (
+    from torchlens.validation._core import (
         _check_whether_func_on_saved_parents_yields_saved_tensor,
     )
 
@@ -238,7 +238,7 @@ def test_bool_predicate_probe_never_mutates_retained_saved_args() -> None:
     corrupted operand (red-capable: pre-fix the byte comparison fails).
     """
 
-    from torchlens.validation.exemptions import _bool_predicate_influence_probe
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_InplaceMaskGate(), torch.randn(3, 4))
     target = [op for op in trace._layer_list if op.func_name == "logical_and_"][0]
@@ -268,7 +268,7 @@ def test_bool_predicate_probe_catch_is_typed() -> None:
     refusals (TypeError/ValueError/RuntimeError) still settle "cannot run".
     """
 
-    from torchlens.validation.exemptions import _bool_predicate_influence_probe
+    from torchlens.validation._exemptions import _bool_predicate_influence_probe
 
     trace, _ground_truth = _capture(_PredicateZoo("isnan"), torch.randn(3, 4))
     target = [op for op in trace._layer_list if op.func_name == "isnan"][0]

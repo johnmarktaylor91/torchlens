@@ -23,8 +23,8 @@ from torchlens.validation import (
     check_metadata_invariants,
     validate_forward_pass,
 )
-from torchlens.validation.core import _check_arglocs_correct_for_arg
-from torchlens.validation.exemptions import _check_interpolate_exempt, _check_lstm_exempt
+from torchlens.validation._core import _check_arglocs_correct_for_arg
+from torchlens.validation._exemptions import _check_interpolate_exempt, _check_lstm_exempt
 
 
 def _sample_func_for_location(x: torch.Tensor) -> torch.Tensor:

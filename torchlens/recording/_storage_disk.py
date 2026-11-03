@@ -1,0 +1,600 @@
+"""Synchronous disk storage backend for fastlog recordings."""
+
+from __future__ import annotations
+
+__tl_layer__ = "L2"
+
+import json
+import os
+import platform
+import sys
+import warnings
+from dataclasses import fields
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import torch
+
+from .. import __version__ as TORCHLENS_VERSION
+from .._io import TLSPEC_VERSION, ArtifactError
+from .._io._durability import fsync_dir, fsync_tree
+from .._io.manifest import Manifest, TensorEntry
+from .._io.streaming import BundleStreamWriter
+from .._ir.predicate import coerce_deferred_value
+from .._ir.refs import DeviceRef, DtypeRef
+from .._utils._torch_symbols import torch_dtype_named
+from ._exceptions import PredicateError, RecordingConfigError
+from ._indexes import write_label_index, write_pass_index
+from ._options import _RecordingConfig
+from ._storage_ram import RamStorageBackend
+from ._storage_resolver import _resolve_storage
+from ._types import (
+    ActivationRecord,
+    CaptureSpec,
+    GradRecordContext,
+    ModuleStackFrame,
+    RecordContext,
+    Recording,
+    StorageIntent,
+)
+
+_GRAD_DTYPES = {
+    torch.float16,
+    torch.bfloat16,
+    torch.float32,
+    torch.float64,
+    torch.complex64,
+    torch.complex128,
+}
+
+# Ceiling for the abort reason persisted to on-disk recovery debris, matching
+# the core bundle writer's length-bounding belt.
+_MAX_ABORT_REASON_CHARS = 512
+
+
+class _ScrubbedReason(str):
+    """Marker type: an abort reason already free of exception message content."""
+
+    __slots__ = ()
+
+
+def _scrubbed_abort_reason(prefix: str, exc: BaseException) -> _ScrubbedReason:
+    """Build the redacted abort reason persisted to REASON.txt.
+
+    The core bundle writer's partial sink persists only the exception TYPE
+    name: ``str(exc)`` can carry object reprs, paths, and captured values,
+    and REASON.txt is on-disk recovery debris that outlives the process. The
+    raised in-memory exception keeps its full detail; only the persisted
+    reason is scrubbed and length-bounded.
+    """
+
+    return _ScrubbedReason(f"{prefix}: {type(exc).__name__}"[:_MAX_ABORT_REASON_CHARS])
+
+
+def _tighten_bundle_tree(root: Path) -> None:
+    """Apply the core bundle writer's 0600/0700 tightening to a fastlog tree.
+
+    ``mkdir``/``open`` honor the ambient umask, so under the common umask 022
+    the fastlog bundle directory and its metadata sidecars stayed
+    world-readable even though the core ``.tlspec`` writer tightens its own
+    output. Best-effort like the shared helper: a filesystem that ignores
+    mode bits is not a save failure.
+    """
+
+    from .._io.bundle import _restrict_mode
+
+    _restrict_mode(root, 0o700)
+    for current_dir, dir_names, file_names in os.walk(root):
+        base = Path(current_dir)
+        for name in dir_names:
+            _restrict_mode(base / name, 0o700)
+        for name in file_names:
+            _restrict_mode(base / name, 0o600)
+
+
+class DiskStorageBackend:
+    """Persist fastlog records to a sync directory bundle."""
+
+    def __init__(self, options: _RecordingConfig, recording: Recording) -> None:
+        """Initialize a disk-backed fastlog storage backend.
+
+        Parameters
+        ----------
+        options:
+            Recording options for the active session.
+        recording:
+            Recording receiving retained records and indexes.
+
+        Raises
+        ------
+        RecordingConfigError
+            If static options request ``keep_grad=True`` in disk-only mode.
+        """
+
+        if options.streaming is None or options.streaming.path is None:
+            raise RecordingConfigError("DiskStorageBackend requires streaming.path")
+        if options.streaming.async_writes is True:
+            # The fastlog recorder consumes each blob's manifest entry
+            # synchronously per record (index lines, record metadata), so an
+            # explicitly requested async pipeline cannot be honored here --
+            # refuse rather than silently downgrade. The default (None)
+            # means synchronous for record() and stays accepted.
+            raise RecordingConfigError(
+                "async_writes=True is not supported for record() streaming: the "
+                "fastlog recorder consumes each blob's manifest entry synchronously. "
+                "Remove async_writes (or set it False) for record(); trace(storage=...) "
+                "supports the async pipeline."
+            )
+        self.options = options
+        self.recording = recording
+        self.disk_only = not options.streaming.retain_in_memory
+        self._validate_static_keep_grad()
+        self.writer = BundleStreamWriter(
+            options.streaming.path,
+            include_custom_attributes=options.streaming.include_custom_attributes,
+            include_buffer_values=options.streaming.include_buffer_values,
+        )
+        # Directories first, so mid-recording contents are already unreachable
+        # to other users; finalize() tightens the files it writes.
+        _tighten_bundle_tree(self.writer.tmp_path)
+        self.index_path = self.writer.tmp_path / "fastlog_index.jsonl"
+        self._ram_backend = RamStorageBackend(recording)
+        self._tensor_entries: list[TensorEntry] = []
+        self._warned_device_move = False
+        self._finalized = False
+
+    def append(self, record: ActivationRecord) -> None:
+        """Append one record, writing its disk blob first when present.
+
+        Parameters
+        ----------
+        record:
+            Fastlog record selected by a predicate.
+
+        Raises
+        ------
+        PredicateError
+            If ``keep_grad=True`` is invalid for this storage mode or tensor.
+        """
+
+        self._validate_record_keep_grad(record)
+        stored_record = record
+        wrote_blob = False
+        if record.disk_payload is not None:
+            blob_id = self.writer.next_blob_id()
+            entry = self.writer.write_blob(
+                blob_id,
+                record.disk_payload,
+                kind="out",
+                label=record.ctx.label,
+            )
+            self._tensor_entries.append(entry)
+            stored_record.metadata.update(_entry_to_record_metadata(record, entry))
+            wrote_blob = True
+        if record.transformed_disk_payload is not None:
+            blob_id = self.writer.next_blob_id()
+            transformed_label = f"{record.ctx.label}::transformed_out"
+            entry = self.writer.write_blob(
+                blob_id,
+                record.transformed_disk_payload,
+                kind="transformed_out",
+                label=transformed_label,
+            )
+            self._tensor_entries.append(entry)
+            stored_record.metadata.update(_transformed_entry_to_record_metadata(record, entry))
+            wrote_blob = True
+        if wrote_blob or record.spec.save_metadata:
+            self._append_index_line(stored_record)
+        self._ram_backend.append(stored_record)
+
+    def resolve_payloads(
+        self,
+        tensor: torch.Tensor,
+        spec: CaptureSpec,
+        intent: StorageIntent,
+        *,
+        options: _RecordingConfig,
+        ctx: RecordContext | GradRecordContext | None = None,
+        kind: str = "activation",
+    ) -> tuple[
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+        torch.Tensor | None,
+    ]:
+        """Resolve tensor payloads for disk-backed capture.
+
+        Parameters
+        ----------
+        tensor:
+            Tensor selected for capture.
+        spec:
+            Capture policy for the selected tensor.
+        intent:
+            Storage intent resolved from streaming options.
+        options:
+            Recording options carrying ``activation_transform`` /
+            ``save_raw_activations``.
+        ctx:
+            Record context used to enrich transform error messages.
+
+        Returns
+        -------
+        tuple[torch.Tensor | None, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]
+            ``(ram_payload, disk_payload, transformed_ram_payload,
+            transformed_disk_payload)``. Any element may be ``None``.
+        """
+
+        transform = options.grad_transform if kind == "grad" else options.activation_transform
+        save_raw = options.save_raw_grads if kind == "grad" else options.save_raw_activations
+        return _resolve_storage(
+            tensor,
+            spec,
+            intent,
+            activation_transform=transform,
+            save_raw_activations=save_raw,
+            ctx=ctx,
+            kind="grad" if kind == "grad" else "activation",
+            detach_saved_activations=options.detach_saved_activations,
+        )
+
+    def finalize(self) -> None:
+        """Finalize the fastlog directory bundle."""
+
+        if self._finalized:
+            return
+        self._ram_backend.finalize()
+        try:
+            write_pass_index(self.writer.tmp_path, self.recording)
+            write_label_index(self.writer.tmp_path, self.recording)
+            _write_metadata(self.writer.tmp_path / "metadata.json", self.recording, self.options)
+            manifest = _build_fastlog_manifest(self._tensor_entries)
+            manifest.write(self.writer.tmp_path / "manifest.json")
+            _tighten_bundle_tree(self.writer.tmp_path)
+        except (OSError, ArtifactError, ValueError) as exc:
+            self.abort(_scrubbed_abort_reason("Failed to finalize fastlog bundle", exc))
+            raise
+        except BaseException as exc:
+            # Safety net (round-8 F3 class, parity with BundleStreamWriter.finalize):
+            # a hand-enumerated except tuple misses shapes like a TypeError from
+            # json.dump or a KeyboardInterrupt unwinding mid-finalize. Mark the
+            # .tmp dir PARTIAL for ANY failure so cleanup_partial()/recover() can
+            # sweep or salvage it, then re-raise unwrapped.
+            self.abort(_scrubbed_abort_reason("Failed to finalize fastlog bundle", exc))
+            raise
+        # Crash-durability before publish (parity with BundleStreamWriter.finalize
+        # and _io/bundle.py): fsync blobs/sidecars and the staged directories so a
+        # power/OS crash after the rename below cannot publish a final-named bundle
+        # holding torn blobs with no PARTIAL sentinel.
+        try:
+            fsync_tree(self.writer.tmp_path)
+        except OSError as exc:
+            self.abort(_scrubbed_abort_reason("Failed to flush fastlog bundle", exc))
+            raise
+        # R59 TOCTOU: re-check target absence at publish time, not just at writer
+        # init -- POSIX rename onto a concurrently-created empty directory would
+        # silently replace it.
+        if self.writer.final_path.exists():
+            reason = f"Bundle path already exists: {self.writer.final_path}"
+            self.abort(reason)
+            raise ArtifactError(reason)
+        try:
+            self.writer.tmp_path.rename(self.writer.final_path)
+        except OSError as exc:
+            self.abort(_scrubbed_abort_reason("Failed to publish fastlog bundle", exc))
+            raise
+        # Make the rename itself durable before declaring the bundle final.
+        fsync_dir(self.writer.final_path.parent)
+        self.writer._closed = True
+        self.writer._finalized = True
+        self._finalized = True
+        object.__setattr__(self.recording, "path", self.writer.final_path)
+
+    def abort(self, reason: str) -> None:
+        """Abort the underlying streaming writer with a redacted persisted reason.
+
+        This is the single chokepoint through which every fastlog failure
+        reason reaches the on-disk ``REASON.txt`` recovery debris. Callers
+        outside this module (the streaming recorder path) pass raw
+        ``str(exc)``, whose message can carry object reprs, paths, and bound
+        values. When an exception is actively being handled and the reason is
+        not already a :class:`_ScrubbedReason`, only the active exception's
+        TYPE name is persisted -- matching the core bundle writer's contract.
+        The raised in-memory exception keeps its full detail.
+
+        Parameters
+        ----------
+        reason:
+            Human-readable failure reason.
+        """
+
+        if self._finalized:
+            return
+        if not isinstance(reason, _ScrubbedReason):
+            active_exception = sys.exc_info()[1]
+            if active_exception is not None:
+                reason = f"aborted by {type(active_exception).__name__}"
+        self.writer.abort(reason[:_MAX_ABORT_REASON_CHARS])
+
+    def _validate_static_keep_grad(self) -> None:
+        """Reject static keep_grad defaults in disk-only mode."""
+
+        if not self.disk_only:
+            return
+        for name, default in (
+            ("default_op", self.options.default_op),
+            ("default_module", self.options.default_module),
+        ):
+            if isinstance(default, CaptureSpec) and default.save_grad:
+                raise RecordingConfigError(
+                    f"{name} cannot use keep_grad=True with disk-only fastlog storage"
+                )
+
+    def _validate_record_keep_grad(self, record: ActivationRecord) -> None:
+        """Validate keep_grad constraints before persisting one record."""
+
+        if not record.spec.save_grad:
+            return
+        if self.disk_only:
+            raise PredicateError(
+                "keep_grad=True is not valid for disk-only fastlog storage. "
+                "Remedy: set retain_in_memory=True or drop keep_grad=True.",
+                code="predicate_storage_conflict",
+            )
+        dtype = _torch_dtype_from_ref(record.ctx.dtype)
+        if dtype is not None and dtype not in _GRAD_DTYPES:
+            raise PredicateError(
+                "keep_grad=True is not valid for integer or bool tensors. "
+                "Remedy: drop keep_grad=True or keep the payload in a floating dtype.",
+                code="predicate_storage_conflict",
+            )
+        if (
+            record.spec.device is not None
+            and record.ctx.tensor_device is not None
+            and not self._warned_device_move
+        ):
+            warnings.warn(
+                "fastlog keep_grad=True with an explicit device target may make autograd "
+                "expensive.",
+                UserWarning,
+                stacklevel=2,
+            )
+            self._warned_device_move = True
+
+    def _append_index_line(self, record: ActivationRecord) -> None:
+        """Append one JSONL metadata line for a retained record."""
+
+        line = json.dumps(record_to_json(record), sort_keys=True)
+        try:
+            with self.index_path.open("a", encoding="utf-8") as handle:
+                handle.write(line)
+                handle.write("\n")
+        except OSError as exc:
+            self.abort(_scrubbed_abort_reason("Failed to append fastlog index", exc))
+            raise ArtifactError(f"Failed to append fastlog index at {self.index_path}.") from exc
+
+
+def record_to_json(record: ActivationRecord) -> dict[str, Any]:
+    """Convert one out record into JSON-serializable metadata."""
+
+    return {
+        "ctx": _ctx_to_json(record.ctx),
+        "spec": _spec_to_json(record.spec),
+        "metadata": dict(record.metadata),
+        "recorded_at": record.recorded_time,
+    }
+
+
+def record_from_json(data: dict[str, Any]) -> ActivationRecord:
+    """Build an out record from JSON-decoded fastlog metadata."""
+
+    ctx = _ctx_from_json(data["ctx"])
+    spec = _spec_from_json(data["spec"])
+    metadata = data.get("metadata", {})
+    if not isinstance(metadata, dict):
+        metadata = {}
+    return ActivationRecord(
+        ctx=ctx,
+        spec=spec,
+        metadata=metadata,
+        recorded_time=float(data.get("recorded_at", 0.0)),
+    )
+
+
+def _entry_to_record_metadata(record: ActivationRecord, entry: TensorEntry) -> dict[str, Any]:
+    """Return persisted raw out blob metadata for one record."""
+
+    metadata = entry.to_dict()
+    metadata["shape"] = entry.shape if record.ctx.shape is None else list(record.ctx.shape)
+    return metadata
+
+
+def _transformed_entry_to_record_metadata(
+    record: ActivationRecord,
+    entry: TensorEntry,
+) -> dict[str, Any]:
+    """Return persisted transformed out blob metadata for one record.
+
+    Stored under a ``transformed_out_*`` key namespace so it can be
+    rehydrated independently from the raw out blob.
+    """
+
+    return {
+        "transformed_out_blob_id": entry.blob_id,
+        "transformed_out_kind": entry.kind,
+        "transformed_out_relative_path": entry.relative_path,
+        "transformed_out_shape": list(entry.shape),
+        "transformed_out_dtype": entry.dtype,
+        "transformed_out_backend": entry.backend,
+        "transformed_out_bytes": entry.bytes,
+        "transformed_out_sha256": entry.sha256,
+        "transformed_out_layout": entry.layout,
+        "transformed_out_device_at_save": entry.device_at_save,
+    }
+
+
+def _ctx_to_json(ctx: Any) -> dict[str, Any]:
+    """Convert a RecordContext into JSON data without recursive history."""
+
+    data = {field.name: getattr(ctx, field.name) for field in fields(ctx)}
+    data["module_stack"] = [
+        {field.name: getattr(frame, field.name) for field in fields(frame)}
+        for frame in ctx.module_stack
+    ]
+    data["recent_events"] = []
+    data["recent_ops"] = []
+    data["dtype"] = None if ctx.dtype is None else str(ctx.dtype)
+    data["tensor_device"] = None if ctx.tensor_device is None else str(ctx.tensor_device)
+    data["tensor_requires_grad"] = coerce_deferred_value(ctx.tensor_requires_grad)
+    data["is_scalar_bool"] = coerce_deferred_value(ctx.is_scalar_bool)
+    data["bool_value"] = coerce_deferred_value(ctx.bool_value)
+    return data
+
+
+def _torch_dtype_from_ref(dtype: Any) -> torch.dtype | None:
+    """Resolve a neutral dtype reference to a torch dtype when possible.
+
+    Parameters
+    ----------
+    dtype
+        ``DtypeRef``, torch dtype, string, or ``None``.
+
+    Returns
+    -------
+    torch.dtype | None
+        Torch dtype for validation checks, or ``None`` when unavailable.
+    """
+
+    if dtype is None or isinstance(dtype, torch.dtype):
+        return dtype
+    return torch_dtype_named(str(dtype).replace("torch.", ""))
+
+
+def _ctx_from_json(data: dict[str, Any]) -> Any:
+    """Convert JSON data into a RecordContext."""
+
+    values = dict(data)
+    values["module_stack"] = tuple(ModuleStackFrame(**frame) for frame in values["module_stack"])
+    values["recent_events"] = ()
+    values["recent_ops"] = ()
+    values["parent_labels"] = tuple(values.get("parent_labels", ()))
+    values["shape"] = None if values.get("shape") is None else tuple(values["shape"])
+    values["dtype"] = DtypeRef.from_value(values.get("dtype"))
+    values["tensor_device"] = DeviceRef.from_value(values.get("tensor_device"))
+    return RecordContext(**values)
+
+
+def _spec_to_json(spec: CaptureSpec) -> dict[str, Any]:
+    """Convert a CaptureSpec into JSON data."""
+
+    return {
+        "save_out": spec.save_out,
+        "save_metadata": spec.save_metadata,
+        "keep_grad": spec.save_grad,
+        "device": None if spec.device is None else str(spec.device),
+        "dtype": _dtype_to_name(spec.dtype),
+        "save_mode": spec.save_mode,
+    }
+
+
+def _spec_from_json(data: dict[str, Any]) -> CaptureSpec:
+    """Build a CaptureSpec from JSON data."""
+
+    return CaptureSpec(
+        save_out=bool(data.get("save_out", True)),
+        save_metadata=bool(data.get("save_metadata", True)),
+        save_grad=bool(data.get("keep_grad", False)),
+        device=data.get("device"),
+        dtype=_dtype_from_name(data.get("dtype")),
+        save_mode=data.get("save_mode", "copy"),
+    )
+
+
+def _dtype_to_name(dtype: torch.dtype | None) -> str | None:
+    """Return a portable dtype name."""
+
+    if dtype is None:
+        return None
+    return str(dtype).replace("torch.", "")
+
+
+def _dtype_from_name(name: str | None) -> torch.dtype | None:
+    """Resolve a portable dtype name to a torch dtype.
+
+    Defense-in-depth parity (fastlog): the fastlog spec ``dtype`` string comes from
+    a portable JSON metadata file that a hand-editor controls. Guard the ``getattr``
+    result with an ``isinstance(_, torch.dtype)`` check -- matching the sibling dtype
+    resolvers (``rehydrate.py::_dtype_from_manifest_string``,
+    ``storage_disk.py::_torch_dtype_from_ref``) -- so a name like ``"load"`` cannot
+    resolve ``torch.load`` (a callable, not a dtype) into a ``CaptureSpec``.
+    """
+
+    if name is None:
+        return None
+    dtype_obj = torch_dtype_named(str(name))
+    if dtype_obj is None:
+        raise ArtifactError(f"Unsupported dtype name in fastlog spec: {name!r}.")
+    return dtype_obj
+
+
+def _setting_reprs(recording: Recording) -> dict[str, str]:
+    """Return scrubbed reprs of the callable settings a bundle cannot store."""
+
+    from .._data_classes._transform_repr import _scrubbed_transform_repr
+
+    settings = recording.options
+    reprs: dict[str, str] = {}
+    for name in ("keep_op", "activation_transform", "grad_transform", "save_grads", "stop_after"):
+        value = getattr(settings, name)
+        if callable(value):
+            reprs[name] = _scrubbed_transform_repr(value) or "<callable>"
+    return reprs
+
+
+def _write_metadata(path: Path, recording: Recording, options: _RecordingConfig) -> None:
+    """Write fastlog JSON metadata."""
+
+    metadata = {
+        "n_ops": recording.num_ops,
+        "n_passes": recording.num_passes,
+        "start_times": recording.start_times,
+        "end_times": recording.end_times,
+        "predicate_failure_overflow_count": recording.num_predicate_failure_overflows,
+        "halted": recording.is_stopped,
+        "stop_reason": recording.stop_reason,
+        "halts_by_pass": recording.stops_by_pass,
+        "save_raw_activations": options.save_raw_activations,
+        "history_size": options.history_size,
+        # ``Recording.options`` plain values; callables and objects are not stored.
+        "settings": recording.options._persisted_values(),
+        # Audit trail only (scrubbed of bound values and heap addresses): the
+        # recovered record reads None for these settings.
+        "_settings_reprs": _setting_reprs(recording),
+    }
+    with path.open("w", encoding="utf-8") as handle:
+        json.dump(metadata, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+
+def _build_fastlog_manifest(tensor_entries: list[TensorEntry]) -> Manifest:
+    """Build a manifest for a finalized fastlog directory bundle."""
+
+    return Manifest(
+        tlspec_version=TLSPEC_VERSION,
+        torchlens_version=TORCHLENS_VERSION,
+        torch_version=torch.__version__,
+        python_version=f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}",
+        platform=f"{platform.system().lower()}-{platform.machine().lower()}",
+        created_at=datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z"),
+        bundle_format="fastlog-directory",
+        n_layers=0,
+        n_out_blobs=sum(1 for entry in tensor_entries if entry.kind == "out"),
+        n_grad_blobs=sum(1 for entry in tensor_entries if entry.kind == "grad"),
+        n_auxiliary_blobs=sum(1 for entry in tensor_entries if entry.kind not in {"out", "grad"}),
+        tensors=tensor_entries,
+        unsupported_tensors=[],
+    )

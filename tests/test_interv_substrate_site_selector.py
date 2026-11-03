@@ -19,8 +19,8 @@ import torchlens as tl
 from torchlens import site
 from torchlens._data_classes._layer_sites import layer_site_key
 from torchlens._errors import ArgumentTypeError
+from torchlens.intervention._site_keys import mint_keys_in_execution_order
 from torchlens.intervention.errors import SelectorCapabilityError
-from torchlens.intervention.site_keys import mint_keys_in_execution_order
 
 
 class _TinyModel(nn.Module):
@@ -87,7 +87,7 @@ def test_site_selector_construction_refusals() -> None:
 
 
 def test_site_classifies_structural() -> None:
-    from torchlens.intervention.spec import classify_where
+    from torchlens.intervention._spec import classify_where
 
     assert classify_where(site(func="relu")) == "structural"
 

@@ -42,7 +42,7 @@ from torchlens.attribution._steps import (
     _validate_step_batch_size,
 )
 from torchlens.receptive_field._viz import _blend_heatmap
-from torchlens.viz import node_plots
+from torchlens.viz import _node_plots as node_plots
 
 LayerAttributionMethod: TypeAlias = Literal["activation_x_grad", "grad"]
 

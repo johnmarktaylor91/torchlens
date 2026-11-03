@@ -104,7 +104,7 @@ _DTYPE_FLOAT_TOLERANCES: dict[torch.dtype, tuple[float, float]] = {
 REL_FLOATING_POINT_TOLERANCE, MAX_FLOATING_POINT_TOLERANCE = _DTYPE_FLOAT_TOLERANCES[torch.float32]
 
 # Gradient-validation tolerance pairs, spelled ONCE here (formerly bare
-# literals repeated across validation/backward.py, validation/consolidated.py,
+# literals repeated across validation/_backward.py, validation/_consolidated.py,
 # validation/_layer_grad_report.py, and receptive_field/__init__.py, where two
 # backward checks of the same capture disagreed 10x with no error model).
 #

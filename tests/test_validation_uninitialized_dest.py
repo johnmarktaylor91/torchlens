@@ -34,13 +34,13 @@ import torch.nn as nn
 
 from torchlens._capture.run_entry import _run_model_and_save_specified_outs
 from torchlens._user_funcs import _validate_forward_pass_torch
-from torchlens.validation.core import validate_saved_outs
-from torchlens.validation.diagnostics import (
+from torchlens.validation._core import validate_saved_outs
+from torchlens.validation._diagnostics import (
     CHECK_PERTURBATION,
     CHECK_REPLAY,
     get_validation_failure,
 )
-from torchlens.validation.exemptions import (
+from torchlens.validation._exemptions import (
     INPLACE_DESTINATION_WRITE_FUNCS,
     _uninitialized_value_origin,
 )

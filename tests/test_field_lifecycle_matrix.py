@@ -12,7 +12,7 @@ from torchlens._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORD
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
 from torchlens._trace_state import TraceState
-from torchlens.intervention.types import (
+from torchlens.intervention._types import (
     LAYER_PASS_LOG_FIELD_FORK_POLICY,
     MODEL_LOG_FIELD_FORK_POLICY,
 )

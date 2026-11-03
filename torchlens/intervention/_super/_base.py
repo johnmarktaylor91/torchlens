@@ -8,7 +8,7 @@ from typing import Any, ClassVar, Generic, Literal, TypeVar, cast
 import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
-from ...errors.episode import ParamEvidenceMissingError
+from ...errors._episode import ParamEvidenceMissingError
 from .._metrics import is_scalar_like, relative_l1, resolve_metric
 
 T = TypeVar("T")

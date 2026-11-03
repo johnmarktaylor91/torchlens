@@ -9,7 +9,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from ...validation.status import ValidationReplaySource, ValidationStatus
+from ...validation._status import ValidationReplaySource, ValidationStatus
 from .._constants import CONSTANT_PARENT_PAYLOAD_REASON, CONSTANT_PRODUCER_LEAF_REASON
 from .._validation_shared import float_replay_tolerances, ops_by_label as _ops_by_label
 from ._raw_op_replay import _import_tensorflow, _replay_raw_op
@@ -512,7 +512,7 @@ def validate_tf_trace_status(trace: Any, *, validate_metadata: bool = True) -> V
     source: ValidationReplaySource = "loaded" if loaded_from_bundle else "live"
     try:
         if validate_metadata:
-            from ...validation.invariants import check_metadata_invariants
+            from ...validation._invariants import check_metadata_invariants
 
             check_metadata_invariants(trace)
         return validate_tf_trace(trace, validate_metadata=validate_metadata)

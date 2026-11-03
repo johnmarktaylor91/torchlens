@@ -16,8 +16,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._utils._tensor_layout import layout_of, relay_to_layout
-from torchlens.intervention.replay import _resolve_arg_component
-from torchlens.intervention.types import ParentRef
+from torchlens.intervention._replay import _resolve_arg_component
+from torchlens.intervention._types import ParentRef
 from torchlens.options import CaptureOptions
 
 
