@@ -10,9 +10,9 @@ Threat model: a victim runs a DEFAULT ``tl.load`` on an attacker-controlled
   (the attacker also writes the manifest digests, so they are not a defense).
 * F-2 -- ``load_intervention_spec`` must reject a symlinked ``intervention.json``
   / ``manifest.json`` child before reading them.
-* D-LOW -- a torch-declared trace bundle must not select a non-torch payload
-  codec: a per-entry ``logical_backend`` other than ``torch`` is rejected at
-  manifest preflight so materialization never imports a foreign codec runtime.
+* D-LOW -- a torch-declared op payload cannot select a foreign codec or runtime.
+  The role check runs before codec lookup; numeric arrays in raw input retain
+  their separate supported value carrier.
 
 These are TRIPWIRE tests; the fixes strengthen containment and must never be
 weakened to make a test pass.
@@ -25,9 +25,11 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 import safetensors  # noqa: F401
 import torch
+from _format3_envelope import read_record, write_record
 from torch import nn
 
 import torchlens as tl
@@ -326,28 +328,65 @@ def test_torch_bundle_normal_load(tmp_path: Path) -> None:
 
 
 def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:
-    """A torch bundle declaring a foreign tensor ``logical_backend`` is rejected."""
+    """A manifest codec list cannot remove the codec the op cells declare."""
 
     bundle_path = _build_torch_bundle(tmp_path)
     manifest = _read_json(bundle_path / "manifest.json")
-    assert manifest.get("kind") == "trace"
-    # 3.0: the payload codecs are the manifest's ``codecs`` list.
     assert manifest["codecs"] == ["torch_safetensors_v1"]
     manifest["codecs"] = ["numpy_safetensors_v1"]
     _write_json(bundle_path / "manifest.json", manifest)
-
-    with pytest.raises(ArtifactError, match="non-torch payload codec"):
+    with pytest.raises(ArtifactError) as caught:
         tl.load(bundle_path)
+    assert caught.value.fields["code"] == "record_schema_invalid"
 
 
-def test_torch_bundle_rejects_non_torch_body_index_codec(tmp_path: Path) -> None:
-    """A torch bundle declaring a foreign body-index backend is rejected."""
+@pytest.mark.parametrize("foreign_backend", ["jax", "numpy"])
+def test_torch_bundle_rejects_non_torch_body_index_codec(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, foreign_backend: str
+) -> None:
+    """An op payload cannot select a foreign codec, even one raw values may use."""
+
+    import torchlens._io.payload_codec as payload_module
 
     bundle_path = _build_torch_bundle(tmp_path)
+    assert isinstance(tl.load(bundle_path), tl.Trace)
+    record = read_record(bundle_path, "op")
+    cell = next(
+        value
+        for value in record["columns"]["out"]
+        if isinstance(value, dict) and value.get("$tl") == "tensor" and "blob" in value
+    )
+    cell["codec"] = {"id": "numpy_safetensors_v1", "logical_backend": foreign_backend}
+    write_record(bundle_path, "op", record)
     manifest = _read_json(bundle_path / "manifest.json")
-    assert manifest.get("body_index")
-    manifest["body_index"][0]["logical_backend"] = "jax"
+    manifest["codecs"].append("numpy_safetensors_v1")
     _write_json(bundle_path / "manifest.json", manifest)
+    looked_up = []
+    original = payload_module.get_payload_codec
 
-    with pytest.raises(ArtifactError, match="non-torch payload codec"):
+    def observed_lookup(backend_name: str) -> Any:
+        looked_up.append(backend_name)
+        return original(backend_name)
+
+    monkeypatch.setattr(payload_module, "get_payload_codec", observed_lookup)
+    with pytest.raises(ArtifactError) as caught:
         tl.load(bundle_path)
+    assert caught.value.fields["code"] == "record_schema_invalid"
+    assert foreign_backend not in looked_up
+
+
+def test_torch_bundle_allows_numeric_ndarray_in_raw_input(tmp_path: Path) -> None:
+    """The role restriction keeps the independent raw-value array carrier working."""
+
+    raw = {"array": np.arange(12, dtype=np.float64), "x": torch.randn(2, 4)}
+    trace = tl.trace(
+        _TorchTraceModel(),
+        raw,
+        capture=CaptureOptions(input_transform=lambda value: value["x"], save_raw_input=True),
+    )
+    path = tmp_path / "raw_array.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    assert isinstance(loaded.input["array"], np.ndarray)
+    np.testing.assert_array_equal(loaded.input["array"], raw["array"])
+    assert torch.equal(loaded.input["x"], raw["x"])
