@@ -939,6 +939,7 @@ jobs:
         with:
           path: |
             ~/.cache/huggingface
+            ~/.cache/kagglehub
             ~/.keras
             ~/.cache/paddle
             ~/.cache/tinygrad

@@ -223,9 +223,10 @@ def _build_efficientnet() -> tuple[Any, Any]:
     return model, tf.constant(image)
 
 
-#: The keras-hub BERT-Tiny preset (2 layers, hidden size 128) the text row loads.
-_BERT_TINY_PRESET = "bert_tiny_en_uncased"
-#: ``[CLS] the quick brown fox jumps . [SEP]`` in the preset's uncased WordPiece vocabulary.
+#: The keras-hub BERT-Tiny preset (2 layers, hidden size 128) the text row loads,
+#: pinned to version 3 of its Kaggle handle so a re-upload cannot move the weights.
+_BERT_TINY_PRESET = "kaggle://keras/bert/keras/bert_tiny_en_uncased/3"
+#: Eight WordPiece ids framed by ``[CLS]`` (101) and ``[SEP]`` (102).
 _BERT_TOKEN_IDS = np.array([[101, 1996, 4248, 2829, 4419, 14523, 1012, 102]], dtype=np.int32)
 
 
@@ -479,7 +480,10 @@ ROW_SPECS: tuple[dict[str, Any], ...] = (
         "family": "bert_tiny_en_uncased_keras_hub",
         "realism": "pretrained",
         "builder": _build_bert_tiny,
-        "checkpoint_evidence": "kaggle:keras/bert/keras/bert_tiny_en_uncased; sha256:<unverified>",
+        "checkpoint_evidence": (
+            "kaggle:keras/bert/keras/bert_tiny_en_uncased/3 model.weights.h5; "
+            "sha256:6c45fb588a10511922476751b2f01581a168631784d090858a1ad42ce8e87eaa"
+        ),
         "expected_op_kinds": None,
         "expected_intermediates": {},
         # The attention softmax adds the padding mask scaled by a Python
