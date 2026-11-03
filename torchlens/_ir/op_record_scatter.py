@@ -194,9 +194,9 @@ CELL_SOURCES: dict[str, str] = {
     "max_distance_to_output": "DEFAULT",
     # ---- buffers ----------------------------------------------------------------
     "is_buffer": "CORE",
-    # Like ``is_output``/``is_orphan``: not on the record. Ingest seeds the
-    # neutral False; the layer build (finalization ``_build_layer_logs``) and
-    # ``backends._constants.apply_constants_rule`` stamp the final value.
+    # Like ``is_output``/``is_orphan``: not on the record. Ingest leaves the
+    # base-dict seed; the layer build (finalization ``_build_layer_logs``) and
+    # ``backends._constants.apply_constants_rule`` stamp the final bool.
     "is_constant": "DEFAULT",
     "address": "JOIN:buffer_address",
     "buffer_pass": "DEFAULT",
@@ -464,7 +464,6 @@ def scatter_record_to_cells(record: OpRecord, extras: IngestExtras, owning_trace
         "min_distance_to_output": None,
         "max_distance_to_output": None,
         "is_buffer": core.kind == "source" and core.layer_type == "buffer",
-        "is_constant": False,
         "buffer_pass": None,
         "buffer_write_kind": None,
         "buffer_value_changed": None,
