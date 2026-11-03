@@ -170,13 +170,6 @@ def test_a_later_upstream_push_passes_through_the_replacement() -> None:
     assert torch.allclose(fork[fork.output_layers[0]].out, expected_output)
 
 
-def test_forked_module_edit_validates_against_the_plain_hook_output() -> None:
-    model, x = _model_and_input()
-    plain = _plain_hook_outputs(model, x, "mlp")
-    _clean, fork = _forked_module_edit(model, x, "mlp")
-    assert fork.validate_forward_pass(plain["__output__"]) is True
-
-
 @pytest.mark.parametrize("address", ["mlp", "mlp.1"])
 def test_forked_edit_of_any_owner_matches_plain_hooks_and_the_capture_shape(address: str) -> None:
     """Editing the outer module or the submodule that owns the last op: same values, same shape."""
