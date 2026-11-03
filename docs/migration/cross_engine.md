@@ -56,10 +56,11 @@ resolves `structurally_absent` with a remedy, as it does in nnterp without
 
 `alias_report(trace, generation="nnterp")` lists every site of the trace under its nnterp
 name, with an honest status for each (`generation="2.x"` and `"4.x"` give the
-TransformerLens names):
+TransformerLens names). The model below runs the default fused attention, so its two
+attention patterns are the only sites that are not live:
 
 ```python
-# migration-test: tool=torchlens expected=(19, True, 'transformer.h.1', 'resid_post')
+# migration-test: tool=torchlens expected=(19, ['attention_probabilities[0]', 'attention_probabilities[1]'], 'transformer.h.1', 'resid_post')
 import torch
 import transformers
 import torchlens as tl
@@ -72,9 +73,9 @@ ids = torch.tensor([[1, 2, 3, 4]])
 
 trace = tl.trace(model, ids, save="all")
 report = mi.alias_report(trace, generation="nnterp")
-live = all(row.status in ("real", "reconstructed_read_only") for row in report)
+not_live = sorted(r.query for r in report if r.status not in ("real", "reconstructed_read_only"))
 site = mi.resolve_alias(trace, "layers_output[1]")
-RESULT = (len(report), live, site.module_address, site.facet)
+RESULT = (len(report), not_live, site.module_address, site.facet)
 ```
 
 ## Worked example: checking nnsight's hooks against TorchLens

@@ -135,3 +135,31 @@ def test_embedding_names_pick_the_token_table(traces):
     assert mi.resolve_alias(traces["gpt2"], "token_embeddings").module_address == "transformer.wte"
     llama_embed = mi.resolve_alias(traces["llama"], "embed_tokens.output")
     assert llama_embed.module_address == "model.embed_tokens"
+
+
+def test_report_keeps_per_layer_rows_under_fused_attention():
+    """Fused SDPA declares no per-head ``result``: per-layer rows must still be listed.
+
+    The report counted layers by attention modules exposing the head vocabulary, so
+    under SDPA every ``{L}`` row vanished. Each row now appears at every layer, live
+    where the eager twin is live, and the attention pattern (no softmax op under a
+    fused kernel) answers non-live with a remedy instead of being dropped.
+    """
+
+    import families
+
+    model = families.build_gpt2("sdpa")
+    torch.manual_seed(4)
+    trace = tl.trace(model, torch.randint(0, 500, (1, 6)), save="all")
+    try:
+        report = {r.query: r for r in mi.alias_report(trace, generation="nnterp")}
+        assert len(report) == 7 * 2 + 5
+        for layer in range(2):
+            for name in ("layers_output", "attentions_output", "mlps_input"):
+                assert report[f"{name}[{layer}]"].status in LIVE, name
+            probs = report[f"attention_probabilities[{layer}]"]
+            assert probs.status not in LIVE and probs.remedy
+        two_x = mi.alias_report(trace, generation="2.x")
+        assert sum(1 for r in two_x if r.query.startswith("blocks.1.")) >= 10
+    finally:
+        trace.cleanup()

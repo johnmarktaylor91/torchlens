@@ -411,6 +411,26 @@ def _resolve(trace: Any, query: _Query) -> AliasResolution:
     return _resolve_on(homes[0], query, facet)
 
 
+def _report_layer_count(trace: Any, rows: list[dict[str, Any]]) -> int:
+    """Return the executed layer count ``alias_report`` instantiates ``{L}`` rows over.
+
+    The count is the most home modules any per-layer row has (never fewer than the
+    attention modules exposing the head vocabulary). Counting attention modules alone
+    dropped every per-layer row where no module declares the per-head ``result``
+    facet, as under fused SDPA attention; a row with fewer homes than the count now
+    answers ``structurally_absent`` for the missing layers instead of vanishing.
+    """
+
+    counts = [len(_attention_modules(trace))]
+    for row in rows:
+        if "{L}" not in str(row["tlens"]):
+            continue
+        facet = str(row["facet"])
+        query = _Query(str(row["tlens"]), facet, 0, str(row["generation"]), row)
+        counts.append(len(_layer_candidates(trace, query, _homes_for(trace, query, facet))))
+    return max(counts)
+
+
 def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution]:
     """GENERATE the per-trace TLens-name coverage matrix (never hand-written).
 
@@ -430,7 +450,7 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
             remedy='pass generation="2.x", "3.x-bridge", "4.x" or "nnterp"',
             generation=generation,
         )
-    n_layers = len(_attention_modules(trace))
+    n_layers = _report_layer_count(trace, rows)
     report = []
     for row in rows:
         pattern = str(row["tlens"])
