@@ -7,6 +7,7 @@ from typing import Any
 from torch import nn
 
 from .._input_coerce import _coerce_input_args
+from ..options import CaptureOptions
 from ._recorder import Recorder
 from .options import PredicateFn
 from .types import DryRun
@@ -47,8 +48,9 @@ def dry_run(
         "history_size": history_size,
         "include_source_events": include_source_events,
         "on_predicate_error": "fail-fast",
-        "seed": seed,
     }
+    if seed is not None:
+        recorder_kwargs["capture"] = CaptureOptions(seed=seed)
     recorder_cm = Recorder(
         model,
         **recorder_kwargs,
