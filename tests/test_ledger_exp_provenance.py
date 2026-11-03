@@ -139,7 +139,7 @@ def test_value_residual_flags_unrecorded_write() -> None:
     # An unrecorded write: replace the clone's output value without any event
     # (assignment on the Op record; no envelope row is minted).
     out_label = clone.output_layers[0]
-    output_op = clone[out_label].ops[0]
+    output_op = clone.layers[out_label].ops[0]
     output_op.out = output_op.out + 1.0
     dirty = bundle.why("clone")
     assert dirty.value_residual == "unexplained"

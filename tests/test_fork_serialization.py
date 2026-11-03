@@ -80,8 +80,8 @@ def _assert_fork_equivalent(restored: tl.Trace, fork: tl.Trace) -> None:
         assert restored_op.layer_label == source_op.layer_label
         assert restored_op.parents == source_op.parents
         assert restored_op.children == source_op.children
-    saved = fork["relu_1_4"].ops[0].out
-    restored_saved = restored["relu_1_4"].ops[0].out
+    saved = fork.layers["relu_1_4"].ops[0].out
+    restored_saved = restored.layers["relu_1_4"].ops[0].out
     assert torch.equal(restored_saved, saved)
 
 

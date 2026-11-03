@@ -85,7 +85,7 @@ def _recurrent_trace():
 
 def test_is_multipass_layer_only_true_for_aggregate_recurrent_layer():
     log = _recurrent_trace()
-    layer = log["linear_1_1"]
+    layer = log.layers["linear_1_1"]
     op = layer.ops[2]
     assert is_multipass_layer(layer) is True
     # An Op proxies num_passes from its parent but is NOT itself multi-pass.
@@ -97,7 +97,7 @@ def test_is_multipass_layer_only_true_for_aggregate_recurrent_layer():
 
 def test_get_multipass_attr_semantics():
     log = _recurrent_trace()
-    layer = log["linear_1_1"]
+    layer = log.layers["linear_1_1"]
     op = layer.ops[2]
 
     # Op resolves its own per-pass value.
@@ -122,7 +122,7 @@ def test_get_multipass_attr_honesty_guard():
     """
 
     log = _recurrent_trace()
-    layer = log["linear_1_1"]
+    layer = log.layers["linear_1_1"]
     # Default multipass=RAISE: per-pass read on a recurrent aggregate MUST raise a
     # typed error, never fabricate the 0.0 default.
     with pytest.raises(MultiPassAmbiguityError):
@@ -155,7 +155,7 @@ def test_h1_module_key_for_forward_op_no_multipass_leak():
     )
 
     log = _recurrent_trace()
-    layer = log["tanh_1_2"]  # aggregate recurrent Layer (grad_fn.op is this type)
+    layer = log.layers["tanh_1_2"]  # aggregate recurrent Layer (grad_fn.op is this type)
     # Must not raise the multi-pass ValueError tripwire any more.
     assert isinstance(_forward_op_is_module_output(layer), bool)
     key = _module_key_for_forward_op(layer)
@@ -170,7 +170,7 @@ def test_h7_forward_correspondence_node_name_scoped_to_multipass():
     # Scoped to the multi-pass case ONLY (gate rework): a recurrent aggregate Layer
     # has an unrecoverable forward pass -> None so the caller SKIPS the edge rather
     # than emit an ambiguous aggregate endpoint.
-    assert _forward_correspondence_node_name(log["tanh_1_2"]) is None
+    assert _forward_correspondence_node_name(log.layers["tanh_1_2"]) is None
     assert _forward_correspondence_node_name(None) is None
     # A NON-recurrent op names the declared unrolled forward node, never the bare
     # layer_label (which Graphviz would draw as a stray oval beside the graph).
@@ -234,7 +234,7 @@ def test_f2_unrolled_titles_are_resolvable(tmp_path):
 def test_h4_layer_show_recurrent_raises_select_pass():
     log = tl.trace(RecurrentLinear(), torch.randn(2, 8), save=lambda op: True)
     with pytest.raises(ValueError) as excinfo:
-        log["linear_1_1"].show()
+        log.layers["linear_1_1"].show()
     message = str(excinfo.value)
     assert "recurrent" in message and "pass" in message
     # A specific pass does not raise the recurrence error (reaches the display gate).
@@ -264,7 +264,7 @@ def test_h6_rolled_per_pass_overlays_are_na():
     from torchlens._visualization.overlays import builtin_overlay_value, format_overlay_value
 
     log = _recurrent_trace()
-    layer = log["linear_1_1"]  # aggregate recurrent Layer
+    layer = log.layers["linear_1_1"]  # aggregate recurrent Layer
     for overlay in ("time", "magnitude", "grad_norm"):
         value = builtin_overlay_value(layer, overlay)
         assert value is None
