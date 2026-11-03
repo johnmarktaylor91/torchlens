@@ -560,6 +560,7 @@ def _shape_str(shape: tuple[int, ...]) -> str:
 def _legend_lines(rows: tuple[ViewRow, ...], columns: tuple[ColumnSpec, ...]) -> list[str]:
     """Explain every mark used by the table in one footer line."""
 
+    # One pass over the three independent marks keeps their shared footer ordering explicit.
     legend: list[str] = []
     if any(row.tied for row in rows):
         legend.append("* tied parameters (identity counted once; see Params)")

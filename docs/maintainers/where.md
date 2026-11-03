@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1449 modules, 648195 lines, 0 modules without a docstring.
+83 packages, 1449 modules, 648210 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32864 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32870 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1258 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25254 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4655 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38095 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38099 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10636 |
@@ -33,7 +33,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._quickstart` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 9 | 1989 |
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14908 |
-| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10463 |
+| `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 21 | 10461 |
 | `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7083 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
@@ -61,7 +61,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54222 |
 | `torchlens.bridge` | External-tool bridge namespace. | 26 | 8456 |
-| `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2738 |
+| `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2742 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9019 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
 | `torchlens.compat` | Compatibility adapters for TorchLens 2.x. | 5 | 2036 |
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5524 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36148 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36150 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1935 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
@@ -86,7 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 20 | 6142 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
-| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14144 |
+| `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14145 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7071 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32864 lines)
+TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32870 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -158,8 +158,8 @@ TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32864 li
 | `_surface` | SURFACE-table machinery: the root surface as machine-readable rows ( item 7). | 121 |
 | `_torchvision_ops` | Torchvision custom-op wrap targets, appended lazily once torchvision is imported. | 54 |
 | `_trace_selection_shape` | Shape queries over a public ''layers_to_save'' selection. | 216 |
-| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 640 |
-| `_trace_slice` | ''TraceSlice'': the sub-DAG view presenter (L6 graph slice, P2). | 408 |
+| `_trace_selector_helpers` | Internal predicate and selector helpers for public trace capture. | 642 |
+| `_trace_slice` | ''TraceSlice'': the sub-DAG view presenter (L6 graph slice, P2). | 412 |
 | `_trace_state` | Trace-state vocabulary and the capture-state predicates shared across layers. | 49 |
 | `_training_validation` | Shared validation helpers for training-compatible capture modes. | 212 |
 | `_transport` | Device/layout-aware host transport for tensor digest and codec paths. | 98 |
@@ -288,7 +288,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38095 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38099 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -302,7 +302,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38095 
 | `_fork_lineage` | Fork lineage: the ''fork'' verb's record-side helpers and the parent-chain test. | 91 |
 | `_grad_fn_naming` | Label naming for autograd grad_fn nodes: normalized type names and label parts. | 62 |
 | `_labels` | The one label vocabulary: raw, pass-qualified op and pass-free layer labels. | 179 |
-| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 370 |
+| `_layer_accessors` | OpAccessor and LayerAccessor: dict-like lookup over ops and layers. | 372 |
 | `_layer_mirror` | Layer mirror reads: the representative op behind a Layer and its mirrored values. | 42 |
 | `_layer_sites` | Layer-level site accessors: ''layer_site_key'', ''site_peers'', ''shape_summary''. | 174 |
 | `_layer_spec` | Layer mirror-field spec table and stored-state order (pure schema data). | 223 |
@@ -331,7 +331,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38095 
 | `_staged_spec` | Staged intervention spec reads shared by the ''Trace.run'' door. | 28 |
 | `_state_adapter` | Class-agnostic live-state enumeration and restoration helpers. | 122 |
 | `_summary` | Summary helpers for compact formatting of captured call arguments. | 72 |
-| `_trace_accessors` | Trace accessor helpers. | 703 |
+| `_trace_accessors` | Trace accessor helpers. | 705 |
 | `_trace_annotations` | Trace annotation family: user notes and tags on a finished trace. | 401 |
 | `_trace_aten` | Public ATen-operation accessors for ''Trace'' (''CaptureOptions(aten_ops=True)''). | 66 |
 | `_trace_components` | Declared Trace field-to-component ownership map ( decomposition). | 619 |
@@ -692,7 +692,7 @@ Frozen type contracts for sparse runnable ''.tlspec'' artifacts. (19 modules, 14
 
 ### `torchlens._selection`
 
-Selection: naming sites and resolving them on a trace. (21 modules, 10463 lines)
+Selection: naming sites and resolving them on a trace. (21 modules, 10461 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -700,7 +700,7 @@ Selection: naming sites and resolving them on a trace. (21 modules, 10463 lines)
 | `_display` | Metadata-only cards for selections and their resolved sites. | 144 |
 | `_module_facet_fold` | ''module(address) & facet'': folding a module scope into a facet selector. | 50 |
 | `_site_record` | ''Site.record'': the record a selection row names, through a weak trace link. | 105 |
-| `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 162 |
+| `_site_refusals` | Site-query refusals: the argument checks, the fan-out bound, and the no-match and multi-pass refusals. | 160 |
 | `align` | Cross-run selection alignment (L6 stage 4a). | 269 |
 | `compare` | Comparative selection producers: differential and cross-pass (L6 producer wave). | 995 |
 | `do_plan` | The ''do(selection, edit)'' plan builder for :mod:'torchlens._selection.selection'. | 170 |
@@ -1406,14 +1406,14 @@ External-tool bridge namespace. (26 modules, 8456 lines)
 
 ### `torchlens.bridge.lit`
 
-LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2738 lines)
+LIT (Google PAIR Language Interpretability Tool) bridge. (6 modules, 2742 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | LIT (Google PAIR Language Interpretability Tool) bridge. | 421 |
 | `_adapters` | Real ''lit_nlp.api.model.Model'' adapters over a live torch model. | 1045 |
 | `_pooling` | Explicit, mask-aware pooling for LIT ''Embeddings'' fields. | 182 |
-| `_refusals` | Typed teaching refusals for the LIT bridge. | 444 |
+| `_refusals` | Typed teaching refusals for the LIT bridge. | 448 |
 | `_runtime` | Tokenization, padding conventions, state guard, and the traced forward. | 275 |
 | `_sites` | Site pinning, the ''blocks'' preset, and the structural site resolver. | 371 |
 
@@ -1631,7 +1631,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36148 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (75 modules, 36150 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1644,13 +1644,13 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_display` | Bounded intervention displays, separate from content identity and execution. | 198 |
 | `_do_target_doors` | Region and slice target doors of ''do'', reached from ''_trace_edits.apply_do_mutation''. | 55 |
 | `_edit_guards` | Call guards shared by the trace edit verbs (''do'', ''set'', hook attachment). | 123 |
-| `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 154 |
+| `_edit_repr` | Public-spelling ''repr'' for ''tl.Edit'' (the ''Edit'' dataclass). | 155 |
 | `_facet_save` | The capture-time save selector for ''trace(save=<facet selector>)''. | 102 |
 | `_facet_writes` | Facet writes: which records serve facet views, and the facet slice an edit is writing. | 191 |
 | `_grad_site_plan` | Gradient-site plans for ''Trace.do'': split, preflight, arm and settle. | 702 |
 | `_gradient_contract` | The gradient contract for edits: ''keep_grad(edit)'' and its connectivity check. | 243 |
 | `_helper_fingerprint` | Content fingerprints of the tensors a staged helper closes over. | 231 |
-| `_helper_internals` | Private internals shared by the builtin intervention helpers. | 560 |
+| `_helper_internals` | Private internals shared by the builtin intervention helpers. | 561 |
 | `_hook_spec_match` | Removal matching for sticky hook specs, used by ''InterventionSpec.remove_hook''. | 42 |
 | `_hooks_support` | Leaf helpers for hook normalization (including the hook signature check), live site proxies and facet bookkeeping. | 366 |
 | `_intervened_rerun_guard` | Refuse the legacy rerun of a loaded trace whose recorded values were intervened. | 108 |
@@ -1892,7 +1892,7 @@ Import-clean representation geometry helpers (real subpackage; item 18). (8 modu
 
 ### `torchlens.report`
 
-Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 14144 lines)
+Reports that describe a completed trace: summary, cost, profile, FLOPs and health. (34 modules, 14145 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1925,7 +1925,7 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_html` | Dependency-free summary HTML renderer (summary memo item 15). | 93 |
 | `_summary_hub` | Hub-name input form for ''tl.summary'' (spelling DOCUMENTED-UNSTABLE). | 78 |
 | `_summary_ladder` | The summary auto ladder (summary memo item 11, decisions 3.1/3.4). | 1293 |
-| `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 576 |
+| `_summary_render` | The rebuilt summary renderer (summary /3.6/3.13). | 577 |
 | `_summary_report` | The detached immutable summary report layer (summary memo item 10). | 596 |
 | `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 405 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 206 |

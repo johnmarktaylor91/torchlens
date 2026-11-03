@@ -49,6 +49,7 @@ def render_edit_repr(spec: Edit) -> str:
 def _edit_repr(spec: Edit) -> str:
     """Render known public constructors or the bounded identity fallback."""
 
+    # Keep constructor/default ordering together; the inherited formatting branch set is cohesive.
     public = _public_constructor(spec)
     if public is not None:
         path, target = public
