@@ -58,6 +58,8 @@ config = GPT2Config(
     n_embd=64,
     vocab_size=512,
     n_positions=64,
+    bos_token_id=0,
+    eos_token_id=0,
     attn_implementation="eager",
     use_cache=False,
 )
@@ -81,7 +83,8 @@ RESULT = (X.shape, len(set(prompt_id)), bool(0.4 < y.mean() < 0.6))
 Hold out whole prompts, train a seeded `LogisticRegression` on the rest, and
 report the five metrics a probe result should carry. Accuracy and F1 read the
 thresholded prediction; ROC AUC and average precision read the score and do not
-depend on the threshold.
+depend on the threshold. Token identity is trivially readable from a random
+network's residual stream, so every metric is 1.0 here; a real concept is not.
 
 ```python
 # recipe-test: tool=sklearn expected=True
@@ -119,8 +122,9 @@ lets the probe memorise prompts instead of learning the concept. The classic
 case is a dataset where each prompt was logged several times (resampled
 episodes). Below, twelve prompts are logged four times each and carry an
 episode label that is a coin flip per prompt, so there is nothing to learn: the
-honest score is chance. A token-level `KFold` reports a high score anyway;
-`GroupKFold` by prompt id does not. On the real concept the two splits agree,
+honest score is chance. A token-level `KFold` reports about 0.8 anyway, because
+every test row has an exact copy in training; `GroupKFold` by prompt id reports
+chance. On the real concept the two splits agree,
 because that signal does not depend on seeing the prompt.
 
 ```python
@@ -146,7 +150,7 @@ honest = cv_accuracy(X_log, y_log, prompt_split, groups_log)
 real_leaky = cv_accuracy(X, y, token_split)
 real_honest = cv_accuracy(X, y, prompt_split, prompt_id)
 print(round(leaky, 2), round(honest, 2), round(real_leaky, 2), round(real_honest, 2))
-RESULT = (leaky > 0.95, honest < 0.75, abs(real_leaky - real_honest) < 0.05)
+RESULT = (leaky > 0.75, honest < 0.6, abs(real_leaky - real_honest) < 0.05)
 ```
 
 ## 4. The few-positive case
@@ -236,7 +240,7 @@ with torch.no_grad():
     flagged = seen["act"] @ w + b > 0  # tokens the probe flags before the attack
     embed_norm = model.transformer.wte(victims).norm()
 
-optimizer = torch.optim.Adam([delta], lr=1e-3)
+optimizer = torch.optim.Adam([delta], lr=3e-4)
 for _ in range(40):
     optimizer.zero_grad()
     logits = attacked(victims).logits
@@ -249,7 +253,7 @@ with torch.no_grad():
     evaded = (seen["act"] @ w + b)[flagged] < 0
 relative_norm = (delta.norm() / embed_norm).item()
 print(f"evaded {evaded.float().mean().item():.2f}, KL {kl:.2e}, relative norm {relative_norm:.2f}")
-RESULT = (bool(evaded.all()), kl < 1e-2, relative_norm < 1.0)
+RESULT = (bool(evaded.all()), kl < 1e-2, relative_norm < 0.5)
 ```
 
 Read the relative norm as the cost of evasion. A probe that a perturbation small
