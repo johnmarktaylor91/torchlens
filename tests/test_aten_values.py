@@ -231,8 +231,9 @@ def test_save_selection_frees_dropped_values_during_the_forward(
 def test_detach_policy_and_graph_connection() -> None:
     """Values are detached snapshots: no grad_fn, no requires_grad, either way."""
 
-    for detach in (True, False):
-        _, _, trace = _block_trace(detach_saved_activations=detach, backward_ready=True)
+    # backward_ready requires attached activations, so only the attach case asks for it.
+    for detach, extra in ((True, {}), (False, {"backward_ready": True})):
+        _, _, trace = _block_trace(detach_saved_activations=detach, **extra)
         for row in trace.aten_ops:
             for leaf in _leaves(row.out):
                 assert leaf.grad_fn is None
@@ -256,21 +257,44 @@ def test_output_device_and_save_mode_are_honored() -> None:
     # In-place calls fall back to a copy under reference mode, as Op.out does.
     inplace = _rows(referenced, "add_")[0]
     assert torch.equal(inplace.out, referenced.output_ops[0].out)
-    assert check_metadata_invariants(referenced)
+    # Reading a reference out that a later in-place call mutated raises by design
+    # (MutatedReferenceError), so the invariant sweep runs on a mutation-free model.
+    torch.manual_seed(0)
+    plain_ref = tl.trace(_MaxModel(), torch.randn(3, 5), capture=_VALUES, save_mode="reference")
+    assert all(row.out is not None for row in plain_ref.aten_ops)
+    assert check_metadata_invariants(plain_ref)
 
 
 def test_values_count_against_the_save_budget() -> None:
     """ATen values are admitted through the same accountant as Op.out."""
 
-    torch.manual_seed(0)
-    model = _BlockModel().eval()
-    x = torch.randn(2, 16)
-    rows_only = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(aten_ops=True, save_budget=4096)
+    def committed(trace: tl.Trace) -> int:
+        """Bytes the capture's accountant holds for CPU payloads."""
+
+        ledger = trace._save_budget_accountant._ledger_for(torch.device("cpu"))
+        return int(ledger.committed_bytes)
+
+    def capture(aten_ops: Any, budget: int) -> tl.Trace:
+        """Capture the block model under one switch spelling and budget."""
+
+        torch.manual_seed(0)
+        return tl.trace(
+            _BlockModel().eval(),
+            torch.randn(2, 16),
+            capture=tl.options.CaptureOptions(aten_ops=aten_ops, save_budget=budget),
+        )
+
+    unlimited = 1 << 30
+    rows_only, valued = capture(True, unlimited), capture("values", unlimited)
+    rows_bytes, valued_bytes = committed(rows_only), committed(valued)
+    value_bytes = sum(
+        leaf.numel() * leaf.element_size() for row in valued.aten_ops for leaf in _leaves(row.out)
     )
-    assert rows_only.has_aten_ops
-    with pytest.raises(SaveBudgetExceededError):
-        tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops="values", save_budget=4096))
+    assert valued_bytes == rows_bytes + value_bytes
+    budget = (rows_bytes + valued_bytes) // 2
+    assert capture(True, budget).has_aten_ops
+    with pytest.raises(SaveBudgetExceededError, match="aten:"):
+        capture("values", budget)
 
 
 @pytest.mark.smoke

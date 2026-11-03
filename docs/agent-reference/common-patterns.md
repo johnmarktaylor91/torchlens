@@ -295,6 +295,12 @@ for row in trace["relu_1_2"].aten_ops:  # the ATen calls this op's torch call di
 len(trace.aten_ops)  # every recorded row, forward then backward, in dispatch order
 trace.aten_gaps  # disclosed interiors the recorder could not observe; () when complete
 
+valued = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops="values"))
+for row in valued["linear_1_1"].aten_ops:  # same rows, plus what each call returned
+    print(row.operator, row.out.shape)  # row.out mirrors op.out: tensor, tuple, or None
+# values are detached snapshots kept only beneath ops whose output was saved (save=);
+# aten_ops=True keeps every row.out None and copies nothing
+
 plain = tl.trace(model, x)
 try:
     plain.aten_ops

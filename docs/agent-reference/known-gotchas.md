@@ -30,6 +30,12 @@
   `AtenOpsUnavailableError` (`aten_ops_unavailable`) rather than returning an empty tuple. Pass
   `capture=tl.options.CaptureOptions(aten_ops=True)`; the switch is a session knob (not persisted,
   inherited by `run()` refreshes, fast or not) while the recorded rows persist.
+- ATen values need `aten_ops="values"`, not `True`: with `True` every `row.out` is `None`. Values are
+  snapshots copied below autograd, so they never carry `grad_fn` even with
+  `detach_saved_activations=False`; they follow the owning call's `save=` decision (a dropped op's
+  rows read `None`), count against `save_budget`, and are not retained when activations stream to
+  disk or an out sink is active. Values are compared only through `aten_values_consistent` under
+  `save_mode="copy"`; a `"reference"` capture still keeps them but skips the owner comparison.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.

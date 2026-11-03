@@ -438,20 +438,28 @@ def _retain_lookback_candidate(
     ctx: RecordContext,
     fields_dict: dict[str, Any],
     tensor: torch.Tensor,
-) -> None:
-    """Retain one candidate payload in the bounded retroactive-save window."""
+) -> bool:
+    """Retain one candidate payload in the bounded retroactive-save window.
+
+    Returns
+    -------
+    bool
+        ``True`` when a candidate was appended (its save verdict is deferred to
+        a later retroactive decision or window eviction), ``False`` when the
+        predicate keeps no lookback payload for this op.
+    """
 
     if ctx.raw_label is None:
-        return
+        return False
     lookback = int(getattr(trace, "_predicate_lookback", 0))
     if lookback <= 0:
-        return
+        return False
     policy = str(getattr(trace, "_predicate_lookback_payload_policy", "metadata_only"))
     if policy == "metadata_only":
-        return
+        return False
     candidate_selector = _trace_followed_by_candidate_selector(trace)
     if candidate_selector is None or not candidate_selector(ctx):
-        return
+        return False
     payload = _copy_lookback_payload(trace, fields_dict, tensor, policy)
     candidates = getattr(trace, "_predicate_lookback_candidates", None)
     if candidates is None:
@@ -468,6 +476,7 @@ def _retain_lookback_candidate(
         evicted = candidates.popleft()
         if not evicted.marked:
             _settle_aten_values_for_candidate(trace, evicted, "drop")
+    return True
 
 
 def _copy_lookback_payload(

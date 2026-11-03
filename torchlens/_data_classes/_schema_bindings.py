@@ -1025,5 +1025,6 @@ STORAGE_BINDINGS: dict[str, dict[str, StorageBinding]] = {
         "outcome": StorageBinding(StorageKind.SCALAR, annotation='str'),
         "exception_type": StorageBinding(StorageKind.SCALAR, annotation='str | None'),
         "execution_context": StorageBinding(StorageKind.INTERNED, annotation='Any'),
+        "out": StorageBinding(StorageKind.PAYLOAD, annotation='Any'),
     },
 }

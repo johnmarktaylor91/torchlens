@@ -374,11 +374,30 @@ def _check_row_values(row: Any, ops: list[Any]) -> None:
         if tuple(leaf.shape) != tuple(fact.shape) or str(leaf.dtype) != str(fact.dtype):
             _value_failure(f"{row.label} value disagrees with its output fact {fact!r}")
     if row.owner_status == "forward_op" and not any(
-        bool(getattr(ops[ref.op_row_index], "has_saved_activation", False))
-        for ref in row.parent_op_refs
-        if 0 <= ref.op_row_index < len(ops)
+        bool(getattr(op, "has_saved_activation", False))
+        for op in _owning_compute_ops(row.parent_op_refs, ops)
     ):
         _value_failure(f"{row.label} kept a value although no owning Op saved its output")
+
+
+def _owning_compute_ops(refs: Any, ops: list[Any]) -> list[Any]:
+    """Return the Ops a partition's references name, minus synthetic boundary rows.
+
+    A synthetic ``output`` (or ``input``) node copies its producer's
+    ``func_call_id`` but dispatched nothing itself, and its ``out`` is the tensor
+    the model returned, which a later in-place call may have mutated; it is not
+    a party to the value contract.
+    """
+
+    owners = []
+    for ref in refs:
+        if not 0 <= ref.op_row_index < len(ops):
+            continue
+        op = ops[ref.op_row_index]
+        if getattr(op, "type", None) in ("input", "output"):
+            continue
+        owners.append(op)
+    return owners
 
 
 def _check_partition_values(owner_rows: list[Any], ops: list[Any]) -> None:
@@ -391,10 +410,7 @@ def _check_partition_values(owner_rows: list[Any], ops: list[Any]) -> None:
     ]
     if not leaves:
         return
-    for ref in owner_rows[0].parent_op_refs:
-        if not 0 <= ref.op_row_index < len(ops):
-            continue
-        op = ops[ref.op_row_index]
+    for op in _owning_compute_ops(owner_rows[0].parent_op_refs, ops):
         target = getattr(op, "out", None)
         if getattr(op, "is_buffer", False) or not getattr(op, "has_saved_activation", False):
             continue

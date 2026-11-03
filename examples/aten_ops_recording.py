@@ -1,7 +1,8 @@
 """Record the ATen operations behind each captured op with ``CaptureOptions(aten_ops=True)``.
 
 The recorder is opt-in: a default capture installs no dispatch mode and its
-accessors refuse typed, so the script shows both sides.
+accessors refuse typed, so the script shows both sides. ``aten_ops="values"``
+additionally keeps what each ATen call returned in ``AtenOp.out``.
 """
 
 from __future__ import annotations
@@ -44,6 +45,14 @@ def main() -> None:
         operators = [f"{row.operator}.{row.overload}" for row in op.aten_ops]
         print(f"  {op.layer_label:<28} -> {operators}")
     print("gaps:", trace.aten_gaps)
+
+    valued = tl.trace(model, x, capture=CaptureOptions(aten_ops="values"))
+    for op in valued.ops:
+        for row in op.aten_ops:
+            shape = tuple(row.out.shape) if isinstance(row.out, torch.Tensor) else row.out
+            print(f"  {op.layer_label:<28} {row.operator}.{row.overload} -> out {shape}")
+    gelu_rows = [row for row in valued.aten_ops if row.operator == "gelu"]
+    print("gelu value equals op output:", torch.equal(gelu_rows[-1].out, valued.ops[-1].out))
 
     plain = tl.trace(model, x)
     print("default capture has_aten_ops:", plain.has_aten_ops)
