@@ -19,7 +19,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.intervention.errors import EngineDispatchError
 from torchlens.options import CaptureOptions
 
 
@@ -109,9 +108,11 @@ def test_fast_door_applies_a_module_target_exactly() -> None:
         result = trace.run(inputs=x, fast=True)
         assert torch.equal(result.output.detach(), _eager_zeroed_fc1(model, x))
 
-    with pytest.raises(EngineDispatchError) as refused:
-        trace.run(inputs=_inputs(1))
-    assert refused.value.fields["code"] == "run_staged_spec_unapplied"
+    # The ordinary live door applies the same module target on its fork.
+    live = trace.run(inputs=_inputs(1))
+    assert torch.equal(live.output.detach(), _eager_zeroed_fc1(model, _inputs(1)))
+    assert live.trace.last_run["engine"] == "live"
+    assert live.trace.last_run["hooks_fired"] >= 1
 
 
 def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> None:

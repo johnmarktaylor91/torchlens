@@ -5,8 +5,8 @@ boundaries, so its output is an edited forward, not the model's own. No hook-awa
 check exists yet, so the run settles ``unverifiable`` with a typed
 ``user_intervention_unsupported`` diagnostic (detection stage
 ``hooked_run_unverified``) and the trace is no longer pristine. The plain run keeps
-its verdict, and the plain ``run(inputs=)`` keeps refusing staged edits it would not
-apply.
+its verdict, and the ordinary ``run(inputs=)`` applies the staged edits the same way,
+with the fire receipts on the result trace.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._trace_state import TraceState
-from torchlens.intervention.errors import EngineDispatchError
 
 _DIM = 8
 
@@ -88,14 +87,28 @@ def test_hooked_fast_run_reports_unverifiable_not_pristine() -> None:
     assert again.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
-def test_hooked_plain_run_inputs_still_refuses() -> None:
-    """The ordinary live run(inputs=) still refuses staged edits it would not apply."""
+def test_hooked_plain_run_inputs_applies_the_staged_spec_unverifiable() -> None:
+    """The ordinary live run(inputs=) applies the staged edits and settles unverifiable."""
 
     model, direction = _setup()
     trace = _steered(model, direction)
-    with pytest.raises(EngineDispatchError) as refused:
-        trace.run(inputs=_x(1))
-    assert refused.value.fields["code"] == "run_staged_spec_unapplied"
+    result = trace.run(inputs=_x(1))
+    report = result.report
+    assert report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
+    mismatch = report.first_mismatch
+    assert mismatch is not None
+    assert mismatch.code is RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE
+    assert mismatch.detection_stage == "hooked_run_unverified"
+    assert dict(mismatch.details)["pristine"] == "false"
+    # The fire receipts ride the result trace, which is no longer pristine.
+    assert result.trace.last_run["engine"] == "live"
+    assert result.trace.last_run["hooks"] == 1
+    assert result.trace.last_run["hooks_fired"] >= 1
+    assert result.trace.last_run["hooks_unfired"] == 0
+    assert result.trace.state is not TraceState.PRISTINE
+    # The output is the steered forward, not the model's own.
+    plain = model(_x(1))
+    assert not torch.allclose(result.output, plain)
 
 
 @pytest.mark.parametrize("fast", [False, True], ids=["live", "fast"])
