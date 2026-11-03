@@ -14,12 +14,10 @@ from typing import Any, NoReturn
 from .._errors import TorchLensWarning
 from .._ir.distribution_container import is_distribution
 from ._zero_fire import (
-    current_zero_fire_policy,
     external_stacklevel,
     live_distribution_leaf_paths,
     non_tensor_module_output_detail,
     non_tensor_reason_fields,
-    raise_rerun_zero_fire,
     recorded_non_tensor_details,
     settle_zero_fire,
 )
@@ -116,17 +114,14 @@ def _unfired_non_tensor_reason(
     return non_tensor_reason_fields(recorded_non_tensor_details(new_log, targets))
 
 
-def disclose_unfired_rerun_entries(
+def rerun_zero_fire_message(
     new_log: Any, hook_plan: Sequence[Any], unfired: list[str], identifier: Callable[[Any], str]
-) -> None:
-    """Settle the rerun door's zero-fire disclosure for ``unfired`` plan entries.
+) -> tuple[str, dict[str, Any]]:
+    """Return the rerun door's zero-fire message and its ``reason`` fields.
 
-    First CONTRACTED S-18 row (compo wave 0): the disclosure standing between a
-    user and a silently un-applied intervention carries a stable machine-readable
-    code and a structured remedy; consumers branch on ``fields["code"]``, never on
-    message text. The typed refusals fire first, whatever the on_zero_fire policy
-    says; the policy settles the rest (default: this coded warning). Under
-    "error" the refusal raises here, before the swap, so the trace is unchanged.
+    The coded ``rerun_zero_fire`` warning itself stays at its contracted site in
+    :mod:`.rerun`; this builds the text it carries, naming a module whose output
+    was not a tensor (capture door parity).
     """
 
     message = (
@@ -140,22 +135,4 @@ def disclose_unfired_rerun_entries(
     reason_fields = _unfired_non_tensor_reason(new_log, hook_plan, unfired, identifier)
     if reason_fields:
         message = f"{message}.{_reason_suffix(reason_fields)}".rstrip(".")
-
-    def _warn() -> None:
-        """Emit the coded ``rerun_zero_fire`` warning under ``on_zero_fire='warn'``."""
-
-        warnings.warn(
-            TorchLensWarning(
-                message,
-                code="rerun_zero_fire",
-                unfired_plan_ids=list(unfired),
-                **reason_fields,
-            ),
-            stacklevel=external_stacklevel(),
-        )
-
-    settle_zero_fire(
-        current_zero_fire_policy(),
-        warn=_warn,
-        raise_error=lambda: raise_rerun_zero_fire(message, list(unfired)),
-    )
+    return message, reason_fields
