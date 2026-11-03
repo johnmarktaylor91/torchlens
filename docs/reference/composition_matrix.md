@@ -27,7 +27,7 @@ proves a verified row.
 | Agent verbs on a partial trace | product-surface | Trace.to_agent_json, trace.explain | product=PartialTrace; verb=agent-doors | not yet verified | - |
 | A bare label on a multi-pass layer | intervention | fork.do | label=bare; layer=multi-pass | refuses with a typed error and a remedy | tests/test_replay_pass_qualified.py |
 | Raw in-place writes on a fork reach shared storage | product-surface | Trace.fork | write=raw-inplace; payload=shared-storage | supported, with a disclosure | tests/composition_expectations/test_galleries.py::test_raw_fork_writes_reach_the_shared_storage |
-| Summary pass counts across ASCII and Unicode | report-surface | Trace.summary, tl.summary | charset=ascii-vs-unicode; layer=multi-pass; view=ladder | supported | F08: tests/test_summary_rebuild_charset.py::test_dual_charset_goldens + tests/test_summary_rebuild_ladder.py::test_multipass_one_row_at_module_grain (byte-exact dual-charset goldens; one row owns all pass events; ascii == degrade(unicode)) |
+| Summary pass counts across ASCII and Unicode | report-surface | Trace.summary, tl.summary | charset=ascii-vs-unicode; layer=multi-pass; view=ladder | supported | tests/test_summary_rebuild_charset.py::test_dual_charset_goldens + tests/test_summary_rebuild_ladder.py::test_multipass_one_row_at_module_grain (byte-exact dual-charset goldens; one row owns all pass events; ascii == degrade(unicode)) |
 
 Rows: 14; not yet verified: 10.
 

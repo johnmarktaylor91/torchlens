@@ -10,6 +10,7 @@ an oracle. The generated projection renders state, cost, and gaps TOGETHER.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -507,6 +508,19 @@ def public_title(row: CompositionRow) -> str:
     return PUBLIC_TITLES.get(row.row_id, fallback)
 
 
+_INTERNAL_TAG_PREFIX = re.compile(r"^[A-Z]{1,3}[0-9]{1,3}(?:\.[0-9]+)?:\s*")
+
+
+def public_evidence(row: CompositionRow) -> str:
+    """The evidence cell as the public page shows it.
+
+    The ledger's evidence node may open with an internal sprint tag
+    (``F08: tests/...``); the page keeps only the test path that follows it.
+    """
+
+    return _INTERNAL_TAG_PREFIX.sub("", row.evidence_node)
+
+
 def render_public_matrix() -> str:
     """Render the public composition matrix (docs/reference/composition_matrix.md).
 
@@ -537,7 +551,7 @@ def render_public_matrix() -> str:
     ]
     for row in LEDGER:
         status = PUBLIC_STATE_WORDING[row.expected_state]
-        evidence = "-" if row.expected_state == "KNOWN-GAP" else row.evidence_node
+        evidence = "-" if row.expected_state == "KNOWN-GAP" else public_evidence(row)
         lines.append(
             f"| {public_title(row)} | {row.family} | {', '.join(row.operation_ids)} "
             f"| {'; '.join(row.axis_values)} | {status} | {evidence} |"
