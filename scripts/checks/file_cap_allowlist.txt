@@ -524,7 +524,7 @@ torchlens/_utils/arg_handling.py::rebuild_tuple_like	69
 torchlens/_utils/arg_handling.py::safe_copy_input_tree	98
 torchlens/_utils/display.py::tensor_stats_summary	72
 torchlens/_utils/display.py::warn_parallel	101
-torchlens/_utils/facade.py::resolve_facade_attr	120
+torchlens/_utils/facade.py::resolve_facade_attr	118
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
 torchlens/_utils/introspection.py	1104
@@ -1161,9 +1161,9 @@ torchlens/intervention/helpers.py::scramble_elements	103
 torchlens/intervention/helpers.py::splice_module	82
 torchlens/intervention/helpers.py::steer	61
 torchlens/intervention/helpers.py::swap_with	69
-torchlens/intervention/hooks.py	1784
+torchlens/intervention/hooks.py	1775
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
-torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	75
+torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	61
 torchlens/intervention/hooks.py::_normalize_value_specs	63
 torchlens/intervention/hooks.py::expand_facet_hook_entries	76
 torchlens/intervention/hooks.py::normalize_hook_plan	71
@@ -1186,13 +1186,13 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	153
-torchlens/intervention/rerun.py	1690
-torchlens/intervention/rerun.py::_append_rerun	104
+torchlens/intervention/rerun.py	1659
+torchlens/intervention/rerun.py::_append_rerun	103
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78
 torchlens/intervention/rerun.py::_reconcile_rerun_hook_fires	96
 torchlens/intervention/rerun.py::_refuse_source_matched_zero_fire	72
-torchlens/intervention/rerun.py::run	144
+torchlens/intervention/rerun.py::run	143
 torchlens/intervention/runtime.py	1668
 torchlens/intervention/runtime.py::_apply_live_backward_hooks	75
 torchlens/intervention/runtime.py::_apply_live_backward_prehooks	72
@@ -1252,7 +1252,7 @@ torchlens/neuro/_compare.py::compare	116
 torchlens/neuro/_datasets.py::_build_dataset	67
 torchlens/neuro/_datasets.py::datasets	86
 torchlens/neuro/_datasets.py::single_dataset	94
-torchlens/neuro/_handoff.py	888
+torchlens/neuro/_handoff.py	846
 torchlens/neuro/_handoff.py::enumerate_extraction_sites	97
 torchlens/neuro/_handoff.py::enumerate_trace_sites	86
 torchlens/neuro/_handoff.py::resolve_stimulus_ids	76
