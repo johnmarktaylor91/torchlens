@@ -1223,13 +1223,11 @@ def torch_func_decorator(
         # Cross-thread tensor->host escapes are still observed by the mode-independent belt
         # (tensor-method patches), which is independent of this wrapper.
         if not _state._logging_enabled:
-            # Deferred payload clones: pending aliases stay zero-copy for the
-            # process lifetime, so the fast path carries the SAME pre-execution
-            # interception as the logging path — any wrapped call that can
-            # write through a tensor argument first copies out pending aliases
-            # sharing those storages. Disarmed cost is one dict-truthiness
-            # check; with pending aliases, only mutation-signature calls pay
-            # the storage lookups.
+            # Deferred payload clones: pending aliases stay zero-copy for the process lifetime,
+            # so the fast path carries the SAME pre-execution interception as the logging path:
+            # any wrapped call that can write through a tensor argument first copies out pending
+            # aliases sharing those storages. Disarmed cost is one dict-truthiness check; with
+            # pending aliases, only mutation-signature calls pay the storage lookups.
             if _COW_PENDING and (
                 mutates_receiver
                 or is_mutating_property_setter
@@ -1240,6 +1238,9 @@ def torch_func_decorator(
                 materialize_deferred_for_call(_collect_tensor_args(args, kwargs))
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
+            # Opened before the call: the fast collector mirrors capture's nesting barcode.
+            fast_collector = _state._active_fast_run_collector
+            fast_event = fast_collector and fast_collector.enter_event(is_barcode_transparent)
             if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
                 args, _fast_path_subclass_cls_index
             ):
@@ -1253,9 +1254,8 @@ def torch_func_decorator(
                     out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
                     if out is STILL_DECLINED:
                         raise
-            fast_collector = _state._active_fast_run_collector
-            if fast_collector is not None and fast_collector.wants_function(func_name):
-                fast_collector.capture_function(func_name, out, args, property_accessor)
+            if fast_event is not None:
+                fast_collector.exit_event(fast_event, func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
