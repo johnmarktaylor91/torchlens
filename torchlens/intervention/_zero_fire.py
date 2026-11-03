@@ -422,40 +422,26 @@ def raise_rerun_zero_fire(message: str, unfired_plan_ids: list[str]) -> NoReturn
     )
 
 
-def warn_recording_intervene_fired_nowhere(intervene: object, fire_count: int) -> None:
-    """Warn when a recording's ``intervene=`` fired at no site at all.
+def warn_multiclause_unfired(intervene: object, fire_count: int) -> None:
+    """Warn (code ``trace_zero_fire``) when a multi-clause ``intervene=`` fired nowhere.
 
-    A single activation selector keeps its plain zero-match warning. A
-    multi-clause spec has no single ``.selector``, so it is checked per forward
-    rule and warns with the coded ``trace_zero_fire`` disclosure; without this,
-    a spec whose every forward rule missed recorded silently.
+    A multi-clause ``Recipe`` has no single ``.selector``, so the recorder's
+    selector check never sees it; without this, a spec whose every forward rule
+    missed recorded silently. The spec is read by its ``rules`` tuple so this
+    module imports nothing from ``spec``.
 
     Parameters
     ----------
     intervene:
-        The recording's ``intervene=`` option (a selector-bearing callable, a
-        ``Recipe`` or ``None``).
+        The recording's ``intervene=`` option.
     fire_count:
         How many times the recording's intervene predicate fired.
     """
 
-    from .._selection.selectors import BaseSelector
-    from .hooks import site_universe
-    from .spec import Recipe
-
-    if fire_count != 0:
+    rules = getattr(intervene, "rules", None)
+    if fire_count != 0 or not isinstance(rules, tuple) or len(rules) < 2:
         return
-    selector = getattr(intervene, "selector", None)
-    if isinstance(selector, BaseSelector) and site_universe(selector) == "activation":
-        warnings.warn(
-            f"Capture-time intervention selector {selector!r} matched zero sites; "
-            "no intervention fired.",
-            UserWarning,
-            stacklevel=4,
-        )
-    if not isinstance(intervene, Recipe) or len(intervene.rules) < 2:
-        return
-    forward_rules = [rule for rule in intervene.rules if rule.signal != "backward"]
+    forward_rules = [rule for rule in rules if rule.signal != "backward"]
     if not forward_rules:
         return
     names = ", ".join(rule.rule_id for rule in forward_rules)
