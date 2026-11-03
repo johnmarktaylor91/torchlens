@@ -77,7 +77,7 @@
   DTensor topologies (C2) refuse typed; merged replay does not exist.
 - `CaptureOptions(save_budget=...)` is a per-device ceiling on retained activation bytes, default
   `"auto"` = half of measurable available memory. Exhaustive, predicate, and deferred
-  `Op.save_activation()` paths pre-admit the primary source-sized RAM copy before allocation, then
+  `Op._save_activation()` paths pre-admit the primary source-sized RAM copy before allocation, then
   reconcile alias-aware physical storage. Transform
   deltas and cross-device temporaries cannot always be known pre-allocation, so this is not a general
   OOM guarantee. Predicate disk-only saves are exempt; exhaustive
@@ -212,7 +212,7 @@
 - "Pristine" has three senses; never read one as another. `Trace.is_pristine` (documented-unstable)
   is the derived reading "nothing ever intervened on this trace", computed from the evidence the
   trace carries (`torchlens/_data_classes/_trace_pristine.py`, one function), so it survives save
-  and load and stays `False` after `clear_hooks()`, a `Trace.state` reassignment or a fork; `None`
+  and load and stays `False` after `clear_edits(...)`, a `Trace.state` reassignment or a fork; `None`
   means no evidence (an artifact older than tlspec 9, or a non-torch backend) and must never be
   treated as `True`. `TraceState.PRISTINE` is only the operational state machine's start value: an
   assignment sets it and a func-targeted `intervene=` capture keeps it. Validation's

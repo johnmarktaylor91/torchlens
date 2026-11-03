@@ -1,13 +1,14 @@
-"""Choose between ``set`` and ``attach_hooks``.
+"""Choose between ``set`` and a sticky hook staged by ``do``.
 
 What this demonstrates
 ----------------------
-``set`` records a concrete one-shot replacement. ``attach_hooks`` records a
-sticky callable/helper recipe that can be replayed or rerun repeatedly.
+``set`` records a concrete one-shot replacement. ``do(site, hook)`` records a
+sticky callable/helper recipe that can be replayed or rerun repeatedly, and
+propagates it in the same call.
 
 How to run
 ----------
-``python examples/intervention/05_set_vs_attach_hooks.py``
+``python examples/intervention/05_set_vs_sticky_hooks.py``
 
 Runnable by default.
 """
@@ -49,12 +50,11 @@ def main() -> None:
     set_log.set(tl.func("relu"), torch.zeros(relu_shape), confirm_mutation=True).push()
 
     hook_log = log.fork("hook")
-    hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    hook_log.push()
+    hook_log.do(tl.func("relu"), tl.zero_ablate())
 
     assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
     assert set_log.state_history[-2]["op"] == "set"
-    assert hook_log.state_history[-2]["op"] == "attach_hooks"
+    assert "do" in [row["op"] for row in hook_log.state_history]
 
 
 if __name__ == "__main__":

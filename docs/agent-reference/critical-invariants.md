@@ -144,8 +144,9 @@
     (the TF static FuncGraph path stays ungrouped at `False`), validation sidecars stay keyed
     to raw capture identities, and tamper tests prove stale-label oracles fail closed.
 16. Smart-collapse metadata is computed, not serialized: `Module.collapse_score`,
-    `Trace.module_collapse_order`, and `Trace.collapse_order(mode=...)` (documented-inert
-    `weights=` removed, collapse memo D9) must stay
+    `Trace.module_collapse_order`, and the per-mode ranking `Drawing.collapse_plan` carries
+    (the public per-mode order accessor and its documented-inert `weights=` are gone, collapse
+    memo D9) must stay
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
    it never executes the DAG or writes values into the sparse core. User staging overrides the

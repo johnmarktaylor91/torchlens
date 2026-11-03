@@ -541,7 +541,7 @@ class TestBufferDuplicate:
         x2 = torch.randn(2, 10)
         with torch.no_grad():
             expected_out = model(x2)
-        log.save_new_outs(model, x2)
+        log._save_new_outs(model, x2)
 
         refreshed_out = log["output_1"].out
         assert refreshed_out is not None

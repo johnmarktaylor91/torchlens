@@ -45,11 +45,8 @@ from ._render_regions import (
     _setup_subgraphs,
     _setup_subgraphs_recurse,
 )
-from ._render_utils import (
-    DEFAULT_DRAW_STEM,
-    announce_written_graph,
-    collision_safe_outpath,
-)
+from ._render_utils import announce_written_graph, resolve_draw_outpath
+from ._stacking import resolve_stack_by
 from ._svg_compose import (
     _inline_svg_file_local_images,
     _inline_svg_local_images,
@@ -1317,6 +1314,7 @@ def draw(
     show_redundant_args: bool = False,
     show_saved_for_backward: bool = False,
     announce_path: bool | None = None,
+    request_sink: dict[str, Any] | None = None,
 ) -> Any:
     """Render the computational graph through the resolved forward IR pipeline.
 
@@ -1348,8 +1346,6 @@ def draw(
     encoding_channel_spec = resolve_color_by(color_by)
     size_channel_spec = resolve_size_by(size_by)
     size_scale = resolve_size_scale(scale, size_by_active=size_channel_spec is not None)
-    from ._stacking import resolve_stack_by
-
     stack_channel_spec = resolve_stack_by(stack_by, vis_mode)
     request = ResolvedRenderRequest(
         vis_mode=vis_mode,
@@ -1407,6 +1403,10 @@ def draw(
             size_scale=size_scale,
         )
     show_buffer_layers = request.show_buffer_layers
+    if request_sink is not None:
+        # The resolved request is the render context the collapse plan and
+        # schedule of the returned Drawing are computed against.
+        request_sink["request"] = request
 
     from .renderer_registry import renderer_info, renderer_names
 
@@ -1426,15 +1426,8 @@ def draw(
         from ._encoding import raise_encoding_dagua_refusal
 
         raise_encoding_dagua_refusal(request.encoding.active_channels())
-    # a bare draw (no vis_outpath) writes a collision-safe file and
-    # always prints where; an explicit path is written exactly, as before.
-    # ``Trace.draw`` resolves the collision-safe path itself and says so.
-    if announce_path is None:
-        announce_path = vis_outpath is None
-    resolved_outpath = (
-        collision_safe_outpath(DEFAULT_DRAW_STEM, vis_fileformat)
-        if vis_outpath is None
-        else _strip_render_extension(vis_outpath)
+    resolved_outpath, announce_path = resolve_draw_outpath(
+        vis_outpath, vis_fileformat, announce_path
     )
     if vis_renderer == "dagua":
         opted_in_module = sys.modules.get("torchlens.experimental.dagua")

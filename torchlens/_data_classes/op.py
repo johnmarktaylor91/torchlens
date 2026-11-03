@@ -2559,25 +2559,6 @@ class Op(OpAtenMixin, _SelectionOperand):
             self, value, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this op through the owning Trace."""
-
-        return _doors.intervention()._op_edits.attach_hooks(
-            self,
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
-        )
-
     def materialize_out(
         self,
         *,
@@ -2936,7 +2917,7 @@ class Op(OpAtenMixin, _SelectionOperand):
 
         return _op_save._copy_with_shallow_fields(self, extra_shallow_fields, _store=_store)
 
-    def save_activation(
+    def _save_activation(
         self,
         t: torch.Tensor,
         t_args: list[Any] | tuple[Any, ...],

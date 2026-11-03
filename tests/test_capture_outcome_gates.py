@@ -246,7 +246,7 @@ def test_complete_capture_surfaces_stay_open(tmp_path) -> None:
     # (a bool or a replay-status object depending on replay coverage).
     result = trace.validate_forward_pass([model(x)])
     assert result is not None
-    trace.save_new_outs(model, x)
+    trace._save_new_outs(model, x)
 
 
 # ---------------------------------------------------------------------------
@@ -500,7 +500,7 @@ def test_f2_refresh_rearms_raise_on_nan() -> None:
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
     with pytest.raises(CaptureError, match="non-finite"):
-        trace.save_new_outs(model, torch.zeros(1, 3))
+        trace._save_new_outs(model, torch.zeros(1, 3))
 
 
 def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:

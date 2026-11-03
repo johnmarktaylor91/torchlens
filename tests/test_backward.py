@@ -2338,7 +2338,7 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
         capture=CaptureOptions(save_grads="all", seed=0),
         save="all",
     )
-    trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
+    trace._save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 
     pass_index = len(trace.autograd.backward_passes)

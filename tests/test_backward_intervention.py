@@ -384,7 +384,7 @@ def test_composite_grad_output_selector_matches_real_live_backward_hook() -> Non
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.grad_output() & tl.grad_fn(name="relu"),
         _helper_spec(
             "count_grad_output",
@@ -430,7 +430,7 @@ def test_live_backward_pass_selector_targets_second_retain_graph_pass() -> None:
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.grad_fn(name="relu") & tl.in_backward_pass(2),
         _helper_spec(
             "count_second_pass",
@@ -567,7 +567,7 @@ def test_backward_in_place_none_return_helper_records_gradient_effect() -> None:
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(tl.grad_fn(name="relu"), zero_in_place, confirm_mutation=True)
+    trace._attach_hooks(tl.grad_fn(name="relu"), zero_in_place, confirm_mutation=True)
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
@@ -902,7 +902,7 @@ def test_backward_intervention_replacement_registers_higher_order_terminal() -> 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    trace.attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
+    trace._attach_hooks(tl.grad_fn(name="pow"), double_grad_input, confirm_mutation=True)
     trace.log_backward(trace[trace.output_layers[0]].out, retain_graph=True, create_graph=True)
     pow_sites = [site for site in trace._grad_fn_logs.values() if site.type == "pow"]
 

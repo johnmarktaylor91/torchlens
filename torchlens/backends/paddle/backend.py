@@ -1443,14 +1443,6 @@ class PaddleBackend:
         del session, policy
         return value
 
-    def copy_replacement_metadata(self, session: object, src: object, dst: object) -> None:
-        """Copy Paddle side-table labels between replacement tensors."""
-
-        del session
-        label = self.tensor_store.get_label(src)
-        if label is not None:
-            self.tensor_store.set_label(dst, label)
-
     def _normalize_input_args(self, input_args: object) -> list[Any]:
         """Normalize user Paddle input arguments to a positional list."""
 

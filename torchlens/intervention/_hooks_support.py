@@ -360,6 +360,6 @@ def _stored_facet_scatter_hook(hook_spec: HookSpec) -> Any:
             "facet scatter wrapper, so firing it would write the whole home "
             "tensor instead of the selected facet slice. Facet hooks cannot be "
             "rebuilt from a serialized helper; re-attach the facet intervention "
-            "on a live trace (e.g. trace.attach_hooks(tl.head(...), helper))."
+            "on a live trace (e.g. trace.do(tl.head(...), helper, model=model, inputs=x))."
         )
     return stored_hook

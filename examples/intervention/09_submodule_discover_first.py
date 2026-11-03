@@ -62,8 +62,7 @@ def main() -> None:
     block_sites = log.find_sites(tl.in_module("block"), max_fanout=4)
     target = tl.label(block_sites.where(lambda site: site.func_name == "relu").labels()[0])
     edited = log.fork("block_relu")
-    edited.attach_hooks(target, tl.zero_ablate())
-    edited.push()
+    edited.do(target, tl.zero_ablate())
 
     assert any(site.func_name == "relu" for site in block_sites)
     assert edited.last_run_records()[-1].edit_name == "zero_ablate"

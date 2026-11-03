@@ -162,14 +162,14 @@ class TestTraceGC:
         trace = tl.trace(model, x, save=None)
 
         # Warm up
-        trace.save_new_outs(model, torch.randn(1, 5), save="all")
+        trace._save_new_outs(model, torch.randn(1, 5), save="all")
         gc.collect()
 
         tracemalloc.start()
         baseline = tracemalloc.take_snapshot()
 
         for _ in range(5):
-            trace.save_new_outs(model, torch.randn(1, 5), save="all")
+            trace._save_new_outs(model, torch.randn(1, 5), save="all")
             gc.collect()
 
         after = tracemalloc.take_snapshot()

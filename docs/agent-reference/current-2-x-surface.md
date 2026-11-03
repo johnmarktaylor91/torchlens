@@ -544,15 +544,17 @@
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
   folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
   run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
-  `Trace.collapse_plan(mode=...)` returns the diagnostic
-  plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
+  stay honest about hidden calls or ranges. A forward drawing's `Drawing.collapse_plan` returns
+  the diagnostic plan it rendered from (mode = the draw's `collapse=`, context = the render
+  request the draw resolved), and `Drawing.collapse_schedule` returns the float schedule
+  metadata under that context. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
   `collapse_budget_fallback`, `planner="linear_fallback"`), never an uncollapsed wall;
   only pathological inputs (raw ops above 20x the constant) still decline outright
-  (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
+  (`collapse_pathological_skip`; `Drawing.collapse_plan` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
   `depth=`, rolled mode) genuinely re-admit the quality planner.
 - The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
@@ -561,8 +563,9 @@
   `docs/images/collapse` artifact check fail there on text-width coordinates only (same labels,
   same fonts). Check or re-record on a Pango 1.52+ host; never re-record from an older one.
 - Smart-collapse metadata is computed at access time: `Module.collapse_score`,
-  `Trace.module_collapse_order`, and `Trace.collapse_order(mode=...)` (the documented-inert
-  `weights=` parameter was removed -- collapse memo D9, clean-v2). These are
+  `Trace.module_collapse_order`, and the per-mode ranking a forward drawing's
+  `Drawing.collapse_plan` carries (the public per-mode order accessor is gone; its
+  documented-inert `weights=` parameter went earlier -- collapse memo D9, clean-v2). These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `Trace.cost.forward_peak_memory` is a real runtime measurement, never a portable fact. CUDA
   reports the device peak; MPS reports the allocator delta. CPU peaks are opt-in:
@@ -1103,7 +1106,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/attach_hooks/push_from/`trace[selector]`), `selection_unresolvable` /
+  (do/push_from/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1389,7 +1392,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
+  (`Trace.set`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
@@ -1556,7 +1559,7 @@
   16-slot float64 vector per op) and no payload is kept. `tl.stats.site_stats(trace)` returns
   `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
   `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
-  `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
+  `validate_forward_pass`, `push`, `push_from` on the trace),
   `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
 - Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,

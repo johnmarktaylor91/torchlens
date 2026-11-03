@@ -142,8 +142,8 @@ def test_attach_hooks_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
     fork = log.fork()
-    handle = fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
-    assert len(handle.handle_ids) == 1
+    handle = fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
+    assert len(handle) == 1
 
 
 def test_spec_door_refuses_extra_arguments() -> None:
@@ -154,7 +154,11 @@ def test_spec_door_refuses_extra_arguments() -> None:
         log.fork().do(spec, tl.scale(0.5))
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
     with pytest.raises(InvalidArgumentError) as excinfo:
-        log.fork().attach_hooks(spec, tl.scale(0.5), confirm_mutation=True)
+        log.fork().do(
+            spec,
+            tl.scale(0.5),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     assert excinfo.value.fields["code"] == "spec_door_extra_arguments"
 
 

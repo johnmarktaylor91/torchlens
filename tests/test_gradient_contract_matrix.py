@@ -271,7 +271,7 @@ def _door_rerun(model: nn.Module, edit: Any) -> torch.Tensor:
 
 def _door_attach_run(model: nn.Module, edit: Any) -> torch.Tensor:
     trace = tl.trace(model, _X)
-    trace.attach_hooks(tl.module("lin1"), edit, confirm_mutation=True)
+    trace._attach_hooks(tl.module("lin1"), edit, confirm_mutation=True)
     trace.run(model, _X)
     return _out(trace)
 
@@ -342,7 +342,7 @@ _DOORS: dict[str, tuple[Callable[[nn.Module, Any], torch.Tensor], Callable[..., 
     "capture InterventionDecision": (_door_decision, _plain),
     "fork.do (replay)": (_door_replay, _plain),
     "do(model=, inputs=) (rerun)": (_door_rerun, _plain),
-    "attach_hooks + run": (_door_attach_run, _plain),
+    "do(set_only) + run": (_door_attach_run, _plain),
     "spec.bind(model)": (_door_bind, _plain),
     "push(differentiable=True)": (_door_push_differentiable, _frontier_hand),
     "do(tl.units(...))": (_door_units, _units_hand),
@@ -493,7 +493,7 @@ _EVIDENCE_CELLS: tuple[tuple[str, str, bool], ...] = (
     ("do(model=, inputs=) (rerun)", "scramble_elements", False),
     # Sole reachers of a library branch the rest of the sample misses.
     ("capture intervene=", "compose", False),
-    ("attach_hooks + run", "permute_batch", False),
+    ("do(set_only) + run", "permute_batch", False),
     ("capture intervene=", "hook callable", True),
     ("do(tl.units(...))", "hook callable", True),
     ("spec.bind(model)", "hook callable", True),

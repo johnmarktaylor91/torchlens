@@ -56,7 +56,7 @@ unaffected.
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
 | `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
 | `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
-| `validate_batch_of_models_and_inputs` | `torchlens.validation.validate_batch_of_models_and_inputs` | removed |
+| `validate_batch_of_models_and_inputs` | none: call `torchlens.validate(model, x)` per model | removed |
 | `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | removed |
 | `wrapped` | `torchlens.backends.torch.wrappers.wrapped` | removed |
 
@@ -185,7 +185,7 @@ The site, not a keyword or a gradient-only helper, says which tensor an edit app
 | `tl.add_grad_noise(std, seed=)` | `tl.add_noise(std, seed=)` on `tl.grad(site)` | removed |
 | `tl.clip_grad(max_norm)` | `tl.clip_norm(max_norm)` on `tl.grad(site)` | removed |
 | `tl.hook_grad(fn)` | `fn` on `tl.grad(site)` | removed |
-| `direction=` on `Trace.do`, `Trace.attach_hooks`, `tl.when`, `tl.observers.tap`, `tl.stats.narrate`, `tl.sweep` | the site: `tl.grad(site)`, or `tl.grad(site) \| site` for both | removed |
+| `direction=` on `Trace.do`, `tl.when`, `tl.observers.tap`, `tl.stats.narrate`, `tl.sweep` | the site: `tl.grad(site)`, or `tl.grad(site) \| site` for both | removed |
 | `tl.stats.aggregate(target=)` | metric keys are sites (`tl.grad(site)` for a gradient) | removed |
 | `tl.observers.span(direction=)` | `span(signal=)` | removed |
 | `show_bundle_graph(direction=)` | `show_bundle_graph(signal=)` | removed |

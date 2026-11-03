@@ -750,7 +750,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
             x,
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
 
     log.save_intervention(path, level="portable")

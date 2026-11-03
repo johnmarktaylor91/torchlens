@@ -289,7 +289,7 @@ def _refreshed_trace(model: nn.Module, x: torch.Tensor, save_grads: object) -> t
     trace = tl.trace(
         model, torch.randn_like(x), capture=CaptureOptions(save_grads=save_grads, seed=0)
     )
-    trace.save_new_outs(model, x, seed=1)
+    trace._save_new_outs(model, x, seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     return trace
 

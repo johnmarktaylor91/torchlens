@@ -56,7 +56,7 @@ a full `Trace`.
 
 ### trace.py
 - `run_and_log_inputs_through_model()` - core runner used by `trace()`.
-- `save_new_outs()` - replay-like out refresh on an existing graph.
+- `_save_new_outs()` - replay-like out refresh on an existing graph (internal; `run()` is the public door).
 - `_run_model_and_save_specified_outs()` is called from `user_funcs.py` for two-pass
   selective save behavior.
 
