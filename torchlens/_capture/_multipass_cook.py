@@ -100,8 +100,11 @@ def fold_pass_cores(
             offsets = totals.offsets()
             label_map = _label_map(events, offsets, pass_number)
             barcode_map = _barcode_map(events, canonical_barcodes)
+            # One memo per pass: lookback contexts are shared between records,
+            # so each is rewritten once and the rewrite stays shared.
+            memo: dict[int, RecordContext] = {}
             relabeled = [
-                _relabel_record(event, offsets, label_map, barcode_map) for event in events
+                _relabel_record(event, offsets, label_map, barcode_map, memo) for event in events
             ]
         folded.events.extend(relabeled)
         _merge_pass_facts(folded, core, label_map, pass_number)
@@ -295,8 +298,13 @@ def _relabel_record(
     offsets: _PassOffsets,
     label_map: Mapping[str, str],
     barcode_map: Mapping[str, str],
+    memo: dict[int, RecordContext],
 ) -> Any:
-    """Return one later-pass record rewritten into the first pass's label space."""
+    """Return one later-pass record rewritten into the first pass's label space.
+
+    ``memo`` is the pass's rewritten record contexts by the identity of their
+    original (see ``_relabeled_context``).
+    """
 
     if not isinstance(event, OpRecord):
         raise _unconvertible(
@@ -329,7 +337,7 @@ def _relabel_record(
         graph=_relabeled_graph(event.graph, label_map, barcode_map),
         modules_facet=_relabeled_modules(event.modules_facet, modules, offsets),
         params_facet=_relabeled_params(event.params_facet, barcode_map),
-        recording=_relabeled_recording(event.recording, offsets, label_map),
+        recording=_relabeled_recording(event.recording, offsets, label_map, memo),
     )
 
 
@@ -481,7 +489,12 @@ def _relabeled_params(facet: Any, barcode_map: Mapping[str, str]) -> Any:
     return replace(facet, params=params)
 
 
-def _relabeled_recording(facet: Any, offsets: _PassOffsets, label_map: Mapping[str, str]) -> Any:
+def _relabeled_recording(
+    facet: Any,
+    offsets: _PassOffsets,
+    label_map: Mapping[str, str],
+    memo: dict[int, RecordContext],
+) -> Any:
     """Rewrite a record's recording facet into the merged label space.
 
     Parameters
@@ -492,6 +505,8 @@ def _relabeled_recording(facet: Any, offsets: _PassOffsets, label_map: Mapping[s
         The counters earlier passes already occupy.
     label_map
         Old raw label to new raw label for every record of the pass.
+    memo
+        The pass's rewritten record contexts by the identity of their original.
 
     Returns
     -------
@@ -503,18 +518,34 @@ def _relabeled_recording(facet: Any, offsets: _PassOffsets, label_map: Mapping[s
     if facet is None or not isinstance(facet.record_context, RecordContext):
         return facet
     return replace(
-        facet, record_context=_relabeled_context(facet.record_context, offsets, label_map)
+        facet, record_context=_relabeled_context(facet.record_context, offsets, label_map, memo)
     )
 
 
 def _relabeled_context(
-    ctx: RecordContext, offsets: _PassOffsets, label_map: Mapping[str, str]
+    ctx: RecordContext,
+    offsets: _PassOffsets,
+    label_map: Mapping[str, str],
+    memo: dict[int, RecordContext],
 ) -> RecordContext:
     """Rewrite one predicate record context (and its lookback) into the merged label space.
 
     ``pass_number`` keeps the Recorder pass it was recorded in: that is the
     context's own provenance within the multi-pass Recording.
+
+    A context's lookback (``recent_events``, ``recent_ops``) holds the earlier
+    contexts themselves, each with its own lookback, so the records of a pass
+    share one lookback graph. ``memo`` maps ``id`` of each original context
+    already rewritten in this pass to its rewrite: every context is rewritten
+    once and the rewrites stay shared. Without it the walk expands the shared
+    graph into a tree whose size grows exponentially with the pass length.
+    The originals stay alive in the pass's records for the whole fold, so an
+    ``id`` is never reused while ``memo`` holds it.
     """
+
+    cached = memo.get(id(ctx))
+    if cached is not None:
+        return cached
 
     raw_label = ctx.raw_label if ctx.raw_label is not None else ctx.label_raw or None
     new_raw = label_map.get(raw_label) if raw_label else None
@@ -523,7 +554,7 @@ def _relabeled_context(
         return ctx
     label, prefix = _relabeled_context_labels(ctx, new_raw, offsets)
     innermost = _innermost_address(ctx)
-    return replace(
+    rewritten = replace(
         ctx,
         label=label,
         raw_label=new_raw if ctx.raw_label is not None else ctx.raw_label,
@@ -538,12 +569,14 @@ def _relabeled_context(
         parent_labels=tuple(label_map.get(parent, parent) for parent in ctx.parent_labels),
         parent_labels_raw=tuple(label_map.get(parent, parent) for parent in ctx.parent_labels_raw),
         recent_events=tuple(
-            _relabeled_context(recent, offsets, label_map) for recent in ctx.recent_events
+            _relabeled_context(recent, offsets, label_map, memo) for recent in ctx.recent_events
         ),
         recent_ops=tuple(
-            _relabeled_context(recent, offsets, label_map) for recent in ctx.recent_ops
+            _relabeled_context(recent, offsets, label_map, memo) for recent in ctx.recent_ops
         ),
     )
+    memo[id(ctx)] = rewritten
+    return rewritten
 
 
 def _relabeled_context_labels(
