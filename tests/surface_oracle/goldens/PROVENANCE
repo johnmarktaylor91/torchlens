@@ -1916,3 +1916,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: fb658943d590ed98e361e882a3e351915630e12f (dirty)
 recorded: 2026-11-03T20:13:46.607005+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.527000+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.553709+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.579185+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.603758+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.628800+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: regenerate goldens after the train merges 91ee24610 and 577895b6c (Op.graph.site_key, concern groups, r2 submodules)
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1087079002856334c9ebecd869afbaa89b4081ab (dirty)
+recorded: 2026-11-03T21:21:25.657319+00:00
