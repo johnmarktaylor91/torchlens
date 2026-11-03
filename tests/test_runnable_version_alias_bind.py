@@ -29,10 +29,25 @@ _CAPTURE = tl.options.CaptureOptions(replayable=True)
 
 
 class _ReluThenMean(nn.Module):
-    """``mean`` reads the ``relu`` output; the tamper reroutes that read through an alias."""
+    """``mean`` and ``sum`` read the ``relu`` output; the tamper reroutes ``mean`` through an alias.
+
+    ``sum`` keeps reading the producer slot, so the producer keeps a reader after the
+    reroute (a call-produced slot with no reader and no terminal claim is refused at load).
+    """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:  # x: (2, 4)
-        return x.relu().mean() + x.sum()
+        h = x.relu()
+        return h.mean() + h.sum()
+
+
+def _load_runnable(bundle: Path) -> Any:
+    """Load ``bundle`` and require a runnable readiness, naming the diagnostics if not."""
+
+    loaded = tl.load(str(bundle))
+    readiness = loaded.readiness
+    diagnostics = [f"{d.code.value} {d.message}" for d in getattr(readiness, "diagnostics", ())]
+    assert readiness is not None and readiness.status.value == "ready", diagnostics
+    return loaded
 
 
 def _build(tmp_path: Path) -> Path:
@@ -94,7 +109,7 @@ def test_direct_alias_with_wrong_recorded_fields_diverges_at_bind(
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader(**recorded))
     with pytest.raises(PathDivergenceError) as caught:
-        tl.load(str(bundle)).run(inputs=torch.randn(2, 4))
+        _load_runnable(bundle).run(inputs=torch.randn(2, 4))
     assert caught.value.fields["code"] == code.value
     assert ":alias" in str(caught.value)
 
@@ -105,6 +120,6 @@ def test_honest_direct_alias_runs_verified(tmp_path: Path) -> None:
     bundle = _build(tmp_path)
     _tamper(bundle, _alias_reader())
     x = torch.randn(2, 4)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
+    result = _load_runnable(bundle).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
     torch.testing.assert_close(result.output, _ReluThenMean()(x))
