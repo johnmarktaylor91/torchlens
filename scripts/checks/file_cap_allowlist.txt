@@ -1272,11 +1272,11 @@ torchlens/preprocessing/_card.py::check_card	77
 torchlens/preprocessing/_diagnostics.py::_check_confinement	62
 torchlens/receptive_field/__init__.py::_empirical_adjoint_checks	170
 torchlens/receptive_field/__init__.py::verify	62
-torchlens/receptive_field/_engine.py	1652
+torchlens/receptive_field/_engine.py	1579
 torchlens/receptive_field/_engine.py::_apply_axis_map	82
 torchlens/receptive_field/_engine.py::_apply_full	82
 torchlens/receptive_field/_engine.py::_apply_passthrough	69
-torchlens/receptive_field/_engine.py::_apply_rule	89
+torchlens/receptive_field/_engine.py::_apply_rule	88
 torchlens/receptive_field/_engine.py::_compose_window_maps	87
 torchlens/receptive_field/_engine.py::_merge_axes	69
 torchlens/receptive_field/_engine.py::_merge_branch_states	76
@@ -1295,7 +1295,7 @@ torchlens/receptive_field/_engine_geometry.py::_transpose_mapped	78
 torchlens/receptive_field/_forward_query.py::_map_axis_forward	62
 torchlens/receptive_field/_forward_query.py::_map_window_forward	64
 torchlens/receptive_field/_forward_query.py::box_for_source_unit	66
-torchlens/receptive_field/_gradient.py	903
+torchlens/receptive_field/_gradient.py	862
 torchlens/receptive_field/_gradient.py::_batch_semantics	77
 torchlens/receptive_field/_gradient.py::_build_result	74
 torchlens/receptive_field/_gradient.py::_select_inputs	71
@@ -1303,7 +1303,7 @@ torchlens/receptive_field/_gradient.py::gradient_for_unit	171
 torchlens/receptive_field/_gradient_forward.py::_build_projective_result	72
 torchlens/receptive_field/_gradient_forward.py::projective_gradient_for_unit	89
 torchlens/receptive_field/_path.py::resolve_graph_point	78
-torchlens/receptive_field/_query.py	1329
+torchlens/receptive_field/_query.py	1134
 torchlens/receptive_field/_query.py::_build_box	163
 torchlens/receptive_field/_query.py::_map_passthrough	64
 torchlens/receptive_field/_query.py::box_for_unit	70

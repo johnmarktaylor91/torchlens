@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from math import ceil
 from typing import Any
 
+from .._capture.arg_positions import _normalize_func_name
+from .._reshape_blocks import Block, block_decomposition
 from .._rules import ReceptiveFieldRuleContext, _RuleResult, register_rf_rule
 from ._utils import int_tuple
 
@@ -16,6 +19,7 @@ def _axis_map_result(
     selected_parent_axes: Sequence[int] = (),
     out_axis_edges: Mapping[int, tuple[int, int]] | None = None,
     selected_parent_indices: Mapping[int, int] | None = None,
+    blocks: Sequence[Block] = (),
 ) -> _RuleResult:
     """Build an axis-map result with optional fixed-index parent axes.
 
@@ -38,6 +42,10 @@ def _axis_map_result(
         Normalized integer index per scalar-selected parent axis. A recorded
         index lets the query walk narrow the axis to its exact singleton
         instead of the conservative full-extent bound (R20-3).
+    blocks:
+        Mixed reshape blocks ``(parent axes, out axes)`` whose coordinates are
+        a row-major regrouping. The per-unit walks enumerate them exactly; the
+        descriptor engines widen their axes to an inexact whole extent.
 
     Returns
     -------
@@ -52,6 +60,7 @@ def _axis_map_result(
             "selected_parent_axes": tuple(selected_parent_axes),
             "out_axis_edges": dict(out_axis_edges or {}),
             "selected_parent_indices": dict(selected_parent_indices or {}),
+            "blocks": tuple(blocks),
         },
         note,
     )
@@ -98,7 +107,7 @@ def reshape(context: ReceptiveFieldRuleContext) -> _RuleResult:
     parent_shape = context.in_shapes[0]
     mapping = _shape_axis_map(parent_shape, context.out_shape)
     if mapping is None:
-        return context.dissolve(note="reshape mixes non-singleton axes")
+        return _block_reshape(context, parent_shape)
     mapped_parent_axes = set(mapping.values())
     removed_singletons = tuple(
         axis
@@ -109,6 +118,117 @@ def reshape(context: ReceptiveFieldRuleContext) -> _RuleResult:
         mapping,
         selected_parent_axes=removed_singletons,
         note="reshape only inserts or removes singleton axes",
+    )
+
+
+def _block_reshape(context: ReceptiveFieldRuleContext, parent_shape: Sequence[int]) -> _RuleResult:
+    """Map a reshape that regroups contiguous axes (``(B, S, H*D) <-> (B, S, H, D)``)."""
+
+    blocks = block_decomposition(parent_shape, context.out_shape)
+    if blocks is None:
+        return context.dissolve(note="reshape has no contiguous axis regrouping")
+    out_shape = context.out_shape
+    mapping: dict[int, int] = {}
+    removed: list[int] = []
+    mixed: list[Block] = []
+    for parent_axes, out_axes in blocks:
+        parent_real = [axis for axis in parent_axes if parent_shape[axis] != 1]
+        out_real = [axis for axis in out_axes if out_shape[axis] != 1]
+        parent_single = [axis for axis in parent_axes if parent_shape[axis] == 1]
+        out_single = [axis for axis in out_axes if out_shape[axis] == 1]
+        if len(parent_real) <= 1 and len(out_real) <= 1:
+            if parent_real and out_real:
+                mapping[out_real[0]] = parent_real[0]
+            mapping.update(zip(out_single, parent_single, strict=False))
+            removed.extend(parent_single[len(out_single) :])
+        else:
+            mixed.append((tuple(parent_real), tuple(out_real)))
+            removed.extend(parent_single)
+    return _axis_map_result(
+        mapping,
+        selected_parent_axes=tuple(removed),
+        blocks=tuple(mixed),
+        note="reshape regroups contiguous axes: per-unit queries enumerate the regrouped "
+        "coordinates exactly, the descriptor widens them to an upper bound",
+    )
+
+
+def _split_start(
+    name: str, context: ReceptiveFieldRuleContext, index: int, extent: int
+) -> int | None:
+    """Return the parent offset of chunk ``index`` for one split-family op."""
+
+    if name in {"split", "unsafesplit", "splitwithsizes"}:
+        sections = context.arg("split_size_or_sections", context.arg("split_sizes", context.arg(0)))
+        if isinstance(sections, int) and sections > 0:
+            return index * sections
+        sizes = int_tuple(sections)
+        return None if sizes is None or index >= len(sizes) else sum(sizes[:index])
+    if name in {"chunk", "unsafechunk"}:
+        chunks = context.arg("chunks", context.arg(0))
+        if not isinstance(chunks, int) or chunks <= 0:
+            return None
+        return index * ceil(extent / chunks)
+    if name == "tensorsplit":
+        sections = context.arg("indices_or_sections", context.arg("sections", context.arg(0)))
+        if isinstance(sections, int) and sections > 0:
+            base, remainder = divmod(extent, sections)
+            return index * base + min(index, remainder)
+        indices = int_tuple(sections)
+        if indices is None or index > len(indices):
+            return None
+        return 0 if index == 0 else indices[index - 1]
+    return None
+
+
+@register_rf_rule(
+    "split",
+    "unsafe_split",
+    "split_with_sizes",
+    "chunk",
+    "unsafe_chunk",
+    "tensor_split",
+    "unbind",
+)
+def split(context: ReceptiveFieldRuleContext) -> _RuleResult:
+    """Offset one chunk of a split along its dimension; ``unbind`` selects one index."""
+
+    if not context.in_shapes:
+        return context.unknown("split is missing its input shape")
+    parent_shape = tuple(context.in_shapes[0])
+    rank = len(parent_shape)
+    index = context.op.multi_output_index
+    if not isinstance(index, int) or rank == 0:
+        return context.unknown("split output index was not captured")
+    name = _normalize_func_name(str(context.op.func_name))
+    dim = context.arg("dim", context.arg(0 if name == "unbind" else 1, 0))
+    if not isinstance(dim, int):
+        return context.unknown("split dimension was not captured")
+    dim %= rank
+    if name == "unbind":
+        if len(context.out_shape) != rank - 1:
+            return context.unknown("unbind output rank does not drop one axis")
+        surviving = [axis for axis in range(rank) if axis != dim]
+        return _axis_map_result(
+            dict(enumerate(surviving)),
+            selected_parent_axes=(dim,),
+            selected_parent_indices={dim: index},
+            note="unbind selects one index along its dimension",
+        )
+    start = _split_start(name, context, index, parent_shape[dim])
+    if (
+        start is None
+        or len(context.out_shape) != rank
+        or start + int(context.out_shape[dim]) > parent_shape[dim]
+    ):
+        return context.unknown(
+            "split chunk offset could not be derived from the captured arguments"
+        )
+    edges = {dim: (1, start)} if start else {}
+    return _axis_map_result(
+        {axis: axis for axis in range(rank)},
+        out_axis_edges=edges,
+        note="split chunk offsets its dimension by the chunk start",
     )
 
 

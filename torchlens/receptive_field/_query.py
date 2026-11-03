@@ -7,13 +7,21 @@ from collections.abc import Callable, Generator, Iterable, Iterator, Mapping, Se
 from contextlib import AbstractContextManager, contextmanager, nullcontext
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import islice
 from math import ceil, floor, gcd, ulp
 from typing import TYPE_CHECKING, Any, TypeAlias, cast
 
 from . import _engine
 from ._engine_geometry import _as_tuple, _select_full_axes
 from ._errors import AmbiguousInputError, ReceptiveFieldError
+from ._index_set import (
+    _AxisSets,
+    _clipped_progression,
+    _IndexSet,
+    _Progression,
+    _progression_sumset,
+)
+from ._query_causal import EXTENDED_KINDS, map_extended_to_parent
+from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import (
     ReceptiveField,
@@ -25,211 +33,6 @@ from ._types import (
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
-
-
-_PROGRESSION_BUDGET = 16
-
-
-@dataclass(frozen=True, order=True)
-class _Progression:
-    """Finite arithmetic progression of integer indices."""
-
-    start: int
-    step: int
-    count: int
-
-    def __post_init__(self) -> None:
-        """Validate canonical progression parameters."""
-        if self.step <= 0 or self.count <= 0:
-            raise ValueError("progression step and count must be positive")
-
-    @property
-    def stop(self) -> int:
-        """Return the inclusive final index."""
-        return self.start + self.step * (self.count - 1)
-
-    def values(self) -> range:
-        """Return a lazy range over all represented indices."""
-        return range(self.start, self.stop + 1, self.step)
-
-
-def _canonical_progression(start: int, step: int, count: int) -> _Progression:
-    """Return the run :meth:`_IndexSet.from_values` derives for one progression's values.
-
-    A single value is the run ``(value, 1, 1)``; two or more equally spaced values
-    are one run with their spacing.
-    """
-    return _Progression(start, step if count > 1 else 1, count)
-
-
-def _progression_sumset(first: _Progression, second: _Progression) -> _Progression | None:
-    """Return ``{a + b : a in first, b in second}`` when it is one progression, else ``None``.
-
-    With steps ``g <= G`` and counts ``c`` (for ``g``) and ``C``: when ``G`` is a
-    multiple ``q * g`` with ``q <= c``, the sums ``g * (i + q * j)`` for
-    ``0 <= i < c`` and ``0 <= j < C`` cover every multiple of ``g`` from ``0`` to
-    ``g * (c - 1 + q * (C - 1))`` with no gap. Any other combination returns
-    ``None`` and the caller enumerates instead, so the result is always the set
-    the enumeration would produce.
-    """
-    start = first.start + second.start
-    if first.count == 1 or second.count == 1:
-        other = second if first.count == 1 else first
-        return _canonical_progression(start, other.step, other.count)
-    small, large = sorted((first, second), key=lambda item: (item.step, item.count))
-    if small.step <= 0 or large.step % small.step:
-        return None
-    ratio = large.step // small.step
-    if ratio > small.count:
-        return None
-    return _Progression(start, small.step, small.count + ratio * (large.count - 1))
-
-
-def _clipped_progression(item: _Progression, extent: int, *, exact: bool) -> _IndexSet:
-    """Intersect one progression with ``[0, extent)`` in closed form.
-
-    Equals ``_IndexSet._from_sorted_unique`` over the surviving values: the
-    survivors of an ascending progression are one contiguous run of its terms.
-    """
-    first = max(0, -(item.start // item.step)) if item.start < 0 else 0
-    last = min(item.count - 1, (extent - 1 - item.start) // item.step)
-    if last < first:
-        return _IndexSet.empty(exact=exact)
-    return _IndexSet(
-        (_canonical_progression(item.start + item.step * first, item.step, last - first + 1),),
-        exact,
-    )
-
-
-@dataclass(frozen=True)
-class _IndexSet:
-    """Bounded union of arithmetic progressions with honest collapse metadata.
-
-    CANONICAL FORM INVARIANT. Every instance is produced either by
-    :meth:`empty`, :meth:`singleton`, :meth:`interval`, :meth:`from_values`, or
-    by re-wrapping another instance's ``progressions`` with a weaker ``exact``
-    flag. All of those yield exactly the greedy run decomposition that
-    :meth:`from_values` derives from the sorted, de-duplicated value list, so
-    ``progressions`` is always ascending, disjoint, maximal, and no longer than
-    ``_PROGRESSION_BUDGET``. The fast paths below rely on that invariant: they
-    are shortcuts for results the general algorithm would reproduce, never a
-    different answer.
-    """
-
-    progressions: tuple[_Progression, ...]
-    exact: bool = True
-
-    @classmethod
-    def empty(cls, *, exact: bool = True) -> _IndexSet:
-        """Construct an empty index set with the requested exactness."""
-        return cls((), exact)
-
-    @classmethod
-    def singleton(cls, value: int) -> _IndexSet:
-        """Construct a singleton index set."""
-        return cls((_Progression(value, 1, 1),))
-
-    @classmethod
-    def interval(cls, start: int, stop: int, *, exact: bool = True) -> _IndexSet:
-        """Construct an inclusive integer interval."""
-        if stop < start:
-            return cls.empty(exact=exact)
-        return cls((_Progression(start, 1, stop - start + 1),), exact)
-
-    @classmethod
-    def from_values(cls, values: Iterable[int], *, exact: bool = True) -> _IndexSet:
-        """Compress values into at most sixteen runs, else an inexact dense hull."""
-        return cls._from_sorted_unique(sorted(set(values)), exact=exact)
-
-    @classmethod
-    def _from_sorted_unique(cls, ordered: Sequence[int], *, exact: bool = True) -> _IndexSet:
-        """Compress an already sorted, de-duplicated value list into runs.
-
-        This is the body of :meth:`from_values`; callers that already hold
-        ascending distinct values skip the redundant ``sorted(set(...))``.
-        """
-        if not ordered:
-            return cls.empty(exact=exact)
-        runs: list[_Progression] = []
-        run_start = ordered[0]
-        run_step = 1
-        run_count = 1
-        previous = run_start
-        for value in islice(ordered, 1, None):
-            difference = value - previous
-            previous = value
-            if run_count == 1:
-                run_step = difference
-                run_count = 2
-            elif difference == run_step:
-                run_count += 1
-            else:
-                runs.append(_Progression(run_start, run_step, run_count))
-                run_start = value
-                run_step = 1
-                run_count = 1
-        runs.append(_Progression(run_start, run_step, run_count))
-        if len(runs) > _PROGRESSION_BUDGET:
-            return cls.interval(ordered[0], ordered[-1], exact=False)
-        return cls(tuple(runs), exact)
-
-    @property
-    def is_empty(self) -> bool:
-        """Return whether no indices are represented."""
-        return not self.progressions
-
-    @property
-    def minimum(self) -> int | None:
-        """Return the smallest index, or ``None`` for an empty set."""
-        return None if self.is_empty else min(item.start for item in self.progressions)
-
-    @property
-    def maximum(self) -> int | None:
-        """Return the largest index, or ``None`` for an empty set."""
-        return None if self.is_empty else max(item.stop for item in self.progressions)
-
-    def values(self) -> tuple[int, ...]:
-        """Materialize represented indices in sorted order."""
-        progressions = self.progressions
-        if len(progressions) == 1:
-            item = progressions[0]
-            return tuple(range(item.start, item.stop + 1, item.step))
-        # Canonical progressions are ascending and disjoint, so chaining them
-        # already yields the sorted distinct order the contract promises.
-        return tuple(value for item in progressions for value in item.values())
-
-    def clipped(self, extent: int) -> _IndexSet:
-        """Intersect this set with ``[0, extent)`` without changing exactness."""
-        progressions = self.progressions
-        if not progressions:
-            return self
-        if progressions[0].start >= 0 and progressions[-1].stop < extent:
-            # Nothing is dropped, so recompressing would rebuild this exact
-            # canonical decomposition with this exact ``exact`` flag.
-            return self
-        if len(progressions) == 1:
-            return _clipped_progression(progressions[0], extent, exact=self.exact)
-        return _IndexSet._from_sorted_unique(
-            [value for value in self.values() if 0 <= value < extent], exact=self.exact
-        )
-
-    @classmethod
-    def union(cls, sets: Iterable[_IndexSet]) -> _IndexSet:
-        """Union progression sets and enforce the global progression budget."""
-        # Path enumeration hands the same set in many times. Union is idempotent
-        # and ``all(...)`` over exactness ignores repeats, so collapsing equal
-        # operands leaves both the value set and the exactness flag unchanged.
-        materialized = tuple(dict.fromkeys(sets))
-        if len(materialized) == 1:
-            # Recompressing one canonical set with its own exactness is identity.
-            return materialized[0]
-        return cls.from_values(
-            (value for index_set in materialized for value in index_set.values()),
-            exact=all(index_set.exact for index_set in materialized),
-        )
-
-
-_AxisSets: TypeAlias = tuple[_IndexSet | None, ...]
 
 
 class _SharedQueryState(threading.local):
@@ -418,15 +221,23 @@ def _select_descriptor(
     raise ReceptiveFieldError(f"Input {identity!r} is not reachable from this target.")
 
 
-def _validate_descriptor_for_query(descriptor: ReceptiveField) -> None:
-    """Reject descriptors whose derived grid cannot support a geometric unit query."""
+def _validate_descriptor_for_query(
+    descriptor: ReceptiveField, *, require_windowed: bool = True
+) -> None:
+    """Reject descriptors whose derived grid cannot support a geometric unit query.
+
+    A single-unit query needs a windowed axis to place its unit on. A set
+    query (``require_windowed=False``) walks index sets through the graph and
+    narrows whole-extent axes along the way (a causal attention hop keeps the
+    query prefix), so it only needs a solved descriptor with a known layout.
+    """
     if descriptor.axes is None or descriptor.status in {
         ReceptiveFieldStatus.DATA_DEPENDENT,
         ReceptiveFieldStatus.UNKNOWN,
         ReceptiveFieldStatus.UNSUPPORTED,
     }:
         raise ReceptiveFieldError("Per-unit geometry is unavailable; use .probe_grad() instead.")
-    if not descriptor.axis_roles.windowed_axes:
+    if require_windowed and not descriptor.axis_roles.windowed_axes:
         raise ReceptiveFieldError("No windowed axes are available; use .probe_grad() instead.")
     if any(kind == "unknown" for kind in descriptor.axis_roles.axis_kinds):
         raise ReceptiveFieldError("The derived layout is ambiguous; use .probe_grad() instead.")
@@ -674,6 +485,8 @@ def _map_to_parent(
     op: Op, parent: Op, output_sets: _AxisSets, result: _RuleResult
 ) -> tuple[_AxisSets, bool]:
     """Apply one local rule result to one parent branch."""
+    if result.kind in EXTENDED_KINDS:
+        return map_extended_to_parent(_map_to_parent, op, parent, output_sets, result)
     if result.kind == "window":
         return _map_window(op, parent, output_sets, result)
     if result.kind == "window_edges":
@@ -684,7 +497,7 @@ def _map_to_parent(
             mapped[axis] = _IndexSet.interval(0, int(parent.shape[axis]) - 1)
         return tuple(mapped), bool(result.values.get("exact", True))
     if result.kind == "axis_map":
-        return _map_axis_mapping(parent, output_sets, result)
+        return _map_axis_mapping(op, parent, output_sets, result)
     if result.kind == "passthrough":
         return _map_passthrough(op, parent, output_sets, result), True
     return _map_composed_envelope(op, parent, output_sets), False
@@ -830,7 +643,7 @@ def _map_passthrough(
 
 
 def _map_axis_mapping(
-    parent: Op, output_sets: _AxisSets, result: _RuleResult
+    op: Op, parent: Op, output_sets: _AxisSets, result: _RuleResult
 ) -> tuple[_AxisSets, bool]:
     """Apply an explicit output-axis to parent-axis mapping.
 
@@ -881,7 +694,7 @@ def _map_axis_mapping(
         else:
             mapped[parent_axis] = _IndexSet.interval(0, extent - 1, exact=False)
             exact = False
-    return tuple(mapped), exact
+    return apply_blocks(result, output_sets, op, parent, mapped, exact, forward=False)
 
 
 def _map_window_edges(

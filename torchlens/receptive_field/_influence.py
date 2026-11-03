@@ -294,14 +294,14 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
     """Refuse typed when the pair's descriptor cannot support per-unit geometry."""
 
     try:
-        _validate_descriptor_for_query(descriptor)
+        _validate_descriptor_for_query(descriptor, require_windowed=False)
     except ReceptiveFieldError as error:
         raise _unresolvable(
             "influence_geometry_unavailable",
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
             f"unavailable (field status {descriptor.status.value!r}): the field engine has no "
-            "per-unit index geometry along this path (data-dependent mixing such as "
-            "attention has none). For an empirical answer pass method='gradient' on a "
+            "per-unit index geometry along this path (data-dependent routing such as "
+            "index selection has none). For an empirical answer pass method='gradient' on a "
             f"trace captured with capture={_GRADIENT_CAPTURE}.",
             code="influence_geometry_unavailable",
             seed_site=seed_op.label,

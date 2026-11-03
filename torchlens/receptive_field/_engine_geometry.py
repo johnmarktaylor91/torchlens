@@ -9,10 +9,10 @@ from math import ceil, floor
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from ._errors import ReceptiveFieldConfigurationError
-from ._types import ReceptiveFieldStatus
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
+    from ._types import ReceptiveFieldStatus
 
 
 @dataclass(frozen=True)

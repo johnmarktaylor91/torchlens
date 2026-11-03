@@ -32,6 +32,8 @@ from ._query import (
     _WalkStep,
     map_transposed_convolution_index_set,
 )
+from ._query_causal import EXTENDED_KINDS, map_extended_to_child
+from ._reshape_blocks import apply_blocks
 from ._rules import _RuleResult
 from ._types import ReceptiveField, ReceptiveFieldBox, ReceptiveFieldDirection
 
@@ -240,6 +242,8 @@ def _map_to_child(
 ) -> tuple[_AxisSets, bool]:
     """Transpose one sealed local backward rule onto a child branch."""
 
+    if result.kind in EXTENDED_KINDS:
+        return map_extended_to_child(_map_to_child, parent, child, parent_sets, result, rule_name)
     if result.kind in {"data_dependent", "unknown", "unsupported", "dissolve", "piecewise"}:
         return _whole_child_envelope(child, parent_sets), False
     if result.unit_box is not None and not (
@@ -585,7 +589,7 @@ def _map_axis_forward(
             # Unknown selected index over a constrained axis: the forward
             # image may be empty, so the non-pruned claim is an upper bound.
             exact = False
-    return tuple(mapped), exact
+    return apply_blocks(result, parent_sets, parent, child, mapped, exact, forward=True)
 
 
 def _map_full_forward(
