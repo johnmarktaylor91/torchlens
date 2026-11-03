@@ -34,7 +34,7 @@ from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
-from ._halt import StopSignal
+from ._halt import StopSignal, _mark_recording_halted
 from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import (
     refuse_episode_on_record,
@@ -51,7 +51,7 @@ from .options import (
     PredicateFn,
     merge_recording_options,
 )
-from .types import CaptureSpec, Recording, _mark_recording_halted
+from .types import CaptureSpec, Recording
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:

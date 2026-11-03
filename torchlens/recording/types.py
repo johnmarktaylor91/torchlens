@@ -16,8 +16,7 @@ import torch
 from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._ir.predicate import EventKind, ModuleStackFrame, RecordContext, RetroactiveCaptureDecision
-from .._utils.tensor_utils import SaveMode
-from ._cooked_ancestry import _backfill_cooked_ancestry, _distinct_label_index_keys
+from .._utils.tensor_utils import SAVE_MODES, SaveMode
 
 __all__ = [
     "ActivationRecord",
@@ -64,8 +63,6 @@ class CaptureSpec:
 
     def __post_init__(self) -> None:
         """Normalize and validate capture save-mode settings."""
-
-        from .._utils.tensor_utils import SAVE_MODES
 
         if self.save_mode not in SAVE_MODES:
             raise InvalidArgumentError(
@@ -627,6 +624,8 @@ class Recording(TraceLike):
     def _ensure_records(self) -> None:
         """Populate retained records from CaptureEvents on first record access."""
 
+        from ._cooked_ancestry import _distinct_label_index_keys
+
         if self._records_built:
             return
         records = object.__getattribute__(self, "records")
@@ -1059,6 +1058,7 @@ class Recording(TraceLike):
             )
         from .._capture.projectors import RecordingProjector
         from .._data_classes.trace import Trace
+        from ._cooked_ancestry import _backfill_cooked_ancestry
         from .options import RecordingOptions
 
         projection = RecordingProjector().project(self._captured_run_cores)
@@ -1085,9 +1085,8 @@ class Recording(TraceLike):
         # `self._capture_events` (the original, intact) below -- only the
         # materialized `trace.capture_events` is the copy.
         events_for_replay = cast(Any, projection.capture_events)._copy_for_replay()
-        # The sparse recorder never tracks ancestry at capture time; derive the
-        # closures on the cook's own projection before postprocess materializes
-        # Op rows from it (the ancestry_closure invariant checks exactly this).
+        # The sparse recorder never tracks ancestry at capture time; derive the closures
+        # on the cook's projection before postprocess materializes Op rows from it.
         _backfill_cooked_ancestry(events_for_replay)
         trace.capture_events = events_for_replay
         projection.prepare_trace(trace)
@@ -1303,16 +1302,3 @@ class Recording(TraceLike):
                 "halted-capture path"
             ),
         )
-
-
-def _mark_recording_halted(recording: Recording, pass_index: int, reason: str) -> None:
-    """Set halt state on a frozen ``Recording`` (mutated via ``object.__setattr__``); an empty
-    ``reason`` means none was given.
-    """
-
-    recording.stops_by_pass.setdefault(pass_index, reason)
-    if recording.is_stopped:
-        return
-    object.__setattr__(recording, "is_stopped", True)
-    object.__setattr__(recording, "status", "halted")
-    object.__setattr__(recording, "stop_reason", reason)

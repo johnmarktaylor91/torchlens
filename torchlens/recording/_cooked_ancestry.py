@@ -8,7 +8,10 @@ record-index key rule the lazy projection and the cook share.
 
 from __future__ import annotations
 
+from dataclasses import replace as _dc_replace
 from typing import Any
+
+from .._ir.op_record import AncestryFacet, OpRecord
 
 
 def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
@@ -48,10 +51,6 @@ def _backfill_cooked_ancestry(events: Any) -> None:
         Replay-projection ``CaptureEvents`` whose op lane should be
         ancestry-backfilled before Trace postprocessing.
     """
-    from dataclasses import replace as _dc_replace
-
-    from .._ir.op_record import AncestryFacet, OpRecord
-
     folded = events.amended_op_records()
     closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
     by_raw_label = events.live_index.by_raw_label
