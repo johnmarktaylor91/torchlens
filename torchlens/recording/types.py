@@ -297,12 +297,12 @@ class RecordingSettings:
         The stop predicate from ``stop_after=``, if any.
     storage:
         The disk sink from ``storage=``, if any.
-    narrate:
-        The live narration settings (a ``NarrationOptions``) that printed each captured
-        event as the forward ran, from the door's ``narrate=``; ``None`` when off.
     lean:
         PROVISIONAL SPELLING. Whether only the kept events were journaled
         (``tl.record(lean=True)``); ``Recording.lean_omissions`` names the omissions.
+    narrate:
+        The live narration settings (a ``NarrationOptions``) that printed each captured
+        event as the forward ran, from the door's ``narrate=``; ``None`` when off.
     """
 
     keep_op: PredicateFn | None
