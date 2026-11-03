@@ -146,7 +146,6 @@ class ProfileReport:
         pandas.DataFrame
             Resource profile rows.
         """
-
         frame = self.frame.copy()
         if include_evidence:
             honesty_frame = self._honesty_table()
@@ -176,7 +175,6 @@ class ProfileReport:
 
     def _totals_row(self) -> dict[str, Any]:
         """The explicit totals row (sumfam item 12): partition denominators."""
-
         row: dict[str, Any] = dict.fromkeys(self.frame.columns)
         row["name"] = "TOTAL"
         row["kind"] = "total"
