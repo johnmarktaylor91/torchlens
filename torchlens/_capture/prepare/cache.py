@@ -679,7 +679,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
     """Hand-curated cache-key rows; ``_resolve_cache_key`` sweeps the remaining fields in."""
     opts = state.capture_options
     args = state.args
-    cache_config = {
+    return {
         "layers_to_save": state.requested_layers_to_save,
         "keep_orphans": opts.keep_orphans,
         "output_device": opts.output_device,
@@ -705,9 +705,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "intervene": _predicate_cache_key(args.intervene),
         "halt": _predicate_cache_key(state.halt),
         "stop_after": _stable_cache_fragment(state.stop_after_site),
-        # Former door kwargs that now ride CaptureOptions and
-        # change what is captured: keyed by field name so the static
-        # coverage lint sees them (the runtime sweep is invisible to it).
+        # Former door kwargs, now CaptureOptions fields: named for the static coverage lint.
         "grad_options": _stable_cache_fragment(opts.grad_options),
         "grouping": opts.grouping,
         "jax_static_argnums": _stable_cache_fragment(opts.jax_static_argnums),
@@ -737,4 +735,3 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "module_identity_mode": opts.module_identity_mode,
         "payload_policy": opts.payload_policy,
     }
-    return cache_config
