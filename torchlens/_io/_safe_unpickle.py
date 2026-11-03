@@ -322,26 +322,23 @@ def _is_torchlens_appliance_module(module: str) -> bool:
 # is NOT an import-sink / instance-callable gadget. Every other torchlens type --
 # above all ``LazyImportRef`` and any callable/import-sink/exec type -- is DENIED.
 #
-# Derivation (default-deny): the set is the vetted-inert DATA-type inventory of the
-# fixed set of first-party DATA modules that make up a scrubbed ``Trace``'s
-# ``metadata.pkl`` (data_classes.* / ir.* / intervention.types / intervention._super
-# / semantic.facets / quantities / capture.config+stop / _trace_state / _io.BlobRef /
-# visualization.code_panel). It was materialized by enumerating those modules and
-# admitting each class OWNED by the module (real ``__module__`` match, so no aliasing
-# to a logic module) that (a) is NOT instance-callable and (b) carries NO custom
-# ``__reduce__`` / ``__reduce_ex__``, then EXCLUDING live-view / error / exception
-# classes (``Facet`` / ``FacetView`` / ``MissingFacet`` / ``*Error`` / ...) that never
-# appear in scrubbed metadata. ``Edit`` is the single vetted instance-callable
-# exception (``__call__`` takes no attacker args; its ``factory`` is scrubbed to
-# ``None`` before pickling, so it is not a reduce-invocable import sink). The result
-# was cross-checked against the torchlens types the real unpickler resolves across the
-# io / tlspec-runnable / semantic-facet / intervention / capture-oracle suites. The
-# import-sink / logic modules -- above all ``torchlens.intervention._spec_values`` (home of
-# ``LazyImportRef``) -- are NOT data modules and are absent, so ``LazyImportRef`` is
-# denied on both counts (module not curated; instance-callable import sink). A legit
-# type not yet covered fails CLOSED (a load error surfacing in a test) and is added
-# only after the same vetting -- never by re-admitting the blanket "any torchlens
-# type" rule.
+# Derivation (default-deny): the set is the vetted-inert DATA-type inventory of the fixed set of
+# first-party DATA modules that make up a scrubbed ``Trace``'s ``metadata.pkl`` (data_classes.* /
+# ir.* / intervention.types / intervention._super / semantic.facets / quantities /
+# capture.config+stop / _trace_state / _io.BlobRef / visualization.code_panel). It was materialized
+# by enumerating those modules and admitting each class OWNED by the module (real ``__module__``
+# match, so no aliasing to a logic module) that (a) is NOT instance-callable and (b) carries NO
+# custom ``__reduce__`` / ``__reduce_ex__``, then EXCLUDING live-view / error / exception classes
+# (``Facet`` / ``FacetView`` / ``MissingFacet`` / ``*Error`` / ...) that never appear in scrubbed
+# metadata. ``Edit`` is the single vetted instance-callable exception (``__call__`` takes no
+# attacker args; its ``factory`` is scrubbed to ``None`` before pickling, so it is not a
+# reduce-invocable import sink). The result was cross-checked against the torchlens types the real
+# unpickler resolves across the io / tlspec-runnable / semantic-facet / intervention /
+# capture-oracle suites. The import-sink / logic modules -- above all
+# ``torchlens.intervention._spec_values`` (home of ``LazyImportRef``) -- are NOT data modules and
+# are absent, so ``LazyImportRef`` is denied on both counts (module not curated; instance-callable
+# import sink). A legit type not yet covered fails CLOSED (a load error surfacing in a test) and is
+# added only after the same vetting -- never by re-admitting the blanket "any torchlens type" rule.
 _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
     {
         # Trace runtime-state enum + capture config / stop directives.
@@ -349,6 +346,8 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens._capture.config", "InternalCaptureConfig"),
         ("torchlens._capture.stop", "StopDirective"),
         ("torchlens._io", "BlobRef"),  # portable I/O blob reference (NamedTuple of ids)
+        ("torchlens._io._grad_fn_call_columns", "GradFnCallColumns"),
+        ("torchlens._io._grad_fn_call_columns", "GradFnCallRefs"),
         ("torchlens._io._grad_record_columns", "GradientRecordColumns"),  # an op's grad records
         # Buffer / grad / param / op / layer / module data records + accessors.
         ("torchlens._data_classes.buffer", "Buffer"),

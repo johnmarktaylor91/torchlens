@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from ._grad_fn_call_packing import GradFnCallPacker, reduce_with_grad_fn_call_columns
 from ._grad_record_columns import reduce_with_grad_record_columns
 from ._inline_tensor import reduce_inline_tensor
 
@@ -45,6 +46,16 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     sidecar of a bundle (tensor payloads ride safetensors blobs), so the
     slower Python walk is a save-time-only, determinism-buying cost.
     """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._grad_fn_calls = GradFnCallPacker(self.memo)
+
+    def save_reduce(self, *args: Any, obj: Any = None, **kwargs: Any) -> None:
+        """Save one reduction, then tell the grad_fn-call packer that ``obj`` is complete."""
+
+        super().save_reduce(*args, obj=obj, **kwargs)  # type: ignore[misc]
+        self._grad_fn_calls.close(obj)
 
     def reducer_override(self, obj: Any) -> Any:
         """Return the canonical reduction for set/frozenset, Enum, plain tensors and op records.
@@ -95,7 +106,13 @@ class _CanonicalMetadataPickler(pickle._Pickler):
                         key=lambda member: (type(member).__qualname__, repr(member)),
                     )
             return (cls, (members,))
-        # An Op's gradient records persist as one columnar table (opcodes per op, not per record).
+        # A GradFn's calls, a BackwardPass's call list and an Op's gradient records persist as
+        # columnar tables (opcodes per owner, not per call or record).
+        reduced = reduce_with_grad_fn_call_columns(
+            self._grad_fn_calls, obj, cls, pickle.HIGHEST_PROTOCOL
+        )
+        if reduced is not NotImplemented:
+            return reduced
         return reduce_with_grad_record_columns(obj, cls, pickle.HIGHEST_PROTOCOL)
 
 

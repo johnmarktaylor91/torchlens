@@ -19,6 +19,7 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
+from .._io._grad_fn_call_columns import unpack_grad_fn_calls_state
 from .._quantities import Duration
 from ._accessor_base import Accessor
 from ._runtime_handles import runtime_handle_from_owner
@@ -162,16 +163,13 @@ class GradFnCallAccessor(Accessor[GradFnCall]):
 # restoring an empty typed container. Plain builtin types are used
 # deliberately.
 #
-# `calls` is intentionally included here (for `default_fill_state`'s
-# absent-key fill only -- a genuinely old pickle predating the
-# `GradFnCallAccessor` promotion) but excluded from the
-# `coerce_container_typed_state` call below via `_GRAD_FN_COERCE_EXCLUDE`:
-# once `__post_init__` has ever run, `self.calls` is always a
-# `GradFnCallAccessor`, never a plain `dict`, so it is a custom-accessor field
-# like `Module.ops`/`Module.params`, not a plain container -- coercing it
-# would call `dict(GradFnCallAccessor)`, which resolves through the
-# accessor's 0-based `__getitem__` and corrupts/crashes on 1-based call-index
-# keys.
+# `calls` is intentionally included here (for `default_fill_state`'s absent-key fill only -- a
+# genuinely old pickle predating the `GradFnCallAccessor` promotion) but excluded from the
+# `coerce_container_typed_state` call below via `_GRAD_FN_COERCE_EXCLUDE`: once `__post_init__` has
+# ever run, `self.calls` is always a `GradFnCallAccessor`, never a plain `dict`, so it is a
+# custom-accessor field like `Module.ops`/`Module.params`, not a plain container -- coercing it
+# would call `dict(GradFnCallAccessor)`, which resolves through the accessor's 0-based `__getitem__`
+# and corrupts/crashes on 1-based call-index keys.
 _GRAD_FN_CONTAINER_DEFAULTS: dict[str, Any] = {
     "modules": [],
     "next_grad_fn_ids": [],
@@ -416,6 +414,7 @@ class GradFn:
         """Restore pickle state and fill fields added in newer versions."""
 
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        unpack_grad_fn_calls_state(state, GradFnCall)  # a columnar ``calls`` table, if persisted
         grad_fn_setstate_defaults: dict[str, Any] = {
             **_GRAD_FN_CONTAINER_DEFAULTS,
             "step_index": state.get("trace_" + "index", state.get("overall_" + "index", 0)),

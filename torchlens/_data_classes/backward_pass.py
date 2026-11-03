@@ -14,9 +14,11 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
+from .._io._grad_fn_call_columns import unpack_grad_fn_call_refs_state
 from .._quantities import Duration
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from .grad_fn_call import GradFnCall
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -180,6 +182,8 @@ class BackwardPass:
         """Restore pickle state and fill fields added in newer versions."""
 
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
+        # A persisted reference table resolves to the calls its GradFns already restored.
+        unpack_grad_fn_call_refs_state(state, GradFnCall)
         backward_pass_setstate_defaults: dict[str, Any] = {
             **_BACKWARD_PASS_CONTAINER_DEFAULTS,
             "outer_context": None,
