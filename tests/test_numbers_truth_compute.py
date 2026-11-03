@@ -51,7 +51,7 @@ def test_relu_has_zero_macs_non_mac() -> None:
     log = _capture(nn.Sequential(nn.Linear(4, 4, bias=False), nn.ReLU()), torch.randn(2, 4))
     try:
         relu = log.layers["relu_1_2"]
-        assert int(relu.macs_forward) == 0
+        assert int(relu.cost.macs_forward) == 0
         record = next(iter(relu.ops.values())).cost.compute_record
         assert record.mac_applicability == "non_mac"
         assert record.fma_macs == 0

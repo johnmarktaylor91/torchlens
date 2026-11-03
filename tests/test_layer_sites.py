@@ -142,7 +142,7 @@ def test_site_peers_finds_reused_site_cohort() -> None:
     relu_labels = [label for label in log.layer_labels if "relu" in label]
     assert len(relu_labels) == 3
     first = log.layers[relu_labels[0]]
-    assert [peer.layer_label for peer in first.site_peers] == relu_labels[1:]
+    assert [peer.layer_label for peer in first.graph.site_peers] == relu_labels[1:]
     # Symmetric membership: every cohort member sees the other two.
     for label in relu_labels:
         peer_labels = {peer.layer_label for peer in log.layers[label].graph.site_peers}
@@ -166,7 +166,7 @@ def test_site_peers_refuses_typed_without_keys() -> None:
     assert excinfo.value.fields["code"] == "site_key_unavailable"
     # Other layers with keys never match the stripped layer either way.
     other = log.layers[relu_labels[1]]
-    assert relu_labels[0] not in {peer.layer_label for peer in other.site_peers}
+    assert relu_labels[0] not in {peer.layer_label for peer in other.graph.site_peers}
 
 
 # ---------------------------------------------------------------------------
