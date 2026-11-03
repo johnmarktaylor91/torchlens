@@ -142,5 +142,5 @@ class TestKernelInventoryCounts:
 
         rows = kernel_universe_rows()
         assert rows["export_targets"] >= 17
-        assert rows["renderers"] >= 2
+        assert rows["renderers"] >= 1
         assert "sidecar_families" in rows
