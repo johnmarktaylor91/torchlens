@@ -658,7 +658,7 @@ def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     artifact = DecodedArtifact(root, manifest)
     artifact.decode_tables()
     artifact.resolve_references()
-    validate_records(artifact.tables, manifest=manifest, root=root)
+    validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
     artifact.build_records()
     layer_list = artifact.tables["trace"][0].get("_layer_list")
     persisted_rows = len(layer_list) if isinstance(layer_list, list) else None

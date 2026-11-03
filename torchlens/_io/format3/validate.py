@@ -16,7 +16,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Final
@@ -484,7 +484,11 @@ def _rows_of(tables: Mapping[str, list[dict[str, Any]]], kind: str) -> int:
     return len(tables.get(kind, ()))
 
 
-def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Path) -> None:
+def _check_trace_containers(
+    tables: Mapping[str, list[dict[str, Any]]],
+    objects: Mapping[str, Sequence[Any]],
+    root: Path,
+) -> None:
     """Check the trace row's container columns against the decoded tables."""
 
     trace = tables["trace"][0]
@@ -497,7 +501,7 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
                 root, f"trace.{field} is not a container", field=field, code=_CODE
             )
         if kind == "op":
-            _check_op_coverage(tables, trace, field, root)
+            _check_op_coverage(objects, trace, field, root)
         elif len(container) != _rows_of(tables, kind):
             raise _invariant_error(
                 root,
@@ -508,31 +512,37 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
             )
 
 
+def _entries(container: Any) -> list[Any]:
+    """Return a container column's entries (a mapping's values, a sequence's items)."""
+
+    return list(container.values()) if isinstance(container, Mapping) else list(container)
+
+
 def _check_op_coverage(
-    tables: Mapping[str, list[dict[str, Any]]], trace: Mapping[str, Any], field: str, root: Path
+    objects: Mapping[str, Sequence[Any]], trace: Mapping[str, Any], field: str, root: Path
 ) -> None:
     """The op table is exactly the retained refs plus the orphan refs (keep_orphans saves).
 
-    Every op row must be reached by ``_layer_list`` or ``_orphan_logs`` and every ref must be
-    a row; a row neither references (a forged extra) or a dangling ref refuses. The
-    ``_layer_dict_main_keys`` values are the retained ops themselves.
+    Reference cells are settled to the op record objects before this runs (a dangling ref
+    refuses at settle time), so coverage is by identity: every op row must be reached once by
+    ``_layer_list`` or ``_orphan_logs``; a row neither references (a forged extra) or a repeated
+    entry refuses. The ``_layer_dict_main_keys`` values are the retained ops themselves.
     """
 
-    container = trace[field]
-    refs = list(container.values()) if isinstance(container, dict) else list(container)
-    orphans = trace.get("_orphan_logs")
-    covered = {id(op) for op in refs}
-    if field == "_layer_list" and isinstance(orphans, (list, tuple)):
-        covered |= {id(op) for op in orphans}
-    rows = {id(row) for row in tables.get("op", ())}
+    entries = _entries(trace[field])
     if field == "_layer_dict_main_keys":
-        retained = trace.get("_layer_list")
-        rows = {id(op) for op in retained} if isinstance(retained, list) else rows
-    if covered != rows:
+        rows = {id(op) for op in _entries(trace.get("_layer_list") or ())}
+    else:
+        rows = {id(op) for op in objects.get("op", ())}
+        orphans = trace.get("_orphan_logs")
+        entries += _entries(orphans) if isinstance(orphans, (list, tuple)) else []
+    covered = {id(op) for op in entries}
+    if len(covered) != len(entries) or covered != rows:
         raise _invariant_error(
             root,
             f"trace.{field} covers {len(covered)} op rows but {len(rows)} are expected: "
-            f"{len(rows - covered)} unreferenced, {len(covered - rows)} dangling",
+            f"{len(rows - covered)} unreferenced, {len(covered - rows)} foreign, "
+            f"{len(entries) - len(covered)} repeated",
             field=field,
             code=_CODE,
         )
@@ -642,16 +652,18 @@ def validate_records(
     *,
     manifest: Mapping[str, Any],
     root: Path,
+    objects: Mapping[str, Sequence[Any]],
 ) -> None:
     """Run every cross-record invariant over the decoded tables; refuse on the first failure.
 
     Runs after the reader resolved every reference (so dangling labels and
-    indices have already refused) and before any record's state hook runs.
+    indices have already refused) and before any record's state hook runs;
+    ``objects`` holds the settled record objects the reference cells now name.
     """
 
     _check_manifest_rows(tables, manifest, root)
     if "trace" in tables:
-        _check_trace_containers(tables, root)
+        _check_trace_containers(tables, objects, root)
         _check_orphans_disjoint(tables, root)
 
 
