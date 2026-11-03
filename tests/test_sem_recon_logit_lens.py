@@ -211,7 +211,6 @@ def test_wrong_reconstruction_on_sliced_capture_still_refuses(
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_predictions_stream_math_and_provenance(_models: dict[str, nn.Module]) -> None:
     """Top-k, full-vocab denominator, one-based ranks, native-row honesty."""
 
@@ -293,7 +292,6 @@ def test_predictions_tie_ranks_share_smallest_rank(_models: dict[str, nn.Module]
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_predictions_positions_normalize_and_refuse(_models: dict[str, nn.Module]) -> None:
     log = _capture(_models["sliced"])
     try:

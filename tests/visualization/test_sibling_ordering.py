@@ -236,7 +236,6 @@ def test_mixed_googlenet_and_distorter_decisions(tmp_path: Path) -> None:
     assert distorter_source.count("tl:sibling-order:start") == 1
 
 
-@pytest.mark.smoke
 def test_residual_toy_is_safe_noop(tmp_path: Path) -> None:
     """Residual merges are skipped by the sole-parent guard."""
 

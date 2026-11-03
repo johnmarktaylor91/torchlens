@@ -145,6 +145,7 @@ def test_top_k_population_too_small_refuses_typed(log):
     assert excinfo.value.fields["available"] == numel
 
 
+@pytest.mark.smoke
 def test_top_fraction_ceil_rule_pinned(log):
     """top_fraction selects ceil(fraction * population), never zero when nonempty."""
 
@@ -154,6 +155,7 @@ def test_top_fraction_ceil_rule_pinned(log):
     assert log[tl.top_fraction(_RELU, 0.0)].is_empty
 
 
+@pytest.mark.smoke
 def test_threshold_band_and_abs(log):
     """Strict above/below bounds and their conjunction, plus magnitude form."""
 
@@ -279,6 +281,7 @@ def test_saturated_detects_pinned_sigmoid_channel(log, log_b):
     assert _relations(resolved) == ["upper_bound"]
 
 
+@pytest.mark.smoke
 def test_saturated_requires_a_declared_bound(log, log_b):
     """Saturation is relative to a range; no bound refuses at construction."""
 
@@ -286,6 +289,7 @@ def test_saturated_requires_a_declared_bound(log, log_b):
         tl.saturated([log, log_b])
 
 
+@pytest.mark.smoke
 def test_low_variance_selects_constant_channel(log, log_b):
     """The zero-weight constant channel has zero variance across samples."""
 
@@ -306,6 +310,7 @@ def test_samples_accept_a_bundle(log, log_b):
     assert bundled == listed
 
 
+@pytest.mark.smoke
 def test_samples_must_be_traces(log):
     """Non-Trace evidence refuses at construction with the offending index."""
 
@@ -409,6 +414,7 @@ def test_param_population_refuses_kind(log):
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
+@pytest.mark.smoke
 def test_unknown_site_refuses_typed(log):
     """A population site absent from the trace refuses site_not_in_trace."""
 
@@ -482,6 +488,7 @@ def test_constructor_validation_rows():
         tl.top_k("s", 1, by="magnitude")
 
 
+@pytest.mark.smoke
 def test_repr_stability_pins(log, log_b):
     """The constructor-shaped disclosures are pinned (readable AST spellings)."""
 

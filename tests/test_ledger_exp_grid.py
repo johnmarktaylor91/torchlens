@@ -89,7 +89,6 @@ def _code(excinfo: pytest.ExceptionInfo[BundleExperimentError]) -> str:
 # ---- shape, equality with the flat sweep, connectedness ----------------------
 
 
-@pytest.mark.smoke
 def test_grid_shape_axes_cells_follow_the_declared_axes() -> None:
     model, x, baseline = _tiny()
     grid = _grid(
@@ -149,7 +148,6 @@ def test_changing_an_edit_axis_value_changes_only_that_cell() -> None:
 # ---- holes and refusals --------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_unresolved_cell_is_refused_and_the_rest_run() -> None:
     model, x, baseline = _tiny()
     calls = {"n": 0}
@@ -350,6 +348,7 @@ def test_duplicate_identity_includes_the_edit() -> None:
     assert replicated.cell(site="a", pos="t0").value == replicated.cell(site="a", pos="again").value
 
 
+@pytest.mark.smoke
 def test_position_preflight_against_recorded_shapes() -> None:
     model, x, baseline = _tiny((2, 4, 3))
     calls = {"n": 0}

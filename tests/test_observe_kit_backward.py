@@ -139,7 +139,6 @@ def test_unpaired_birth_is_never_overclaimed() -> None:
         captured.cleanup()
 
 
-@pytest.mark.smoke
 def test_healed_birth_reported_despite_finite_final_gradient() -> None:
     """sqrt-birth erased by relu-backward: healed is measured, not decoration."""
 
@@ -156,7 +155,6 @@ def test_healed_birth_reported_despite_finite_final_gradient() -> None:
         captured.cleanup()
 
 
-@pytest.mark.smoke
 def test_multi_backward_requires_bwd_selector() -> None:
     """Two captured passes refuse an unselected walk; passes never collapse."""
 
@@ -240,7 +238,6 @@ def test_gradient_flow_audit_relabels_carrier_and_points_at_bisector() -> None:
         captured.cleanup()
 
 
-@pytest.mark.smoke
 def test_audit_trace_runs_bisector_automatically_when_unambiguous() -> None:
     """audit_trace adds the backward-birth finding for one captured backward."""
 

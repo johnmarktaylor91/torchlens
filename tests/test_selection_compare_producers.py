@@ -291,6 +291,7 @@ def test_reference_must_be_one_trace(log, log_b):
         tl.changed("not a trace")
 
 
+@pytest.mark.smoke
 def test_self_comparison_refuses_typed(log):
     """Resolving against the reference itself is vacuous and refuses, teaching."""
 
@@ -386,6 +387,7 @@ def test_param_population_refuses_kind(log_b):
     assert excinfo.value.fields["code"] == "selection_kind_incompatible"
 
 
+@pytest.mark.smoke
 def test_constructor_validation_rows(log_b):
     """Construction-time parameter validation refuses early and plainly."""
 
@@ -489,6 +491,7 @@ def test_missing_window_pass_refuses_named(rec_log):
     assert excinfo.value.fields["site"] == f"{_TANH}:9"
 
 
+@pytest.mark.smoke
 def test_window_construction_floor_and_validation():
     """Explicit windows need >= 2 distinct 1-based passes, refused at construction."""
 
@@ -504,6 +507,7 @@ def test_window_construction_floor_and_validation():
         tl.stable_across_passes(_TANH, atol=-1.0)
 
 
+@pytest.mark.smoke
 def test_single_pass_layer_refuses_vacuous_claim(log):
     """A cross-pass claim on a single-pass layer refuses with teaching, never
     a vacuous everything-mask."""

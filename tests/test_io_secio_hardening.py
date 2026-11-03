@@ -77,7 +77,6 @@ def test_bundle_sidecars_and_dirs_are_private(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_cleanup_tmp_does_not_sweep_siblings_via_glob_metachars(tmp_path: Path) -> None:
     """A ``*`` in one bundle's name must not widen cleanup to a sibling bundle.
 
@@ -105,7 +104,6 @@ def test_cleanup_tmp_does_not_sweep_siblings_via_glob_metachars(tmp_path: Path) 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_mark_partial_reason_is_length_bounded(tmp_path: Path) -> None:
     """A long reason is truncated so recovery debris cannot grow unbounded."""
 
@@ -116,7 +114,6 @@ def test_mark_partial_reason_is_length_bounded(tmp_path: Path) -> None:
     assert len(persisted) <= bundle_mod._MAX_PARTIAL_REASON_CHARS
 
 
-@pytest.mark.smoke
 def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch) -> None:
     """A failed save records the exception TYPE, not a repr-bearing message.
 
@@ -260,7 +257,6 @@ class _NestedMultiOutputParamModel(nn.Module):
         return out
 
 
-@pytest.mark.smoke
 def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> None:
     """Multi-output param-op equivalence groups survive save with distinct keys.
 
@@ -377,7 +373,6 @@ def test_git_commit_hash_is_independent_of_working_directory(tmp_path: Path, mon
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_double_fault_restore_discloses_stranded_backup(tmp_path: Path) -> None:
     """When a save fails AND the restore fails, the backup path is disclosed.
 

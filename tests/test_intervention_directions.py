@@ -222,6 +222,7 @@ def test_padded_rows_read_the_last_real_token(stack: dict[str, Any]) -> None:
     assert torch.equal(direction.vector, (rows[0] - rows[1]).mean(dim=0))
 
 
+@pytest.mark.smoke
 def test_steer_edit_adds_the_scaled_vector(stack: dict[str, Any]) -> None:
     """``direction.steer(m)`` placed at the site adds ``m * vector`` to its output."""
 

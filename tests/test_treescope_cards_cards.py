@@ -48,7 +48,6 @@ def recurrent_log() -> object:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_trace_card_content_and_proof_row(recurrent_log) -> None:
     """The Trace card carries identity, counts, keys, and the PROOF row."""
 
@@ -62,7 +61,6 @@ def test_trace_card_content_and_proof_row(recurrent_log) -> None:
     assert "card unavailable" not in html
 
 
-@pytest.mark.smoke
 def test_layer_card_pass_rows_are_the_shape(recurrent_log) -> None:
     """A reused layer renders N pass rows via ops[k]; no pooled stats."""
 
@@ -81,7 +79,6 @@ def test_single_pass_layer_degenerates_to_op_card(recurrent_log) -> None:
     assert "card unavailable" not in html
 
 
-@pytest.mark.smoke
 def test_op_card_zones(recurrent_log) -> None:
     """Op card: identity, grid, wrappers untouched, neighbors, proof."""
 
@@ -135,7 +132,6 @@ def test_partial_trace_card_failure_first() -> None:
     assert "&lt;script&gt;" in html
 
 
-@pytest.mark.smoke
 def test_inference_mode_capture_renders_without_raise() -> None:
     """Composition row X9: inference-mode captures never paint a traceback."""
 
@@ -278,7 +274,6 @@ def test_six_state_classification_and_bounds() -> None:
     assert positive.mode == "sequential" and "all-positive" in positive.disclosure
 
 
-@pytest.mark.smoke
 def test_grid_motifs_truncation_and_empty() -> None:
     """Grid: motif glyphs render, truncation discloses, EMPTY is explicit."""
 
@@ -294,7 +289,6 @@ def test_grid_motifs_truncation_and_empty() -> None:
     assert "EMPTY" in empty.html and empty.cells_total == 0
 
 
-@pytest.mark.smoke
 def test_grid_facet_gaps_outer_2x_inner() -> None:
     """Static facet convention: outer group gaps render 2x the inner gap."""
 
@@ -316,7 +310,6 @@ def test_axis_labels_positional_fallback_disclosed() -> None:
     assert all(label.provenance == "positional" for label in axis_labels((2, 3), ("batch",)))
 
 
-@pytest.mark.smoke
 def test_token_labels_threshold_and_degrade() -> None:
     """Token decode is opt-in above the threshold and never raises."""
 
@@ -327,7 +320,6 @@ def test_token_labels_threshold_and_degrade() -> None:
     assert decode_token_labels([0], None) is None
 
 
-@pytest.mark.smoke
 def test_sdpa_hint_fires_only_without_softmax() -> None:
     """The SDPA product hint: sdpa present + softmax absent."""
 

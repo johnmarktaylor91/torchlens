@@ -167,7 +167,6 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 

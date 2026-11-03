@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -142,7 +141,6 @@ def test_threshold_boundary_relocates_exactly_at_gate(tmp_path: Path) -> None:
     assert result.hard_violation_count == 0, result.describe("fanat")
 
 
-@pytest.mark.smoke
 def test_parallel_same_pair_arg_edges_merge_into_one_edge(tmp_path: Path) -> None:
     """A collapsed block feeding cat at N slots renders ONE merged edge.
 
@@ -198,7 +196,6 @@ _OWN_SPLINE_KNOWN_BAD = """digraph ownspline {
 }"""
 
 
-@pytest.mark.smoke
 def test_own_edge_head_label_spline_collision_fires() -> None:
     """An own-spline crossing of a head label is a hard violation now."""
 
@@ -254,7 +251,6 @@ def test_stage0_endpoint_check_fires_on_pileup() -> None:
     assert endpoint.measurements["endpoint_label_boxes"] == 12
 
 
-@pytest.mark.smoke
 def test_stage0_endpoint_check_passes_clean_with_boxes_counted() -> None:
     """Known-good direction: clean endpoint labels pass over a NON-EMPTY set."""
 

@@ -63,6 +63,7 @@ def test_gate_reads_settled_complete_recording_without_warning():
     assert hand_built == []
 
 
+@pytest.mark.smoke
 def test_gate_refuses_failed_recording_with_its_real_status():
     failed = tl.record(
         _Boom(),
@@ -109,7 +110,6 @@ def aborted_bundle(tmp_path):
     return rec.path
 
 
-@pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.recording.recover(aborted_bundle)
     assert recovered.is_recovered is True
@@ -120,7 +120,6 @@ def test_recover_carries_abort_failure_evidence(aborted_bundle):
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
-@pytest.mark.smoke
 def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     """Corruption salvage unchanged: index debris WITHOUT abort evidence stays
     a non-failed recovered recording with a conservative UNKNOWN outcome."""

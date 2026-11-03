@@ -463,7 +463,6 @@ def test_hook_plan_reaches_op_door_when_any_entry_does() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke_cells("test_skip_matches_legacy_path[trace-steer]")
 @pytest.mark.parametrize("spec_name", list(_SPECS))
 @pytest.mark.parametrize("entry", ["trace", "record"])
 def test_skip_matches_legacy_path(entry: str, spec_name: str) -> None:
@@ -642,7 +641,6 @@ def test_op_door_memo_is_identity_keyed_bounded_and_weak(monkeypatch: pytest.Mon
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_record_module_steer_fires_once_per_module_call() -> None:
     """``tl.record`` fires a module-only steer once per call, at the boundary, like a plain hook."""
 

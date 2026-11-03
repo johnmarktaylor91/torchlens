@@ -469,6 +469,7 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
         )
 
 
+@pytest.mark.smoke
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
     """CaptureSpec save_grad=False contradicts backward_ready keep-grad sugar."""
 
@@ -481,6 +482,7 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         )
 
 
+@pytest.mark.smoke
 def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     """save_new_outs restores override flags when fast-pass graph validation fails."""
 

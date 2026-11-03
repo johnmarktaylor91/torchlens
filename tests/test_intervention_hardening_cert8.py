@@ -160,6 +160,7 @@ def test_distance_value_multi_element_matches_cosine() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_callable_helper_arg_roundtrips_at_default_save_level() -> None:
     """BLOCKER-2 case 1: a portable callable helper arg decodes to a callable.
 

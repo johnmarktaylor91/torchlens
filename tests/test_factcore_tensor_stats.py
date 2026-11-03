@@ -135,7 +135,6 @@ def test_sampler_aliasing_regression_with_strided_negative_control() -> None:
     assert abs(strided_sd - exact_sd) > 4 * se_sd
 
 
-@pytest.mark.smoke
 def test_sampled_sd_above_gate_is_marked_and_bounded(monkeypatch) -> None:
     """Above the sd gate: sampled family marked, exact mean retained (D18/D19)."""
 
@@ -215,7 +214,6 @@ def test_bool_family_truth_rate_never_moments() -> None:
     assert tensor_stats(torch.zeros(4, dtype=torch.bool)).is_all_false
 
 
-@pytest.mark.smoke
 def test_complex_magnitude_labeled() -> None:
     """Complex moments are |z| statistics and say so (D12; lovely bug 3)."""
 
@@ -261,7 +259,6 @@ def test_version_keyed_cache_invalidates_on_mutation() -> None:
     assert second.tensor_version != first.tensor_version
 
 
-@pytest.mark.smoke
 def test_never_raises_on_hostile_payloads() -> None:
     """Metadata-only is a first-class success; the kernel never raises."""
 

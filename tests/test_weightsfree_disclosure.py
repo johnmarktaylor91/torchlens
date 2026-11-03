@@ -166,7 +166,6 @@ _CHANNELS = {
 _MARKER_TOKENS = ("structure-only", "structure_only", "hypothes")
 
 
-@pytest.mark.smoke_cells("test_every_channel_carries_the_structure_marker[slice_summary]")
 @pytest.mark.parametrize("channel", sorted(_CHANNELS))
 def test_every_channel_carries_the_structure_marker(channel: str, tmp_path) -> None:
     """No shipped text-bearing channel may launder the hypothesis banner."""

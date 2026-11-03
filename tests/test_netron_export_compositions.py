@@ -18,7 +18,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -31,7 +30,6 @@ def _props(payload: dict[str, Any]) -> dict[str, str]:
     return {row["key"]: row["value"] for row in payload["metadataProps"]}
 
 
-@pytest.mark.smoke
 def test_c2_intervened_ops_visibly_marked(tmp_path: Path) -> None:
     """Ablated ops carry the ``intervened`` attribute and the model marker."""
 

@@ -123,6 +123,7 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
     assert torch.equal(h1, clean_h1)
 
 
+@pytest.mark.smoke
 def test_facet_helper_hook_stores_scatter_wrapper_with_helper_provenance() -> None:
     """Sticky facet entries store the scatter wrapper as the fire-time hook."""
 

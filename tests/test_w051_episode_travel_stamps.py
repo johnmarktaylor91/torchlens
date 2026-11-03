@@ -66,6 +66,7 @@ def _episode(model: _Greedy, **extra) -> tl.Trace:
     )
 
 
+@pytest.mark.smoke
 def test_run_product_round_trips_save_load(tmp_path) -> None:
     """The non-fast provider: run -> save -> load must succeed."""
 

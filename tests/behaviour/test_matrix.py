@@ -77,14 +77,46 @@ def _sweep_cells() -> Iterator[Cell]:
 
 #: The smoke hook. Cell ids listed here run in the smoke tier instead of
 #: ``heavy`` (the two tier marks are exclusive; ``tests/test_marker_lint.py``).
-#: Empty today: the net has no smoke cells. To turn it on, list the ids and set
+#: Today it holds the cheap cells the smoke-tier selection chose (the two
+#: cheapest core pairs plus two more). To change it, list the ids and set
 #: ``_SMOKE_TIER`` to the smoke marker spelled in this file (``pytest.mark``
 #: followed by ``.smoke``): the smoke file list is a text scan of each test
 #: file's own source, so the marker must be spelled here, never through an
 #: alias in a conftest. Only cheap cells can join; an id the universe does not
 #: hold, or one outside the cheap cells, raises at import.
-SMOKE_CELLS: frozenset[str] = frozenset()
-_SMOKE_TIER: pytest.MarkDecorator | None = None
+SMOKE_CELLS: frozenset[str] = frozenset(
+    {
+        "Avalanche_multi-task_simple_MLP_compact-record-reporting",
+        "Avalanche_multi-task_simple_MLP_compact-save-index",
+        "BindsNET_McCullochPitts_(threshold_node)-record-reporting",
+        "BindsNET_McCullochPitts_(threshold_node)-save-index",
+        "BindsNET_McCullochPitts_(threshold_node)-storage-draw",
+        "COMBO_(Conservative_Model-Based_Offline_RL)-record-reporting",
+        "COMBO_(Conservative_Model-Based_Offline_RL)-save-index",
+        "DIAYN_PolicyNetwork_(skill-conditioned_SAC_actor)-record-reporting",
+        "DIAYN_PolicyNetwork_(skill-conditioned_SAC_actor)-save-index",
+        "Exphormer-GPS-VirtualNode-record-reporting",
+        "Exphormer-GPS-VirtualNode-save-index",
+        "IQL_(Implicit_Q-Learning,_rlkit_actor)-record-reporting",
+        "IQL_(Implicit_Q-Learning,_rlkit_actor)-save-index",
+        "MemN2N_(End-To-End_Memory_Networks)-record-reporting",
+        "MemN2N_(End-To-End_Memory_Networks)-save-index",
+        "Neural_Gas-record-reporting",
+        "Neural_Gas-save-index",
+        "PufferLib_NMMO3_observation_encoder_(multi-hot_tile_CNN_+_player_embed)-record-reporting",
+        "PufferLib_NMMO3_observation_encoder_(multi-hot_tile_CNN_+_player_embed)-save-index",
+        "Sionna-NeuralReceiver-record-reporting",
+        "Sionna-NeuralReceiver-save-index",
+        "Tree_parity_machine-intervene-fork_do",
+        "Tree_parity_machine-record-reporting",
+        "Tree_parity_machine-save-index",
+        "Wavelet_Kernel_Network_(WKN)-record-reporting",
+        "Wavelet_Kernel_Network_(WKN)-save-index",
+        "aenet-PyTorch-record-reporting",
+        "aenet-PyTorch-save-index",
+    }
+)
+_SMOKE_TIER: pytest.MarkDecorator | None = pytest.mark.smoke
 
 
 def _param(cell: Cell, *marks: pytest.MarkDecorator) -> object:

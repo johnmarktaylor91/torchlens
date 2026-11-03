@@ -124,13 +124,6 @@ def _loaded_run_matches_live(model: nn.Module, inputs: torch.Tensor, tmp_path: P
 
 # Every fft cell runs the same resolver path; smoke keeps one per shape class (1-D,
 # real inverse, 2-D, n-D, shift helper) and the rest run in the backstop tiers.
-@pytest.mark.smoke_cells(
-    "test_private_fft_key_resolves_to_the_public_callable[fft]",
-    "test_private_fft_key_resolves_to_the_public_callable[irfft]",
-    "test_private_fft_key_resolves_to_the_public_callable[rfft2]",
-    "test_private_fft_key_resolves_to_the_public_callable[ifftn]",
-    "test_private_fft_key_resolves_to_the_public_callable[fftshift]",
-)
 @pytest.mark.parametrize("name", _FFT_NAMES)
 def test_private_fft_key_resolves_to_the_public_callable(name: str) -> None:
     """A ``torch._C._fft`` key resolves exactly, to the object ``torch.fft`` exports."""
@@ -146,7 +139,6 @@ def test_private_fft_key_resolves_to_the_public_callable(name: str) -> None:
     assert qualname == f"torch._C._fft.fft_{name}"
 
 
-@pytest.mark.smoke
 def test_private_linalg_key_resolves_exactly() -> None:
     """A ``torch._C._linalg`` key resolves without the version-bounded alias rows."""
 
@@ -158,13 +150,6 @@ def test_private_linalg_key_resolves_exactly() -> None:
     assert resolved[0] is runnable_load._unwrap_decorated(torch.linalg.inv)
 
 
-@pytest.mark.smoke_cells(
-    "test_public_fft_key_resolves_to_the_public_callable[fft]",
-    "test_public_fft_key_resolves_to_the_public_callable[irfft]",
-    "test_public_fft_key_resolves_to_the_public_callable[rfft2]",
-    "test_public_fft_key_resolves_to_the_public_callable[ifftn]",
-    "test_public_fft_key_resolves_to_the_public_callable[fftshift]",
-)
 @pytest.mark.parametrize("name", _FFT_NAMES)
 def test_public_fft_key_resolves_to_the_public_callable(name: str) -> None:
     """The ``torch.fft`` key form resolves exactly to the same object.
@@ -192,7 +177,6 @@ def _minted_fft_key(name: str) -> FunctionRegistryKey:
     )
 
 
-@pytest.mark.smoke
 def test_fft_keys_resolve_exactly_whatever_the_producer_torch_version() -> None:
     """FFT readiness does not depend on the recorded producer torch minor.
 
@@ -240,7 +224,6 @@ def test_special_model_loaded_run_is_verified(tmp_path: Path) -> None:
     _loaded_run_matches_live(_SpecialFamily().eval(), torch.rand(2, 4), tmp_path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("module_name", "qualname", "public"),
     (
@@ -265,7 +248,6 @@ def test_registry_coherence_accepts_only_the_keys_own_public_name(
     assert check(foreign, ("op_1_1:1",), {"op_1_1": public}) == (public, "op_1_1:1")
 
 
-@pytest.mark.smoke
 def test_registry_coherence_still_refuses_a_swapped_fft_builtin() -> None:
     """``fft_irfft`` as the authority for an op recorded as ``rfft`` is a contradiction."""
 
@@ -277,7 +259,6 @@ def test_registry_coherence_still_refuses_a_swapped_fft_builtin() -> None:
     ) == ("rfft", "rfft_1_1:1")
 
 
-@pytest.mark.smoke
 def test_boundary_identity_table_key_is_the_minted_key() -> None:
     """The resolver table spells exactly the key capture mints for the boundary op."""
 
@@ -285,7 +266,6 @@ def test_boundary_identity_table_key_is_the_minted_key() -> None:
     assert set(runnable_load._TORCHLENS_SYNTHETIC_CALLABLES) == {_BOUNDARY_IDENTITY_KEY}
 
 
-@pytest.mark.smoke
 def test_identity_boundary_op_resolves_exactly() -> None:
     """``nn.Identity`` and pass-through outputs resolve to the in-memory identity helper."""
 
@@ -305,7 +285,6 @@ def test_identity_model_loaded_run_is_verified(tmp_path: Path) -> None:
     _loaded_run_matches_live(_IdentityFamily().eval(), torch.randn(2, 4), tmp_path)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "key",
     (
@@ -385,7 +364,6 @@ def _legacy_ctor_labels(trace: Any) -> list[str]:
     return [str(op.label) for op in ops if getattr(op, "func_id", None) == _LEGACY_CTOR_KEY]
 
 
-@pytest.mark.smoke
 def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
     """Section-13 disposition: runnable save refuses ``torch.Tensor.__new__`` typed.
 
@@ -408,7 +386,6 @@ def test_legacy_tensor_constructor_save_refuses_typed(tmp_path: Path) -> None:
     assert set(labels) <= refused
 
 
-@pytest.mark.smoke
 def test_legacy_tensor_constructor_key_stays_unresolved() -> None:
     """Section-13 disposition: the resolver keeps refusing the raw legacy constructor.
 

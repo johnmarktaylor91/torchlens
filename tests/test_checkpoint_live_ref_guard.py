@@ -202,6 +202,7 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
     assert "nothing to compare" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_refusal_survives_bundle_save_load(ckpt_bundle: Any, tmp_path: Any) -> None:
     """A bundle.save round trip keeps the refusal armed on the loaded Bundle."""
 
@@ -218,7 +219,6 @@ def test_refusal_survives_bundle_save_load(ckpt_bundle: Any, tmp_path: Any) -> N
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
     """A same-checkpoint bundle with no version claim triggers nothing."""
 
@@ -248,7 +248,6 @@ def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
         _ = related.params[_WEIGHT].weight_norm_diff
 
 
-@pytest.mark.smoke
 def test_single_member_param_view_keeps_live_handle_contract(
     stepped_pair: dict[str, Any],
 ) -> None:
@@ -296,7 +295,6 @@ def test_bypass_matrix_every_read_hits_the_guard(ckpt_bundle: Any, read: Any) ->
     assert excinfo.value.fields["param_address"] == _WEIGHT
 
 
-@pytest.mark.smoke
 def test_bundle_at_routes_to_the_same_guard(ckpt_bundle: Any) -> None:
     """Bundle.at(param label) reads funnel through the identical refusal."""
 
@@ -354,7 +352,6 @@ def test_n_gate_precedence_unchanged_on_halted_member(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_immutable_evidence_fixture_passes_the_guard(ckpt_bundle: Any, monkeypatch: Any) -> None:
     """When every member basis is immutable (R8(b) simulation), the read proceeds."""
 
@@ -364,7 +361,6 @@ def test_immutable_evidence_fixture_passes_the_guard(ckpt_bundle: Any, monkeypat
     assert set(diffs) == {"ck0", "ck64"}
 
 
-@pytest.mark.smoke
 def test_until_r8b_the_public_read_still_refuses(ckpt_bundle: Any) -> None:
     """Without R8(b) no immutable basis exists, so the read refuses -- row shape unchanged."""
 

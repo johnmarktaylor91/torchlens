@@ -53,7 +53,6 @@ def test_selector_run_freezes_plan_and_matches_string_run(tmp_path: Path) -> Non
         assert torch.equal(tensor, by_label[key.split(":")[0]])
 
 
-@pytest.mark.smoke
 def test_selector_disk_run_records_plan_and_resumes(tmp_path: Path) -> None:
     """The frozen plan rides the manifest; a compatible resume adopts it."""
 
@@ -82,7 +81,6 @@ def test_selector_disk_run_records_plan_and_resumes(tmp_path: Path) -> None:
     assert sorted(reader.keys) == ["relu_1_2:1", "relu_2_4:1"]
 
 
-@pytest.mark.smoke
 def test_selector_mapping_namespaces_children(tmp_path: Path) -> None:
     """A mapping selector matching several sites namespaces its children."""
 

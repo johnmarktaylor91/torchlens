@@ -430,7 +430,6 @@ def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
     assert first.trace.name != second.trace.name
 
 
-@pytest.mark.smoke
 def test_loaded_sparse_fast_run_verifies_once_then_reuses_compiled_result_trace(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
@@ -702,6 +701,7 @@ def test_live_fast_run_refreshes_every_multipass_activation(plan_kind: str) -> N
 
 # Heavy, not unmarked: 9.9 s CPU on a GitHub fast-tier worker (2026-10-03), past the 5 s
 # unmarked budget even at reference speed.
+@pytest.mark.smoke
 @pytest.mark.heavy
 def test_loaded_sparse_fast_run_keeps_control_witness_guard(honesty_artifact: Path) -> None:
     """Evaluate recorded control witnesses on every trusted compiled iteration."""

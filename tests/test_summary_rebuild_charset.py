@@ -118,7 +118,6 @@ def test_glyph_table_is_one_to_one(golden_report) -> None:
     assert [len(line) for line in ascii_lines] == [len(line) for line in unicode_lines]
 
 
-@pytest.mark.smoke
 def test_no_escape_bytes_ever(golden_report) -> None:
     """A11: no ESC byte in any returned string, any charset."""
 
@@ -160,7 +159,6 @@ def test_detection_ci_rung_beats_a_tty(monkeypatch) -> None:
     assert detect_style(_Tty()) == "ascii"
 
 
-@pytest.mark.smoke
 def test_detection_falls_toward_ascii(monkeypatch) -> None:
     """Non-tty, dumb TERM, and non-round-tripping encodings all -> ASCII."""
 
@@ -208,7 +206,6 @@ def test_detection_affirms_unicode_only_when_verified(monkeypatch) -> None:
     assert detect_style(_Utf8Tty()) == "unicode"
 
 
-@pytest.mark.smoke
 def test_print_resolves_at_the_boundary(golden_report, monkeypatch) -> None:
     """print(style='auto') detects the actual sink, not global stdout."""
 

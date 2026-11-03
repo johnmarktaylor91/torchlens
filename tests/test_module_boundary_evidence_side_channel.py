@@ -79,7 +79,6 @@ def _boundary_capture(hook: Any) -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     """An attr-rejecting replacement keeps its intervention provenance.
 

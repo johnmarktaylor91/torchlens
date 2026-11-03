@@ -283,6 +283,7 @@ _REFUSAL_SWEEP = [
 ]
 
 
+@pytest.mark.smoke_cells("test_numeric_literal_bomb_refused_op_agnostically[one_hot]")
 @pytest.mark.parametrize(
     "name, factory, x, kind, sentinel, replacement",
     _REFUSAL_SWEEP,
@@ -396,7 +397,6 @@ def test_preflight_excludes_views_and_inplace_by_storage_alias() -> None:
         _preflight_call_allocation(None, func, args, kwargs, call)
 
 
-@pytest.mark.smoke
 def test_preflight_fails_open_on_data_dependent_op() -> None:
     """A data-dependent op with no fake impl (``nonzero``) fails open -- not refused."""
 

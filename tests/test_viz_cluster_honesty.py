@@ -199,7 +199,6 @@ def test_condensed_away_clusters_are_not_emitted_empty(tmp_path: Path) -> None:
         )
 
 
-@pytest.mark.smoke
 def test_image_node_attrs_are_visualizer_relative(tmp_path: Path) -> None:
     """DOT ``image=`` attrs never embed the mkdtemp visualizer path (R19-6).
 

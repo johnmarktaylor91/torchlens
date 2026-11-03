@@ -59,13 +59,11 @@ class TestOpLabelBackReferenceForgery:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
-    @pytest.mark.smoke
     def test_empty_op_labels_on_op_bearing_kind_refuses(self):
         entry = boundary(0, 0)
         entry["op_labels_raw"] = []
         self._assert_refuses(entry)
 
-    @pytest.mark.smoke
     def test_duplicate_op_labels_refuse(self):
         entry = boundary(0, 0)
         entry["op_labels_raw"] = ["allreduce_1_raw", "allreduce_1_raw"]
@@ -132,7 +130,6 @@ class TestRoleIndexValidation:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
-    @pytest.mark.smoke
     def test_missing_index_refuses(self):
         role = self._role("contribution", 0)
         del role["index"]
@@ -147,7 +144,6 @@ class TestRoleIndexValidation:
     def test_non_integer_index_refuses(self):
         self._assert_refuses([self._role("contribution", "0")])
 
-    @pytest.mark.smoke
     def test_duplicate_index_within_one_role_name_refuses(self):
         self._assert_refuses([self._role("contribution", 0), self._role("contribution", 0)])
 
@@ -208,7 +204,6 @@ class TestGroupRecordForgery:
         entry["group"]["size"] = True
         self._assert_refuses([entry])
 
-    @pytest.mark.smoke
     def test_permuted_my_group_rank_refuses(self):
         entry = boundary(0, 0)  # rank 0 of members (0, 1): position is 0
         entry["group"]["my_group_rank"] = 1
@@ -219,7 +214,6 @@ class TestGroupRecordForgery:
         entry["group"]["my_group_rank"] = 5
         self._assert_refuses([entry])
 
-    @pytest.mark.smoke
     def test_selective_my_group_rank_strip_refuses(self):
         # The writer mints None only when dist.get_group_rank RAISES -- a
         # group-level fact -- so mixed presence within one core+group is
@@ -242,7 +236,6 @@ class TestGroupRecordForgery:
             "honest-uniform-absence",
         )
 
-    @pytest.mark.smoke
     def test_engine_belt_refuses_out_of_range_group_rank_typed(self):
         """Direct engine evidence gets a typed refusal, never an IndexError."""
 
@@ -326,6 +319,7 @@ class TestGatherDivergenceSurvivesGroupRankTamper:
             f"gather-tamper[{rank}]",
         )
 
+    @pytest.mark.smoke
     def test_honest_mismatch_yields_value_divergence(self):
         d = derive_merge({0: self._extract(0, [self._root()]), 1: self._extract(1, [self._leaf()])})
         assert d.joins[0].consistency is BoundaryConsistency.MISMATCHED
@@ -342,7 +336,6 @@ class TestGatherDivergenceSurvivesGroupRankTamper:
             self._extract(1, [stripped, boundary(1, 1)])
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
-    @pytest.mark.smoke
     def test_group_wide_strip_retreats_to_no_claim_never_attested(self):
         # Stripping the WHOLE group's my_group_rank on a single-boundary core
         # is byte-identical to an honest get_group_rank failure, so it parses
@@ -377,19 +370,16 @@ class TestC10dGroupSeqLatch:
             )
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
-    @pytest.mark.smoke
     def test_deleted_key_refuses(self):
         entry = boundary(0, 0)
         del entry["c10d_group_seq"]
         self._assert_refuses([entry])
 
-    @pytest.mark.smoke
     def test_undisclosed_drop_after_values_refuses(self):
         self._assert_refuses(
             [boundary(0, 0, c10d_group_seq=10), boundary(0, 1, c10d_group_seq=None)]
         )
 
-    @pytest.mark.smoke
     def test_value_after_null_refuses(self):
         self._assert_refuses(
             [boundary(0, 0, c10d_group_seq=None), boundary(0, 1, c10d_group_seq=11)]
@@ -563,7 +553,6 @@ class TestMemberOutcomeGate:
         assert excinfo.value.fields["code"] == MergedErrorCode.MERGE_INPUT_INVALID.value
         assert excinfo.value.fields["reason"] == "member_outcome_not_mergeable"
 
-    @pytest.mark.smoke
     def test_failed_member_refuses_typed(self):
         from torchlens._capture.outcome import CaptureStatus
 
@@ -625,7 +614,6 @@ class TestMemberOutcomeGate:
         assert merged.member_outcomes[1] == "unattested"
         assert "unattested" in merged.summary()
 
-    @pytest.mark.smoke
     def test_disclosure_survives_release(self):
         from torchlens._capture.outcome import CaptureStatus
         from torchlens._merged import merge_ranks
@@ -635,7 +623,6 @@ class TestMemberOutcomeGate:
         assert merged.member_outcomes == {0: "stopped", 1: "complete"}
         assert "stopped" in merged.summary()
 
-    @pytest.mark.smoke
     def test_members_without_outcome_sidecar_make_no_claim(self):
         from torchlens._merged import merge_ranks
 

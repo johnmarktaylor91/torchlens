@@ -51,6 +51,7 @@ def _traced(intervene: Any = None) -> tl.Trace:
     )
 
 
+@pytest.mark.smoke
 def test_edit_text_rule() -> None:
     """Name alone without arguments; short literals written in; stand-ins otherwise."""
 

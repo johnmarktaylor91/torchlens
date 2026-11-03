@@ -252,7 +252,6 @@ def test_io_boundary_ops_join_positional() -> None:
     assert rows["s1||output||1"].verdict is _SiteJoinVerdict.POSITIONAL
 
 
-@pytest.mark.smoke
 def test_site_profile_refuses_typed_on_keyless_trace() -> None:
     log = tl.trace(_SameLineLoop(), torch.randn(2, 4))
     for label in log.op_labels:
@@ -301,7 +300,6 @@ def test_closure_is_identity_when_recurrence_already_grouped() -> None:
         assert group == frozenset(recurrence)
 
 
-@pytest.mark.smoke
 def test_closure_reunites_degraded_same_site_cohorts() -> None:
     # On the recurrence_detection=False path the param-free relus stay
     # single layers; the closure folds them back into one group via
@@ -343,7 +341,6 @@ def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
             assert len({ops[member].equivalence_class for member in group}) == 1
 
 
-@pytest.mark.smoke
 def test_closure_keyless_rows_never_fold() -> None:
     rows = [
         FoldRow("a_1_1:1", None, "tanh_x", ()),
@@ -354,6 +351,7 @@ def test_closure_keyless_rows_never_fold() -> None:
     assert groups["a_2_2:1"] == frozenset({"a_2_2:1"})
 
 
+@pytest.mark.smoke
 @pytest.mark.heavy
 def test_resnet18_fold_group_census_pin() -> None:
     # Pinned census fact (I-S3' family). Grouping rule row 28: each

@@ -124,7 +124,6 @@ def test_typing_leaks_stay_deleted() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_class_layer_every_member_is_licensed() -> None:
     """Class-layer closure by construction (D3): the RULES are the baseline.
 

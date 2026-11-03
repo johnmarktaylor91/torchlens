@@ -175,7 +175,6 @@ def test_amendment_registry_exact_sets() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_strict_protocol_refusal_type() -> None:
     from ._models import SmallCNN, _cnn_input
 
@@ -221,6 +220,7 @@ def _journal_events(model, inputs) -> list:
     return [op_event_from_record(entry) for entry in captured]
 
 
+@pytest.mark.smoke
 @pytest.mark.heavy
 def test_scatter_is_the_single_ingest_truth(tmp_path: Path) -> None:
     """Every journal record ingests through the generated scatter (P3).

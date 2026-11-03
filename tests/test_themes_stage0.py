@@ -91,7 +91,6 @@ def test_label_spelling_audit_counts_forbidden_families() -> None:
     assert clean[0].passed
 
 
-@pytest.mark.smoke
 def test_output_caps_flag_extreme_aspect(tmp_path: Any) -> None:
     """A declared 20000x100 artifact fails the caps."""
 
@@ -101,7 +100,6 @@ def test_output_caps_flag_extreme_aspect(tmp_path: Any) -> None:
     assert not findings[0].passed
 
 
-@pytest.mark.smoke
 def test_disclosure_checks_catch_a_stripped_caption(speed_render: Any) -> None:
     """Removing the coverage line from the DOT fails the audit."""
 

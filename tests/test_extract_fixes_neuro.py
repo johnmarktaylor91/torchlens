@@ -53,7 +53,6 @@ class _ZeroTail(nn.Module):
         return self.second(torch.tanh(self.first(x)))
 
 
-@pytest.mark.smoke
 def test_default_rdm_sweep_skips_buffer_sites_with_one_disclosure() -> None:
     """Buffer sites are excluded from the sweep and disclosed exactly once."""
 
@@ -95,7 +94,6 @@ def test_explicit_buffer_site_selection_refuses_actionably() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_forced_late_failure_leaves_zero_annotations() -> None:
     """Atomicity (D4): a failure at a later site commits nothing at all."""
 
@@ -184,7 +182,6 @@ def test_shape_mismatch_site_refuses_on_explicit_selection() -> None:
     assert "rdm_evolution" in message
 
 
-@pytest.mark.smoke
 def test_successful_sweep_still_annotates_and_returns() -> None:
     """The gate does not disturb the happy path: annotations + returns intact."""
 

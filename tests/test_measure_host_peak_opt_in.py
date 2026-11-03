@@ -92,7 +92,6 @@ def test_option_defaults_off_and_is_mirrored_on_the_trace() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 @procfs
 def test_default_capture_leaves_the_process_high_water_mark_untouched() -> None:
     _raise_mark_above_rss()

@@ -88,7 +88,6 @@ def test_reference_encoder_vectors() -> None:
     assert unescape_site_component("a%2Fb%25c%7Cd") == "a/b%c|d"
 
 
-@pytest.mark.smoke
 def test_parse_is_exact_inverse() -> None:
     for site, layer_type, slot, ordinal in (
         (("a|b", "a/b.c:d"), "relu", None, 3),
@@ -397,7 +396,6 @@ def _fake_op(**kwargs: object) -> SimpleNamespace:
     return SimpleNamespace(**kwargs)
 
 
-@pytest.mark.smoke
 def test_is2_forged_singleton_collision_without_module_stack_still_raises() -> None:
     """Two singleton ops (unique equivalence_class each) sharing one site_key,
     with no module_call_stack, is a real forged collision -- the coarse
@@ -425,7 +423,6 @@ def test_is2_forged_singleton_collision_without_module_stack_still_raises() -> N
         _check_site_key_uniqueness(ops, "site_key_invariants")
 
 
-@pytest.mark.smoke
 def test_is2_jax_bare_function_root_multipass_group_is_not_a_false_positive() -> None:
     """A genuine multi-occurrence equivalence group with no module_call_stack
     (the JAX bare ``function_root`` recurrence case 93ba1a033 fixed) shares
@@ -446,7 +443,6 @@ def test_is2_jax_bare_function_root_multipass_group_is_not_a_false_positive() ->
     _check_site_key_uniqueness(ops, "site_key_invariants")  # must not raise
 
 
-@pytest.mark.smoke
 def test_is2_jax_multipass_group_still_catches_a_genuine_duplicate() -> None:
     """Within a genuine multi-occurrence group, two passes that collide on
     BOTH site_key and raw label (not merely the shared equivalence_class)

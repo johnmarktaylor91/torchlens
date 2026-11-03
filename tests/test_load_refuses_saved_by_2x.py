@@ -52,7 +52,6 @@ def _manifest(path: Path) -> dict:
     return json.loads((path / "manifest.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("family", sorted(_FAMILIES))
 def test_family_refuses_as_2x(family: str) -> None:
     """The artifact exists, is the family it claims, and refuses with the one 2.x error."""
@@ -115,7 +114,6 @@ def test_stamp_below_the_oldest_known_format_refuses(tmp_path: Path, stamp: int)
 _INTERVENTION_V2_16 = _LEGACY / "intervention_v2_16.tlspec"
 
 
-@pytest.mark.smoke
 def test_intervention_spec_v2_16_refuses_as_2x() -> None:
     """The kept 2.16 intervention spec refuses at load and at validation with the one error."""
 
@@ -169,7 +167,6 @@ def _assert_extraction_v1_refusal(error: ArtifactTooOldError, path: Path) -> Non
     assert error.fields["path"] == str(path)
 
 
-@pytest.mark.smoke
 def test_extraction_v1_refuses_as_2x_at_every_reader(tmp_path: Path) -> None:
     """The kept v1 extraction manifest refuses at tl.load and at each extraction reader."""
 

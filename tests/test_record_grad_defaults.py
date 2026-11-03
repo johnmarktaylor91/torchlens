@@ -99,6 +99,7 @@ def test_record_installs_no_grad_hooks_by_default() -> None:
     assert recording.outcome.inference_only is False
 
 
+@pytest.mark.smoke_cells("test_record_opt_in_restores_grad_hooks_and_backward[backward_ready]")
 @pytest.mark.parametrize(
     "opt_in",
     [
@@ -128,7 +129,6 @@ def test_record_save_grads_off_values_do_not_opt_in(value: object) -> None:
     assert not _has_grad_hooks(out)
 
 
-@pytest.mark.smoke
 def test_record_log_backward_without_opt_in_refuses_naming_it() -> None:
     """A backward on a record without the opt-in refuses instead of recording nothing."""
 

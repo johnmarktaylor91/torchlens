@@ -318,7 +318,6 @@ def test_variable_on_non_tensor_raises_inside_capture() -> None:
     assert "Variable data has to be a tensor" in expected_message
 
 
-@pytest.mark.smoke
 def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
     """``unwrap_torch`` restores ``__new__``, ``tp_new`` and immutability; rewrap patches again."""
 
@@ -354,6 +353,7 @@ def test_unwrap_restores_legacy_classes_exactly_and_rewrap_reinstalls() -> None:
     assert _validate(SylvesterReparam(), torch.randn(2, 4))
 
 
+@pytest.mark.smoke
 def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
     """The resolver never resolves the legacy-constructor ops; a runnable run refuses typed.
 

@@ -47,7 +47,6 @@ def _run_scaled_loop(session: tc.ChecksSession, model: nn.Module, optimizer, sca
         scaler.update()
 
 
-@pytest.mark.smoke
 def test_checks_publish_the_new_series_on_the_shared_stream() -> None:
     """Scale, skipped-attempts, clip-factor, ratio series reach subscribers."""
 
@@ -85,7 +84,6 @@ def test_checks_publish_the_new_series_on_the_shared_stream() -> None:
     assert all(event.axis_provenance == "hook_only" for event in skip_events)
 
 
-@pytest.mark.smoke
 def test_watchdog_state_is_a_verdict_series() -> None:
     """The watchdog delivers verdict events, not silence, under total skip."""
 
@@ -116,7 +114,6 @@ def test_watchdog_state_is_a_verdict_series() -> None:
     assert watchdog_events[-1].verdict == "tripped"
 
 
-@pytest.mark.smoke
 def test_unavailable_is_mandatory_vocabulary_on_the_stream() -> None:
     """Censored magnitude arrives as kind='unavailable' with a reason."""
 
@@ -141,7 +138,6 @@ def test_unavailable_is_mandatory_vocabulary_on_the_stream() -> None:
     assert magnitude_event.reason and "max_norm" in magnitude_event.reason
 
 
-@pytest.mark.smoke
 def test_throwing_subscriber_never_corrupts_collection() -> None:
     """The C06 isolation contract holds under the checks producer."""
 

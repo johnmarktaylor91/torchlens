@@ -64,6 +64,12 @@ _ACTIVE = [
 ]
 
 
+@pytest.mark.smoke_cells(
+    "test_every_active_row_renders[sentinel-07-intervention]",
+    "test_every_active_row_renders[sentinel-08-bundle]",
+    "test_every_active_row_renders[sentinel-09-gradients]",
+    "test_every_active_row_renders[sentinel-14-side-surfaces]",
+)
 @pytest.mark.heavy
 @pytest.mark.parametrize("row_id, slide", _ACTIVE, ids=[s.id for _r, s in _ACTIVE])
 def test_every_active_row_renders(row_id: str, slide, tmp_path: Path) -> None:

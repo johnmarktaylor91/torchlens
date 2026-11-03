@@ -241,7 +241,6 @@ class TestMetaApiSmokePostWrap:
         batched = torch.vmap(torch.dot)(torch.randn(4, 3), torch.randn(4, 3))
         assert batched.shape == (4,)
 
-    @pytest.mark.smoke
     def test_flop_counter_mode(self):
         from torch.utils.flop_counter import FlopCounterMode
 

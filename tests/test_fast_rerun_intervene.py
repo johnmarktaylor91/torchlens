@@ -414,7 +414,6 @@ def _assert_matches_hook(trace: Any, reference: dict[str, Any], *, fast: bool) -
     assert _max_abs_diff(_site_op(trace, _HEAD).out, reference["head"]) == 0.0
 
 
-@pytest.mark.smoke
 def test_five_legacy_reruns_are_exact_against_hook_and_fresh_trace() -> None:
     """Five consecutive same-length steered reruns match the hook and a fresh capture."""
 
@@ -445,7 +444,6 @@ def test_five_legacy_reruns_are_exact_against_hook_and_fresh_trace() -> None:
         assert _max_abs_diff(_site_op(trace, _HEAD).out, _site_op(fresh, _HEAD).out) == 0.0
 
 
-@pytest.mark.smoke
 def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
     """Eight greedy steps of growing length rerun fast, exactly, with honest shapes."""
 
@@ -482,7 +480,6 @@ def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
     assert torch.equal(ids, reference_ids)
 
 
-@pytest.mark.smoke
 def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
     """A different branch at the new length is refused fast and reruns through capture."""
 

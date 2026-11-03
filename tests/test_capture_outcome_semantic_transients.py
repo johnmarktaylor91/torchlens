@@ -129,7 +129,6 @@ def test_failed_capture_drops_the_semantic_output_scratch() -> None:
     assert _leaked(partial) == []
 
 
-@pytest.mark.smoke
 def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
     """The drop never runs before the sole consumer.
 
@@ -161,6 +160,7 @@ def test_halt_does_not_break_decoding_on_the_completed_path() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_transient_fields_are_declared_drop_on_trace() -> None:
     """Declared, so the runtime-declaration lockstep gate can see them."""
 

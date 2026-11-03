@@ -128,7 +128,6 @@ def test_fold_total_severity_order(weaker: CaptureStatus, stronger: CaptureStatu
     assert folded.status is stronger
 
 
-@pytest.mark.smoke
 def test_fold_unsettled_member_is_unknown_fail_closed() -> None:
     """A member with no settled outcome drives the fold to UNKNOWN."""
 
@@ -176,7 +175,6 @@ def test_outcome_for_bundle_returns_fold_not_none(complete_pair: Bundle) -> None
     assert complete_pair.outcome.status is CaptureStatus.COMPLETE
 
 
-@pytest.mark.smoke
 def test_capability_gate_on_bundle_no_false_hand_built_warning(complete_pair: Bundle) -> None:
     """The container gate reads the fold: no UNKNOWN, no hand-built-object warning."""
 
@@ -277,7 +275,6 @@ def test_container_fold_never_gates_a_member_read(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_runnable_level_refuses_identically_at_both_doors(tmp_path, complete_pair: Bundle) -> None:
     with pytest.raises(InvalidArgumentError) as tl_door:
         complete_pair.save(tmp_path / "r1.tlspec", level="runnable")

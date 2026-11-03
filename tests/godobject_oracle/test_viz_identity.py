@@ -199,7 +199,6 @@ def _worker_renders() -> dict[str, str]:
     return renders
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("model_key", ("viz_cnn", "viz_recurrent"))
 @pytest.mark.parametrize("vis_mode", ("unrolled", "rolled"))
 def test_forward_dot_matches_golden(model_key: str, vis_mode: str) -> None:
@@ -233,7 +232,6 @@ def test_forward_dot_two_process_control() -> None:
     assert hashes[0] == hashes[1]
 
 
-@pytest.mark.smoke
 def test_backward_dot_in_process_stable(tmp_path: Path) -> None:
     """Backward DOT: double-render byte equality + structural invariants.
 

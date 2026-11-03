@@ -28,7 +28,6 @@ from torchlens.backends.paddle.validation import _arrays_close as paddle_arrays_
 class TestMLXPayloadsClose:
     """MLX replay oracle: absolute term must not bless sub-band corruption."""
 
-    @pytest.mark.smoke
     def test_all_zero_replay_of_low_magnitude_fp32_fails(self) -> None:
         """An all-zero replay of activations below the old atol must FAIL."""
 
@@ -78,7 +77,6 @@ class TestMLXPayloadsClose:
 class TestPaddleArraysClose:
     """Paddle replay oracle: tolerances must be dtype-aware in both directions."""
 
-    @pytest.mark.smoke
     def test_fp64_small_value_corruption_fails(self) -> None:
         """fp64 elements below the old fp32 atol must not be zeroable."""
 
@@ -236,7 +234,6 @@ class TestTinygradScalarOracle:
     byte-identical NaN replay FAILED only there, and fp64 corruption below
     the decimal pair PASSED."""
 
-    @pytest.mark.smoke
     def test_identical_nan_pattern_passes(self) -> None:
         from torchlens.backends.tinygrad.backend import _payload_values_close
 

@@ -173,7 +173,6 @@ def _codes(descriptor: SparseRunDescriptor) -> set[RunnableErrorCode]:
     return {diagnostic.code for diagnostic in report.diagnostics}
 
 
-@pytest.mark.smoke
 def test_locked_ladder_exact_alias_reverse_and_decorated_rungs() -> None:
     """Resolve representative keys through every locked ladder rung."""
 
@@ -459,6 +458,7 @@ def test_non_torch_backend_returns_structured_unsupported_readiness() -> None:
     }
 
 
+@pytest.mark.smoke
 def test_load_time_failure_taxonomy_and_execution_skeletons(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

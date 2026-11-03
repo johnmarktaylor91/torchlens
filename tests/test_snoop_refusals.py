@@ -59,6 +59,7 @@ def test_echo_unknown_stats_rung_refuses() -> None:
     assert _code(excinfo) == "echo_argument_invalid"
 
 
+@pytest.mark.smoke
 def test_finalized_label_selector_refuses_before_execution() -> None:
     """Selectors needing finalized graph facts refuse BEFORE the forward."""
 

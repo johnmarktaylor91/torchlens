@@ -45,7 +45,6 @@ def _lm() -> nn.Module:
 class TestRungLaw:
     """Memo D2: real XOR input_size XOR nothing, identical on all verbs."""
 
-    @pytest.mark.smoke
     def test_mixed_rung_refuses(self) -> None:
         """A real input plus input_shape= is a typed conflict, never a guess."""
 
@@ -79,7 +78,6 @@ class TestRungLaw:
 class TestGrammar:
     """Memo D4: SOL's grammar verbatim, refusing before capture."""
 
-    @pytest.mark.smoke_cells("test_malformed_sizes_refuse[bad4]")
     @pytest.mark.parametrize(
         "bad",
         [(0, 3), (1, -2), (1, 2.5), ("a", 3), (), [], "224", 224, {3: (1, 2)}],
@@ -98,7 +96,6 @@ class TestGrammar:
             parse_input_size((1, True, 4), _cnn())
         assert excinfo.value.fields["code"] == "input_size_invalid"
 
-    @pytest.mark.smoke
     def test_unknown_mapping_binding_refuses(self) -> None:
         """A mapping key the forward does not accept refuses with the names."""
 
@@ -117,7 +114,6 @@ class TestGrammar:
         assert len(parsed.positional) == 2
         assert parsed.positional[0].shape == (1, 4)
 
-    @pytest.mark.smoke
     def test_dtype_facts_embedding_entry_permits_ids(self) -> None:
         """An unambiguous embedding entry permits vocab-bounded int64 ids."""
 
@@ -127,7 +123,6 @@ class TestGrammar:
         assert slot.recipe == "randint"
         assert slot.high <= 50
 
-    @pytest.mark.smoke
     def test_dtype_ambiguity_refuses_with_override_teach(self) -> None:
         """No static entry fact refuses; InputSpec is the taught override."""
 
@@ -214,7 +209,6 @@ class TestCapabilityGate:
         assert excinfo.value.fields["code"] == "nongold_semantics_unavailable"
         require_gold(tl.trace(_cnn(), torch.randn(1, 3, 8, 8)), "decoded labels")
 
-    @pytest.mark.smoke
     def test_first_raw_read_warns_once_per_trace(self) -> None:
         """Layer.out warns exactly once on a synthesized trace, never on gold."""
 
@@ -253,7 +247,6 @@ class TestTypedRefusalProvocation:
             tl.trace(_cnn(), input_shape=(1, 3, 8, 8), backend="tf")
         assert excinfo.value.fields["code"] == "input_ladder_backend_unsupported"
 
-    @pytest.mark.smoke
     def test_render_pipeline_failure_refuses_typed(self) -> None:
         """A graphviz pipeline failure surfaces as one typed refusal."""
 
@@ -278,7 +271,6 @@ class TestTypedRefusalProvocation:
         assert excinfo.value.fields["code"] == "render_engine_unavailable"
         assert "pip install graphviz" in excinfo.value.fields["remedy"]
 
-    @pytest.mark.smoke
     def test_open_viewer_windows_branch_uses_startfile(
         self, monkeypatch: pytest.MonkeyPatch, tmp_path
     ) -> None:

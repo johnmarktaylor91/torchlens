@@ -253,7 +253,6 @@ def _reduce_belt_admits_construction(resolved: object) -> bool:
     return True
 
 
-@pytest.mark.smoke
 def test_admitted_constructable_alloc_set_is_empty_over_baseline_and_allowlists() -> None:
     """No admitted (module,name) resolves to an alloc type the belt permits constructing.
 

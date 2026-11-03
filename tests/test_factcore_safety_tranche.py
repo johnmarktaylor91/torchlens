@@ -73,7 +73,6 @@ def test_recording_repr_is_bounded_identity_card(recording) -> None:
     assert "RecordContext(" not in text
 
 
-@pytest.mark.smoke
 def test_recording_str_is_bounded_per_pass_table(recording) -> None:
     """str(Recording) stays within the collection-view line budget (bug 1)."""
 
@@ -136,7 +135,6 @@ def test_op_accessor_iteration_yields_ops(loop_trace) -> None:
     assert [member.pass_number for member in members] == [1, 2, 3]
 
 
-@pytest.mark.smoke
 def test_op_accessor_get_matches_getitem_basis(loop_trace) -> None:
     """get/[] share the 0-based positional basis (bug 27)."""
 
@@ -185,7 +183,6 @@ def test_edge_refusal_remedy_is_runnable_spelling(loop_trace) -> None:
     assert getattr(excinfo.value, "fields", {}).get("code") == "edge_provenance_unavailable"
 
 
-@pytest.mark.smoke
 def test_run_products_have_bounded_reprs() -> None:
     """RunResult/RunReport reprs are verdict-first descriptors (bug 9)."""
 
@@ -219,7 +216,6 @@ def test_population_state_sentinel_aware() -> None:
     assert _population_state(0) == "defaulted_zero"
 
 
-@pytest.mark.smoke
 def test_tree_surfaces_are_ascii(loop_trace) -> None:
     """Module/profile trees emit ASCII rails only (bug 10)."""
 

@@ -254,7 +254,6 @@ def test_grad_connected_deferral_is_off_by_default():
     assert _tu._DEFER_GRAD_ENABLED is False
 
 
-@pytest.mark.smoke
 def test_grad_connected_deferral_actually_defers():
     # Guard against the whole feature silently degrading to eager clones: at
     # least one graph-connected payload must genuinely share its source
@@ -433,6 +432,7 @@ class _CustomViewIntoSetitem(nn.Module):
         return out + v.sum()
 
 
+@pytest.mark.smoke_cells("test_custom_function_view_as_inplace_source_captures[True]")
 @pytest.mark.parametrize("use_tensor_resize", [False, True])
 def test_custom_function_view_as_inplace_source_captures(use_tensor_resize):
     """A deferred alias rebind must not poison a custom-Function view.

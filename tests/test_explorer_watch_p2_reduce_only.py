@@ -203,7 +203,6 @@ class TestReduceOnlyBudget:
         )
         assert log["linear_1_1"].transformed_out is not None
 
-    @pytest.mark.smoke
     def test_budget_below_summary_refuses(self) -> None:
         from torchlens.errors import SaveBudgetExceededError
 

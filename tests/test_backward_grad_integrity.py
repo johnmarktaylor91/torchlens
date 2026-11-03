@@ -142,7 +142,6 @@ def test_op_grad_payloads_charge_the_save_budget() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_selective_save_grads_consults_predicate_for_params() -> None:
     """Callable save_grads policies see parameter gradients, not a silent drop.
 

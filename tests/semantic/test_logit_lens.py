@@ -218,7 +218,6 @@ def test_logit_lens_refuses_without_head_facets() -> None:
     assert head_exc.value.fields["code"] == "logit_lens_head_unavailable"
 
 
-@pytest.mark.smoke
 def test_logit_lens_top_tokens_and_summary_shapes() -> None:
     """Result accessors decode top tokens and format the per-layer table."""
 

@@ -113,7 +113,6 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
     assert ops_rows == ["1 op"] * 5, f"call boxes double-represent surfaced exits: {ops_rows}"
 
 
-@pytest.mark.smoke
 def test_rolled_multicall_box_discloses_shape_variation(split_trace: tl.Trace) -> None:
     """A shape-varying rolled box carries a shapes line, not one false shape (V5)."""
 

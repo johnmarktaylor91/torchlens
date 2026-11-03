@@ -94,6 +94,7 @@ class TestRemovedSpellings:
         assert excinfo.value.fields["code"] == "summary_level_invalid"
         assert _REMOVED_LEVELS[level] in str(excinfo.value)
 
+    @pytest.mark.smoke_cells("test_removed_kwarg_refuses_before_capture_on_tl_summary[include_ops]")
     @pytest.mark.parametrize("name", sorted(_REMOVED_KWARGS))
     def test_removed_kwarg_refuses_before_capture_on_tl_summary(self, name: str) -> None:
         """tl.summary(model, x, <old>=...) refuses typed before any forward runs."""

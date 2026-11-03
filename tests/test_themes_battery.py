@@ -58,7 +58,6 @@ def test_key_is_generated_from_machine_record(keyed: Any) -> None:
     assert key.to_dict()["lens"] == "speed"
 
 
-@pytest.mark.smoke
 def test_packets_are_seed_deterministic(keyed: Any) -> None:
     """Same seed, same order; filenames masked; phases honour the memo."""
 
@@ -79,7 +78,6 @@ def test_packets_are_seed_deterministic(keyed: Any) -> None:
     assert audit.build_packet(sentinel_key, ["a.png"], seed=11, sentinel=True).judges == 5
 
 
-@pytest.mark.smoke
 def test_scoring_flags_honesty_hits_zero_tolerance(keyed: Any) -> None:
     """A wrong honesty-probe answer is a confirmed class hit."""
 
@@ -99,7 +97,6 @@ def test_honesty_classes_are_the_nine() -> None:
     assert "NOT-CHECKED-as-FINITE" in audit.HONESTY_CLASSES
 
 
-@pytest.mark.smoke
 def test_threshold_freezing_midpoint_rounds_up_to_five() -> None:
     """The anchor-midpoint procedure, rounded UP to five points."""
 
@@ -126,7 +123,6 @@ def test_insufficient_anchors_refuse() -> None:
     assert excinfo.value.fields["code"] == "battery_anchor_insufficient"
 
 
-@pytest.mark.smoke
 def test_debug_key_guards_not_checked_as_finite() -> None:
     """A partial-coverage debug render generates the NOT-CHECKED probe."""
 

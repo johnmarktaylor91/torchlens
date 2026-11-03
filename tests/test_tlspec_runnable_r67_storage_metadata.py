@@ -223,6 +223,9 @@ def test_r67_placement_read_canonical_state_identical_verdicts(
     assert loaded.run(inputs=x.clone()).report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
+@pytest.mark.smoke_cells(
+    "test_r67_placement_read_shared_state_refuses_every_spelling[is_shared_tensor]"
+)
 @pytest.mark.parametrize(
     "spelling",
     ["is_shared_tensor", "is_shared_untyped", "is_shared_typed"],
@@ -487,7 +490,6 @@ class _TiedModel(nn.Module):
         return x - self.tied_b.detach().sum() if flag else x + self.tied_b.detach().sum()
 
 
-@pytest.mark.smoke
 def test_r67_tied_alias_direct_read_attributes_to_full_group() -> None:
     """A direct read on ONE tied name marks EVERY canonical name in the alias group."""
 

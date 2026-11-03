@@ -215,6 +215,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode
 
 
+@pytest.mark.smoke
 def test_teacher_forcing_is_disclosed_non_verifying():
     model = TinyLM()
     runner = GreedyRunner(model, 3)

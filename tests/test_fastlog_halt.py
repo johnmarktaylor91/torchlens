@@ -270,6 +270,7 @@ def test_record_halt_predicate_module_exit_boundary() -> None:
     assert [record.ctx.layer_type for record in recording.records] == ["linear"]
 
 
+@pytest.mark.smoke
 def test_record_halt_predicate_rejects_non_bool_return() -> None:
     """halt= must return a bool, not a capture decision."""
 
@@ -370,6 +371,7 @@ def test_halted_recording_partial_events_present() -> None:
     ]
 
 
+@pytest.mark.smoke
 def test_fastlog_halt_finalizes_disk_storage(tmp_path: Path) -> None:
     """Disk-backed halted recordings finalize with halt metadata."""
 

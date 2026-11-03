@@ -43,7 +43,6 @@ def _envelope(status: str = "ok", **data: object) -> dict:
     return {"status": status, "data": data, "truncation": None}
 
 
-@pytest.mark.smoke
 def test_fail_on_predicates_read_every_record_shape() -> None:
     """Direct records and per-side compare records both gate; None never trips unverified."""
 
@@ -145,7 +144,6 @@ def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     assert _sha256_of_file(target) == sha256_file(target)
 
 
-@pytest.mark.smoke
 def test_corrupted_metadata_is_never_served_from_the_cache(clean: Path, tmp_path: Path) -> None:
     """Same manifest, different metadata.pkl -> cache MISS -> the loader's integrity refusal."""
 

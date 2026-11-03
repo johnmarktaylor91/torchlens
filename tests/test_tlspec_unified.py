@@ -616,6 +616,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     assert records[0].signal == "forward"
 
 
+@pytest.mark.smoke
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
     """Trace.save preserves backward GradFnCall intervention fire refs."""
 

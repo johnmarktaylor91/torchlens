@@ -32,7 +32,6 @@ class _RefusingOwner:
         raise RuntimeError("setattr refused")
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("registry_cls", [_MLXWrapperRegistry, _PaddleWrapperRegistry])
 def test_registry_unwrap_sweeps_past_failing_setattr(registry_cls: type) -> None:
     """One fallible setattr cannot strand the remaining wrapper restores."""
@@ -64,7 +63,6 @@ def test_registry_unwrap_sweeps_past_failing_setattr(registry_cls: type) -> None
     assert registry.is_wrapped() is True
 
 
-@pytest.mark.smoke
 def test_paddle_hook_cleanup_sweeps_past_failing_remove() -> None:
     """One raising ``remove()`` cannot strand later hook handles."""
 
@@ -186,7 +184,6 @@ class _ExplodingMapping:
         raise _InstallInterrupt("install interrupted")
 
 
-@pytest.mark.smoke
 def test_tf_module_stack_install_raise_unwinds_installed_patches() -> None:
     """A BaseException mid-install restores every tf class ``__call__`` landed."""
 
@@ -212,7 +209,6 @@ def test_tf_module_stack_install_raise_unwinds_installed_patches() -> None:
     assert _Module.__dict__["__call__"] is original_call
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("patcher_name", ["scoped_equinox_module_calls", "scoped_nnx_module_calls"])
 def test_jax_module_calls_install_raise_unwinds_installed_patches(
     patcher_name: str, monkeypatch: pytest.MonkeyPatch
@@ -247,7 +243,6 @@ def test_jax_module_calls_install_raise_unwinds_installed_patches(
     assert _Module.__dict__["__call__"] is original_call
 
 
-@pytest.mark.smoke
 def test_tinygrad_module_calls_install_raise_unwinds_installed_patches() -> None:
     """A BaseException mid-install restores every tinygrad class ``__call__`` landed."""
 
@@ -271,7 +266,6 @@ def test_tinygrad_module_calls_install_raise_unwinds_installed_patches() -> None
     assert _Module.__dict__["__call__"] is original_call
 
 
-@pytest.mark.smoke
 def test_mlx_registry_wrap_install_raise_unwinds_installed_patches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -302,7 +296,6 @@ def test_mlx_registry_wrap_install_raise_unwinds_installed_patches(
     assert registry._originals == {}
 
 
-@pytest.mark.smoke
 def test_paddle_registry_wrap_install_raise_unwinds_installed_patches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -337,7 +330,6 @@ def test_paddle_registry_wrap_install_raise_unwinds_installed_patches(
     assert registry.inventory() == paddle_wrappers.PaddleInventory((), ())
 
 
-@pytest.mark.smoke
 def test_tf_intervention_wrap_install_raise_unwinds_installed_patches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

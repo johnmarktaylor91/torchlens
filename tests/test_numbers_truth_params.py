@@ -7,7 +7,6 @@ construction; ties counted once and NAMED; storage aliasing disclosed, never mer
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -103,7 +102,6 @@ def test_tied_params_counted_once_by_object_identity() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tie_is_named_and_per_path_total_printed() -> None:
     """A2: the footer prints BOTH totals when they differ and names the tie."""
 
@@ -136,7 +134,6 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_declared_executed_unexecuted_split_named() -> None:
     """A3: declared-but-unexecuted params split out and NAMED, never dropped."""
 

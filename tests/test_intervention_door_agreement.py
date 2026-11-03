@@ -205,6 +205,7 @@ def _outcome(door: str, model_name: str, selector_name: str) -> tuple[str, Any]:
     return "ok", value.detach().clone()
 
 
+@pytest.mark.smoke_cells("test_every_door_matches_the_eager_oracle[inner-func]")
 @pytest.mark.parametrize("selector_name", sorted(_SELECTORS))
 @pytest.mark.parametrize("model_name", sorted(_MODELS))
 def test_every_door_matches_the_eager_oracle(model_name: str, selector_name: str) -> None:

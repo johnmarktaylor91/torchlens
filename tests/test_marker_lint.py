@@ -62,7 +62,6 @@ def test_no_smoke_test_carries_a_heavier_tier_marker(request: pytest.FixtureRequ
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markers", "callspec_markers", "expected_fragments"),
     [
@@ -95,7 +94,6 @@ def test_tier_combo_policy_is_red_capable(
         assert any(fragment in violation for violation in violations), (fragment, violations)
 
 
-@pytest.mark.smoke
 def test_tier_violations_among_selected_items_fail_the_session_at_collection() -> None:
     """``_tiers_plugin`` refuses a session whose selected items include a violation."""
 
@@ -244,7 +242,6 @@ def _warn_once_declarations(package_root: Path) -> set[tuple[str, str]]:
     return declarations
 
 
-@pytest.mark.smoke
 def test_warn_once_sentinel_census_matches_autouse_reset(
     request: pytest.FixtureRequest,
 ) -> None:
@@ -372,7 +369,6 @@ def _module_trace_fixtures_without_yield(tests_root: Path) -> list[str]:
     return violations
 
 
-@pytest.mark.smoke
 def test_module_scoped_trace_fixtures_have_teardown() -> None:
     """Module-scoped fixtures retaining Traces must yield for explicit cleanup."""
 
@@ -384,7 +380,6 @@ def test_module_scoped_trace_fixtures_have_teardown() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_root_conftest_does_not_inject_repo_into_sys_path() -> None:
     """The suite must not hide an unusable editable install via path mutation."""
 
@@ -925,7 +920,6 @@ def per_test_trace():
 """
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("snippet", "expected"),
     [
@@ -984,7 +978,6 @@ def _lru_cached_functions(package_root: Path) -> dict[tuple[str, str], str]:
     return cached
 
 
-@pytest.mark.smoke
 def test_capability_dependent_caches_are_cleared() -> None:
     """Every probe-derived lru_cache must be in the conftest clear list.
 
@@ -1032,7 +1025,6 @@ def test_capability_dependent_caches_are_cleared() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_capability_dependent_cache_clear_actually_clears() -> None:
     """The conftest clear helper empties every declared probe-derived cache."""
 
@@ -1051,7 +1043,6 @@ def test_capability_dependent_cache_clear_actually_clears() -> None:
         assert function.cache_info().currsize == 0, f"{function} survived the probe restore"
 
 
-@pytest.mark.smoke
 def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     """Every documented broad tier spelling arms the ArgSpec usage gate.
 
@@ -1088,7 +1079,6 @@ def test_usage_stats_gate_arms_on_documented_backstop_spellings() -> None:
     assert not _is_full_usage_stats_run(config("", args=[str(Path(TESTS_DIR) / "sub")]))
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -1141,7 +1131,6 @@ def _pyproject_declared_markers() -> dict[str, str]:
     return declared
 
 
-@pytest.mark.smoke
 def test_marker_algebra_lockstep_with_pyproject() -> None:
     """Every pyproject marker has exactly one algebra role, and vice versa."""
 
@@ -1157,7 +1146,6 @@ def test_marker_algebra_lockstep_with_pyproject() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_marker_algebra_lockstep_is_red_capable() -> None:
     """A planted undeclared/unroled/unknown-role marker each goes red."""
 
@@ -1180,7 +1168,6 @@ def test_marker_algebra_lockstep_is_red_capable() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_selection_markers_are_orthogonal_to_every_tier() -> None:
     """`compo`/`real_model` combine with any tier without a combo violation.
 
@@ -1233,7 +1220,6 @@ def test_smoke_file_list_never_hides_a_smoke_test(request: pytest.FixtureRequest
     )
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("markexpr", "expected"),
     [
@@ -1258,13 +1244,6 @@ def test_smoke_only_session_recognizes_only_smoke_requiring_expressions(
     assert smoke_only_session(config) is expected  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke_cells(
-    "test_smoke_file_token_detection[module-mark]",
-    "test_smoke_file_token_detection[decorator]",
-    "test_smoke_file_token_detection[cell]",
-    "test_smoke_file_token_detection[smoke-cells]",
-    "test_smoke_file_token_detection[longer-name]",
-)
 @pytest.mark.parametrize(
     ("source", "expected"),
     [
@@ -1284,7 +1263,6 @@ def test_smoke_file_token_detection(tmp_path: Path, source: str, expected: bool)
     assert source_may_hold_smoke_items(path) is expected
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("item_name", "expected"),
     [
@@ -1356,6 +1334,7 @@ def test_item_collection_records_smoke_items_off_the_file_list(tmp_path: Path) -
     fail_on_off_list_smoke_items([])
 
 
+@pytest.mark.smoke
 def test_smoke_session_skips_test_modules_off_the_file_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

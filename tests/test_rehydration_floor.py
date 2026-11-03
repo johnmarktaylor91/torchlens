@@ -60,7 +60,6 @@ def _build_trace() -> tl.Trace:
     )
 
 
-@pytest.mark.smoke
 def test_floor_error_is_typed_and_public() -> None:
     """The floor error is a ``ArtifactError`` reachable via ``tl.errors``."""
 
@@ -138,7 +137,6 @@ def test_current_version_object_state_still_restores() -> None:
     assert restored.layer_label == trace.ops[0].layer_label
 
 
-@pytest.mark.smoke
 def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
     """A manifest with ``kind`` deleted is NOT the legacy pre-tlspec format.
 
@@ -167,7 +165,6 @@ def test_manifest_missing_kind_still_loads_as_trace(tmp_path: Path) -> None:
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Path) -> None:
     """Losing ``kind`` must not dodge the real numeric floor check either."""
 
@@ -188,7 +185,6 @@ def test_manifest_missing_kind_and_below_floor_still_refuses_typed(tmp_path: Pat
     trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_pre_floor_bundle_manifest_refuses_typed(tmp_path: Path) -> None:
     """A bundle whose manifest claims a sub-floor tlspec_version refuses."""
 
@@ -230,7 +226,6 @@ def test_below_floor_refusal_carries_structured_fields(tmp_path: Path) -> None:
     assert fields["path"] == str(path)
 
 
-@pytest.mark.smoke
 def test_legacy_intervention_specs_refuse_as_2x_at_the_format_stamp() -> None:
     """A 2.16 intervention spec (``format_version`` 1) refuses with the one 2.x error.
 

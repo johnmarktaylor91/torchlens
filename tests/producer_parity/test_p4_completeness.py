@@ -338,7 +338,6 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
 )
 
 
-@pytest.mark.smoke
 def test_live_legacy_sites_completeness() -> None:
     """Layers 1-3: pair-wise identity, value round-trip, reached-family >= 1."""
 
@@ -425,7 +424,6 @@ def _sentinel_for(path: str, value_types: tuple[type, ...], template: Any, flip:
 _BOOL_PATTERNS = (False, True)
 
 
-@pytest.mark.smoke_cells("test_distinct_sentinel_fold_routing[decomposed]")
 @pytest.mark.parametrize("producer", _LEGS)
 def test_distinct_sentinel_fold_routing(monkeypatch: pytest.MonkeyPatch, producer: str) -> None:
     """Every registry path routes to its OWN destination on both fold legs.

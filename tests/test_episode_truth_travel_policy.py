@@ -186,7 +186,6 @@ def test_fresh_execution_scrubs_every_registered_sub_key():
             assert key not in product_annotations
 
 
-@pytest.mark.smoke
 def test_guarded_fast_rerun_never_exposes_foreign_ledger():
     """Gate row: guarded-fast (run(fast=True)) never exposes a foreign ledger."""
 

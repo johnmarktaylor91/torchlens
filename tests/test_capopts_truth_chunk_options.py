@@ -80,7 +80,6 @@ def test_chunk_path_rebuild_covers_every_capture_option_field() -> None:
     assert not unknown, f"chunked rebuild names non-fields: {sorted(unknown)}"
 
 
-@pytest.mark.smoke
 def test_chunked_capture_honors_save_budget() -> None:
     """A 1-byte budget must trip on the chunked path exactly as unchunked."""
 

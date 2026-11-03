@@ -274,7 +274,6 @@ _FAMILY_FIXTURES: dict[
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r71_registry_closure_meta() -> None:
     """Registry keys == direct kinds | shape prefixes | claim families; every row
     carries a non-empty independent anchor AND a named runtime consumer; the gap
@@ -744,6 +743,7 @@ class _OpaqueLeaf(nn.Module):
         return x * 2.0
 
 
+@pytest.mark.smoke
 def test_r71_completeness_forgery_never_strengthens(tmp_path: Path) -> None:
     """Per gap class: forcing "complete" refuses (floor mismatch); stripping the gap
     (keeping the summary) refuses; stripping gap+summary leaves the surviving

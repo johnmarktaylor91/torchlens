@@ -105,6 +105,7 @@ def recipe_namespace(
         monkeypatch.undo()
 
 
+@pytest.mark.smoke
 @pytest.mark.heavy
 @pytest.mark.real_model
 def test_surviving_target_aligns_with_label_drift_disclosure(
