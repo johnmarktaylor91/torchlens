@@ -15,6 +15,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
@@ -268,7 +269,12 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
     metadata = _metadata(weighted_path)
     assert_sparse_core_has_no_tensor_payload(read_runnable(weighted_path))
     assert_sparse_core_has_no_tensor_payload(metadata)
-    assert "_buffer_initial_values" not in metadata["trace"]["fields"]
+    assert (
+        decode_value(
+            metadata["trace"]["fields"]["_buffer_initial_values"], at="trace._buffer_initial_values"
+        )
+        == {}
+    )
     assert "func" not in metadata["op"]["columns"]
     tl.validation.validate_tlspec(weighted_path)
 
