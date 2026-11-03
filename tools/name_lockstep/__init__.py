@@ -6,7 +6,8 @@ Four parts, one command (``python tools/name_lockstep <subcommand>``):
   (``root:tl.X``, ``export:tl.ns.X``, ``member:<module>:<Class>.<name>``,
   ``param:<name>``), at the working tree or at any git ref.
 - ``diff``: compare two inventories and list new, removed, renamed and moved (same
-  public spelling, other defining module) public names.
+  public spelling, other defining module or class: a mixin member folded onto the
+  public class it was reached through) public names.
 - ``check``: the LOCKED lockstep rule for every new or renamed name (glossary entry,
   agent-reference examples, ``notebooks/audit/`` and ``examples/``); exits 1 and lists
   the missing places. ``attribution`` keeps a contextual old spelling (``.member``,

@@ -229,15 +229,53 @@ def _moved_pairs(base: Rows, head: Rows, removed: set[str], new: set[str]) -> li
             groups.setdefault(_spelling_key(rows[row_id]), []).append(row_id)
         return groups
 
-    old_groups, new_groups = index(base, removed), index(head, new)
+    def pair(old_groups: dict, new_groups: dict) -> None:
+        for key in sorted(set(old_groups) & set(new_groups)):
+            if len(old_groups[key]) == 1 and len(new_groups[key]) == 1:
+                old_id, new_id = old_groups[key][0], new_groups[key][0]
+                if old_id in removed and new_id in new:
+                    found.append(_moved(base[old_id], head[new_id], "moved"))
+                    removed.discard(old_id)
+                    new.discard(new_id)
+
     found: list[Rename] = []
-    for key in sorted(set(old_groups) & set(new_groups)):
-        if len(old_groups[key]) == 1 and len(new_groups[key]) == 1:
-            old_id, new_id = old_groups[key][0], new_groups[key][0]
-            found.append(_moved(base[old_id], head[new_id], "moved"))
-            removed.discard(old_id)
-            new.discard(new_id)
+    pair(index(base, removed), index(head, new))
+    pair(_public_spellings(base, removed), _public_spellings(head, new))
     return found
+
+
+def _public_spellings(rows: Rows, ids: set[str]) -> dict[tuple[str, str], list[str]]:
+    """Index member rows by every public spelling they are reached through.
+
+    A member defined on a mixin and reached as ``Trace.<leaf>`` spells ``Trace.<leaf>``
+    through its ``owner_names``; folding it onto ``Trace`` keeps that spelling while the
+    defining class and module change. Each row is indexed under its own path and under
+    ``<owner>.<leaf>`` for every public owner it is reached through, so the fold pairs as
+    a move when the spelling is unique on both sides.
+
+    Parameters
+    ----------
+    rows
+        Inventory keyed on id.
+    ids
+        Row ids to index.
+
+    Returns
+    -------
+    dict[tuple[str, str], list[str]]
+        Spelling key to the row ids spelled that way.
+    """
+
+    groups: dict[tuple[str, str], list[str]] = {}
+    for row_id in ids:
+        row = rows[row_id]
+        if row["kind"] != "member":
+            continue
+        spellings = {str(row["path"])}
+        spellings.update(f"{owner}.{row['name']}" for owner in row.get("owner_names", ()))
+        for spelling in spellings:
+            groups.setdefault((row["kind"], spelling), []).append(row_id)
+    return groups
 
 
 def _fingerprint_renames(base: Rows, head: Rows, removed: set[str], new: set[str]) -> list[Rename]:

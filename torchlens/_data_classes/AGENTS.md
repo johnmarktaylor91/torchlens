@@ -38,10 +38,15 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
 | `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
 | `_layer_views.py` | Layer view functions: per-pass aggregation, graph unions, row export and mirror materialization moved off `Layer` |
-| `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
+| `trace.py` | `Trace` (the dataclass and every public method as a thin door call), conditional event records |
+| `_trace_docs.py` | Binds the full `Trace` method docstrings from the `_trace_docs_*.py` tables at class definition |
+| `_trace_docs_stats.py` | Docstring table: `Trace` stats, views and inventory methods |
+| `_trace_docs_output.py` | Docstring table: `Trace` export, visualization and summary methods |
+| `_trace_docs_intervention.py` | Docstring table: `Trace` intervention methods |
+| `_trace_docs_validation.py` | Docstring table: `Trace` validation, run and backward methods |
+| `_trace_field_spec.py` | `Trace._PORTABLE_STATE_SPEC`, the persisted-field policy table |
+| `_trace_removal.py` | Log-entry removal and parameter-reference release behind `Trace._remove_log_entry` and friends |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
-| `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
-| `_trace_intervention.py` | Trace intervention mixin: thin shell of the intervention verbs; bodies live in `intervention/_trace_edits.py`, `intervention/_trace_selection_edits.py`, `intervention/_trace_hooks.py` (via `_doors`), `_trace_intervention_records.py` and `_fork_lineage.py` |
 | `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
 | `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
@@ -58,9 +63,6 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_nonfinite.py` | Nonfinite scan/abort helpers |
 | `prehook.py` | Pre-hook effect records |
 | `_trace_profile.py` | `ModelProfile` and the `model_profile(trace)` body behind `Trace.model_profile` |
-| `_trace_stats.py` | `TraceStatsMixin`: thin stats/view methods forwarding to `_trace_views`, `_call_tree`, `_trace_inventory`, `_trace_profile`, `_trace_stats_grad_fn_site` and the `_doors` destinations; backward-pass projection sync stays here |
-| `_trace_validation.py` | Trace validation, run and backward mixin: thin methods over the record-rebuild destinations, plus the log-entry removal helpers |
-| `_trace_viz.py` | Thin `Trace` visualization and summary methods; bodies live in `_visualization/_trace_draw.py` and `report/_trace_summary.py` |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |

@@ -26,11 +26,7 @@ Key design patterns:
   ``_init_module_hierarchy_data()``.
 """
 
-import copy
-import dataclasses
-import difflib
 import inspect
-import json
 import pickle
 import weakref
 from collections import OrderedDict, defaultdict
@@ -42,6 +38,8 @@ from typing import (
     Any,
     ClassVar,
     Literal,
+    TextIO,
+    Union,
     cast,
 )
 
@@ -53,35 +51,42 @@ if TYPE_CHECKING:
 
     from .._io.streaming import BundleStreamWriter
     from .._output_slot import OutputSlot
-    from .._runnable import (
-        ArchivedActivation,
-        SparseRunDescriptor,
-    )
+    from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
+    from ..intervention.types import FrozenInterventionSpec, TargetSpec
+    from ..options import InterventionOptions, ReplayOptions
     from ._op_dedup import IdentityCacheEntry
     from .func_call_location import FuncCallLocation
 
+from collections.abc import Collection, Iterable, Sequence
+from functools import cached_property
+
 from .. import _state
 from .._captured_run import TraceLike
-from .._constants import LAYER_PASS_LOG_FIELD_ORDER, MODEL_LOG_FIELD_ORDER
-from .._errors import InvalidArgumentError
+from .._constants import MODEL_LOG_FIELD_ORDER
+from .._deprecations import MISSING, MissingType
 from .._io import (
     TLSPEC_VERSION,
     FieldPolicy,
-    coerce_container_typed_state,
-    default_fill_state,
-    read_tlspec_version,
 )
 from .._ir.workspaces import (
-    LEGACY_TRACE_BUILD_STATE_KEYS,
     ModuleCaptureWorkspace,
     RawGraphWorkspace,
     WrapperRuntimeWorkspace,
 )
-from .._quantities import Bytes, Duration
+from .._literals import (
+    BufferVisibilityLiteral,
+    CollapseLiteral,
+    FoldRepeatsLiteral,
+    VisDirectionLiteral,
+    VisInterventionModeLiteral,
+    VisNodeModeLiteral,
+    VisNodePlacementLiteral,
+    VisRendererLiteral,
+)
+from .._quantities import Bytes, Duration, Flops, Macs, as_duration
 from .._runnable.seam import (
     RunnableTraceState,
-    normalize_runnable_trace_state,
     runnable_trace_state,
 )
 from .._save_budget import SaveBudget, SaveBudgetOption
@@ -95,32 +100,59 @@ from ..intervention.types import (
     Relationship,
 )
 from ..types import _ActivationPostfunc, _GradientPostfunc
-from . import _trace_rehydrate
+from . import (
+    _call_tree,
+    _doors,
+    _fork_lineage,
+    _trace_annotations,
+    _trace_intervention_records,
+    _trace_inventory,
+    _trace_profile,
+    _trace_rerun_state,
+    _trace_state_io,
+    _trace_stats_grad_fn_site,
+    _trace_views,
+)
+from ._accessor_base import Accessor
+from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
-from ._state_adapter import state_items, state_restore
 from ._trace_accessors import (
-    _invalidate_trace_module_call_accessor_cache,
-    _invalidate_trace_op_layer_accessor_caches,
+    OrphanAccessor,
+    TraceGradFnCallAccessor,
+    TraceModuleCallAccessor,
+    TraceOpAccessor,
 )
+from ._trace_docs import attach_trace_docs
+from ._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
+from ._trace_fork import build_fork
+from ._trace_grad_sites import armed_edits, armed_summary_line
+from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
+from ._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
+from ._trace_intervention_records import _DoTransaction
 from ._trace_missing_attrs import _raise_missing_trace_attribute
-from ._trace_narrate import TraceNarrateMixin
 from ._trace_output import TraceOutputMixin
-from ._trace_pickle_state import (
-    _initialize_output_metadata,
-    _restore_pickled_verification,
-    _sanitize_pickled_verification,
-)
+from ._trace_pickle_state import _initialize_output_metadata
+from ._trace_pristine import derive_pristine
+from ._trace_profile import ModelProfile
+from ._trace_removal import batch_remove_log_entries, release_param_refs, remove_log_entry
+from ._trace_stack import StackedActivations, stack_traces
+from ._trace_state_io import _MODEL_LOG_DEFAULT_FILL
+from ._trace_views import _CallableList
+from ._trace_viz_arguments import _forward_draw, _forward_summary
 from ._transform_repr import _scrubbed_transform_repr
-from .backward_pass import BackwardPass
+from .backward_pass import BackwardPass, BackwardPassAccessor
+from .cleanup import (
+    cleanup,
+)
 from .container import reconstruct_container, reconstruct_output
-from .derived_grad import DerivedGradAccessor
+from .derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
 from .field_policy import (
     build_record_field_policy_table,
     default_fill_state_from_policy,
     fork_policy_from_policy,
     portable_state_spec_from_policy,
 )
-from .grad_fn import GradFn
+from .grad_fn import GradFn, GradFnAccessor
 from .interface import (
     _getitem_after_pass,
     _getitem_during_pass,
@@ -128,257 +160,35 @@ from .interface import (
     _str_during_pass,
 )
 from .layer import Layer
-from .module import ModuleAccessor
+from .module import Module, ModuleAccessor
 from .op import Op
 from .param import ParamAccessor
 
 if TYPE_CHECKING:
+    import pandas as pd
 
-    class _TraceMixinTypingBase:
-        """Typing-only permissive base for mechanically extracted Trace mixins."""
-
-        def __getattr__(self, name: str) -> Any:
-            """Return any dynamic Trace attribute for type checking."""
-
-            raise AttributeError(name)
-
-        def __getitem__(self, key: Any) -> Any:
-            """Return any dynamic Trace item for type checking."""
-
-            raise KeyError(key)
-
-        def __iter__(self) -> Iterator[Any]:
-            """Iterate dynamic Trace entries for type checking."""
-
-            return iter(())
-
-        def __len__(self) -> int:
-            """Return dynamic Trace length for type checking."""
-
-            return 0
-
-    class TraceStatsMixin(_TraceMixinTypingBase):
-        """Typing-only TraceStatsMixin stand-in."""
-
-    class TraceStackMixin(_TraceMixinTypingBase):
-        """Typing-only TraceStackMixin stand-in."""
-
-    class TraceInterventionMixin(_TraceMixinTypingBase):
-        """Typing-only TraceInterventionMixin stand-in."""
-
-    class TraceValidationMixin(_TraceMixinTypingBase):
-        """Typing-only TraceValidationMixin stand-in."""
-
-    class TraceExportMixin(_TraceMixinTypingBase):
-        """Typing-only TraceExportMixin stand-in."""
-
-    class TraceVisualizationMixin(_TraceMixinTypingBase):
-        """Typing-only TraceVisualizationMixin stand-in."""
-
-else:
-    from ._trace_export import TraceExportMixin
-    from ._trace_intervention import TraceInterventionMixin
-    from ._trace_stack import TraceStackMixin
-    from ._trace_stats import TraceStatsMixin
-    from ._trace_validation import TraceValidationMixin
-    from ._trace_viz import TraceVisualizationMixin
+    from .._runnable import RunResult
+    from .._trace_slice import TraceSlice
+    from .._visualization.code_panel import CodePanelOption
+    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
+    from ..intervention.types import FireRecord
+    from ..receptive_field._types import (
+        ReceptiveFieldDirection,
+        ReceptiveFieldProfile,
+        ReceptiveFieldStatus,
+    )
+    from ..report._explain import ExplainReport
+    from ..report._profile import ProfileReport
+    from ..report._trace_facts import _CallableDict
+    from ..validation.status import ValidationStatus
+    from ..viz._drawing import Drawing
+    from .buffer import BufferAccessor
+    from .layer import LayerAccessor
+    from .module import Module, ModuleCall
 
 
-#: Values ``copy.deepcopy`` returns unchanged, so a rerun refresh hands them over as they are.
-_ATOMIC_RERUN_VALUE_TYPES: frozenset[type] = frozenset(
-    {type(None), bool, int, float, complex, str, bytes, torch.dtype, torch.device}
-)
-_MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
-    "_options_grouping": "structural",
-    "_options_grouping_policy": None,
-    "_provenance_distributed_scope": None,
-    "name": None,
-    "model_name": None,
-    "_provenance_backend": "torch",
-    "_options_module_identity_mode": "torch_module",
-    "_provenance_param_source": "native-module",
-    "_autograd_derived_grads": DerivedGradAccessor(),
-    "_runnable": None,
-    "_fast_run_session": None,
-    "_distributed_plane_p": None,
-    "_buffer_persistence": {},
-    "is_replayable": False,
-    "_options_save_arg_templates": False,
-    "input": None,
-    "_transform": None,
-    "_options_save_raw_input": "small",
-    "batch_render": "auto",
-    "transformed_output": None,
-    "_output_transform": None,
-    "_output_slot": None,
-    "_options_save_transformed_output": "small",
-    "layer_visualizers": None,
-    "save_visualizations": False,
-    "_visualizer_dir": None,
-    "_parent_run": None,
-    "_intervention_spec": None,
-    "state_history": [],
-    "last_run": None,
-    "_append_history": [],
-    "_has_direct_writes": False,
-    "_warned_direct_write": False,
-    "_warned_mutate_in_place": False,
-    "_warned_once": set(),
-    "_spec_revision": 0,
-    "_out_recipe_revision": 0,
-    "_annotation_blobs": None,
-    "_append_sequence_id": 0,
-    "_last_hook_handle_ids": (),
-    "state": TraceState.PRISTINE,
-    "_provenance_model_object_id": None,
-    "_source_class_qualname": None,
-    "_provenance_param_hash_quick": None,
-    "_provenance_param_hash_full": None,
-    "_provenance_root_entry_point": None,
-    "_provenance_input_object_id": None,
-    "_provenance_input_signature_hash": None,
-    "_provenance_fingerprint": None,
-    "_module_filter": None,
-    "_options_emit_nvtx": False,
-    "measure_python_peak_memory": False,
-    "distributed_witness": "none",
-    "save_budget": "auto",
-    "_options_on_nonfinite": False,
-    "track_nonfinite": False,
-    "track_device_memory": False,
-    "measure_host_peak_memory": False,
-    "_options_structure_only": False,
-    "intervention_audit": [],
-    "_options_keep_orphans": False,
-    "annotations": {},
-    "_provenance_observer_spans": [],
-    "_graph_manual_tensor_connections": [],
-    "_source_forward_line": None,
-    "_source_forward_file": None,
-    "_source_class_file": None,
-    "_source_class_line": None,
-    "_source_init_file": None,
-    "_source_init_line": None,
-    "_source_class_docstring": None,
-    "_source_init_signature": None,
-    "_source_init_docstring": None,
-    "_source_forward_signature": None,
-    "_source_forward_docstring": None,
-    "_source_frames": [],
-    "_provenance_cache_hit": False,
-    "_provenance_cache_key": None,
-    "_provenance_cache_path": None,
-    "_provenance_recording_kept": True,
-    "facet_functions": None,
-    "_out_dedup_mode": "identity",
-    "_out_identity_cache": {},
-    "_out_hash_cache": {},
-    "_code_context_cache": {},
-    "capture_tensor_grad_hooks": True,
-    "_options_save_grads": None,
-    "_options_inference_only": False,
-    "_options_chunk_size": False,
-    "_provenance_is_appended": False,
-    "_graph_relationship_evidence": {},
-    "_replay_frontier": {},
-    "_ambiguous_lookup_keys": {},
-    "_cost_total_grad_memory": 0,
-    "_cost_total_backward_memory": 0,
-    "_cost_saved_grad_memory": 0,
-    "_cost_total_param_grad_memory": 0,
-    "_cost_forward_peak_memory": 0,
-    "_provenance_forward_memory_backend": "unknown",
-    "_cost_forward_peak_memory_reason": None,
-    "backward_peak_memory_reason": None,
-    "_forward_peak_memory_pair": None,
-    "_phase_timings": {},
-    "_replay_arg_version_data_complete": True,
-    "_grad_fn_param_refs": {},
-}
-# Typed container defaults for every non-Optional container field in
-# `MODEL_LOG_FIELD_ORDER`. The blanket ``{field: None}`` base below is wrong for
-# these: an absent (legacy/partial-state) container field would restore as
-# ``None`` instead of its declared list/dict/set/tuple and then crash on first
-# touch (``.values()``/iteration), or -- for ``layer_list``/``layer_logs`` --
-# crash inside ``__setstate__`` itself. Plain builtin types are used
-# deliberately: they let ``coerce_container_typed_state`` also repair a
-# present-but-wrong-typed legacy value (e.g. ``None`` or a ``dict`` where a
-# ``list`` is now declared). Fields whose declared type is a genuine
-# ``OrderedDict``/``defaultdict`` at runtime restore correctly as a plain dict
-# for legacy states (still ``.values()``/``.items()``-usable); fresh captures
-# always carry the exact runtime container, so this only affects legacy fill.
-_MODEL_LOG_CONTAINER_DEFAULTS: dict[str, Any] = {
-    "_source_snapshots": [],
-    "escape_diagnostics": [],
-    "completeness_diagnostics": [],
-    "_health_completeness_decompositions": [],
-    "capture_guard_passes": [],
-    "annotations": {},
-    "_provenance_observer_spans": [],
-    "_graph_manual_tensor_connections": [],
-    "_source_frames": [],
-    "_out_identity_cache": {},
-    "_out_hash_cache": {},
-    "_code_context_cache": {},
-    "_grad_op_nums_to_save": [],
-    "_provenance_input_annotations": {},
-    "_source_code_blob": {},
-    "state_history": [],
-    "_append_history": [],
-    "_last_hook_handle_ids": (),
-    "_graph_relationship_evidence": {},
-    "_replay_frontier": {},
-    "_layer_list": [],
-    "_layer_dict_main_keys": {},
-    "_layer_dict_all_keys": {},
-    "_layer_logs": {},
-    "layer_labels": [],
-    "op_labels": [],
-    "_layer_num_calls": {},
-    "_by_pass": {},
-    "_raw_to_final_layer_labels": {},
-    "_raw_to_final_parent_layer_labels": {},
-    "_raw_to_final_op_labels": {},
-    "_final_to_raw_layer_labels": {},
-    "_lookup_keys_to_layer_num_dict": {},
-    "_layer_num_to_lookup_keys_dict": {},
-    "_ambiguous_lookup_keys": {},
-    "input_layers": [],
-    "output_layers": [],
-    "buffer_layers": [],
-    "_buffer_num_calls": {},
-    "internal_source_ops": [],
-    "internal_sink_ops": [],
-    "internally_terminated_bool_ops": [],
-    "_graph_conditional_branch_edges": [],
-    "_graph_conditional_records": [],
-    "_graph_conditional_arm_entry_edges": {},
-    "_graph_conditional_edge_call_indices": {},
-    "layers_with_params": {},
-    "_graph_op_equivalence_classes": {},
-    "_orphan_labels": [],
-    "_orphan_logs": (),
-    "_orphan_records": [],
-    "_phase_timings": {},
-    "_grad_fn_logs": {},
-    "_autograd_grad_fn_order": [],
-    "_backward_pass_logs": {},
-    "_grad_fn_param_refs": {},
-    "_autograd_backward_root_grad_fn_object_ids": [],
-    "_cost_backward_durations": [],
-}
-_MODEL_LOG_DEFAULT_FILL = {
-    **dict.fromkeys(MODEL_LOG_FIELD_ORDER),
-    **_MODEL_LOG_CONTAINER_DEFAULTS,
-    **_MODEL_LOG_DEFAULT_FILL,
-}
-_MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
-_SESSION_BOOL_KNOBS = (
-    "measure_python_peak_memory",
-    "measure_host_peak_memory",
-    "track_nonfinite",
-    "track_device_memory",
-)
+#: Sentinel: ``Trace.rerun`` keeps the transform recorded at capture time.
+_USE_STORED_TRANSFORM = object()
 
 
 @dataclass
@@ -730,99 +540,8 @@ class ConditionalAccessor:
         return [(conditional.id, conditional) for conditional in self._list]
 
 
-class _CallableList(list[Any]):
-    """List that returns a plain list when called.
-
-    This keeps rare report surfaces callable for user ergonomics without adding
-    extra callable custom_methods to the Trace method state_history.
-    """
-
-    def __call__(self) -> list[Any]:
-        """Return a plain-list copy of this report.
-
-        Returns
-        -------
-        list[Any]
-            Plain list containing this report's items.
-        """
-
-        return list(self)
-
-
-def _normalize_conditional_arm_entry_edges(
-    value: Any,
-) -> dict[tuple[int, str], list[tuple[str, str]]]:
-    """Return conditional arm edges in canonical flat-key form.
-
-    Parameters
-    ----------
-    value:
-        Stored conditional arm edge state from current or older portable bundles.
-
-    Returns
-    -------
-    dict[tuple[int, str], list[tuple[str, str]]]
-        Mapping from ``(conditional_id, arm_kind)`` to edge tuples.
-    """
-
-    normalized: dict[tuple[int, str], list[tuple[str, str]]] = {}
-    if not isinstance(value, Mapping):
-        return normalized
-    for raw_key, raw_edges in value.items():
-        if isinstance(raw_key, tuple) and len(raw_key) == 2 and isinstance(raw_key[1], str):
-            normalized[(int(raw_key[0]), raw_key[1])] = list(raw_edges or [])
-            continue
-        if not isinstance(raw_edges, Mapping):
-            continue
-        conditional_id = int(raw_key)
-        for arm_kind, arm_edges in raw_edges.items():
-            normalized[(conditional_id, str(arm_kind))] = list(arm_edges or [])
-    return normalized
-
-
-def _drop_runtime_only_caches(state: dict[str, Any]) -> None:
-    """Strip lazy accessor, geometry and render caches from pickle ``state`` in place."""
-
-    # Lazy per-instance accessor caches (FieldPolicy.DROP) rebuild on
-    # demand after restore; carrying them would make pickle bytes depend
-    # on which accessors were touched (access-is-pure contract).
-    state.pop("_op_accessor_cache", None)
-    state.pop("_layer_accessor_cache", None)
-    state.pop("_module_call_accessor", None)
-    # Lazy influence-geometry caches (FieldPolicy.DROP) hold
-    # mappingproxy-bearing solution objects after any receptive-field
-    # access, so carrying them made pickle.dumps/copy.deepcopy crash with
-    # "cannot pickle 'mappingproxy' object" while Trace.save succeeded on
-    # the same trace. They rebuild on first access after restore.
-    state.pop("_receptive_field_solution", None)
-    state.pop("_rf_directional_solutions", None)
-    # Render diagnostic from the last draw(): its EncodingChannelSpec can
-    # hold the RAW user callable a `color_by=lambda ...` passed in, so
-    # carrying it made pickle.dumps crash after an ordinary draw while
-    # Trace.save succeeded on the same trace (the R10-7 raw-callable class).
-    # Runtime-only either way; it rebuilds on the next draw.
-    state.pop("_last_encoding_state", None)
-    # The recorded save request can hold a raw user save callable.
-    state.pop("_rerun_save_request", None)
-    # Same runtime-only class: the last draw's layout-execution geometry
-    # record (vizmech D24) rebuilds on the next draw and never serializes.
-    state.pop("_last_render_geometry", None)
-    state.pop("_container_ordinals_by_output_op_label", None)
-    state.pop("_container_ordinals_by_input_func_call_id", None)
-
-
 @dataclass(init=False, repr=False, eq=False)
-class Trace(
-    TraceStatsMixin,
-    TraceStackMixin,
-    TraceInterventionMixin,
-    TraceValidationMixin,
-    TraceExportMixin,
-    TraceVisualizationMixin,
-    TraceNarrateMixin,
-    TraceOutputMixin,
-    TraceLike,
-):
+class Trace(TraceOutputMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -912,10 +631,7 @@ class Trace(
             Structured non-finite diagnostic. Source locations are surfaced
             from the operation's existing recorded code context when available.
         """
-
-        from ..debug._nan import find_nan_in_trace
-
-        return find_nan_in_trace(self)
+        return _trace_views.find_nan(self)
 
     def audit(self) -> "HealthReport":
         """Return an honest one-call health report for this completed trace.
@@ -929,10 +645,7 @@ class Trace(
         torchlens.report.HealthReport
             Prioritized findings plus checks run and skipped-check reasons.
         """
-
-        from ..debug._audit import audit_trace
-
-        return audit_trace(self)
+        return _trace_annotations.audit(self)
 
     def using(self, name: str) -> Any:
         """Return the appliance registered as ``name``, bound to this trace.
@@ -941,10 +654,7 @@ class Trace(
         ``torchlens.appliances.register``. An unknown name refuses typed
         (``appliance_unknown``) and lists the registered names.
         """
-
-        from ..appliances._appliances import open_appliance
-
-        return open_appliance(self, name)
+        return _trace_annotations.using(self, name=name)
 
     def __getattr__(self, name: str) -> Any:
         """Explain common missing memory attributes before raising.
@@ -1097,486 +807,7 @@ class Trace(
     _rf_directional_solutions: Any
     _tl_rf_probe_active: Any
 
-    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
-        "name": FieldPolicy.KEEP,
-        "_source_class_name": FieldPolicy.KEEP,
-        "model_name": FieldPolicy.KEEP,
-        "_provenance_backend": FieldPolicy.KEEP,
-        "_provenance_backend_config": FieldPolicy.KEEP,
-        "backend_runtime_device_summary": FieldPolicy.KEEP,
-        "_provenance_backend_version": FieldPolicy.KEEP,
-        # Provenance marker for traces cooked from a Recording: postprocess
-        # runs exhaustive-style (capture_mode stays "exhaustive" for behavior
-        # compatibility), but the marker records the true origin so gates and
-        # diagnostics never mistake a cooked projection for a live exhaustive
-        # capture. Session-only; not a portable fact.
-        "_cooked_from": FieldPolicy.DROP,
-        # Settlement-authority state (torchlens/_capture/outcome.py). The
-        # settled outcome is a PERSISTED portable fact (tlspec v7): saved as
-        # its string-only payload, parsed against closed vocabularies and the
-        # status coherence matrix at load. The phase marker and stop-request
-        # latch are strictly session-transient.
-        "_capture_outcome": FieldPolicy.KEEP,
-        "_capture_phase": FieldPolicy.DROP,
-        "_settlement_ops_committed": FieldPolicy.DROP,
-        "_stop_requested": FieldPolicy.DROP,
-        "_paddle_capture_depth": FieldPolicy.DROP,
-        "_paddle_op_captures": FieldPolicy.DROP,
-        "_paddle_alias_annotations": FieldPolicy.DROP,
-        "_paddle_capture_gap_markers": FieldPolicy.DROP,
-        "_tf_unresolved_producers": FieldPolicy.DROP,
-        "_tf_init_op_labels": FieldPolicy.DROP,
-        "_tf_op_captures": FieldPolicy.DROP,
-        "_tf_validation_result": FieldPolicy.DROP,
-        # JAX capture scratch the v11 groups lane moved behind provenance/options
-        # views: written by the JAX backend, read back by it, never portable.
-        "_provenance_jax_closed_jaxpr": FieldPolicy.DROP,
-        "_provenance_jax_inlined_call_primitives": FieldPolicy.DROP,
-        "_options_jax_static_argnums": FieldPolicy.DROP,
-        "_tl_save_selector_fire_count": FieldPolicy.DROP,
-        "_tl_intervene_selector_fire_count": FieldPolicy.DROP,
-        "_module_call_accessor": FieldPolicy.DROP,
-        "_op_accessor_cache": FieldPolicy.DROP,
-        "_layer_accessor_cache": FieldPolicy.DROP,
-        "_receptive_field_solution": FieldPolicy.DROP,
-        "_rf_directional_solutions": FieldPolicy.DROP,
-        "_options_module_identity_mode": FieldPolicy.KEEP,
-        "_provenance_param_source": FieldPolicy.KEEP,
-        "_autograd_derived_grads": FieldPolicy.KEEP,
-        "num_context_lines": FieldPolicy.KEEP,
-        "_optimizer": FieldPolicy.DROP,
-        "tlspec_version": FieldPolicy.KEEP,
-        "_tracing_finished": FieldPolicy.KEEP,
-        "_options_mode": FieldPolicy.KEEP,
-        # L7a structure-only mode marker: persists as of tlspec v8 (the
-        # coordinated bump) with the marker-coherence load-validation rows in
-        # torchlens/_io/forgery_validation.py (M-C2/M-C3; M-C1's form-(a)
-        # stripped-marker case is a documented scope statement there).
-        "_options_structure_only": FieldPolicy.KEEP,
-        # tlspec v9 entry-dark evidence envelope (C07; weightsfree memo
-        # section 5): None until the F33 writer lands; coherence-validated
-        # at load (only a structure-only capture may carry one).
-        "_graph_structure_evidence": FieldPolicy.KEEP,
-        # L6 resolved-intervention audit record: persists as of tlspec v8
-        # (reprs/identities/digests only, never raw values) with its load
-        # validation in torchlens/_io/forgery_validation.py.
-        "intervention_audit": FieldPolicy.KEEP,
-        "_runnable": FieldPolicy.DROP,
-        "_fast_run_session": FieldPolicy.DROP,
-        "_distributed_plane_p": FieldPolicy.DROP,
-        "_health_escape_detector_mode": FieldPolicy.DROP,
-        "_health_escape_detector_verified": FieldPolicy.DROP,
-        "escape_diagnostics": FieldPolicy.DROP,
-        "_health_num_escape_detector_events": FieldPolicy.DROP,
-        "_health_escape_detector_callback_ns": FieldPolicy.DROP,
-        "_autograd_escape_detector_backward_coverage": FieldPolicy.DROP,
-        "_health_completeness_mode": FieldPolicy.DROP,
-        "_health_completeness_verified": FieldPolicy.DROP,
-        "completeness_diagnostics": FieldPolicy.DROP,
-        "_health_completeness_decompositions": FieldPolicy.DROP,
-        "_health_num_witness_events": FieldPolicy.DROP,
-        "_health_num_accounted_witness_events": FieldPolicy.DROP,
-        "_health_num_expected_opaque_witness_events": FieldPolicy.DROP,
-        "_health_num_unaccounted_witness_events": FieldPolicy.DROP,
-        "_health_completeness_callback_ns": FieldPolicy.DROP,
-        # grind-r5 P7: the escape-disclosure VERDICT persists (negative claims
-        # only -- __getstate__/__setstate__ degrade anything else to None), so
-        # a capture TorchLens refused to bless is no longer byte-
-        # indistinguishable from a clean one after save/load. rescue_rerun
-        # stays session-time per docs/migration/scoped_detached_patching.md.
-        "_provenance_verified": FieldPolicy.KEEP,
-        "_provenance_verification_reason": FieldPolicy.KEEP,
-        "_rescue_rerun": FieldPolicy.DROP,
-        "_provenance_owner_thread_id": FieldPolicy.DROP,
-        "_provenance_owner_thread_qualified": FieldPolicy.DROP,
-        "_provenance_thread_count_start": FieldPolicy.DROP,
-        "_provenance_thread_count_end": FieldPolicy.DROP,
-        "_provenance_thread_activity_detected": FieldPolicy.DROP,
-        "capture_guard_passes": FieldPolicy.DROP,
-        "is_stopped": FieldPolicy.KEEP,
-        "stop_reason": FieldPolicy.KEEP,
-        "_graph_stop_frontier": FieldPolicy.KEEP,
-        "_layers_logged": FieldPolicy.KEEP,
-        "_layers_saved": FieldPolicy.KEEP,
-        "_options_keep_orphans": FieldPolicy.KEEP,
-        "is_replayable": FieldPolicy.KEEP,
-        "_options_save_arg_templates": FieldPolicy.KEEP,
-        "input": FieldPolicy.KEEP,
-        "_provenance_input_preprocessor": FieldPolicy.KEEP,
-        "_transform": FieldPolicy.DROP,
-        "_options_input_transform": FieldPolicy.KEEP,
-        "_options_save_raw_input": FieldPolicy.KEEP,
-        "batch_render": FieldPolicy.KEEP,
-        "transformed_output": FieldPolicy.KEEP,
-        "_decoded_output": FieldPolicy.KEEP,
-        "_provenance_output_postprocessor": FieldPolicy.KEEP,
-        "output_id2label": FieldPolicy.KEEP,
-        "output_num_classes": FieldPolicy.KEEP,
-        "_output_transform": FieldPolicy.DROP,
-        "_output_slot": FieldPolicy.DROP,
-        "_options_save_transformed_output": FieldPolicy.KEEP,
-        "layer_visualizers": FieldPolicy.DROP,
-        "save_visualizations": FieldPolicy.KEEP,
-        "_visualizer_dir": FieldPolicy.DROP,
-        "_options_activation_transform": FieldPolicy.DROP,
-        "_activation_transform_repr": FieldPolicy.KEEP,
-        "_options_save_raw_activations": FieldPolicy.KEEP,
-        "_options_save_mode": FieldPolicy.KEEP,
-        "_provenance_input_annotations": FieldPolicy.KEEP,
-        "_source_code_blob": FieldPolicy.KEEP,
-        "_source_model_ref": FieldPolicy.DROP,
-        # Session-time: recorded at the module build while the model is live.
-        "_uncalled_module_addresses": FieldPolicy.DROP,
-        "_parent_run": FieldPolicy.DROP,
-        "_provenance_model_object_id": FieldPolicy.KEEP,
-        "_source_class_qualname": FieldPolicy.KEEP,
-        "_provenance_param_hash_quick": FieldPolicy.KEEP,
-        # tlspec v9 root entry-point identity fact (C07X item (iv)): the
-        # closed "kind:qualified_identity" descriptor, written
-        # unconditionally at capture beside the two facts above; fail-closed
-        # grammar validation at load (_io/forgery_validation.py).
-        "_provenance_root_entry_point": FieldPolicy.KEEP,
-        "_provenance_param_hash_full": FieldPolicy.KEEP,
-        "_provenance_input_object_id": FieldPolicy.KEEP,
-        "_provenance_input_signature_hash": FieldPolicy.KEEP,
-        "_options_seed": FieldPolicy.KEEP,
-        "_options_output_device": FieldPolicy.KEEP,
-        "_options_detach_saved_activations": FieldPolicy.KEEP,
-        "_options_backward_ready": FieldPolicy.DROP,
-        "_options_inference_only": FieldPolicy.KEEP,
-        "_options_chunk_size": FieldPolicy.KEEP,
-        "_module_filter": FieldPolicy.DROP,
-        "_options_emit_nvtx": FieldPolicy.KEEP,
-        # Session-time measurement knob (like ``backward_ready``): it selects how
-        # ``forward_peak_memory`` was measured during this capture and has no
-        # meaning for a loaded artifact, which never re-measures. Portable load
-        # restores the default ``False``, so it stays out of
-        # ``MODEL_LOG_FIELD_ORDER`` and out of the portable schema.
-        "measure_python_peak_memory": FieldPolicy.DROP,
-        "_forward_peak_memory_pair": FieldPolicy.DROP,  # F20 D-7 session pair
-        # Session-time witness knob for collective boundary records: it selects
-        # what capture PAID FOR (digests or nothing), not what a trace means;
-        # the per-boundary witness.policy_resolved field is the portable
-        # evidence. Portable load restores the default "none".
-        "distributed_witness": FieldPolicy.DROP,
-        # Session-time resource ceiling: it bounds what THIS process was willing
-        # to retain and has no meaning for a loaded artifact, which retains
-        # nothing. Portable load restores the default, so it stays out of
-        # ``MODEL_LOG_FIELD_ORDER`` and out of the portable schema.
-        "save_budget": FieldPolicy.DROP,
-        "_options_on_nonfinite": FieldPolicy.KEEP,
-        # Session-time recording knob (same class as measure_python_peak_memory):
-        # it selects what capture PAID FOR (per-op finiteness checks), not what a
-        # trace means. Portable load restores the default False, so it stays out
-        # of MODEL_LOG_FIELD_ORDER and out of the portable schema.
-        "track_nonfinite": FieldPolicy.DROP,
-        # F24 sampling knob + per-call sample store: allocator counters are
-        # process facts of the capturing run; load restores the default.
-        "track_device_memory": FieldPolicy.DROP,
-        "measure_host_peak_memory": FieldPolicy.DROP,  # session knob
-        "_device_memory_samples": FieldPolicy.DROP,
-        "annotations": FieldPolicy.KEEP,
-        "_provenance_observer_spans": FieldPolicy.KEEP,
-        "_graph_manual_tensor_connections": FieldPolicy.KEEP,
-        "_source_forward_file": FieldPolicy.KEEP,
-        "_source_forward_line": FieldPolicy.KEEP,
-        "_source_class_file": FieldPolicy.KEEP,
-        "_source_class_line": FieldPolicy.KEEP,
-        "_source_init_file": FieldPolicy.KEEP,
-        "_source_init_line": FieldPolicy.KEEP,
-        "_source_class_docstring": FieldPolicy.KEEP,
-        "_source_init_signature": FieldPolicy.KEEP,
-        "_source_init_docstring": FieldPolicy.KEEP,
-        "_source_forward_signature": FieldPolicy.KEEP,
-        "_source_forward_docstring": FieldPolicy.KEEP,
-        "_source_frames": FieldPolicy.KEEP,
-        # tlspec v9 entry-dark source-snapshot table (C07; convert memo item
-        # 24): one row per (path, digest), empty until the F30 writer lands;
-        # fail-closed row validation at load.
-        "_source_snapshots": FieldPolicy.KEEP,
-        "_provenance_cache_hit": FieldPolicy.KEEP,
-        "_provenance_cache_key": FieldPolicy.KEEP,
-        "_provenance_cache_path": FieldPolicy.KEEP,
-        "_provenance_recording_kept": FieldPolicy.KEEP,
-        "facet_functions": FieldPolicy.DROP,
-        "_out_dedup_mode": FieldPolicy.DROP,
-        "_out_identity_cache": FieldPolicy.DROP,
-        "_out_hash_cache": FieldPolicy.DROP,
-        "_code_context_cache": FieldPolicy.DROP,
-        "_options_save_args": FieldPolicy.KEEP,
-        "_options_save_grads": FieldPolicy.KEEP,
-        "capture_tensor_grad_hooks": FieldPolicy.KEEP,
-        "_grad_op_nums_to_save": FieldPolicy.KEEP,
-        "_options_grad_transform": FieldPolicy.DROP,
-        "_options_save_raw_grads": FieldPolicy.KEEP,
-        "_options_save_source_context": FieldPolicy.KEEP,
-        "_options_save_rng": FieldPolicy.KEEP,
-        "_options_recurrence_detection": FieldPolicy.KEEP,
-        # L1 grouping surface: persists as of tlspec v8; the grouping-policy
-        # stamp validates at load (C1-C8, _postprocess/_grouping_stamp.py).
-        "_options_grouping": FieldPolicy.KEEP,
-        "_options_grouping_policy": FieldPolicy.KEEP,
-        # L8/F6 shard-local capture marker (merge-ranks C2 substrate):
-        # persists as of tlspec v8 with the closed-vocabulary load validation
-        # in torchlens/_io/forgery_validation.py. Value vocabulary
-        # ("rank_local_shard") is DOCUMENTED-UNSTABLE pending its S2 amendment.
-        "_provenance_distributed_scope": FieldPolicy.KEEP,
-        # L9 backward-residuals surface: both persist as of tlspec v8 with
-        # closed-vocabulary load validation in _io/forgery_validation.py.
-        # Value vocabularies provisional (E-L9-4 routing).
-        "grad_fn_timing_provenance": FieldPolicy.KEEP,
-        "checkpoint_invocation_witness": FieldPolicy.KEEP,
-        "_options_verbose": FieldPolicy.KEEP,
-        "profile_enabled": FieldPolicy.KEEP,
-        "_autograd_has_grads": FieldPolicy.KEEP,
-        "_options_mark_layer_depths": FieldPolicy.KEEP,
-        "_provenance_fingerprint": FieldPolicy.KEEP,
-        "_intervention_spec": FieldPolicy.DROP,
-        "state_history": FieldPolicy.KEEP,
-        "last_run": FieldPolicy.DROP,
-        "_append_history": FieldPolicy.KEEP,
-        "_has_direct_writes": FieldPolicy.KEEP,
-        "_warned_direct_write": FieldPolicy.DROP,
-        "_warned_mutate_in_place": FieldPolicy.DROP,
-        "_warned_once": FieldPolicy.DROP,
-        "_spec_revision": FieldPolicy.KEEP,
-        "_out_recipe_revision": FieldPolicy.KEEP,
-        "_append_sequence_id": FieldPolicy.KEEP,
-        "_last_hook_handle_ids": FieldPolicy.DROP,
-        "_predicate_save_options": FieldPolicy.DROP,
-        "_predicate_history_size": FieldPolicy.DROP,
-        "_predicate_history": FieldPolicy.DROP,
-        "_predicate_lookback": FieldPolicy.DROP,
-        "_predicate_lookback_payload_policy": FieldPolicy.DROP,
-        "_capture_config": FieldPolicy.DROP,
-        "_stop_directive": FieldPolicy.DROP,
-        "_halt_returns_partial_trace": FieldPolicy.DROP,
-        "_predicate_save_decisions": FieldPolicy.DROP,
-        "_predicate_current_contexts": FieldPolicy.DROP,
-        "_predicate_lookback_candidates": FieldPolicy.DROP,
-        "_postprocessing_active": FieldPolicy.DROP,
-        "_raw_transform_escape_detected": FieldPolicy.DROP,
-        "_raw_dynamo_region_detected": FieldPolicy.DROP,
-        "_raw_event_shape_hash": FieldPolicy.DROP,
-        "_raw_call_fingerprint": FieldPolicy.DROP,
-        "_replay_arg_version_data_complete": FieldPolicy.KEEP,
-        "state": FieldPolicy.KEEP,
-        "_provenance_is_appended": FieldPolicy.KEEP,
-        "_graph_relationship_evidence": FieldPolicy.KEEP,
-        "_replay_frontier": FieldPolicy.DROP,
-        "_output_container_specs_by_raw_label": FieldPolicy.DROP,
-        "_layer_list": FieldPolicy.KEEP,
-        "_layer_dict_main_keys": FieldPolicy.KEEP,
-        "_layer_dict_all_keys": FieldPolicy.KEEP,
-        "_layer_logs": FieldPolicy.KEEP,
-        "layer_labels": FieldPolicy.KEEP,
-        "op_labels": FieldPolicy.KEEP,
-        "_layer_num_calls": FieldPolicy.KEEP,
-        "_by_pass": FieldPolicy.KEEP,
-        "_layer_nums_to_save": FieldPolicy.KEEP,
-        "_num_ops": FieldPolicy.KEEP,
-        "_raw_to_final_layer_labels": FieldPolicy.KEEP,
-        "_raw_to_final_parent_layer_labels": FieldPolicy.KEEP,
-        "_raw_to_final_op_labels": FieldPolicy.KEEP,
-        "_final_to_raw_layer_labels": FieldPolicy.KEEP,
-        "_lookup_keys_to_layer_num_dict": FieldPolicy.KEEP,
-        "_layer_num_to_lookup_keys_dict": FieldPolicy.KEEP,
-        "_ambiguous_lookup_keys": FieldPolicy.KEEP,
-        "input_layers": FieldPolicy.KEEP,
-        "output_layers": FieldPolicy.KEEP,
-        "_provenance_input_structure": FieldPolicy.BLOB_RECURSIVE,
-        "_containers": FieldPolicy.BLOB_RECURSIVE,
-        "_annotation_blobs": FieldPolicy.BLOB_RECURSIVE,
-        "buffer_layers": FieldPolicy.KEEP,
-        "_buffer_num_calls": FieldPolicy.KEEP,
-        "_buffer_accessor": FieldPolicy.DROP,
-        "_buffer_write_tracker": FieldPolicy.DROP,
-        "_param_storage_addresses": FieldPolicy.DROP,
-        "_buffer_initial_values": FieldPolicy.BLOB_RECURSIVE,
-        "_buffer_persistence": FieldPolicy.KEEP,
-        "internal_source_ops": FieldPolicy.KEEP,
-        "internal_sink_ops": FieldPolicy.KEEP,
-        "internally_terminated_bool_ops": FieldPolicy.KEEP,
-        "_graph_conditional_branch_edges": FieldPolicy.KEEP,
-        "_graph_conditional_records": FieldPolicy.KEEP,
-        "_graph_conditional_arm_entry_edges": FieldPolicy.KEEP,
-        "_graph_conditional_edge_call_indices": FieldPolicy.KEEP,
-        "_graph_conditionals": FieldPolicy.KEEP,
-        "_orphan_labels": FieldPolicy.KEEP,
-        "_orphan_logs": FieldPolicy.KEEP,
-        "_orphan_records": FieldPolicy.BLOB_RECURSIVE,
-        "_saved_grad_labels": FieldPolicy.DROP,
-        "layers_with_params": FieldPolicy.KEEP,
-        "ops_with_params": FieldPolicy.DROP,
-        "_graph_op_equivalence_classes": FieldPolicy.KEEP,
-        "_cost_total_activation_memory": FieldPolicy.KEEP,
-        "_cost_total_grad_memory": FieldPolicy.KEEP,
-        "_cost_total_backward_memory": FieldPolicy.KEEP,
-        "_cost_total_autograd_memory": FieldPolicy.KEEP,
-        "_cost_pinned_autograd_memory": FieldPolicy.DROP,  # live graph only
-        "_num_saved_ops": FieldPolicy.KEEP,
-        "_cost_saved_activation_memory": FieldPolicy.KEEP,
-        "_cost_saved_grad_memory": FieldPolicy.KEEP,
-        "_param_logs": FieldPolicy.KEEP,
-        "_num_param_tensors": FieldPolicy.KEEP,
-        "_num_layers_with_params": FieldPolicy.KEEP,
-        "num_params": FieldPolicy.KEEP,
-        "num_params_trainable": FieldPolicy.KEEP,
-        "num_params_frozen": FieldPolicy.KEEP,
-        "_cost_total_param_memory": FieldPolicy.KEEP,
-        "_cost_total_param_grad_memory": FieldPolicy.KEEP,
-        "_cost_forward_peak_memory": FieldPolicy.KEEP,
-        "_provenance_forward_memory_backend": FieldPolicy.KEEP,
-        "_cost_forward_peak_memory_reason": FieldPolicy.KEEP,
-        # r83 S4: live-capture scratch reinstated by ``__setstate__`` alongside
-        # ``_tl_backward_hooked_tensor_keys``, but never registered here. Any
-        # trace that went through ``__setstate__`` -- which ``cache=True`` makes
-        # routine -- therefore tripped the catalog tripwire and failed
-        # ``save(level="runnable")`` outright on the SECOND capture. DROP, like
-        # its sibling: pending live-fire records are session state and are
-        # already reset on rehydrate.
-        "_pending_live_fire_records": FieldPolicy.DROP,
-        "_module_logs": FieldPolicy.DROP,
-        "_param_logs_by_module": FieldPolicy.DROP,
-        "_raw_graph_ws": FieldPolicy.DROP,
-        "_module_capture_ws": FieldPolicy.DROP,
-        "_wrapper_runtime_ws": FieldPolicy.DROP,
-        # The per-trace columnar Op row store (torchlens._trace_core). Never
-        # portable: plain pickle re-materializes each Op as a detached row
-        # from its own state, and .tlspec artifacts stay object-shaped until
-        # the M11 direct semantic serialization.
-        "_trace_core": FieldPolicy.DROP,
-        # L3 primitive-op profile: persists as of tlspec v8; loaded profiles
-        # validate through validate_loaded_primitive_profile whenever present.
-        "_primitive_op_profile": FieldPolicy.KEEP,
-        "_pre_forward_rng_states": FieldPolicy.DROP,
-        # r63 C1: pre-clone per-slot state metadata signatures (producer-side only,
-        # never portable) and the buffer storage-pointer attribution index.
-        # r77 F2: capture-time persistent-buffer name universe + geometry
-        # (producer-side only, never portable).
-        "_buffer_storage_addresses": FieldPolicy.DROP,
-        "_mlx_saved_payloads": FieldPolicy.DROP,
-        "_mlx_capture_depth": FieldPolicy.DROP,
-        "_out_writer": FieldPolicy.DROP,
-        # Runtime-only: the live per-device accountant that enforces
-        # ``save_budget`` while payloads are being retained. It describes what
-        # THIS process was willing to allocate, so it is never portable; a loaded
-        # artifact retains nothing and rebuilds it from the restored option.
-        "_save_budget_accountant": FieldPolicy.DROP,
-        "_keep_outs_in_memory": FieldPolicy.DROP,
-        "_grad_stream_retain_in_memory": FieldPolicy.DROP,
-        "_defer_streaming_bundle_finalization": FieldPolicy.DROP,
-        "_out_sink": FieldPolicy.DROP,
-        # Runtime-only: the set of dispatchable op func-call-ids the orphan-removal
-        # pass pruned, read by the validation dispatch-count backstop. Never portable.
-        "_orphan_pruned_func_call_ids": FieldPolicy.DROP,
-        # Runtime-only (r29 F3b): the capture-time (slot -> producer) parent-edge
-        # truth keyed by raw label, read by the capture_edge_survival metadata
-        # invariant. Registered in _io/scrub.py's runtime-only list; declared here
-        # so the portable-state cover stays exhaustive. Never portable.
-        "_capture_parent_edge_truth": FieldPolicy.DROP,
-        # track_nonfinite's runtime store (events/unchecked/pending), set lazily
-        # by the torch op-finalize hook; same runtime-bookkeeping class as
-        # _capture_parent_edge_truth: never persisted, absent on loaded traces.
-        "_nonfinite_capture": FieldPolicy.DROP,
-        # F24 session-time stores (saved-band decomposition, first-save set,
-        # aborted-nonfinite prefix facts): the _capture_parent_edge_truth
-        # class; loaded traces disclose honest absence (field_intent live-only).
-        "_autograd_saved_bands": FieldPolicy.DROP,
-        "_autograd_seen_saved_storages": FieldPolicy.DROP,
-        "_nonfinite_frontier_out": FieldPolicy.DROP,
-        "_nonfinite_prefix_finalized": FieldPolicy.DROP,
-        "_nonfinite_prefix_finalize_error": FieldPolicy.DROP,
-        "_capture_events": FieldPolicy.DROP,
-        "_capture_session": FieldPolicy.DROP,
-        "_tl_backward_hooked_tensor_keys": FieldPolicy.DROP,
-        "_tl_grad_hook_owner_by_label": FieldPolicy.DROP,
-        # RF probe suppression flag: declared statically so a Trace serialized
-        # BEFORE any receptive-field probe has the same class spec as one
-        # serialized after (the probe used to setdefault this at call time).
-        "_tl_rf_probe_active": FieldPolicy.DROP,
-        "_active_backward_pass_index": FieldPolicy.DROP,
-        "_backward_roots_by_pass": FieldPolicy.DROP,
-        "_backward_projection_event_count": FieldPolicy.DROP,
-        "_backward_projection_revision": FieldPolicy.DROP,
-        "_backward_projection_fold_state": FieldPolicy.DROP,
-        "_implicit_backward_pass_open": FieldPolicy.DROP,
-        "_tl_backward_triggers_disarmed": FieldPolicy.DROP,
-        # Idempotent-cleanup sentinel (b6-opus R25): stamped by cleanup() so a
-        # second cleanup() early-returns and every reader of a husked trace
-        # funnels into the one typed TraceCleanedUpError. Session-time by
-        # construction -- a load rebinds a live trace, never a husk.
-        "_tl_cleaned_up": FieldPolicy.DROP,
-        "_provenance_start_time": FieldPolicy.KEEP,
-        "_provenance_end_time": FieldPolicy.KEEP,
-        "_phase_timings": FieldPolicy.KEEP,
-        "_provenance_setup_duration": FieldPolicy.KEEP,
-        "_cost_forward_duration": FieldPolicy.KEEP,
-        "_provenance_cleanup_duration": FieldPolicy.KEEP,
-        "_cost_func_calls_duration": FieldPolicy.KEEP,
-        "_autograd_has_backward_pass": FieldPolicy.KEEP,
-        "_grad_fn_logs": FieldPolicy.KEEP,
-        "_autograd_grad_fn_order": FieldPolicy.KEEP,
-        "_backward_pass_logs": FieldPolicy.KEEP,
-        "_grad_fn_param_refs": FieldPolicy.KEEP,
-        "_grad_fn_param_refs_by_object_id": FieldPolicy.DROP,
-        "_param_log_by_pid": FieldPolicy.DROP,
-        "_session_param_inventory": FieldPolicy.DROP,
-        "_session_buffer_inventory": FieldPolicy.DROP,
-        "_session_buffer_identity": FieldPolicy.DROP,
-        "_autograd_backward_root_grad_fn_object_ids": FieldPolicy.KEEP,
-        "_cost_backward_durations": FieldPolicy.KEEP,
-        "_num_backward_passes": FieldPolicy.KEEP,
-        "_cost_backward_peak_memory": FieldPolicy.KEEP,
-        "_provenance_backward_memory_backend": FieldPolicy.KEEP,
-        "backward_peak_memory_reason": FieldPolicy.KEEP,
-        "_backward_gradfn_refs": FieldPolicy.DROP,
-        # B1-17: the remaining undeclared runtime Trace attrs the widened
-        # lockstep gate finds across the 30-axis postprocess matrix. All are
-        # session-time by construction; declaring them makes the gate's
-        # authority the policy table rather than the pre-spec allowance in
-        # `_io/scrub.py`.
-        #
-        # Predicate-intervention dedup caches (INTERVENED axis). `..._target_keys` pins
-        # the live intervention spec, so it is also dropped at the postprocess seam.
-        "_tl_predicate_intervention_spec_keys": FieldPolicy.DROP,
-        "_tl_predicate_intervention_target_keys": FieldPolicy.DROP,
-        "_tl_injection_state": FieldPolicy.DROP,  # F01 session transient
-        # Streaming-bundle provenance (STREAMING axes). Already popped and
-        # restored around the scrub by `_io/bundle.py` and cleared by
-        # `data_classes/cleanup.py`; a load rebinds them fresh, so DROP is the
-        # existing behavior made declarative.
-        "_source_bundle_path": FieldPolicy.DROP,
-        "_source_bundle_manifest_sha256": FieldPolicy.DROP,
-        # The capture's save request: the backend reads its two-pass
-        # output-parent retention flag (DEFERRED_RETENTION axis) and a legacy
-        # rerun replays it.
-        "_rerun_save_request": FieldPolicy.DROP,
-        # Validation side-channel state (B1-04). `validate_forward_pass` is
-        # a public method on a user-held Trace, and
-        # validation ENTRY unconditionally sets `_last_validation_failure`
-        # (`reset_validation_failure` writes None on every run), so a plain
-        # validate-then-save sequence hit
-        # `ArtifactError: Trace._last_validation_failure is missing from
-        # _PORTABLE_STATE_SPEC` -- a hard refusal on a completely ordinary
-        # workflow. Both attrs are session-time diagnostics carried on the
-        # trace as a side channel, exactly the `_fast_run_session` class, and
-        # `ValidationFailure`/`ValidationDiagnostic` are not portable records.
-        "_last_validation_failure": FieldPolicy.DROP,
-        "_validation_diagnostics": FieldPolicy.DROP,
-        # Session-time semantic-output scratch (B1-02). Written at capture
-        # entry, consumed only by ``decode_outputs_for_trace``, and dropped on
-        # every settlement path (``_capture/trace.py``'s
-        # ``_drop_semantic_output_transients`` plus the postprocess seam).
-        # Declared here so the runtime-declaration lockstep gate can SEE them
-        # on the halted axis and so the portable scrub is policy-driven rather
-        # than a hand-maintained name list in ``_io/scrub.py``:
-        # ``_output_tokenizer`` holds a LIVE user tokenizer and
-        # ``_semantic_output_metadata`` a model-derived key, so a surviving
-        # copy leaks vocab/merges into a plain pickle of the Trace.
-        "_output_tokenizer": FieldPolicy.DROP,
-        "_semantic_output_metadata": FieldPolicy.DROP,
-    }
+    _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = TRACE_PORTABLE_STATE_SPEC
     _FIELD_POLICY = build_record_field_policy_table(
         MODEL_LOG_FIELD_ORDER,
         _PORTABLE_STATE_SPEC,
@@ -2060,10 +1291,9 @@ class Trace(
         _SiteTable
             Ordered table of matching layer-pass records.
         """
-
-        from .._selection.resolver import find_sites
-
-        return find_sites(self, selector, strict=strict, max_fanout=max_fanout)
+        return _trace_views.find_sites(
+            self, selector=selector, strict=strict, max_fanout=max_fanout
+        )
 
     def _resolve_sites(self, selector: Any, *, strict: bool = False, max_fanout: int = 8) -> Any:
         """Resolve the record-grain site table for internal planning (private).
@@ -2086,10 +1316,9 @@ class Trace(
         _SiteTable
             Ordered table of matching layer-pass records.
         """
-
-        from .._selection.resolver import _resolve_sites
-
-        return _resolve_sites(self, selector, strict=strict, max_fanout=max_fanout)
+        return _trace_views.resolve_site_table(
+            self, selector=selector, strict=strict, max_fanout=max_fanout
+        )
 
     def check_plan(self, plan: Any) -> Any:
         """Audit-only plan check (weightsfree memo D14; nnsight-scan parity).
@@ -2116,10 +1345,7 @@ class Trace(
         torchlens._capture._plan_check.PlanCheckReport
             Frozen audit report.
         """
-
-        from .._capture._plan_check import check_plan
-
-        return check_plan(self, plan)
+        return _trace_views.check_plan(self, plan=plan)
 
     def annotate(
         self,
@@ -2155,79 +1381,9 @@ class Trace(
         Trace
             The annotated trace. This is ``self`` unless ``copy=True``.
         """
-
-        target = self.fork(name=None) if copy else self
-        target._annotate_in_place(selector, data=data, image=image, max_fanout=max_fanout)
-        return target
-
-    def _annotate_in_place(
-        self,
-        selector: Any,
-        *,
-        data: Any,
-        image: str | Path | None,
-        max_fanout: int,
-    ) -> None:
-        """Apply annotation updates directly to this trace.
-
-        Parameters
-        ----------
-        selector:
-            Selector resolved against this trace.
-        data:
-            Annotation data supplied by the caller.
-        image:
-            Optional image path supplied by the caller.
-        max_fanout:
-            Explicit fan-out limit passed to the site resolver.
-
-        Returns
-        -------
-        None
-            This trace is mutated in place.
-        """
-
-        if data is None and image is None:
-            raise InvalidArgumentError(
-                "annotate() requires data=, image=, or both",
-                code="annotation_payload_missing",
-                remedy="pass data=, image=, or both to annotate()",
-            )
-        sites = self._resolve_sites(selector, max_fanout=max_fanout)
-        image_value = str(image) if image is not None else None
-        data_kind = self._annotation_data_kind(data)
-        for site in sites:
-            key = self._annotation_key_for_site(site)
-            if data is not None:
-                if data_kind == "blob":
-                    self._store_annotation_blob(key, data)
-                else:
-                    self._store_annotation_breadcrumb(site, "data", data)
-            if image_value is not None:
-                self._store_annotation_breadcrumb(site, "image", image_value)
-        self._mark_annotations_mutated()
-
-    def _annotation_data_kind(self, data: Any) -> str:
-        """Classify and validate annotation data.
-
-        Parameters
-        ----------
-        data:
-            Candidate annotation payload.
-
-        Returns
-        -------
-        str
-            ``"none"``, ``"blob"``, or ``"json"``.
-        """
-
-        if data is None:
-            return "none"
-        if isinstance(data, torch.Tensor):
-            self._validate_annotation_tensor(data)
-            return "blob"
-        self._validate_annotation_json(data)
-        return "json"
+        return _trace_annotations.annotate(
+            self, selector=selector, data=data, image=image, max_fanout=max_fanout, copy=copy
+        )
 
     def _validate_annotation_tensor(self, tensor: torch.Tensor) -> None:
         """Validate that a tensor annotation matches the active payload codec.
@@ -2242,74 +1398,7 @@ class Trace(
         None
             Raises if the tensor is not portable for this trace.
         """
-
-        backend_name = str(self._provenance_backend)
-        if backend_name != "torch":
-            raise InvalidArgumentError(
-                "annotate(data=torch.Tensor) is supported only for torch traces in this "
-                f"release; this trace uses backend={backend_name!r}",
-                code="annotation_backend_unsupported",
-                remedy="pass JSON-serializable annotation data for non-torch traces",
-                backend=backend_name,
-            )
-        from .._io.payload_codec import get_payload_codec
-
-        decision = get_payload_codec(backend_name).validate_for_save(tensor, strict=True)
-        if decision.__class__.__name__ != "Ok":
-            reason = getattr(decision, "text", "unsupported tensor payload")
-            raise InvalidArgumentError(
-                f"Annotation tensor is not portable for backend {backend_name!r}: {reason}",
-                code="annotation_tensor_not_portable",
-                remedy="pass a dense, codec-supported tensor as annotation data",
-                backend=backend_name,
-                reason=reason,
-            )
-
-    @staticmethod
-    def _validate_annotation_json(data: Any) -> None:
-        """Validate that an annotation breadcrumb can be persisted as JSON data.
-
-        Parameters
-        ----------
-        data:
-            Candidate JSON breadcrumb.
-
-        Returns
-        -------
-        None
-            Raises if ``data`` is not JSON-serializable.
-        """
-
-        try:
-            json.dumps(data, sort_keys=True)
-        except (TypeError, ValueError) as exc:
-            raise InvalidArgumentError(
-                "annotate(data=...) must be JSON-serializable or a torch.Tensor; "
-                "values are never silently stringified",
-                code="annotation_not_json_serializable",
-                remedy="convert arrays to torch.Tensor for blob persistence",
-                argument="data",
-            ) from exc
-
-    def _annotation_key_for_site(self, site: Any) -> str:
-        """Return the persistent annotation blob key for a resolved site.
-
-        Parameters
-        ----------
-        site:
-            Resolved layer-pass record.
-
-        Returns
-        -------
-        str
-            ``layer:<layer_label>`` for single-pass layers, otherwise
-            ``op:<op.label>``.
-        """
-
-        layer_label = str(getattr(site, "layer_label"))
-        if self._layer_num_calls.get(layer_label, 1) == 1:
-            return f"layer:{layer_label}"
-        return f"op:{getattr(site, 'label')}"
+        return _trace_annotations.validate_annotation_tensor(self, tensor=tensor)
 
     #: Key namespaces of DERIVED render-time annotation blobs (computed from a
     #: specific run's activations). Bare ``layer:``/``op:`` keys are USER
@@ -2331,84 +1420,7 @@ class Trace(
             Blobs outside every derived render namespace, or ``None`` when no
             user blob exists (matching the unannotated default).
         """
-
-        blobs = self._annotation_blobs
-        if not isinstance(blobs, dict):
-            return None
-        kept = {
-            key: value
-            for key, value in blobs.items()
-            if not key.startswith(self._DERIVED_ANNOTATION_BLOB_PREFIXES)
-        }
-        return kept or None
-
-    def _store_annotation_blob(self, key: str, data: Any) -> None:
-        """Store a blob annotation under ``_annotation_blobs``.
-
-        Parameters
-        ----------
-        key:
-            Namespaced annotation key.
-        data:
-            Codec-validated payload.
-
-        Returns
-        -------
-        None
-            This trace's blob mapping is mutated in place.
-        """
-
-        if self._annotation_blobs is None:
-            self._annotation_blobs = {}
-        self._annotation_blobs[key] = data
-
-    def _store_annotation_breadcrumb(self, site: Any, name: str, value: Any) -> None:
-        """Store a small user breadcrumb on the selected Op and Layer.
-
-        Parameters
-        ----------
-        site:
-            Resolved layer-pass record.
-        name:
-            User-namespace field name.
-        value:
-            JSON-compatible breadcrumb value.
-
-        Returns
-        -------
-        None
-            The selected Op and aggregate Layer annotation dicts are mutated.
-        """
-
-        self._user_annotation_dict(site.annotations)[name] = value
-        layer_log = self._layer_logs.get(str(getattr(site, "layer_label")))
-        if layer_log is not None:
-            self._user_annotation_dict(layer_log.annotations)[name] = value
-
-    @staticmethod
-    def _user_annotation_dict(annotations: dict[str, Any]) -> dict[str, Any]:
-        """Return the reserved user annotation namespace.
-
-        Parameters
-        ----------
-        annotations:
-            Op, Layer, or Trace annotation mapping.
-
-        Returns
-        -------
-        dict[str, Any]
-            Mutable ``annotations["user"]`` mapping.
-        """
-
-        user_annotations = annotations.setdefault("user", {})
-        if not isinstance(user_annotations, dict):
-            raise InvalidArgumentError(
-                'annotations["user"] must be a dict to store user annotations; '
-                f"found {type(user_annotations).__name__}",
-                code="annotation_namespace_invalid",
-                remedy='restore annotations["user"] to a dict before annotating',
-            )
-        return user_annotations
+        return _trace_annotations.user_annotation_blobs(self)
 
     def _mark_annotations_mutated(self) -> None:
         """Invalidate render-only caches after an annotation mutation.
@@ -2418,10 +1430,7 @@ class Trace(
         None
             The cached sibling-ordering decision is discarded.
         """
-
-        self.__dict__.pop("_last_sibling_ordering_decision", None)
-        self.__dict__.pop("_last_encoding_state", None)
-        self.__dict__.pop("_last_render_geometry", None)
+        return _trace_annotations.mark_annotations_mutated(self)
 
     def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
         """Return layer labels matching a fuzzy query.
@@ -2439,20 +1448,7 @@ class Trace(
             Matching no-pass layer labels in execution order, followed by close
             fuzzy matches when substring matches are insufficient.
         """
-
-        query_text = str(selector).lower()
-        labels = list(self.layer_labels)
-        substring_matches = [label for label in labels if query_text in label.lower()]
-        if len(substring_matches) >= limit:
-            return substring_matches[:limit]
-        fuzzy_matches = difflib.get_close_matches(str(selector), labels, n=limit, cutoff=0.25)
-        result = substring_matches[:]
-        for label in fuzzy_matches:
-            if label not in result:
-                result.append(label)
-            if len(result) >= limit:
-                break
-        return result
+        return _trace_views.find_layers(self, selector=selector, limit=limit)
 
     @property
     def uncalled_modules(self) -> _CallableList:
@@ -2467,18 +1463,7 @@ class Trace(
             unpickled trace) and the source model is no longer available;
             ``num_uncalled_modules`` reads ``None`` in that case.
         """
-
-        stored = self.__dict__.get("_uncalled_module_addresses")
-        if stored is not None:
-            return _CallableList(stored)
-        source_ref = None if self.__dict__.get("_tl_cleaned_up", False) else self._source_model_ref
-        model = source_ref() if source_ref is not None else None
-        if model is None:
-            return _CallableList()
-        registered = {address or "self" for address, _module in model.named_modules()}
-        called = set(getattr(self._module_logs, "_dict", {}).keys())
-        called.update(getattr(self._module_logs, "_alias_dict", {}).keys())
-        return _CallableList(sorted(registered - called))
+        return _trace_views.uncalled_modules(self)
 
     @property
     def outcome(self) -> Any | None:
@@ -2493,16 +1478,7 @@ class Trace(
             live trace that has not settled yet (the documented pre-settlement
             state; capability gates independently treat it as UNKNOWN).
         """
-
-        from .._capture.outcome import CaptureOutcome, CaptureStatus, outcome_for
-
-        if self.__dict__.get("_tl_cleaned_up", False):
-            # cleanup() deletes the settled sidecar with every other field.
-            # The frozen vocabulary designates UNKNOWN as the most-restrictive
-            # value and the save gate already lands there; ``None`` is outside
-            # the vocabulary and was the one unsettled read (b6-opus R25).
-            return CaptureOutcome(status=CaptureStatus.UNKNOWN, is_derived=True)
-        return outcome_for(self)
+        return _trace_annotations.outcome(self)
 
     @property
     def _source_cls(self) -> type[Any] | None:
@@ -2904,107 +1880,7 @@ class Trace(
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with non-picklable weakref-backed accessors stripped."""
-        state = self.__dict__.copy()
-        state["_pickle_module_accessor_state"] = self.__dict__.get("_module_logs")
-        # Event streams never serialize (FieldPolicy.DROP): strip the stream
-        # AND the projection guard derived from it, or a restored trace would
-        # claim a source-process revision/fold-state over a fresh empty stream
-        # (silently dropped passes / stale-id partial folds on the advertised
-        # restored-trace backward-capture path).
-        state.pop("_capture_events", None)
-        state.pop("_backward_projection_event_count", None)
-        state.pop("_backward_projection_revision", None)
-        state.pop("_backward_projection_fold_state", None)
-        state.pop("_tl_materializing_backward_projection", None)
-        state["_module_logs"] = None
-        state["_buffer_accessor"] = None
-        state["_source_model_ref"] = None
-        state["_parent_run"] = None
-        state["last_run"] = None
-        state["_out_identity_cache"] = {}
-        state["_out_hash_cache"] = {}
-        state["_code_context_cache"] = {}
-        _drop_runtime_only_caches(state)
-        # B1-02: the semantic-output scratch never serializes. Plain pickle
-        # legitimately carries most session-time DROP state (in-process
-        # round-trips need `backward_ready`, `save_budget`, ...), but these
-        # hold LIVE USER OBJECTS -- an HF tokenizer and a model-derived
-        # metadata key. A surviving copy reconstructs the tokenizer on load and
-        # bakes its vocab/merges into an artifact the user believes is a graph
-        # (measured 47KB -> 238KB). Capture drops them at every settlement
-        # path; this is the serialization boundary's own belt.
-        state.pop("_output_tokenizer", None)
-        state.pop("_semantic_output_metadata", None)
-        # Capture-session predicate carriers (FieldPolicy.DROP) hold LIVE USER
-        # CLOSURES when predicate capture/intervention/halt was used (a
-        # ``tl.when(...)`` conditional is a local function), so pickling a
-        # trace that ``Trace.save`` accepted failed on exactly these fields.
-        # Serialize to the loaded-artifact form instead (absent / None), which
-        # every post-capture consumer already tolerates -- same belt as the
-        # semantic-output scratch above.
-        state.pop("_stop_directive", None)
-        state.pop("_capture_config", None)
-        state["_predicate_save_options"] = None
-        # R10-6: run(fast=True) binds a session holding weakrefs/compiled
-        # binders; every other session workspace pops here but this one did
-        # not, so pickle.dumps/copy.deepcopy after a fast run crashed with
-        # "cannot pickle 'weakref.ReferenceType'". Session-time (FieldPolicy
-        # DROP under its private name); a restored trace re-runs verified.
-        state.pop("_fast_run_session", None)
-        # Session-time plane-P dispatch journal (merge-ranks C2): tuples of
-        # per-dispatch facts, meaningless outside the capture session.
-        state.pop("_distributed_plane_p", None)
-        # R10-7: the REPR is scrubbed below, but the RAW user callables stayed
-        # in state, so a lambda transform= made pickle.dumps crash while
-        # Trace.save succeeded on the same trace. Serialize to the loaded-artifact
-        # form (None), which every post-load consumer already tolerates.
-        state["_options_activation_transform"] = None
-        state["_options_grad_transform"] = None
-        state["_output_transform"] = None
-        # The actual forward return can retain arbitrary live user objects.
-        # It is available only on the capture that executed the forward.
-        state["_output_slot"] = None
-        # R10-7b: the MODERN tl.trace(..., transform=...) kwarg populates
-        # `_transform`, a fourth raw-callable holder the original fix missed
-        # (it covered only the deprecated activation_transform= spelling).
-        state["_transform"] = None
-        # Facet recipe snapshot (FieldPolicy.DROP): its entries pickle builtin
-        # recipe FUNCTIONS by import identity, so a later recipe rename made
-        # every earlier plain pickle unloadable (gqa_sdpa_attention,
-        # 2026-08-26). Serialize to the loaded-artifact form (None);
-        # `_snapshot_for_record` falls back to the live registry exactly as it
-        # does for every tlspec-loaded Trace.
-        state["facet_functions"] = None
-        state["_cost_pinned_autograd_memory"] = None  # a pickled copy pins nothing
-        state.pop("_uncalled_module_addresses", None)  # session-time: unknown once restored
-        state.pop("_raw_graph_ws", None)
-        state.pop("_module_capture_ws", None)
-        state.pop("_wrapper_runtime_ws", None)
-        state.pop("_trace_core", None)
-        state["_backward_gradfn_refs"] = []
-        state["_tl_backward_hooked_tensor_keys"] = set()
-        state.pop("_tl_grad_hook_owner_by_label", None)
-        state["_pending_live_fire_records"] = []
-        state["_last_hook_handle_ids"] = ()
-        state["_activation_transform_repr"] = _scrubbed_transform_repr(
-            self._options_activation_transform
-        )
-        # Runnable traces bind state as immutable MappingProxyType views, which
-        # cannot be pickled/deepcopied. Preserve tensor identity while replacing
-        # only those mapping proxies with ordinary dictionaries.
-        state["_runnable"] = runnable_trace_state(self).pickle_safe_copy()
-        # The settled capture outcome persists as its STRING-ONLY payload dict
-        # (tlspec v7): loads parse it against the closed vocabularies and the
-        # status coherence matrix, so a stale or forged record can only ever
-        # degrade to UNKNOWN, never upgrade. A pre-settlement live object
-        # persists None and loads derive from the structural lattice.
-        outcome = state.get("_capture_outcome")
-        state["_capture_outcome"] = (
-            outcome.to_payload() if outcome is not None and hasattr(outcome, "to_payload") else None
-        )
-        _sanitize_pickled_verification(state)
-        state["tlspec_version"] = TLSPEC_VERSION
-        return state
+        return _trace_state_io.trace_getstate(self)
 
     def __deepcopy__(self, memo: dict[int, Any]) -> "Trace":
         """Return a detached deep copy using the supported pickle semantics.
@@ -3037,330 +1913,7 @@ class Trace(
 
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state and rebuild weakref-backed links."""
-        state["_output_slot"] = None
-        pickle_module_accessor_state = state.pop("_pickle_module_accessor_state", None)
-        _restore_pickled_verification(state)
-        for field_name in (
-            *LEGACY_TRACE_BUILD_STATE_KEYS,
-            # "_build_state" is the pre-M10 flat scratchpad key; the three
-            # workspace keys are its dissolved successors. All transient,
-            # all dropped on restore.
-            "_build_state",
-            "_raw_graph_ws",
-            "_module_capture_ws",
-            "_wrapper_runtime_ws",
-            "_trace_core",
-        ):
-            state.pop(field_name, None)
-        serialized_tlspec_version = read_tlspec_version(
-            state, cls_name=type(self).__name__, cls=type(self)
-        )
-        containers_were_serialized = "_containers" in state and state["_containers"] is not None
-        setstate_defaults = {
-            **_MODEL_LOG_DEFAULT_FILL,
-            "tlspec_version": serialized_tlspec_version,
-            "_options_input_transform": None,
-            "_decoded_output": None,
-            "_provenance_output_postprocessor": None,
-            "output_id2label": None,
-            "output_num_classes": None,
-            "_activation_transform_repr": None,
-            "_options_module_identity_mode": "torch_module",
-            "_provenance_param_source": "native-module",
-            # Session-time (DROP): a restored trace carries no optimizer handle.
-            "_optimizer": None,
-            "_options_save_raw_activations": True,
-            "_options_save_mode": "copy",
-            "transformed_output": None,
-            "_output_transform": None,
-            "_output_slot": None,
-            "_options_save_transformed_output": "small",
-            "layer_visualizers": None,
-            "save_visualizations": False,
-            "_visualizer_dir": None,
-            "_provenance_input_annotations": {},
-            "_options_grad_transform": None,
-            "_options_save_raw_grads": True,
-            "_options_save_grads": None,
-            "capture_tensor_grad_hooks": True,
-            "_grad_op_nums_to_save": [],
-            "_autograd_has_backward_pass": False,
-            "_grad_fn_logs": OrderedDict(),
-            "_autograd_grad_fn_order": [],
-            "_backward_pass_logs": OrderedDict(),
-            "_autograd_backward_root_grad_fn_object_ids": [],
-            "_cost_backward_durations": [],
-            "_num_backward_passes": 0,
-            "_cost_backward_peak_memory": 0,
-            "_provenance_backward_memory_backend": "unknown",
-            "backward_peak_memory_reason": None,
-            "_cost_total_autograd_memory": None,
-            "_cost_pinned_autograd_memory": None,
-            "_buffer_accessor": None,
-            "_module_logs": None,
-            "_out_writer": None,
-            "_keep_outs_in_memory": True,
-            "_defer_streaming_bundle_finalization": False,
-            "_out_sink": None,
-            "_append_history": [],
-            "_source_code_blob": {},
-            "_source_model_ref": None,
-            "_options_backward_ready": False,
-            "_options_inference_only": False,
-            "_options_chunk_size": False,
-            "_module_filter": None,
-            "_options_on_nonfinite": False,
-            "track_nonfinite": False,
-            "track_device_memory": False,
-            "measure_host_peak_memory": False,
-            "_options_structure_only": False,
-            "intervention_audit": [],
-            "_options_keep_orphans": False,
-            "annotations": {},
-            "_provenance_observer_spans": [],
-            "_graph_manual_tensor_connections": [],
-            "_source_forward_file": None,
-            "_source_forward_line": None,
-            "_source_class_file": None,
-            "_source_class_line": None,
-            "_source_init_file": None,
-            "_source_init_line": None,
-            "_source_class_docstring": None,
-            "_source_init_signature": None,
-            "_source_init_docstring": None,
-            "_source_forward_signature": None,
-            "_source_forward_docstring": None,
-            "_source_frames": [],
-            "_provenance_cache_hit": False,
-            "_provenance_cache_key": None,
-            "_provenance_cache_path": None,
-            "_provenance_recording_kept": True,
-            "_out_dedup_mode": "identity",
-            "_out_identity_cache": {},
-            "_out_hash_cache": {},
-            "_code_context_cache": {},
-            "_last_hook_handle_ids": (),
-            "_graph_conditionals": ConditionalAccessor(),
-            "_cost_total_grad_memory": 0,
-            "_cost_saved_grad_memory": 0,
-            "_cost_total_param_grad_memory": 0,
-            "_cost_forward_peak_memory": 0,
-            "_provenance_forward_memory_backend": "unknown",
-            "_cost_forward_peak_memory_reason": None,
-            "_postprocessing_active": False,
-            # `_backward_gradfn_refs` is `FieldPolicy.DROP` (never part of
-            # `MODEL_LOG_FIELD_ORDER`) and `__getstate__` always emits an
-            # empty `list` for it -- but any artifact serialized by code
-            # older than this line still has it baked in as a `dict`
-            # (`__getstate__` used to hardcode `{}`). Listing it here
-            # lets `coerce_container_typed_state` below fix that
-            # present-but-wrong-typed legacy shape, not just absence.
-            "_backward_gradfn_refs": [],
-        }
-        default_fill_state(state, defaults=setstate_defaults)
-        runnable_state = normalize_runnable_trace_state(state)
-        coerce_container_typed_state(
-            state,
-            setstate_defaults,
-            exclude={
-                # `List[int] | str` -- a bare string sentinel (``"all"``) is
-                # a legitimate value, not a type-mismatch bug; coercing it
-                # to ``list("all")`` would silently corrupt real data.
-                "_grad_op_nums_to_save",
-            },
-        )
-        state["_cost_pinned_autograd_memory"] = None  # a restored trace pins nothing
-        state.pop("_uncalled_module_addresses", None)
-        if state.get("_intervention_spec") is None:
-            state["_intervention_spec"] = InterventionSpec()
-        if not state.get("_graph_relationship_evidence"):
-            state["_graph_relationship_evidence"] = {
-                "model": Relationship.UNKNOWN,
-                "weights": Relationship.UNKNOWN,
-                "input": Relationship.UNKNOWN,
-                "graph": Relationship.UNKNOWN,
-            }
-        if state["_options_backward_ready"] is None:
-            state["_options_backward_ready"] = False
-        # Session-time DROP knobs (``track_nonfinite`` too: a loaded artifact never
-        # re-records, so load restores the default and the queryable record falls
-        # back to the saved-payload basis).
-        for knob in _SESSION_BOOL_KNOBS:
-            if state.get(knob) is None:
-                state[knob] = False
-        if state.get("distributed_witness") is None:
-            state["distributed_witness"] = "none"
-        # ``save_budget`` is FieldPolicy.DROP, so a portable artifact never
-        # carries a real value; it arrives absent or None and is restored to the
-        # default. A loaded trace retains nothing, so there is no ceiling to honor.
-        if state.get("save_budget") is None:
-            state["save_budget"] = "auto"
-        if state["_options_inference_only"] is None:
-            state["_options_inference_only"] = False
-        if state["_options_chunk_size"] is None:
-            state["_options_chunk_size"] = False
-        if runnable_state.poisoned is None:
-            runnable_state.poisoned = False
-        for field_name in (
-            "_provenance_setup_duration",
-            "_cost_forward_duration",
-            "_provenance_cleanup_duration",
-            "_cost_func_calls_duration",
-        ):
-            state[field_name] = Duration(state.get(field_name) or 0.0)
-        state["_cost_backward_durations"] = [
-            Duration(duration) for duration in state.get("_cost_backward_durations", [])
-        ]
-        conditional_arm_entry_edges = _normalize_conditional_arm_entry_edges(
-            state.get("_graph_conditional_arm_entry_edges") or {}
-        )
-        state["_graph_conditional_arm_entry_edges"] = conditional_arm_entry_edges
-        for field_name in (
-            "_cost_total_activation_memory",
-            "_cost_total_grad_memory",
-            "_cost_total_backward_memory",
-            "_cost_saved_activation_memory",
-            "_cost_saved_grad_memory",
-            "_cost_total_param_memory",
-            "_cost_total_param_grad_memory",
-            "_cost_forward_peak_memory",
-            "_cost_backward_peak_memory",
-        ):
-            if field_name.endswith("_peak_memory") and state.get(field_name, 0) is None:
-                continue  # a recorded CPU None (with its reason) stays None
-            state[field_name] = Bytes(state.get(field_name, 0) or 0)
-        if state.get("_cost_total_autograd_memory") is not None:
-            state["_cost_total_autograd_memory"] = Bytes(state["_cost_total_autograd_memory"])
-        from .._io.state_keys import refuse_callable_shadowing_state_keys
-
-        refuse_callable_shadowing_state_keys(type(self), state)
-        # Restore is keyed off the INCOMING state, never the reused object's
-        # dict: a legacy artifact that baked in a stream is discarded, and a
-        # reused object's prior stream must not survive a re-restore (it would
-        # retain the previous trace's events and re-serialize them later).
-        state.pop("_capture_events", None)
-        self.__dict__.update(state)
-        # A persisted primitive-op profile (tlspec v8) is hostile artifact
-        # input: validate its foreign keys whenever one is present.
-        if self.__dict__.get("_primitive_op_profile") is not None:
-            from ..validation._invariants_primitive_ops import validate_loaded_primitive_profile
-
-            validate_loaded_primitive_profile(self)
-        # Event streams never serialize (FieldPolicy.DROP), but a restored
-        # trace remains a supported backward-capture target within the live
-        # process, so restore installs a fresh stream EXPLICITLY here rather
-        # than letting backward capture fabricate one silently on demand.
-        # The stream is DETACHED, not blank: it records the restored
-        # projection's pass-index base and cumulative baselines so a new
-        # backward numbers itself after the preserved passes and a full
-        # rebuild keeps (never silently erases) the pre-pickle projection.
-        from torchlens._ir.capture_events import CaptureEvents
-
-        self.__dict__["_capture_events"] = CaptureEvents.detached_from(self)
-        # The projection guard is derived from the stream that just got
-        # replaced; stale values from the source process (or a reused object)
-        # would silently drop new passes or fold onto dead-process fold state.
-        self.__dict__.pop("_backward_projection_event_count", None)
-        self.__dict__.pop("_backward_projection_revision", None)
-        self.__dict__.pop("_backward_projection_fold_state", None)
-        self.__dict__.pop("_tl_materializing_backward_projection", None)
-        if not containers_were_serialized:
-            self.__dict__.pop("_containers", None)
-        if self.__dict__.get("_module_logs") is None:
-            self._module_logs = ModuleAccessor({})
-        if "_buffer_accessor" not in self.__dict__:
-            self._buffer_accessor = None
-        for layer_log in self._layer_logs.values():
-            layer_log.source_trace = self
-            for layer_pass in layer_log.ops.values():
-                layer_pass.source_trace = self
-        for layer_pass in self._layer_list:
-            layer_pass.source_trace = self
-        for grad_fn_handle in self._grad_fn_logs.values():
-            grad_fn_handle.trace = self
-            if grad_fn_handle.op is not None:
-                grad_fn_handle.op.grad_fn_handle = grad_fn_handle
-                op_passes = getattr(grad_fn_handle.op, "ops", None)
-                if op_passes is not None and hasattr(op_passes, "values"):
-                    for layer_pass in op_passes.values():
-                        layer_pass.grad_fn_handle = grad_fn_handle
-        # F44 injections stage 2: split persisted injected-op rows out of
-        # layer_list BEFORE the persisted-claim validators run (the site-key
-        # totality check would correctly refuse the partial family) and
-        # before any accessor can observe them; forged rows refuse typed
-        # inside the split.
-        from .._io.injection_codec import split_restored_injected_rows
-
-        split_restored_injected_rows(self)
-        # Persisted DROP-gated claim families become hostile artifact input at
-        # this boundary. Validate them before any consumer can observe or bind
-        # the restored values; wholly absent legacy families remain legal.
-        from .._io.forgery_validation import validate_persisted_forgery_surfaces
-
-        validate_persisted_forgery_surfaces(self)
-        # grind-r5 P7: load-side twin of the __getstate__ sanitation -- a
-        # tampered artifact claiming capture_verified=True (or any non-bool)
-        # degrades to None/no-claim; only the producer's NEGATIVE claim (with
-        # a string-only reason) is adopted. Verdicts never improve across a
-        # save/load cycle.
-        if self.__dict__.get("_provenance_verified") is not False:
-            self.__dict__["_provenance_verified"] = None
-            self.__dict__["_provenance_verification_reason"] = None
-        elif not isinstance(
-            self.__dict__.get("_provenance_verification_reason"), (str, type(None))
-        ):
-            self.__dict__["_provenance_verification_reason"] = None
-        # Resolve the settled capture outcome BEFORE core rehydration: adopt a
-        # coherent persisted attestation, else derive from the structural
-        # lattice (fail-closed to UNKNOWN on parse/coherence violations). The
-        # helper reads only the restored __dict__ and never consults
-        # rehydration side effects; rehydration keys on the same truthiness
-        # convention independently.
-        from .._capture.outcome import resolve_loaded_outcome
-
-        self.__dict__["_capture_outcome"] = resolve_loaded_outcome(self.__dict__)
-        # Grouping-policy stamp: adopt-or-degrade (L1). An absent stamp
-        # (every pre-stamp v7 artifact) settles silently to the canonical
-        # legacy settlement; an invalid one warns once and settles with the
-        # violated rule's name. Monotonic: verdicts only worsen across
-        # persistence, and the settled payload round-trips byte-stable. The
-        # knob mirror normalizes first (a DROP-scrubbed field restores as an
-        # explicit None, bypassing default fill).
-        if self.__dict__.get("_options_grouping") is None:
-            self.__dict__["_options_grouping"] = "structural"
-        # L9: a DROP-scrubbed timing-provenance field restores as an explicit
-        # None; normalize to the honest "unmeasured" state (a loaded pre-bump
-        # artifact carries no timing evidence). The witness stays None.
-        if self.__dict__.get("grad_fn_timing_provenance") is None:
-            self.__dict__["grad_fn_timing_provenance"] = "unmeasured"
-        from .._postprocess._grouping_stamp import settle_loaded_grouping_policy
-
-        self.__dict__["_options_grouping_policy"] = settle_loaded_grouping_policy(self.__dict__)
-        # F9: adopt the restored detached records into a fresh sealed core so
-        # loaded traces rejoin the single-truth store (best-effort — an abort
-        # preserves the coreless-island behavior; backward records stay
-        # detached by design). See _data_classes/_trace_rehydrate.py.
-
-        _trace_rehydrate.rehydrate_trace_core(self)
-        if pickle_module_accessor_state is not None:
-            from .._io.accessor_rebuild import rebuild_trace_accessors
-
-            rebuild_trace_accessors(
-                self,
-                pickle_module_accessor_state._dict,
-                pickle_module_accessor_state._list,
-                pickle_module_accessor_state._pass_dict,
-            )
-        # Episode-ledger load validation (S7): an episode payload in the
-        # restored annotations is validated fail-closed -- illegal attachment
-        # refuses typed, incoherent geometry quarantines with one warning.
-        if isinstance(self.__dict__.get("annotations"), dict) and (
-            "episode" in self.__dict__["annotations"]
-        ):
-            from .._capture._episode_ledger import validate_loaded_episode_annotations
-
-            validate_loaded_episode_annotations(self)
-        _state.register_log(self)
+        return _trace_state_io.trace_setstate(self, state, conditional_accessor=ConditionalAccessor)
 
     def replace_state_from(self, trace: "Trace") -> None:
         """Atomically replace this log's run-state from another ``Trace``.
@@ -3383,61 +1936,7 @@ class Trace(
         None
             This log is mutated in place.
         """
-
-        preserved_fields = (
-            "name",
-            "_parent_run",
-            "_intervention_spec",
-            "_transform",
-            "_options_save_raw_input",
-            "batch_render",
-            "_output_transform",
-            "_options_save_transformed_output",
-            "state_history",
-            "_warned_direct_write",
-            "_warned_mutate_in_place",
-            "_provenance_model_object_id",
-            "_source_class_qualname",
-            "_provenance_param_hash_quick",
-            "_provenance_param_hash_full",
-            "_provenance_root_entry_point",
-            "_provenance_input_object_id",
-            "_provenance_input_signature_hash",
-            "_provenance_is_appended",
-            "_append_sequence_id",
-            "_append_history",
-            "_graph_relationship_evidence",
-            "_source_model_ref",
-            "_has_direct_writes",
-            "_spec_revision",
-            "_out_recipe_revision",
-            "_provenance_input_annotations",
-        )
-        current_state = dict(state_items(self))
-        preserved_trace_user_annotations = self._copy_user_annotations(
-            current_state.get("annotations")
-        )
-        preserved_state = {
-            field_name: current_state.get(field_name) for field_name in preserved_fields
-        }
-        # DERIVED annotation blobs (feature maps / RDM / MDS / scree, the
-        # ``_DERIVED_ANNOTATION_BLOB_PREFIXES`` namespaces) are NOT preserved:
-        # they were computed from the replaced run's activations and would
-        # render stale data over the new run's stimuli. USER
-        # ``annotate(data=...)`` blobs (bare ``layer:``/``op:`` keys) are the
-        # user's own attachments and survive like the user annotations above.
-        preserved_state["_annotation_blobs"] = self._user_annotation_blobs()
-        replacement_state = dict(state_items(trace))
-        replacement_state.update(preserved_state)
-        replacement_state["annotations"] = self._merge_user_annotations(
-            self._copy_rerun_value(getattr(trace, "annotations", {})),
-            preserved_trace_user_annotations,
-        )
-        state_restore(self, replacement_state)
-        self.__dict__.pop("_validation_replay_status", None)
-        _invalidate_trace_op_layer_accessor_caches(self)
-        _invalidate_trace_module_call_accessor_cache(self)
-        self._rebind_fork_owner_refs()
+        return _trace_rerun_state.replace_state_from(self, trace=trace)
 
     def _refresh_matching_rerun_state_from(self, new_log: "Trace") -> bool:
         """Refresh payload-bearing fields from a same-shape rerun.
@@ -3454,124 +1953,7 @@ class Trace(
             False means labels did not match closely enough and callers should
             use ``replace_state_from``.
         """
-
-        old_raw_labels = tuple(layer._layer_label_raw for layer in self._layer_list)
-        new_raw_labels = tuple(layer._layer_label_raw for layer in new_log._layer_list)
-        old_final_labels = tuple(layer.layer_label for layer in self._layer_list)
-        new_final_labels = tuple(layer.layer_label for layer in new_log._layer_list)
-        if old_raw_labels != new_raw_labels or old_final_labels != new_final_labels:
-            return False
-
-        # Pair the two op sequences POSITIONALLY, never through a label -> op map.
-        # Neither `_layer_label_raw` nor `layer_label` is pass-qualified, so every
-        # pass of a multi-pass (recurrent) layer shares both keys: a dict keyed by
-        # either collapses an N-pass layer to its last pass and then refreshes all
-        # N existing passes from that one op, silently overwriting the earlier
-        # passes' activations and pass labels. The label-sequence equality checked
-        # just above is exactly the precondition that makes index i of one list the
-        # same op as index i of the other.
-        for layer, new_layer in zip(self._layer_list, new_log._layer_list):
-            self._refresh_rerun_op_from(layer, new_layer)
-        self._refresh_rerun_layer_logs_from(new_log)
-        self._refresh_rerun_trace_fields_from(new_log)
-        self.__dict__.pop("_validation_replay_status", None)
-        _invalidate_trace_op_layer_accessor_caches(self)
-        _invalidate_trace_module_call_accessor_cache(self)
-        self._rebind_fork_owner_refs()
-        return True
-
-    def _refresh_rerun_op_from(self, layer: Any, new_layer: Any) -> None:
-        """Copy rerun fields into one existing ``Op``.
-
-        Parameters
-        ----------
-        layer:
-            Existing operation record retained by the fast path.
-        new_layer:
-            Fresh rerun operation record supplying current payloads and
-            per-call metadata.
-        """
-
-        preserved_fields = {
-            "source_trace",
-            "_source_trace_ref",
-            "input_ops",
-            "input_activations",
-            "input_shapes",
-            "input_dtypes",
-            "input_memory",
-            "num_inputs",
-            "is_in_conditional_body",
-        }
-        new_layer_state = dict(state_items(new_layer))
-        preserved_user_annotations = self._copy_user_annotations(
-            getattr(layer, "annotations", None)
-        )
-        copies: dict[str, Any] = {}  # fields both loops below write are copied once
-        for field_name in LAYER_PASS_LOG_FIELD_ORDER:
-            if field_name in preserved_fields:
-                continue
-            value = copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
-            if field_name == "annotations":
-                value = self._merge_user_annotations(value, preserved_user_annotations)
-            layer._internal_set(
-                field_name,
-                value,
-            )
-        for field_name in (
-            "out_ref",
-            "grad_ref",
-            "_pending_blob_id",
-            "_pending_transformed_out_blob_id",
-            "_pending_grad_blob_id",
-            "_pending_transformed_grad_blob_id",
-            "annotations",
-            "edits",
-            "container_spec",
-            "args_template",
-            "kwargs_template",
-            "_edge_uses",
-        ):
-            if hasattr(new_layer, field_name):
-                if field_name not in copies:
-                    copies[field_name] = self._copy_rerun_value(new_layer_state.get(field_name))
-                value = copies[field_name]
-                if field_name == "annotations":
-                    value = self._merge_user_annotations(value, preserved_user_annotations)
-                layer._internal_set(
-                    field_name,
-                    value,
-                )
-        layer.source_trace = self
-
-    def _refresh_rerun_layer_logs_from(self, new_log: "Trace") -> None:
-        """Refresh aggregate ``Layer`` records from a same-shape rerun.
-
-        Parameters
-        ----------
-        new_log:
-            Fresh rerun trace with layer aggregates already postprocessed.
-        """
-
-        new_layer_logs = new_log._layer_logs or {}
-        for label, layer_log in self._layer_logs.items():
-            new_layer_log = new_layer_logs.get(label)
-            if new_layer_log is None:
-                continue
-            preserved_user_annotations = self._copy_user_annotations(
-                getattr(layer_log, "annotations", None)
-            )
-            for field_name, value in state_items(new_layer_log):
-                if field_name in {"_source_trace_ref", "ops"}:
-                    continue
-                copied_value = self._copy_rerun_value(value)
-                if field_name == "annotations":
-                    copied_value = self._merge_user_annotations(
-                        copied_value,
-                        preserved_user_annotations,
-                    )
-                setattr(layer_log, field_name, copied_value)
-            layer_log.source_trace = self
+        return _trace_rerun_state.refresh_matching_rerun_state_from(self, new_log=new_log)
 
     def _copy_user_annotations(self, annotations: Any) -> dict[str, Any] | None:
         """Copy the reserved user annotation namespace from a mapping.
@@ -3586,13 +1968,7 @@ class Trace(
         dict[str, Any] | None
             Copied user namespace, or ``None`` when absent.
         """
-
-        if not isinstance(annotations, dict):
-            return None
-        user_annotations = annotations.get("user")
-        if not isinstance(user_annotations, dict):
-            return None
-        return self._copy_rerun_value(user_annotations)
+        return _trace_rerun_state.copy_user_annotations(self, annotations=annotations)
 
     def _merge_user_annotations(
         self,
@@ -3613,61 +1989,11 @@ class Trace(
         dict[str, Any]
             Fresh annotations plus the preserved user namespace.
         """
-
-        merged = fresh_annotations if isinstance(fresh_annotations, dict) else {}
-        if preserved_user_annotations is not None:
-            merged["user"] = self._copy_rerun_value(preserved_user_annotations)
-        return merged
-
-    def _refresh_rerun_trace_fields_from(self, new_log: "Trace") -> None:
-        """Refresh trace-level run fields without replacing graph containers.
-
-        Parameters
-        ----------
-        new_log:
-            Fresh rerun trace supplying current run metadata.
-        """
-
-        # Share the fresh return itself; the metadata copier rebuilds containers.
-        self._output_slot = new_log._output_slot
-        field_names = (
-            "transformed_output",
-            "_options_save_transformed_output",
-            "_autograd_has_grads",
-            "_options_seed",
-            "_options_chunk_size",
-            "_provenance_input_object_id",
-            "_provenance_input_signature_hash",
-            "_provenance_fingerprint",
-            "_raw_event_shape_hash",
-            "_raw_call_fingerprint",
-            "_num_saved_ops",
-            "_cost_saved_activation_memory",
-            "_cost_total_activation_memory",
-            "_cost_saved_grad_memory",
-            "_cost_total_grad_memory",
-            "_cost_total_backward_memory",
-            "_cost_total_autograd_memory",
-            "_cost_pinned_autograd_memory",
-            "_cost_forward_peak_memory",
-            "_cost_forward_peak_memory_reason",
-            "_provenance_forward_memory_backend",
-            "_forward_peak_memory_pair",
-            "_cost_backward_peak_memory",
-            "backward_peak_memory_reason",
-            "output_layers",
-            "output_layers_by_pass",
-            "output_layers_by_module_call",
-            "_output_container_specs_by_raw_label",
+        return _trace_rerun_state.merge_user_annotations(
+            self,
+            fresh_annotations=fresh_annotations,
+            preserved_user_annotations=preserved_user_annotations,
         )
-        for field_name in field_names:
-            if hasattr(new_log, field_name):
-                setattr(self, field_name, self._copy_rerun_value(getattr(new_log, field_name)))
-        # DERIVED annotation blobs (feature-map/RDM/MDS/scree namespaces) were
-        # computed from the replaced activations and are invalidated; USER
-        # ``annotate(data=...)`` blobs survive the same-shape refresh.
-        self._annotation_blobs = self._user_annotation_blobs()
-        self.facet_functions = getattr(new_log, "facet_functions", None)
 
     def _copy_rerun_value(self, value: Any) -> Any:
         """Copy rerun metadata while keeping tensor payload identities.
@@ -3683,25 +2009,7 @@ class Trace(
             Copied metadata container, or the original tensor/object when
             copying would be incorrect or unnecessary.
         """
-
-        if isinstance(value, torch.Tensor) or type(value) in _ATOMIC_RERUN_VALUE_TYPES:
-            return value
-        if isinstance(value, list):
-            return [self._copy_rerun_value(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(self._copy_rerun_value(item) for item in value)
-        if isinstance(value, dict):
-            return {
-                self._copy_rerun_value(key): self._copy_rerun_value(item)
-                for key, item in value.items()
-            }
-        from ..intervention.types import REPLAY_TEMPLATE_TYPES
-
-        if type(value) in REPLAY_TEMPLATE_TYPES:
-            # Field by field, so a parameter literal keeps its identity (a deep copy cloned it).
-            names = [field.name for field in dataclasses.fields(value)]
-            return type(value)(**{n: self._copy_rerun_value(getattr(value, n)) for n in names})
-        return fail_open(lambda: copy.deepcopy(value), lambda _error: value)
+        return _trace_rerun_state.copy_rerun_value(self, value=value)
 
     def _append_state_from(self, trace: "Trace") -> None:
         """Merge compatible chunk outs from ``trace`` into this log.
@@ -3712,168 +2020,7 @@ class Trace(
             Freshly captured append chunk whose topology and tensor metadata
             have already been validated against this log.
         """
-
-        old_by_label = {
-            key: layer
-            for layer in self._layer_list
-            for key in (layer._layer_label_raw, layer.layer_label)
-        }
-        # By position, not raw label: a reused module repeats its raw label across passes.
-        for layer, new_layer in zip(self._layer_list, trace._layer_list, strict=True):
-            if not (
-                getattr(layer, "is_buffer", False)
-                or self._is_append_buffer_side_effect_layer(layer, old_by_label)
-            ):
-                layer._append_tensor_from(new_layer, "out")
-                layer._append_tensor_from(new_layer, "transformed_out")
-            self._copy_append_last_chunk_fields(layer, new_layer)
-            self._refresh_appended_tensor_metadata(layer)
-        self._autograd_has_grads = self._autograd_has_grads or trace._autograd_has_grads
-        self._options_seed = trace._options_seed
-        self._provenance_input_object_id = trace._provenance_input_object_id
-        self._provenance_input_signature_hash = trace._provenance_input_signature_hash
-        # Concatenated captures have no single model-return object.
-        self._output_slot = None
-        self._rebind_fork_owner_refs()
-
-    def _is_append_buffer_side_effect_layer(
-        self, layer: Any, layer_by_label: dict[str, Any]
-    ) -> bool:
-        """Return whether ``layer`` only feeds buffer version side effects.
-
-        Parameters
-        ----------
-        layer:
-            Candidate layer being considered for append tensor concatenation.
-        layer_by_label:
-            Mapping from raw and final labels to layers in this trace.
-
-        Returns
-        -------
-        bool
-            True when every tracked child is a buffer version node created by a
-            buffer write.
-        """
-
-        child_labels = list(getattr(layer, "children", []))
-        if not child_labels:
-            return False
-        saw_buffer_write = False
-        for child_label in child_labels:
-            child_layer = layer_by_label.get(child_label)
-            if child_layer is None:
-                return False
-            if not (
-                getattr(child_layer, "is_buffer", False)
-                and getattr(child_layer, "buffer_write_kind", None) is not None
-            ):
-                return False
-            saw_buffer_write = True
-        return saw_buffer_write
-
-    def _copy_append_last_chunk_fields(self, layer: Any, new_layer: Any) -> None:
-        """Copy per-call metadata fields from the last appended chunk.
-
-        Parameters
-        ----------
-        layer:
-            Existing accumulated layer pass.
-        new_layer:
-            New chunk layer pass supplying per-call state.
-        """
-
-        for field_name in (
-            "func_duration",
-            "flops_forward",
-            "flops_backward",
-            "func_rng_states",
-            "func_autocast_state",
-            "arg_names",
-            "num_args_total",
-            "num_pos_args",
-            "num_kwargs",
-            "non_tensor_pos_args",
-            "non_tensor_kwargs",
-            "func_non_tensor_args",
-            "is_inplace",
-            "grad_fn_class_name",
-            "grad_fn_object_id",
-            "edits",
-            "annotations",
-        ):
-            if hasattr(new_layer, field_name):
-                layer._internal_set(
-                    field_name, self._copy_append_metadata_value(getattr(new_layer, field_name))
-                )
-
-    def _copy_append_metadata_value(self, value: Any) -> Any:
-        """Copy metadata from the last chunk without failing on non-leaf tensors.
-
-        Parameters
-        ----------
-        value:
-            Metadata value from the new chunk.
-
-        Returns
-        -------
-        Any
-            Best-effort copied value.
-        """
-
-        if isinstance(value, torch.Tensor):
-            from .._utils.tensor_utils import safe_copy
-
-            return safe_copy(value, detach_tensor=True)
-        if isinstance(value, list):
-            return [self._copy_append_metadata_value(item) for item in value]
-        if isinstance(value, tuple):
-            return tuple(self._copy_append_metadata_value(item) for item in value)
-        if isinstance(value, dict):
-            return {
-                self._copy_append_metadata_value(key): self._copy_append_metadata_value(item)
-                for key, item in value.items()
-            }
-        try:
-            return copy.deepcopy(value)
-        except RuntimeError:
-            return value
-
-    def _refresh_appended_tensor_metadata(self, layer: Any) -> None:
-        """Refresh shape, dtype, and memory fields after tensor concatenation.
-
-        Parameters
-        ----------
-        layer:
-            Layer pass whose tensor fields may have been concatenated.
-        """
-
-        for tensor_field, shape_field, dtype_field, memory_field in (
-            ("out", "shape", "dtype", "activation_memory"),
-            (
-                "transformed_out",
-                "transformed_out_shape",
-                "transformed_out_dtype",
-                "transformed_activation_memory",
-            ),
-            ("grad", "grad_shape", "grad_dtype", "gradient_memory"),
-            (
-                "transformed_grad",
-                "transformed_grad_shape",
-                "transformed_grad_dtype",
-                "transformed_gradient_memory",
-            ),
-        ):
-            value = getattr(layer, tensor_field, None)
-            if isinstance(value, torch.Tensor):
-                from .._utils.tensor_utils import get_memory_amount
-
-                layer._internal_set(shape_field, tuple(value.shape))
-                layer._internal_set(dtype_field, value.dtype)
-                layer._internal_set(memory_field, Bytes(get_memory_amount(value)))
-            else:
-                layer._internal_set(shape_field, None)
-                layer._internal_set(dtype_field, None)
-                layer._internal_set(memory_field, None)
+        return _trace_rerun_state.append_state_from(self, trace=trace)
 
     # ********************************************
     # ******** Public Convenience Methods ********
@@ -3892,12 +2039,1524 @@ class Trace(
         refusals). See ``torchlens._capture.structure_only.discharge_against``
         for the full join/precondition contract.
         """
+        return _trace_rerun_state.discharge_against(self, real_trace=real_trace)
 
-        from .._capture.structure_only import discharge_against as _discharge
+    @property
+    def cost(self) -> "TraceCost":
+        """Compute, memory and timing totals of a Trace."""
 
-        return _discharge(self, real_trace)
+        return TraceCost(self)
+
+    @property
+    def graph(self) -> "TraceGraph":
+        """Graph-shape facts of a Trace: edges, degrees, branching and conditionals."""
+
+        return TraceGraph(self)
+
+    @property
+    def autograd(self) -> "TraceAutograd":
+        """Backward-pass records and grad_fn facts of a Trace."""
+
+        return TraceAutograd(self)
+
+    @property
+    def source(self) -> "TraceSource":
+        """Source facts of the traced model class: locations, signatures, docstrings."""
+
+        return TraceSource(self)
+
+    @property
+    def provenance(self) -> "TraceProvenance":
+        """How, when and from what this Trace was captured."""
+        return TraceProvenance(self)
+
+    @property
+    def options(self) -> "TraceSettings":
+        """The capture options this Trace ran with (the stored snapshot)."""
+
+        return TraceSettings(self)
+
+    @property
+    def health(self) -> "TraceHealth":
+        """Honesty diagnostics of the capture: witness and escape-detector facts."""
+
+        return TraceHealth(self)
+
+    @property
+    def _graph_is_recurrent(self) -> bool:
+        """Whether any layer has more than one pass."""
+        return any(v > 1 for v in self._layer_num_calls.values())
+
+    @property
+    def _cost_forward_peak_memory_pair(self) -> "dict[str, Any] | None":
+        """Session-time (live, resident) forward peak pair with backend named."""
+        from .._capture.peak_memory import read_peak_pair  # report/ may not read peaks
+
+        return read_peak_pair(self)
+
+    @property
+    def _layers_recurrent(self) -> "LayerAccessor":
+        """Access Layers with more than one captured pass."""
+
+        return _trace_views.layers_recurrent(self)
+
+    @property
+    def _graph_max_ops_per_layer(self) -> int:
+        """Maximum number of ops for any layer."""
+        return max(self._layer_num_calls.values(), default=1)
+
+    @property
+    def _graph_is_branching(self) -> bool:
+        """Whether any layer has more than one child."""
+        return any(len(entry.children) > 1 for entry in self._layer_list)
+
+    @property
+    def _graph_has_conditional_branching(self) -> bool:
+        """Whether any layer is in a conditional branch."""
+        return any(entry.is_in_conditional_body for entry in self._layer_list)
+
+    @property
+    def _graph_has_conditionals(self) -> bool:
+        """Whether this Trace contains conditional-flow records."""
+
+        return len(self._graph_conditionals) > 0
+
+    @property
+    def _graph_is_dynamic(self) -> bool:
+        """Whether execution depends on runtime tensor values."""
+
+        return self.graph.has_conditionals
+
+    @property
+    def _source_forward_location(self) -> str | None:
+        """Combined forward source location."""
+
+        if self._source_forward_file is None or self._source_forward_line is None:
+            return None
+        return f"{self._source_forward_file}:{self._source_forward_line}"
+
+    @property
+    def _source_class_location(self) -> str | None:
+        """Combined model class source location."""
+
+        if self._source_class_file is None or self._source_class_line is None:
+            return None
+        return f"{self._source_class_file}:{self._source_class_line}"
+
+    @property
+    def _source_init_location(self) -> str | None:
+        """Combined model ``__init__`` source location."""
+
+        if self._source_init_file is None or self._source_init_line is None:
+            return None
+        return f"{self._source_init_file}:{self._source_init_line}"
+
+    @property
+    def _cost_last_backward_duration(self) -> Duration | None:
+        """Most recent backward-pass duration, if any."""
+
+        if not self._cost_backward_durations:
+            return None
+        return as_duration(self._cost_backward_durations[-1])
+
+    @property
+    def _cost_total_backward_duration(self) -> Duration:
+        """Sum of all captured backward-pass durations."""
+
+        return Duration(sum(self._cost_backward_durations))
+
+    @property
+    def _autograd_last_backward_root_grad_fn_object_id(self) -> int | None:
+        """Most recent backward root grad_fn_handle object id, if any."""
+
+        if not self._autograd_backward_root_grad_fn_object_ids:
+            return None
+        return self._autograd_backward_root_grad_fn_object_ids[-1]
+
+    @property
+    def _cost_overhead_duration(self) -> Duration:
+        """Time spent on TorchLens overhead (total minus function calls)."""
+        return self._provenance_duration - self._cost_func_calls_duration
+
+    @property
+    def _provenance_duration(self) -> Duration:
+        """Total capture-phase duration in seconds."""
+
+        if not self._provenance_start_time or not self._provenance_end_time:
+            return Duration(0)
+        return Duration(self._provenance_end_time - self._provenance_start_time)
+
+    @property
+    def _provenance_kind(self) -> str:
+        """Return this product's capture kind: ``"episode"`` or ``"plain"``."""
+
+        return _doors.report()._trace_facts.provenance_kind(self)
+
+    @property
+    def episode(self) -> Any | None:
+        """Return the parsed episode step ledger, or ``None``."""
+
+        return _doors.report()._trace_facts.episode(self)
+
+    @property
+    def episode_coupling(self) -> Any | None:
+        """Return the attested coupling verdict, or ``None``."""
+
+        return _doors.report()._trace_facts.episode_coupling(self)
+
+    @property
+    def _cost_total_flops_forward(self) -> Flops:
+        """Total forward FLOPs (the canonical identity-partition aggregation)."""
+
+        return _doors.report()._trace_facts.cost_total_flops_forward(self)
+
+    @property
+    def _cost_total_flops_backward(self) -> Flops:
+        """Total backward FLOPs across all layers (skipping None/unknown)."""
+        return Flops(
+            sum(
+                entry.flops_backward
+                for entry in self._layer_list
+                if entry.flops_backward is not None
+            )
+        )
+
+    @property
+    def _cost_total_flops(self) -> Flops:
+        """Total FLOPs (forward + backward)."""
+        return Flops(self.cost.total_flops_forward + self.cost.total_flops_backward)
+
+    @property
+    def _cost_flops_by_op_type(self) -> "_CallableDict":
+        """Group FLOPs by layer type."""
+
+        return _doors.report()._trace_facts.cost_flops_by_op_type(self)
+
+    @property
+    def _cost_total_macs_forward(self) -> Macs:
+        """Total TRUE forward MACs over ops with a known MAC split."""
+
+        return _doors.report()._trace_facts.cost_total_macs_forward(self)
+
+    @property
+    def factcore(self) -> Any:
+        """The ONE numbers substrate for this trace."""
+
+        return _doors.report()._trace_facts.factcore(self)
+
+    @property
+    def health_facts(self) -> Any:
+        """Normalized, serializable health observations."""
+
+        return _doors.report()._trace_facts.health_facts(self)
+
+    @property
+    def nonfinite_verdict(self) -> str:
+        """Three-state health verdict: found / checked_and_clean / not_checked."""
+
+        return _doors.report()._trace_facts.nonfinite_verdict(self)
+
+    @property
+    def unknown_flop_ops(self) -> tuple[Any, ...]:
+        """Named ledger of ops with unknown FLOPs, grouped by op name."""
+
+        return _doors.report()._trace_facts.unknown_flop_ops(self)
+
+    @property
+    def compute_coverage(self) -> dict[str, int]:
+        """Four-way compute coverage counts over every layer-list row."""
+
+        return _doors.report()._trace_facts.compute_coverage(self)
+
+    @property
+    def macs_unknown_split_ops(self) -> tuple[str, ...]:
+        """Labels of compute ops whose exact MAC split cannot be derived."""
+
+        return _doors.report()._trace_facts.macs_unknown_split_ops(self)
+
+    @property
+    def _cost_total_macs_backward(self) -> Macs | None:
+        """Backward MACs are not derivable and always ``None`` (estimates only)."""
+
+        return None
+
+    @property
+    def _cost_total_macs(self) -> Macs | None:
+        """Total MACs are not derivable and always ``None`` (see total_macs_backward)."""
+
+        return None
+
+    @property
+    def _cost_macs_by_kind(self) -> "_CallableDict":
+        """Group TRUE forward MACs by layer type."""
+
+        return _doors.report()._trace_facts.cost_macs_by_kind(self)
+
+    @property
+    def params(self) -> ParamAccessor:
+        """Access parameter metadata by address, short name, or index."""
+        return self._param_logs
+
+    @property
+    def _graph_tied_param_groups(self) -> tuple[tuple[str, ...], ...]:
+        """Alias-address groups of parameters registered at more than one path."""
+
+        return _trace_views.graph_tied_param_groups(self)
+
+    @property
+    def ops(self) -> TraceOpAccessor:
+        """Access per-invocation Op records by label or index."""
+
+        return _trace_views.ops(self)
+
+    @property
+    def transforms(self) -> tuple[Op, ...]:
+        """Return transform-boundary operation records."""
+
+        return _trace_views.transforms(self)
+
+    @property
+    def model_profile(self) -> ModelProfile:
+        """Return a computed semantic I/O profile descriptor."""
+
+        return _trace_profile.model_profile(self)
+
+    def profile(
+        self,
+        level: Literal["op", "module", "call"] = "op",
+        *,
+        sort_by: Literal["time", "flops", "activation_memory", "param_count"] = "time",
+        ascending: bool = False,
+        k: int | None = None,
+        group_by: Literal["source_line"] | None = None,
+    ) -> "ProfileReport":
+        """Return a unified resource profile assembled from this trace."""
+
+        return _doors.report()._trace_facts.profile(
+            self, level, sort_by=sort_by, ascending=ascending, k=k, group_by=group_by
+        )
+
+    def sites(self) -> Any:
+        """Return the tabular view of this trace's structural sites."""
+
+        return _trace_inventory.build_sites_table(self)
+
+    def bill_of_materials(self) -> dict[str, Any]:
+        """Return the inventory of what this trace actually contains."""
+
+        return _doors.report()._trace_facts.bill_of_materials(self)
+
+    def explain(
+        self,
+        *,
+        audience: Literal["researcher", "practitioner", "auto"] = "auto",
+        max_tokens: int | None = None,
+    ) -> "ExplainReport":
+        """Explain this trace in plain language (DOCUMENTED-UNSTABLE)."""
+
+        return _doors.report()._trace_facts.explain(self, audience=audience, max_tokens=max_tokens)
+
+    def capabilities(self) -> Any:
+        """Return the report-family capability card for THIS trace."""
+
+        return _doors.report()._trace_facts.capabilities(self)
+
+    def receptive_fields(
+        self,
+        level: Literal["op", "layer", "call", "module"] = "op",
+        *,
+        input_op: "Op | None" = None,
+        statuses: "Collection[ReceptiveFieldStatus] | None" = None,
+        sort_by: str | None = None,
+        ascending: bool = True,
+        direction: "ReceptiveFieldDirection | str" = "receptive",
+    ) -> "ReceptiveFieldProfile":
+        """Return the trace-wide geometric receptive-field table."""
+
+        return _doors.receptive_field()._trace_tables.receptive_fields(
+            self,
+            level,
+            input_op=input_op,
+            statuses=statuses,
+            sort_by=sort_by,
+            ascending=ascending,
+            direction=direction,
+        )
+
+    def projective_fields(
+        self,
+        level: Literal["op", "layer", "call", "module"] = "op",
+        *,
+        input_op: "Op | None" = None,
+        statuses: "Collection[ReceptiveFieldStatus] | None" = None,
+        sort_by: str | None = None,
+        ascending: bool = True,
+    ) -> "ReceptiveFieldProfile":
+        """Return the trace-wide source-anchored projective-field table."""
+
+        return _doors.receptive_field()._trace_tables.projective_fields(
+            self, level, input_op=input_op, statuses=statuses, sort_by=sort_by, ascending=ascending
+        )
+
+    @property
+    def layers(self) -> "LayerAccessor":
+        """Access aggregate per-layer metadata by label, index, or pass notation."""
+
+        return _trace_views.layers(self)
+
+    @property
+    def modules(self) -> "ModuleAccessor":
+        """Access structured per-module metadata by address, index, or pass notation."""
+        return self._module_logs
+
+    @property
+    def module_collapse_order(self) -> list[tuple[str, float]]:
+        """Every module's smart-collapse priority (``Module.collapse_score``), highest first."""
+
+        return _doors.visualization()._trace_collapse.module_collapse_order(self)
+
+    def collapse_order(self, mode: Literal["auto", "max"] = "auto") -> list[tuple[str, float]]:
+        """Return smart-collapse ranking for a policy."""
+
+        return _doors.visualization()._trace_collapse.collapse_order(self, mode)
+
+    def collapse_plan(
+        self,
+        mode: Literal["auto", "max"] | float = "auto",
+        context: "RenderContext | None" = None,
+    ) -> "CollapsePlan":
+        """Return the v2 diagnostic collapse plan for this trace."""
+
+        return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
+
+    def collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
+        """Return the public monotone float collapse schedule."""
+
+        return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
+
+    def modules_with_facet(self, name: str) -> Iterator[Any]:
+        """Yield Modules whose semantic facet view has a facet available now."""
+
+        return (module for module in self.modules if module.facets.has(name))
+
+    def attention_blocks(self) -> Iterator[Any]:
+        """Yield Modules with an available query-projection facet."""
+
+        return self.modules_with_facet("q")
+
+    @property
+    def module_calls(self) -> TraceModuleCallAccessor:
+        """Access per-invocation ModuleCall records by call label or index."""
+
+        return _trace_views.module_calls(self)
+
+    def _root_call(self) -> "ModuleCall":
+        """Return the top-level ModuleCall for internal call-tree traversal."""
+
+        return _call_tree.root_call(self)
+
+    @property
+    def call_tree(self) -> "ModuleCall":
+        """Return the root ModuleCall for the nested dynamic call tree."""
+
+        return self._root_call()
+
+    def walk_calls(self) -> Iterator["ModuleCall"]:
+        """Yield every ModuleCall in call-tree depth-first order."""
+
+        return _call_tree.walk_calls(self)
+
+    def show_call_tree(
+        self,
+        max_depth: int | None = None,
+        include_atomic: bool = True,
+        show_call_index: bool = True,
+        file: TextIO | None = None,
+    ) -> None:
+        """Print this Trace's full ModuleCall tree as an ASCII tree."""
+
+        return _call_tree.show_call_tree(self, max_depth, include_atomic, show_call_index, file)
+
+    @property
+    def root_module(self) -> "Module":
+        """The root module (the model itself)."""
+        return cast("Module", self._module_logs["self"])
+
+    @property
+    def num_edges(self) -> int:
+        """Distinct edges in the per-pass Op graph, including boundary edges."""
+
+        return _trace_views.num_edges(self)
+
+    @property
+    def _graph_num_compute_edges(self) -> int:
+        """Distinct Op graph edges whose endpoints are both compute Ops."""
+
+        return _trace_views.graph_num_compute_edges(self)
+
+    @property
+    def _graph_num_buffer_edges(self) -> int:
+        """Distinct Op graph edges with at least one buffer endpoint."""
+
+        return _trace_views.graph_num_buffer_edges(self)
+
+    @property
+    def _graph_num_layer_edges(self) -> int:
+        """Distinct edges in the aggregate Layer graph."""
+
+        return _trace_views.graph_num_layer_edges(self)
+
+    @property
+    def _autograd_num_backward_edges(self) -> int | None:
+        """Distinct edges in the backward GradFn graph, or ``None`` if ungated."""
+
+        return _trace_views.autograd_num_backward_edges(self)
+
+    @property
+    def _graph_branching_factor(self) -> float:
+        """Mean fan-out: children (consumers) per compute Op."""
+
+        return _trace_views.graph_branching_factor(self)
+
+    @property
+    def _graph_max_in_degree(self) -> int:
+        """Maximum number of parents over compute Ops."""
+
+        return _trace_views.graph_max_in_degree(self)
+
+    @property
+    def _graph_max_out_degree(self) -> int:
+        """Maximum number of children over compute Ops."""
+
+        return _trace_views.graph_max_out_degree(self)
+
+    @property
+    def _autograd_intermediate_derived_grads(self) -> IntermediateDerivedGradAccessor:
+        """Access exact op-level derived gradient records, when a backend provides them."""
+
+        return _trace_views.autograd_intermediate_derived_grads(self)
+
+    @_autograd_intermediate_derived_grads.setter
+    def _autograd_intermediate_derived_grads(self, value: IntermediateDerivedGradAccessor) -> None:
+        """Store exact op-level derived gradient records."""
+
+        self.__dict__["_intermediate_derived_grads"] = value
+
+    @property
+    def has_trainable_params(self) -> bool:
+        """Whether this Trace contains at least one trainable parameter."""
+
+        return self.num_params_trainable > 0
+
+    @property
+    def has_frozen_params(self) -> bool:
+        """Whether this Trace contains at least one frozen parameter."""
+
+        return self.num_params_frozen > 0
+
+    @property
+    def buffers(self) -> "BufferAccessor":
+        """Access buffer metadata by address, short name, or index."""
+        return self._buffer_accessor  # type: ignore[return-value]
+
+    @property
+    def _graph_orphans(self) -> OrphanAccessor:
+        """Access retained orphan island operations by raw or final label."""
+
+        return _trace_views.graph_orphans(self)
+
+    @property
+    def _autograd_grad_fns(self) -> GradFnAccessor:
+        """Access backward grad_fn_handle metadata by label, index, pass label, or substring."""
+
+        return _trace_views.autograd_grad_fns(self)
+
+    @property
+    def _autograd_grad_fn_calls(self) -> TraceGradFnCallAccessor:
+        """Access per-invocation GradFnCall records by qualified label or index."""
+
+        return _trace_views.autograd_grad_fn_calls(self)
+
+    @property
+    def _autograd_grad_fn_fire_timings(self) -> "OrderedDict[str, Duration | None]":
+        """Return live per-fire backward timing spans keyed like ``grad_fn_calls``."""
+        return _trace_stats_grad_fn_site.grad_fn_fire_timings(self)
+
+    @property
+    def grad_fn_site_summary(self) -> "OrderedDict[str | None, dict[str, Any]]":
+        """Return the read-only per-site rollup of backward grad-fn facts."""
+
+        return _trace_stats_grad_fn_site.grad_fn_site_summary(self)
+
+    @property
+    def _autograd_backward_passes(self) -> BackwardPassAccessor:
+        """Access backward pass records by 0-based position or named pass number."""
+
+        return _trace_views.autograd_backward_passes(self)
+
+    @property
+    def _autograd_last_backward_pass(self) -> BackwardPass | None:
+        """Return the most recent backward pass record, if any."""
+
+        backward_passes = self.autograd.backward_passes
+        if not backward_passes:
+            return None
+        return backward_passes[-1]
+
+    def _sync_backward_projection_if_needed(self) -> None:
+        """Synchronize lazy backward projections from runtime sidecar events."""
+        return _doors.backends_torch()._trace_backward.sync_backward_projection_if_needed(self)
+
+    @property
+    def saved_ops(self) -> Accessor[Op]:
+        """Access Ops with saved activations."""
+
+        return _trace_views.saved_ops(self)
+
+    @property
+    def saved_grad_ops(self) -> Accessor[Op]:
+        """Access Ops with saved gradients."""
+
+        return _trace_views.saved_grad_ops(self)
+
+    @property
+    def saved_layers(self) -> Accessor[Layer]:
+        """Access Layers containing at least one Op with a saved activation."""
+
+        return _trace_views.saved_layers(self)
+
+    @property
+    def _layers_saved_grad(self) -> Accessor[Layer]:
+        """Access Layers containing at least one Op with a saved gradient."""
+
+        return _trace_views.layers_saved_grad(self)
+
+    @property
+    def saved_module_calls(self) -> Accessor[Any]:
+        """Access ModuleCalls whose outputs include saved activations."""
+
+        return self._module_calls_with_output_in(set(self.saved_ops.keys()))
+
+    def _module_calls_with_output_in(self, op_labels: set[str]) -> Accessor[Any]:
+        """Access ModuleCalls with at least one output Op among ``op_labels``."""
+        return _trace_views.module_calls_with_output_in(self, op_labels)
+
+    @property
+    def saved_modules(self) -> Accessor[Any]:
+        """Access Modules with at least one saved-activation ModuleCall."""
+
+        return _trace_views.saved_modules(self)
+
+    @property
+    def saved_grad_module_calls(self) -> Accessor[Any]:
+        """Access ModuleCalls whose outputs include saved gradients."""
+
+        return self._module_calls_with_output_in(set(self.saved_grad_ops.keys()))
+
+    @property
+    def saved_grad_modules(self) -> Accessor[Any]:
+        """Access Modules with at least one saved-gradient ModuleCall."""
+
+        return _trace_views.saved_grad_modules(self)
+
+    @property
+    def _autograd_saved_grad_fn_calls(self) -> Accessor[Any]:
+        """Access GradFnCall records with saved gradient inputs or outputs."""
+
+        return _trace_views.autograd_saved_grad_fn_calls(self)
+
+    @property
+    def _autograd_saved_grad_fns(self) -> GradFnAccessor:
+        """Access GradFns containing at least one saved GradFnCall."""
+
+        return _trace_views.autograd_saved_grad_fns(self)
+
+    @property
+    def compute_ops(self) -> Accessor[Op]:
+        """Access Ops that are not graph-boundary sentinels."""
+
+        return _trace_views.compute_ops(self)
+
+    @property
+    def _layers_compute(self) -> Accessor[Layer]:
+        """Access Layers whose representative Op is not a boundary sentinel."""
+
+        return _trace_views.layers_compute(self)
+
+    @property
+    def input_ops(self) -> Accessor[Op]:
+        """Access flat input-boundary Ops."""
+
+        return _trace_views.input_ops(self)
+
+    @property
+    def num_input_layers(self) -> int:
+        """Number of distinct input-boundary Layers (a multi-pass Layer counts once)."""
+
+        return len(dict.fromkeys(self.input_layers))
+
+    @property
+    def output_ops(self) -> Accessor[Op]:
+        """Access flat output-boundary Ops."""
+
+        return _trace_views.output_ops(self)
+
+    @property
+    def num_output_layers(self) -> int:
+        """Number of distinct output-boundary Layers (a multi-pass Layer counts once)."""
+
+        return len(dict.fromkeys(self.output_layers))
+
+    @property
+    def num_buffer_layers(self) -> int:
+        """Number of distinct buffer-boundary Layers."""
+
+        return len(dict.fromkeys(self.buffer_layers))
+
+    @property
+    def buffer_read_ops(self) -> list[str]:
+        """Labels for buffer Ops that read registered-buffer values into the graph."""
+
+        return _trace_views.buffer_read_ops(self)
+
+    @property
+    def buffer_write_ops(self) -> list[str]:
+        """Labels for buffer Ops that record registered-buffer write events."""
+
+        return _trace_views.buffer_write_ops(self)
+
+    @property
+    def _layers_internal_source(self) -> Accessor[Layer]:
+        """Access Layers representing internal-source positions."""
+
+        return _trace_views.layers_internal_source(self)
+
+    @property
+    def _layers_internal_sink(self) -> Accessor[Layer]:
+        """Access Layers representing internal-sink positions."""
+
+        return _trace_views.layers_internal_sink(self)
+
+    @property
+    def num_uncalled_modules(self) -> int | None:
+        """Number of registered source-model modules not called in this Trace."""
+
+        return _trace_views.num_uncalled_modules(self)
+
+    @property
+    def ops_with_params(self) -> Accessor[Op]:
+        """Access Ops that use at least one parameter tensor."""
+
+        return _trace_views.ops_with_params(self)
+
+    def between(self, sources: Any, sinks: Any) -> "TraceSlice":
+        """Return the sub-DAG view carrying influence from sources to sinks."""
+
+        return _doors.trace_slice().build_slice_between(self, sources, sinks)
+
+    def subgraph(self, selection: Any) -> "TraceSlice":
+        """Return the sub-DAG view of any ACT region of this trace."""
+
+        return _doors.trace_slice().build_slice_from_selection(self, selection)
+
+    def stack(self, selector: "Any") -> "StackedActivations":
+        """Stack selector-matched saved outputs in recorded execution order."""
+
+        return stack_traces(self, selector=selector)
+
+    @property
+    def injected_ops(self) -> tuple[Any, ...]:
+        """Injected-op records from ``log_injections=True`` hooks."""
+
+        return _doors.intervention()._trace_edits.injected_ops(self)
+
+    @property
+    def model_ops(self) -> tuple[Any, ...]:
+        """The MODEL half of the injections query split."""
+
+        return tuple(self._layer_list)
+
+    def save_intervention(
+        self,
+        path: str | Path,
+        *,
+        level: str = "executable_with_callables",
+        allow_direct_writes: bool = False,
+        overwrite: bool = False,
+    ) -> None:
+        """Save this log's intervention recipe to a ``.tlspec`` directory."""
+
+        return _doors.intervention()._trace_edits.save_intervention(
+            self, path, level=level, allow_direct_writes=allow_direct_writes, overwrite=overwrite
+        )
+
+    @cached_property
+    def recipe(self) -> "FrozenInterventionSpec":
+        """Return an immutable snapshot of this log's intervention recipe."""
+
+        return self._ensure_intervention_spec().freeze()
+
+    def _history_site_payload(self, site: Any) -> Any:
+        """Forward to ``_trace_intervention_records.history_site_payload``."""
+
+        return _trace_intervention_records.history_site_payload(site)
+
+    def set(
+        self,
+        site: Any,
+        value: Any,
+        *,
+        direction: str = "forward",
+        strict: bool = False,
+        confirm_mutation: bool = False,
+    ) -> "Trace":
+        """Set a site out recipe without propagating it."""
+
+        return _doors.intervention()._trace_edits.set_site(
+            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
+        )
+
+    def attach_hooks(
+        self,
+        hooks_or_site: Any,
+        hook: Any = None,
+        *extra_hooks: Any,
+        strict: bool = False,
+        prepend: bool = False,
+        confirm_mutation: bool = False,
+    ) -> Any:
+        """Attach sticky hooks to the current intervention spec."""
+
+        return _doors.intervention()._trace_hooks.attach_hooks(
+            self,
+            hooks_or_site,
+            hook,
+            *extra_hooks,
+            strict=strict,
+            prepend=prepend,
+            confirm_mutation=confirm_mutation,
+        )
+
+    def _refuse_chunked_batch_coupling(self, entries: list[Any]) -> None:
+        """Forward to ``_doors.intervention()._trace_edits.refuse_chunked_batch_coupling``."""
+
+        return _doors.intervention()._trace_edits.refuse_chunked_batch_coupling(self, entries)
+
+    def remove(self) -> None:
+        """Remove the most recent legacy-returned hook attachment."""
+
+        return _doors.intervention()._trace_edits.remove(self)
+
+    def __enter__(self) -> "Trace":
+        """Enter a legacy scoped hook attachment."""
+
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        """Clean up a legacy scoped hook attachment."""
+
+        self.remove()
+
+    def clear_edits(
+        self,
+        site: Any = None,
+        handle: Any = None,
+        *,
+        strict: bool = False,
+        confirm_mutation: bool = False,
+    ) -> "Trace":
+        """Detach sticky hooks by site or handle."""
+
+        return _doors.intervention()._trace_edits.clear_edits(
+            self, site, handle, strict=strict, confirm_mutation=confirm_mutation
+        )
+
+    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+        """Clear all sticky hooks from the current intervention spec."""
+
+        return _doors.intervention()._trace_hooks.clear_hooks(
+            self, confirm_mutation=confirm_mutation
+        )
+
+    @property
+    def _graph_edges(self) -> tuple[Any, ...]:
+        """Forward to ``_doors.intervention()._trace_edits.graph_edges``."""
+
+        return _doors.intervention()._trace_edits.graph_edges(self)
+
+    def _settle_selection_do(
+        self, txn: "_DoTransaction", selected_engine: str, mutation_kind: str
+    ) -> None:
+        """Forward to ``_doors.intervention()._trace_edits.settle_selection_do``."""
+
+        return _doors.intervention()._trace_edits.settle_selection_do(
+            self, txn, selected_engine, mutation_kind
+        )
+
+    def do(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any = None,
+        *,
+        model: nn.Module | None = None,
+        inputs: Any = None,
+        intervention: "InterventionOptions | None" = None,
+        loss: Callable[["Trace"], torch.Tensor] | None = None,
+    ) -> "Trace":
+        """Apply an intervention and dispatch to replay, rerun, or set-only."""
+
+        return _doors.intervention()._trace_edits.do(
+            self,
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            inputs=inputs,
+            intervention=intervention,
+            loss=loss,
+        )
+
+    def _do_with_options(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any,
+        *,
+        model: nn.Module | None,
+        x: Any,
+        intervention_options: "InterventionOptions",
+    ) -> "Trace":
+        """Forward to ``_doors.intervention()._trace_edits.do_with_options``."""
+
+        return _doors.intervention()._trace_edits.do_with_options(
+            self,
+            hooks_or_site,
+            value_or_hook,
+            model=model,
+            x=x,
+            intervention_options=intervention_options,
+        )
+
+    @property
+    def armed_edits(self) -> tuple[Any, ...]:
+        """The gradient rules in this trace's recipe, as ``Rule`` clauses."""
+
+        return armed_edits(self)
+
+    def _armed_summary_line(self) -> str | None:
+        """Summary text while an armed gradient rule has not fired (or ``None``)."""
+
+        return armed_summary_line(self)
+
+    def _record_do_intervention_event(
+        self,
+        txn: _DoTransaction,
+        *,
+        status: str | None,
+        error: str | None = None,
+        staged_only: bool = False,
+        extra_fields: dict[str, Any] | None = None,
+        event_row: bool = False,
+    ) -> dict[str, Any]:
+        """Forward to ``_doors.intervention()._trace_edits.record_do_intervention_event``."""
+
+        return _doors.intervention()._trace_edits.record_do_intervention_event(
+            self,
+            txn,
+            status=status,
+            error=error,
+            staged_only=staged_only,
+            extra_fields=extra_fields,
+            event_row=event_row,
+        )
+
+    def fork(self, name: str | None = None) -> "Trace":
+        """Create a copy-on-write intervention fork of this log."""
+
+        return _fork_lineage.fork_trace(self, name)
+
+    def _record_operation(self, op: str, **payload: Any) -> None:
+        """Forward to ``_trace_intervention_records.record_operation``."""
+
+        return _trace_intervention_records.record_operation(self, op, **payload)
+
+    def _warn_if_root_mutation(self, *, confirm_mutation: bool) -> None:
+        """Forward to ``_doors.intervention()._trace_edits.warn_if_root_mutation``."""
+
+        return _doors.intervention()._trace_edits.warn_if_root_mutation(
+            self, confirm_mutation=confirm_mutation
+        )
+
+    def _select_do_engine(self, engine: str, *, model: nn.Module | None, x: Any) -> str:
+        """Forward to ``_doors.intervention()._trace_edits.select_do_engine``."""
+
+        return _doors.intervention()._trace_edits.select_do_engine(self, engine, model=model, x=x)
+
+    def _apply_do_mutation(
+        self,
+        hooks_or_site: Any,
+        value_or_hook: Any,
+        *,
+        engine: str,
+        strict: bool,
+        confirm_mutation: bool,
+    ) -> tuple[str, tuple[str, ...]]:
+        """Forward to ``_doors.intervention()._trace_edits.apply_do_mutation``."""
+
+        return _doors.intervention()._trace_edits.apply_do_mutation(
+            self,
+            hooks_or_site,
+            value_or_hook,
+            engine=engine,
+            strict=strict,
+            confirm_mutation=confirm_mutation,
+        )
+
+    @staticmethod
+    def _is_selection_batch(value: Any) -> bool:
+        """Forward to ``_doors.intervention()._trace_selection_edits.is_selection_batch``."""
+
+        return _doors.intervention()._trace_selection_edits.is_selection_batch(value)
+
+    @staticmethod
+    def _selection_batch_kind(selection: Any) -> str:
+        """Forward to ``_doors.intervention()._trace_selection_edits.selection_batch_kind``."""
+
+        return _doors.intervention()._trace_selection_edits.selection_batch_kind(selection)
+
+    def _apply_selection_batch_do(
+        self, pairs: Any, *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_batch_do``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_selection_batch_do(
+            self, pairs, engine=engine, strict=strict
+        )
+
+    def _batch_act_plan(
+        self, index: int, selection: Any, edit: Any
+    ) -> tuple[Any, list[dict[str, Any]], dict[str, Any]]:
+        """Forward to ``_doors.intervention()._trace_selection_edits.batch_act_plan``."""
+
+        return _doors.intervention()._trace_selection_edits.batch_act_plan(
+            self, index, selection, edit
+        )
+
+    def _apply_cross_kind_batch_do(
+        self, pairs: list[tuple[Any, Any]], kinds: list[str], *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_cross_kind_batch_do(
+            self, pairs, kinds, engine=engine, strict=strict
+        )
+
+    def _apply_selection_do(
+        self, selection: Any, edit: Any, *, engine: str, strict: bool
+    ) -> tuple[str, tuple[str, ...]]:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_do``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_selection_do(
+            self, selection, edit, engine=engine, strict=strict
+        )
+
+    def _attach_selection_plan_hooks(
+        self, hook_items: list[dict[str, Any]], *, strict: bool
+    ) -> tuple[str, ...]:
+        """Forward to ``_doors.intervention()._trace_selection_edits.attach_selection_plan_hooks``."""
+
+        return _doors.intervention()._trace_selection_edits.attach_selection_plan_hooks(
+            self, hook_items, strict=strict
+        )
+
+    def _apply_selection_edge_do(
+        self, selection: Any, lifted: Any, edit: Any, *, engine: str, strict: bool
+    ) -> str:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_edge_do``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_selection_edge_do(
+            self, selection, lifted, edit, engine=engine, strict=strict
+        )
+
+    def _apply_selection_param_do(
+        self, selection: Any, lifted: Any, edit: Any, *, engine: str, strict: bool
+    ) -> str:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_selection_param_do``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_selection_param_do(
+            self, selection, lifted, edit, engine=engine, strict=strict
+        )
+
+    def _apply_leaf_selection_edits(self, leaf_items: list[dict[str, Any]]) -> None:
+        """Forward to ``_doors.intervention()._trace_selection_edits.apply_leaf_selection_edits``."""
+
+        return _doors.intervention()._trace_selection_edits.apply_leaf_selection_edits(
+            self, leaf_items
+        )
+
+    def _validate_supplied_model_matches_capture(self, model: nn.Module) -> None:
+        """Forward to ``_doors.intervention()._trace_edits.validate_supplied_model_matches_capture``."""
+
+        return _doors.intervention()._trace_edits.validate_supplied_model_matches_capture(
+            self, model
+        )
+
+    def _fork_trace(self, *, name: str | None) -> "Trace":
+        """Build a copy-on-write fork of this Trace (the M11 builder)."""
+
+        return build_fork(self, name=name)
+
+    def _next_fork_name(self) -> str:
+        """Forward to ``_fork_lineage.next_fork_name``."""
+
+        return _fork_lineage.next_fork_name(self)
+
+    def _rebind_fork_owner_refs(self) -> None:
+        """Forward to ``_fork_lineage.rebind_fork_owner_refs``."""
+
+        return _fork_lineage.rebind_fork_owner_refs(self)
+
+    def _recipe_is_clean(self) -> bool:
+        """Forward to ``_trace_intervention_records.recipe_is_clean``."""
+
+        return _trace_intervention_records.recipe_is_clean(self)
+
+    def _ensure_intervention_spec(self) -> InterventionSpec:
+        """Forward to ``intervention._trace_edits.ensure_intervention_spec``."""
+
+        return _doors.intervention()._trace_edits.ensure_intervention_spec(self)
+
+    def _mark_intervention_spec_mutated(self, *, outs_stale: bool = True) -> None:
+        """Forward to ``_trace_intervention_records.mark_intervention_spec_mutated``."""
+
+        return _trace_intervention_records.mark_intervention_spec_mutated(
+            self, outs_stale=outs_stale
+        )
+
+    def _validate_intervention_site(self, site: Any, *, strict: bool) -> None:
+        """Forward to ``_doors.intervention()._trace_edits.validate_intervention_site``."""
+
+        return _doors.intervention()._trace_edits.validate_intervention_site(
+            self, site, strict=strict
+        )
+
+    def _target_spec_from_site(self, site: Any, *, strict: bool) -> "TargetSpec":
+        """Forward to ``_doors.intervention()._trace_edits.target_spec_from_site``."""
+
+        return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
+
+    def save_new_outs(
+        self,
+        model: torch.nn.Module,
+        input_args: torch.Tensor | list[Any],
+        input_kwargs: dict[Any, Any] | None = None,
+        layers_to_save: str | list[str] = "all",
+        grad_layers_to_save: str | list[str] | None = "all",
+        seed: int | None = None,
+        backward_ready: bool | None = None,
+        _run_until_plan: Any | None = None,
+    ) -> None:
+        """Re-run the model with new inputs, saving only outs."""
+        return _doors.validation()._trace_checks.save_new_outs(
+            self,
+            model,
+            input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save=layers_to_save,
+            grad_layers_to_save=grad_layers_to_save,
+            seed=seed,
+            backward_ready=backward_ready,
+            _run_until_plan=_run_until_plan,
+        )
+
+    def validate_forward_pass(
+        self,
+        ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
+        verbose: bool = False,
+        validate_metadata: bool = True,
+    ) -> Union[bool, "ValidationStatus"]:
+        """Validate saved outs against ground-truth model outputs."""
+        return _doors.validation()._trace_checks.validate_forward_pass(
+            self, ground_truth_output_tensors, verbose=verbose, validate_metadata=validate_metadata
+        )
+
+    @property
+    def validation_replay_status(self) -> "ValidationStatus":
+        """Return replay-validation availability or last completed result."""
+        return _doors.validation()._trace_checks.validation_replay_status(self)
+
+    @property
+    def is_pristine(self) -> bool | None:
+        """Whether nothing ever intervened on this trace, read from its saved evidence."""
+
+        return derive_pristine(self)
+
+    def push(self, replay: "ReplayOptions | None" = None) -> "Trace":
+        """Push the edit downstream through the recorded graph (DAG replay)."""
+        return _doors.intervention()._trace_run.push(self, replay=replay)
+
+    def push_from(self, site: Any, replay: "ReplayOptions | None" = None) -> "Trace":
+        """Push downstream from a pre-mutated site."""
+        return _doors.intervention()._trace_run.push_from(self, site, replay=replay)
+
+    def run(
+        self,
+        model: Any = None,
+        x: Any = None,
+        *,
+        inputs: Any | MissingType = MISSING,
+        seed: int | None = None,
+        fast: bool = False,
+        carry_state: bool = False,
+        until: Any = None,
+        save: Any = None,
+        on_divergence: Literal["raise", "return"] = "raise",
+        chunk_paths: Any | None = None,
+        replay: "ReplayOptions | None" = None,
+        input_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        output_transform: Callable[[Any], Any] | bool | object = _USE_STORED_TRANSFORM,
+        on_zero_fire: str | MissingType = MISSING,
+    ) -> "Trace | RunResult":
+        """Execute this Trace through its live or loaded provider."""
+        return _doors.intervention()._trace_run.run(
+            self,
+            model,
+            x,
+            inputs=inputs,
+            seed=seed,
+            fast=fast,
+            carry_state=carry_state,
+            until=until,
+            save=save,
+            on_divergence=on_divergence,
+            chunk_paths=chunk_paths,
+            replay=replay,
+            input_transform=input_transform,
+            output_transform=output_transform,
+            on_zero_fire=on_zero_fire,
+        )
+
+    def check_metadata_invariants(self) -> bool:
+        """Run metadata invariant checks on this completed model log."""
+        return _doors.validation()._trace_checks.check_metadata_invariants(self)
+
+    def cleanup(self) -> None:
+        """Delete log data, break cycles, and free cached GPU memory."""
+        return cleanup(self)
+
+    def _release_param_refs(self, *, allow_iter_rehydrate: bool = False) -> None:
+        """Release live ``nn.Parameter`` references held by ParamLogs."""
+        return release_param_refs(self, allow_iter_rehydrate=allow_iter_rehydrate)
+
+    def _postprocess(
+        self, output_tensors: list[torch.Tensor], output_tensor_addresses: list[str]
+    ) -> None:
+        """Run postprocessing on a completed raw capture pass."""
+        from .._postprocess import postprocess as _impl
+
+        self._postprocessing_active = True
+        try:
+            return _impl(
+                self,
+                output_tensors=output_tensors,
+                output_tensor_addresses=output_tensor_addresses,
+            )
+        finally:
+            self._postprocessing_active = False
+
+    def _run_and_log_inputs_through_model(
+        self,
+        model: torch.nn.Module,
+        input_args: torch.Tensor | list[Any],
+        input_kwargs: dict[Any, Any] | None = None,
+        layers_to_save: str | list[str | int] | None = "all",
+        grad_layers_to_save: str | list[str | int] | None = "all",
+        random_seed: int | None = None,
+        postprocess: bool = True,
+        reservation_resume: object | None = None,
+    ) -> Any:
+        """Run a forward pass and capture it into this model log."""
+        from .._capture.run import run_and_log_inputs_through_model as _impl
+
+        return _impl(
+            self,
+            model=model,
+            input_args=input_args,
+            input_kwargs=input_kwargs,
+            layers_to_save=layers_to_save,
+            grad_layers_to_save=grad_layers_to_save,
+            seed=random_seed,
+            postprocess=postprocess,
+            reservation_resume=reservation_resume,
+        )
+
+    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
+        """Run backward from ``loss`` while capturing first-class backward metadata."""
+        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
+
+    def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
+        """Run backward from ``loss`` and populate this Trace with backward metadata."""
+
+        return self.log_backward(loss, **backward_kwargs)
+
+    def capture_backward(self) -> Any:
+        """Return a context manager that captures user-managed backward calls."""
+        return _doors.backends_torch()._trace_backward.capture_backward(self)
+
+    def disarm_triggers(self) -> None:
+        """Detach this Trace from global autograd backward interception."""
+        _doors.intervention()._trace_run.disarm_triggers(self)
+
+    def _remove_log_entry(
+        self,
+        log_entry: Op,
+        remove_references: bool = True,
+        replacement_labels: dict[str, str] | None = None,
+    ) -> None:
+        """Remove a single layer-pass entry and scrub graph references."""
+        return remove_log_entry(
+            self,
+            log_entry,
+            remove_references=remove_references,
+            replacement_labels=replacement_labels,
+        )
+
+    def _batch_remove_log_entries(
+        self,
+        entries_to_remove: Iterable[Op],
+        remove_references: bool = True,
+        replacement_labels: dict[str, str] | None = None,
+    ) -> None:
+        """Remove multiple layer-pass entries using single-pass filtering."""
+        return batch_remove_log_entries(
+            self,
+            entries_to_remove,
+            remove_references=remove_references,
+            replacement_labels=replacement_labels,
+        )
+
+    @property
+    def logged_values(self) -> dict[str, Any]:
+        """Return values recorded via ``log_value`` during this capture."""
+
+        values = (getattr(self, "annotations", {}) or {}).get("logged_values", {})
+        return dict(values) if isinstance(values, dict) else {}
+
+    def to_agent_json(self, *, max_ops: int | None = None) -> dict[str, Any]:
+        """Return a self-describing machine-readable dump of this trace."""
+
+        return _doors.report()._agent_json.build_agent_json(self, max_ops=max_ops)
+
+    def _attach_dataframe_honesty(self, frame: Any) -> Any:
+        """Stamp ``frame.attrs`` with this trace's capture-honesty facts."""
+
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(frame, self)
+
+    def to_pandas(self, include_decoded_output_summary: bool = False) -> "pd.DataFrame":
+        """Return a dataframe containing one row per layer pass."""
+
+        return _doors.export()._trace_tables.to_pandas(
+            self, include_decoded_output_summary=include_decoded_output_summary
+        )
+
+    def decode_output(
+        self,
+        k: int | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
+        tokenizer: Any | None = None,
+    ) -> Any:
+        """Return decoded output rows: the captured rows, or a decode on demand."""
+
+        return _doors.export()._trace_tables.decode_output(
+            self, k=k, style=style, head=head, tokenizer=tokenizer
+        )
+
+    def output_table(
+        self,
+        k: int = 5,
+        batch_items: int | Sequence[int] | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
+    ) -> "pd.DataFrame":
+        """Return decoded output as a batch top-k dataframe."""
+
+        return _doors.export()._trace_tables.output_table(
+            self, k=k, batch_items=batch_items, style=style, head=head
+        )
+
+    def show(self, kind: str | None = None, **kwargs: Any) -> Any:
+        """Render this trace using a lightweight notebook-friendly dispatcher."""
+
+        return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
+
+    def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
+        self,
+        path: str | None = None,
+        *,
+        graph: Literal["forward", "backward", "combined"] = "forward",
+        rolled: bool = False,
+        depth: int = 1000,
+        module: "Module | str | None" = None,
+        collapse: CollapseLiteral = "none",
+        fold_repeats: FoldRepeatsLiteral = None,
+        fold_patterns: Any = None,
+        theme: str = "torchlens",
+        layout: VisNodePlacementLiteral = "auto",
+        renderer: VisRendererLiteral = "graphviz",
+        direction: VisDirectionLiteral | None = None,
+        node_style: VisNodeModeLiteral = "default",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_legend: bool | None = None,
+        color_by: Any = None,
+        size_by: str | Callable[[Any], Any] | None = None,
+        size_scale: str | None = None,
+        stack_by: str | bool | Callable[[Any], Any] | None = None,
+        node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
+        node_label_fields: list[str] | None = None,
+        graph_overrides: dict[str, Any] | None = None,
+        edge_overrides: dict[str, Any] | None = None,
+        grad_edge_overrides: dict[str, Any] | None = None,
+        module_overrides: dict[str, Any] | None = None,
+        node_spec_fn: Callable[..., Any] | None = None,
+        collapsed_node_spec_fn: Callable[..., Any] | None = None,
+        collapse_fn: Callable[..., Any] | None = None,
+        skip_fn: Callable[..., Any] | None = None,
+        intervention_mode: VisInterventionModeLiteral = "node_mark",
+        show_cone: bool = False,
+        code_panel: "CodePanelOption" = False,
+        font_size: int | None = None,
+        dpi: int | None = None,
+        order_siblings: bool = True,
+        show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
+        container_max_inline: int = 12,
+        show_input_transform_summary: bool = False,
+        show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
+        show_redundant_args: bool = False,
+        show_saved_for_backward: bool = False,
+        bwd: int | Iterable[int] | None = None,
+        show_module_paths: bool = False,
+        show_grad_values: bool = False,
+        backward_node_spec_fn: Callable[..., Any] | None = None,
+        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+        file_format: str = "pdf",
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
+
+        return _forward_draw(_doors.visualization()._trace_draw.draw, locals())
+
+    def animate(
+        self,
+        site: Any,
+        path: str | None = None,
+        *,
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`."""
+
+        return _doors.visualization()._trace_draw.animate(
+            self, site, path=path, open_viewer=open_viewer
+        )
+
+    @property
+    def nonfinite_ops(self) -> tuple[str, ...]:
+        """Return pass-qualified labels of ops whose output held NaN or Inf."""
+
+        return nonfinite_op_labels(self)
+
+    @property
+    def nonfinite_coverage(self) -> Any:
+        """Return the evidence basis and coverage behind :attr:`nonfinite_ops`."""
+
+        return nonfinite_coverage(self)
+
+    def first_nonfinite(self, link_format: Literal["terminal", "html", "text"] = "text") -> str:
+        """Return a text answer describing the first saved non-finite out."""
+
+        return _doors.report()._trace_summary.first_nonfinite(self, link_format=link_format)
+
+    def preview_fastlog(
+        self,
+        predicate: Callable[..., Any] | None = None,
+        keep_op: Callable[..., Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        """Render a fastlog predicate preview for this model graph."""
+
+        return _doors.visualization()._trace_draw.preview_fastlog(
+            self, predicate=predicate, keep_op=keep_op, **kwargs
+        )
+
+    def last_run_records(self) -> tuple["FireRecord", ...]:
+        """Return fire records from the most recent replay, rerun, or live capture."""
+
+        return _doors.visualization()._trace_draw.last_run_records(self)
+
+    def _repr_html_(self) -> str:
+        """Return the notebook HTML representation for this model log."""
+
+        return _doors.report()._trace_summary.repr_html(self)
+
+    def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
+        self,
+        level: str | None = None,
+        *,
+        # Rebuilt grammar (F08; summary memo 3.10). Spellings
+        # DOCUMENTED-UNSTABLE pending naming-session ratification.
+        view: str | None = None,
+        depth: Any = None,
+        columns: list[str] | None = None,
+        where: Any = None,
+        buffers: str | None = None,
+        fold_repeats: Any = None,
+        max_rows: int | None = None,
+        flop_convention: str | None = None,
+        units: str | None = None,
+        style: str | None = None,
+        max_scan_elements: int | None = None,
+        # One-call-only spellings (typed errors here, never no-ops).
+        input_shape: Any = None,
+        execution_mode: str | None = None,
+        grad_mode: str | None = None,
+        # Internal plumbing from the one-call door (not public grammar).
+        _execution_note: str | None = None,
+        _input_synthesis: str | None = None,
+        # Anything else refuses typed (removed legacy spellings name their
+        # successor; unknown names get the nearest grammar option).
+        **unsupported: Any,
+    ) -> str:
+        """Render a summary of this capture."""
+
+        return _forward_summary(_doors.report()._trace_summary.summary, locals())
+
+    def to_dagua_graph(
+        self,
+        rolled: bool = False,
+        depth: int = 1000,
+        show_buffers: bool = False,
+        direction: str = "bottomup",
+        include_grad_edges: bool | None = None,
+    ) -> Any:
+        """Translate this model log into an experimental Dagua graph."""
+
+        return _doors.visualization()._trace_draw.to_dagua_graph(
+            self,
+            vis_mode="rolled" if rolled else "unrolled",
+            vis_call_depth=depth,
+            show_buffers=show_buffers,
+            direction=direction,
+            include_grad_edges=include_grad_edges,
+        )
+
+    def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
+        """Render this trace's events in the live-narration grammar."""
+        return _doors.report()._narrate.narrate(self, last=last, select=select)
 
 
+attach_trace_docs(Trace)
 Trace._FIELD_FORK_POLICY = fork_policy_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
 Trace._DEFAULT_FILL_STATE = default_fill_state_from_policy(Trace._FIELD_POLICY)  # type: ignore[attr-defined]
 
