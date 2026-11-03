@@ -1,7 +1,7 @@
 """Audited expected-opaque boundaries of the aten-dispatch completeness witness.
 
 The reviewable table of wrapper scopes whose aten dispatches are opaque by design
-(metadata and export conversions that TorchLens never records as ops, the scalar
+(metadata reads and host exports that TorchLens never records as ops, the scalar
 extraction family, the in-forward ``torch.autograd.grad`` engine pass, the
 foreign-kernel ``autograd.Function`` boundary, the TorchScript call boundary and the
 in-place materialization of a lazy module's pending slots), its hard budget, and the derived wrapper-wide set. ``completeness_witness`` re-exports every name; split out along the
@@ -34,11 +34,6 @@ under this token. Defined once so a rename is one line.
 """
 
 AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
-    AuditedCompletenessBoundary(
-        wrapper_name="torch_func:numpy:not_logged",
-        operator=None,
-        reason="existing metadata/export conversion boundary; TorchLens never records it as an op",
-    ),
     AuditedCompletenessBoundary(
         wrapper_name="torch_func:size:not_logged",
         operator=None,
@@ -91,6 +86,16 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
             "an autograd.Function whose forward left torch (numpy / dlpack round trip) is "
             "recorded as one autogradfunction boundary op that replays through apply; every "
             "dispatch inside it belongs to that op"
+        ),
+    ),
+    AuditedCompletenessBoundary(
+        wrapper_name="foreign_data:export",
+        operator=None,
+        reason=(
+            "a tensor leaving torch in plain forward code (numpy / __array__ / dlpack export "
+            "outside any autograd.Function) is journaled as a departure of the foreign data "
+            "round trip; the dispatches inside the export itself (the NumPy protocol "
+            "conversion, toDLPack's strides fix) belong to it and are never recorded as ops"
         ),
     ),
     AuditedCompletenessBoundary(

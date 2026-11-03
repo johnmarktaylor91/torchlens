@@ -4484,7 +4484,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_flow.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6110,6 +6110,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/backends/torch/_foreign_data.py",
+  "has_default": false,
+  "sites": 5,
+  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -9945,6 +9953,38 @@
  },
  {
   "ambiguous": false,
+  "field": "func_call_id",
+  "file": "torchlens/validation/_pre_replay.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/validation/_pre_replay.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/validation/_pre_replay.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_config",
+  "file": "torchlens/validation/_pre_replay.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
   "field": "parent_arg_positions",
   "file": "torchlens/validation/_replay_grad_fidelity.py",
   "has_default": true,
@@ -10044,7 +10084,7 @@
   "field": "func_call_id",
   "file": "torchlens/validation/core.py",
   "has_default": true,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": true
  },
  {
@@ -10068,7 +10108,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/validation/core.py",
   "has_default": true,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": true
  },
  {
@@ -10078,14 +10118,6 @@
   "has_default": false,
   "sites": 5,
   "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/validation/core.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
  },
  {
   "ambiguous": false,

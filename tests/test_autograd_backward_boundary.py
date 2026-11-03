@@ -140,7 +140,6 @@ def test_backward_in_forward_is_a_recorded_boundary_op() -> None:
     assert len(selected.transforms) == 2
 
 
-@pytest.mark.smoke
 def test_second_backward_through_a_retained_graph_accumulates_in_place() -> None:
     torch.manual_seed(0)
     trace = tl.trace(_RetainTwice(), torch.rand(2, 4))
