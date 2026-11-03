@@ -2135,7 +2135,7 @@
    "status": "composes",
    "evidence": "tests/test_interaction_battery.py::test_intervene_x_rerun_applies_the_edit_once",
    "confidence": "high",
-   "note": "The unified run(inputs=...) door refuses a staged spec (run_staged_spec_unapplied); the legacy run(model, x) door and fast=True apply it."
+   "note": "The live run(inputs=...) door applies a staged spec and stamps fire receipts on the fork's last_run (engine \"live\", hooks, hooks_fired, hooks_unfired, unfired_plan_ids, divergence_count); zero-fire entries follow on_zero_fire (warn/error, code rerun_zero_fire). The legacy run(model, x) door and fast=True apply it too; only a loaded artifact refuses with run_staged_spec_unapplied."
   },
   {
    "a": "intervene",
@@ -2921,7 +2921,7 @@
   {
    "id": "A41",
    "pair": [],
-   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, unified run(inputs=...) refuses a staged spec (run_staged_spec_unapplied) unless fast=True, and carry_state, fast and until are unified-only.",
+   "summary": "Rerun has two doors with different option sets: legacy run(model, x) applies a staged spec and re-arms capture predicates, the live run(inputs=...) applies it too and stamps fire receipts on the fork's last_run (zero-fire entries follow on_zero_fire, code rerun_zero_fire) while only a loaded artifact refuses it (run_staged_spec_unapplied), and carry_state, fast and until are unified-only.",
    "evidence": "docs/guides/fast_paths.md",
    "recommendation": "document",
    "ruling": "pending"
