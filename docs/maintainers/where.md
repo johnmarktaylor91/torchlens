@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1395 modules, 628718 lines, 0 modules without a docstring.
+83 packages, 1395 modules, 628802 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -26,7 +26,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11480 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
-| `torchlens._observability` | Observability substrates. | 21 | 7938 |
+| `torchlens._observability` | Observability substrates. | 21 | 7936 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 504 |
 | `torchlens._postprocess` | Postprocessing pipeline for cleaning up the model log after the forward pass. | 29 | 17182 |
@@ -38,7 +38,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2118 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
-| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 37 | 15868 |
+| `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 37 | 15979 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
 | `torchlens._visualization` | Computational graph visualization via Graphviz. | 70 | 42934 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12304 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5993 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5968 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13609 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -546,7 +546,7 @@ Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5849 lines)
 
 ### `torchlens._observability`
 
-Observability substrates. (21 modules, 7938 lines)
+Observability substrates. (21 modules, 7936 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -561,7 +561,7 @@ Observability substrates. (21 modules, 7938 lines)
 | `_memory_parity` | Memory-timeline category contract + parity oracle (torchnative /6.3). | 149 |
 | `_memory_totals` | Transformed-payload memory totals (explorer P4). | 59 |
 | `_native_profile` | The one-call device-profiling door (torchnative 4.3; consumer). | 248 |
-| `_op_tier` | Op/facet-grain history collection, Route B via fastlog (explorer). | 696 |
+| `_op_tier` | Op/facet-grain history collection, Route B via fastlog (explorer). | 694 |
 | `_overhead` | The overhead-measurement harness (torchnative ; section-5 protocol). | 308 |
 | `_payloads` | Sink-neutral payload conversion for watch observations. | 180 |
 | `_perf_harness` | The pinned interleaved A/B perf harness (explorer). | 242 |
@@ -778,7 +778,7 @@ Private per-trace semantic store substrate (trace_core_design.md). (12 modules, 
 
 ### `torchlens._utils`
 
-Shared helpers used by two or more TorchLens packages. (37 modules, 15868 lines)
+Shared helpers used by two or more TorchLens packages. (37 modules, 15979 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -787,6 +787,7 @@ Shared helpers used by two or more TorchLens packages. (37 modules, 15868 lines)
 | `_callable_safety` | Security gate deciding which resolved callables are pure forward/tensor ops. | 1562 |
 | `_cuda_probe` | CUDA availability and initialization probes, cached once per process. | 69 |
 | `_exception_notes` | The guarded PEP 678 exception-note helper, shared by every crash-note site. | 84 |
+| `_kernel_probes` | Capability probes that run one real tensor op each (a torch-only leaf). | 157 |
 | `_lazy_import_warm` | Import the modules a process's first capture would otherwise load in-window. | 58 |
 | `_module_call_dispatch` | Tell ''module(x)'' from a direct ''module.forward(x)'' by the caller frame. | 127 |
 | `_multipass_access` | Multi-pass-safe attribute access for aggregate (recurrent) ''Layer'' objects. | 134 |
@@ -798,14 +799,13 @@ Shared helpers used by two or more TorchLens packages. (37 modules, 15868 lines)
 | `_stdlib_denial` | Structural stdlib/builtin denial for resolved callables. | 91 |
 | `_stochastic_funcs` | Names of torch functions whose outputs depend on random draws. | 39 |
 | `_subprocess` | The ONE bounded-subprocess spawn discipline for every TorchLens child. | 205 |
-| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4596 |
-| `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 247 |
+| `_torch_compat` | Backward-compatible shims for torch APIs whose surface changed across versions. | 4588 |
+| `_torch_compat_table` | Per-flag torch capability table: measured availability on the supported torch matrix. | 248 |
 | `_torch_structseq` | Repr-independent discovery of ''torch.return_types'' structseq field names. | 74 |
 | `_torch_symbols` | Single sanctioned spelling for resolving a top-level ''torch'' attribute on the | 117 |
 | `_type_new_slot` | CPython ''tp_new'' patching for torch's immutable legacy tensor-constructor types. | 465 |
 | `_type_sequence_slot` | CPython ''sq_item'' slot repair for ''torch.Tensor'' (a stdlib-only ctypes leaf). | 94 |
 | `_uninit_alloc` | Uninitialized-memory value-source family ( hon_2): ONE closed table. | 226 |
-| `_untyped_storage_probe` | Probe for a stable ''Tensor.untyped_storage'' Python wrapper (a torch-only leaf). | 39 |
 | `alias_footprint` | THE one absolute-byte three-valued alias/overlap engine. | 293 |
 | `arg_handling` | Argument copying, normalization, and input validation for model forward calls. | 1016 |
 | `collections` | Iterable helpers: type checks, list/dict manipulation, nested indexing. | 160 |
@@ -1800,7 +1800,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (19 modules, 5993 lines)
+Lightweight predicate-recording namespace for TorchLens. (19 modules, 5968 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1808,7 +1808,7 @@ Lightweight predicate-recording namespace for TorchLens. (19 modules, 5993 lines
 | `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 532 |
 | `_halt` | Fastlog early-abort control signal. | 73 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
-| `_record_one_shot` | One-shot public fastlog recording API. | 352 |
+| `_record_one_shot` | One-shot public fastlog recording API. | 327 |
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 859 |
 | `_recorder_config` | Resolved stop and capture configuration for one predicate recording pass. | 32 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |

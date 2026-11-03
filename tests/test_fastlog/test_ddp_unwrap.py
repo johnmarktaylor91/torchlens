@@ -91,9 +91,7 @@ def test_ddp_wrapped_model_records_unwrapped_module(process_group: None) -> None
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
 
-    recording = _record_under_group(
-        ddp_model, torch.ones(1, 2), recording=tl.options.RecordingOptions(default_op=True)
-    )
+    recording = _record_under_group(ddp_model, torch.ones(1, 2), default_op=True)
 
     assert len(recording) > 0
 
@@ -107,7 +105,7 @@ def test_ddp_bundle_path_gets_rank_prefix(process_group: None, tmp_path: Path) -
     recording = _record_under_group(
         ddp_model,
         torch.ones(1, 2),
-        recording=tl.options.RecordingOptions(default_op=True),
+        default_op=True,
         storage=tl.options.StorageOptions(path=requested, retain_in_memory=False),
     )
 
@@ -130,7 +128,7 @@ def test_process_group_teardown_leaves_distributed_capture_dormant(process_group
     """
 
     ddp_model = torch.nn.parallel.DistributedDataParallel(DdpModel())
-    tl.record(ddp_model, torch.ones(1, 2), recording=tl.options.RecordingOptions(default_op=True))
+    tl.record(ddp_model, torch.ones(1, 2), default_op=True)
     assert tl.distributed.is_armed(), "capture under an initialized group should auto-arm"
 
     torch.distributed.destroy_process_group()

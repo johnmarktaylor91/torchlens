@@ -169,7 +169,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
                 narrate=NarrationOptions(sites=True, sink=sink),
-                recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
+                on_forward_error="attach_partial",
             )
         assert isinstance(excinfo.value.__cause__, RuntimeError)
     transcript = sink.getvalue()

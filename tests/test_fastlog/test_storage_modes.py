@@ -40,9 +40,7 @@ def _first_payload_record(recording: tl.Recording) -> tl.recording.ActivationRec
 def test_ram_only_keep_grad_false_records_detached_tensor() -> None:
     """RAM-only keep_grad=False stores a detached tensor payload."""
 
-    recording = tl.record(
-        StorageModel(), torch.ones(1, 3), recording=tl.options.RecordingOptions(default_op=True)
-    )
+    recording = tl.record(StorageModel(), torch.ones(1, 3), default_op=True)
     payload = _first_payload_record(recording).ram_payload
 
     assert payload is not None
@@ -57,7 +55,7 @@ def test_ram_only_keep_grad_true_records_attached_tensor_and_backpropagates() ->
     recording = tl.record(
         model,
         torch.ones(1, 3),
-        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
+        default_op=CaptureSpec(save_grad=True),
     )
     payload = _first_payload_record(recording).ram_payload
 
@@ -74,7 +72,7 @@ def test_view_save_mode_promotes_keep_grad() -> None:
     recording = tl.record(
         StorageModel(),
         torch.ones(1, 3),
-        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_mode="view")),
+        default_op=CaptureSpec(save_mode="view"),
     )
     record = _first_payload_record(recording)
 
@@ -91,7 +89,7 @@ def test_reference_save_mode_to_trace_checks_version() -> None:
         recording = tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_mode="reference")),
+            default_op=CaptureSpec(save_mode="reference"),
         )
     trace = recording.to_trace()
     op = next(layer for layer in trace._layer_list if layer.has_saved_activation)
@@ -110,7 +108,7 @@ def test_true_predicate_inherits_default_save_mode() -> None:
         StorageModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_mode="reference")),
+        default_op=CaptureSpec(save_mode="reference"),
     )
 
     saved_modes = {
@@ -131,7 +129,7 @@ def test_ram_disk_mirror_keep_grad_true_splits_attached_ram_detached_disk(
             path=tmp_path / "mirror.tlfast",
             retain_in_memory=True,
         ),
-        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
+        default_op=CaptureSpec(save_grad=True),
     )
     record = _first_payload_record(recording)
 
@@ -188,9 +186,7 @@ def test_keep_grad_true_integer_dtype_rejected_per_record() -> None:
         tl.record(
             StorageModel(),
             torch.ones(1, 3),
-            recording=tl.options.RecordingOptions(
-                default_op=CaptureSpec(save_grad=True, dtype=torch.int32)
-            ),
+            default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
         )
 
 
@@ -205,9 +201,7 @@ def test_keep_grad_true_cpu_device_warns_once_and_is_allowed(tmp_path: Path) -> 
                 path=tmp_path / "mirror.tlfast",
                 retain_in_memory=True,
             ),
-            recording=tl.options.RecordingOptions(
-                default_op=CaptureSpec(save_grad=True, device="cpu")
-            ),
+            default_op=CaptureSpec(save_grad=True, device="cpu"),
         )
 
     assert len(warnings_seen) == 1
@@ -238,7 +232,7 @@ def test_model_parameter_requires_grad_flags_preserved() -> None:
     model.linear.bias.requires_grad_(False)
     before = {name: param.requires_grad for name, param in model.named_parameters()}
 
-    tl.record(model, torch.ones(1, 3), recording=tl.options.RecordingOptions(default_op=True))
+    tl.record(model, torch.ones(1, 3), default_op=True)
 
     after = {name: param.requires_grad for name, param in model.named_parameters()}
     assert after == before

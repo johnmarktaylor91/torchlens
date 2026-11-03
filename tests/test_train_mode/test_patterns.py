@@ -450,7 +450,7 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
     recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
-        recording=tl.options.RecordingOptions(default_op=False),
+        default_op=False,
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
 
@@ -464,7 +464,7 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            recording=tl.options.RecordingOptions(default_op=True),
+            default_op=True,
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
@@ -476,9 +476,7 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            recording=tl.options.RecordingOptions(
-                default_op=tl.recording.CaptureSpec(save_grad=False)
-            ),
+            default_op=tl.recording.CaptureSpec(save_grad=False),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 

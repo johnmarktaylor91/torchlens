@@ -147,7 +147,7 @@ class TestCloneSkipFastlog:
             rec = tl.record(
                 model,
                 x,
-                recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_out=True)),
+                default_op=CaptureSpec(save_out=True),
                 capture=tl.options.CaptureOptions(
                     activation_transform=probe, save_raw_activations=False
                 ),
@@ -180,9 +180,7 @@ class TestCloneSkipFastlog:
             tl.record(
                 model,
                 x,
-                recording=tl.options.RecordingOptions(
-                    default_op=CaptureSpec(save_out=True, dtype=torch.float64)
-                ),
+                default_op=CaptureSpec(save_out=True, dtype=torch.float64),
                 capture=tl.options.CaptureOptions(
                     activation_transform=probe, save_raw_activations=False
                 ),
