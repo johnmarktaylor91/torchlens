@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1447 modules, 649258 lines, 0 modules without a docstring.
+84 packages, 1447 modules, 649257 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 110 | 54373 |
-| `torchlens.bridge` | External-tool bridge namespace. | 27 | 8831 |
+| `torchlens.bridge` | External-tool bridge namespace. | 27 | 8830 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -1368,13 +1368,13 @@ Torch backend implementation package for TorchLens capture. (110 modules, 54373 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (27 modules, 8831 lines)
+External-tool bridge namespace. (27 modules, 8830 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | External-tool bridge namespace. | 114 |
 | `_hf_refusals` | Typed preprocessing refusals shared by the Hugging Face auto-routes. | 105 |
-| `_image_preprocessing` | Accept or refuse the preprocessing resolved for a PIL input on the image bridge. | 54 |
+| `_image_preprocessing` | Accept or refuse the preprocessing resolved for a PIL input on the image bridge. | 53 |
 | `_sae_export` | Write SAE latents and top examples in the formats SAEDashboard and delphi read. | 484 |
 | `_sae_latents` | SAE latents as a facet family, and the logged splice that puts them in a trace. | 595 |
 | `_sae_metrics` | Reconstruction and next-token metrics for the SAE splice experiment. | 204 |

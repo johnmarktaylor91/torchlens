@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from torchlens._errors import InvalidArgumentError
+from torchlens.bridge._hf_refusals import refuse_preprocessing_unresolved
 
 __tl_layer__ = "L8"
 
@@ -27,14 +27,13 @@ def accept_image_resolution(model: Any, resolution: Any) -> tuple[Callable[[Any]
             record.description = f"AutoImageProcessor: {record.identifier}"
         return resolution.input_transform, record
     reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    raise InvalidArgumentError(
-        f"torchlens.trace: no preprocessing authority resolved for the PIL image "
-        f"input to {type(model).__name__} ({reason or 'nothing resolved'}). "
+    refuse_preprocessing_unresolved(
+        model,
+        f"no preprocessing authority resolved for the PIL image input to "
+        f"{type(model).__name__} ({reason or 'nothing resolved'}). "
         "TorchLens refuses to guess a recipe the model may not have been "
         "trained with.",
-        code="preprocessing_unresolved",
         remedy=_UNRESOLVED_REMEDY,
-        model_type=type(model).__name__,
         resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
 
