@@ -334,6 +334,11 @@ def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -
     ):
         return
     if ctx_param is None and not has_var_keyword:
-        raise HookSignatureError("hook must accept required keyword-only argument 'ctx'")
+        raise HookSignatureError(
+            "hook must accept required keyword-only argument 'ctx'; write it as "
+            "def edit(t, *, ctx): return t * 0 (ctx may go unused)"
+        )
     if ctx_param is not None and ctx_param.kind is not inspect.Parameter.KEYWORD_ONLY:
-        raise HookSignatureError("'ctx' must be a keyword-only parameter")
+        raise HookSignatureError(
+            "'ctx' must be a keyword-only parameter; write it as def edit(t, *, ctx): ..."
+        )

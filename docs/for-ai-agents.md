@@ -1,5 +1,11 @@
 # TorchLens for AI coding agents
 
+Start with the recipe cookbook: `python -m torchlens guide` prints it, and
+`torchlens.agent.guide()` returns the same text. Each recipe (module outputs, every op of a
+forward pass, the first NaN or Inf, edits and ablations, editing a module's input, activation
+patching, gradients, comparing checkpoints) runs as written once your model and input exist.
+The rest of this page is a reference map.
+
 This page is a compact map for agents writing or reviewing TorchLens code. Prefer the current
 v2 spelling: `tl.trace(..., backend=None)`, predicate `save=...`, `intervene=...`,
 `storage=...`, and grouped `capture=tl.options.CaptureOptions(save_grads=...)` (the flat

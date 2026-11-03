@@ -1476,7 +1476,9 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
-        raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
+        from ._familiar_names import missing_attribute_error
+
+        raise missing_attribute_error(type(self).__name__, name)
 
     # ********************************************
     # ************ User-facing custom_methods ***********
