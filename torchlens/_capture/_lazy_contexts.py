@@ -220,7 +220,7 @@ class LazyContextHistory(deque[RecordContext]):
         """Build the deferred contexts and return the newest one."""
 
         self.materialize()
-        return self._entries[-1]  # type: ignore[no-any-return]
+        return self._entries[-1]
 
     def prepare_module_boundary(self, module_call_label: str) -> None:
         """Build the deferred contexts when this module call is selected.
