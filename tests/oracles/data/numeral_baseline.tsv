@@ -4987,7 +4987,6 @@ package-docstrings	torchlens/_utils/_multipass_access.py	12
 package-docstrings	torchlens/_utils/_onramp.py	64
 package-docstrings	torchlens/_utils/_script_call_slot.py	11
 package-docstrings	torchlens/_utils/_stdlib_denial.py	3.10
-package-docstrings	torchlens/_utils/_stdlib_denial.py	31
 package-docstrings	torchlens/_utils/_subprocess.py	40
 package-docstrings	torchlens/_utils/_torch_compat.py	1.2
 package-docstrings	torchlens/_utils/_torch_compat.py	1.4
