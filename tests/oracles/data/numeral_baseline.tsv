@@ -8864,8 +8864,6 @@ test-docstrings	tests/test_selection_gallery.py	64
 test-docstrings	tests/test_selection_influence.py	1..5.
 test-docstrings	tests/test_selection_influence.py	1..7
 test-docstrings	tests/test_selection_influence.py	16
-test-docstrings	tests/test_selection_influence.py	2..12.
-test-docstrings	tests/test_selection_influence.py	2..3
 test-docstrings	tests/test_selection_influence.py	2..5
 test-docstrings	tests/test_selection_influence.py	2..6
 test-docstrings	tests/test_selection_influence.py	3..11.
