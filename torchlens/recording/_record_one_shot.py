@@ -183,8 +183,6 @@ def record(
         ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
         Recording to it as ``partial_recording``, ``"return_partial"`` returns it,
         and its ``output`` refuses with ``output_forward_failed``.
-        With ``return_output=True``, the returned output is ``None`` because no
-        valid model output exists on failure.
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     stop_after:

@@ -137,7 +137,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `overlay:others` | node_overlay 'bytes'/'grad-norm'/'bundle_delta' use the same generic numeric-row + bold-border machinery as the overlays shown ('nan' and 'intervention', the two color-coded overlays, both have pages). |
 | `combined:cluster_rest` | intervening_cluster 'outside'/'downstream' mirror the two placements shown ('upstream'/'own') with different cluster targets. |
 | `overrides:grad_edge` | vis_grad_edge_overrides styles gradient edges via the same override dict machinery as vis_edge_overrides (shown). |
-| `plumbing` | vis_outpath / vis_fileformat / vis_save_only / return_graph / vis_graph_overrides and the draw() short-form params (view, depth, renderer, layout, node_style) have no visual identity of their own. |
+| `plumbing` | path / file_format / open_viewer / graph_overrides and the draw() view params (rolled, depth, renderer, layout, node_style) have no visual identity of their own. |
 | `show:dispatcher` | Trace.show(kind='graph'/'repr') dispatches to draw()/repr(). method='html' returns Trace._repr_html_() -- see the html_repr entry. |
 | `html_repr` | Trace._repr_html_() is a bespoke HTML identity card (layers/ops/save-level/NaN summary) for notebooks; an HTML widget, not a static Graphviz render, so it cannot appear in this PDF. |
 | `animate` | trace.animate(site) returns an HTML play/pause Drawing for repeated-pass ops; interactive HTML, out of scope for a static PDF. |
