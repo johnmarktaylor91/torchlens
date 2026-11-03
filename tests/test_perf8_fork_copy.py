@@ -689,9 +689,9 @@ def _fork_events(trace: Any) -> int:
 
     Earlier tests in the same process leave dead captures in reference cycles. If an
     automatic collection fires inside the profiled fork, their op-store finalizers run
-    there and are counted as the fork's calls (one such collection read 125,417 events
-    against about 29,600 for the fork alone). So collect first and keep automatic
-    collection off for the profiled call.
+    there and are counted as the fork's calls (one such collection read about four
+    times the fork's own count). So collect first and keep automatic collection off
+    for the profiled call.
     """
 
     trace.fork()  # warm-up, as the benchmark counter does
