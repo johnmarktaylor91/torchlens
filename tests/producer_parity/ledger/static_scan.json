@@ -4500,7 +4500,7 @@
   "field": "modules",
   "file": "torchlens/_visualization/_render_flow.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 3,
   "via_getattr": false
  },
  {
