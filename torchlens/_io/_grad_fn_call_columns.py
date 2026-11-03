@@ -44,7 +44,7 @@ _CALL_KEYS = frozenset(
     {
         "call_index",
         "ordinal",
-        "backward_pass_index",
+        "backward_pass_number",
         "grad_fn_label",
         "grad_inputs",
         "grad_outputs",
@@ -56,7 +56,7 @@ _CALL_KEYS = frozenset(
         "tlspec_version",
     }
 )
-_OPTIONAL_INTS = ("ordinal", "backward_pass_index")
+_OPTIONAL_INTS = ("ordinal", "backward_pass_number")
 _OPTIONAL_FLOATS = ("timestamp", "_time_started", "_time_finished")
 _PAYLOADS = ("grad_inputs", "grad_outputs")
 _SPARSE = (*_PAYLOADS, "fire_record")

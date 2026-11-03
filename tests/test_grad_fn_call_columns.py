@@ -118,7 +118,7 @@ def _payload_equal(live: Any, loaded: Any) -> bool:
 _CALL_FACTS = (
     "call_index",
     "ordinal",
-    "backward_pass_index",
+    "backward_pass_number",
     "grad_fn_label",
     "timestamp",
     "_time_started",

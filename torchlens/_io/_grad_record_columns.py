@@ -45,7 +45,7 @@ _RECORD_FIELDS = frozenset(
     {
         "owner",
         "ordinal",
-        "backward_pass_index",
+        "backward_pass_number",
         "grad",
         "transformed_grad",
         "shape",
@@ -77,7 +77,7 @@ class GradientRecordColumns:
     ----------
     count:
         Number of records.
-    ordinal, backward_pass_index, shape_index, dtype_index:
+    ordinal, backward_pass_number, shape_index, dtype_index:
         Little-endian 4-byte signed integer columns, one value per record.
     memory:
         Little-endian 8-byte signed integer column of gradient bytes (restored as ``Bytes``).
@@ -94,7 +94,7 @@ class GradientRecordColumns:
 
     count: int
     ordinal: bytes
-    backward_pass_index: bytes
+    backward_pass_number: bytes
     memory: bytes
     timestamp: bytes
     shape_index: bytes
@@ -205,7 +205,7 @@ def pack_gradient_records(records: Any) -> GradientRecordColumns | None:
     if states is None:
         return None
     ordinal = _int_column([state["ordinal"] for state in states], _INT32)
-    pass_index = _int_column([state["backward_pass_index"] for state in states], _INT32)
+    pass_index = _int_column([state["backward_pass_number"] for state in states], _INT32)
     memory = _int_column([int(state["memory"]) for state in states], _INT64)
     shapes = _index_column([state["shape"] for state in states])
     dtypes = _index_column([state["dtype"] for state in states])
@@ -217,7 +217,7 @@ def pack_gradient_records(records: Any) -> GradientRecordColumns | None:
     return GradientRecordColumns(
         count=len(states),
         ordinal=ordinal,
-        backward_pass_index=pass_index,
+        backward_pass_number=pass_index,
         memory=memory,
         timestamp=struct.pack(f"<{len(timestamps)}{_FLOAT64_CODE}", *timestamps),
         shape_index=shapes[0],
@@ -312,7 +312,7 @@ def unpack_gradient_records(
     if type(count) is not int or count < 0:
         raise _corrupt("record count is not a non-negative int")
     ordinals = _read_column(columns.ordinal, count, _INT32[0], _INT32[1], "ordinal")
-    passes = _read_column(columns.backward_pass_index, count, _INT32[0], _INT32[1], "pass")
+    passes = _read_column(columns.backward_pass_number, count, _INT32[0], _INT32[1], "pass")
     memories = _read_column(columns.memory, count, _INT64[0], _INT64[1], "memory")
     stamps = _read_column(columns.timestamp, count, _FLOAT64_CODE, _FLOAT64_SIZE, "timestamp")
     shapes = _read_indices(columns.shape_index, count, columns.shapes, "shape_index")
@@ -325,7 +325,7 @@ def unpack_gradient_records(
         record_type(
             owner=None,
             ordinal=ordinals[position],
-            backward_pass_index=passes[position],
+            backward_pass_number=passes[position],
             grad=grads[position],
             transformed_grad=transformed[position],
             shape=shapes[position],

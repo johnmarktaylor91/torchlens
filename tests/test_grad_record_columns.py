@@ -99,9 +99,9 @@ def test_grad_records_round_trip(tmp_path: Path, lazy: bool) -> None:
         assert len(loaded_records) == len(live_records), live_op.label
         for live, record in zip(live_records, loaded_records, strict=True):
             assert record.owner is loaded_op
-            assert (record.ordinal, record.backward_pass_index) == (
+            assert (record.ordinal, record.backward_pass_number) == (
                 live.ordinal,
-                live.backward_pass_index,
+                live.backward_pass_number,
             )
             assert (record.shape, record.dtype, record.timestamp) == (
                 live.shape,
@@ -114,7 +114,7 @@ def test_grad_records_round_trip(tmp_path: Path, lazy: bool) -> None:
                 saved_grads += 1
                 assert torch.equal(record.grad, live.grad), live_op.label
         for live in live_records:
-            pass_index = live.backward_pass_index
+            pass_index = live.backward_pass_number
             assert loaded_op.grads.for_pass(pass_index).ordinal == live.ordinal
     assert saved_grads > 0, "the round trip must cover saved gradient payloads"
 
