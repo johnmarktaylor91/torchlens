@@ -13,9 +13,10 @@ from collections import OrderedDict
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, Optional
 
-from .._constants import LAYER_LOG_FIELD_ORDER, split_pass_token
+from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
+from .._pass_tokens import split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty
 from ._layer_views import _layer_log_to_row
 

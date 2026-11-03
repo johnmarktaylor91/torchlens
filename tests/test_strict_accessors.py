@@ -13,6 +13,7 @@ from torchlens._data_classes.module import Module
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._errors import AmbiguousOpLookupError
+from torchlens._selection.errors import AmbiguousSiteError
 
 
 class StrictAccessorModel(torch.nn.Module):
@@ -106,8 +107,9 @@ def test_trace_getitem_never_returns_a_layer() -> None:
     for label in trace.layer_labels:
         if trace.layers[label].num_passes == 1:
             assert not isinstance(trace[label], Layer)
-    with pytest.raises(AmbiguousOpLookupError) as info:
+    with pytest.raises(AmbiguousSiteError) as info:
         trace["linear_1_1"]
+    assert info.value.fields["code"] == "multipass_bare_label_ambiguous"
     message = str(info.value)
     assert "trace.layers['linear_1_1']" in message
     assert "'linear_1_1:last'" in message and "'linear_1_1:all'" in message

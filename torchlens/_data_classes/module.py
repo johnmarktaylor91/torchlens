@@ -54,6 +54,7 @@ from ._call_tree import (
     _resolve_call_ops,
     _sum_call_ops_field,
 )
+from ._module_accessor_filters import ModuleAccessorFilters
 from ._runtime_handles import runtime_handle_from_trace
 from .attribute_write import AttributeWrite
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -2467,7 +2468,7 @@ class Module:
         return pd.DataFrame(rows, columns=columns)
 
 
-class ModuleAccessor(Accessor["Module"]):
+class ModuleAccessor(ModuleAccessorFilters, Accessor["Module"]):
     """Dict-like accessor for Module objects.
 
     Supports indexing by:
@@ -2555,29 +2556,6 @@ class ModuleAccessor(Accessor["Module"]):
         return (
             list(self._dict.keys()) + list(self._alias_dict.keys()) + list(self._pass_dict.keys())
         )
-
-    @property
-    def uncalled(self) -> list[str]:
-        """Addresses of registered modules the captured pass never called.
-
-        The collection spelling of ``Trace.uncalled_modules``: an uncalled module
-        has no ``Module`` record, so the answer is its addresses. Empty when no
-        member still reaches its trace.
-        """
-
-        for module in self._list:
-            trace = module._source_trace
-            if trace is not None:
-                return trace.uncalled_modules
-        return []
-
-    def _composition_note(self) -> str | None:
-        """Composition breakdown: total calls across modules (F10)."""
-
-        calls = sum(getattr(ml, "num_calls", 0) or 0 for ml in self._list)
-        if calls <= len(self._list):
-            return None
-        return f"{calls} calls"
 
     def to_pandas(self) -> "pd.DataFrame":
         """Export module metadata as a pandas DataFrame.

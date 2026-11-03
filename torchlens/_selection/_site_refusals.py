@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
-from .._constants import PASS_TOKEN_ALL, split_pass_token
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from .errors import AmbiguousSiteError, SiteResolutionError
 
 if TYPE_CHECKING:

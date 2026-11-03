@@ -22,8 +22,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .._constants import pass_token_labels
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._pass_tokens import pass_token_labels
 from ..backends._backend_names import TORCH_BACKEND_NAME
 
 #: String-label attribute universes per lifecycle, in match order.

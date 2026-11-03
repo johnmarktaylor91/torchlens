@@ -1252,20 +1252,14 @@ class Trace(TraceLike):
     def __getitem__(self, ix: Any) -> Any:
         """Return one record, or the Selection a selector names.
 
-        After the pass: an int, slice or string addresses records as before;
-        a selector is the one resolution door. A set-naming selector
-        (``tl.func``, ``tl.in_module``, ``tl.where``, ``tl.label_contains``,
-        a ``tl.Selector`` and their compositions) returns a ``tl.Selection``
-        of every matching site, never capped (``len`` and ``repr`` report the
-        count). A spelling that names one thing (an exact label, a target
-        spec, a facet selector) must match exactly one and returns that
-        record. During the pass, the raw barcode lookup applies.
-
-        A string never returns a ``Layer``: ``trace.layers[...]`` is the Layer
-        door. A layer label returns its Op when the layer ran once and refuses
-        a bare multi-pass label; ``label:N`` names pass ``N`` (1-based),
-        ``label:last`` the final pass, and ``label:all`` every pass as a
-        ``Selection``.
+        After the pass an int, slice or string addresses records; a selector is
+        the one resolution door: a set-naming selector (``tl.func``, ``tl.where``,
+        ``tl.in_module``, ``tl.label_contains``, compositions) returns a
+        ``tl.Selection`` of every match, never capped; a one-thing spelling (exact
+        label, target spec, facet) must match exactly one and returns it. During
+        the pass the raw barcode lookup applies. Never a ``Layer`` (that door is
+        ``trace.layers[...]``): a layer label gives its Op or refuses a bare
+        multi-pass label; ``label:N`` (1-based), ``label:last``, ``label:all``.
 
         Args:
             ix: index, slice, label, address, substring or selector.

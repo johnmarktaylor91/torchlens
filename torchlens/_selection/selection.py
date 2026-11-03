@@ -40,7 +40,6 @@ from __future__ import annotations
 
 import hashlib
 import random as _random_module
-import weakref
 from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, overload
@@ -49,6 +48,7 @@ import torch
 
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
+from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from .align import align_resolved_selection
 from .errors import SelectionError, SelectorCompositionError
 from .mask import (
@@ -109,29 +109,18 @@ class Site:
     provenance: SelectionProvenance
     _mask: _Mask
     structural_site_key: Any = None
-    #: Weak link to the trace the row resolved against, filled by ``Selection``
-    #: at construction; outside equality and hashing (two rows naming the same
-    #: site stay equal whichever selection carried them).
+    #: Weak trace link filled by ``Selection``; outside equality and hashing.
     _trace_ref: Any = field(default=None, compare=False, repr=False)
 
     @property
     def record(self) -> Any:
-        """The record this row names: an ``Op``, ``Param`` or ``EdgeUseRecord``.
+        """The ``Op`` (ACT), ``Param`` (PARAM) or ``EdgeUseRecord`` (EDGE) this row names.
 
-        ACT rows return the ``Op`` at ``(layer_label, pass_index)``; PARAM rows
-        the ``Param`` at the parameter address; EDGE rows the ``EdgeUseRecord``
-        whose occurrence address the key is (never synthesized). The trace is
-        held weakly: once it is released the row refuses typed.
-
-        Raises
-        ------
-        SelectionError
-            ``selection_trace_released`` when the trace is gone or the row was
-            never bound to one; ``selection_unresolvable`` (reason
-            ``site_not_in_trace``) when the live trace has no such record.
+        Weak trace link: ``selection_trace_released`` once the trace is gone,
+        ``selection_unresolvable`` (``site_not_in_trace``) when it has no such record.
         """
 
-        return _site_record(self)
+        return site_record(self, _forward_ops, _trace_edge_records)
 
     @property
     def mask(self) -> torch.Tensor:
@@ -158,62 +147,6 @@ class Site:
             f"Site({self.key!r}, {self.num_selected}/{self._mask.numel()} "
             f"elements, relation={self.provenance.relation})"
         )
-
-
-def _bind_entries(trace: Any, entries: Iterable[Site]) -> None:
-    """Give every row a weak link to ``trace`` so ``Site.record`` can find it."""
-
-    try:
-        ref = weakref.ref(trace)
-    except TypeError:
-        return
-    for entry in entries:
-        object.__setattr__(entry, "_trace_ref", ref)
-
-
-def _site_trace(site: Site) -> Any:
-    """Return the live trace behind one row, or refuse typed when it is gone."""
-
-    ref = site._trace_ref
-    trace = ref() if ref is not None else None
-    if trace is None:
-        raise SelectionError(
-            f"Site {site.key!r} cannot reach its trace: the trace was released (or the "
-            "row was never bound to one), so its record cannot be read.",
-            code="selection_trace_released",
-            site_key=site.key,
-        )
-    return trace
-
-
-def _site_record(site: Site) -> Any:
-    """Resolve one row to the ``Op``, ``Param`` or ``EdgeUseRecord`` it names."""
-
-    trace = _site_trace(site)
-    found: Any = None
-    if site.kind == "ACT" and len(site.key) == 2:
-        layer_label, pass_index = site.key
-        for op in _forward_ops(trace):
-            if (getattr(op, "layer_label", None) or op.label) == layer_label and (
-                getattr(op, "pass_number", 1) or 1
-            ) == pass_index:
-                found = op
-                break
-    elif site.kind == "PARAM" and len(site.key) == 1:
-        found = fail_open(lambda: trace.params[site.key[0]], lambda _error: None)
-    elif site.kind == "EDGE":
-        for record in _trace_edge_records(trace):
-            if edge_address_of(record) == site.key:
-                found = record
-                break
-    if found is None:
-        raise SelectionError(
-            f"Site {site.key!r} ({site.kind}) names no record on its trace.",
-            code="selection_unresolvable",
-            reason="site_not_in_trace",
-            site_key=site.key,
-        )
-    return found
 
 
 def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
@@ -314,7 +247,7 @@ class Selection:
         object.__setattr__(self, "_kind", kind)
         object.__setattr__(self, "_selector", selector)
         object.__setattr__(self, "_entries", _graph_entry_order(trace, entries))
-        _bind_entries(trace, self._entries)
+        bind_entries(trace, self._entries)
         digest = hashlib.sha256()
         digest.update(kind.encode())
         for entry in self._entries:
@@ -1634,25 +1567,6 @@ class _EdgeTerm:
         if self.display:
             return f"edges({', '.join(self.display)})"
         return f"edges(n={len(self.addresses)})"
-
-
-def edge_address_of(record: Any) -> tuple[Any, ...]:
-    """Return one EdgeUseRecord's canonical occurrence address."""
-
-    return (record.child_func_call_id, record.arg_kind, tuple(record.arg_path))
-
-
-def _require_edge_provenance(trace: Any) -> None:
-    """Refuse typed when edge provenance was not captured."""
-
-    if not bool(getattr(trace, "is_replayable", False)):
-        raise SelectionError(
-            "edge provenance requires an replayable capture "
-            "(EdgeUseRecords exist only under it). Re-capture with "
-            "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)).",
-            code="edge_provenance_unavailable",
-        )
 
 
 def _trace_edge_records(trace: Any) -> tuple[Any, ...]:

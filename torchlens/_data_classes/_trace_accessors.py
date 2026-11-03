@@ -5,8 +5,9 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from .._constants import PASS_TOKEN_ALL, _is_suffixed_raw_label, split_pass_token
+from .._constants import _is_suffixed_raw_label
 from .._errors import AmbiguousOpLookupError
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
 from ._accessor_base import Accessor, attach_source_honesty, first_source_trace
 from ._layer_accessors import _LAYER_COUNTABLE_FIELDS
 from ._nonfinite import nonfinite_op_labels

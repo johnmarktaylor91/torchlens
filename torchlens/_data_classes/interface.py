@@ -27,8 +27,10 @@ if TYPE_CHECKING:
 
 from .._capture.projections import LiveOpView
 from .._errors import AmbiguousOpLookupError, InvalidArgumentError
+from .._pass_tokens import PASS_TOKEN_ALL, split_pass_token
+from .._selection._site_refusals import multipass_bare_label_message
 from .._selection.errors import AmbiguousSiteError
-from .._selection.selectors import BaseSelector
+from .._selection.selectors import BaseSelector, LabelSelector
 from .._selection.target import FrozenTargetSpec, TargetSpec
 from ._lookup_keys import _give_user_feedback_about_lookup_key
 from .op import Op
@@ -111,7 +113,6 @@ def _names_one_thing(selector: Any) -> bool:
     selector each name one thing; every other selector names a set.
     """
 
-    from .._constants import PASS_TOKEN_ALL, split_pass_token
     from .._selection.selectors import FacetSelector
 
     if isinstance(selector, TargetSpec | FrozenTargetSpec | FacetSelector):
@@ -173,18 +174,10 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     Lookup cascade:
     1. slice -> list slice of layer_list
     2. int -> Op by 0-based ordinal position
-    3. string ending in ``:last`` or ``:all`` -> the last pass Op, or the
-       Selection of every pass, through the label selector
-    4. layer label -> its Op (single pass) or the multi-pass teaching refusal
-    5. string -> ops, module_calls, modules, params, buffers, grad_fns
-    6. alternate Op lookup keys
-    7. case-insensitive exact match against alternate Op lookup keys
-    8. substring match against alternate Op lookup keys
-    9. fallback: KeyError with contextual help message
-
-    A string never returns a ``Layer``: ``trace.layers[...]`` is the Layer
-    door, and a bare multi-pass layer label refuses with the spellings that
-    name one pass or every pass.
+    3. ``label:last`` / ``label:all`` -> last-pass Op / Selection of every pass
+    4. layer label -> its Op (one pass) or the multi-pass teaching refusal
+    5. accessors, alternate Op lookup keys, case-insensitive, then substring
+    6. fallback: KeyError with contextual help message (never a ``Layer``)
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
@@ -194,7 +187,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     Raises:
         KeyError: No match found.
-        AmbiguousOpLookupError: Bare multi-pass layer label or ambiguous substring.
+        AmbiguousSiteError / AmbiguousOpLookupError: Bare multi-pass label / substring.
         ValueError: Invalid index.
     """
     from .._selection.selection import Selector
@@ -219,8 +212,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         from .._trace_selector_helpers import canonical_module_site_key
 
         ix = canonical_module_site_key(self, ix) or ix
-        tokened = _resolve_pass_token(self, ix)
-        if tokened is not None:
+        if (tokened := _resolve_pass_token(self, ix)) is not None:
             return tokened
         if ix in self._layer_logs:
             return _layer_label_op(self, ix)
@@ -310,9 +302,6 @@ def _resolve_pass_token(self: "Trace", ix: str) -> Any:
     answers (and refuses) as it would for any unknown key.
     """
 
-    from .._constants import split_pass_token
-    from .._selection.selectors import LabelSelector
-
     token = split_pass_token(ix)
     if token is None or not self.ops.resolve_all(token[0]):
         return None
@@ -324,20 +313,24 @@ def _layer_label_op(self: "Trace", layer_label: str) -> Any:
 
     Raises
     ------
-    AmbiguousOpLookupError
-        The layer ran several passes, so the bare label names none of them;
+    AmbiguousSiteError
+        ``multipass_bare_label_ambiguous`` (the same refusal as ``tl.label``):
+        the layer ran several passes, so the bare label names none of them;
         the message teaches ``label:N``, ``label:last``, ``label:all`` and
         ``trace.layers[label]``.
     """
-
-    from .._selection._site_refusals import multipass_bare_label_message
 
     ops = self.ops.resolve_all(layer_label)
     if len(ops) == 1:
         return ops[0]
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in ops)
-    raise AmbiguousOpLookupError(
+    raise AmbiguousSiteError(
         multipass_bare_label_message(layer_label, pass_indices),
+        code="multipass_bare_label_ambiguous",
+        remedy=(
+            f"address one pass ('{layer_label}:N' or '{layer_label}:last'), every pass "
+            f"('{layer_label}:all'), or the Layer (trace.layers[{layer_label!r}])"
+        ),
         layer_label=layer_label,
         pass_indices=tuple(pass_indices),
     )

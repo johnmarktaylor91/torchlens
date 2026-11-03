@@ -1184,8 +1184,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   return that Op, `trace["relu_1_1:all"]` and `trace[tl.label("relu_1_1:all")]` return the
   Selection of every pass (an Op collection refuses `:all` with a `KeyError` naming those
   doors), and `trace.layers["relu_1_1:last"]` is the aggregate Layer like any pass spelling.
-  A bare multi-pass label through `trace[...]` refuses (`ambiguous_op_lookup`) naming these
-  spellings and `trace.layers[label]`; `trace[...]` never returns a Layer.
+  A bare multi-pass label through `trace[...]` refuses (`multipass_bare_label_ambiguous`, the
+  `tl.label` refusal) naming these spellings and `trace.layers[label]`; `trace[...]` never
+  returns a Layer.
 
 **tl.all_sites** — *unstable — no deprecation shim owed*
 : `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
@@ -2535,10 +2536,10 @@ shim owed; S2-gated*
   bare layer label addresses only single-pass layers, and each pass of a
   recurrence-grouped layer must be named pass-qualified (`label:pass`, `label:last`, or
   `label:all` for every pass); the
-  `tl.label` addressing face is `multipass_bare_label_ambiguous` on
-  `AmbiguousSiteError` and the `trace[label]` face is `ambiguous_op_lookup` on
-  `AmbiguousOpLookupError` (the teaching refusals name every pass-qualified
-  spelling, `:last`, `:all` and `trace.layers[label]`; spellings DOCUMENTED-UNSTABLE).
+  string/`tl.label` addressing face (`trace[label]` included) is
+  `multipass_bare_label_ambiguous` on `AmbiguousSiteError` (both teaching refusals name
+  every pass-qualified spelling, `:last`, `:all` and `trace.layers[label]`; spellings
+  DOCUMENTED-UNSTABLE).
 
 **tl.Edit / do(selection, edit)** — *Edit ratified (slate 5.5, subject to D7
 default-keep); mask-application semantics documented-unstable*
