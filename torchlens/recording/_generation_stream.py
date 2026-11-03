@@ -24,6 +24,8 @@ import torch
 from .._capture.projections import activation_record_from_event
 from .._errors import InvalidArgumentError
 from .._ir.selector_eval import module_union_matches
+from .._selection.selector_base import BaseSelector
+from .._selection.selectors import module as module_selector
 from ._generation_options import GenerationOptions
 from .types import ActivationRecord
 
@@ -123,12 +125,11 @@ class _StepSink:
         options: GenerationOptions,
         recorder: Recorder,
         max_new_tokens: Callable[[int], int | None],
-        matcher: _SiteMatcher | None = None,
     ) -> None:
         self.options = options
         self.recorder = recorder
         self.max_new_tokens = max_new_tokens
-        self.matcher = matcher if matcher is not None else _SiteMatcher(tuple(options.reducers))
+        self._site_sets = {site: frozenset({site}) for site in options.reducers}
         self.windows: list[range] = []
         self.pass_of_step: list[int] = []
         self.values: dict[str, dict[int, torch.Tensor]] = {site: {} for site in options.reducers}
@@ -160,15 +161,8 @@ class _StepSink:
     def _site_of(self, record: ActivationRecord) -> str | None:
         """Return the declared reducer site ``record`` is the output of, if any."""
 
-        ctx = record.ctx
-        key = (int(ctx.pass_number), str(ctx.raw_label or ctx.label))
-        site = self.matcher.matched.get(key)
-        if site is not None:
-            return site
-        if ctx.address in self.options.reducers:
-            return str(ctx.address)
-        for site, addresses in self.matcher.addresses.items():
-            if module_union_matches(ctx, addresses):
+        for site, addresses in self._site_sets.items():
+            if module_union_matches(record.ctx, addresses):
                 return site
         return None
 
@@ -438,27 +432,16 @@ class _StepSink:
         return TokenSeries(name=name, positions=range(start, stop), values=values)
 
 
-class _SiteMatcher:
-    """The save predicate of the declared reducer sites, remembering what it matched.
+def site_selector(sites: tuple[str, ...]) -> BaseSelector:
+    """Return the ``tl.module`` union of the declared reducer sites.
 
-    ``tl.module`` matching needs the live capture context (its module-output
-    facts are not projected back from the event), so the matcher runs at capture
-    time and records each match by ``(pass_number, raw_label)``; the sink reads
-    that table after the pass to find the sites' records.
+    The save must be a selector that names the sites as modules: the recorder
+    joins a module's output facts to its output op at module exit and
+    re-evaluates only a module-bearing selector there, so a plain callable
+    never sees a module output as such.
     """
 
-    __slots__ = ("addresses", "matched", "sites")
-
-    def __init__(self, sites: tuple[str, ...]) -> None:
-        self.sites = sites
-        self.addresses = {site: frozenset({site}) for site in sites}
-        self.matched: dict[tuple[int, str], str] = {}
-
-    def __call__(self, ctx: Any) -> bool:
-        """Return whether ``ctx`` is the output of a declared site, noting which."""
-
-        for site, addresses in self.addresses.items():
-            if module_union_matches(ctx, addresses):
-                self.matched[(int(ctx.pass_number), str(ctx.raw_label or ctx.label))] = site
-                return True
-        return False
+    selector: BaseSelector = module_selector(sites[0])
+    for site in sites[1:]:
+        selector = selector | module_selector(site)
+    return selector
