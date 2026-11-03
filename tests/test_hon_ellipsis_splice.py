@@ -1,4 +1,4 @@
-"""U16.1: ``...`` is a safe stored literal, so a Gemma-class splice runs.
+"""``...`` is a safe stored literal, so a Gemma-class splice runs.
 
 Rotary attention slices with ``x[..., :n]``. Before, the replay template
 stored the ``Ellipsis`` as ``Unsupported``, so any splice whose downstream

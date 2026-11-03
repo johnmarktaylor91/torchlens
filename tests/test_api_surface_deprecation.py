@@ -60,11 +60,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("save_intervention", "torchlens.io", "save_intervention"),
     ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
     ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
-    (
-        "validate_batch_of_models_and_inputs",
-        "torchlens.validation",
-        "validate_batch_of_models_and_inputs",
-    ),
     ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
 ]
@@ -93,6 +88,7 @@ REMOVED_WRAPPER_NAMES = [
     "draw_backward",
     "draw_combined",
     "load_intervention_spec",
+    "validate_batch_of_models_and_inputs",
 ]
 
 #: Removed paper-era shim names.
@@ -109,9 +105,6 @@ REMOVED_PAPER_ERA_NAMES = [
 ]
 
 
-@pytest.mark.smoke_cells(
-    "test_moved_name_is_gone_and_canonical_resolves[NodeSpec-torchlens.experimental.dagua-NodeSpec]",
-)
 @pytest.mark.parametrize(("old_name", "module_name", "new_name"), REMOVED_TOP_LEVEL_CASES)
 def test_moved_name_is_gone_and_canonical_resolves(
     old_name: str, module_name: str, new_name: str
@@ -126,7 +119,6 @@ def test_moved_name_is_gone_and_canonical_resolves(
     assert getattr(module, new_name) is not None
 
 
-@pytest.mark.smoke_cells("test_removed_top_level_wrapper_is_gone[preview_fastlog]")
 @pytest.mark.parametrize(
     "name", REMOVED_SURFACE_NAMES + REMOVED_WRAPPER_NAMES + REMOVED_PAPER_ERA_NAMES
 )

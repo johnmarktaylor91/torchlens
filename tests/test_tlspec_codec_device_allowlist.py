@@ -107,10 +107,6 @@ _ATTACKER_TOKENS = [
 ]
 
 
-@pytest.mark.smoke_cells(
-    "test_grammar_only_backends_admit_device_tokens_unchanged[Device(cpu)-paddle]",
-    "test_grammar_only_backends_admit_device_tokens_unchanged[DeviceType.gpu-paddle]",
-)
 @pytest.mark.parametrize("backend_name", ["paddle", "mlx", "jax", "tf"])
 @pytest.mark.parametrize("token", _LEGIT_GRAMMAR_TOKENS)
 def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, token: str) -> None:
@@ -124,9 +120,6 @@ def test_grammar_only_backends_admit_device_tokens_unchanged(backend_name: str, 
     assert _sanitize_artifact_device_token(token, backend_name) == token
 
 
-@pytest.mark.smoke_cells(
-    "test_attacker_device_tokens_refused_to_default[disk:/tmp/tl_sentinel-tinygrad]"
-)
 @pytest.mark.parametrize("backend_name", ["tinygrad", "paddle"])
 @pytest.mark.parametrize("token", _ATTACKER_TOKENS)
 def test_attacker_device_tokens_refused_to_default(backend_name: str, token: str) -> None:
@@ -135,7 +128,6 @@ def test_attacker_device_tokens_refused_to_default(backend_name: str, token: str
     assert _sanitize_artifact_device_token(token, backend_name) is None
 
 
-@pytest.mark.smoke
 def test_unknown_and_empty_tokens_resolve_default() -> None:
     """The sentinel ``unknown``/empty strings and non-strings resolve to default."""
 
@@ -165,6 +157,8 @@ def _runtime_accelerator_bases() -> frozenset[str]:
     return _tinygrad_runtime_device_bases() - _TINYGRAD_IO_SINK_BASES
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_every_runtime_accelerator_round_trips_admitted() -> None:
     """Every non-sink base the INSTALLED runtime names is admitted unchanged.
 
@@ -181,6 +175,8 @@ def test_every_runtime_accelerator_round_trips_admitted() -> None:
             assert _resolve_portable_device("tinygrad", token, None) == token
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 @pytest.mark.parametrize("token", ["NV", "AMD", "WEBGPU", "QCOM", "DSP", "NPY", "NV:0"])
 def test_corr1_victim_accelerators_admitted(token: str) -> None:
     """The exact accelerators the r55 static allowlist over-refused now round-trip."""
@@ -193,6 +189,8 @@ def test_corr1_victim_accelerators_admitted(token: str) -> None:
     assert _resolve_portable_device("tinygrad", token, None) == token
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_codec_round_trips_runtime_accelerator_device() -> None:
     """End-to-end corr_1 pin: a legit recorded accelerator token is NOT silently
     relocated to the runtime default by the codec.
@@ -234,7 +232,6 @@ _SINK_TOKENS = [
 ]
 
 
-@pytest.mark.smoke_cells("test_tinygrad_io_sink_bases_refused[disk]")
 @pytest.mark.parametrize("token", _SINK_TOKENS)
 def test_tinygrad_io_sink_bases_refused(token: str) -> None:
     """Every file/socket/fabric sink base is refused, index suffix or not.
@@ -247,6 +244,8 @@ def test_tinygrad_io_sink_bases_refused(token: str) -> None:
     assert _resolve_portable_device("tinygrad", token, None) is None
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_sink_exclude_precedes_runtime_membership() -> None:
     """Ordering pin: ``disk`` is refused even though the runtime NAMES it.
 
@@ -303,6 +302,7 @@ def _build_tinygrad_bundle(tmp_path: Path) -> Path:
     return bundle
 
 
+@pytest.mark.rare
 def test_tinygrad_disk_device_creates_no_file(tmp_path: Path) -> None:
     """A ``disk:<abs path>`` device token on default ``tl.load()`` writes NO file."""
 

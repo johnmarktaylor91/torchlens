@@ -427,9 +427,6 @@ def test_returned_predicate_remains_a_conditional_consumer() -> None:
     assert predicate.label in trace.internally_terminated_bool_ops
 
 
-@pytest.mark.smoke_cells(
-    "test_conditional_evaluation_entry_edges_are_distinct_upstream_layers[model3-input_tensor3]"
-)
 @pytest.mark.parametrize(
     ("model", "input_tensor"),
     [
@@ -547,6 +544,7 @@ class WrittenBufferBranchModel(nn.Module):
         return y * 2
 
 
+@pytest.mark.smoke
 def test_buffer_merge_repoints_step5_conditional_edges(monkeypatch) -> None:
     """A merged-away buffer's conditional edges repoint to the survivor.
 

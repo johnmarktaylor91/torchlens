@@ -105,10 +105,13 @@ optional dependency.
   the functions).
 - `_hf_processor.py` (used by `transformers.py`): `_resolve_hf_processor(model, name_or_path)`
   loads the `AutoProcessor` for a modality dict (cache first, then the Hub unless offline)
-  and refuses typed `preprocessing_unresolved` when it cannot; `_load_hf_processor` is the
-  one network seam tests patch; `_make_multimodal_transform(processor)` builds the
-  `input_transform`. The auto-route claims on `name_or_path` alone (no cache or Hub I/O
-  in detection); a dict on a model with an attached `model.processor` is coerced in
+  and refuses typed `preprocessing_unresolved` when it cannot, through the one raise site
+  `_hf_refusals.refuse_preprocessing_unresolved` (shared with the image cascade);
+  `_load_hf_processor` is the one network seam tests patch; `_make_multimodal_transform(processor)`
+  builds the `input_transform`. The auto-route claims a `transformers` `PreTrainedModel`
+  with a `name_or_path` on shape alone (no cache or Hub I/O in detection); any other named
+  model is claimed only when its processor is in the local cache, else it keeps the plain
+  path. A dict on a model with an attached `model.processor` is coerced in
   `torchlens/_input_coerce.py` instead. The same resolution reaches `Trace.run`, `tl.record`,
   `tl.recording.dry_run`, `tl.validation.validate_backward_pass` and the `tl.debug` entries through that coercion
   door: `autoroute/_builtin_input.py` installs `hf_input_claims` / `hf_input_transform` on

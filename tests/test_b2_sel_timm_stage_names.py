@@ -1,4 +1,4 @@
-"""U26.1 acceptance: every timm stage name in both wrapper types, plus ``fc``, resolves.
+"""Acceptance: every timm stage name in both wrapper types, plus ``fc``, resolves.
 
 Executed with timm installed (it is in the ``test`` and ``hf`` extras): resnet18
 ``features_only`` builds a ``FeatureListNet`` (5 stages), vit_tiny ``features_only``

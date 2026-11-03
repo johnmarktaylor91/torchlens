@@ -135,7 +135,6 @@ class TestTraceTrainModeCarveOut:
         # The refusal teaches the new remedy at the point of failure.
         assert "summary(" in str(excinfo.value)
 
-    @pytest.mark.smoke
     def test_summary_grad_transform_passes(self) -> None:
         model = _model()
         x = torch.randn(2, 4, requires_grad=True)
@@ -164,7 +163,9 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=CaptureSpec(save_out=True, save_grad=True),
+            recording=tl.options.RecordingOptions(
+                default_op=CaptureSpec(save_out=True, save_grad=True)
+            ),
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(_histo64), save_raw_activations=False
             ),
@@ -187,7 +188,9 @@ class TestFastlogCarveOut:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, save_grad=True),
+                recording=tl.options.RecordingOptions(
+                    default_op=CaptureSpec(save_out=True, save_grad=True)
+                ),
                 capture=tl.options.CaptureOptions(activation_transform=_histo64),
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"
@@ -200,8 +203,7 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=True,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(default_op=True, include_source_events=True),
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(_histo64), save_raw_activations=False
             ),
@@ -216,7 +218,6 @@ class TestFastlogCarveOut:
 class TestStreamingTripwireUnchanged:
     """The streaming serialization validator is NOT relaxed by the role."""
 
-    @pytest.mark.smoke
     def test_summary_non_tensor_output_refuses_under_streaming(self, tmp_path) -> None:
         from torchlens._io import ArtifactError
 

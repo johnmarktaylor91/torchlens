@@ -121,6 +121,13 @@ class AuthorityAdapter:
         Cheap predicate: does this object look like this authority kind?
     adapt:
         Normalizer: authority object -> :class:`Resolution`.
+
+    Examples
+    --------
+    >>> adapter = AuthorityAdapter("demo", lambda obj: False,
+    ...                            lambda obj: tl.preprocessing.unknown_resolution("demo"))
+    >>> adapter.name, adapter.probe(object())
+    ('demo', False)
     """
 
     name: str
@@ -598,6 +605,16 @@ def register_authority_adapter(
         Cheap predicate over candidate authority objects.
     adapt:
         Normalizer returning a :class:`Resolution`.
+
+    Examples
+    --------
+    >>> def probe(obj):
+    ...     return isinstance(obj, dict) and obj.get("demo_authority_kind") is True
+    >>> def adapt(obj):
+    ...     return tl.preprocessing.unknown_resolution("demo adapter declares nothing")
+    >>> tl.preprocessing.register_authority_adapter("demo_kind", probe, adapt)
+    >>> tl.preprocessing.resolve({"demo_authority_kind": True}).status
+    'unknown'
     """
 
     _REGISTERED_ADAPTERS.insert(0, AuthorityAdapter(name, probe, adapt))
@@ -775,6 +792,14 @@ def resolve(
         Authority record + declared fields + transform (when the authority
         ships one). Nothing resolving is the honest ``unknown``, never a
         TorchLens-authored recipe (memo D7/D9).
+
+    Examples
+    --------
+    >>> resolution = tl.preprocessing.resolve({"mean": [0.5] * 3, "std": [0.5] * 3})
+    >>> resolution.status, resolution.preprocessing.source
+    ('authoritative', 'explicit_declaration')
+    >>> resolution.declared.mean
+    (0.5, 0.5, 0.5)
     """
 
     if authority is not None:

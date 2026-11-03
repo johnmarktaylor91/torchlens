@@ -53,6 +53,20 @@ def circuitsvis_payload(views: list[AttentionView]) -> dict[str, Any]:
         ``{"tokens": [...], "attention": [layer][head][dst][src],
         "disclosure": ...}`` -- the same coordinates and values the static
         renderers draw, with bridge provenance attached.
+
+    Examples
+    --------
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> payload = tl.transformer.circuitsvis_payload([view])
+    >>> payload["tokens"], payload["layers"]
+    (['a', 'b', 'c'], ['blocks.0.attn'])
     """
 
     if not views:
@@ -103,6 +117,22 @@ def circuitsvis_attention(views: list[AttentionView], *, max_bytes: int | None =
         ``tv_bridge_payload_too_large`` above the ceiling (typed, with the
         measured size), or ``tv_bridge_unavailable`` when circuitsvis is
         not installed. The native static path is unaffected either way.
+
+    Examples
+    --------
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> try:
+    ...     tl.transformer.circuitsvis_attention([view], max_bytes=10)
+    ... except tl.errors.RenderError as err:
+    ...     print(err.fields["code"])
+    tv_bridge_payload_too_large
     """
 
     payload = circuitsvis_payload(views)
@@ -153,6 +183,20 @@ def bertviz_tuple(views: list[AttentionView], *, batch: bool = True) -> tuple[to
     -------
     tuple[torch.Tensor, ...]
         One tensor per layer.
+
+    Examples
+    --------
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> attentions = tl.transformer.bertviz_tuple([view])
+    >>> len(attentions), tuple(attentions[0].shape)
+    (1, (1, 2, 3, 3))
     """
 
     if not views:

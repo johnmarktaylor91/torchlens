@@ -341,7 +341,7 @@ def test_dry_run_routes_modality_dict(hf_route: Any) -> None:
     _reference_labels, reference_calls = _reference(model, raw)
     _reset_ledgers()
 
-    tl.recording.dry_run(model, raw)
+    tl.recording.dry_run(model, raw, save=tl.module("text_embed"))
 
     assert _forward_calls[:1] == reference_calls
 

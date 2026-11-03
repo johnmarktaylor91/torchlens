@@ -150,7 +150,7 @@ def _recording_hook(seen: list[torch.Tensor]):
 _IN_PLACE = tl.options.InterventionOptions(confirm_mutation=True)
 
 _DOORS = {
-    "attach_hooks": lambda trace, site, hook: trace.attach_hooks(site, hook) and trace.push(),
+    "attach_hooks": lambda trace, site, hook: trace._attach_hooks(site, hook) and trace.push(),
     "trace_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),
     "fork_do": lambda trace, site, hook: trace.fork("door").do(site, hook),
     "tl_do": lambda trace, site, hook: trace.do(site, hook, intervention=_IN_PLACE),

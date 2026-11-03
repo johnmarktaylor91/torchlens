@@ -233,6 +233,28 @@ def test_check_passes_a_complete_change(tmp_path: Path) -> None:
     assert check.check_lockstep(surface_diff, corpus, head) == []
 
 
+def test_check_owes_no_glossary_entry_for_a_record_constructor_keyword(tmp_path: Path) -> None:
+    """A new keyword that only record constructors take needs no glossary entry."""
+
+    glossary = (
+        "### Records built by TorchLens\n| Record | Meaning |\n| --- | --- |\n"
+        "| `tl.report.Facts` | built by TorchLens |\n| `tl.errors.*` | errors |\n\n"
+        "### Keywords\n`tl.trace`\n"
+    )
+    corpus = _lockstep_repo(tmp_path, glossary=glossary, example="")
+    head = {
+        "root:tl.trace": HEAD["root:tl.trace"],
+        "param:peak": _row("param:peak", "param", "peak", "peak=", "f-p", uses=["tl.report.Facts"]),
+        "param:code": _row(
+            "param:code", "param", "code", "code=", "f-c", uses=["tl.errors.ReadError"]
+        ),
+        "param:k": _row("param:k", "param", "k", "k=", "f-k", uses=["tl.report.Facts", "tl.rank"]),
+    }
+    base = {"root:tl.trace": BASE["root:tl.trace"]}
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert {f.row_id for f in findings if f.problem == "missing"} == {"param:k"}
+
+
 def test_contextual_residue_skips_a_leaf_another_row_keeps(tmp_path: Path) -> None:
     """``.name`` is not stale while another head member still spells it."""
 

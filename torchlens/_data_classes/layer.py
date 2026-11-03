@@ -302,6 +302,14 @@ class Layer(_SelectionOperand):
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
     reads from ``ops[0].out``).
+
+    Examples
+    --------
+    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> type(layer).__name__, layer.func_name
+    ('Layer', 'relu')
+    >>> tuple(layer.out.shape)
+    (1, 4, 8, 8)
     """
 
     if TYPE_CHECKING:
@@ -1618,44 +1626,6 @@ class Layer(_SelectionOperand):
             self._intervention_site(),
             value,
             strict=strict,
-            confirm_mutation=confirm_mutation,
-        )
-
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this layer through the owning Trace.
-
-        Parameters
-        ----------
-        hook:
-            Hook or helper to attach to this layer.
-        *extra_hooks:
-            Additional hooks to compose on this layer in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Any
-            Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-        """
-
-        return self._source_trace_or_error().attach_hooks(
-            self._intervention_site(),
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
             confirm_mutation=confirm_mutation,
         )
 

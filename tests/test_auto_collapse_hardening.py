@@ -58,6 +58,11 @@ from torchlens._visualization._segment_descriptors import (
     _make_child_segment_descriptor,
     _op_segment_owner_key,
 )
+from torchlens._visualization._trace_collapse import (
+    collapse_order as _collapse_order,
+    collapse_plan as _collapse_plan,
+    collapse_schedule as _collapse_schedule,
+)
 from torchlens._visualization.auto_collapse import _make_run_fold, analyze_collapse
 from torchlens._visualization.collapse_optimizer import (
     _RESULT_CACHE,
@@ -258,9 +263,9 @@ def test_collapse_surface_survives_multipass_submodule(depth, tmp_path):
     model = DoubleCall(depth).eval()
     trace = tl.trace(model, torch.randn(2, 8))
     for mode in ("auto", "max", 0.5):
-        plan = trace.collapse_plan(mode=mode)
+        plan = _collapse_plan(trace, mode=mode)
         assert plan.total > 0
-    schedule = trace.collapse_schedule()
+    schedule = _collapse_schedule(trace)
     assert schedule.steps[0].visible_count >= schedule.steps[-1].visible_count
     order = trace.module_collapse_order
     assert isinstance(order, list) and order
@@ -294,7 +299,7 @@ def test_segment_collision_render_parity(tmp_path):
 
     model = CollidingSegments().eval()
     trace = tl.trace(model, torch.randn(2, 8))
-    plan = trace.collapse_plan(mode="max")
+    plan = _collapse_plan(trace, mode="max")
     out = tmp_path / "collision"
     trace.draw(
         file_format="svg",
@@ -319,7 +324,7 @@ def test_multipass_op_segments_render_distinct(builder, tmp_path):
 
     model = builder().eval()
     trace = tl.trace(model, torch.randn(2, 8))
-    plan = trace.collapse_plan(mode="max")
+    plan = _collapse_plan(trace, mode="max")
     result = select_collapse_plan(trace, RenderContext(), mode="max")
     descriptors = result.segments or {}
     assert len(descriptors) == _plan_segment_node_count(result.plan)
@@ -531,7 +536,7 @@ def test_multipass_pass_occurrence_conservation_and_render_parity(builder, requi
         ]
         assert later_pass_boxes, "multi-call fold representative must render later passes"
 
-    schedule = trace.collapse_schedule()
+    schedule = _collapse_schedule(trace)
     assert schedule.steps[-1].visible_count == max_result.plan.total
 
     for mode in ("auto", "max", 0.5, 1.0):
@@ -567,7 +572,7 @@ def test_schedule_collapsed_addresses_not_empty_when_hiding():
 
     model = nn.Sequential(*[nn.Linear(8, 8) for _ in range(20)]).eval()
     trace = tl.trace(model, torch.randn(2, 8))
-    schedule = trace.collapse_schedule()
+    schedule = _collapse_schedule(trace)
     full = schedule.steps[0].visible_count
     for step in schedule.steps:
         if step.visible_count < full:
@@ -585,7 +590,7 @@ def test_schedule_addresses_monotone_superset():
         nn.Sequential(*[ResidualBlock() for _ in range(6)]).eval(),
     ):
         trace = tl.trace(model, torch.randn(2, 8))
-        schedule = trace.collapse_schedule()
+        schedule = _collapse_schedule(trace)
         previous: frozenset = frozenset()
         for step in schedule.steps:
             assert step.collapsed_addresses >= previous
@@ -696,7 +701,7 @@ def test_at_zero_agrees_with_select_level_zero():
         layers += [nn.Linear(8, 8), nn.ReLU()]
     model = nn.Sequential(*layers).eval()
     trace = tl.trace(model, torch.randn(2, 8))
-    schedule = trace.collapse_schedule()
+    schedule = _collapse_schedule(trace)
     full = schedule.steps[0].visible_count
     step = schedule.at(0.0)
     assert step.visible_count == full
@@ -737,12 +742,14 @@ _DETERMINISM_SNIPPET = textwrap.dedent(
 
     m = DC(3).eval()
     log = tl.trace(m, torch.randn(2, 8))
+    from torchlens._visualization._trace_collapse import collapse_plan as _collapse_plan
+    from torchlens._visualization._trace_collapse import collapse_schedule as _collapse_schedule
     pieces = [
-        repr(log.collapse_plan(mode="max")),
-        repr(log.collapse_plan(mode="auto")),
+        repr(_collapse_plan(log, mode="max")),
+        repr(_collapse_plan(log, mode="auto")),
         repr(log.module_collapse_order),
         repr([(s.t, s.visible_count, tuple(sorted(s.collapsed_addresses)))
-              for s in log.collapse_schedule().steps]),
+              for s in _collapse_schedule(log).steps]),
     ]
     print(hashlib.sha256("\\n".join(pieces).encode()).hexdigest())
     """
@@ -878,12 +885,12 @@ def test_op_segment_condensed_auto_max_ladder_surfaces(kind, loops, tmp_path):
         assert len(set(descriptors)) == len(descriptors)
     assert results["t=1.0"].plan == max_result.plan
 
-    schedule = trace.collapse_schedule()
+    schedule = _collapse_schedule(trace)
     assert schedule.steps[-1].visible_count == max_result.plan.total
     for step in schedule.steps:
         assert step.visible_count == step.plan.total
 
-    order = trace.collapse_order(mode="max")
+    order = _collapse_order(trace, mode="max")
     assert isinstance(order, list)
 
     concrete, visible, hidden = _occurrence_witness_partition(trace, max_result)
@@ -898,7 +905,7 @@ def test_op_segment_condensed_auto_max_ladder_surfaces(kind, loops, tmp_path):
             collapse=mode,
             path=str(out),
         )
-        plan = trace.collapse_plan(mode)
+        plan = _collapse_plan(trace, mode)
         rendered = _svg_node_group_count(str(out) + ".svg")
         assert plan.total == rendered, (
             f"draw({mode}): plan.total {plan.total} != rendered SVG nodes {rendered}"

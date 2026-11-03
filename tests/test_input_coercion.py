@@ -345,7 +345,9 @@ def test_fastlog_record_with_attached_tokenizer_string() -> None:
     """Fastlog one-shot recording accepts raw text when a tokenizer is attached."""
 
     model = TokenEmbeddingModel()
-    recording = tl.record(model, "hello world", default_op=True)
+    recording = tl.record(
+        model, "hello world", recording=tl.options.RecordingOptions(default_op=True)
+    )
     assert recording.records
     assert model.tokenizer_calls == [("hello world", "pt")]
 

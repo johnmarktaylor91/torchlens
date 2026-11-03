@@ -70,7 +70,6 @@ def test_plan_check_value_callable_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "plan_check_unsupported"
 
 
-@pytest.mark.smoke
 def test_plan_check_refuted_source_refuses() -> None:
     from torchlens._capture.structure_only import StructureOnlyCapabilityError
 

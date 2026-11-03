@@ -42,6 +42,12 @@ class MergedFinding:
         key-scoped.
     ranks:
         Global ranks the finding cites.
+
+    Examples
+    --------
+    >>> finding = MergedFinding(kind="presence_gap", detail="rank 1 never recorded it", ranks=(1,))
+    >>> finding.to_dict()["kind"], finding.ranks
+    ('presence_gap', (1,))
     """
 
     kind: str
@@ -79,7 +85,15 @@ class MergedFinding:
 
 
 class MergedTraceError(TorchLensError):
-    """Base class for merged-trace errors; ``fields["code"]`` is frozen."""
+    """Base class for merged-trace errors; ``fields["code"]`` is frozen.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.MergeConflictError, MergedTraceError)
+    True
+    >>> issubclass(MergedTraceError, tl.errors.TorchLensError)
+    True
+    """
 
     def __init__(
         self,
@@ -99,7 +113,15 @@ class MergedTraceError(TorchLensError):
 
 class MergeInputError(MergedTraceError, ValueError):
     """A merge input is unusable: not a rank capture, duplicate rank,
-    missing distributed evidence, or an out-of-scope (C1) boundary."""
+    missing distributed evidence, or an out-of-scope (C1) boundary.
+
+    Examples
+    --------
+    >>> issubclass(MergeInputError, tl.errors.MergedTraceError)
+    True
+    >>> issubclass(MergeInputError, ValueError)
+    True
+    """
 
 
 class MergeConflictError(MergedTraceError, RuntimeError):
@@ -109,12 +131,35 @@ class MergeConflictError(MergedTraceError, RuntimeError):
     conflicts, relation violations, order contradictions, or correlation
     cross-check disagreements. A conflicted merge never constructs; the
     graph-free diagnostic escape hatch is ``tl.merge_report(...)``.
+
+    Examples
+    --------
+    >>> issubclass(MergeConflictError, tl.errors.MergedTraceError)
+    True
+    >>> issubclass(MergeConflictError, RuntimeError)
+    True
     """
 
 
 class MergedArtifactError(MergedTraceError, CompatibilityError):
-    """Merged artifact save/load failure: schema, integrity, or tamper."""
+    """Merged artifact save/load failure: schema, integrity, or tamper.
+
+    Examples
+    --------
+    >>> issubclass(MergedArtifactError, tl.errors.MergedTraceError)
+    True
+    >>> issubclass(MergedArtifactError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class MergedSurfaceUnsupportedError(MergedTraceError, RuntimeError):
-    """A refused surface on a merged trace (run/export/validate/selectors)."""
+    """A refused surface on a merged trace (run/export/validate/selectors).
+
+    Examples
+    --------
+    >>> issubclass(MergedSurfaceUnsupportedError, tl.errors.MergedTraceError)
+    True
+    >>> issubclass(MergedSurfaceUnsupportedError, RuntimeError)
+    True
+    """

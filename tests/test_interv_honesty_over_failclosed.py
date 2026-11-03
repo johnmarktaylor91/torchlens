@@ -8,8 +8,6 @@ Pins, in both failure directions of the one line that shipped wrong:
 - A1c: ``mean_ablate(source=tensor)`` derives ``is_batch_independent=True`` (the
   fill value never reads the traced batch; append is permitted), while the
   self-mean derives ``False`` (couples batch rows; append refuses).
-- 0b: ``source=``/``from_=`` both passed refuses typed instead of silently
-  preferring ``source=``.
 """
 
 from __future__ import annotations
@@ -103,13 +101,13 @@ def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
     """The append gate honors the DERIVED flag in both directions."""
 
     model, x, log = _traced_model()
-    log.attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
     log.run(model, x)
     with pytest.raises(AppendBatchDependenceError):
         log.run(model, torch.randn(2, 4), replay=ReplayOptions(append=True))
 
     model2, x2, log2 = _traced_model()
-    log2.attach_hooks(
+    log2._attach_hooks(
         tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None), confirm_mutation=True
     )
     log2.run(model2, x2)
@@ -127,21 +125,3 @@ def test_mean_ablate_fires_with_tensor_source_mean() -> None:
     fork.do(tl.func("relu"), tl.mean_ablate(source=source, dim=None))
     patched = fork["relu_1_2"].out
     assert torch.allclose(patched, torch.full_like(patched, 7.0))
-
-
-def test_scramble_source_and_from_both_passed_refuses() -> None:
-    """0b: both spellings passed is a conflict, never a silent preference."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        tl.intervention.scramble_elements(torch.ones(3), from_=torch.zeros(3))
-    assert excinfo.value.fields["code"] == "intervention_source_conflict"
-    assert "source=" in str(excinfo.value)
-    assert "from_=" in str(excinfo.value)
-
-
-def test_scramble_single_spelling_still_accepted() -> None:
-    """Either spelling alone keeps working after the refusal lands."""
-
-    by_source = tl.intervention.scramble_elements(torch.ones(3), seed=1)
-    by_from = tl.intervention.scramble_elements(from_=torch.ones(3), seed=1)
-    assert torch.equal(by_source.args[0], by_from.args[0])

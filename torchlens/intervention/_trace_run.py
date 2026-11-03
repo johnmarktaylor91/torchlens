@@ -30,7 +30,7 @@ from .._data_classes._trace_rerun_state import (
 from .._data_classes.trace import _USE_STORED_TRANSFORM
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
-from .._fast_live_steer import refusal_code
+from .._fast_live_steer import refusal_code, refuse_unfired_fast_run, stages_user_entries
 from .._fast_run import (
     _FastLiveSession,
     _FastSparseSession,
@@ -487,7 +487,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 "the legacy intervened rerun trace.run(model, x) or capture "
                 "fresh with tl.trace(model, x, intervene=...); to run "
                 "WITHOUT it, detach the staged spec first "
-                "(trace.clear_hooks() or detach_hooks(site=/handle=)).",
+                "(trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
                 code="run_staged_spec_unapplied",
                 remedy="apply the spec via run(model, x) / tl.trace(..., "
                 "intervene=...), or detach the staged hooks before "
@@ -632,8 +632,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             _warn_stateful_live_run_once(trace, live_model)
 
         if fast:
-            from .._fast_live_steer import refuse_unfired_fast_run
-
             with zero_fire_policy_scope(zero_fire_policy):
                 fast_result = run_fast_live_trace(trace, run_inputs, seed=seed, until=until)
                 refuse_unfired_fast_run(fast_result.trace)
@@ -720,8 +718,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     # Any typed refusal (ineligible save scope or target, a real
     # divergence) falls back to the capture rerun below, with the code in
     # ``last_run``. A trace with nothing staged keeps the capture rerun.
-    from .._fast_live_steer import stages_user_entries
-
     fast_refused: str | None = None
     with zero_fire_policy_scope(zero_fire_policy):
         if (
@@ -730,8 +726,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             and replay_options.chunk_size is None
             and stages_user_entries(trace)
         ):
-            from .._fast_live_steer import refuse_unfired_fast_run
-
             fast_done, fast_refused = try_guarded_fast_rerun(
                 trace, run_model, transformed_input, output_transform=resolved_output_transform
             )

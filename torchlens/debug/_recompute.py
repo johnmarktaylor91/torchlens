@@ -76,6 +76,13 @@ def recompute_candidates(trace: Trace, *, budget_gb: float | None = None) -> Rep
         DataFrame described here.
         Candidate rows with exclusion counts in ``df.attrs``; ``source_line``
         is the ``"file:line"`` of the user code that ran the op.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> frame = recompute_candidates(tl.trace(model, x), budget_gb=1e-9).to_pandas()
+    >>> len(frame) > 0, bool(frame["suggested"].any())
+    (True, True)
     """
 
     pd = _require_pandas()

@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped diagnostic helper returns the one ``tl.report.Report``.
+"""Every report-shaped diagnostic helper returns the one ``tl.report.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -168,7 +168,7 @@ def test_hot_path_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = _dead_neurons_rows(trace, dim=None, threshold=0.0)
+    rows, attrs = _dead_neurons_rows(trace, dim=None, max_activation=0.0)
     columns = [
         "op",
         "total_units",

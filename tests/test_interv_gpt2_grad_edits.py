@@ -1,4 +1,4 @@
-"""Gradient-side edits on GPT-2 over every live-backward spelling (U14.5).
+"""Gradient-side edits on GPT-2 over every live-backward spelling.
 
 Every spelling that edits a gradient during a live backward is checked against
 an independent oracle built from plain PyTorch hooks on a deep copy of the same
@@ -229,12 +229,12 @@ def _apply_door(trace: Any, door: str, selector: Any, helper: Any) -> None:
     """Attach one gradient edit to a finished trace through a post-capture door."""
 
     if door == "attach_hooks":
-        trace.attach_hooks(selector, helper, confirm_mutation=True)
+        trace._attach_hooks(selector, helper, confirm_mutation=True)
     elif door == "layer_record":
         # A Layer record addresses its gradient through tl.grad(record) on the trace;
         # Layer.attach_hooks itself edits the activation.
         layer_label = trace.find_sites(selector).first().layer_label
-        trace.attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
+        trace._attach_hooks(tl.grad(trace.layers[layer_label]), helper, confirm_mutation=True)
     else:
         raise AssertionError(door)
 
@@ -421,6 +421,7 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
         )
 
 
+@pytest.mark.smoke
 def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) -> None:
     """do(tl.grad(...), engine='rerun') arms the edit; the next backward matches the oracle."""
 

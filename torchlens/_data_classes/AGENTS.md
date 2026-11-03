@@ -166,7 +166,7 @@ label lists; resolve through the owning Trace accessor when records are needed.
 
 ## Autograd Contract
 
-`Op.save_activation()` is the slow/replay choke point for saved tensor copies.
+`Op._save_activation()` (private: capture-internal payload writer) is the slow/replay choke point for saved tensor copies.
 `backward_ready=True` keeps saved floating tensors graph-connected, rejects contradictory
 detaching/disk-only configs, and must restore all flags in `finally` paths.
 
@@ -279,7 +279,7 @@ layer.ops  # dict[int, Op]
 - `var_names` records bare source assignment target names for an op when
   `save_source_context=True`; inline, unnameable, dynamic-source, attribute, and
   subscript targets are represented as `[]`.
-- `save_activation()` must route through `safe_copy()` and respect `backward_ready`.
+- `_save_activation()` must route through `safe_copy()` and respect `backward_ready`.
 - `TensorLog` was the 2.x name of `Op`; the alias is gone, and a pickle naming it
   refuses as a file saved by torchlens 2.x.
 

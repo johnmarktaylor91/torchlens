@@ -182,7 +182,7 @@ def test_rerun_warns_when_value_dependent_sticky_hook_stops_matching() -> None:
         lambda _op: gate["active"],
         name_hint="runtime_gate",
     )
-    log.attach_hooks(selector, tl.zero_ablate())
+    log._attach_hooks(selector, tl.zero_ablate())
     gate["active"] = False
 
     with pytest.warns(UserWarning, match="fired at zero sites on the new inputs"):
@@ -196,7 +196,7 @@ def test_rerun_matching_sticky_hook_has_no_unfired_warning() -> None:
     """A sticky hook that fires is reconciled without a zero-site warning."""
     model = ReluAdd()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -641,6 +641,7 @@ def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
         dist.destroy_process_group()
 
 
+@pytest.mark.smoke
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
     """One entry's fires can never mask a colliding entry's total miss.
 

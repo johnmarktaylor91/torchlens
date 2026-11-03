@@ -210,6 +210,7 @@ def test_all_sites_equals_label_matches_dot_star(fixture_name, request) -> None:
     assert all(entry.num_selected == entry.mask.numel() for entry in universal)
 
 
+@pytest.mark.smoke
 def test_all_sites_spelling_and_payload() -> None:
     """A named regex selector: same kind and payload, its own repr."""
 

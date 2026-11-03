@@ -1,4 +1,4 @@
-"""Model Explorer's stepless-ledger refusal remedy works as written (R2-11).
+"""Model Explorer's stepless-ledger refusal remedy works as written.
 
 A trace whose episode ledger has no stepped-module address refuses the
 per-step export with the remedy "export with per_step=False"; following that

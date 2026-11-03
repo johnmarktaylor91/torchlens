@@ -261,7 +261,7 @@ def test_fast_run_steers_through_a_module(parent_type: type[nn.Module]) -> None:
         plain = model(x)
     direction = torch.tensor([1.0, -2.0, 0.5])
     trace = tl.trace(model, x)
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.module("parent.inner"), tl.steer(direction, strength=3.0, dim=-1), confirm_mutation=True
     )
     trace.run(model, x)

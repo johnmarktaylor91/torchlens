@@ -44,6 +44,15 @@ class LineageReport(Report):
         Tuples of ``(label, depth, source_line, shape, dtype)``.
     message:
         Human-readable status.
+
+    Examples
+    --------
+    >>> run = tl.trace(model, x)
+    >>> report = tl.debug.lineage(run, "conv2d_2_3")
+    >>> isinstance(report, LineageReport), report.direction
+    (True, 'ancestors')
+    >>> len(report.nodes) > 1
+    True
     """
 
     start_label: str | None
@@ -103,6 +112,15 @@ def lineage(
     -------
     LineageReport
         Traversal result with unavailable lookups reported in ``message``.
+
+    Examples
+    --------
+    >>> run = tl.trace(model, x)
+    >>> report = lineage(run, "conv2d_2_3", max_depth=1)
+    >>> report.start_label.startswith("conv2d_2_3"), len(report.nodes)
+    (True, 2)
+    >>> len(lineage(run, "conv2d_1_1", direction="descendants").nodes) > 1
+    True
     """
 
     start_op, error = _resolve_op(trace, op_or_label)
@@ -453,6 +471,14 @@ def compare(
         activations must match exactly. The coverage line also counts the ops
         that could not be compared and why. The optional view over :func:`_compare_rows` (the
         pandas-free core).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> first, second = tl.trace(model, x), tl.trace(model, x)
+    >>> frame = compare(first, second).to_pandas()
+    >>> frame.attrs["matched"] > 0, frame.attrs["value_diverged"]
+    (True, 0)
     """
 
     rows, attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
@@ -518,6 +544,14 @@ def first_divergence(
     dict[str, Any] | None
         The first diverging row in execution order, or ``None`` when no
         compared row diverged.
+
+    Examples
+    --------
+    >>> first, shifted = tl.trace(model, x), tl.trace(model, x + 1)
+    >>> first_divergence(first, shifted) is not None
+    True
+    >>> first_divergence(first, first) is None
+    True
     """
 
     rows, _attrs = _compare_rows(trace_a, trace_b, rtol=rtol, atol=atol)
@@ -532,7 +566,7 @@ def first_divergence(
 
 
 def dead_neurons_rows(
-    trace: Trace, *, dim: int | None = None, threshold: float = 0.0
+    trace: Trace, *, dim: int | None = None, max_activation: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pandas-free core of :func:`dead_neurons` (agent stage-0 item 4).
 
@@ -543,7 +577,7 @@ def dead_neurons_rows(
     dim:
         Unit axis forced on every op, or ``None`` to pick it per op (see
         :func:`dead_neurons`).
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -586,7 +620,7 @@ def dead_neurons_rows(
         else:
             max_by_unit = out.detach()
             var_by_unit = torch.zeros_like(out.detach())
-        dead_mask = (max_by_unit <= threshold) | (var_by_unit == 0)
+        dead_mask = (max_by_unit <= max_activation) | (var_by_unit == 0)
         dead_indices = torch.nonzero(dead_mask, as_tuple=False).flatten().tolist()
         total_units = int(out.shape[feature_dim])
         dead_count = len(dead_indices)
@@ -606,7 +640,7 @@ def dead_neurons_rows(
 
     attrs: dict[str, Any] = {
         "skipped": skipped,
-        "threshold": threshold,
+        "max_activation": max_activation,
         "dim": dim,
         "note": "single-trace zero-variance is insufficient sample",
         "torchlens_capture_honesty": capture_honesty_facts(trace),
@@ -625,7 +659,7 @@ def _feature_dim(
     return feature_dim if 0 <= feature_dim < out.ndim else None
 
 
-def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0) -> Report:
+def dead_neurons(trace: Trace, *, dim: int | None = None, max_activation: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -644,7 +678,7 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0
         the same-shaped ops it feeds (an activation after a convolution), and
         axis 1 for four or more dimensions. Activations under two dimensions
         get ``reason="invalid-dim"``. An int forces that axis on every op.
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -656,9 +690,16 @@ def dead_neurons(trace: Trace, *, dim: int | None = None, threshold: float = 0.0
         ``sample_dead_idx``, ``reason``, and ``source_line`` (``"file:line"``
         of the user code that ran the op). The optional view over
         :func:`dead_neurons_rows` (the pandas-free core).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> frame = dead_neurons(tl.trace(model, x), dim=1).to_pandas()
+    >>> {"op", "dead_count"}.issubset(frame.columns)
+    True
     """
 
-    rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)
+    rows, attrs = dead_neurons_rows(trace, dim=dim, max_activation=max_activation)
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,

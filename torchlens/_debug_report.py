@@ -171,6 +171,14 @@ class Report:
     ``_report_findings`` (one-line findings, most severe first). Dataclass
     subclasses get ``to_dict()`` and ``to_pandas()`` from their fields.
     DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> report = tl.debug.dtype_range(tl.trace(model, x, save="all"))
+    >>> isinstance(report, Report)
+    True
+    >>> report.report_type, report.status
+    ('DTypeRangeReport', 'clean')
     """
 
     __slots__ = ()

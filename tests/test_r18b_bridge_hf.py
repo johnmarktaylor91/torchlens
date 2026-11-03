@@ -216,26 +216,46 @@ def test_trace_text_explicit_tokenizer_end_to_end(monkeypatch: Any) -> None:
 
 
 def test_processor_gate_claims_on_shape_without_io(monkeypatch: Any) -> None:
-    """The multimodal gate never loads the processor; it claims on model shape.
+    """The multimodal gate claims a ``PreTrainedModel`` on shape and never downloads.
 
-    The fake AutoProcessor raises on any call, so a gate that still probed the
-    cache (or the Hub) would raise here. A model with a ``name_or_path`` is
-    claimed; one without is declined; ``transformers`` must be importable.
+    A ``transformers`` ``PreTrainedModel`` with a ``name_or_path`` is claimed
+    with no processor load at all (the bridge resolves it later, so a cold
+    cache still routes). Any other named model is probed in the local cache
+    only: the fake AutoProcessor raises on any non-cache-only call, and an
+    uncached name declines. A model without a ``name_or_path`` is declined.
     """
 
     import sys
 
+    recorded: list[tuple[str, dict[str, Any]]] = []
+
+    class FakePreTrainedModel:
+        name_or_path = "fixture/hf-model"
+
     class FakeAutoProcessor:
         @classmethod
         def from_pretrained(cls, name_or_path: str, **kwargs: Any) -> Any:
-            raise AssertionError("detection must not resolve the processor")
+            recorded.append((name_or_path, kwargs))
+            if not kwargs.get("local_files_only"):
+                raise RuntimeError("network access attempted in a detection heuristic")
+            if name_or_path == "fixture/uncached":
+                raise OSError("not found in the local cache")
+            return object()
 
     monkeypatch.setitem(
-        sys.modules, "transformers", SimpleNamespace(AutoProcessor=FakeAutoProcessor)
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoProcessor=FakeAutoProcessor, PreTrainedModel=FakePreTrainedModel),
     )
 
+    assert hf._can_resolve_hf_processor(FakePreTrainedModel()) is True
+    assert recorded == []
     assert hf._can_resolve_hf_processor(SimpleNamespace(name_or_path="fixture/model")) is True
-    assert hf._can_resolve_hf_processor(SimpleNamespace(name_or_path="fixture/uncached")) is True
+    assert hf._can_resolve_hf_processor(SimpleNamespace(name_or_path="fixture/uncached")) is False
+    assert recorded == [
+        ("fixture/model", {"local_files_only": True}),
+        ("fixture/uncached", {"local_files_only": True}),
+    ]
     assert hf._can_resolve_hf_processor(SimpleNamespace()) is False
 
 

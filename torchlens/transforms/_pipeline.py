@@ -59,6 +59,16 @@ class OpaqueStep:
         The live callable, or ``None`` when rehydrated from an artifact
         record (identification cannot resurrect code; applying an
         unresolved opaque step refuses typed).
+
+    Examples
+    --------
+    >>> def double(tensor):
+    ...     return 2 * tensor
+    >>> step = tl.transforms.chain(double).steps[0]
+    >>> isinstance(step, OpaqueStep), step.qualname, step.context_capable
+    (True, 'double', False)
+    >>> step.apply(torch.ones(1, 2), None).tolist()
+    [[2.0, 2.0]]
     """
 
     module: str
@@ -132,6 +142,16 @@ class TransformPipeline:
     steps:
         Ordered steps: frozen :class:`TransformSpec` rows and/or
         :class:`OpaqueStep` disclosures. Applied left to right.
+
+    Examples
+    --------
+    >>> pipe = tl.transforms.chain(tl.transforms.magnitude(), tl.transforms.flatten())
+    >>> isinstance(pipe, TransformPipeline), len(pipe.steps), pipe.resume_verifiable
+    (True, 2, True)
+    >>> [step.output.shape for step in pipe.plan(tl.transforms.TensorSpec.from_tensor(x))]
+    [(None, 3, 8, 8), (None, 192)]
+    >>> pipe.apply(x).shape
+    torch.Size([1, 192])
     """
 
     steps: tuple[TransformSpec | OpaqueStep, ...]
@@ -351,6 +371,15 @@ def apply_dispatch(step: Any, tensor: torch.Tensor, ctx: TransformContext | None
     torch.Tensor
         The callable's result. Dispatch is one isinstance check — never
         ``inspect.signature`` (15 measured counterexamples).
+
+    Examples
+    --------
+    >>> apply_dispatch(torch.neg, torch.ones(1, 2), None).tolist()
+    [[-1.0, -1.0]]
+    >>> tagged = tl.transforms.with_context(lambda tensor, ctx: tensor * len(ctx.site_label))
+    >>> ctx = tl.transforms.TransformContext(site_label="abc")
+    >>> apply_dispatch(tagged, torch.ones(1, 2), ctx).tolist()
+    [[3.0, 3.0]]
     """
 
     if wants_context(step):

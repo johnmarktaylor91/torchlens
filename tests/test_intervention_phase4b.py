@@ -6,7 +6,6 @@ from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 import torch
 
 import torchlens as tl
@@ -109,7 +108,6 @@ def _component_values(paths: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
     return values
 
 
-@pytest.mark.smoke
 def test_path_walker_supports_required_output_containers() -> None:
     """Path-aware traversal preserves supported output container structure."""
 
@@ -291,7 +289,10 @@ def test_internal_edge_uses_extend_parent_arg_locs_without_replacing_them() -> N
 
 
 def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persisted() -> None:
-    """Default capture avoids templates but keeps graph edge provenance."""
+    """Default capture records argument templates and keeps graph edge provenance.
+
+    The name predates templates-by-default; it is kept so ledgers that cite it stay valid.
+    """
 
     class TinyModel(torch.nn.Module):
         """Simple model for non-ready gating."""
@@ -314,8 +315,10 @@ def test_non_intervention_ready_capture_leaves_templates_empty_and_edges_persist
 
     log = tl.trace(TinyModel(), torch.randn(2, 3))
 
-    assert all(layer.args_template is None for layer in log._layer_list)
-    assert all(layer.kwargs_template is None for layer in log._layer_list)
+    assert log.is_replayable is False
+    compute_layers = [layer for layer in log._layer_list if layer.func is not None]
+    assert compute_layers
+    assert all(layer.args_template is not None for layer in compute_layers)
     edge_layers = [layer for layer in log._layer_list if layer._edge_uses]
     assert edge_layers
     for layer in edge_layers:

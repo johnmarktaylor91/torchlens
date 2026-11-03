@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import pickle
 
-import pytest
-
 import torchlens._io as tl_io
 from torchlens._io import format_contract, format_errors
 
@@ -96,7 +94,6 @@ def test_split_modules_declare_their_ruled_layers() -> None:
     assert tl_io.__tl_layer__ == "FACADE"
 
 
-@pytest.mark.smoke
 def test_fastlog_dispositions_are_declared() -> None:
     """Item 4 label rows: storage_disk L2, recover/cleanup L3, types vocabulary."""
 

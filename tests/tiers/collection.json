@@ -1,73 +1,73 @@
 {
   "schema": 1,
-  "source_commit": "210da189",
+  "source_commit": "0e5d885c9",
   "environment": "pinned smoke row: python 3.10, torch 2.13.0+cpu",
-  "durations_source": "per-file means from tests/tiers/durations.csv, the per-file summary of per-test durations of the not-rare, not-slow, not-serial tier at ad2e0300 (-n 8, line-coverage tracing on; an upper bound)",
+  "durations_source": "tests/tiers/durations.csv",
   "estimate_workers": 4,
   "tiers": {
     "smoke": {
-      "count": 1474,
-      "files": 456,
-      "id_digest": 123516539903122,
+      "count": 384,
+      "files": 161,
+      "id_digest": 124526507575007,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"smoke\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 1429,
-        "tests_without_duration": 45,
-        "serial_seconds": 426.9,
-        "n4_seconds": 106.7
+        "tests_with_duration": 329,
+        "tests_without_duration": 55,
+        "serial_seconds": 229.8,
+        "n4_seconds": 57.5
       }
     },
     "mid": {
-      "count": 23957,
-      "files": 1552,
-      "id_digest": 145171635103776,
+      "count": 23690,
+      "files": 1538,
+      "id_digest": 279768514364515,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow and not heavy\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 22264,
-        "tests_without_duration": 1693,
-        "serial_seconds": 10033.3,
-        "n4_seconds": 2508.3
+        "tests_with_duration": 21127,
+        "tests_without_duration": 2563,
+        "serial_seconds": 9756.1,
+        "n4_seconds": 2439.0
       }
     },
     "not_slow": {
-      "count": 26321,
-      "files": 1620,
-      "id_digest": 247162204897126,
+      "count": 24781,
+      "files": 1605,
+      "id_digest": 117300067461775,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not rare and not slow\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 24023,
-        "tests_without_duration": 2298,
-        "serial_seconds": 12049.0,
-        "n4_seconds": 3012.3
+        "tests_with_duration": 22102,
+        "tests_without_duration": 2679,
+        "serial_seconds": 11527.7,
+        "n4_seconds": 2881.9
       }
     },
     "all": {
-      "count": 39361,
-      "files": 1650,
-      "id_digest": 238461799085822,
+      "count": 27644,
+      "files": 1639,
+      "id_digest": 198926597801421,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 24539,
-        "tests_without_duration": 14822,
-        "serial_seconds": 13613.5,
-        "n4_seconds": 3403.4
+        "tests_with_duration": 22670,
+        "tests_without_duration": 4974,
+        "serial_seconds": 13099.1,
+        "n4_seconds": 3274.8
       }
     },
     "unmarked": {
-      "count": 22483,
-      "files": 1539,
-      "id_digest": 55549303804527,
+      "count": 23306,
+      "files": 1537,
+      "id_digest": 249190476775547,
       "collect_command": "CI=true OMP_NUM_THREADS=1 TORCHLENS_ORACLE_ENFORCE=1 python -m pytest --collect-only -q -o addopts= -p no:randomly -p no:cacheprovider -m \"not smoke and not heavy and not slow and not rare\" tests/",
       "wall_estimate": {
         "method": "per_file_mean",
-        "tests_with_duration": 20835,
-        "tests_without_duration": 1648,
-        "serial_seconds": 9606.4,
-        "n4_seconds": 2401.6
+        "tests_with_duration": 20798,
+        "tests_without_duration": 2508,
+        "serial_seconds": 9526.3,
+        "n4_seconds": 2381.6
       }
     }
   }

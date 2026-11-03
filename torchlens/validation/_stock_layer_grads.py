@@ -112,7 +112,7 @@ def _make_post_hook(
 def _make_tensor_grad_hook(
     collector: _StockModuleGradCollector,
     key: ModuleOutputGradKey,
-) -> Callable[[torch.Tensor], torch.Tensor]:
+) -> Callable[[torch.Tensor | None], torch.Tensor | None]:
     """Build a tensor hook that snapshots one module-output gradient.
 
     Parameters
@@ -124,17 +124,42 @@ def _make_tensor_grad_hook(
 
     Returns
     -------
-    Callable[[torch.Tensor], torch.Tensor]
+    Callable[[torch.Tensor | None], torch.Tensor | None]
         Tensor hook that records a clone and returns the incoming gradient unchanged.
     """
 
-    def _tensor_grad_hook(grad: torch.Tensor) -> torch.Tensor:
-        """Snapshot a stock module-output gradient without retaining output grads."""
+    def _tensor_grad_hook(grad: torch.Tensor | None) -> torch.Tensor | None:
+        """Snapshot a stock module-output gradient without retaining output grads.
 
+        Autograd hands ``None`` to a tensor hook when the tensor is one output
+        of a multi-output node (``split``, ``unbind``, an LSTM) whose sibling
+        carried the gradient and this one did not; no gradient reached the
+        output, so nothing is recorded and the key stays "reached, no grad".
+        """
+
+        if grad is None:
+            return None
         collector.stock_module_output_grads[key] = grad.detach().clone()
         return grad
 
     return _tensor_grad_hook
+
+
+def _to_tuple_method(obj: Any) -> Callable[[], Any] | None:
+    """Return ``obj.to_tuple`` when it is a callable attribute, else ``None``.
+
+    Probed through ``getattr`` under a broad ``except``: a ``dict`` subclass
+    whose ``__getattr__`` raises ``KeyError`` for a missing name (the
+    ``Pack``/``AttrDict`` idiom) defeats ``hasattr``, which swallows only
+    ``AttributeError``, and a model output of that shape used to escape the
+    stock pass as an untyped ``KeyError``.
+    """
+
+    try:
+        method = getattr(obj, "to_tuple", None)
+    except Exception:  # noqa: BLE001 -- a hostile ``__getattr__`` is the guarded case
+        return None
+    return method if callable(method) else None
 
 
 def _first_leaf_tensor(obj: Any) -> torch.Tensor | None:
@@ -155,12 +180,8 @@ def _first_leaf_tensor(obj: Any) -> torch.Tensor | None:
         if isinstance(obj, nn.Parameter):
             return None
         return obj
-    if (
-        hasattr(obj, "to_tuple")
-        and callable(getattr(obj, "to_tuple", None))
-        and isinstance(obj, dict)
-    ):
-        to_tuple = getattr(obj, "to_tuple")
+    to_tuple = _to_tuple_method(obj)
+    if to_tuple is not None and isinstance(obj, dict):
         try:
             leaf = _first_leaf_tensor(to_tuple())
         except Exception:
@@ -179,9 +200,9 @@ def _first_leaf_tensor(obj: Any) -> torch.Tensor | None:
             if leaf is not None:
                 return leaf
         return None
-    if hasattr(obj, "to_tuple") and callable(getattr(obj, "to_tuple", None)):
+    if to_tuple is not None:
         try:
-            return _first_leaf_tensor(obj.to_tuple())
+            return _first_leaf_tensor(to_tuple())
         except Exception:
             return None
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
@@ -210,12 +231,8 @@ def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
         if isinstance(obj, nn.Parameter):
             return []
         return [obj]
-    if (
-        hasattr(obj, "to_tuple")
-        and callable(getattr(obj, "to_tuple", None))
-        and isinstance(obj, dict)
-    ):
-        to_tuple = getattr(obj, "to_tuple")
+    to_tuple = _to_tuple_method(obj)
+    if to_tuple is not None and isinstance(obj, dict):
         try:
             return _tensor_leaves(to_tuple())
         except Exception:
@@ -230,9 +247,9 @@ def _tensor_leaves(obj: Any) -> list[torch.Tensor]:
         for value in obj.values():
             leaves.extend(_tensor_leaves(value))
         return leaves
-    if hasattr(obj, "to_tuple") and callable(getattr(obj, "to_tuple", None)):
+    if to_tuple is not None:
         try:
-            return _tensor_leaves(obj.to_tuple())
+            return _tensor_leaves(to_tuple())
         except Exception:
             return []
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):

@@ -74,6 +74,7 @@ class TestFrozenPhase:
         value = store.cell_get(2, 2)
         assert type(value) is float and value.hex() == (-0.0).hex()
 
+    @pytest.mark.smoke
     def test_subclass_and_mixed_values_stay_exact_type(self):
         class Marked(int):
             pass
@@ -123,6 +124,7 @@ class TestFrozenPhase:
         column = store._columns[2]
         assert all(value is not big for value in column.values)
 
+    @pytest.mark.smoke
     def test_post_freeze_packed_delete_tombstones(self):
         store = _store_with_rows(1)
         store.cell_set(0, 1, 9)
@@ -131,6 +133,7 @@ class TestFrozenPhase:
         assert store.cell_get(0, 1) is _MISSING
         assert store.cell_del(0, 1) is False
 
+    @pytest.mark.smoke
     def test_no_new_rows_after_freeze(self):
         store = _store_with_rows(1)
         store.freeze()
@@ -162,6 +165,7 @@ class TestSmallStoreSeal:
         assert store.cell_get(0, 1) == "post-seal"
         assert store.cell_del(0, 1) is True
 
+    @pytest.mark.smoke
     def test_adopt_row_bulk_ingress(self):
         store = OpRowStore(LAYOUT)
         row = store.adopt_row(["a", _MISSING, None, 4])
@@ -174,6 +178,7 @@ class TestSmallStoreSeal:
 
 
 class TestDetachedStore:
+    @pytest.mark.smoke
     def test_single_row_roundtrip(self):
         store = DetachedOpStore(LAYOUT)
         store.cell_set(0, 0, "x")

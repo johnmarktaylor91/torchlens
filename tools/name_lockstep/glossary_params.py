@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Any
 
 from name_lockstep import docsections, inventory
+from name_lockstep.records import is_record, record_classes
 
 #: Parameter kinds a caller passes by name.
 _NAMED_KINDS = frozenset({inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY})
@@ -278,6 +279,21 @@ def _names(owner: str, aliases: Iterable[str]) -> bool:
     return False
 
 
+def _is_record_constructor(row: dict[str, Any], records: frozenset[str]) -> bool:
+    """Return whether a parameter row belongs to the constructor of a record class.
+
+    Only the class's own spellings count: a public class that inherits a record's
+    constructor keeps its keywords public.
+    """
+
+    if not row["constructor"]:
+        return False
+    aliases: list[str] = list(row["aliases"])
+    if row["defined_by"] != row["callable"] and row["defined_by"] in aliases:
+        aliases = aliases[: aliases.index(row["defined_by"])]
+    return any(is_record(alias, records) for alias in aliases)
+
+
 def missing(rows: Iterable[dict[str, Any]], glossary: str) -> list[dict[str, Any]]:
     """Return the parameter rows the glossary does not name.
 
@@ -292,13 +308,16 @@ def missing(rows: Iterable[dict[str, Any]], glossary: str) -> list[dict[str, Any
     -------
     list[dict[str, Any]]
         Rows with no keyword row naming their callable; each gains ``keyword_row`` (whether
-        any row for the keyword exists).
+        any row for the keyword exists). Constructor rows of record classes need no row.
     """
 
     table = keyword_rows(glossary)
     owners = {name: set().union(*map(_named_owners, texts)) for name, texts in table.items()}
+    records = record_classes(glossary)
     out: list[dict[str, Any]] = []
     for row in rows:
+        if _is_record_constructor(row, records):
+            continue
         named = owners.get(row["param"], set())
         if not any(_names(owner, row["aliases"]) for owner in named):
             out.append({**row, "keyword_row": row["param"] in table})
@@ -320,13 +339,17 @@ def stale(rows: Iterable[dict[str, Any]], glossary: str) -> list[tuple[str, str]
     -------
     list[tuple[str, str]]
         Sorted pairs; an owner that names no public callable (a private helper, a field
-        table) is not judged.
+        table) is not judged. A record class takes no public keyword, so every row naming
+        one is stale.
     """
 
+    records = record_classes(glossary)
     takes: dict[str, set[str]] = {}
     aliases: dict[str, list[str]] = {}
     for row in rows:
-        takes.setdefault(row["callable"], set()).add(row["param"])
+        takes.setdefault(row["callable"], set())
+        if not _is_record_constructor(row, records):
+            takes[row["callable"]].add(row["param"])
         aliases[row["callable"]] = row["aliases"]
     found: set[tuple[str, str]] = set()
     for name, texts in keyword_rows(glossary).items():

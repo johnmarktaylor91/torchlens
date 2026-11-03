@@ -57,7 +57,6 @@ def _needs_switch() -> None:
         pytest.skip("torch build without the public torch.backends.mha fast-path switch")
 
 
-@pytest.mark.smoke
 def test_eager_takes_the_fused_path_and_capture_records_the_unfused_program() -> None:
     _needs_switch()
     model, x = _model_and_input()

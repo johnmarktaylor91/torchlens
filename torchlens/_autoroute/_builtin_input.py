@@ -6,7 +6,7 @@ from typing import Any, cast
 
 from torchlens._autoroute.input import register
 from torchlens._data_classes.trace import Trace
-from torchlens._input_route import _install_route
+from torchlens._input_route import _apply_hf_processor, _install_route
 from torchlens.bridge import transformers as _hf
 
 
@@ -114,10 +114,7 @@ def hf_input_transform(model: Any, payload: Any) -> Any:
         )
         return transform(payload)
     if _hf._is_hf_multimodal_input(payload):
-        from torchlens._input_route import _apply_hf_processor
-        from torchlens.bridge._hf_processor import _resolve_hf_processor
-
-        processor = _resolve_hf_processor(model, str(_hf._model_name_or_path(model)))
+        processor = _hf._resolve_hf_processor(model, str(_hf._model_name_or_path(model)))
         return _apply_hf_processor(
             processor, payload, sampling_rate=getattr(model, "sampling_rate", None)
         )

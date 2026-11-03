@@ -47,7 +47,7 @@ def test_edited_rerun_does_not_trip_divergence_detector() -> None:
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         fork.run(model, x)
@@ -68,7 +68,7 @@ def test_edited_rerun_strict_does_not_raise() -> None:
     x = torch.randn(2, 3, 8, 8)
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     fork = log.fork()
-    fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.5)))
     fork.run(model, x, replay=tl.options.ReplayOptions(strict=True))
 
 
@@ -93,7 +93,6 @@ def test_bundle_retained_bytes_lower_bound_aggregation() -> None:
     assert report["unmetered_members"] == []
 
 
-@pytest.mark.smoke
 def test_bundle_retained_bytes_names_unmetered_members() -> None:
     torch.manual_seed(1)
     x = torch.randn(2, 3, 8, 8)
@@ -105,7 +104,6 @@ def test_bundle_retained_bytes_names_unmetered_members() -> None:
     assert report["unmetered_members"] == ["legacy"]
 
 
-@pytest.mark.smoke
 def test_retention_preflight_refuses_typed_before_any_work() -> None:
     with pytest.raises(BundleExperimentError) as excinfo:
         preflight_retention_projection(

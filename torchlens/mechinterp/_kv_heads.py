@@ -136,6 +136,21 @@ def patch_query_heads_grid(  # noqa: PLR0913 -- mirrors the grid driver's signat
         call) matches, ``mi_grid_axes_invalid`` for a site other than k/v,
         ``mi_head_geometry_unavailable`` for an out-of-range head, and the
         grid driver's own codes (budget, length mismatch, missing payloads).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import LlamaConfig, LlamaForCausalLM
+    >>> lm = LlamaForCausalLM(LlamaConfig(
+    ...     num_hidden_layers=1, hidden_size=8, intermediate_size=16, num_attention_heads=4,
+    ...     num_key_value_heads=2, vocab_size=32, max_position_embeddings=16, use_cache=False,
+    ...     attn_implementation="eager")).eval()
+    >>> a, b = torch.randint(0, 32, (2, 1, 6))
+    >>> grid = tl.mechinterp.patch_query_heads_grid(
+    ...     lm, a, b, lambda t: t.modules["lm_head"].out[0, -1, 3], heads=[0, 1])
+    patching grid: 2 cells x ~...s/rerun ~= ...s total
+    >>> grid.axes, tuple(grid.values.shape)
+    (('layer', 'head'), (1, 2))
     """
 
     _validate_site(site)

@@ -213,7 +213,6 @@ def _drop_prepared_parameter_mutations(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(wrappers, "_parameter_mutation_output_for_logging", _drop)
 
 
-@pytest.mark.smoke
 def test_validation_still_fails_when_the_parameter_mutation_is_dropped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

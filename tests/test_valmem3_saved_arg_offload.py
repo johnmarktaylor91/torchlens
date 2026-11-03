@@ -22,6 +22,7 @@ devices while it checks that layer. These tests pin:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Callable
 from typing import Any
 from unittest import mock
 
@@ -50,7 +51,18 @@ def _accelerator() -> str | None:
 
 
 _ACCEL = _accelerator()
-_NEEDS_ACCEL = pytest.mark.skipif(_ACCEL is None, reason="needs a CUDA or MPS device")
+_SKIP_WITHOUT_ACCEL = pytest.mark.skipif(_ACCEL is None, reason="needs a CUDA or MPS device")
+
+
+def _needs_accel(test: Callable[..., Any]) -> Callable[..., Any]:
+    """Skip ``test`` without an accelerator; mark it ``cuda`` unless this host's is MPS.
+
+    The GPU leg selects ``-m cuda``, so on a CUDA or CPU host these tests carry the
+    ``cuda`` marker (a CPU host skips them with a stated reason either way). On an
+    MPS host they stay unmarked so the MPS run keeps them.
+    """
+    marked = _SKIP_WITHOUT_ACCEL(test)
+    return marked if _ACCEL == "mps" else pytest.mark.cuda(marked)
 
 
 class _Offsets(nn.Module):
@@ -385,7 +397,7 @@ def test_a_mid_forward_dtype_hop_validates(output_device: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() -> None:
     torch.manual_seed(0)
     assert _ACCEL is not None
@@ -418,7 +430,7 @@ def test_validation_capture_holds_no_saved_argument_copy_on_the_accelerator() ->
     assert on_device == [0] and tagged[0] > 0
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 def test_same_output_device_keeps_saved_arguments_on_the_accelerator() -> None:
     torch.manual_seed(0)
     assert _ACCEL is not None
@@ -433,7 +445,7 @@ def test_same_output_device_keeps_saved_arguments_on_the_accelerator() -> None:
     assert verdict and devices == [{_ACCEL}]
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 def test_a_user_trace_keeps_saved_arguments_on_each_ops_device() -> None:
     torch.manual_seed(0)
     assert _ACCEL is not None
@@ -449,7 +461,7 @@ def test_a_user_trace_keeps_saved_arguments_on_each_ops_device() -> None:
     assert not any(hasattr(t, _TAG) for t in saved)
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 @pytest.mark.parametrize("model_name", ["offsets", "device_hop", "dtype_hop"])
 def test_accelerator_verdicts_equal_the_same_device_run(model_name: str) -> None:
     assert _ACCEL is not None
@@ -481,7 +493,7 @@ def _corrupt_saved_weight(trace: Any, model: Any) -> None:
         linear.saved_args[1].add_(1.0)
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 @pytest.mark.parametrize(
     "corrupt", [_corrupt_relu_input, _corrupt_scale_argument, _corrupt_saved_weight]
 )
@@ -542,7 +554,7 @@ def _corrupt_matmul_weight(trace: Any, model: Any) -> None:
         matmul.saved_args[1].add_(1.0)
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 @pytest.mark.parametrize(
     "index", range(4), ids=["maml", "two_losses", "second_order", "two_arities"]
 )
@@ -560,7 +572,7 @@ def test_in_forward_autograd_grad_models_match_the_same_device_run(
     assert results["cpu"] == results["same"]
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 @pytest.mark.parametrize("corrupt", [_corrupt_relu_input, _corrupt_matmul_weight])
 def test_a_corrupted_autograd_grad_model_fails_as_with_same(
     corrupt: Any, monkeypatch: pytest.MonkeyPatch
@@ -578,7 +590,7 @@ def test_a_corrupted_autograd_grad_model_fails_as_with_same(
     assert results["cpu"][0] is False
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 def test_a_tight_budget_still_refuses_real_copies_in_offload_mode() -> None:
     from torchlens._save_budget import SaveBudgetExceededError
 
@@ -591,7 +603,7 @@ def test_a_tight_budget_still_refuses_real_copies_in_offload_mode() -> None:
             tl.validate(model, x, scope="forward", output_device="cpu", save_budget=256)
 
 
-@_NEEDS_ACCEL
+@_needs_accel
 def test_parameter_aliases_alone_do_not_trip_the_validation_budget() -> None:
     from torchlens._save_budget import SaveBudgetExceededError
 

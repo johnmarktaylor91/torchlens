@@ -30,7 +30,6 @@ def trace() -> tl.Trace:
     return tl.trace(_TwoRelu(), torch.randn(3, 4))
 
 
-@pytest.mark.smoke
 def test_set_selector_returns_every_match_as_a_selection(trace: tl.Trace) -> None:
     selection = trace[tl.func("relu")]
     assert isinstance(selection, tl.Selection)
@@ -49,6 +48,7 @@ def test_set_selector_is_never_capped(trace: tl.Trace) -> None:
     assert len(everything) == len(trace._layer_list)
 
 
+@pytest.mark.smoke
 def test_set_selector_with_no_match_is_an_empty_selection(trace: tl.Trace) -> None:
     selection = trace[tl.func("conv2d")]
     assert isinstance(selection, tl.Selection)

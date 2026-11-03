@@ -205,7 +205,6 @@ def _plain_tuple_sort(value: torch.Tensor, *args: Any, **kwargs: Any) -> tuple[t
     return tuple(torch.sort(value, *args, **kwargs))
 
 
-@pytest.mark.smoke_cells("test_structseq_named_runtime_paths_match_positional_saved_paths[topk]")
 @pytest.mark.parametrize("operation", ["sort", "topk", "max", "min", "median"])
 def test_structseq_named_runtime_paths_match_positional_saved_paths(
     operation: str, tmp_path: Path

@@ -33,7 +33,15 @@ __tl_layer__ = "L5"
 
 
 class WatchRenderError(ObservabilityError):
-    """Raised for watch renderer / derived-read refusals (lane F25)."""
+    """Raised for watch renderer / derived-read refusals (lane F25).
+
+    Examples
+    --------
+    >>> issubclass(WatchRenderError, tl.errors.ObservabilityError)
+    True
+    >>> issubclass(WatchRenderError, tl.errors.TorchLensError)
+    True
+    """
 
 
 @dataclass(frozen=True)

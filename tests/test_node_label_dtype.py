@@ -1,4 +1,4 @@
-"""The ``"dtype"`` node label field (walk U06.3).
+"""The ``"dtype"`` node label field.
 
 ``draw(node_label_fields=[..., "dtype", ...])`` adds the node's output dtype
 as one row, framework namespace dropped (``"float16"``, the Keras

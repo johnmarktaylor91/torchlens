@@ -109,7 +109,6 @@ def test_switch_records_rows_and_each_op_serves_its_own() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_switch_off_refuses_typed_and_reports_no_rows() -> None:
     """The default capture records nothing and every accessor refuses typed."""
 
@@ -220,6 +219,7 @@ def test_intervention_capture_with_the_switch_passes_invariants() -> None:
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.smoke
 def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     """Backward rows append after the forward rows and keep their phase."""
 
@@ -241,6 +241,8 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.rare
+@pytest.mark.backend_jax
 def test_non_torch_backend_records_nothing_and_refuses() -> None:
     """A non-torch backend ignores the switch: no profile, typed refusal, invariants hold."""
 

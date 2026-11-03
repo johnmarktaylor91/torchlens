@@ -11,8 +11,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from torchlens._errors import InvalidArgumentError
 from torchlens._input_route import _apply_hf_processor
+from torchlens.bridge._hf_refusals import refuse_preprocessing_unresolved
 
 
 def _load_hf_processor(name_or_path: str) -> Any:
@@ -60,11 +60,10 @@ def _resolve_hf_processor(model: Any, name_or_path: str) -> Any:
     try:
         return _load_hf_processor(name_or_path)
     except Exception as exc:  # the fetch failure is the finding, never a guess
-        raise InvalidArgumentError(
-            f"torchlens.trace: no AutoProcessor resolved for the modality dict "
-            f"input to {type(model).__name__} ({name_or_path!r}): "
-            f"{type(exc).__name__}: {exc}",
-            code="preprocessing_unresolved",
+        refuse_preprocessing_unresolved(
+            model,
+            f"no AutoProcessor resolved for the modality dict input to "
+            f"{type(model).__name__} ({name_or_path!r}): {type(exc).__name__}: {exc}",
             remedy=(
                 "run once with network access so the processor files join the "
                 "model's cache; or attach the processor you built the inputs with, "
@@ -72,12 +71,13 @@ def _resolve_hf_processor(model: Any, name_or_path: str) -> Any:
                 "pass the processor's output yourself, tl.trace(model, (), "
                 "input_kwargs=dict(processor(text=..., images=..., return_tensors='pt')))"
             ),
-            model_type=type(model).__name__,
             resolution_attempt={
+                "source": "hf_auto_processor",
+                "identifier": name_or_path,
                 "name_or_path": name_or_path,
                 "error": f"{type(exc).__name__}: {exc}",
             },
-        ) from exc
+        )
 
 
 def _make_multimodal_transform(processor: Any) -> Callable[[dict[str, Any]], Any]:

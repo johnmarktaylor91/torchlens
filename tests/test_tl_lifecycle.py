@@ -148,7 +148,6 @@ def test_failed_capture_cleans_partial_outputs_buffers_and_params() -> None:
         assert not hasattr(param, "_tl")
 
 
-@pytest.mark.smoke
 def test_tag_untagged_buffers_promotes_prior_label_mid_session() -> None:
     """Dynamic buffer tagging should preserve prior label as buffer_source.
 

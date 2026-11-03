@@ -1,4 +1,4 @@
-"""V-JEPA 2 full-clip capture and validation leg (GPU venue; U55.4).
+"""V-JEPA 2 full-clip capture and validation leg (GPU venue).
 
 Runs ``facebook/vjepa2-vitl-fpc64-256`` at its native 64 frames x 256 px
 through ``tl.trace`` and ``tl.validate(scope="forward")`` on one CUDA device

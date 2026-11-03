@@ -1,4 +1,4 @@
-"""TransformerLens 4.x canonical hook names resolve to live sites (U12.5).
+"""TransformerLens 4.x canonical hook names resolve to live sites.
 
 Every ``4.x`` translation row, instantiated at every executed layer, must
 resolve on a real-class tiny model to a ``real`` (or validated

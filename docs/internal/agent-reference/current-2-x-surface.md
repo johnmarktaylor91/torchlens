@@ -124,7 +124,7 @@
       original = exc.__cause__  # the forward's own exception, traceback intact
       print(exc.partial_trace.narrate(last=20))
   ```
-- **A default `tl.trace` is a pure observer** (U40.1, AGT-2360; `carry_state`,
+- **A default `tl.trace` is a pure observer** (`carry_state`,
   `Module.attribute_writes` and `torchlens.types.AttributeWrite` DOCUMENTED-UNSTABLE): buffers
   (persistent and non-persistent), every module's `training` flag, the global random states and
   every plain module attribute are restored after the capture, on success and on failure
@@ -229,7 +229,7 @@
   after settlement. EVIDENCE DERIVATION IS DECLARATION-DRIVEN (F40b, foldA D8):
   tokens/digest/none per the declared kind, `step_output_from` resolves
   dict/ModelOutput/tuple root slots by container path, and per-step positions are
-  TAIL-ALIGNED along `step_axis` (last n_steps positions) — real `generate()`
+  TAIL-ALIGNED along `step_axis` (last `num_steps` positions) — real `generate()`
   prompt+completion shapes and float roots (under digest/none) capture instead of
   refusing; declaration mismatches refuse teaching (`episode_declaration_invalid`);
   `step_output_kind="none"` admits value-free save policies. The family version is
@@ -335,15 +335,19 @@
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
-  `nodes="members"` for the member relation graph) and returns the DOT source.
+  `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
+  DOT source). Both draw doors take the format from the path's extension (`file_format=` only for a
+  path without one; a disagreement refuses `draw_format_mismatch`), and a bare `trace.draw()` or
+  `b.draw()` in a Jupyter kernel displays inline and writes no file (JMT, Sun 1 Nov 2026).
   `b.token_pairs("critique", "draft")` (relate's argument order) is the one
   verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
+  `b.draw("bundle.svg")` draws the merged bundle graph (the shared model graph, member lists only where
+  members differ; `b.show()` defaults to it, `b.show(kind="strip")` draws each member on its own);
+  `b.draw("members.svg", nodes="members")` draws members and relation rows;
+  `b.draw("bundle.svg", theme="dark", show_legend=True)` takes draw's skin, shapes, fills and key, and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiments.md`):
@@ -540,15 +544,17 @@
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
   folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
   run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
-  `Trace.collapse_plan(mode=...)` returns the diagnostic
-  plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
+  stay honest about hidden calls or ranges. A forward drawing's `Drawing.collapse_plan` returns
+  the diagnostic plan it rendered from (mode = the draw's `collapse=`, context = the render
+  request the draw resolved), and `Drawing.collapse_schedule` returns the float schedule
+  metadata under that context. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
   `collapse_budget_fallback`, `planner="linear_fallback"`), never an uncollapsed wall;
   only pathological inputs (raw ops above 20x the constant) still decline outright
-  (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
+  (`collapse_pathological_skip`; `Drawing.collapse_plan` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
   `depth=`, rolled mode) genuinely re-admit the quality planner.
 - The committed collapse reference SVGs (`docs/images/collapse`) are rendered with libpango
@@ -557,8 +563,9 @@
   `docs/images/collapse` artifact check fail there on text-width coordinates only (same labels,
   same fonts). Check or re-record on a Pango 1.52+ host; never re-record from an older one.
 - Smart-collapse metadata is computed at access time: `Module.collapse_score`,
-  `Trace.module_collapse_order`, and `Trace.collapse_order(mode=...)` (the documented-inert
-  `weights=` parameter was removed -- collapse memo D9, clean-v2). These are
+  `Trace.module_collapse_order`, and the per-mode ranking a forward drawing's
+  `Drawing.collapse_plan` carries (the public per-mode order accessor is gone; its
+  documented-inert `weights=` parameter went earlier -- collapse memo D9, clean-v2). These are
   not portable fields and must not be added to `*_FIELD_ORDER` without an explicit schema change.
 - `Trace.cost.forward_peak_memory` is a real runtime measurement, never a portable fact. CUDA
   reports the device peak; MPS reports the allocator delta. CPU peaks are opt-in:
@@ -575,7 +582,10 @@
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
-  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  rows; `CaptureOptions(aten_ops="values")` additionally keeps what each call returned in
+  `AtenOp.out` (a tensor, a tuple per `output_tensor_facts`, or `None`), as detached snapshots under
+  the capture's `save=` / `save_mode` / `output_device` / `save_budget` policy, persisted with
+  `Op.out`; any other spelling refuses `aten_ops_invalid`. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
   from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
   op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
   observe (empty when complete). With the switch off nothing is installed and every accessor
@@ -836,7 +846,7 @@
   input_shape=...)` is the rung-4 auto-selecting facade (bare summary with
   no input evidence refuses); `Trace.check_plan(plan)` is the audit-only
   nnsight-scan-parity checker (`executable=False` always). Raw text works
-  structure-only (U38.1): the text bridge keeps the token ids' shape on meta
+  structure-only: the text bridge keeps the token ids' shape on meta
   with a meta ALL-ONES mask (padded prompts refuse
   `structure_only_text_mask_not_all_ones`); it traces and discharges under
   `attn_implementation="eager"` or the TorchLens backend, while the default
@@ -1096,7 +1106,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/attach_hooks/push_from/`trace[selector]`), `selection_unresolvable` /
+  (do/push_from/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1151,11 +1161,11 @@
   disclosed via the `recurrence` attr, never drawn — a cycle fails the checker), curated
   wording-contract panel attrs (missing is ABSENT never zero; the module-path attr is not
   named `module`), the `netron:attachment` companion (four fail-closed vendor guards;
-  written beside every file export by default, ruling U09.3; `attachment=False` opts out,
+  written beside every file export by default; `attachment=False` opts out,
   `attachment=True` refuses the memory-only serve), `baseline=<reference Trace>` per-node
   `torchlens.diff.*` facts from `torchlens.report.diff` in node metadataProps
-  and the companion plus the diff summary in the `torchlens.baseline` slot (ruling U09.5;
-  a string stays a bare identifier), serve/widget one-liner (`serve=True`, extra `torchlens[netron]`), and
+  and the companion plus the diff summary in the `torchlens.baseline` slot
+  (a string stays a bare identifier), serve/widget one-liner (`serve=True`, extra `torchlens[netron]`), and
   an extent-budget WARN past ~27 ranks. Every artifact stays green under strict
   `onnx.ModelProto` parse + `check_model(full_check=True)`; netron 9.2.2's own parser
   executes over it in CI (tests/test_netron_export_*.py). Doc:
@@ -1201,8 +1211,8 @@
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
   `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
-  facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
-  with `format="json"`. Doc: `docs/for-ai-agents.md`.
+  facts and partial-capture failure evidence never drop; the JSON form is
+  `trace.to_agent_json()`, which takes no token budget. Doc: `docs/for-ai-agents.md`.
 - STRUCTURAL FINGERPRINT (`tl.fingerprint`): `tl.fingerprint.model(model, inputs)`,
   `tl.fingerprint.trace(trace)` and `tl.fingerprint.content(...)` compute address-free
   structural hashes; `tl.fingerprint.assert_unchanged(...)` asserts a model still matches a
@@ -1251,7 +1261,9 @@
   `patch_head` (patch one head on a FUSED
   SDPA model via exact implementation-independent lowering),
   `resolve_alias` / `translation_table` (TLens spellings resolve against a
-  trace; tuple and compact `"k6"` forms), `test_prompt`, `apply_norm_scale`
+  trace; tuple and compact `"k6"` forms; nnterp accessor spellings such as
+  `"attentions_output[3]"` resolve too, and
+  `alias_report(trace, generation="nnterp")` lists the sites under nnterp names), `test_prompt`, `apply_norm_scale`
   (cached-scale LayerNorm linearization, TLens-parity bit-exact), retention
   planning (`retention_plan`). ~47 names; `MechInterpError` family.
   Component edge graph: `torchlens.mechinterp.component_graph(trace)` returns a
@@ -1280,13 +1292,13 @@
 - TRAINING-TIME WATCH (F26; DOCUMENTED-UNSTABLE): `torchlens.trackers` is the
   attach-once watch engine over the C06 records -- `watch`/`WatchSession`,
   sinks (TensorBoardSink incl. `add_histogram_raw` precomputed buckets,
-  WandbSink, JSONLSink, MemorySink; batch-2 U54.2/U54.3: `MLflowSink(client=None, *,
+  WandbSink, JSONLSink, MemorySink; `MLflowSink(client=None, *,
   run_id=None)` and `CometSink(experiment)` over a user-created run, caller step kept,
   Comet without raw histograms), `HFTrainerWatchCallback` /
   `LightningWatchCallback`, TB GraphDef with real StepStats. CHANGED:
   `tl.export.tensorboard` requires keyword `step` (default removed). `tl.export.mlflow` /
   `tl.export.aim` log the per-layer table, the report and honesty facts as string tags
-  (wandb parity; U54.1) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
+  (wandb parity) and return `table`, `report`, `tags` (+ `artifacts` for MLflow).
   CHANGED (batch-2 buffer ruling, option c): `tl.export.xarray(log)` returns an
   `xarray.Dataset`, not a `DataArray`: `ds["out"]` is the unchanged NeuroidAssembly
   (`presentation` x `neuroid`), and every saved buffer layer is its own variable named
@@ -1294,7 +1306,7 @@
   `torchlens_kind="module_state"`, `layer_label`, `buffer_address`
   (`ds.attrs["module_state_variables"]` lists them). Save-all exports everything; the
   former buffer-layer refusal is removed.
-  OP GRAIN (batch-2 U32.1/U34.1): `watch(..., signals=("activations",),
+  OP GRAIN: `watch(..., signals=("activations",),
   grain="op", select=<prefixes or selector>, inputs=x,
   allow_forward_wrap=True, facets=None)` drives the Route-B
   `OpTierCollector` through a consented root-forward wrap (no consent:
@@ -1304,7 +1316,7 @@
   `torchlens/meta/op_grain_calibration`, `torchlens/run/op_grain_overhead_median_x`,
   one `watch_op_grain_cost_disclosed` warning); first forward of a sampled step
   only; facet leaves `<op label>/<facet>`; `close()` removes the wrap.
-  CALLBACK ENV CONFIG (U34.2): explicit callbacks read `TORCHLENS_WATCH_SIGNALS`
+  CALLBACK ENV CONFIG: explicit callbacks read `TORCHLENS_WATCH_SIGNALS`
   / `_SELECT` / `_EVERY` / `_HIST_EVERY` for settings not passed (never
   activation), print each setting's source via `print_fn=` (argument > env >
   derived > default), keep `callback.settings`; malformed refuses
@@ -1313,7 +1325,7 @@
   the private `torchlens._observability.WatchSettings` defaults (`sketch_embeddings` off,
   `artifact_budget_bytes` 256 MiB; embedding tables >= 2**20 elements spine-only; budget refuses
   `history_artifact_budget_exceeded` before the crossing block).
-- LIGHTNING FIT-START SUMMARY (walk U03.4; DOCUMENTED-UNSTABLE):
+- LIGHTNING FIT-START SUMMARY (DOCUMENTED-UNSTABLE):
   `torchlens.callbacks.lightning.SummaryCallback(input_getter=None, print_fn=print,
   **summary_kwargs)` prints `tl.summary` once per fit: sample = the module's
   `example_input_array` (in `on_fit_start`) else the first training batch (in
@@ -1342,7 +1354,7 @@
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
   `Trace.narrate` replays a finished capture as narration.
-  `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
+  `NarrationEvent.value_stats` is a `tl.stats.TensorStats` (or `None`). Read
   `stats.mean_evidence.population` / `stats.mean_evidence.sample_size` for
   sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
   `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.
@@ -1355,7 +1367,7 @@
 - `tl.receptive_field` is a lazy power-user submodule. `Op`, `Layer`, `ModuleCall`, and
   `Module` expose `receptive_field` and `projective_field` views; `Trace` exposes the matching
   `receptive_fields()` and `projective_fields()` tables.
-- HF ATTENTION BACKEND (U36.2, spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
+- HF ATTENTION BACKEND (spellings DOCUMENTED-UNSTABLE): `tl.bridge.transformers.register_attention(model=None)`
   registers the `"torchlens"` attention function AND its matching mask function (the
   mask trap: an attention function without one gets no mask); `tl.bridge.transformers.record_attention(model,
   check_sdpa=False)` yields an `AttentionRecording` of per-head probabilities per attention module,
@@ -1383,7 +1395,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
+  (`Trace.set`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
@@ -1430,7 +1442,7 @@
   (typed refusals `extraction_resume_*` / `extraction_manifest_invalid`);
   `torchlens.load(path)` reads the artifact back with metadata.
   Crash-safety is pinned by a hard-process-death test.
-- R2-08 EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
+- EXTRACTION ADDITIONS (every spelling DOCUMENTED-UNSTABLE):
   `tl.extract_dataset(model, x, layers, intervene=tl.when(tl.module("fc2"), tl.zero_ablate()))`
   stores INTERVENED activations: batch zero freezes the fired sites, a batch firing nowhere
   or elsewhere refuses (`extraction_intervention_no_fire` / `_site_drift`), disk mode writes
@@ -1557,7 +1569,7 @@
   16-slot float64 vector per op) and no payload is kept. `tl.stats.site_stats(trace)` returns
   `{op label: Spine}`, equal field by field to `Spine().update(out)` on a full capture. Refusals:
   `activation_reduced_to_stats` (payload read), `stats_capture_not_replayable` (`run`,
-  `validate_forward_pass`, `save_new_outs`, `push`, `push_from` on the trace),
+  `validate_forward_pass`, `push`, `push_from` on the trace),
   `stats_capture_not_reduced` (`site_stats` on another trace). Doc of record:
   `docs/reference/stats.md`, Reduce and discard.
 - Trajectory statistics (DOCUMENTED-UNSTABLE): `tl.mechinterp.measure_trajectory(model, data, *,
