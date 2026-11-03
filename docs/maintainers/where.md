@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1425 modules, 633683 lines, 0 modules without a docstring.
+83 packages, 1425 modules, 633682 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8471 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3937 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 108 | 53714 |
-| `torchlens.bridge` | External-tool bridge namespace. | 26 | 7860 |
+| `torchlens.bridge` | External-tool bridge namespace. | 26 | 7859 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 8789 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -1358,7 +1358,7 @@ Torch backend implementation package for TorchLens capture. (108 modules, 53714 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (26 modules, 7860 lines)
+External-tool bridge namespace. (26 modules, 7859 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1385,7 +1385,7 @@ External-tool bridge namespace. (26 modules, 7860 lines)
 | `sae_lens` | SAE Lens bridge helpers. | 99 |
 | `shap` | SHAP bridge helpers. | 81 |
 | `steering_vectors` | steering-vectors converter. | 52 |
-| `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 751 |
+| `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 750 |
 | `treescope` | The treescope bridge: external registration, probe, sniff, door (B4). | 636 |
 | `xarray` | xarray / NeuroidAssembly adapters over TorchLens sites (tvscope B8). | 154 |
 
