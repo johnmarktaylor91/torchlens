@@ -156,7 +156,7 @@ variable ever turns narration on (`narrate=` is code-explicit).
   `tl.trace`) and reports operations and modules, not arbitrary Python lines.
 - Plain Python code with no tensors in a model is outside TorchLens; for line-level tracing of
   general Python, pysnooper remains the tool. For other destinations see
-  [landscape.md](landscape.md).
+  [where to go instead](where_to_go_instead.md).
 
 ## Using both
 

@@ -87,7 +87,7 @@ RESULT = log["linear_1_1"].out.detach().tolist()
   transformed, saved as code and recompiled, which a TorchLens trace (one concrete run) is not.
 - Graph transformations and passes (rewriting, fusion, quantization and export pipelines build
   on FX). TorchLens records and edits values; it does not produce a transformed module.
-- For other destinations see [landscape.md](landscape.md).
+- For other destinations see [where to go instead](where_to_go_instead.md).
 
 ## Using both
 

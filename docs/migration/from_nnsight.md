@@ -101,7 +101,9 @@ PyTorch model (see [landscape.md](landscape.md)).
 ## What nnsight does that TorchLens does not
 
 - Remote execution on NDIF, vLLM and tensor-parallel back ends, and `scan`. TorchLens captures a
-  local eager forward; for serving-scale capture see [landscape.md](landscape.md), which lists
+  local eager forward; for serving-scale capture see
+  [where to go instead](where_to_go_instead.md#capture-at-serving-scale-on-remote-gpus-or-across-devices)
+  and [landscape.md](landscape.md), which lists
   Neuronpedia's interp-engine and vllm-lens beside nnsight.
 - Source-local tracing syntax: edits are written inline inside a `with model.trace(...)` block and
   read as ordinary indexing. TorchLens separates capture from edit, so the same task is two steps.

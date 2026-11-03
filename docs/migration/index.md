@@ -17,4 +17,9 @@ TorchLens adds, what the other tool does that TorchLens does not, using both, an
 differences.
 
 <!-- coming-from-index: start -->
+- PyTorch building blocks: [forward hooks](from_hooks.md), [torch.fx](from_fx.md), [Hugging Face `output_hidden_states` and `output_attentions`](from_hf_kwargs.md).
+- Interpretability and intervention: [TransformerLens](from_transformerlens.md), [nnsight](from_nnsight.md), [pyvene](from_pyvene.md), [baukit](baukit.md), [AutoCircuit](autocircuit.md), [SAELens](saelens.md), [RepE](repe.md), [penzai](penzai.md).
+- Attribution: [Captum](from_captum.md), [Inseq](inseq.md), [transformers-interpret](from_transformers_interpret.md).
+- Feature extraction: [torchvision's feature extractor](from_torchvision_feature_extraction.md), [torchvision's `IntermediateLayerGetter`](from_intermediate_layer_getter.md), [timm `features_only`](from_timm_features_only.md), [thingsvision](from_thingsvision.md), [torchextractor](from_torchextractor.md), [surgeon-pytorch](from_surgeon_pytorch.md), [model zoos](from_model_zoos.md).
+- Inspection and drawing: [torchinfo](from_torchinfo.md), [torchview](from_torchview.md), [torchviz or hiddenlayer](from_torchviz_hiddenlayer.md), [BertViz or Ecco](from_bertviz_ecco.md), [torchsnooper](coming_from_torchsnooper.md), [lovely-tensors](lovely_stats_line.md).
 <!-- coming-from-index: end -->

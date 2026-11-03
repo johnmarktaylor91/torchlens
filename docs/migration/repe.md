@@ -76,7 +76,7 @@ RESULT = (tuple(direction.vector.shape), direction.method, not torch.equal(plain
 | Save steering recipe | `.tlspec/` portable save when direction tensors and built-ins are used | Equivalent publication path. |
 | Train/read representation directions | `torchlens.intervention.fit_direction(log_pos, log_neg, "model.layers.<i>", method="pca")` fits the direction from saved last-token activations (`"mean_diff"`, `"pca"` or `"logistic"`), and `direction.to_repeng()` returns a real `repeng.ControlVector` (`direction.to_steering_vectors()` does the same for steering-vectors, and `direction.to_dialz()` for dialz) | Changed: TorchLens fits the direction itself instead of replicating `ControlVector.train`, so the vector differs from repeng's `pca_diff`; `ControlModel.set_control(vector, coeff=m)` on the converted vector reproduces the logits of `direction.steer(m)` at that layer. Padded batches read the last real token when the trace saved its `attention_mask` input; without a mask, `read_token_index=-1` reads the last position, a pad token on right-padded rows. |
 | Batch evaluation | `tl.when(site, action).bind(model)` to steer many forwards, or `trace.run(inputs=batch)` per batch | Equivalent; see `docs/guides/fast_paths.md`. |
-| Intervene inside fused attention | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.lowered_counterfactual` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
+| Intervene inside fused attention | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.patch_head` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
 
 ## What TorchLens adds
 
@@ -132,5 +132,5 @@ row). For serving, build and check the vector in TorchLens, then serve it in Eas
 - **Strength.** `direction.steer(m)` adds `m` times the vector on the trailing axis;
   repeng's `coeff` is the same multiplier on its own vector.
 - **Fused attention.** Head-level and pattern-level edits work on fused models through
-  `torchlens.mechinterp.lowered_counterfactual`; other edits inside the fused kernel need an
+  `torchlens.mechinterp.patch_head`; other edits inside the fused kernel need an
   eager recapture.

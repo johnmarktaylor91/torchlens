@@ -78,7 +78,7 @@ RESULT = [
 | SAE dashboards / feature stores | No built-in equivalent | Out of scope by design; use SAELens/Neuronpedia tooling on activations TorchLens extracts. |
 | Publish intervention recipe | `save_intervention(level="portable")` when using built-ins/tensors | Portable if no opaque SAE module is required. |
 | Execute opaque SAE module recipe elsewhere | `executable_with_callables` in same code environment | Not portable. |
-| Fused attention internals | Attention facets (`pattern`/`scores`/`z`/`result`) with disclosed provenance; `torchlens.mechinterp.lowered_counterfactual` for head-level patching on fused models | Head-level semantics are addressable; raw fused kernel intermediates are still not op-DAG sites. |
+| Fused attention internals | Attention facets (`pattern`/`scores`/`z`/`result`) with disclosed provenance; `torchlens.mechinterp.patch_head` for head-level patching on fused models | Head-level semantics are addressable; raw fused kernel intermediates are still not op-DAG sites. |
 
 `bridge.sae.splice` and the facet spellings are DOCUMENTED-UNSTABLE pending
 the naming session. The boundary statement, kept honest: TorchLens measures

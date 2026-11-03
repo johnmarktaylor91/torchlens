@@ -161,7 +161,7 @@ random projection, the speed trick DeepJuice uses for brain benchmarking (worked
   transforms, keep using thingsvision's own implementations over the exported matrices; see
   [bring your own alignment](../neuroai/byo_alignment.md).
 - Anything beyond feature extraction that the thingsvision documentation describes; see
-  [landscape.md](landscape.md) for destinations.
+  [where to go instead](where_to_go_instead.md) for destinations.
 
 ## Using both
 
