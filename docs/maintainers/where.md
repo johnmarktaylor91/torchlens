@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1448 modules, 649673 lines, 0 modules without a docstring.
+84 packages, 1448 modules, 649677 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -85,7 +85,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2751 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7156 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7160 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -1855,7 +1855,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 15
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (23 modules, 7156 lines)
+Lightweight predicate-recording namespace for TorchLens. (23 modules, 7160 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1878,7 +1878,7 @@ Lightweight predicate-recording namespace for TorchLens. (23 modules, 7156 lines
 | `exceptions` | Exception types for fastlog predicate recording. | 152 |
 | `options` | Grouped options for fastlog predicate recording. | 430 |
 | `recover` | Load and recover fastlog directory bundles. | 632 |
-| `reducers` | Per-token reducers for the generation recorder (DOCUMENTED-UNSTABLE spellings). | 256 |
+| `reducers` | Per-token reducers for the generation recorder (DOCUMENTED-UNSTABLE spellings). | 260 |
 | `storage_disk` | Synchronous disk storage backend for fastlog recordings. | 600 |
 | `storage_ram` | In-memory storage backend for fastlog recordings. | 128 |
 | `types` | Core dataclasses for fastlog predicate recording. | 1317 |
