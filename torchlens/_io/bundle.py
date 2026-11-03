@@ -736,7 +736,10 @@ def save(
             )
             if blob_spec.logical_backend != "torch":
                 raise BackendPayloadUnsupportedError(error_text, code="metadata_value_unportable")
-            raise ArtifactError(error_text, code="metadata_value_unportable")
+            remedy = 'make the tensor dense and strided before the save, or save at level="audit"'
+            raise ArtifactError(
+                f"{error_text}. Remedy: {remedy}.", code="metadata_value_unportable", remedy=remedy
+            )
 
         source_manifest_cache: dict[Path, dict[str, TensorEntry]] = {}
         for fast_copy_spec in fast_copy_specs:
