@@ -228,7 +228,7 @@ def _validate(entry: Any, model: Any, inputs: Any) -> dict[str, Any]:
         model(*normalize_input_args(copy.deepcopy(inputs), model))
     start = time.perf_counter()
     verdict = tl.validate(
-        model, inputs, scope="forward", random_seed=VALIDATION_SEED, validate_metadata=True
+        model, inputs, scope="forward", seed=VALIDATION_SEED, validate_metadata=True
     )
     result: dict[str, Any] = {"passed": bool(verdict), "seconds": time.perf_counter() - start}
     if not verdict:
