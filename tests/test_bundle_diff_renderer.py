@@ -16,6 +16,7 @@ import torch
 
 import torchlens as tl
 from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
+from torchlens.bundle._site_deltas import SiteDeltas
 from torchlens.errors import MultiMatchWarning
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
@@ -244,8 +245,10 @@ def test_bundle_diff_uses_each_members_own_delta() -> None:
         right_name="right",
         metric_name="relative_l2",
         tensor_field="out",
-        delta_map={"node_1": {"baseline": 0.0, "left": 1.25, "right": 5.5}},
-        layer_to_node={"left_1": "node_1", "right_1": "node_1"},
+        deltas=SiteDeltas(
+            values={"node_1": {"baseline": 0.0, "left": 1.25, "right": 5.5}},
+            node_for_label={"left_1": "node_1", "right_1": "node_1"},
+        ),
         theme_name="paper",
         include_unmatched=False,
     )
@@ -266,16 +269,18 @@ def test_bundle_diff_pair_selection_considers_left_delta() -> None:
     selected = _select_pairs(
         [(left_high, right_low), (left_low, right_mid)],
         names=("left", "right"),
-        delta_map={
-            "node_high": {"left": 9.0, "right": 0.0},
-            "node_mid": {"left": 0.0, "right": 5.0},
-        },
-        layer_to_node={
-            "left_high": "node_high",
-            "right_low": "node_high",
-            "left_low": "node_mid",
-            "right_mid": "node_mid",
-        },
+        deltas=SiteDeltas(
+            values={
+                "node_high": {"left": 9.0, "right": 0.0},
+                "node_mid": {"left": 0.0, "right": 5.0},
+            },
+            node_for_label={
+                "left_high": "node_high",
+                "right_low": "node_high",
+                "left_low": "node_mid",
+                "right_mid": "node_mid",
+            },
+        ),
         max_pairs=1,
     )
 
@@ -339,8 +344,10 @@ def test_bundle_diff_dot_keeps_each_side_in_its_own_column_cluster() -> None:
         right_name="patched",
         metric_name="relative_l2",
         tensor_field="out",
-        delta_map={f"op_{i}": {"clean": 0.0, "patched": float(i + 1)} for i in range(3)},
-        layer_to_node={f"op_{i}": f"op_{i}" for i in range(3)},
+        deltas=SiteDeltas(
+            values={f"op_{i}": {"clean": 0.0, "patched": float(i + 1)} for i in range(3)},
+            node_for_label={f"op_{i}": f"op_{i}" for i in range(3)},
+        ),
         theme_name="paper",
         include_unmatched=False,
     )
