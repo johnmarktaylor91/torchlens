@@ -229,6 +229,7 @@ def test_direct_out_write_warns_once_and_marks_dirty() -> None:
 # Heavy, not smoke: 11.3-12.4 s CPU on GitHub rows (2026-10-03), about 6 s at
 # reference speed, past the smoke tier's 5 s rule.
 @pytest.mark.heavy
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits root logs in place on purpose
 def test_do_dispatch_replay_rerun_set_only_and_top_level_alias() -> None:
     """``do`` dispatches to replay, rerun, set-only, and top-level alias paths."""
 
@@ -305,6 +306,7 @@ def test_do_ambiguous_dispatch_and_model_mismatch_errors() -> None:
     assert log._spec_revision == spec_revision
 
 
+@pytest.mark.usefixtures("root_edits_in_place")  # D.12: edits a root log in place on purpose
 def test_direct_write_propagation_warning_is_one_time() -> None:
     """Replay warns once when propagation overlays direct writes."""
 

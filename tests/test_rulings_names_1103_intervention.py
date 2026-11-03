@@ -124,7 +124,8 @@ def test_run_inputs_transaction_returns_run_result() -> None:
     """The transactional ``inputs=`` door still returns a ``RunResult``."""
 
     x = torch.randn(2, 3)
-    log = tl.trace(ReluAdd(), x)
+    model = ReluAdd()  # the trace holds the model weakly; keep it alive for a live run
+    log = tl.trace(model, x)
     result = log.run(inputs=x)
     assert isinstance(result, RunResult)
     assert result.trace is not log
