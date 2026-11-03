@@ -222,6 +222,7 @@ set size; saved activations are the summed saved bytes of every step's record. R
 | --- | --- | --- | --- |
 | 500 | 857 ms | 5.3 GiB | 6.9 MiB |
 | 1,000 | 1,336 ms | 15.7 GiB | 13.8 MiB |
+| 2,000 | not reached | over 17 GiB (stopped after 17 min) | not reached |
 
 The saved activations are a small part of the growth: 6.9 MiB of saved tensors at 500 tokens against 5.3 GiB of process memory; 13.8 MiB of saved tensors at 1,000 tokens against 15.7 GiB of process memory. The rest of the process memory
 grows with each recorded decode step and is not accounted for by the saved tensors. For long
@@ -235,7 +236,8 @@ generations, record a shorter run or save fewer sites.
 - TransformerLens on GPT-2 small. The second run measured forward hooks, nnsight, `tl.record`
   and `tl.trace` on GPT-2.
 - `tl.extract_dataset` on GPU: the arm failed (see the notes under the ResNet-18 tables).
-- Generation cost past 1,000 tokens: a 2,000-token run had not finished when this page was written.
+- Generation cost past about 1,000 tokens: the 2,000-token run passed 17 GiB of process memory
+  after 17 minutes and was stopped at the 17 GiB limit set for the run, before it finished.
 
 ## Reproduce
 
