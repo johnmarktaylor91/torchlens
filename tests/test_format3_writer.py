@@ -38,8 +38,8 @@ from torchlens._io.format3.contract import (
     TYPED_VALUE_KEY,
     TYPED_VALUE_TAGS,
 )
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.recipe import RECIPE_FORMAT, RECIPE_FORMAT_VERSION
-from torchlens._io.format3.values import decode_value
 from torchlens._io.writer_contract import writer_contract_digest
 from torchlens._postprocess._pipeline import PIPELINE
 

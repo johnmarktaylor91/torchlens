@@ -2,7 +2,7 @@
 
 ``docs/maintainers/saved_format_3.md`` section 9. A tiny CNN is traced once and saved
 at each of the four save levels. Until the 3.0 reader is merged, the record files are
-decoded with ``values.decode_value`` (the decoder the reader builds on) and compared
+decoded with ``decode.decode_value`` (the decoder the reader builds on) and compared
 cell by cell with the live records:
 
 - the column set of each record file is the persisted key set of its level;
@@ -46,10 +46,11 @@ from torchlens._data_classes._accessor_base import Accessor
 from torchlens._data_classes._state_adapter import state_items
 from torchlens._io.format3 import schema as format_schema
 from torchlens._io.format3.contract import TENSOR_REFERENCE_FIELDS
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import read_tensor
-from torchlens._io.format3.values import RowRef, decode_value, object_state
+from torchlens._io.format3.values import RowRef, object_state
 from torchlens._io.format3.writer import record_kind_of
-from torchlens.io import UnencodableValue
+from torchlens.types import UnencodableValue
 
 _LEVELS = ("portable", "audit", "runnable", "executable_with_callables")
 #: Seed containers: record kind to the live trace attribute whose order is the row order.

@@ -14,9 +14,10 @@ from pathlib import Path
 import pytest
 
 from torchlens._io import ArtifactError
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.payloads import ChunkWriter
-from torchlens._io.format3.values import ValueEncoder, decode_value
-from torchlens.io import UnencodableValue
+from torchlens._io.format3.values import ValueEncoder
+from torchlens.types import UnencodableValue
 
 
 def test_self_referencing_value_refuses_typed() -> None:
@@ -54,7 +55,7 @@ def test_value_with_no_typed_encoding_is_disclosed_not_refused() -> None:
 
 
 def test_unencodable_value_loads_back_as_the_public_stand_in() -> None:
-    """The decoder returns ``tl.io.UnencodableValue`` in place of the value, never a dict."""
+    """The decoder returns ``tl.types.UnencodableValue`` in place of the value, never a dict."""
 
     class Opaque:
         def __repr__(self) -> str:

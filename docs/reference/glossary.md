@@ -1473,7 +1473,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 `tl.types.UnencodableValue`
 : The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
   format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
-  with `type` (the value's `module.qualname`), `repr` (its repr text, bounded), `repr_length`
+  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
   and `at` (the record, row and column it sat in). The load attaches one advisory,
   `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
   manifest discloses such values. A record cell that fails its typed schema refuses
@@ -1485,7 +1485,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
   A saved value with no typed encoding is written as text and counted in the manifest's
-  `disclosures`; it loads back as `tl.io.UnencodableValue`, a frozen stand-in carrying
+  `disclosures`; it loads back as `tl.types.UnencodableValue`, a frozen stand-in carrying
   `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
   characters) and `at` (where it was in the artifact). A saved cell that fails its type check
   on load refuses `record_schema_invalid`.
