@@ -5,8 +5,10 @@ cell raises to carry ``fields["code"]``. Two did not: ``TraceCaptureError`` (a
 failed forward, every ``hook_raises_plain`` and ``cc_raise_mid_capture`` cell) and
 ``LiveModeLabelError`` (every ``hook_live_final_label`` cell). The sparse-mm cells
 failed for a third reason: the buffer-write tracker could not snapshot a sparse
-buffer, so the capture failed inside TorchLens before the forward ran. These tests
-provoke each code through its production raise site and pin the sparse capture.
+buffer, so the capture failed inside TorchLens before the forward ran. A sparse
+registered buffer now refuses typed at entry; a sparse tensor built inside forward
+captures through ``torch.sparse.mm``. These tests provoke each code through its
+production raise site and pin the sparse capture.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
+from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens._utils._sparse_parts import sparse_component_tensors, sparse_with_values
 from torchlens.backends.torch._state_bytes import _state_bytes_equal, _whole_storage_uint8
 from torchlens.errors import ArtifactError, TraceCaptureError
@@ -60,6 +63,18 @@ class _SparseAdjacency(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.sparse.mm(self.adjacency, self.linear(x))
+
+
+class _SparseInForward(nn.Module):
+    """The entry refusal's remedy: a dense buffer made sparse inside forward."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.register_buffer("adjacency", torch.eye(3) + torch.diag(torch.ones(2), 1))
+        self.linear = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.sparse.mm(self.adjacency.to_sparse(), self.linear(x))
 
 
 def _hook_raises(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -145,9 +160,18 @@ def test_live_mode_label_error_defaults_its_code() -> None:
     assert explicit.fields["code"] == "rerun_staged_label_unmatchable"
 
 
-def test_sparse_buffer_model_captures() -> None:
-    torch.manual_seed(0)
+def test_sparse_buffer_refuses_typed_at_entry() -> None:
     model = _SparseAdjacency().eval()
+    with pytest.raises(UnsupportedTensorVariantError) as info:
+        tl.trace(model, [torch.randn(3, 4)])
+    assert info.value.fields["code"] == "unsupported_tensor_variant"
+    assert "model.adjacency" in str(info.value)
+    assert model.adjacency.layout is torch.sparse_coo
+
+
+def test_sparse_in_forward_model_captures() -> None:
+    torch.manual_seed(0)
+    model = _SparseInForward().eval()
     x = torch.randn(3, 4)
     with torch.no_grad():
         expected = model(x)
@@ -190,14 +214,6 @@ def test_state_bytes_equal_reads_sparse_components() -> None:
     assert not _state_bytes_equal(sparse, clone.to_sparse_csr())
 
 
-def test_sparse_buffer_is_left_as_the_forward_left_it() -> None:
-    model = _SparseAdjacency().eval()
-    before = model.adjacency.detach().clone()
-    tl.trace(model, [torch.randn(3, 4)])
-    assert model.adjacency.layout is torch.sparse_coo
-    torch.testing.assert_close(model.adjacency.to_dense(), before.to_dense())
-
-
 def test_perturbing_a_sparse_parent_keeps_its_structure() -> None:
     sparse = (torch.eye(3) + torch.diag(torch.ones(2), 1)).to_sparse()
     perturbed = _perturb_layer_outs(sparse, torch.randn(3, 4))
@@ -211,14 +227,14 @@ def test_perturbing_a_sparse_parent_keeps_its_structure() -> None:
     torch.testing.assert_close(rebuilt.to_dense(), csr.to_dense() * 3)
 
 
-def test_sparse_buffer_model_validates() -> None:
+def test_sparse_in_forward_model_validates() -> None:
     torch.manual_seed(0)
-    model = _SparseAdjacency().eval()
+    model = _SparseInForward().eval()
     assert tl.validate(model, [torch.randn(3, 4)], scope="forward", seed=0)
 
 
-def test_portable_save_of_a_sparse_buffer_refuses_with_a_code(tmp_path) -> None:
-    trace = tl.trace(_SparseAdjacency().eval(), [torch.randn(3, 4)])
+def test_portable_save_of_a_sparse_activation_refuses_with_a_code(tmp_path) -> None:
+    trace = tl.trace(_SparseInForward().eval(), [torch.randn(3, 4)])
     with pytest.raises(ArtifactError) as info:
         trace.save(tmp_path / "sparse.tlspec", level="portable")
     assert info.value.fields["code"] == "artifact_tensor_unsupported"

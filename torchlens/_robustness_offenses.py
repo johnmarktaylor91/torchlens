@@ -108,9 +108,8 @@ def _sparse_state_offense(name: str, tensor: torch.Tensor) -> dict[str, Any]:
     """Offense record for a sparse tensor registered as model state at ``model.{name}``.
 
     A registered sparse tensor has no dense storage for the state-write journal to
-    snapshot (``_state_bytes._whole_storage_uint8`` raises torch's bare
-    NotImplementedError at session prep): the check refuses typed at entry, naming
-    the slot, instead of failing mid-prep (stress F1).
+    snapshot: the check refuses typed at entry, naming the slot, instead of failing
+    mid-prep (stress F1).
     """
 
     return _offense_entry(

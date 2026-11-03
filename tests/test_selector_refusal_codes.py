@@ -101,9 +101,7 @@ class _TwoLinear(nn.Module):
 
 
 def _ready_trace() -> tl.Trace:
-    return tl.trace(
-        _TwoLinear(), [torch.randn(2, 4)], capture=CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(_TwoLinear(), [torch.randn(2, 4)], capture=CaptureOptions(replayable=True))
 
 
 def _scale_hook(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
