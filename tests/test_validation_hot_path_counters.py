@@ -6,6 +6,11 @@
 * Five per-op helpers executed a function-level import statement on every
   call (about 22,600 per validate of a 1,200-op chain); each now binds its
   module once.
+
+Both counts are hermetic: they count only events of the trace or helper frames
+under test on this thread, after a warm-up, with pending garbage collected
+first and the cyclic collector off, so they do not depend on which tests ran
+earlier in the same worker process.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from typing import Any
 
 import pytest
 import torch
+from _hermetic_counters import quiet_gc
 
 import torchlens as tl
 from torchlens._data_classes import trace as trace_mod
@@ -39,13 +45,13 @@ def _loaded_flag_probes(monkeypatch: pytest.MonkeyPatch, depth: int) -> int:
     original = trace_mod.Trace.__getattr__
 
     def counting(self: object, name: str) -> object:
-        if name == "_loaded_from_bundle":
+        if self is trace and name == "_loaded_from_bundle":
             counts["probes"] += 1
         return original(self, name)
 
-    monkeypatch.setattr(trace_mod.Trace, "__getattr__", counting)
-    _check_op_log_fields(trace)
-    monkeypatch.setattr(trace_mod.Trace, "__getattr__", original)
+    with monkeypatch.context() as patch, quiet_gc():
+        patch.setattr(trace_mod.Trace, "__getattr__", counting)
+        _check_op_log_fields(trace)
     return counts["probes"]
 
 
@@ -82,8 +88,8 @@ def test_hot_helpers_execute_no_import_statement(monkeypatch: pytest.MonkeyPatch
             counts[name] = counts.get(name, 0) + 1
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(builtins, "__import__", counting)
-    tl.trace(model, x)
-    tl.validate(model, x, scope="forward", seed=0, validate_metadata=True)
-    monkeypatch.setattr(builtins, "__import__", real)
+    with monkeypatch.context() as patch, quiet_gc():
+        patch.setattr(builtins, "__import__", counting)
+        tl.trace(model, x)
+        tl.validate(model, x, scope="forward", seed=0, validate_metadata=True)
     assert counts == {}

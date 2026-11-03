@@ -14,6 +14,7 @@ from typing import Any
 
 import pytest
 import torch
+from _hermetic_counters import quiet_gc, thread_counting
 
 import torchlens as tl
 from torchlens._data_classes import op as op_mod
@@ -87,20 +88,19 @@ def test_cleanup_hydrates_no_pooled_cell_and_dispatches_no_descriptor(
     )
     assert pooled > 0, "the fixture must carry pooled container cells"
     counts = {"hydrate": 0, "delete": 0}
-    real_hydrate = PooledCell.hydrate
-    real_delete = op_mod._OpField.__delete__
-
-    def counting_hydrate(self: PooledCell) -> Any:
-        counts["hydrate"] += 1
-        return real_hydrate(self)
-
-    def counting_delete(self: Any, op: Any) -> None:
-        counts["delete"] += 1
-        real_delete(self, op)
-
-    monkeypatch.setattr(PooledCell, "hydrate", counting_hydrate)
-    monkeypatch.setattr(op_mod._OpField, "__delete__", counting_delete)
-    trace.cleanup()
+    # Only this thread's calls count, with pending garbage collected first and
+    # the cyclic collector off, so finalizers of objects earlier tests left
+    # behind cannot hydrate or delete inside the window.
+    monkeypatch.setattr(
+        PooledCell, "hydrate", thread_counting(PooledCell.hydrate, counts, "hydrate")
+    )
+    monkeypatch.setattr(
+        op_mod._OpField,
+        "__delete__",
+        thread_counting(op_mod._OpField.__delete__, counts, "delete"),
+    )
+    with quiet_gc():
+        trace.cleanup()
     assert counts == {"hydrate": 0, "delete": 0}
     assert all(
         store.cell_get(row, fid) is _MISSING
