@@ -8781,9 +8781,6 @@ test-docstrings	tests/test_runnable_state_rollback.py	5.1
 test-docstrings	tests/test_runnable_state_rollback.py	5.2
 test-docstrings	tests/test_runnable_state_rollback.py	5.3
 test-docstrings	tests/test_runnable_state_rollback.py	5.4
-test-docstrings	tests/test_runnable_trace_seam.py	11
-test-docstrings	tests/test_runnable_trace_seam.py	60
-test-docstrings	tests/test_runnable_trace_seam.py	85
 test-docstrings	tests/test_s5_render_identity_harness.py	256
 test-docstrings	tests/test_save_budget.py	32
 test-docstrings	tests/test_save_budget.py	34
@@ -8805,9 +8802,6 @@ test-docstrings	tests/test_schema_lockstep.py	3.11
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	10
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	22.3
 test-docstrings	tests/test_schema_v10_contract_and_goldens.py	36
-test-docstrings	tests/test_schema_v11_contract.py	10
-test-docstrings	tests/test_schema_v11_contract.py	11
-test-docstrings	tests/test_schema_v11_contract.py	11,
 test-docstrings	tests/test_schema_v9_c07x_episode.py	10
 test-docstrings	tests/test_schema_v9_c07x_episode.py	40
 test-docstrings	tests/test_schema_v9_c07x_episode.py	42
@@ -9886,8 +9880,6 @@ test-names	tests/test_runnable_r36_regressions.py	26
 test-names	tests/test_runnable_r36_regressions.py	27
 test-names	tests/test_schema_v10_contract_and_goldens.py	10_
 test-names	tests/test_schema_v10_contract_and_goldens.py	216_
-test-names	tests/test_schema_v11_contract.py	10_
-test-names	tests/test_schema_v11_contract.py	11_
 test-names	tests/test_site_join.py	18_
 test-names	tests/test_site_key.py	2_4
 test-names	tests/test_snoop_real_model.py	18_
