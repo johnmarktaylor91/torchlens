@@ -64,6 +64,7 @@ from ..._data_classes.op import (
     _stamp_reference_out,
     apply_transform,
     register_relation_cell_encoding,
+    register_row_release_property,
     train_mode_tripwire_armed,
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
@@ -590,6 +591,13 @@ setattr(
         _delete_internal_source_ancestors,
     ),
 )
+# Each overlay reads through its preserved slot descriptor (raising on an
+# unset cell) and deletes only that cell, so op removal may release rows
+# directly. Registration reads the live class attribute, so it runs after
+# all four overlays are installed.
+for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
+    register_row_release_property(_ancestor_field_name)
+del _ancestor_field_name
 from ._ops_container_base import (  # noqa: E402
     _op_record_from_log,
 )

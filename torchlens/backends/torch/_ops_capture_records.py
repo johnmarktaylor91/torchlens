@@ -423,7 +423,7 @@ def _should_keep_alias_mutation_contract(trace: Trace) -> bool:
         or getattr(trace, "is_replayable", False)
         or trace._options_backward_ready
         or save_grads not in (None, False)
-        or getattr(trace, "_validation_active", False)
+        or trace.__dict__.get("_validation_active", False)
     )
 
 

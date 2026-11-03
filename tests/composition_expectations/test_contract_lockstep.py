@@ -19,7 +19,9 @@ from tests.composition_expectations.ledger import (
     LEDGER,
     CompositionRow as Row,
     ledger_violations,
+    public_title,
     render_projection,
+    render_public_matrix,
     row_violations,
 )
 
@@ -174,6 +176,33 @@ def test_projection_regenerates_identically() -> None:
         "copy render_projection() over "
         "tests/composition_expectations/data/composition_ledger.md in this change."
     )
+
+
+def test_public_matrix_matches_ledger() -> None:
+    """Regenerate-and-diff: docs/reference/composition_matrix.md matches the ledger."""
+
+    page = TREE_ROOT.parents[1] / "docs" / "reference" / "composition_matrix.md"
+    committed = page.read_text(encoding="utf-8")
+    live = render_public_matrix()
+    assert committed == live, (
+        "docs/reference/composition_matrix.md drifted from the ledger. Review the "
+        "diff, then copy render_public_matrix() over the page in this change."
+    )
+
+
+def test_public_matrix_shows_every_row_and_hides_gap_internals() -> None:
+    """Known gaps read ``not yet verified``; owners and deadlines stay internal."""
+
+    page = render_public_matrix()
+    for row in LEDGER:
+        assert public_title(row) in page, f"{row.row_id} missing from the public matrix"
+        if row.expected_state == "KNOWN-GAP":
+            assert row.gap_owner not in page.split(public_title(row), 1)[1].split("\n", 1)[0]
+            assert row.gap_deadline not in page
+    assert page.count("not yet verified") >= sum(
+        row.expected_state == "KNOWN-GAP" for row in LEDGER
+    )
+    assert "KNOWN-GAP" not in page
 
 
 def test_every_tree_module_carries_the_compo_marker() -> None:

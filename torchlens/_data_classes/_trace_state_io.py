@@ -149,7 +149,6 @@ _MODEL_LOG_DEFAULT_FILL: dict[str, Any] = {
     "_provenance_input_object_id": None,
     "_provenance_input_signature_hash": None,
     "_provenance_fingerprint": None,
-    "_module_filter": None,
     "_options_emit_nvtx": False,
     "measure_python_peak_memory": False,
     "distributed_witness": "none",
