@@ -64,7 +64,16 @@ def _message_from_payload(class_name: str, fields: dict[str, object]) -> str:
 
 
 class TorchLensError(Exception):
-    """Root base class for all TorchLens errors."""
+    """Root base class for all TorchLens errors.
+
+    Examples
+    --------
+    >>> error = TorchLensError("capture refused", code="example_refusal")
+    >>> error.fields["code"], error.severity
+    ('example_refusal', 'recoverable')
+    >>> issubclass(tl.errors.SelectionError, TorchLensError)
+    True
+    """
 
     default_severity: ClassVar[Severity] = "recoverable"
     severity: Severity = "recoverable"
@@ -122,31 +131,95 @@ class TorchLensError(Exception):
 
 
 class InterventionError(TorchLensError):
-    """Base for intervention execution, replay, hook, and bundle failures."""
+    """Base for intervention execution, replay, hook, and bundle failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.HookValueError, InterventionError)
+    True
+    >>> issubclass(InterventionError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class CaptureError(TorchLensError):
-    """Base for capture-time and recorder lifecycle failures."""
+    """Base for capture-time and recorder lifecycle failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.CaptureGapError, CaptureError)
+    True
+    >>> issubclass(CaptureError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class ConfigurationError(TorchLensError):
-    """Base for invalid options, selectors, and user-supplied configuration."""
+    """Base for invalid options, selectors, and user-supplied configuration.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.errors.TorchLensError("refused", severity="loud")
+    ... except ConfigurationError as error:
+    ...     print(type(error).__name__)
+    DiagnosticSeverityError
+    >>> issubclass(ConfigurationError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class DiagnosticSeverityError(ConfigurationError, ValueError):
-    """Raised when a diagnostic severity value is outside the closed vocabulary."""
+    """Raised when a diagnostic severity value is outside the closed vocabulary.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.errors.TorchLensError("refused", severity="loud")
+    ... except DiagnosticSeverityError as error:
+    ...     print(error.fields["code"])
+    diagnostic_severity_invalid
+    >>> issubclass(DiagnosticSeverityError, ValueError)
+    True
+    """
 
 
 class CompatibilityError(TorchLensError):
-    """Base for model, storage, dtype/device, and downstream compatibility failures."""
+    """Base for model, storage, dtype/device, and downstream compatibility failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.ArtifactTooNewError, CompatibilityError)
+    True
+    >>> issubclass(CompatibilityError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class ValidationError(TorchLensError):
-    """Base for graph, metadata, append, saved-out, and replay validation failures."""
+    """Base for graph, metadata, append, saved-out, and replay validation failures.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.AppendMismatchError, ValidationError)
+    True
+    >>> issubclass(ValidationError, tl.errors.TorchLensError)
+    True
+    """
 
 
 class TorchLensWarning(UserWarning):
-    """Root base class for TorchLens warnings with the shared payload contract."""
+    """Root base class for TorchLens warnings with the shared payload contract.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     warnings.warn(TorchLensWarning("check this", code="example_notice"))
+    >>> caught[0].category.__name__, caught[0].message.fields["code"]
+    ('TorchLensWarning', 'example_notice')
+    """
 
     default_severity: ClassVar[Severity] = "informational"
     severity: Severity = "informational"
@@ -203,11 +276,27 @@ class TorchLensWarning(UserWarning):
 
 
 class TraceNotReproducibleWarning(TorchLensWarning):
-    """Warning emitted when validation captures different graph structures."""
+    """Warning emitted when validation captures different graph structures.
+
+    Examples
+    --------
+    >>> issubclass(TraceNotReproducibleWarning, tl.errors.TorchLensWarning)
+    True
+    >>> issubclass(TraceNotReproducibleWarning, UserWarning)
+    True
+    """
 
 
 class ScalarEscapeWarning(TorchLensWarning):
-    """Warning emitted when captured tensor data escapes to a Python scalar."""
+    """Warning emitted when captured tensor data escapes to a Python scalar.
+
+    Examples
+    --------
+    >>> issubclass(ScalarEscapeWarning, tl.errors.TorchLensWarning)
+    True
+    >>> issubclass(ScalarEscapeWarning, UserWarning)
+    True
+    """
 
 
 __all__ = [

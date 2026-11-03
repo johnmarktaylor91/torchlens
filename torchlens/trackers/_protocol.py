@@ -51,6 +51,14 @@ class Sink(Protocol):
     ``close`` must be safe to call once each at teardown; a failure in any
     method should raise (the engine latches the sink failed and preserves
     the partial report -- it never retries silently).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink
+    >>> isinstance(MemorySink(), Sink)
+    True
+    >>> isinstance(object(), Sink)
+    False
     """
 
     def capabilities(self) -> frozenset[str]:
@@ -90,6 +98,16 @@ def require_capabilities(sink: Any, needed: tuple[str, ...]) -> None:
     Runs at attach, BEFORE any emission: a run that would lose one requested
     signal family must fail while the user is looking at the console, not
     after ten hours of partial panels.
+
+    Examples
+    --------
+    >>> from torchlens.trackers import MemorySink
+    >>> require_capabilities(MemorySink(), ("scalar", "raw_histogram"))
+    >>> try:
+    ...     require_capabilities(MemorySink(capabilities=frozenset({"scalar"})), ("raw_histogram",))
+    ... except Exception as exc:
+    ...     print(type(exc).__name__, exc.fields["code"])
+    SinkProtocolError tracker_sink_capability_missing
     """
 
     capabilities_method = getattr(sink, "capabilities", None)
