@@ -924,7 +924,6 @@ tests/test_postprocess_enforcement.py,44,43.64,17.91,missing
 tests/test_postprocess_r14a_regressions.py,8,1.08,0.19,unmarked
 tests/test_postprocess_retention_epilogue.py,9,3.65,2.24,unmarked
 tests/test_prebump_roundtrip_acceptance.py,30,23.00,2.04,unmarked
-tests/test_predicate_registry.py,19,0.30,0.02,unmarked
 tests/test_predicate_review_regressions.py,33,2.43,0.55,smoke
 tests/test_predicate_training_error_codes.py,11,0.55,0.08,smoke
 tests/test_prehook_provenance.py,29,7.03,0.84,unmarked

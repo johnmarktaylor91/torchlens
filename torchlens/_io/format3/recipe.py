@@ -332,6 +332,7 @@ class RecipeHeader:
     append_state: Mapping[str, Any] = dataclasses.field(default_factory=dict)
     function_registry_keys: Sequence[Mapping[str, Any]] = ()
     spec_derived: bool = False
+    capture_rules: Sequence[tuple[Any, Any]] = ()
 
 
 def build_recipe(
@@ -360,6 +361,15 @@ def build_recipe(
         _value_rule(i, value_spec, encoder)
         for i, value_spec in enumerate(getattr(spec, "target_value_specs", ()))
     ]
+    capture_rules = [
+        {
+            "index": i,
+            "selector": _selector(target, encoder, f"capture_rules.{i}.selector"),
+            "edit": _edit(i, edit, encoder),
+        }
+        for i, (target, edit) in enumerate(header.capture_rules)
+    ]
+    capture_rules = [rule for rule in capture_rules if not _placeholders_in(rule)]
     executable = (
         header.save_level != _AUDIT_LEVEL and not encoder.placeholders and not encoder.disclosures
     )
@@ -372,10 +382,17 @@ def build_recipe(
         "spec_derived": bool(header.spec_derived),
         "append_state": ValueEncoder().encode(dict(header.append_state), "append_state"),
         "rules": rules,
+        "capture_rules": capture_rules,
         "values": values,
         "helpers": _builtin_helpers(rules),
         "function_registry_keys": [dict(entry) for entry in header.function_registry_keys],
     }
+    if header.save_level == "portable" and not executable:
+        raise ArtifactError(
+            "A portable intervention recipe requires built-in edits and portable values.",
+            code="intervention_spec_not_portable",
+            remedy="use built-in edits or save at level='audit' for a non-executable record",
+        )
     return recipe, list(encoder.disclosures)
 
 
@@ -443,9 +460,7 @@ def _bind(data: Any, root: Path, at: str) -> Any:
         return {key: _bind(item, root, f"{at}[{key!r}]") for key, item in data.items()}
     if tag == "callable_placeholder":
         fields = decode_value(data, at=at)
-        return CallablePlaceholder(
-            fields["position"], str(fields["qualname"]), int(fields["repr_length"])
-        )
+        return CallablePlaceholder(fields.position, fields.qualname, fields.repr_length)
     if tag == "tensor":
         tensor = read_tensor(root, blob=str(data["blob"]), key=str(data["key"]))
         return torch.view_as_complex(tensor) if data.get("complex") else tensor
@@ -529,6 +544,25 @@ _RULE_KEYS: Final = frozenset({"index", "selector", "edit"})
 def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
     """Return ``(detail, code)`` for the first structural fault of a recipe, else ``None``."""
 
+    allowed = {
+        "format",
+        "format_version",
+        "helper_registry_version",
+        "save_level",
+        "executable",
+        "spec_derived",
+        "append_state",
+        "rules",
+        "values",
+        "helpers",
+        "function_registry_keys",
+        "capture_rules",
+    }
+    if set(data) - allowed:
+        return "recipe contains unknown keys", "manifest_schema_invalid"
+    problem = _capture_rules_problem(data.get("capture_rules", []))
+    if problem is not None:
+        return problem, "manifest_schema_invalid"
     if data.get("save_level") not in _RECIPE_SAVE_LEVELS:
         return f"save_level {data.get('save_level')!r} is unknown", "artifact_save_level_invalid"
     rules = data.get("rules")
@@ -542,6 +576,76 @@ def _recipe_shape_problem(data: Mapping[str, Any]) -> tuple[str, str] | None:
         if not isinstance(rule["edit"], dict) or not isinstance(rule["selector"], dict):
             return f"rule {position} edit or selector is not an object", "manifest_schema_invalid"
     return None
+
+
+def _capture_rules_problem(rules: Any) -> str | None:
+    """Check the closed capture-rule schema before decoding any member."""
+
+    if not isinstance(rules, list):
+        return "capture_rules is not an array"
+    if _placeholders_in(rules):
+        return "capture_rules requires portable built-in edits"
+    selector_keys = {"selector_kind", "selector_value", "strict", "slice_spec", "metadata"}
+    edit_keys = {
+        "name",
+        "args",
+        "kwargs",
+        "portability",
+        "signal",
+        "is_batch_independent",
+        "is_compatible_with_append",
+        "metadata",
+        "selection_recipe",
+    }
+    # Keep the closed wire-schema checks together so every refusal is reviewed in one place.
+    for index, rule in enumerate(rules):
+        if not isinstance(rule, dict) or set(rule) != {"index", "selector", "edit"}:
+            return f"capture_rules[{index}] has unknown or missing keys"
+        if type(rule["index"]) is not int or rule["index"] != index:
+            return f"capture_rules[{index}] has an invalid index"
+        target, edit = rule["selector"], rule["edit"]
+        if not isinstance(target, dict) or set(target) != selector_keys:
+            return f"capture_rules[{index}] has an invalid selector"
+        if type(target["strict"]) is not bool or not isinstance(target["metadata"], dict):
+            return f"capture_rules[{index}] has invalid selector field types"
+        if not isinstance(target["selector_kind"], str) or not target["selector_kind"]:
+            return f"capture_rules[{index}] has an invalid selector kind"
+        if not isinstance(edit, dict) or set(edit) != edit_keys or edit["portability"] != "builtin":
+            return f"capture_rules[{index}] requires a built-in edit"
+        if (
+            not isinstance(edit["args"], list)
+            or not isinstance(edit["kwargs"], dict)
+            or not isinstance(edit["metadata"], dict)
+            or type(edit["is_batch_independent"]) is not bool
+            or type(edit["is_compatible_with_append"]) is not bool
+        ):
+            return f"capture_rules[{index}] has invalid edit field types"
+    return None
+
+
+def trace_capture_rules(trace: Any) -> list[tuple[Any, Any]]:
+    """Return original portable predicates without replacing their staged label rules."""
+
+    spec = getattr(trace, "_intervention_spec", None)
+    saved = getattr(spec, "metadata", {}).get("_capture_rules", [])
+    options = getattr(trace, "_predicate_save_options", None)
+    predicate = getattr(options, "intervene", None)
+    if predicate is None:
+        return list(saved)
+    rules = getattr(predicate, "rules", ())
+    if not rules or any(
+        not callable(getattr(rule.target, "to_target_spec", None)) for rule in rules
+    ):
+        raise ArtifactError(
+            "A callable intervention predicate cannot be saved portably.",
+            code="intervention_spec_not_portable",
+            remedy="address the rule with a built-in selector such as tl.func or tl.in_module",
+        )
+    return [
+        (rule.target.to_target_spec(), rule.edit)
+        for rule in rules
+        if _is_edit(rule.edit) and rule.edit.portability == "builtin"
+    ]
 
 
 def recipe_placeholders(recipe: Mapping[str, Any]) -> list[CallablePlaceholder]:
@@ -606,6 +710,7 @@ def trace_recipe_context(trace: Any) -> dict[str, Any]:
             "state_history": append_records,
         },
         "function_registry_keys": keys,
+        "capture_rules": trace_capture_rules(trace),
         "spec_derived": bool(hook_specs)
         and all(
             dict(getattr(hook, "metadata", {}) or {}).get("created_by") == "intervene_predicate"

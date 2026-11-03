@@ -98,7 +98,7 @@ hostile input, and every load path here is fail-closed.
 ## Local invariants
 - Fail-closed everywhere: unknown pickle globals raise, oversized/deep JSON refuses,
   symlinked bundle members are rejected.
-- Artifacts older than tlspec v6 refuse with `ArtifactTooOldError`
+- Artifacts older than the current tlspec (saved by torchlens 2.x) refuse with `ArtifactTooOldError`
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.
@@ -110,3 +110,7 @@ leaf `_field_policy.py`, with the record package preserving its `StorageKind` re
 Save preparation lives in `_save_gates.py`; runnable wire storage has no record or execution
 binding dependency. Runtime component attachment and family binding belong to
 `_format3_runnable_bind.py`, above the pure `format3/runnable.py` carrier.
+
+Save preparation in `_save_gates.py` is L3 bundle assembly. The format 3 runnable carrier consumes prepared JSON and tensor families at L1; frozen wire version names come from `_runnable/_schema_versions.py`, which re-exports through `_runnable`.
+
+Typed recipe restoration and predicate re-arming share `intervention/_rerun_predicate.py`; `intervention/save.py` delegates decoding there.

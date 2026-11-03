@@ -162,8 +162,9 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
     members[0]["byte_digest"] = "0" * 64
     _write_descriptor(path, descriptor)
 
-    with pytest.raises(ArtifactError, match="byte-digest mismatch"):
+    with pytest.raises(ArtifactError) as caught:
         tl.load(path)
+    assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
 
     # The honest artifact still loads and publishes a digest that MATCHES its value.
     members[0]["byte_digest"] = honest_digest

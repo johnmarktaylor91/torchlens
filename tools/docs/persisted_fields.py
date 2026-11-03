@@ -120,6 +120,13 @@ def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str |
             continue
         table: dict[str, dict[str, tuple[str, str | None]]] = {}
         for record_node, fields_node in zip(node.value.keys, node.value.values, strict=True):
+            if (
+                isinstance(fields_node, ast.Subscript)
+                and isinstance(fields_node.value, ast.Name)
+                and fields_node.value.id == "_TRACE_STORAGE_BINDINGS"
+            ):
+                table.update(read_bindings(path.with_name("_schema_bindings_trace.py")))
+                continue
             if record_node is None or not isinstance(fields_node, ast.Dict):
                 continue
             fields = {}

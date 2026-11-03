@@ -39,7 +39,7 @@ from typing import Any
 
 import torch
 
-from ..._runnable import (
+from ..._runnable._schema_versions import (
     RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
     RUNNABLE_CALL_RECIPE_VERSION,
     RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,

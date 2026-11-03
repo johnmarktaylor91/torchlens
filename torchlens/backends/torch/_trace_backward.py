@@ -14,6 +14,7 @@ import torch
 from ..._capture.outcome import require_capture_capability
 from ..._capture.structure_only import require_structure_only_capability
 from ..._errors import PayloadUnavailableError
+from ..._trace_state import is_stats_capture
 from ...errors import RunCapabilityUnavailableError
 from .._backend_protocol import refuse_backward_capture_unsupported
 from ..registry import get_backend_spec
@@ -69,8 +70,6 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
     start from and validation nothing to compare; refusing is the honest
     outcome (a missing payload must never read as a pass).
     """
-
-    from ...stats._capture_stats import is_stats_capture
 
     if not is_stats_capture(trace):
         return

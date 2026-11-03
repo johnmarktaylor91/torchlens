@@ -313,8 +313,8 @@ def _classify_capability_absences(
 ) -> tuple[list[str], list[str], list[str]]:
     """Split a capability snapshot's absent flags into degradation groups.
 
-    ONE shared classifier for ``tl.report.doctor()`` and ``tl.compat.report()``
-    so both rows read the same snapshot the same way.
+    The one classifier behind the runtime-capabilities row of ``tl.report.doctor()``,
+    so every absent flag is grouped the same way.
 
     Parameters
     ----------

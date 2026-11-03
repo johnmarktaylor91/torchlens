@@ -8,6 +8,7 @@ it unchanged.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from enum import Enum
 
 
@@ -59,3 +60,32 @@ class StorageKind(Enum):
 
 # Preserve the existing enum identity while its definition lives below record classes.
 StorageKind.__module__ = "torchlens._data_classes.field_policy"
+
+
+@dataclass(frozen=True)
+class StorageBinding:
+    """Physical-storage axes for one declared field.
+
+    Parameters
+    ----------
+    kind:
+        Storage class of the field's backing.
+    annotation:
+        Public type annotation string presented on the generated facade
+        descriptor, or ``None`` when the class declares none.
+    codec:
+        Physical column codec name (resolved when the field's family
+        columnarizes), or ``None`` for object-backed storage.
+    mutability:
+        ``"immutable"``, ``"mutable_container"`` (public in-place mutation is
+        observable and must stay so), or ``"copy_on_read"`` (every read
+        returns a fresh container; caller mutation is discarded).
+    """
+
+    kind: StorageKind
+    annotation: str | None = None
+    codec: str | None = None
+    mutability: str = "immutable"
+
+
+StorageBinding.__module__ = "torchlens._data_classes.field_policy"

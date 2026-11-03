@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .monitor import host_nondeterminism_monitor
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
@@ -24,6 +24,28 @@ FIRST in the teardown, so readers never observe a partially-installed window and
 nested window's exit cannot null the slot mid-outer-window. Captures do not nest
 (``active_logging`` rejects nested captures), so a single slot is sufficient.
 """
+
+_WARMUPS: list[Callable[[], None]] = []
+"""Callables a monitor window runs before it arms, in registration order.
+
+Higher layers register here, at import, the lazy imports a first capture would otherwise
+trigger INSIDE the window (an in-window import marks the finders' entropy draws and walks
+their frames as inventory roots). The monitor never imports upward to warm them itself.
+"""
+
+
+def register_warmup(fn: Callable[[], None]) -> None:
+    """Register ``fn`` to run before every monitor window arms (idempotent).
+
+    Parameters
+    ----------
+    fn:
+        A no-argument callable; a raise is benign (the window arms regardless and the
+        in-window retry's draws are then marked honestly).
+    """
+
+    if fn not in _WARMUPS:
+        _WARMUPS.append(fn)
 
 
 class _PatchStackEntry:

@@ -211,6 +211,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._errors",
         "BackwardStreamUnavailableError",
     ),
+    "AtenOpsUnavailableError": ("torchlens._errors", "AtenOpsUnavailableError"),
     "AmbiguousBackendError": ("torchlens.backends.registry", "AmbiguousBackendError"),
     "BackendCapabilityConformanceError": (
         "torchlens.backends.registry",
@@ -433,6 +434,7 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
+    "AtenOpsUnavailableError",
     "BufferSinkRoutingError",
     "BundleExperimentError",
     "BundleRelationError",

@@ -17,7 +17,6 @@ from torchlens._data_substrate import (
     LEDGER_FILENAME,
     MANIFEST_SCHEMA_V2,
     SIGNATURE_SEMANTIC_FIELDS,
-    UNRECORDED_V1,
     ArtifactWriter,
     ExtractionArtifactError,
     compare_signatures,
@@ -200,14 +199,3 @@ def test_compare_signatures_model_identity_uses_level_rules() -> None:
     assert compare_signatures(unavailable, _signature()) == ["model_identity"], (
         "an unavailable identity cannot verify a resume"
     )
-
-
-def test_compare_signatures_skips_unrecorded_v1_fields() -> None:
-    """Migrated UNRECORDED_V1 fields are disclosed, not comparable."""
-
-    migrated = _signature(
-        padding_side=UNRECORDED_V1,
-        model_identity={"level": UNRECORDED_V1},
-    )
-    current = _signature(padding_side="right")
-    assert compare_signatures(migrated, current) == []

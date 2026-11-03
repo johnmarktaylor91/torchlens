@@ -503,8 +503,8 @@ class Manifest:
         Raises
         ------
         ArtifactTooOldError
-            If the manifest predates the ``tlspec_version >= 6`` rehydration
-            floor. Checked before the remaining required fields so a
+            If the manifest predates the current ``tlspec_version`` (torchlens
+            2.x saved it). Checked before the remaining required fields so a
             genuinely old manifest (which also lacks newer required fields)
             refuses with the floor named instead of a missing-field error.
         ArtifactError

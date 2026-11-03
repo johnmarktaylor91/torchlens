@@ -371,7 +371,8 @@ def _intervened_rerun_case(tmp_path: Path, edit: Any) -> tuple[Any, Any, torch.T
     value = torch.randn(2, 4)
     trace = tl.trace(model, value, intervene=tl.when(tl.func("relu"), edit))
     path = tmp_path / "intervened3"
-    _quiet_save(trace, path, level="portable")
+    level = "portable" if getattr(edit, "portability", None) == "builtin" else "audit"
+    _quiet_save(trace, path, level=level)
     return tl.load(path), model, value
 
 
