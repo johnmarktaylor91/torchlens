@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1424 modules, 633464 lines, 0 modules without a docstring.
+83 packages, 1424 modules, 633475 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5227 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3008 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 73 | 35073 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 73 | 35084 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1912 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
@@ -1611,7 +1611,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3008 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (73 modules, 35073 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (73 modules, 35084 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1650,7 +1650,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_runtime_sites` | Site-scope and provisional-site helpers for live intervention hooks. | 267 |
 | `_site_signal` | Site-signal classification: which pass a selector site lives in. | 106 |
 | `_spec_codec` | Codec of the ''.tlspec'' spec document (''spec.json''). | 635 |
-| `_spec_values` | Value grammar of the persisted intervention spec: the JSON wrapper tags | 756 |
+| `_spec_values` | Value grammar of the persisted intervention spec: the JSON wrapper tags | 767 |
 | `_subspace_edits` | k-dimensional subspace ablation and interchange edits (N-IV-6). | 264 |
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
 | `_subspace_spec` | Reload a saved ''subspace_edit'': the portable form of a projection-valued edit. | 277 |
