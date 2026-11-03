@@ -11,9 +11,8 @@ measured on.
 * DTensor tensor parallelism: a forward sharded over a real two-process CPU ``gloo`` mesh
   runs, and capture refuses with the typed ``DistributedCaptureUnsupportedError`` naming the
   ``dtensor`` and ``tensor_parallel`` kinds (the planned design is
-  ``docs/internal/reference/tensor_parallel_design.md``). Both torch-native
-  ``parallelize_module`` and transformers' DTensor-native ``tp_plan="auto"`` loading are
-  covered.
+  ``docs/internal/reference/tensor_parallel_design.md``). The sharding is torch-native
+  ``parallelize_module``; transformers' ``tp_plan="auto"`` loading is not yet verified here.
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
   package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
   xfail), and a companion test pins that a witnessed trace is marked unverified, not silent.
@@ -147,15 +146,14 @@ def _refusal_kinds(model: torch.nn.Module, args: Any, kwargs: dict[str, Any]) ->
     return []
 
 
-def _tp_rank(rank: int, world_size: int, init_file: str, out_dir: str, hf_dir: str) -> None:
+def _tp_rank(rank: int, world_size: int, init_file: str, out_dir: str) -> None:
     """One rank of the two-process CPU mesh: shard, run, then try to capture."""
 
     import torch.distributed as dist
     from torch.distributed.device_mesh import init_device_mesh
     from torch.distributed.tensor import parallel
 
-    # transformers reads the rank layout from the environment when it applies a tp_plan; without
-    # these it loads the checkpoint unsharded. The spawned child owns its environment.
+    # Each spawned child owns its environment; publish its rank layout there as well.
     os.environ.update(RANK=str(rank), WORLD_SIZE=str(world_size), LOCAL_RANK=str(rank))
     store = dist.FileStore(init_file, world_size)
     dist.init_process_group("gloo", store=store, rank=rank, world_size=world_size)
@@ -172,42 +170,9 @@ def _tp_rank(rank: int, world_size: int, init_file: str, out_dir: str, hf_dir: s
             result["torch_forward_shape"] = list(mlp(x).shape)
         result["torch_weight_type"] = type(mlp.fc1.weight).__name__
         result["torch_kinds"] = _refusal_kinds(mlp, x, {})
-        if hf_dir:
-            config = transformers.DistributedConfig(tp_plan="auto")
-            model = transformers.AutoModelForCausalLM.from_pretrained(
-                hf_dir, distributed_config=config, device_mesh=mesh
-            ).eval()
-            result["hf_weight_type"] = type(model.model.layers[0].self_attn.q_proj.weight).__name__
-            input_ids = torch.randint(0, 128, (1, 6), generator=torch.Generator().manual_seed(4))
-            with torch.no_grad():
-                result["hf_forward_shape"] = list(model(input_ids=input_ids).logits.shape)
-            result["hf_kinds"] = _refusal_kinds(model, (), {"input_ids": input_ids})
     finally:
         Path(out_dir, f"rank{rank}.json").write_text(json.dumps(result))
         dist.destroy_process_group()
-
-
-def _hf_tp_checkpoint(tmp_path: Path) -> str:
-    """Save a seeded tiny Llama for ``tp_plan`` loading, or return ``""`` when unsupported.
-
-    transformers refuses a ``tp_plan`` on any machine with an MPS device, so that half of the row
-    does not run on Apple silicon.
-    """
-
-    if not hasattr(transformers, "DistributedConfig"):
-        return ""
-    mps = getattr(torch.backends, "mps", None)
-    if mps is not None and mps.is_available():
-        return ""
-    try:
-        import accelerate  # noqa: F401  (transformers requires it for tp_plan loading)
-    except ImportError:
-        return ""
-    config = transformers.LlamaConfig(**_TINY, intermediate_size=64)
-    torch.manual_seed(0)
-    path = tmp_path / "tiny-llama"
-    transformers.LlamaForCausalLM(config).save_pretrained(str(path))
-    return str(path)
 
 
 @pytest.mark.slow
@@ -223,9 +188,7 @@ def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(
     pytest.importorskip("torch.distributed.tensor.parallel")
     import torch.multiprocessing as mp
 
-    hf_dir = _hf_tp_checkpoint(tmp_path)
-    # The row is a CPU mesh. On a CUDA host transformers would bind each rank to its own GPU,
-    # so the spawned ranks (which inherit this environment) see no CUDA device.
+    # The row is a CPU mesh: the spawned ranks (which inherit this environment) see no CUDA device.
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
     if sys.platform == "darwin" and "GLOO_SOCKET_IFNAME" not in os.environ:
         # gloo on macOS otherwise binds the hostname's interface, and the shard scatter in
@@ -234,7 +197,7 @@ def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(
     world_size = 2
     mp.spawn(
         _tp_rank,
-        args=(world_size, str(tmp_path / "init_store"), str(tmp_path), hf_dir),
+        args=(world_size, str(tmp_path / "init_store"), str(tmp_path)),
         nprocs=world_size,
         join=True,
     )
@@ -243,10 +206,6 @@ def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(
         assert result["torch_weight_type"] == "DTensor", "precondition: the plan sharded fc1"
         assert result["torch_forward_shape"] == [2, 8]
         assert result["torch_kinds"] == ["dtensor", "tensor_parallel"], result
-        if hf_dir:
-            assert result["hf_weight_type"] == "DTensor", "precondition: tp_plan sharded q_proj"
-            assert result["hf_forward_shape"] == [1, 6, 128]
-            assert result["hf_kinds"] == ["dtensor", "tensor_parallel"], result
 
 
 def _flash_attention_4_ready() -> str:

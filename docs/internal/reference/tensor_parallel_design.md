@@ -17,8 +17,8 @@ records rank-local view and reshape shims instead of the real ops and reports
 zero parameters. The workaround stays the same until the build lands: capture a
 rank-local dense copy of the module (build it unsharded, or materialize the
 logical tensors with `DTensor.full_tensor()` first).
-The refusal is measured on a two-process CPU `gloo` mesh for both
-`parallelize_module` and transformers `tp_plan` loading
+The refusal is measured on a two-process CPU `gloo` mesh for
+`parallelize_module` sharding; transformers `tp_plan` loading is not yet verified
 ([compat_matrix.md](../../reference/compat_matrix.md)).
 
 ## The planned answer: inference-only gather-on-read
