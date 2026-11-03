@@ -47,7 +47,7 @@ def owners():
         yield {
             "Trace": first,
             "Bundle": tl.Bundle({"a": first, "b": second}),
-            "Layer": first["relu_1_2"],
+            "Layer": first.layers["relu_1_2"],
             "Op": first.layers["relu_1_2"].ops[0],
             "VisualizationOptions": VisualizationOptions(),
             "CaptureOptions": CaptureOptions(),
