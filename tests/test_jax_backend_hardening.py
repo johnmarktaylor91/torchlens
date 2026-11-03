@@ -1185,7 +1185,10 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.provenance.param_source == "pytree-derived"
     assert set(trace.params.keys()) == {"w", "b"}
     assert trace.autograd.has_backward_pass is False
-    assert len(trace.autograd.backward_passes) == 0
+    # The public pass count is len(trace.autograd.backward_passes); a backend without
+    # backward capture refuses that read typed rather than reporting zero passes.
+    with pytest.raises(ValueError, match="do not capture true backward graphs"):
+        _ = trace.autograd.backward_passes
     assert trace.autograd.num_backward_edges is None
 
     outpath = tmp_path / "jax_graph"

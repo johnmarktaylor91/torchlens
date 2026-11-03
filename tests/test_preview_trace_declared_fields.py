@@ -33,6 +33,10 @@ from torchlens.backends._finalize import new_preview_function_trace
 _BACKENDS_DIR = Path(tl.__file__).parent / "backends"
 
 
+# Absent by design until a container output registers; a reload drops it too.
+_ABSENT_UNTIL_SET = frozenset({"_containers"})
+
+
 def _missing_declared_fields(trace: Trace) -> list[str]:
     """Declared Trace fields that neither the instance nor its class provides."""
 
@@ -40,7 +44,7 @@ def _missing_declared_fields(trace: Trace) -> list[str]:
     return sorted(
         name
         for name in MODEL_LOG_FIELD_ORDER
-        if name not in trace.__dict__ and name not in class_names
+        if name not in trace.__dict__ and name not in class_names and name not in _ABSENT_UNTIL_SET
     )
 
 
@@ -93,6 +97,8 @@ def test_declared_field_fill_sets_absent_fields_only_with_fresh_values() -> None
     assert first.capture_guard_passes == [] == second.capture_guard_passes
     assert first.capture_guard_passes is not second.capture_guard_passes
     assert first.completeness_diagnostics is not second.completeness_diagnostics
+    # Readers test the container registry by presence (``hasattr``); never fill it.
+    assert "_containers" not in first.__dict__
 
 
 def _preview_backend_sources() -> list[Path]:

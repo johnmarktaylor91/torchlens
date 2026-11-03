@@ -212,9 +212,10 @@ _MODEL_LOG_DEFAULT_FILL = {
 }
 _MODEL_LOG_DEFAULT_FILL["tlspec_version"] = TLSPEC_VERSION
 # The declared field set and each field's neutral value: the same fill a reloaded
-# trace receives for keys its writer never stamped (``trace_setstate``).
+# trace receives for keys its writer never stamped (``trace_setstate``), which
+# also drops an unserialized ``_containers`` (absence means no container registry).
 _DECLARED_FIELD_FILL: dict[str, Any] = {
-    field_name: _MODEL_LOG_DEFAULT_FILL[field_name] for field_name in MODEL_LOG_FIELD_ORDER
+    name: _MODEL_LOG_DEFAULT_FILL[name] for name in MODEL_LOG_FIELD_ORDER if name != "_containers"
 }
 
 
