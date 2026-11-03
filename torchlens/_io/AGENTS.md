@@ -102,3 +102,8 @@ hostile input, and every load path here is fail-closed.
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.
+
+The 3.0 runnable writer uses `format3/runnable.py` and its `runnable_families.py` adapter.
+It shares the artifact tensor-key counter with `format3/payloads.py`; the descriptor and
+state families live under `runnable/`. The storage and persistence enums live in the
+leaf `_field_policy.py`, with the record package preserving its `StorageKind` re-export.

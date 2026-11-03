@@ -57,6 +57,8 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `route.py` | the `bundle.load` switch into the 3.0 format: the root test and the door dispatch, kept outside `bundle.py` and its import cycle | 100 | reader |
 | `validate.py` | cross-record invariants after decode (section 9): site keys, structure-only coherence, checkpoint windows, edge carriers, graph structure, kernel relations, identity facts, injection provenance, evidence facts | 600 | reader |
 | `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | runnable |
+| `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
+| `container.py` | Bundle members, manifest bindings and relations |
 
 Public doors do not move: `tl.load`, `Trace.save`, `Bundle.save`, `tl.io`
 (`torchlens/io/__init__.py`), `Trace.save_intervention`. `_io/bundle.py` becomes the dispatch

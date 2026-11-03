@@ -55,7 +55,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `files` | object | every file in the directory except `manifest.json`, by relative path: `{"sha256": hex, "bytes": N}` |
 | `model_signature`, `model_fingerprint` | string | as the tlspec 11 manifest stamps them |
 | `runnable`, `intervention` | object | present with the component; component schema versions and file paths |
-| `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; the loader attaches an advisory when present |
+| `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
 
 ### Version floor and refusals
 
@@ -69,6 +69,10 @@ contract written in this format, so the 3.0 reader reads nothing older than itse
 - `format_version` above 3, or `tlspec_version` above the runtime's, refuses
   `artifact_version_above_runtime`.
 - `tlspec_version` below the floor refuses `artifact_version_below_floor`.
+
+`tl.io.detect_tlspec_format(path)` returns `"v3"` for a directory with a 3.0 manifest, `"pre_3"`
+for a 2.x save (a `metadata.pkl` or a manifest without `format`), and `"unknown"` for a directory
+that is not a TorchLens save at all.
 
 ### Digest relation
 
@@ -126,8 +130,8 @@ validates the JSON value against it; `Any` admits any value the value rules prod
 
 A key the field page marks `required` is a column of every artifact. A key marked `optional`
 with a payload flag is a column exactly when that flag is on in `payload_policy`; otherwise the
-column is absent, never null-filled. A column the level forbids refuses `manifest_schema_invalid`
-(the record-level spelling is provisional, see section 6). A structure-only capture keeps every
+column is absent, never null-filled. A column the level forbids refuses `record_schema_invalid`
+(section 6). A structure-only capture keeps every
 payload column but its tensor references carry no blob (section 3).
 
 ### Keys and values the format adds
@@ -220,8 +224,10 @@ A user object no rule covers is stringified with a disclosure, never pickled:
 ```
 
 `repr` keeps at most 256 characters (`contract.UNENCODABLE_REPR_LIMIT`), `repr_length` is the
-full length and `at` is the field path. The reader materializes it as a private frozen record
-with those four fields whose `repr` is the saved text; it carries no public name.
+full length and `at` is the field path. The reader materializes it as an `UnencodableValue`, a
+public frozen record with those four fields whose `repr` is the saved text, so a user can test for
+it with `isinstance`. A loaded artifact whose manifest carries `disclosures` gets the load
+advisory `unencodable_values_stringified`, in the same list as the capture advisories.
 
 ## 5. The intervention recipe
 
@@ -256,6 +262,9 @@ writes the same file in its own directory: one grammar, two homes.
   `kwargs` is replaced in place by the same object with `position` set to
   `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
   `intervention.executable` is false and the rule loads as an audit-only edit.
+- Such a recipe is written only at the audit level: `save_intervention(level="portable")` on a
+  recipe holding a user callable, or a value the format cannot carry, refuses at save time with
+  `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
 - A loaded trace whose recipe holds a placeholder refuses every rerun door
   (`run(model, x)` plain, append or chunked, a fork's `run`, `do(engine="rerun")`) with
   `run_intervention_spec_not_persisted`; the message names the rule position and the callable's
@@ -281,15 +290,21 @@ One table for the writer and the reader. Codes are rows of
 | unknown save level | `artifact_save_level_invalid` | writer, reader |
 | file digest or length mismatch, truncated record file | `bundle_metadata_integrity_refused` | reader |
 | key not in the record contract, or a `runtime` kind key | `unknown_persisted_field` | reader |
-| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `manifest_schema_invalid` (provisional spelling `record_schema_invalid`) | reader |
+| record value violates the contract (type, row length, column the level forbids, typed object with an unknown tag, `record` type off the allowlist) | `record_schema_invalid` | reader |
 | blob file or entry named by a reference is missing | `bundle_load_failed` | reader |
 | blob in a structure-only artifact, or a structure-only marker over retained payloads | `artifact_structure_only_incoherent` | writer, reader |
 | load path is a symlink | `load_path_symlink_rejected` | reader |
 | payload tensor the codec cannot hold | `metadata_value_unportable` | writer |
 | explicit payload flag contradicts the level | `save_payload_level_conflict` | writer |
 | target exists without `overwrite` | `bundle_save_failed` | writer |
+| portable save of a recipe holding a user callable or a value the format cannot carry | `intervention_spec_not_portable` | writer |
 | rerun of a loaded trace whose recipe holds a callable placeholder | `run_intervention_spec_not_persisted` | rerun doors |
 | a door called before its lane filled it | `bundle_save_failed`, `bundle_load_failed` | the stubs |
+
+`record_schema_invalid` and `intervention_spec_not_portable` (ruled 2 Nov 2026) join the error
+contract table in the change that adds their raise sites, the reader and the writer respectively.
+Until the reader lands, `contract.PROVISIONAL_REFUSALS` maps the record-level code to
+`manifest_schema_invalid`, the code a builder raises meanwhile.
 
 Two behaviours stay as they are today and apply to the JSON reader: the save preflight reloads
 every save once through the reader before publishing it, and the checked load validates every
@@ -303,6 +318,40 @@ callable reference and initializer policy at the component versions the writer c
 `state_dict-NNNN.safetensors` and `buffers.safetensors`. A callable reference that cannot be
 written follows the callable placeholder rule and makes the artifact audit-only. The `runnable`
 manifest object lists the component versions and files.
+
+- `descriptor.json` is canonical JSON (sorted keys, no NaN or infinity) and is byte for byte the
+  descriptor the tlspec 11 manifest carried under `run`. Callables appear only as callable registry
+  records (a registry key per callable); no callable object is ever written.
+- `state_dict-NNNN.safetensors` holds the capture-time state dict, numbered from 0001, each file at
+  most 256 MiB (a larger tensor gets a file of its own). `buffers.safetensors` holds the
+  non-persistent buffer values. `activations-NNNN.safetensors` holds the capture-selected
+  activations when the save archived them. Every tensor is one opaque key `t<k>` in one file, as in
+  section 3 (numbered on the artifact's shared counter; a reference names its file and key); tensors that share storage (tied weights, view activations) are written as separate
+  copies, and a complex tensor is stored as its real view with `"complex": true`.
+- The `runnable` manifest object is closed. Required: `descriptor`, `descriptor_version`,
+  `call_recipe_version`, `callable_ref_version`, `initializer_policy_version`,
+  `witness_registry_version`. Each present family adds three keys: its files, its schema and its
+  tensor references. `state_dict` (list), `state_dict_family`, `state_dict_tensors` (state name to
+  tensor reference); `buffers`, `buffers_family`, `buffers_tensors` (buffer name to tensor
+  reference); `activations` (list), `activations_family`, `activations_tensors` (the descriptor's
+  activation blob id to tensor reference). Every listed file has a `files` row.
+- Load refuses `manifest_schema_invalid` for an unknown key, a family missing one of its three keys,
+  a version other than the runtime's, a file name outside the fixed names, chunk numbering that is
+  not 0001 upward, a listed file without a `files` row, a tensor reference that is not a contract
+  tensor reference into its own family's files, or a `runnable/` directory the manifest does not
+  list; `bundle_metadata_integrity_refused` for a file whose sha256 or byte length differs, or for
+  a reference whose key is absent, repeated or whose dtype or shape disagree, or a stored tensor no
+  reference names;
+  `bundle_load_failed` for a listed file that is missing; `load_path_symlink_rejected` for a
+  symlinked file. The families then bind through the same strict state binders as before, so
+  readiness, numeric attestation and path faithfulness prove what they proved in tlspec 11.
+
+A bundle's member list references each member by `name`, `path` (`members/<index>-<name>`, the
+name part keeping letters, digits, `.`, `_` and `-` and at most 64 characters) and
+`manifest_sha256`, the sha256 of that member's `manifest.json`. A member swapped or edited after
+the save refuses `bundle_metadata_integrity_refused`; an unknown reference key or a mistyped hash
+refuses `manifest_schema_invalid`. `relations.json` holds the closed relation rows and is listed
+in the bundle manifest's `files`.
 
 ## 8. Worked examples
 
@@ -354,7 +403,8 @@ rule 0 is the `scale` edit of section 5 and rule 1 is
 with `"executable": false` at the top of the file and in the manifest's `intervention` object.
 `records/op.json` carries `is_edited` true and the `edits` fire records for both ops; loading
 succeeds, and `run(model, x)` refuses `run_intervention_spec_not_persisted` naming rule 1 and
-`experiments.hooks.clamp_top`.
+`experiments.hooks.clamp_top`. This recipe is the audit-level form: the same intervention saved
+with `save_intervention(level="portable")` refuses `intervention_spec_not_portable` at save time.
 
 ## 9. Loaded equals live
 

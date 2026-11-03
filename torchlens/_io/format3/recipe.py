@@ -30,8 +30,9 @@ import torch
 from .. import _json
 from ..format_errors import ArtifactError
 from .contract import HELPER_REGISTRY_VERSION, INTERVENTION_FILE, TYPED_VALUE_KEY
+from .decode import decode_value
 from .payloads import PayloadStore, host_tensor, read_tensor, tensor_reference
-from .values import ValueEncoder, build_record, callable_placeholder, decode_value, tagged
+from .values import ValueEncoder, build_record, callable_placeholder, tagged
 
 #: ``format`` of the recipe file.
 RECIPE_FORMAT: Final = "torchlens.intervention_recipe"

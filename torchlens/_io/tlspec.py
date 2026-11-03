@@ -17,10 +17,11 @@ import torch
 from .. import __version__ as TORCHLENS_VERSION
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
-from . import TLSPEC_VERSION, ArtifactError, refuse_bundle_exists
+from . import TLSPEC_VERSION, refuse_bundle_exists
 from ._durability import _restrict_mode, fsync_dir, fsync_tree
 from ._tlspec_identity import _backend_v2_fields, _model_fingerprint, _model_signature, _safe_len
 from ._tlspec_json_helpers import _json_int_or_none, _json_str_or_none, _utc_timestamp
+from .format3.container import write_members
 from .format3.writer import EnvelopeSpec, envelope_fields
 from .manifest import Manifest, TensorEntry, _runtime_python_version
 from .paths import reject_symlink_path
@@ -447,18 +448,12 @@ class _TlSpecWriter:
             Member metadata records.
         """
 
-        members = getattr(bundle, "members", {})
-        if not isinstance(members, dict):
-            raise ArtifactError("Bundle writer expected a mapping of members.")
-        members_path = tmp_path / "members"
-        members_path.mkdir()
-        _restrict_mode(members_path, 0o700)
-        records: list[dict[str, str]] = []
-        for index, (name, trace) in enumerate(members.items()):
-            relative_path = Path("members") / f"{index:04d}-{_member_slug(name)}"
-            trace.save(tmp_path / relative_path, level=save_level)
-            records.append({"name": str(name), "path": relative_path.as_posix()})
-        return records
+        return write_members(
+            bundle,
+            tmp_path,
+            level=save_level,
+            write_member=lambda trace, member_path, level: trace.save(member_path, level=level),
+        )
 
     @classmethod
     def build_manifest(

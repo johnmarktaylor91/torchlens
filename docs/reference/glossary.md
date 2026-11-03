@@ -705,7 +705,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   artifact). Pair kinds: `alternative_of` (peers; still comparable), `forked_from`,
   `successor_of`, `escalates`, `fed_by`, `selected_by`; member kind: `episode_member`. Each kind's
   params are a
-  closed set; rows persist in `bundle.json` and every load re-checks them. On a pair row `from` is
+  closed set; rows persist in the bundle artifact (`relations.json` in the 3.0 format) and every
+  load re-checks them. On a pair row `from` is
   always the LATER member. Rows are ordering and topology claims: members joined by a directed
   path of ordering kinds are not comparison operands.
 
@@ -940,7 +941,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Runnable artifact**
 : A `.tlspec` saved at `level="runnable"` with a sparse taken-path descriptor. Its source capture
   must use `replayable=True`; this flag supplies replay templates even when no intervention
-  is planned.
+  is planned. In the 3.0 format the descriptor is `runnable/descriptor.json` and the state is
+  safetensors files beside it, listed by the manifest's `runnable` object; no callable is ever
+  pickled ([saved_format_3.md](../maintainers/saved_format_3.md), section 7).
 
 **Readiness**
 : The non-executing runnable state `ready` or `unavailable`.
@@ -1473,8 +1476,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 `tl.types.UnencodableValue`
 : The stand-in a loaded 3.0 artifact carries where the save met a value outside the saved
   format's vocabulary (a user object in a module attribute, a custom metadata value). Frozen,
-  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded) and
-  `at` (the record, row and column it sat in). The load attaches one advisory,
+  with `type_name` (the value's `module.qualname`), `repr_text` (its repr text, bounded)
+  and `at` (the record, row and column it sat in). The load attaches one advisory,
   `unencodable_values_stringified`, to the trace's capture advisories when the artifact's
   manifest discloses such values. A record cell that fails its typed schema refuses
   `record_schema_invalid`.
@@ -1484,6 +1487,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
   3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  A saved value with no typed encoding is written as text and counted in the manifest's
+  `disclosures`; it loads back as `tl.types.UnencodableValue`, a frozen stand-in carrying
+  `type_name` (the original type's dotted name), `repr_text` (its `repr`, cut at 256
+  characters) and `at` (where it was in the artifact). A saved cell that fails its type check
+  on load refuses `record_schema_invalid`.
   `Trace.save` writes the staged intervention spec as the typed recipe `intervention.json`
   beside the intervened values and their per-op provenance (`save_intervention` writes the same
   recipe as an artifact of its own). A loaded trace whose recipe holds only built-in edits reruns

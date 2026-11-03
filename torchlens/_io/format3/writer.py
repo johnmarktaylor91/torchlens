@@ -41,10 +41,11 @@ from .contract import (
     RECORD_INDEX,
     RECORDS_DIR,
 )
+from .decode import decode_value
 from .payloads import PayloadStore
 from .recipe import RecipeHeader, build_recipe, write_recipe
 from .schema import LiveCells, level_columns, record_kind_of, record_schema
-from .values import ValueEncoder, decode_value, object_state, record_type_table, tagged
+from .values import ValueEncoder, object_state, record_type_table, tagged
 
 #: Root files the digest table leaves out: the manifest itself and the
 #: staging sentinel that comes off right before publish.
@@ -425,27 +426,6 @@ def envelope_fields(root: Path, envelope: EnvelopeSpec) -> dict[str, Any]:
     return fields
 
 
-def payload_index(tensor_refs: Mapping[str, Mapping[str, Any]]) -> dict[str, dict[str, str]]:
-    """Return the manifest ``tensors`` index: blob id to its chunk file and key.
-
-    Parameters
-    ----------
-    tensor_refs:
-        Blob id to tensor reference fields of every stored payload.
-
-    Returns
-    -------
-    dict[str, dict[str, str]]
-        ``{blob_id: {"blob": chunk relpath, "key": "t<k>"}}`` in blob-id order.
-    """
-
-    return {
-        blob_id: {"blob": str(fields["blob"]), "key": str(fields["key"])}
-        for blob_id, fields in sorted(tensor_refs.items())
-        if "blob" in fields
-    }
-
-
 def make_encoder_factory(tensor_refs: Mapping[str, Mapping[str, Any]]) -> Any:
     """Return the encoder factory that resolves scrubbed blob references.
 
@@ -510,8 +490,9 @@ def write_trace_envelope(
         cells=LiveCells(tables.record_pairs, include_source=tables.include_source),
     )
     records = write_record_files(root, files)
-    # Blob-id index: the runnable descriptor and weight tables name payloads by blob id.
-    manifest: dict[str, Any] = {**base_manifest, "tensors": payload_index(tables.tensor_refs)}
+    manifest: dict[str, Any] = dict(base_manifest)
+    manifest.pop("run", None)
+    manifest.pop("tensors", None)
     manifest.pop("tensor_entries", None)
     filled = dataclasses.replace(
         envelope, records=records, disclosures=[*disclosures, *envelope.disclosures]
@@ -712,7 +693,6 @@ __all__ = [
     "encode_tables",
     "envelope_fields",
     "file_digests",
-    "payload_index",
     "preflight_reload",
     "record_kind_of",
     "record_type_table",

@@ -19,7 +19,7 @@ eviction plus parameter-reference release. Step order is load-bearing.
 | `_executor.py` | executor | `StepContext` and the per-step adapters (`_run_<name>`), gates (`_should_run_<name>`) and postconditions (`_<name>_violation`) the pipeline points at |
 | `_materialize.py` | 0 | Project capture events into raw `Op` state |
 | `_buffer_addresses.py` | 0 support | Resolve each buffer op's registered buffer address and the initial buffer snapshots |
-| `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances |
+| `graph_traversal.py` | 1-4 | Output nodes, output ancestors, orphan removal, distances; `_orphan_seeds.py` owns flood seeds, call-group closure and pre-removal identity/payload bookkeeping |
 | `ast_branches.py` | 5 support, 11.5 support | Conditional AST indexing and source variable name resolution. Hot/cold FileIndex split: parsed ASTs (`_HeavyAst`) are released at the postprocess epilogue (`release_parsed_asts()`); span data + node-free projected calls persist, and unprojected-scope queries re-parse from RETAINED source (never disk), failing closed on anomaly |
 | `control_flow.py` | 5-6 | Conditional attribution and buffer version merging |
 | `loop_detection.py` | 7 | Call-site grouping (`callsite_v1`, rule in `docs/guides/grouping.md`; keys from `utils/_call_site.py`); falls back to the structural adapter when no op carries call-site evidence |

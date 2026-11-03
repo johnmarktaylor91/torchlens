@@ -74,7 +74,11 @@ from ._save_gates import (
     _refuse_shard_local_erasure,
     _save_bundle_via_container_door,
 )
-from .format3 import contract as format3_contract, reader as format3_reader
+from .format3 import (
+    contract as format3_contract,
+    reader as format3_reader,
+    runnable as format3_runnable,
+)
 from .format3.payloads import (
     NUMPY_CODEC,
     TORCH_CODEC,
@@ -574,7 +578,6 @@ def save(
         include_buffer_values=include_buffer_values,
     )
     sparse_run_descriptor = None
-    sparse_run_json = None
     weight_blob_specs: list[BlobSpec] = []
     nonpersistent_buffer_blob_specs: list[BlobSpec] = []
     activation_blob_specs: list[BlobSpec] = []
@@ -593,44 +596,14 @@ def save(
             arguments=("include_activations", "level"),
         )
     if save_level == "runnable":
-        from .runnable import (
-            require_sparse_run_descriptor,
-            sparse_descriptor_to_json,
-            with_activation_payload,
-            with_weight_payload,
-        )
-
-        sparse_run_descriptor = require_sparse_run_descriptor(trace)
-        nonpersistent_buffer_blob_specs = _capture_nonpersistent_buffer_blob_specs(
-            trace,
+        (
             sparse_run_descriptor,
+            nonpersistent_buffer_blob_specs,
+            weight_blob_specs,
+            activation_blob_specs,
+        ) = format3_runnable._stamped_descriptor(
+            trace, include_weights=include_weights, include_activations=include_activations
         )
-        if nonpersistent_buffer_blob_specs:
-            _warn_nonpersistent_buffer_disclosure_once()
-        if include_weights:
-            weight_blob_specs = _capture_weight_blob_specs(
-                trace,
-                sparse_run_descriptor,
-            )
-            sparse_run_descriptor = with_weight_payload(sparse_run_descriptor)
-        if include_activations:
-            (
-                activation_blob_specs,
-                activation_members,
-                original_input_digests,
-                capture_state_digests,
-                input_fingerprints,
-            ) = _capture_activation_blob_specs(trace, sparse_run_descriptor)
-            if activation_members and not original_input_digests:
-                _warn_unattestable_activation_archive_once()
-            sparse_run_descriptor = with_activation_payload(
-                sparse_run_descriptor,
-                members=activation_members,
-                original_input_digests=original_input_digests,
-                capture_state_digests=capture_state_digests,
-                input_fingerprints=input_fingerprints,
-            )
-        sparse_run_json = sparse_descriptor_to_json(sparse_run_descriptor)
     backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
     backend_spec = get_backend_spec(backend_name)
     _reject_audit_only_materialized_payload_save(
@@ -684,9 +657,6 @@ def save(
                 raise ArtifactError(
                     "Sparse runnable scrub produced tensor blob specs; refusing runnable label."
                 )
-            blob_specs.extend(nonpersistent_buffer_blob_specs)
-            blob_specs.extend(weight_blob_specs)
-            blob_specs.extend(activation_blob_specs)
         _refuse_incoherent_structure_only_write(scrubbed_state)
         _apply_visualization_save_policy(
             trace,
@@ -728,7 +698,8 @@ def save(
                 "be saved without a backend payload codec."
             )
 
-        payload_store = PayloadStore(tmp_path)
+        payload_counter = [0]
+        payload_store = PayloadStore(tmp_path, counter=payload_counter)
         tensor_refs: dict[str, dict[str, Any]] = {}
         tensor_entries: list[TensorEntry] = []
         unsupported_tensors: list[dict[str, str]] = list(scrub_unsupported_tensors)
@@ -781,6 +752,22 @@ def save(
         intervention_entry, recipe_disclosures = write_trace_recipe(
             tmp_path, trace, store=payload_store, save_level=save_level
         )
+        runnable_entry = None
+        if sparse_run_descriptor is not None:
+            runnable_entry = format3_runnable.write_runnable(
+                trace,
+                tmp_path,
+                include_weights=include_weights,
+                include_activations=include_activations,
+                counter=payload_counter,
+                prepared=(
+                    sparse_run_descriptor,
+                    nonpersistent_buffer_blob_specs,
+                    weight_blob_specs,
+                    activation_blob_specs,
+                ),
+            )
+            payload_store.writer(TORCH_CODEC)
         payload_store.close()
         tensor_entries = seal_tensor_entries(tmp_path, tensor_entries)
 
@@ -819,11 +806,12 @@ def save(
             trace=trace,
             legacy_manifest=manifest,
             save_level=save_level,
-            sparse_run=sparse_run_json,
             scrubbed_state=scrubbed_state,
         )
         if intervention_entry is not None:
             base_manifest["intervention"] = intervention_entry
+        if runnable_entry is not None:
+            base_manifest["runnable"] = runnable_entry.manifest
         tables = TraceTables(
             scrubbed_state,
             tensor_refs,

@@ -1040,6 +1040,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/_pickle_prescan.py", "__all__"),
         ("torchlens/_io/_safe_unpickle.py", "__all__"),
         ("torchlens/_io/_torch_symbols.py", "__all__"),
+        ("torchlens/_io/format3/__init__.py", "__all__"),
         ("torchlens/_io/injection_codec.py", "__all__"),
         ("torchlens/_io/payload_reader.py", "__all__"),
         ("torchlens/_io/runnable.py", "__all__"),

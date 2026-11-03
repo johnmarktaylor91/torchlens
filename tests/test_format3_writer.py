@@ -38,8 +38,8 @@ from torchlens._io.format3.contract import (
     TYPED_VALUE_KEY,
     TYPED_VALUE_TAGS,
 )
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.format3.recipe import RECIPE_FORMAT, RECIPE_FORMAT_VERSION
-from torchlens._io.format3.values import decode_value
 from torchlens._io.writer_contract import writer_contract_digest
 from torchlens._postprocess._pipeline import PIPELINE
 
@@ -611,3 +611,36 @@ def test_staged_artifact_passes_the_reload_check(saved: dict[str, Path], label: 
     )
     for root in roots:
         format_writer.reload_check(root)
+
+
+@pytest.mark.parametrize("keep_orphans", [False, True])
+def test_pruning_retains_complete_orphan_records_or_no_shells(
+    tmp_path: Path, keep_orphans: bool
+) -> None:
+    """Removed orphan ops leave no identity-free rows; retained orphans keep state."""
+
+    class DeadBranch(nn.Module):
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            torch.ones(2).sin()
+            return x + 1
+
+    trace = tl.trace(
+        DeadBranch(),
+        torch.ones(2),
+        capture=tl.options.CaptureOptions(keep_orphans=keep_orphans, replayable=True),
+    )
+    try:
+        assert trace._orphan_labels
+        assert bool(trace._orphan_logs) is keep_orphans
+        if keep_orphans:
+            assert all(isinstance(op.label, str) for op in trace._orphan_logs)
+        else:
+            path = tmp_path / "pruned.tlspec"
+            trace.save(path)
+            loaded = tl.load(path)
+            try:
+                assert loaded._orphan_logs == ()
+            finally:
+                loaded.cleanup()
+    finally:
+        trace.cleanup()
