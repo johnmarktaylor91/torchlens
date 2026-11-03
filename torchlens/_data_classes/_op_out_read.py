@@ -34,6 +34,8 @@ def _synthesized_out_read_due(source_trace: Any) -> bool:
     ``Op.out``; the gate itself dedupes per trace.
     """
 
+    if source_trace is None:
+        return False
     record = source_trace._provenance_input_preprocessor
     return (
         record is not None

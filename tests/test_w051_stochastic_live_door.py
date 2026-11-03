@@ -79,7 +79,7 @@ def test_live_door_matches_replay_door() -> None:
         site_key, pass_index, _step = coordinate
         assert isinstance(site_key, str) and site_key.startswith("s1|")
         assert pass_index == 1
-    assert {layer_site_key(live["relu_1_2"]), layer_site_key(live["relu_2_4"])} == {
+    assert {layer_site_key(live.layers["relu_1_2"]), layer_site_key(live.layers["relu_2_4"])} == {
         coordinate[0] for coordinate, _d in replay
     }, "the stamped live key IS the key postprocess mints"
 

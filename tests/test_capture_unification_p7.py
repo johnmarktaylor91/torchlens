@@ -219,7 +219,7 @@ def test_recording_to_trace_inputs_come_from_materialization(
         for event in recording._capture_events.op_events
         if event.layer_type == "input"
     }
-    actual_raw_inputs = {cooked[label].ops[0]._label_raw for label in cooked.input_layers}
+    actual_raw_inputs = {cooked.layers[label].ops[0]._label_raw for label in cooked.input_layers}
     assert expected_raw_inputs
     assert actual_raw_inputs == expected_raw_inputs
     check_metadata_invariants(cooked)

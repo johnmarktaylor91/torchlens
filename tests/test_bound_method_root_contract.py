@@ -209,7 +209,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     log.save(target)
     loaded = tl.load(target)
     assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
-    out_op = loaded[loaded.output_layers[0]].ops[0]
+    out_op = loaded.layers[loaded.output_layers[0]].ops[0]
     assert out_op.tl_authored_root is True
     with pytest.raises(ModelMismatchError) as excinfo:
         loaded._validate_supplied_model_matches_capture(model)

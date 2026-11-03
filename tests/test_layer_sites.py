@@ -104,7 +104,7 @@ class _Grow(nn.Module):
 def test_site_key_single_on_uniform_layer() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     assert layer_site_key(log.layers["linear_1_1"]) == "s1|lin|linear||1"
-    assert layer_site_key(log["relu_1_2"]) == "s1|act|relu||1"
+    assert layer_site_key(log.layers["relu_1_2"]) == "s1|act|relu||1"
 
 
 def test_site_key_refuses_typed_on_spanning_layer() -> None:
@@ -165,7 +165,7 @@ def test_site_peers_refuses_typed_without_keys() -> None:
         _ = layer.site_peers
     assert excinfo.value.fields["code"] == "site_key_unavailable"
     # Other layers with keys never match the stripped layer either way.
-    other = log[relu_labels[1]]
+    other = log.layers[relu_labels[1]]
     assert relu_labels[0] not in {peer.layer_label for peer in other.site_peers}
 
 
@@ -196,12 +196,14 @@ class _StubLayer:
 def test_shape_summary_none_for_single_pass_and_uniform() -> None:
     log = tl.trace(_Tied(), torch.randn(2, 8))
     assert log.layers["linear_1_1"].shape_summary is None  # uniform multi-pass
-    assert log["input_1"].shape_summary is None  # single-pass
+    assert log.layers["input_1"].shape_summary is None  # single-pass
 
 
 def test_shape_summary_single_axis_monotone_on_real_capture() -> None:
     log = tl.trace(_Grow(), torch.randn(2, 4, 8))
-    multi_pass = [log.layers[label] for label in log.layer_labels if log[label].num_passes > 1]
+    multi_pass = [
+        log.layers[label] for label in log.layer_labels if log.layers[label].num_passes > 1
+    ]
     linear = next(layer for layer in multi_pass if "linear" in layer.layer_label)
     assert linear.shape_summary == "2->4"
     assert set(linear.shape_summary) <= SHAPE_SUMMARY_CHARACTER_CLASS

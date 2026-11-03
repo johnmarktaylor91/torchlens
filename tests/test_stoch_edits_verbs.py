@@ -153,7 +153,7 @@ def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     fork = log.fork()
     # The explicit Layer selection is the all-passes spelling (one rule, two
     # pass firings) -- exactly the treeified-scrub shape A4b pins.
-    fork.do(fork[layer].__selection__(), tl.patch_from(per_firing))
+    fork.do(fork.layers[layer].__selection__(), tl.patch_from(per_firing))
     records = [r for r in sampling_draws(fork) if r.share_draw == "per_firing"]
     assert len(records) == 2, "one draw per pass firing"
     assert records[0].derived_seed != records[1].derived_seed

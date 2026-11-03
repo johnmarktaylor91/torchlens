@@ -1360,7 +1360,7 @@ class _FastLiveSession:
             # A folded input Layer is listed once per pass under one bare
             # label, which ``layer_dict_all_keys`` maps to the LAST pass; the
             # per-listing rule refreshes each pass with its own input.
-            input_ops = boundary_label_rows(input_labels, self.target.__getitem__)
+            input_ops = boundary_label_rows(input_labels, self.target.layers.__getitem__)
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)

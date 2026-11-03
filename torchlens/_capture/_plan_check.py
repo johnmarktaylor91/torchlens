@@ -107,7 +107,7 @@ def _geometry_verdict(trace: Any, labels: tuple[str, ...], replacement: Any) -> 
             "or any object with shape/dtype attributes as the replacement",
         )
     for label in labels:
-        layer = trace[label]
+        layer = trace.layers[label]
         site_shape = getattr(layer, "shape", None)
         site_dtype = getattr(layer, "dtype", None)
         if shape is not None and site_shape is not None and tuple(shape) != tuple(site_shape):

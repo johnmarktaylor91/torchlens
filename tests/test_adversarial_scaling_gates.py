@@ -431,7 +431,7 @@ def test_wide_fanout_and_fanin_relations_exact() -> None:
     assert len(mults) == N_FANOUT
     # grouping rule row 32: the comprehension is one ``mul`` layer with a pass
     # per child, so relations name the pass-qualified labels.
-    assert log[mults[0]].num_passes == N_FANOUT
+    assert log.layers[mults[0]].num_passes == N_FANOUT
     input_children = log["input_1:1"].children
     assert len(input_children) == N_FANOUT
     assert set(input_children) == set(mults)

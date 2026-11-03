@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -298,6 +298,7 @@ def _check_conditional_bool_event_backrefs(
                     f"ConditionalEvent id={event.id} bool_layers contains missing label "
                     f"{bool_label!r}",
                 )
+            bool_layer: Any
             try:
                 bool_layer = ml.ops[bool_label]
             except (KeyError, ValueError, TypeError):
