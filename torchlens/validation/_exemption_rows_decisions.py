@@ -53,6 +53,8 @@ _VALUE_PROOF = _EX + "_posthoc_value_proof_decision"
 _SETITEM_TOTAL = _EX + "_setitem_destination_coverage_is_total"
 _OPERAND = "torchlens.validation._operand_value_proofs:"
 _SDPA = "torchlens.validation._sdpa_value_proofs:"
+_SAVED = "torchlens.validation._saved_value_proofs:"
+_SAVED_TESTS = "tests/test_validation_saved_value_proofs.py::"
 _SINGLE_KEY = _GAP + "test_sdpa_single_key_edge_is_exempted"
 _NON_FINITE = _VHARD + "test_annihilator_and_singleton_proofs_refuse_a_non_finite_saved_output"
 
@@ -478,6 +480,68 @@ _DECISION_ROWS: tuple[ExemptionRow, ...] = (
         (
             _VHARD + "test_nan_multiplication_proof_still_covers_plain_mul",
             _HARDENING + "test_boundary_crossing_validates_piecewise_constant_ops",
+        ),
+    ),
+    # -- saved-value proofs (Menagerie rung-4 port): the train's operand and sdpa proofs decide first
+    _decision(
+        "zero_dividend_annihilator",
+        ("posthoc", _C2),
+        _SAVED + "_division_decision",
+        "the divisor of a division whose saved dividend is exactly zero everywhere and whose quotient is finite zero",
+        (
+            _SAVED_TESTS + "test_zero_dividend_exempts_the_divisor",
+            _SAVED_TESTS + "test_divisor_of_nonzero_dividend_and_zero_dividend_itself_still_fail",
+        ),
+    ),
+    _decision(
+        "conjunction_zero_annihilator",
+        ("posthoc", _C2),
+        _SAVED + "_conjunction_decision",
+        "one operand of a bitwise or logical and whose saved partner is zero everywhere",
+        (
+            _SAVED_TESTS + "test_and_with_all_false_operand_exempts_the_other_operand",
+            _SAVED_TESTS + "test_and_with_true_operand_still_fails_when_frozen",
+        ),
+    ),
+    _decision(
+        "disjunction_saturated",
+        ("posthoc", _C2),
+        _SAVED + "_disjunction_decision",
+        "one operand of an in-place bool or whose saved partner is True everywhere "
+        "(the out-of-place spellings are or_absorbing_true_operand)",
+        (
+            _SAVED_TESTS + "test_inplace_or_with_all_true_destination_exempts_the_other_operand",
+            _SAVED_TESTS + "test_inplace_or_with_false_destination_still_fails_when_frozen",
+        ),
+    ),
+    _decision(
+        "pow_zero_exponent",
+        ("posthoc", _C2),
+        _SAVED + "_pow_zero_exponent_decision",
+        "the base of a pow whose saved exponent is zero everywhere",
+        (
+            _SAVED_TESTS + "test_zero_exponent_exempts_the_base",
+            _SAVED_TESTS + "test_base_under_nonzero_exponent_and_zero_exponent_itself_still_fail",
+        ),
+    ),
+    _decision(
+        "sdpa_singleton_key",
+        ("posthoc", _C2),
+        _SAVED + "_sdpa_singleton_key_decision",
+        "the additive float mask of scaled_dot_product_attention over exactly one key position with every softmax row well defined",
+        (
+            _SAVED_TESTS + "test_single_key_position_exempts_query_key_and_additive_mask",
+            _SAVED_TESTS + "test_query_key_and_mask_of_longer_memory_and_lone_value_still_fail",
+        ),
+    ),
+    _decision(
+        "setitem_singleton_index_dim",
+        ("posthoc", _C2),
+        _SAVED + "_setitem_singleton_index_decision",
+        "an integer index component of a setitem that addresses a destination dim of size one",
+        (
+            _SAVED_TESTS + "test_index_into_size_one_dim_is_exempt",
+            _SAVED_TESTS + "test_index_into_wider_dim_still_fails_when_frozen",
         ),
     ),
 )
