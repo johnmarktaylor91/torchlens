@@ -91,7 +91,7 @@ def _routed_capture_fields(state: _DoorState, opts: CaptureOptions, save: Any) -
     return {
         "input_transform": None,
         "save_raw_input": state.save_raw_input_policy,
-        "save_transformed_output": state.save_raw_output_policy,
+        "save_transformed_output": state.save_transformed_output_policy,
         "save_grads": state.save_grads_policy,
         "hooks": MISSING,
         "unwrap_when_done": False,

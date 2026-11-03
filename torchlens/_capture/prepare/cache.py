@@ -717,7 +717,7 @@ def _curated_cache_config(state: _DoorState) -> dict[str, Any]:
         "aten_ops": opts.aten_ops,
         "log_injections": opts.log_injections,
         "save_raw_input": repr(state.save_raw_input_policy),
-        "save_transformed_output": repr(state.save_raw_output_policy),
+        "save_transformed_output": repr(state.save_transformed_output_policy),
         "save_raw_activations": state.save_options.save_raw_activations,
         "save_raw_grads": state.save_options.save_raw_gradients,
         "activation_transform": _stable_cache_fragment(state.save_options.activation_transform),

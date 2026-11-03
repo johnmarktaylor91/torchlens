@@ -1040,7 +1040,7 @@ def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
 
     Regression test for a MAJOR cost regression: ``_is_safely_picklable``'s
     ``stringify_unknown`` probe called ``pickle.dumps()`` on every unspecced
-    value reached via ``save_raw_input``/``save_raw_output`` -- including
+    value reached via ``save_raw_input``/``save_transformed_output`` -- including
     large tensors, which is the entire point of choosing the ``True`` "full
     retention" policy over the default bounded ``"small"`` policy -- doubling
     CPU cost and transiently doubling peak memory. ``torch.Tensor`` and

@@ -388,7 +388,7 @@ class CaptureOptions:
             ``"shape_only"``.
         output_transform:
             Optional callable applied once to the model output after ``model.forward``.
-        save_raw_output:
+        save_transformed_output:
             Raw model-output save policy for portable bundles. ``"small"`` stores a
             bounded representation, ``True`` stores the full object, and ``False``
             drops it when saving.

@@ -289,7 +289,7 @@ class TinygradBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
@@ -353,8 +353,8 @@ class TinygradBackend:
             Raw-input render policy.
         output_transform
             Optional metadata transform for final output.
-        save_raw_output
-            Raw-output save policy.
+        save_transformed_output
+            Transformed-output save policy.
         layer_visualizers
             Unsupported for tinygrad in this preview.
         save_visualizations
@@ -401,7 +401,7 @@ class TinygradBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
             module_identity_mode=module_identity_mode,
         )
@@ -419,7 +419,7 @@ class TinygradBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
@@ -450,7 +450,7 @@ class TinygradBackend:
         name = _default_if_missing(name, None)
         save_raw_input = _default_if_missing(save_raw_input, "small")
         batch_render = _default_if_missing(batch_render, "auto")
-        save_raw_output = _default_if_missing(save_raw_output, "small")
+        save_transformed_output = _default_if_missing(save_transformed_output, "small")
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
@@ -504,7 +504,7 @@ class TinygradBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_transformed_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_transformed_output),
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
