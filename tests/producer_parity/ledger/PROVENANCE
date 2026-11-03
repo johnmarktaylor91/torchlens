@@ -4355,3 +4355,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 5f8b45d75dea1098e9d033c1ee3c2120d69f2628 (dirty)
 recorded: 2026-10-29T04:14:24.023243+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family c129-r2 on b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf (dirty)
+recorded: 2026-11-03T20:13:50.693973+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: queue family c129-r2 on b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: b75fa3c2a082783d76ec05057ba0bb8a4f04e5cf (dirty)
+recorded: 2026-11-03T20:13:55.748259+00:00

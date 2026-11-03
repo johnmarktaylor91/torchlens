@@ -7104,6 +7104,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": false,
+  "field": "raw_index",
+  "file": "torchlens/bridge/captum.py",
+  "has_default": true,
+  "sites": 2,
+  "via_getattr": true
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/bridge/lit/__init__.py",
