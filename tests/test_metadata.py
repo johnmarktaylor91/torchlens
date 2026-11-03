@@ -463,7 +463,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
 
     mh = trace_fn(
         model=_WithOrphans(),
-        input_args=torch.randn(2, 3),
+        inputs=torch.randn(2, 3),
         capture=torchlens.options.CaptureOptions(keep_orphans=True),
     )
     orphan_labels = list(mh.graph.orphans.keys())

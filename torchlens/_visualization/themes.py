@@ -9,10 +9,13 @@ ramp (low/mid/high, so a diverging map is later a mapping change, not a
 schema change), and the declared NEUTRAL "aggregate, not encoded" fill
 (N17) for collapsed boxes under an active channel.
 
-Every shipped skin renders the legacy TorchLens role colours (input light
-green, output light red, weights light grey when trainable and dark grey when
-frozen, plain operations the page colour); the Okabe-Ito set ships as data with
-its accessibility evidence attached.
+The default ``torchlens`` skin and the ``colorblind`` skin render the
+Okabe-Ito role colours (input green, output vermillion, weights sky blue when
+trainable and a deeper blue when frozen, plain operations the page colour), the
+set that passes every colour-vision gate. The ``paper`` and ``high_contrast``
+skins keep the legacy TorchLens role colours (input light green, output light
+red, weights light grey when trainable and dark grey when frozen) and ``dark``
+its dark remap.
 """
 
 from __future__ import annotations
@@ -27,8 +30,9 @@ from .._errors import InvalidArgumentError
 from .._vocab.node_spec import NodeSpec
 from ._typography import DEFAULT_TYPOGRAPHY, HIGH_CONTRAST_TYPOGRAPHY, TypographyRecord
 
-#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set). Shipped as
-#: data only, no skin renders it; the CVD accessibility gate measures it.
+#: The Okabe-Ito semantic role palette (memo FORK-2 branch A set): the default
+#: ``torchlens`` skin and the ``colorblind`` skin render it; the CVD
+#: accessibility gate measures it.
 OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#009E73",
@@ -44,8 +48,8 @@ OKABE_ITO_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
 )
 
 #: The historical semantic role palette: the identity mapping of the rendered
-#: constants. The default ``torchlens`` skin and the paper, colorblind and
-#: high_contrast skins render it.
+#: constants (the role vocabulary). The ``paper`` and ``high_contrast`` skins
+#: render it; it stays the field default of :class:`VisualizationTheme`.
 LEGACY_SEMANTIC_PALETTE: Mapping[str, str] = MappingProxyType(
     {
         "input": "#98FB98",
@@ -172,7 +176,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_fill="white",
         default_border="black",
         default_font="black",
-        semantic_palette=LEGACY_SEMANTIC_PALETTE,
+        semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
         ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
         neutral_aggregate_fill="#E8EEF2",
     ),
@@ -213,7 +217,7 @@ THEME_PRESETS: dict[str, VisualizationTheme] = {
         default_fill="white",
         default_border="#0072B2",
         default_font="#111111",
-        semantic_palette=LEGACY_SEMANTIC_PALETTE,
+        semantic_palette=OKABE_ITO_SEMANTIC_PALETTE,
         ramp=("#F2F2F2", "#79A8CC", "#0072B2"),
         neutral_aggregate_fill="#E8EEF2",
     ),

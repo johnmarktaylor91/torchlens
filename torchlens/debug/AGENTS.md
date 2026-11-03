@@ -36,7 +36,7 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
   `first_divergence` (a dict or None), and `_grad_fn_walk.py` (VIZ-R).
 
 ## _nan.py
-- `find_nan(model, x, **trace_kwargs)` captures fresh and localizes the first
+- `find_nan(model, inputs, **trace_kwargs)` captures fresh and localizes the first
   nonfinite value; `find_nan_in_trace(trace)` / `bisect_nan(trace)` work on an
   existing trace.
 - Results are `FindNanReport` / `BisectNanReport`; unsaved ancestors become an

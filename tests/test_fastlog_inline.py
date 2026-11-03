@@ -54,7 +54,7 @@ def test_fast_pass_selective_save_matches_fresh_trace_outputs() -> None:
         fast_trace.save_new_outs(
             model,
             replacement_input,
-            layers_to_save=selected_labels,
+            save=selected_labels,
             seed=11,
         )
         fresh_trace = tl.trace(

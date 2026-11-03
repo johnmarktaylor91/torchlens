@@ -563,5 +563,5 @@ def test_public_surface_and_docs_lockstep() -> None:
         assert row.count("|") == 4 and row.rsplit("|", 2)[-2].strip(), code
     for removed in ("read_ledger", "ExperimentLedger", "LedgerEntry", "active_ledger"):
         assert removed not in glossary, removed
-        for page in (_REPO_ROOT / "docs" / "agent-reference").glob("*.md"):
+        for page in (_REPO_ROOT / "docs" / "internal" / "agent-reference").glob("*.md"):
             assert removed not in page.read_text(), (page.name, removed)

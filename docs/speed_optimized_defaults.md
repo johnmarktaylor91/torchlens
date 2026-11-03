@@ -3,7 +3,7 @@
 TorchLens defaults favor complete metadata and debuggability. For high-throughput capture, use the
 smallest capture surface that answers your question.
 
-Backend note: these defaults describe torch capture. `tl.record()`/fastlog is torch-only in
+Backend note: these defaults describe torch capture. `tl.record()` (sparse recording) is torch-only in
 backend v1. JAX, tinygrad, Paddle, and TensorFlow preview `.tlspec` payloads materialize
 arrays, but loaded traces report replay validation as unavailable because runtime replay captures
 are stripped.
@@ -78,7 +78,7 @@ exception) with a separate honest partial on `exc.partial_trace`.
 
 `save=[...]` is still supported when selection depends on final labels that are only known
 after postprocessing. That path runs the legacy two-pass strategy. For recurrent layers,
-`layers_to_save=["attn"]` saves all passes, while `layers_to_save=["attn:2"]` saves only pass 2
+`save=["attn"]` saves all passes, while `save=["attn:2"]` saves only pass 2
 using TorchLens's 1-based pass-label syntax.
 
 ## What Not To Optimize Away

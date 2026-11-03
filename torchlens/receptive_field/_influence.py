@@ -67,9 +67,9 @@ from .._selection.selection import (
 )
 from . import _engine
 from ._engine_forward import solve_projective
-from ._errors import ReceptiveFieldError
+from ._errors import ReceptiveFieldError, ReceptiveFieldUnavailableError
 from ._gradient import gradient_for_unit
-from ._gradient_forward import projective_gradient_for_unit
+from ._gradient_forward import projective_gradient_for_unit, projective_supports_by_row_sweep
 from ._query import _AxisSets, _IndexSet, _validate_descriptor_for_query
 from ._set_query import _IndexSetBox, box_for_source_units, box_for_units
 from ._types import GradReceptiveField, ReceptiveField, ReceptiveFieldStatus
@@ -303,8 +303,10 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
         raise _unresolvable(
             "influence_geometry_unavailable",
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
-            f"unavailable (field status {descriptor.status.value!r}): {error} "
-            "Use method='gradient' on a backward-ready trace for an empirical answer.",
+            f"unavailable (field status {descriptor.status.value!r}): the field engine has no "
+            "per-unit index geometry along this path (data-dependent mixing such as "
+            "attention has none). For an empirical answer pass method='gradient' on a "
+            f"trace captured with capture={_GRADIENT_CAPTURE}.",
             code="influence_geometry_unavailable",
             seed_site=seed_op.label,
             target_site=target.label,
@@ -473,6 +475,9 @@ def _refuse_over_probe_budget(seed_units: int, target_sites: int, probe_budget: 
         )
 
 
+_GRADIENT_CAPTURE = 'tl.options.CaptureOptions(backward_ready=True, save_mode="reference")'
+
+
 def _gradient_influence(
     trace: Any,
     seeds: tuple[tuple[Any, Site], ...],
@@ -494,22 +499,25 @@ def _gradient_influence(
         target.label: torch.zeros(shapes[target.label], dtype=torch.bool) for target in targets
     }
     cross_batch = dict.fromkeys(shapes, False)
+    units_by_seed: dict[str, tuple[Any, list[tuple[int, ...]]]] = {}
+    for seed_op, unit in probes:
+        units_by_seed.setdefault(seed_op.label, (seed_op, []))[1].append(unit)
     # Every probe retains the autograd graph: freeing it on the last probe
     # would make the next gradient query on the same trace fail, and the
     # saved tensors live as long as the armed trace does anyway.
-    for seed_op, unit in probes:
+    for seed_op, units in units_by_seed.values():
         for target in targets:
-            support, crossed = _probe_pair(seed_op, unit, target, node.direction)
-            if tuple(support.shape) != shapes[target.label]:
-                raise _unresolvable(
-                    "mask_shape_mismatch",
-                    f"gradient support shape {tuple(support.shape)!r} does not match site "
-                    f"{target.label!r} output space {shapes[target.label]!r}.",
-                    code="selection_unresolvable",
-                    site=target.label,
-                )
-            supports[target.label] |= support
-            cross_batch[target.label] = cross_batch[target.label] or crossed
+            for support, crossed in _probe_units(seed_op, units, target, node):
+                if tuple(support.shape) != shapes[target.label]:
+                    raise _unresolvable(
+                        "mask_shape_mismatch",
+                        f"gradient support shape {tuple(support.shape)!r} does not match site "
+                        f"{target.label!r} output space {shapes[target.label]!r}.",
+                        code="selection_unresolvable",
+                        site=target.label,
+                    )
+                supports[target.label] |= support
+                cross_batch[target.label] = cross_batch[target.label] or crossed
     entries = [
         _influence_entry(
             target,
@@ -523,6 +531,39 @@ def _gradient_influence(
         for target in targets
     ]
     return Selection(trace, "ACT", entries)
+
+
+def _probe_units(
+    seed_op: Any, units: Sequence[tuple[int, ...]], target: Any, node: _InfluenceTerm
+) -> list[tuple[torch.Tensor, bool]]:
+    """Probe every seed unit against one target site, sweeping rows when needed.
+
+    A projective probe linearizes the captured graph a second time, which a
+    fused kernel with no second derivative (fused attention) refuses. Then one
+    ordinary backward pass per target element answers every seed unit at once,
+    so the sweep runs when the target site has at most ``probe_budget``
+    elements; otherwise the linearization refusal stands.
+    """
+
+    try:
+        return [_probe_pair(seed_op, unit, target, node.direction) for unit in units]
+    except ReceptiveFieldUnavailableError as refusal:
+        linearization_failed = isinstance(refusal.__cause__, RuntimeError)
+        if node.direction != "projective" or not linearization_failed:
+            raise
+        if _site_numel(target) > node.probe_budget:
+            raise
+    swept = projective_supports_by_row_sweep(seed_op, units, target)
+    return [(result.support_mask.bool(), bool(result.cross_batch_influence)) for result in swept]
+
+
+def _site_numel(target: Any) -> int:
+    """Number of elements in a target site's output space."""
+
+    numel = 1
+    for size in _site_shape(target):
+        numel *= int(size)
+    return numel
 
 
 def _probe_pair(

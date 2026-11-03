@@ -64,9 +64,9 @@ the COMPLETE folded tree in 19 body rows -- nothing hidden.
 ## The grammar
 
 ```text
-tl.summary(model, input_args=None, input_kwargs=None,
+tl.summary(model, inputs=None, input_kwargs=None,
     # Everything below is keyword-only.
-    input_shape=None,          # synthetic input shape (XOR real input_args)
+    input_shape=None,          # synthetic input shape (XOR real inputs)
     execution_mode="eval",    # eval | train | same    (one-call only)
     grad_mode="off",          # off | same             (one-call only)
     level="auto",             # auto | module | op

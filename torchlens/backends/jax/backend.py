@@ -78,6 +78,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
     JAX_PREVIEW_TRACE_OPTION_POLICY,
@@ -446,7 +447,6 @@ class JAXBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -508,8 +508,6 @@ class JAXBackend:
             Unsupported for JAX in this preview.
         name
             Trace label.
-        module_filter
-            Unsupported for JAX in this preview.
         transform
             Unsupported for JAX in this preview.
         raw_input
@@ -542,19 +540,16 @@ class JAXBackend:
             regions; ``"reject"`` preserves the earlier nested-primitive
             rejection behavior.
         jax_max_control_flow_unroll
-            Maximum allowed static unroll length for one JAX control-flow
-            primitive.
+            Maximum static unroll length for one JAX control-flow primitive.
         module_identity_mode
             Optional JAX module mode. Raw callables use ``"function_root"``;
             Equinox module roots default to ``"pytree_module"``.
         grad_options
-            Optional JAX derived-gradient configuration. This runs a second
-            pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.autograd.derived_grads``.
+            Optional JAX derived-gradient configuration: a second pure functional
+            ``jax.value_and_grad`` pass populates ``trace.autograd.derived_grads``.
         capture
-            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
-            flat capture kwargs above; an explicit field here is merged in
-            (``merge_capture_options``) ahead of this backend's own defaults.
+            Grouped ``CaptureOptions``, the sole spelling for the flat capture kwargs
+            above; an explicit field is merged in (``merge_capture_options``) first.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -565,6 +560,7 @@ class JAXBackend:
         """
 
         save_predicate = pop_static_label_save_predicate(kwargs, backend_name="JAX")
+        facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
         _reject_transformed_callable(model)
         # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
@@ -619,7 +615,6 @@ class JAXBackend:
         jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
-        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
         output_transform = _resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -649,7 +644,6 @@ class JAXBackend:
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
-        module_filter = None if _is_missing(module_filter) else module_filter
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
@@ -693,7 +687,6 @@ class JAXBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
@@ -766,6 +759,7 @@ class JAXBackend:
                 jax_control_flow=cast(str, jax_control_flow),
                 jax_max_control_flow_unroll=cast(int, jax_max_control_flow_unroll),
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="JAX")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace

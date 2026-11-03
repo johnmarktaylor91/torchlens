@@ -25,7 +25,7 @@ preview: `backend.py` plus registry-backed `capabilities.py` only.
   `layers_to_save` must be `"all"` (full-save only for live traces),
   `output_device` must be `"same"`, `save_args` / `save_source_context` /
   `save_rng` must be false, and `save_grads` / `backward_ready` /
-  `transform` / `module_filter` / `activation_transform` are unsupported.
+  `transform` / `activation_transform` are unsupported.
 
 ## capabilities.py
 - Registry-backed re-exports only. Per the registry: `can_intervene=False`,
