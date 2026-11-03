@@ -687,8 +687,8 @@ class Bundle:
         floor of the comparison gate passes for every member pair (a view
         read, so different input values are allowed). ``compare()`` on the
         returned view is the member-by-member matrix at this site and first
-        runs the comparison gate (shared graph, same input values) over the
-        members it reads. To read a subset of members, build a bundle of
+        runs the comparison gate (shared graph; same input values or, for runs
+        on different inputs, graphs that line up) over the members it reads. To read a subset of members, build a bundle of
         them: ``tl.Bundle({name: bundle[name] for name in names}).at(site)``.
 
         Parameters
@@ -1347,8 +1347,8 @@ class Bundle:
         """Run the two-predicate comparison gate over the operand pairs.
 
         Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
-        (topology -> model-axis floor -> value-level input identity, per
-        operand pair; A-GATE, foldB D6/D18).
+        (topology -> model-axis floor -> site line-up: proven-equal input values
+        or equal graph-shape hashes, per operand pair; A-GATE, foldB D6/D18).
 
         Parameters
         ----------

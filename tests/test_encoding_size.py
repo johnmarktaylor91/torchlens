@@ -31,7 +31,7 @@ from torchlens._visualization._encoding import (
     LAYER_SOURCE_ROWS,
     NOTE_CALLABLE,
     SIZE_BY_MAX_AREA_MULT,
-    _non_batch_numel,
+    non_batch_numel,
     resolve_size_by,
     resolve_size_scale,
 )
@@ -203,11 +203,14 @@ def test_non_string_non_callable_refuses() -> None:
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
-def test_scalar_builtins_are_not_size_sources() -> None:
-    """Memo 2.2: only color_by accepts the node_overlay scalar builtins."""
+def test_size_by_shares_color_by_builtin_tokens() -> None:
+    """size_by accepts the scalar builtins color_by does, with the same meaning."""
 
+    for token in ("time", "bytes", "flops", "magnitude"):
+        spec = resolve_size_by(token)
+        assert spec is not None and spec.source_kind == "builtin"
     with pytest.raises(Exception) as excinfo:
-        resolve_size_by("magnitude")
+        resolve_size_by("memory")
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
@@ -237,11 +240,11 @@ def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> Non
 def test_non_batch_numel_mapping() -> None:
     """C2 mapping pins: torch.Size/tuple parity, empty/rank-0/rank-1 default."""
 
-    assert _non_batch_numel(()) == 1.0
-    assert _non_batch_numel((5,)) == 1.0
-    assert _non_batch_numel((2, 3)) == 3.0
-    assert _non_batch_numel((2, 3, 4)) == 12.0
-    assert _non_batch_numel(tuple(torch.Size((2, 3, 4)))) == 12.0
+    assert non_batch_numel(()) == 1.0
+    assert non_batch_numel((5,)) == 1.0
+    assert non_batch_numel((2, 3)) == 3.0
+    assert non_batch_numel((2, 3, 4)) == 12.0
+    assert non_batch_numel(tuple(torch.Size((2, 3, 4)))) == 12.0
 
 
 def test_size_by_dims_encodes_minimum_geometry(mlp_log: tl.Trace, tmp_path: Path) -> None:
@@ -598,6 +601,12 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         "_visualization/_render_flow.py": 1,
         # THE NodeSpec funnel (fixedsize key + width/height emissions).
         "_visualization/_render_leaf.py": 3,
+        # Encoding channel on segment capsules (fill + width/height/fixedsize
+        # from the draw's size state; no state, no attrs).
+        "_visualization/_encoding_aggregate.py": 3,
+        # Label-aware size pass: rewrites only the channel's own provisional
+        # width/height (user overrides differ and are kept).
+        "_visualization/_encoding_size_layout.py": 2,
         # PUBLIC user-slot node_spec_fn factories (C2(b) allowlist).
         "viz/feature_maps.py": 1,
         # C01 architecture move: the three node-visual writer sites left
