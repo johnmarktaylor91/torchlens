@@ -8,9 +8,12 @@ are lockstep checks in the spirit of the other generated-docs gates.
 from __future__ import annotations
 
 import importlib.util
+import posixpath
+import re
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 
@@ -179,6 +182,70 @@ def test_site_map_never_publishes_internal_pages(tmp_path: Path) -> None:
     )
     with pytest.raises(ValueError, match="never published"):
         site_nav.load_site_map(bad)
+
+
+_MD_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|^\[[^\]]+\]:\s*(\S+)", re.MULTILINE)
+
+#: Links from public pages into internal pages that are still waiting for their
+#: source page to be regenerated: (source page, target page), both docs-relative.
+#: A row that no longer matches a link fails the test until it is removed.
+_PENDING_INTERNAL_LINKS = frozenset(
+    {
+        ("reference/glossary.md", "reference/merged_trace_contract.md"),
+        ("reference/glossary.md", "reference/predicate_runtime.md"),
+        ("reference/glossary.md", "reference/runnable_tlspec_contract.md"),
+    }
+)
+
+
+def _links_into_internal_pages(site_map: Any, docs: Path) -> set[tuple[str, str]]:
+    pages = {page.path: page for page in site_map.pages}
+    internal = site_map.internal_sections
+    found: set[tuple[str, str]] = set()
+    for source, page in pages.items():
+        if page.section in internal:
+            continue
+        text = (docs / source).read_text("utf-8")
+        for match in _MD_LINK.finditer(text):
+            href = (match.group(1) or match.group(2)).split("#", 1)[0]
+            if not href or "://" in href or href.startswith(("mailto:", "/")):
+                continue
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(source), href))
+            if target in pages and pages[target].section in internal:
+                found.add((source, target))
+    return found
+
+
+def test_public_pages_never_link_into_internal_pages() -> None:
+    site_map = site_nav.load_site_map()
+    found = _links_into_internal_pages(site_map, site_nav.DOCS)
+    assert found - _PENDING_INTERNAL_LINKS == set(), (
+        "public pages link into internal pages; point the link at a public page, "
+        "drop it, or make the target public in docs/_site_map.yaml"
+    )
+    assert _PENDING_INTERNAL_LINKS - found == set(), "stale rows in _PENDING_INTERNAL_LINKS"
+
+
+def test_internal_link_finder_sees_inline_reference_and_relative_links(tmp_path: Path) -> None:
+    docs = tmp_path / "docs"
+    (docs / "reference").mkdir(parents=True)
+    (docs / "reference" / "secret.md").write_text("# Secret\n")
+    (docs / "reference" / "page.md").write_text(
+        "[a](secret.md#part) [b](https://example.org/secret.md)\n[c]: ./secret.md\n"
+    )
+    (docs / "index.md").write_text('[d](reference/secret.md "title") [e](reference/page.md)\n')
+    site_map = tmp_path / "map.yaml"
+    site_map.write_text(
+        "sections:\n  - {id: ref, title: Reference}\n"
+        "  - {id: internal, title: Internal, internal: true}\n"
+        "pages:\n  - {path: index.md, section: ref}\n"
+        "  - {path: reference/page.md, section: ref}\n"
+        "  - {path: reference/secret.md, section: internal}\n"
+    )
+    assert _links_into_internal_pages(site_nav.load_site_map(site_map), docs) == {
+        ("index.md", "reference/secret.md"),
+        ("reference/page.md", "reference/secret.md"),
+    }
 
 
 def test_page_mover_retargets_links_when_depth_changes() -> None:

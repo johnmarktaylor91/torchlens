@@ -399,6 +399,71 @@ def test_release_job_python_stack_is_hash_locked() -> None:
     )
 
 
+#: Security floors for the token-bearing release lock: package -> (first fixed
+#: release, advisory). A regeneration that drops one fails here, not only in the
+#: pip-audit job, which runs on pull requests.
+_RELEASE_LOCK_SECURITY_FLOORS = {
+    "certifi": ("2026.10.18", "GHSA-6q48-6c7w-9gw2"),
+    "gitpython": ("3.2.1", "GHSA-83vg-56qc-22m7"),
+    "setuptools": ("84.1.0", "GHSA-xmj3-9gf7-h52w"),
+}
+
+
+def test_release_lock_meets_security_floors() -> None:
+    """The release lock pins no package below its advisory's first fixed release."""
+    from packaging.version import Version
+
+    repo_root = Path(__file__).resolve().parents[1]
+    lock_text = (repo_root / ".github" / "workflows" / "release-requirements.txt").read_text()
+    pins = {
+        name.lower(): Version(version)
+        for name, version in re.findall(r"^([A-Za-z0-9_.-]+)==([^\s\\]+)", lock_text, re.M)
+    }
+    below = [
+        f"{name}=={pins[name]} < {floor} ({advisory})"
+        for name, (floor, advisory) in _RELEASE_LOCK_SECURITY_FLOORS.items()
+        if name in pins and pins[name] < Version(floor)
+    ]
+    assert not below, f"release lock pins vulnerable versions: {below}"
+    assert set(_RELEASE_LOCK_SECURITY_FLOORS) <= set(pins), "a floored package left the lock"
+
+
+def test_changelog_keeps_the_release_tools_insertion_flag() -> None:
+    """The release tool writes each release entry at the changelog's insertion flag.
+
+    In its default ``update`` mode the release tool splits ``CHANGELOG.md`` on the
+    insertion flag and leaves a file without the flag unchanged, so a missing flag
+    silently stops every release entry. The newest entry must name the package version.
+    """
+    repo_root = Path(__file__).resolve().parents[1]
+    pyproject_text = (repo_root / "pyproject.toml").read_text()
+    section = re.search(
+        r"^\[tool\.semantic_release\.changelog\]\n(.*?)(?=^\[|\Z)",
+        pyproject_text,
+        flags=re.MULTILINE | re.DOTALL,
+    )
+    settings = section.group(1) if section else ""
+    mode = re.search(r'^mode\s*=\s*"(\w+)"', settings, flags=re.MULTILINE)
+    assert mode is None or mode.group(1) == "update", (
+        "changelog mode 'init' rebuilds CHANGELOG.md from commits and drops its hand-written entries"
+    )
+    flag_match = re.search(r'^insertion_flag\s*=\s*"([^"]+)"', settings, flags=re.MULTILINE)
+    flag = flag_match.group(1) if flag_match else "<!-- version list -->"
+
+    changelog = (repo_root / "CHANGELOG.md").read_text()
+    assert changelog.count(flag) == 1, f"CHANGELOG.md must hold the insertion flag {flag!r} once"
+    above, below = changelog.split(flag)
+    assert not re.search(r"^## v\d", above, flags=re.MULTILINE), (
+        "a release entry sits above the flag"
+    )
+    newest = re.search(r"^## v(\d+\.\d+\.\d+) ", below, flags=re.MULTILINE)
+    version = re.search(r'^version = "([^"]+)"', pyproject_text, flags=re.MULTILINE)
+    assert newest and version, "no release entry below the flag, or no project version"
+    assert newest.group(1) == version.group(1), (
+        f"newest CHANGELOG.md entry is v{newest.group(1)} but the package is {version.group(1)}"
+    )
+
+
 @pytest.mark.slow
 def test_built_wheel_manifest_is_diet(tmp_path: Path) -> None:
     """Assert the built wheel's manifest: schemas in, py.typed in, nothing else top-level.
