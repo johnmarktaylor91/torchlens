@@ -12,6 +12,7 @@ from typing import Any
 
 import torch
 
+from ._grad_record_columns import reduce_with_grad_record_columns
 from ._inline_tensor import reduce_inline_tensor
 
 __all__ = ["dump_canonical_metadata"]
@@ -46,7 +47,7 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     """
 
     def reducer_override(self, obj: Any) -> Any:
-        """Return the canonical reduction for set/frozenset, Enum members and plain tensors.
+        """Return the canonical reduction for set/frozenset, Enum, plain tensors and op records.
 
         A plain dense ``torch.Tensor`` is emitted through the TorchLens-owned
         inline reduction (``_inline_tensor``: raw bytes, dtype, shape,
@@ -94,7 +95,8 @@ class _CanonicalMetadataPickler(pickle._Pickler):
                         key=lambda member: (type(member).__qualname__, repr(member)),
                     )
             return (cls, (members,))
-        return NotImplemented
+        # An Op's gradient records persist as one columnar table (opcodes per op, not per record).
+        return reduce_with_grad_record_columns(obj, cls, self.proto)
 
 
 def dump_canonical_metadata(state: Any, handle: Any) -> None:

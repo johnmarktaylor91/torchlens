@@ -59,6 +59,7 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
+from .._io._grad_record_columns import unpack_grad_records_state
 from .._ir.refs import DeviceRef, DtypeRef
 from .._quantities import (
     Bytes,
@@ -2710,12 +2711,10 @@ class Op(OpAtenMixin, _SelectionOperand):
     def __setstate__(self, state: dict[str, Any]) -> None:
         """Restore pickle state produced by ``__getstate__``."""
         _ensure_detached_store(self)
+        unpack_grad_records_state(state)  # a persisted columnar table becomes records again
         read_tlspec_version(state, cls_name=type(self).__name__, cls=type(self))
         resolver_status_was_present = "resolver_status" in state
-        default_fill_state(
-            state,
-            defaults=self._DEFAULT_FILL_STATE,
-        )
+        default_fill_state(state, defaults=self._DEFAULT_FILL_STATE)
         # Repair present-but-wrong-typed container fields from legacy states
         # (e.g. `_param_barcodes` serialized as a `set` where a `list` is now
         # declared). `default_fill_state` only fills absent keys; this closes

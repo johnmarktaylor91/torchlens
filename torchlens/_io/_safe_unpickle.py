@@ -348,8 +348,8 @@ _SAFE_TORCHLENS_TYPES: frozenset[tuple[str, str]] = frozenset(
         ("torchlens._trace_state", "TraceState"),
         ("torchlens._capture.config", "InternalCaptureConfig"),
         ("torchlens._capture.stop", "StopDirective"),
-        # Portable I/O blob reference (NamedTuple of ids).
-        ("torchlens._io", "BlobRef"),
+        ("torchlens._io", "BlobRef"),  # portable I/O blob reference (NamedTuple of ids)
+        ("torchlens._io._grad_record_columns", "GradientRecordColumns"),  # an op's grad records
         # Buffer / grad / param / op / layer / module data records + accessors.
         ("torchlens._data_classes.buffer", "Buffer"),
         ("torchlens._data_classes.buffer", "BufferAccessor"),
