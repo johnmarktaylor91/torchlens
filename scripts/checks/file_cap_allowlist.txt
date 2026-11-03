@@ -99,12 +99,12 @@ torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
 torchlens/_data_classes/grad_fn.py	840
 torchlens/_data_classes/interface.py::_getitem_after_pass	121
 torchlens/_data_classes/interface.py::_str_after_pass	63
-torchlens/_data_classes/layer.py	1803
+torchlens/_data_classes/layer.py	1800
 torchlens/_data_classes/module.py	2626
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3479
+torchlens/_data_classes/op.py	3476
 torchlens/_data_classes/op.py::Op.__getattribute__	79
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	66
