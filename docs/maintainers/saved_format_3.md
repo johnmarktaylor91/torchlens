@@ -45,7 +45,7 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `format_version` | integer | the format major; `3` for this contract |
 | `tlspec_version` | integer | the record contract version the records follow |
 | `kind` | string | `trace`, `bundle` or `intervention` |
-| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC); required, never part of any digest |
+| `torchlens_version`, `python_version`, `torch_version`, `platform`, `created_at` | string | writer identity (`created_at` is ISO 8601 UTC; `python_version` and `torch_version` parse under PEP 440); required, never part of any digest |
 | `backend`, `backend_runtime` | string | the capture backend and its runtime, as the tlspec 11 manifest stamps them |
 | `save_level` | string | one of `portable`, `audit`, `runnable`, `executable_with_callables` |
 | `payload_policy` | object | the resolved flags `include_outs`, `include_grads`, `include_saved_args`, `include_rng_states`, `include_buffer_values`, `structure_only`, all booleans |
@@ -322,7 +322,7 @@ One table for the writer and the reader. Codes are rows of
 | no `manifest.json` | `manifest_missing` | reader |
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
-| manifest violates this contract (missing field, wrong type, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
+| manifest violates this contract (missing field, wrong type, unparsable `python_version` or `torch_version`, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
 | 2.x artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 | `artifact_version_below_floor` | reader |
 | `torchlens_version` not parseable under PEP 440 | `bundle_producer_unverifiable` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |

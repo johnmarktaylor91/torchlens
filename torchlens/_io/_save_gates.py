@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import warnings
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, NoReturn, cast
 
@@ -39,6 +40,8 @@ if TYPE_CHECKING:
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from .._runnable import RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION, PayloadLayerDescriptor
+from ..intervention.types import CapturedArgTemplate
 from .format3.runnable import _WriteContext
 from .runnable import (
     require_sparse_run_descriptor,
@@ -217,6 +220,38 @@ def _save_bundle_via_container_door(
     bundle.save(path, level=level, overwrite=overwrite)
 
 
+def _validated_descriptor_for_resave(trace: Any) -> SparseRunDescriptor | None:
+    """Return the descriptor a loaded trace resaves from, or ``None`` when the producer must run.
+
+    ``Op.args_template`` is runtime-only and never persists, so a trace loaded from an
+    artifact cannot re-cook its call recipe; the descriptor the load validated is that
+    recipe, carried through exactly. Its optional payload layers reset to absent so the
+    save stamps only what it writes. A trace whose ops carry a cooked template (a live
+    capture, or a loaded trace refreshed by a rerun) builds afresh, and a trace with neither
+    still runs the producer and takes its typed refusal: the recipe is never optional.
+    """
+
+    descriptor = trace._runnable.descriptor
+    if descriptor is None or not getattr(trace, "_loaded_from_bundle", False):
+        return None
+    if any(
+        isinstance(getattr(op, "args_template", None), CapturedArgTemplate)
+        for op in trace._layer_list
+    ):
+        return None
+    layers = descriptor.payload_layers
+    return replace(
+        descriptor,
+        payload_layers=replace(
+            layers,
+            weights=replace(layers.weights, present=False),
+            activations=PayloadLayerDescriptor(
+                present=False, schema=RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION
+            ),
+        ),
+    )
+
+
 def _stamped_descriptor(
     trace: Any, *, include_weights: bool, include_activations: bool
 ) -> tuple[Any, list[Any], list[Any], list[Any]]:
@@ -225,7 +260,7 @@ def _stamped_descriptor(
     Returns the descriptor and the buffer, weight and activation blob specs.
     """
 
-    descriptor = require_sparse_run_descriptor(trace)
+    descriptor = _validated_descriptor_for_resave(trace) or require_sparse_run_descriptor(trace)
     buffer_specs = _capture_nonpersistent_buffer_blob_specs(trace, descriptor)
     if buffer_specs:
         _warn_nonpersistent_buffer_disclosure_once()

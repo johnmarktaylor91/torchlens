@@ -145,6 +145,14 @@ def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, val
         swapped = dict(manifest)
         swapped[key] = value
         write_manifest(copy, swapped)
+        if key == "torchlens_version" and isinstance(value, str) and value:
+            # The writer's own stamp is judged by the runtime identity policy, not the
+            # manifest table: an unparsable stamp refuses with the policy's documented code.
+            with pytest.raises(ArtifactError) as info:
+                _load(copy)
+            assert info.value.fields.get("code") == "bundle_producer_unverifiable", key
+            assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
+            continue
         assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "refused", key
 
 
