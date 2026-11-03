@@ -15,6 +15,7 @@ this package mostly stateless and free of high-level TorchLens business logic.
 | `introspection.py` | Recursive object search and nested getattr/assign |
 | `rng/` | Package: `streams.py` (Python, NumPy, torch, CUDA stream snapshot/restore), `seeding.py`, `restore.py` (the one restore door `RngStreamsRestore`, used by `tl.trace`, replay and `tl.validate`), `autocast.py`; the host-nondeterminism monitor in `monitor.py` with its `registry.py`, `channels.py`, `engine_state.py`, `inventory_types.py`, `call_sites.py`, `monitor_state.py`, and the method groups it calls through class aliases: `inventory_walk.py`, `deep_inventory.py`, `generator_sweep.py`, `numpy_frames.py`, `digest.py` |
 | `tensor_utils.py` | `safe_copy`, `safe_to`, `tensor_nanequal`, tensor memory helpers |
+| `_tensor_layout.py` | Capture-time tensor layouts for saved-DAG replay: `layout_of` (what capture records on a `ParentRef`) and `relay_to_layout` (replay re-lays a compact saved value into it); torch-only leaf |
 | `_sparse_parts.py` | Sparse tensor components per layout (`sparse_component_tensors`) and rebuilding a sparse tensor with new values (`sparse_with_values`); torch-only leaf |
 | `alias_footprint.py` | THE absolute-byte three-valued alias/overlap engine (r37 INV-2), split out of `tensor_utils.py` |
 | `_subprocess.py` | The ONE bounded-subprocess spawn discipline (group teardown, no orphaned grandchildren); never hand-roll `subprocess.run` for children |
