@@ -8,13 +8,13 @@ ever interpreted as a default.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
 import torch.nn as nn
+from _format3_envelope import read_runnable, write_runnable
 
 import torchlens as tl
 from torchlens._runnable import (
@@ -44,10 +44,9 @@ def _save_runnable(tmp_path: Path, **save_kwargs: Any) -> Path:
 
 
 def _rewrite_manifest(bundle: Path, mutate: Any) -> None:
-    manifest_path = bundle / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    mutate(manifest)
-    manifest_path.write_text(json.dumps(manifest))
+    descriptor = read_runnable(bundle)
+    mutate({"run": descriptor})
+    write_runnable(bundle, descriptor)
 
 
 def test_v2_descriptor_round_trips_with_required_context(tmp_path: Path) -> None:

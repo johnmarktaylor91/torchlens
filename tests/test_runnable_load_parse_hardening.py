@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import read_runnable, write_runnable
 from torch import nn
 
 import torchlens as tl
@@ -49,9 +49,7 @@ def runnable_manifest(tmp_path: Path) -> tuple[Path, Path, dict]:
     )
     path = tmp_path / "tamper.tlspec"
     captured.save(path, level="runnable", include_weights=True)
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    return path, manifest_path, manifest
+    return path, path / "runnable/descriptor.json", {"run": read_runnable(path)}
 
 
 def test_edited_execution_context_fails_runtime_fingerprint(
@@ -64,10 +62,10 @@ def test_edited_execution_context_fails_runtime_fingerprint(
     context (F-R10-B1).
     """
 
-    path, manifest_path, manifest = runnable_manifest
+    path, _manifest_path, manifest = runnable_manifest
     call = manifest["run"]["calls"][0]
     call["execution_context"]["grad_enabled"] = not call["execution_context"]["grad_enabled"]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    write_runnable(path, manifest["run"])
 
     loaded = tl.load(path)
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
@@ -79,10 +77,10 @@ def test_edited_argument_names_fail_runtime_fingerprint(
 ) -> None:
     """A hand-edited call arity/argument list refuses at parse."""
 
-    path, manifest_path, manifest = runnable_manifest
+    path, _manifest_path, manifest = runnable_manifest
     call = manifest["run"]["calls"][0]
     call["argument_names"] = [*call["argument_names"], "forged"]
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    write_runnable(path, manifest["run"])
 
     loaded = tl.load(path)
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
@@ -98,7 +96,7 @@ def test_reserved_name_prefix_alias_group_refuses(
     one tensor between two unrelated slots.
     """
 
-    path, manifest_path, manifest = runnable_manifest
+    path, _manifest_path, manifest = runnable_manifest
     tampered = False
     for slot in manifest["run"]["tensor_slots"]:
         binding = slot.get("state_binding")
@@ -107,7 +105,7 @@ def test_reserved_name_prefix_alias_group_refuses(
             tampered = True
             break
     assert tampered
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    write_runnable(path, manifest["run"])
 
     loaded = tl.load(path)
     assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
@@ -206,18 +204,14 @@ def test_encode_literal_bounds_nesting_below_every_decode_ceiling() -> None:
 
 
 def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> None:
-    """Loaded-runnable re-save never claims 'no state records' falsely (F-R10-2).
+    """A validated runnable descriptor resaves; genuinely absent state still refuses.
 
-    A loaded artifact with embedded weights carries the full capture-time
-    state_dict, so the state-universe ladder must consult it: the re-save now
-    proceeds to the producer preflight and refuses with the TYPED diagnostics
-    naming the genuinely missing session-time producer records. An artifact
-    saved WITHOUT embedded weights keeps the universe refusal, now with an
-    honest reason and a stable error code (fields were empty before).
+    Format 3 retains the validated descriptor and embedded state, so the old
+    missing-producer refusal no longer applies to a complete loaded runnable.
+    The no-weight control still proves the state-universe refusal is honest.
     """
 
     from torchlens._io import ArtifactError
-    from torchlens.errors import RunnablePreflightError
 
     captured = tl.trace(
         TinyModel(),
@@ -231,10 +225,10 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
     with_weights = tmp_path / "with-weights.tlspec"
     captured.save(with_weights, level="runnable", include_weights=True)
     loaded = tl.load(with_weights)
-    with pytest.raises(RunnablePreflightError) as preflight:
-        loaded.save(tmp_path / "resave.tlspec", level="runnable", include_weights=True)
-    assert preflight.value.fields["code"] == "sparse_preflight_failed"
-    assert preflight.value.fields["diagnostics"]
+    resaved = tmp_path / "resave.tlspec"
+    loaded.save(resaved, level="runnable", include_weights=True)
+    assert read_runnable(with_weights) == read_runnable(resaved)
+    assert tl.load(resaved).readiness.status is ReadinessStatus.READY
 
     recaptured = tl.trace(
         TinyModel(),
