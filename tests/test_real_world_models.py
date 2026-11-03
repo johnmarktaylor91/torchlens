@@ -2555,38 +2555,13 @@ def test_deberta():
     )
     model = transformers.DebertaV2Model(config).eval()
     model_kwargs = {"input_ids": torch.randint(0, 100, (1, 16))}
-    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
-        # DebertaV2's disentangled attention computes its scale in the
-        # torch.jit.script helper scaled_size_sqrt. With the ScriptFunction
-        # call hook, TorchLens records that call as one jitscript boundary op
-        # (warning contract code torchscript_boundary), so the scale tensor has
-        # graph provenance: no provenance disclosure, and the boundary op
-        # replays by calling the scripted function again.
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            show_model_graph(
-                model,
-                [],
-                model_kwargs,
-                rolled=False,
-                visualization=tl.options.VisualizationOptions(
-                    container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
-                ),
-            )
-        codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
-        messages = [str(w.message) for w in caught]
-        assert "torchscript_boundary" in codes, f"expected the boundary disclosure; got: {messages}"
-        assert not any("no graph/source provenance" in m for m in messages), messages
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            result = validate_forward_pass(model, [], model_kwargs)
-        messages = [str(w.message) for w in caught]
-        assert result, f"validate_forward_pass returned False; got: {messages}"
-        return
-    # Without the hook the scripted helper runs below the wrappers: its output
-    # reaches the graph with no graph/source provenance (known limitation, same
-    # pattern as test_styletts).
-    with pytest.warns(UserWarning, match="no graph/source provenance"):
+    # DebertaV2 scales attention in the torch.jit.script helper scaled_size_sqrt.
+    # With the ScriptFunction call hook that call is one jitscript boundary op
+    # (code torchscript_boundary) whose output has provenance and replays. Without
+    # it the scale has no graph/source provenance (as in test_styletts) and the
+    # completeness witness may flag a capture gap that fails validation honestly.
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
         show_model_graph(
             model,
             [],
@@ -2596,21 +2571,23 @@ def test_deberta():
                 container_path=opj(VIS_OUTPUT_DIR, "encoder-only", "deberta")
             ),
         )
-    # The jit.script-compiled region executes outside normal eager dispatch, so
-    # TorchLens's completeness witness flags the capture incomplete
-    # (CaptureGapWarning, capture_verified=False) and validate_forward_pass
-    # honestly returns False rather than blessing a partial capture.
+    codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
+    got = [str(w.message) for w in caught]
+    unattributed = any("no graph/source provenance" in m for m in got)
+    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
+        assert "torchscript_boundary" in codes and not unattributed, got
+    else:
+        assert unattributed, f"expected the provenance disclosure; got: {got}"
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         result = validate_forward_pass(model, [], model_kwargs)
     messages = [str(w.message) for w in caught]
     capture_gap = any("unaccounted aten dispatch event" in m for m in messages)
     provenance_gap = any("no graph/source provenance" in m for m in messages)
-    assert provenance_gap, f"expected the provenance disclosure; got: {messages}"
-    assert result or capture_gap, (
-        f"validate_forward_pass returned False with no capture-gap disclosure "
-        f"to explain it; got: {messages}"
-    )
+    if HAS_SCRIPT_FUNCTION_CALL_HOOK:
+        assert result and not provenance_gap, f"boundary capture did not validate: {messages}"
+    else:
+        assert provenance_gap and (result or capture_gap), messages
 
 
 @pytest.mark.slow
