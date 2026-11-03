@@ -2080,7 +2080,7 @@ def _load_unified_tlspec(
     # an absent `kind` means a plain trace, the only kind that existed before the
     # discriminator was introduced, never an unsupported-kind refusal.
     kind = manifest.get("kind", "trace")
-    if kind in MODEL_FREE_TLSPEC_KINDS:
+    if isinstance(kind, str) and kind in MODEL_FREE_TLSPEC_KINDS:
         return load_model_free_tlspec(
             kind,
             bundle_path,

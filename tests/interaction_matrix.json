@@ -2880,7 +2880,7 @@
    "summary": "Predicate type errors raise the same code and class on both entry points: tl.trace and tl.record refuse a non-callable halt with halt_predicate_type_invalid and a non-callable intervene with intervention_predicate_type_invalid (ArgumentTypeError, TypeError lineage).",
    "evidence": "tests/test_exception_taxonomy_records.py",
    "recommendation": "close",
-   "ruling": "closed"
+   "ruling": "close"
   },
   {
    "id": "A40",

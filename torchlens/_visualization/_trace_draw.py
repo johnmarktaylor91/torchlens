@@ -239,6 +239,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         path=written if written.exists() else None,
         num_ops=num_ops,
         policy=policy,
+        trace=trace,
     )
 
 
