@@ -51,6 +51,7 @@ from . import (
     BlobRef,
     FieldPolicy,
     PayloadLoadHints,
+    _format3_runnable_bind as runnable_bind,
     _json,
     raise_if_manifest_below_floor,
     refuse_bundle_exists,
@@ -66,7 +67,6 @@ from ._durability import (
     fsync_tree,
 )
 from ._pickle_prescan import OpcodeCeilingExceeded
-from ._pre3_module_paths import modellog_216_error
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
@@ -92,6 +92,7 @@ from .format3.writer import (
     settle_live_side,
     write_trace_envelope,
 )
+from .format_contract import modellog_216_error
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -1330,13 +1331,44 @@ def _finish_format3_trace(
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
     trace._source_bundle_provenance = manifest.get("provenance")
-    _attach_run_readiness(trace, None)
+    _attach_run_readiness(trace, manifest.get("run"))
+    _bind_format3_runnable_payloads(
+        trace, manifest=manifest, root=root, map_location=map_location, blobs_dir=blobs_dir
+    )
     disclosures = manifest.get("disclosures")
     if disclosures is not None:
         format3_reader.attach_disclosure_advisory(trace, disclosures)
     if manifest.get("intervention") is not None:
         trace._intervention_spec = _finish_format3_recipe(root)
     return trace
+
+
+def _bind_format3_runnable_payloads(
+    trace: Trace,
+    *,
+    manifest: Mapping[str, Any],
+    root: Path,
+    map_location: str | torch.device,
+    blobs_dir: Path | None,
+) -> None:
+    """Bind a 3.0 artifact's runnable payload families (references rebuilt from its
+    blob-id index and parsed ``run`` descriptor); an analysis artifact binds nothing."""
+
+    payloads = runnable_bind.runnable_payload_index(manifest, trace._sparse_run_descriptor)
+    if not payloads.tensors and trace._sparse_run_descriptor is None:
+        return
+    for bind in (
+        _bind_embedded_nonpersistent_buffer_payload,
+        _bind_embedded_weight_payload,
+        _bind_archived_activation_payload,
+    ):
+        bind(
+            trace,
+            manifest=payloads,
+            bundle_path=root,
+            map_location=map_location,
+            resolved_blobs_dir=blobs_dir,
+        )
 
 
 def _finish_format3_bundle(
@@ -1872,7 +1904,7 @@ def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str
 def _bind_embedded_nonpersistent_buffer_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -1939,19 +1971,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                "Checksum mismatch for embedded non-persistent buffer "
-                f"blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor_map = _load_safetensors_file(blob_path, map_location)
-        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(
-                f"Embedded non-persistent buffer blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}."
-            )
-        embedded[entry.label] = tensor
+        embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
     from .._runnable.state import bind_embedded_nonpersistent_buffers
 
@@ -1961,7 +1981,7 @@ def _bind_embedded_nonpersistent_buffer_payload(
 def _bind_embedded_weight_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -2025,16 +2045,7 @@ def _bind_embedded_weight_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                f"Checksum mismatch for embedded state blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor_map = _load_safetensors_file(blob_path, map_location)
-        tensor = tensor_map.get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(f"Embedded state blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
-        embedded[entry.label] = tensor
+        embedded[entry.label] = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
 
     from .._runnable.state import bind_embedded_trace_state
 
@@ -2044,7 +2055,7 @@ def _bind_embedded_weight_payload(
 def _bind_archived_activation_payload(
     trace: Trace,
     *,
-    manifest: Manifest,
+    manifest: Manifest | runnable_bind.RunnablePayloadIndex,
     bundle_path: Path,
     map_location: str | torch.device,
     resolved_blobs_dir: Path | None = None,
@@ -2115,14 +2126,7 @@ def _bind_archived_activation_payload(
             entry.relative_path,
             resolved_blobs_dir=resolved_blobs_dir,
         )
-        observed_sha256 = sha256_file(blob_path)
-        if observed_sha256 != entry.sha256:
-            raise ArtifactError(
-                f"Checksum mismatch for archived activation blob_id={entry.blob_id} at {blob_path}."
-            )
-        tensor = _load_safetensors_file(blob_path, map_location).get(_BLOB_TENSOR_KEY)
-        if tensor is None:
-            raise ArtifactError(f"Archived activation blob {blob_path} lacks {_BLOB_TENSOR_KEY!r}.")
+        tensor = runnable_bind.read_runnable_payload(blob_path, entry, map_location)
         # r6 M4: the file ``sha256`` above attests the BLOB against the MANIFEST, but the
         # member's ``byte_digest`` -- the value republished on the public
         # ``ArchivedActivation.byte_digest`` beside ``.value`` -- was never checked

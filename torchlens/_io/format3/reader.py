@@ -119,6 +119,7 @@ LOAD_ORDER: Final[tuple[str, ...]] = (
 #: owner's state hook wraps a plain mapping itself).
 _ACCESSOR_COLUMNS: Final[dict[tuple[str, str], tuple[str, str, str | None]]] = {
     ("layer", "ops"): ("op", "pass_number", "OpAccessor"),
+    ("trace", "_param_logs"): ("param", "address", "ParamAccessor"),
     ("module", "ops"): ("module_call", "call_index", None),
     ("module", "params"): ("param", "address", "ParamAccessor"),
     ("grad_fn", "calls"): ("grad_fn_call", "call_index", None),
