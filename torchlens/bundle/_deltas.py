@@ -180,10 +180,8 @@ def _distance_value(
             f"{tuple(reference.shape)} and {tuple(candidate.shape)}",
             code="metric_shape_mismatch",
             remedy=(
-                "compare members whose aligned sites hold the same shape (for "
-                "runs on different inputs, inputs of the same shape, such as "
-                "prompts with the same token count); a shape-changing edit or "
-                "input has no element-wise distance at that site"
+                "compare members whose aligned sites hold the same shape; a shape-changing "
+                "edit or input (a longer prompt) has no element-wise distance at that site"
             ),
             site=site,
             reference_shape=tuple(reference.shape),

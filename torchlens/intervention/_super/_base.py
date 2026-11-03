@@ -677,7 +677,7 @@ class _TensorBearing:
     def _require_equal_shapes(
         self,
         names: list[str],
-        tensors: list[torch.Tensor],
+        tensors: list[torch.Tensor | None],
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
     ) -> None:
         """Refuse a site whose member tensors differ in shape (typed, site-named).
@@ -693,7 +693,8 @@ class _TensorBearing:
         names:
             Member names, aligned with ``tensors``.
         tensors:
-            Member tensors at this site.
+            Member tensors at this site (``None`` entries carry no shape and
+            are left to the metric's own handling).
         metric:
             Metric name or callable, named in the refusal.
 
@@ -703,9 +704,12 @@ class _TensorBearing:
             ``code="metric_shape_mismatch"`` when the shapes differ.
         """
 
-        if all(is_scalar_like(tensor) for tensor in tensors):
+        present = {
+            name: tensor for name, tensor in zip(names, tensors, strict=True) if tensor is not None
+        }
+        if all(is_scalar_like(tensor) for tensor in present.values()):
             return
-        shapes = {name: tuple(tensor.shape) for name, tensor in zip(names, tensors, strict=True)}
+        shapes = {name: tuple(tensor.shape) for name, tensor in present.items()}
         if len(set(shapes.values())) > 1:
             metric_name = (
                 metric if isinstance(metric, str) else getattr(metric, "__name__", "metric")

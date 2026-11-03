@@ -356,25 +356,13 @@ def _require_lined_up(
 ) -> None:
     """Refuse a comparison pair whose sites do not line up one to one.
 
-    Proven-equal input values line the pair up: the same model on the same
-    input runs the same graph, and the structural alignment pairs any sites
-    an edit inserted or removed. A pair on DIFFERENT input values (or whose
-    input identity is unproven) is a legitimate comparison (different
-    prompts, clean vs. patched across inputs, different checkpoints) when
-    both captured graphs have the same graph-shape hash
-    (``_provenance_fingerprint``: op order, functions, parent edges, module
-    addresses), so every site has exactly one counterpart. Otherwise
-    data-dependent control flow may have taken different branches, and the
-    model-axis floor cannot see that for one model object: refuse rather
-    than pair sites from different code paths. Equal shapes are checked per
-    site by the metric (``metric_shape_mismatch``).
-
-    Raises
-    ------
-    BundleComparisonError
-        ``bundle_gate_input_values_differ`` (inputs differ, graphs differ)
-        or ``bundle_gate_input_identity_unproven`` (no input payloads to
-        prove identity, graphs differ or carry no hash).
+    Proven-equal input values line a pair up; pairs on different or unproven
+    inputs line up when both graph-shape hashes are equal. Otherwise control
+    flow may have taken another path, which the model-axis floor cannot see
+    for one model object, so the pair refuses with
+    ``bundle_gate_input_values_differ`` (inputs differ) or
+    ``bundle_gate_input_identity_unproven`` (no input payloads). Per-site
+    shapes are checked by the metric (``metric_shape_mismatch``).
     """
 
     left_digest = _input_value_digest(left)
@@ -382,24 +370,9 @@ def _require_lined_up(
     if left_digest is not None and left_digest == right_digest:
         return
     left_graph = left._provenance_fingerprint
-    right_graph = right._provenance_fingerprint
-    if left_graph is not None and left_graph == right_graph:
+    if left_graph is not None and left_graph == right._provenance_fingerprint:
         return
-    graph_note = (
-        "their captured graphs differ (graph-shape hashes disagree: "
-        "data-dependent control flow or a structural edit), so their sites "
-        "do not line up one to one"
-        if left_graph is not None and right_graph is not None
-        else "a graph-shape hash is missing, so line-up cannot be checked"
-    )
-    left_shapes = _input_shapes(left)
-    right_shapes = _input_shapes(right)
-    if left_shapes is not None and right_shapes is not None and left_shapes != right_shapes:
-        graph_note += (
-            f"; their inputs also differ in shape ({left_name}: {list(left_shapes)}, "
-            f"{right_name}: {list(right_shapes)}), and inputs of different shapes "
-            "(such as prompts with different token counts) usually run different graphs"
-        )
+    graph_note = _line_up_note(left_name, left, right_name, right)
     if left_digest is not None and right_digest is not None:
         raise BundleComparisonError(
             f"Bundle operation {operation!r} refuses: member pair "
@@ -434,6 +407,32 @@ def _require_lined_up(
         right_member=right_name,
         unproven_members=unproven,
     )
+
+
+def _line_up_note(left_name: str, left: Trace, right_name: str, right: Trace) -> str:
+    """Explain why a pair's graphs do not line up, for the refusal message.
+
+    Names both input shapes when they differ: inputs of different shapes
+    (prompts with different token counts) usually run different graphs, and
+    the message should say so rather than blame control flow alone.
+    """
+
+    if left._provenance_fingerprint is None or right._provenance_fingerprint is None:
+        return "a graph-shape hash is missing, so line-up cannot be checked"
+    note = (
+        "their captured graphs differ (graph-shape hashes disagree: "
+        "data-dependent control flow or a structural edit), so their sites "
+        "do not line up one to one"
+    )
+    left_shapes = _input_shapes(left)
+    right_shapes = _input_shapes(right)
+    if left_shapes is not None and right_shapes is not None and left_shapes != right_shapes:
+        note += (
+            f"; their inputs also differ in shape ({left_name}: {list(left_shapes)}, "
+            f"{right_name}: {list(right_shapes)}), and inputs of different shapes "
+            "(such as prompts with different token counts) usually run different graphs"
+        )
+    return note
 
 
 def _input_shapes(trace: Trace) -> tuple[tuple[int, ...] | None, ...] | None:

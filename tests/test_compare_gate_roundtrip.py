@@ -151,9 +151,10 @@ def test_leg1_cross_input_line_up_survives_save_load(tmp_path: Path) -> None:
     """Different input values: lined-up graphs compare, divergent ones refuse, after loading.
 
     Default saves retain the input payloads and the graph-shape hash, so the
-    line-up predicate is decided identically on loaded artifacts: the
-    same-graph pair reports real distances and the divergent-branch pair
-    refuses on line-up.
+    same-graph pair reports real distances after loading. A loaded artifact
+    carries no live model object, so the divergent-branch pair (different
+    graph-shape hashes) never reaches ``shared_graph`` and refuses at the
+    model-axis floor, before the line-up predicate.
     """
 
     model = _TwoLayer()
@@ -180,7 +181,7 @@ def test_leg1_cross_input_line_up_survives_save_load(tmp_path: Path) -> None:
     )
     with pytest.raises(BundleComparisonError) as excinfo:
         divergent.compare("a", "b")
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
 
 
 def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
@@ -203,13 +204,15 @@ def test_leg4_success_survives_save_load(tmp_path: Path) -> None:
 
 
 def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
-    """A payload-free (runnable-level) artifact refuses UNPROVEN when graphs differ.
+    """A payload-free (runnable-level) artifact lines up only on equal graph hashes.
 
     The sparse runnable core carries no activation payloads, so value-level
     input identity is unprovable after the round trip. A pair whose
-    graph-shape hashes are equal still lines up (the gate admits it); a pair
-    whose graphs differ refuses with the gate's own code, names the members,
-    and never falls back to the shape-level hash.
+    graph-shape hashes are equal still lines up (the gate admits it). A pair
+    whose graphs differ has no live model object to rank it ``same_object``,
+    so it refuses at the model-axis floor and never falls back to the
+    shape-level input hash. (The live unproven refusal is pinned in
+    ``tests/test_compare_gate_lattice.py``.)
     """
 
     model = _TwoLayer()
@@ -237,8 +240,7 @@ def test_unproven_after_payload_free_round_trip(tmp_path: Path) -> None:
     )
     with pytest.raises(BundleComparisonError) as excinfo:
         divergent._require_comparable("at.compare")
-    assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
-    assert excinfo.value.fields["unproven_members"] == ["a", "b"]
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
 
 
 def test_rank_upgrade_audit_across_save_load(tmp_path: Path) -> None:
