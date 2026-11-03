@@ -170,7 +170,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   indices per position, the attended keys on an attention-probability site) and
   `probe(fitted, position_dim=1)` (the decision function of an already-fitted linear probe: a
   scikit-learn linear estimator with `coef_`/`intercept_`, an `nn.Linear` or a `(weight, bias)`
-  pair), each a named `Reducer`. `kv_sites=` names decoder layer indexes (or `True` for all)
+  pair), each a named `Reducer` (calling it, `Reducer.__call__`, applies the wrapped callable `Reducer.fn`). `kv_sites=` names decoder layer indexes (or `True` for all)
   whose new KV-cache slices are kept per token as series `kv.<layer>.key` and `kv.<layer>.value`
   (`[positions, kv_heads, head_dim]`); `kv_sites=` alone needs no `save=`. `keep_last=N` is a ring buffer: the payloads of older
   forwards are written to `spill=` (one `torch.save` file per step) or dropped, and the record
@@ -181,7 +181,8 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   KV cache among them, and the logits of every pass but the newest), so memory grows with the
   token count, not its square. The
   `GenerationRecording` adds `.options`, `.series_names`, `.series(name)` (a `TokenSeries`:
-  `name`, `positions`, a `range` of absolute positions, `values`, one row per position, read back
+  `name`, `positions`, a `range` of absolute positions, `values`, one row per position, and
+  `len(series)` (`TokenSeries.__len__`) the number of positions; values are read back
   from the spill when evicted; refuses an unknown or fully dropped series with
   `record_generation_step_missing`), `.peak_saved_bytes` and `.evicted_steps` (step to
   `"spilled"` or `"dropped"`). A reducer that raises, returns a non-tensor or a value whose
