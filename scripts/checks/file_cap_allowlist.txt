@@ -111,7 +111,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	66
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1082
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3477
+torchlens/_data_classes/trace.py	3457
 torchlens/_data_classes/trace.py::Trace.__init__	364
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
@@ -343,7 +343,7 @@ torchlens/_postprocess/_materialize.py::ingest_op_records	122
 torchlens/_postprocess/_primitive_profile.py::_materialize_backward_primitive_profile	64
 torchlens/_postprocess/_recurrence.py::_build_preview_recurrence_graph	111
 torchlens/_postprocess/_recurrence.py::relabel_edge_metadata	73
-torchlens/_postprocess/ast_branches.py	2235
+torchlens/_postprocess/ast_branches.py	2214
 torchlens/_postprocess/ast_branches.py::_ScopeIndexer._build_if_record	65
 torchlens/_postprocess/ast_branches.py::classify_bool	87
 torchlens/_postprocess/ast_branches.py::get_file_index	91
@@ -354,8 +354,8 @@ torchlens/_postprocess/control_flow.py::_materialize_conditional_records	140
 torchlens/_postprocess/control_flow.py::_merge_buffer_entries	151
 torchlens/_postprocess/control_flow.py::_merge_same_version_buffers	68
 torchlens/_postprocess/control_flow.py::_repropagate_ancestry_after_buffer_wiring	64
-torchlens/_postprocess/finalization.py	1843
-torchlens/_postprocess/finalization.py::_build_conditional_records	160
+torchlens/_postprocess/finalization.py	1842
+torchlens/_postprocess/finalization.py::_build_conditional_records	159
 torchlens/_postprocess/finalization.py::_build_layer_logs	114
 torchlens/_postprocess/finalization.py::_build_module_logs	206
 torchlens/_postprocess/finalization.py::_build_root_module_log	112
@@ -590,7 +590,7 @@ torchlens/_visualization/_render_flow.py::_enumerate_base_rendered_node_emission
 torchlens/_visualization/_render_flow.py::_enumerate_run_fold_ellipsis_emissions	116
 torchlens/_visualization/_render_flow.py::_expand_edges_through_skipped	86
 torchlens/_visualization/_render_flow.py::_render_edge_occurrences	80
-torchlens/_visualization/_render_leaf.py	2366
+torchlens/_visualization/_render_leaf.py	2365
 torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
