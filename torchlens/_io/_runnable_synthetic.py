@@ -16,12 +16,12 @@ reference: no artifact-selected module is ever imported (``runnable_load``).
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, Literal
 
 from .._utils._foreign_data_replay import foreigndata
 from .._utils.display import identity
 
-SyntheticKey = tuple[str, str, str, str]
+SyntheticKey = tuple[Literal["custom"], str, Literal["function"], str]
 """``(namespace, qualname, kind, import_path)`` of a persisted ``FunctionRegistryKey``."""
 
 BOUNDARY_IDENTITY_KEY: SyntheticKey = (

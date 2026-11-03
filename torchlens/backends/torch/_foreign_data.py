@@ -272,9 +272,9 @@ def _view_geometry(departure: Departure, out: torch.Tensor) -> tuple[str, tuple[
     same_start = out_offset == source_offset
     if same_start and size == tuple(source.size()) and out.stride() == source.stride():
         return "strided", (size, _contiguous_strides(size), 0)
-    if same_start and out.numel() == source.numel() and out.is_contiguous():
-        if source.is_contiguous():
-            return "strided", (size, _contiguous_strides(size), 0)
+    reshaped = out.numel() == source.numel() and out.is_contiguous() and source.is_contiguous()
+    if same_start and reshaped:
+        return "strided", (size, _contiguous_strides(size), 0)
     storage_numel = departure.storage_nbytes // element_size
     out_positions = _flat_positions(size, tuple(out.stride()), out_offset)
     if out_positions.size and int(out_positions.max()) >= storage_numel:
