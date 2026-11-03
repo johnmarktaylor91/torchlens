@@ -56,10 +56,13 @@ Replace the names with your model's.
 
 ## Module outputs
 
-tl.extract returns {module_name: output tensor} for modules that return
-one tensor. A module that returns several tensors (a tuple) raises
-AmbiguousOpLookupError; trace instead and read the labels of its output
-ops, tr.modules[name].output_ops, then tr[label].out.
+tl.extract returns {module_name: output tensor} at about one plain forward
+pass per call, so in a sweep call it once per input instead of tracing in
+a loop. Modules that return one tensor work as written: a Linear, an MLP,
+a decoder layer in transformers 5 (HuggingFace models). A module that
+returns several tensors (a tuple) raises AmbiguousOpLookupError; then
+trace once and read the labels of its output ops,
+tr.modules[name].output_ops, then tr[label].out.
 
     import torchlens as tl
     acts = tl.extract(model, x, ["blocks.0", "blocks.1.mlp"])
