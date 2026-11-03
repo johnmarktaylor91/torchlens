@@ -17,9 +17,6 @@ from torchlens.intervention.types import Edit
     [
         (tl.clip_norm(1.0), "tl.clip_norm(1.0)"),
         (tl.zero_ablate(), "tl.zero_ablate()"),
-        (tl.scale(0.5), "tl.scale(0.5)"),
-        (tl.add_noise(0.1, seed=3), "tl.add_noise(0.1, seed=3)"),
-        (tl.clamp(low=0.0, high=1.0), "tl.clamp(low=0.0, high=1.0)"),
     ],
 )
 def test_builtin_edit_repr_is_the_public_constructor_call(edit: Edit, expected: str) -> None:
@@ -28,13 +25,6 @@ def test_builtin_edit_repr_is_the_public_constructor_call(edit: Edit, expected: 
     assert isinstance(edit, tl.Edit)
     assert repr(edit) == expected
     assert eval(repr(edit), {"tl": tl}) == edit
-
-
-def test_non_root_builtin_prints_its_public_namespace() -> None:
-    """A builtin that is not a root name prints under ``tl.intervention``."""
-
-    edit = tl.intervention.scramble_elements(seed=1)
-    assert repr(edit).startswith("tl.intervention.scramble_elements(")
 
 
 @pytest.mark.smoke

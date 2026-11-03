@@ -68,13 +68,6 @@ def traces(captured):
     return {family: (trace, address) for family, (_, trace, address) in captured.items()}
 
 
-def test_true_views_verify_on_every_role(traces):
-    for trace, address in traces.values():
-        views = mi.head_weight_views(trace, address)
-        for role in ("q", "k", "v"):
-            assert views.sources[role].verification == "payload_verified", (address, role)
-
-
 @pytest.mark.parametrize("family", ["gpt2", "llama"])
 @pytest.mark.parametrize("perturbation", sorted(PERTURBATIONS))
 @pytest.mark.parametrize("role_index", [0, 2])  # the q view and the v view

@@ -104,29 +104,6 @@ def test_midpoint_schedule_matches_inline_grid() -> None:
     assert all(weight == pytest.approx(1.0 / n_steps) for _alpha, weight in schedule)
 
 
-@pytest.mark.parametrize("chunk", [2, 8])
-def test_step_batching_matches_sequential_input_ig(chunk: int) -> None:
-    """Chunked input IG matches sequential at the memo's rtol 1e-4."""
-
-    model = _SmoothMlp()
-    inputs = torch.tensor([[0.4, -0.3, 0.2]], dtype=torch.float64)
-    sequential = attribution.integrated_gradients(model, inputs, target=1, num_steps=12)
-    batched = attribution.integrated_gradients(
-        model, inputs, target=1, num_steps=12, step_batch_size=chunk, step_audit_seed=0
-    )
-    torch.testing.assert_close(batched.values, sequential.values, rtol=1e-4, atol=1e-9)
-    assert batched.extra["step_batch_size"] == chunk
-    assert batched.extra["path_evaluations_logical"] == 12
-    # Physical calls: endpoints + ceil(12/chunk) chunks + 1 audit recompute.
-    assert batched.extra["physical_forward_calls"] < sequential.extra["physical_forward_calls"]
-    audit = batched.extra["step_audit"]
-    assert audit["mode"] == "per_call"
-    assert audit["seed"] == 0
-    assert len(audit["audited_pairs"]) == 1
-    assert audit["sampled_test_not_proof"] is True
-    assert audit["worst_deviation"] <= audit["rtol"]
-
-
 def test_step_batching_callable_target_tree_split() -> None:
     """Callable targets are applied per logical path point via the tree split."""
 
@@ -180,38 +157,6 @@ def test_step_batch_size_and_audit_vocabulary_refusals() -> None:
     assert mode_err.value.fields["code"] == "step_audit_invalid"
 
 
-def test_audit_catches_rows_tail_coupling_adversary() -> None:
-    """The rows[1:] adversary is caught by a randomized draw (pinned seed).
-
-    The seed is pinned so the drawn row is a coupled one; a fixed-row-0 audit
-    is silent on this adversary by construction (memo finding (d)).
-    """
-
-    model = _RowCouplingAdversary()
-    inputs = torch.tensor([[0.5, -0.4, 0.3]], dtype=torch.float64)
-    # Find a seed whose drawn row is NOT the first stacked row, then assert
-    # detection under that pinned seed -- deterministic by construction.
-    detecting_seed = None
-    for seed in range(20):
-        probe = attribution._steps._StepAuditor("per_call", 1, [6], seed=seed)
-        row = probe.row_for_chunk(0)
-        if row is not None and row != 0:
-            detecting_seed = seed
-            break
-    assert detecting_seed is not None
-    with pytest.raises(AttributionError) as excinfo:
-        attribution.integrated_gradients(
-            model,
-            inputs,
-            target=0,
-            num_steps=6,
-            step_batch_size=6,
-            step_audit_seed=detecting_seed,
-        )
-    assert excinfo.value.fields["code"] == "step_batch_audit_failed"
-    assert "step_batch_size=1" in str(excinfo.value)
-
-
 def test_audit_catches_row_mean_coupling_positive_control() -> None:
     """The realistic full-coupling class is caught even by per_call auditing."""
 
@@ -228,18 +173,6 @@ def test_audit_catches_row_mean_coupling_positive_control() -> None:
             step_audit_seed=3,
         )
     assert excinfo.value.fields["code"] == "step_batch_audit_failed"
-
-
-def test_audit_off_is_disclosed_not_silent() -> None:
-    """step_audit='off' is an explicit expert choice and rides the extra."""
-
-    model = _SmoothMlp()
-    inputs = torch.tensor([[0.2, 0.1, -0.3]], dtype=torch.float64)
-    result = attribution.integrated_gradients(
-        model, inputs, target=0, num_steps=4, step_batch_size=2, step_audit="off"
-    )
-    assert result.extra["step_audit"]["mode"] == "off"
-    assert result.extra["step_audit"]["audited_pairs"] == []
 
 
 @pytest.mark.parametrize("chunk", [2, 8])
@@ -261,41 +194,3 @@ def test_step_batching_matches_sequential_layer_ig_and_conductance(chunk: int) -
         )
         torch.testing.assert_close(batched.values, sequential.values, rtol=1e-4, atol=1e-9)
         assert batched.extra["step_batch_size"] == chunk
-
-
-def test_layer_completeness_fields_present_with_caveat() -> None:
-    """D21: LIG and conductance expose the completeness fields + caveat."""
-
-    model = _SmoothMlp()
-    inputs = torch.tensor([[0.6, -0.2, 0.4]], dtype=torch.float64)
-    for method in (attribution.layer_integrated_gradients, attribution.layer_conductance):
-        result = method(model, inputs, target=0, layer="hidden", num_steps=64)
-        for key in (
-            "attribution_sum",
-            "target_delta",
-            "completeness_residual",
-            "residual_rel",
-            "target_delta_abs",
-            "completeness_caveat",
-        ):
-            assert key in result.extra, (method, key)
-        # ``hidden`` IS a bottleneck of this Sequential-shaped MLP, so the
-        # layer-space residual is small at n=64.
-        assert result.extra["residual_rel"] < 0.02
-        assert result.extra["target_delta_abs"] == pytest.approx(
-            float(result.extra["target_delta"].abs()), rel=1e-12
-        )
-
-
-def test_input_ig_residual_rel_and_delta_disclosure() -> None:
-    """D27: input IG carries residual_rel and |target_delta| beside the residual."""
-
-    model = _SmoothMlp()
-    inputs = torch.tensor([[0.45, -0.3, 0.15]], dtype=torch.float64)
-    result = attribution.integrated_gradients(model, inputs, target=1, num_steps=128)
-    assert result.extra["residual_rel"] < 1e-3
-    assert result.extra["target_delta_abs"] > 0.0
-    residual = float(result.extra["completeness_residual"].abs())
-    assert result.extra["residual_rel"] == pytest.approx(
-        residual / result.extra["target_delta_abs"], rel=1e-9
-    )

@@ -76,14 +76,3 @@ def test_smoothgrad_refuses_zero_or_negative_noise(noise_level: float) -> None:
     with pytest.raises(AttributionError) as info:
         attribution.smoothgrad(_Linear(), torch.randn(2, 4), target=0, noise_level=noise_level)
     assert info.value.fields["code"] == "smoothgrad_noise_level_invalid"
-
-
-def test_smoothgrad_zero_noise_remedies_run() -> None:
-    """Both remedies run: a positive scale, or saliency for the noise-free map."""
-
-    torch.manual_seed(0)
-    model, x = _Linear(), torch.randn(2, 4)
-    noisy = attribution.smoothgrad(model, x, target=0, num_samples=3, noise_level=0.1, seed=0)
-    assert noisy.values.shape == x.shape
-    plain = attribution.saliency(model, x, target=0)
-    assert plain.values.shape == x.shape

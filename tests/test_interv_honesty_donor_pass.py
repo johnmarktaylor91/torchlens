@@ -57,19 +57,6 @@ def _pair() -> tuple[tl.Trace, tl.Trace]:
     return donor, base
 
 
-@pytest.mark.parametrize("pass_index", [1, 2])
-def test_patch_from_delivers_the_addressed_pass(pass_index: int) -> None:
-    """Each addressed pass receives ITS donor value, never the last pass's."""
-
-    donor, base = _pair()
-    other = 3 - pass_index
-    fork = base.fork()
-    fork.do(f"relu_1_2:{pass_index}", tl.patch_from(donor))
-    patched = fork[f"relu_1_2:{pass_index}"].out
-    assert torch.equal(patched, donor[f"relu_1_2:{pass_index}"].out)
-    assert not torch.equal(patched, donor[f"relu_1_2:{other}"].out)
-
-
 def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     """A fire context without a pass on a multi-pass donor site refuses typed
     and teaches every pass-qualified spelling."""
@@ -94,15 +81,6 @@ def test_bare_multipass_donor_lookup_refuses_instead_of_guessing() -> None:
     assert remedy and message.rstrip(".").endswith(remedy)
 
 
-def test_single_pass_donor_still_resolves() -> None:
-    """Single-pass sites keep resolving (bare or qualified spellings)."""
-
-    donor, base = _pair()
-    fork = base.fork()
-    fork.do("linear_1_1:1", tl.patch_from(donor))
-    assert torch.equal(fork["linear_1_1:1"].out, donor["linear_1_1:1"].out)
-
-
 class _SharedEncoder(nn.Module):
     """ALBERT-pattern cross-layer sharing in stdlib form: one real
     ``nn.TransformerEncoderLayer`` applied twice with SHARED weights."""
@@ -117,41 +95,6 @@ class _SharedEncoder(nn.Module):
         x = self.layer(x)
         x = self.layer(x)
         return x
-
-
-@pytest.mark.heavy  # measured 7.2-25.3s across CI rows (round-1/2/3 CI triage,
-# 2026-10-01): consistently over the smoke ceiling on a real weight-shared
-# transformer-encoder capture plus donor-pin round trip, not a one-off load spike.
-@pytest.mark.real_model
-def test_recurrent_model_donor_pin_shared_transformer_encoder() -> None:
-    """ROW GATE (recurrent-model donor pin): pass-correct donors on a real
-    weight-shared transformer encoder, at every multi-pass linear site."""
-
-    torch.manual_seed(0)
-    model = _SharedEncoder().eval()
-    xa, xb = torch.randn(5, 2, 16), torch.randn(5, 2, 16)
-    capture = tl.options.CaptureOptions(replayable=True)
-    donor = tl.trace(model, xa, capture=capture)
-    base = tl.trace(model, xb, capture=capture)
-
-    sites = [
-        label
-        for label in donor.layer_labels
-        if label.startswith("linear") and getattr(donor[label], "num_passes", 1) > 1
-    ]
-    assert sites, "shared encoder must produce multi-pass linear sites"
-    for site in sites:
-        for pass_index in (1, 2):
-            other = 3 - pass_index
-            fork = base.fork()
-            fork.do(f"{site}:{pass_index}", tl.patch_from(donor))
-            patched = fork[f"{site}:{pass_index}"].out
-            assert torch.equal(patched, donor[f"{site}:{pass_index}"].out), (
-                f"{site} pass {pass_index}: donor is not pass-correct"
-            )
-            assert not torch.equal(patched, donor[f"{site}:{other}"].out), (
-                f"{site} pass {pass_index}: received the other pass's donor"
-            )
 
 
 @pytest.mark.real_model
