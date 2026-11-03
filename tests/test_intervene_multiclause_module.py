@@ -63,7 +63,7 @@ def _eager(model: _Net, x: torch.Tensor, *, a: float = 0.0, b: float = 0.0) -> t
 
 
 def _output(trace: Any) -> torch.Tensor:
-    return trace[trace.output_layers[0]].activation.detach()
+    return trace[trace.output_layers[0]].out.detach()
 
 
 @contextmanager
