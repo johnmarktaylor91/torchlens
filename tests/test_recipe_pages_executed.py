@@ -57,6 +57,8 @@ PAGES: dict[str, str] = {
     "examples/recipes/function_vectors_recipe.ipynb": "transformers",
     "examples/recipes/clip_head_attention_recipe.ipynb": "clip",
     "examples/recipes/clip_text_decomposition_recipe.ipynb": "clip",
+    "examples/recipes/probe_accuracy_by_layer_recipe.ipynb": "matplotlib",
+    "examples/recipes/cka_rsa_two_models_recipe.ipynb": "matplotlib",
 }
 
 #: Pages whose other fences are illustrative: only their headed fences run here,
@@ -97,6 +99,9 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
 #: The distributed alignment search notebook trains its model and two rotations:
 #: 8.5 s on one pinned Linux core.
+#: The probe-by-layer notebook measured 4.2 and 4.5 s run alone on one thread
+#: (at the boundary, and past the unmarked family's aggregate budget); the
+#: two-model CKA/RSA notebook measured 12.5 and 16.9 s.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/lrp_transformers_lxt.md",
@@ -108,6 +113,8 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "examples/recipes/train_tuned_lens_recipe.ipynb",
         "docs/recipes/prisma_clip_sae.md",
         "examples/recipes/das_causal_basis_recipe.ipynb",
+        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
     }
 )
 
