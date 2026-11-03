@@ -79,7 +79,7 @@ def test_protocol_validate_names_op_and_reason_on_tamper() -> None:
     assert status.state == "failed"
     assert len(status.decisions) == 1
     decision = status.decisions[0]
-    assert decision["label"] == op._label_raw
+    assert decision["op_label"] == op._label_raw
     assert decision["reason"] in VALIDATION_REASONS
     assert op._label_raw in status.message
     # the public boolean contract of the spec entry is unchanged
