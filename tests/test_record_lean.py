@@ -162,7 +162,7 @@ def test_recorder_door_takes_the_lean_keyword() -> None:
     rec = recorder.recording
     assert rec.options.lean is True
     assert len(rec.records) == 2
-    assert len(rec.records_in_pass(0)) == 1 and len(rec.records_in_pass(1)) == 1
+    assert [len(list(rec.records_in_pass(i))) for i in (0, 1)] == [1, 1]
     assert all(e.predicate_matched for e in _events(rec).amended_op_records())
 
 
