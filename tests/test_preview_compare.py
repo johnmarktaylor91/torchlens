@@ -51,6 +51,12 @@ def _check_comparison(backend: str, model: Any, x: Any, alt: Any, tmp_path: Path
     assert counted["dead_count"].between(0, counted["total_units"]).all()
     # The dense model head has two output units on every backend.
     assert counted["total_units"].iloc[-1] == 2
+    spatial = dead[dead["reason"].str.contains("unit axis unavailable", na=False)]
+    assert spatial["total_units"].isna().all()
+    explicit_dim = -1 if backend in {"jax", "tf", "mlx"} else 1
+    explicit = tl.debug.dead_neurons(first, dim=explicit_dim).to_pandas()
+    # An explicit layout recovers the convolution's four channels.
+    assert explicit["total_units"].eq(4).any()
 
 
 @pytest.mark.backend_jax
@@ -184,6 +190,15 @@ def test_comparison_tensor_reads_preview_arrays_through_the_codec() -> None:
     assert _comparison_tensor(tensor, codec) is tensor
     assert _comparison_tensor({"container": array}, codec) is None
     assert _comparison_tensor(None, codec) is None
+    scalar_codec = SimpleNamespace(
+        to_numpy=lambda value: SimpleNamespace(
+            array=np.asarray([value], dtype=np.float32),
+            logical_dtype="float32",
+            codec_metadata={"logical_shape": []},
+        )
+    )
+    scalar = _comparison_tensor(3.0, scalar_codec)
+    assert scalar.ndim == 0 and scalar.item() == 3.0
 
 
 def test_comparison_tensor_decodes_bfloat16_storage_bits() -> None:
