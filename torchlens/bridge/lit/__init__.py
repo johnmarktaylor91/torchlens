@@ -24,6 +24,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ..._selection.selectors import in_module
 from . import _pooling, _refusals, _runtime, _sites
 
 __all__ = ["dataset", "layout", "model"]
@@ -209,8 +210,6 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
     Any
         A composed selector, or None for the save-everything default.
     """
-
-    from ..._selection.selectors import in_module
 
     label_map: dict[str, Any] = {}
     for op in probe._layer_list:

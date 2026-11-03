@@ -9,6 +9,13 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from ..intervention.errors import SiteResolutionError
+from ..repgeom._annotation_gate import (
+    _expected_stimulus_counts,
+    _raise_ineligible_site,
+    _site_ineligibility,
+    _warn_skipped_sites,
+)
 
 
 def source_model(log: Any) -> nn.Module:
@@ -61,8 +68,6 @@ def resolve_one_site(log: Any, site: Any) -> Any:
     Any
         Layer-pass-like object with an ``out`` attribute.
     """
-
-    from ..intervention.errors import SiteResolutionError
 
     if hasattr(site, "out") and hasattr(site, "layer_label"):
         return site
@@ -432,12 +437,6 @@ def tensor_layers(
         or is not stimulus-indexed.
     """
 
-    from ..repgeom._annotation_gate import (
-        _expected_stimulus_counts,
-        _raise_ineligible_site,
-        _site_ineligibility,
-    )
-
     expected_counts = _expected_stimulus_counts(log)
     if sites is not None:
         resolved: list[Any] = []
@@ -479,8 +478,6 @@ def _default_tensor_layer_sweep(
     """
 
     from collections import OrderedDict
-
-    from ..repgeom._annotation_gate import _site_ineligibility, _warn_skipped_sites
 
     selected: list[Any] = []
     skipped: OrderedDict[str, str] = OrderedDict()

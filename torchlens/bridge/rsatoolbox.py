@@ -21,6 +21,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from torchlens.neuro._datasets import single_dataset
+
 __tl_layer__ = "L8"
 
 
@@ -60,8 +62,6 @@ def dataset(source: Any, site: str | None = None) -> Any:
     torchlens.errors.FeatureShapingError
         When the site holds no payload or row/id cardinality disagrees.
     """
-
-    from torchlens.neuro._datasets import single_dataset
 
     return single_dataset(source, site)
 

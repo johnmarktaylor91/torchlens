@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from ..report import doctor
+from ..report._explain import explain
 from . import _budgets
 from ._envelope import build_envelope, build_error_envelope, canonical_dumps, json_safe
 
@@ -240,8 +242,6 @@ def _present_row_key(data: dict[str, Any], row_key: str | tuple[str, ...] | None
 def _handle_doctor(args: dict[str, Any]) -> dict[str, Any]:
     """Environment health report."""
 
-    from ..report import doctor
-
     report = doctor()
     data = {
         "checks": [
@@ -377,7 +377,6 @@ def _handle_explain(args: dict[str, Any]) -> dict[str, Any]:
     instead of being dead gates (AUD-CODE 3.11a).
     """
 
-    from ..report._explain import explain
     from ._artifacts import load_trace
     from ._overview import honesty_blocks
 

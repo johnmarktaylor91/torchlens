@@ -49,6 +49,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._extraction._front_door import extract
 from ._utils import tensor_layers
 
 #: TorchLens lookup used for Brain-Score's special ``"logits"`` layer name.
@@ -355,8 +356,6 @@ def get_activations_fn(
         OrderedDict[str, Any]
             Requested layer names to CPU numpy activations, batch axis first.
         """
-
-        from .._extraction._front_door import extract
 
         names = [str(name) for name in layer_names]
         plan = {

@@ -15,6 +15,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._errors import InvalidArgumentError
+from ..report._agent_json import _health_summary, _op_entry, _payload_state, build_agent_json
+from ._artifacts import declared_bytes_and_count
 from ._fold import FOLD_KEY_VERSION, fold_class_rows, fold_trace
 
 #: Schema ids -- the two overview modes are distinct schemas by contract.
@@ -52,7 +55,6 @@ def manifest_overview(manifest: dict[str, Any] | None) -> dict[str, Any]:
                 "artifact or it is corrupt. Nothing was unpickled."
             ),
         }
-    from ._artifacts import declared_bytes_and_count
 
     declared_bytes, declared_count = declared_bytes_and_count(manifest)
     backward = manifest.get("backward_summary") or {}
@@ -83,7 +85,6 @@ def _coverage_block(log: Any) -> dict[str, Any]:
     """Payload/gradient coverage counts an agent needs before value work."""
 
     ops = list(log._layer_list or [])
-    from ..report._agent_json import _payload_state
 
     states = [_payload_state(op) for op in ops]
     saved_grads = sum(
@@ -100,8 +101,6 @@ def _coverage_block(log: Any) -> dict[str, Any]:
 
 def _audit_block(log: Any) -> dict[str, Any]:
     """The always-present audit block: health verdict + non-finite facts."""
-
-    from ..report._agent_json import _health_summary
 
     health = _health_summary(log)
     coverage = getattr(log, "nonfinite_coverage", None)
@@ -198,8 +197,6 @@ def honesty_blocks(log: Any) -> dict[str, Any]:
         ``{"capture": ..., "audit": ...}``.
     """
 
-    from ..report._agent_json import build_agent_json
-
     return {"capture": build_agent_json(log, max_ops=1)["capture"], "audit": _audit_block(log)}
 
 
@@ -217,8 +214,6 @@ def folded_overview(log: Any) -> dict[str, Any]:
         Folded overview data block (fold classes, capture honesty, counts,
         coverage, audit, interventions, anomalies, next operations).
     """
-
-    from ..report._agent_json import build_agent_json
 
     skeleton = build_agent_json(log, max_ops=1)
     capture = skeleton["capture"]
@@ -327,9 +322,6 @@ def dump_view(
     InvalidArgumentError
         ``agent_view_invalid`` on an unknown view or class id.
     """
-
-    from .._errors import InvalidArgumentError
-    from ..report._agent_json import _op_entry, build_agent_json
 
     if view not in DUMP_VIEWS:
         raise InvalidArgumentError(

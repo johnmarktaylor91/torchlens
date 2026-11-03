@@ -17,8 +17,9 @@ from typing import Any, cast
 import torch
 
 from torchlens.errors import TorchLensError, TorchLensWarning
+from torchlens.options import CaptureOptions
 
-from .._user_public_impls import summary, trace
+from .._user_public_impls import _validate_summary_grammar, summary, trace
 
 
 def _lightning_callback_base() -> type[Any]:
@@ -303,8 +304,6 @@ class _LayerProfilerCallbackMixin:
             The trace, or ``None`` when the batch was skipped.
         """
 
-        from torchlens.options import CaptureOptions
-
         # Snapshot every submodule's flag: ``pl_module.train()`` afterwards
         # would flip a frozen (eval-mode) backbone back into train mode.
         training_flags = [(module, module.training) for _, module in pl_module.named_modules()]
@@ -393,8 +392,6 @@ class _SummaryCallbackMixin:
             Forwarded to ``tl.summary`` (the summary grammar). Validated here,
             so a bad option fails when the callback is built, not mid-fit.
         """
-
-        from torchlens._user_public_impls import _validate_summary_grammar
 
         _validate_summary_grammar(summary_kwargs)
         super().__init__()

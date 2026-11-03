@@ -9,6 +9,8 @@ from __future__ import annotations
 from dataclasses import fields as dataclass_fields
 from typing import Any
 
+from ..backends._backend_protocol import REFUSAL_CODES, protocol_problems
+from ..backends.registry import BackendCapabilities
 from ._cases import TIER_C0, CaseResult, _failed, _passed
 
 __tl_layer__ = "L9"
@@ -48,8 +50,6 @@ def run_c0_protocol_cases(backend: str) -> list[CaseResult]:
         One row per :data:`C0_PROTOCOL_CASES`; empty when the backend has no
         registered protocol (its slots do not exist).
     """
-
-    from ..backends._backend_protocol import REFUSAL_CODES, protocol_problems
 
     spec = registered_protocol_spec(backend)
     if spec is None:
@@ -107,8 +107,6 @@ def _refusal_codes_cell(candidate: Any, registry: frozenset[str]) -> CaseResult:
 
 def _capability_table_cell(candidate: Any) -> CaseResult:
     """Every ``BackendCapabilities`` field holds a value of its declared kind."""
-
-    from ..backends.registry import BackendCapabilities
 
     try:
         table = candidate.capabilities()

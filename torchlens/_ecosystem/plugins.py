@@ -41,7 +41,11 @@ from dataclasses import dataclass
 from importlib import metadata
 from typing import Any
 
+from .._registry import ProviderInfo
+from ..backends.registry import BackendSpec, register_backend_spec
 from ..errors import ConfigurationError, TorchLensWarning
+from ..export._registry import register_target
+from ..transforms._registry import register_transform
 
 __tl_layer__ = "L8"
 
@@ -240,8 +244,6 @@ def _plugins_env_disabled() -> bool:
 def _commit_backends(result: Any, provider: ProviderCandidate) -> None:
     """Commit one backend provider spec through the backend door."""
 
-    from ..backends.registry import BackendSpec, register_backend_spec
-
     if not isinstance(result, BackendSpec):
         raise ConfigurationError(
             f"torchlens.backends factory {provider.name!r} returned "
@@ -256,9 +258,6 @@ def _commit_backends(result: Any, provider: ProviderCandidate) -> None:
 def _commit_transforms(result: Any, provider: ProviderCandidate) -> None:
     """Commit one transform definition through the transforms door."""
 
-    from .._registry import ProviderInfo
-    from ..transforms._registry import register_transform
-
     register_transform(
         result,
         provider=ProviderInfo(
@@ -271,9 +270,6 @@ def _commit_transforms(result: Any, provider: ProviderCandidate) -> None:
 
 def _commit_export_targets(result: Any, provider: ProviderCandidate) -> None:
     """Commit one export-target row through the export door."""
-
-    from .._registry import ProviderInfo
-    from ..export._registry import register_target
 
     if not isinstance(result, dict) or not {"name", "fn", "tier"} <= set(result):
         raise ConfigurationError(

@@ -25,6 +25,11 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._semantic import _families
+from .._semantic.facets import FacetSpec, TransformPrimitive
+from .._utils.tensor_utils import get_tensor_label
+from ..intervention.errors import MultiMatchWarning, SiteResolutionError
+from ..options import CaptureOptions
 from ._utils import module_for_site, resolve_one_site
 
 _DOCS = "docs/recipes/pretrained_saes.md"
@@ -235,8 +240,6 @@ class _SAEFamily:
     def _spec(self, record: Any, index: int | tuple[int, ...] | None) -> Any:
         """Build the codec facet spec anchored to ``record``."""
 
-        from .._semantic.facets import FacetSpec, TransformPrimitive
-
         codec = _LatentCodec(self.name, self.sae, index)
         primitive = TransformPrimitive("codec", (codec,), capability_class="codec")
         home = FacetSpec.from_home(record, function_id=f"sae:{self.name}")
@@ -289,8 +292,6 @@ class _SAEFamily:
         every pass of that layer; so a string site must name a layer that
         runs once, and a selector keeps one home per matched layer.
         """
-
-        from ..intervention.errors import MultiMatchWarning, SiteResolutionError
 
         if not isinstance(self.site, str):
             # The edit's own fan-out warning reports the count; resolving the
@@ -421,8 +422,6 @@ def register(name: str, sae: Any, *, site: Any) -> None:
         ``sae_family_name_taken`` when the name is registered already.
     """
 
-    from .._semantic import _families
-
     require_codec(sae, "tl.bridge.sae.register")
     if (
         not isinstance(name, str)
@@ -454,8 +453,6 @@ def unregister(name: str) -> None:
     InvalidArgumentError
         ``sae_family_unknown`` when nothing is registered under ``name``.
     """
-
-    from .._semantic import _families
 
     if name not in _families._FACET_FAMILIES:
         registered = sorted(_families._FACET_FAMILIES)
@@ -510,8 +507,6 @@ def logged_splice_trace(
     """
 
     from .._user_public_impls import release_model, trace as _capture_trace
-    from .._utils.tensor_utils import get_tensor_label
-    from ..options import CaptureOptions
 
     module = module_for_site(clean, site_label, bridge="splice(..., log_latents=True)")
     raw: dict[str, str | None] = {}

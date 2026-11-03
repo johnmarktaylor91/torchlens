@@ -39,6 +39,7 @@ from typing import Any
 import torch
 
 from torchlens._errors import InvalidArgumentError, MissingDependencyError
+from torchlens._semantic.tolerances import within_reconstruction_tolerance
 from torchlens.errors import ValidationError
 
 BACKEND_KEY = "torchlens"
@@ -350,8 +351,6 @@ def _check_against_sdpa(name: str, facts: _CallFacts) -> None:
     Uses the same cancellation-aware budget as the semantic SDPA ``z``
     reconstruction gate (``torchlens._semantic.tolerances``).
     """
-
-    from torchlens._semantic.tolerances import within_reconstruction_tolerance
 
     attn_mask, is_causal = _sdpa_reference_mask(facts)
     if attn_mask is not None and attn_mask.is_floating_point():

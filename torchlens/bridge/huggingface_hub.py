@@ -14,6 +14,10 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .._errors import ArgumentTypeError
+from .._io import ArtifactError
+from ..bundle import Bundle
+
 _DEFAULT_PATH_IN_REPO = "torchlens_artifact.tar.gz"
 _BUNDLE_ARCNAME = "bundle"
 #: Upper bounds on a downloaded artifact's tar: a Hub file is untrusted input.
@@ -214,8 +218,6 @@ def _extract_bundle(archive: Path, destination: Path) -> Path:
         entry, or a member count or total size over the bounds.
     """
 
-    from .._io import ArtifactError
-
     root, problem = _checked_extract(archive, destination)
     if problem is not None:
         raise ArtifactError(
@@ -310,9 +312,6 @@ def _artifact_bytes(log_or_bundle_or_spec: Any, *, save_level: str = "portable")
         If the bundle save fails.
     """
 
-    from .._errors import ArgumentTypeError
-    from .._io import ArtifactError
-
     saver = _resolve_bundle_saver(log_or_bundle_or_spec)
     if saver is None:
         raise ArgumentTypeError(
@@ -381,8 +380,6 @@ def _resolve_bundle_saver(log_or_bundle_or_spec: Any) -> Any | None:
             _save_trace_bundle(log_or_bundle_or_spec, path, level=level, overwrite=overwrite)
 
         return _save_trace
-
-    from ..bundle import Bundle
 
     if isinstance(log_or_bundle_or_spec, Bundle):
         return log_or_bundle_or_spec.save

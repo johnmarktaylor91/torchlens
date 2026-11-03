@@ -26,6 +26,9 @@ from typing import TYPE_CHECKING, Any
 import torch
 from torch import nn
 
+from torchlens._selection.selectors import label as label_selector
+from torchlens.intervention.helpers import splice_module
+
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
 from . import _sae_metrics
@@ -512,9 +515,6 @@ def _replayed(clean: Any, site: str, name: str, module: nn.Module) -> Any:
     Any
         Replayed fork.
     """
-
-    from torchlens._selection.selectors import label as label_selector
-    from torchlens.intervention.helpers import splice_module
 
     fork = clean.fork(name)
     fork.attach_hooks(label_selector(site), splice_module(module, input_route="out"))

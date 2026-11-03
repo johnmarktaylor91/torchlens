@@ -48,6 +48,8 @@ from .._observability import (
 from .._observability._artifact import CommittedBlock
 from .._observability._collector import StepTruth
 from .._observability._overhead import RefusalPredicate
+from .._selection.selectors import in_module
+from ..errors import TorchLensWarning
 from ._errors import WatchConfigError
 
 if TYPE_CHECKING:
@@ -134,8 +136,6 @@ def op_selector(select: Any) -> Any:
     ``tl.in_module(...)`` selectors; any other object is a selector or
     predicate from the selector algebra and passes through unchanged.
     """
-
-    from .._selection.selectors import in_module
 
     if isinstance(select, str):
         return in_module(select)
@@ -511,8 +511,6 @@ def _ratio(value: float | None) -> str:
 
 def disclose_cost(collector: OpGrainCollector) -> None:
     """Warn once at attach with the calibrated cost (the loud disclosure)."""
-
-    from ..errors import TorchLensWarning
 
     measurement = collector.calibration
     median = measurement.median_ratio if measurement is not None else None

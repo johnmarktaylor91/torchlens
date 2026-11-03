@@ -27,6 +27,11 @@ import json
 import sys
 from typing import Any
 
+from ._artifacts import artifact_block, read_manifest, resolve_artifact_path, resolve_digest
+from ._envelope import build_envelope, canonical_dumps, json_safe
+from ._overview import OVERVIEW_MANIFEST_SCHEMA, manifest_overview
+from ._registry import call_tool, tool_specs
+
 #: Exit-code vocabulary (closed).
 EXIT_OK = 0
 EXIT_GATE = 1
@@ -54,8 +59,6 @@ _ARTIFACT_CODES = (
 def _emit(payload: dict[str, Any], as_json: bool) -> None:
     """Write one result to stdout (canonical JSON or plain key lines)."""
 
-    from ._envelope import canonical_dumps, json_safe
-
     if as_json:
         sys.stdout.write(canonical_dumps(json_safe(payload)) + "\n")
         return
@@ -69,10 +72,6 @@ def _emit(payload: dict[str, Any], as_json: bool) -> None:
 
 def _tier0_info(path_arg: str, as_json: bool) -> int:
     """Torch-free manifest preflight (``info`` verb)."""
-
-    from ._artifacts import artifact_block, read_manifest, resolve_artifact_path, resolve_digest
-    from ._envelope import build_envelope
-    from ._overview import OVERVIEW_MANIFEST_SCHEMA, manifest_overview
 
     path = resolve_artifact_path(path_arg)
     digest, _ = resolve_digest(path)
@@ -232,9 +231,6 @@ def _apply_fail_on(envelope: dict[str, Any], checks: list[str]) -> int:
 
 def _tier1(verb: str, args: argparse.Namespace) -> int:
     """Dispatch one registry verb in-process (tier 1)."""
-
-    from ._envelope import canonical_dumps, json_safe
-    from ._registry import call_tool, tool_specs
 
     tool_by_verb = {spec.cli_verb: spec for spec in tool_specs() if spec.cli_verb}
     spec = tool_by_verb[verb]

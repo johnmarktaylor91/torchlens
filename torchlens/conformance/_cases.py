@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..backends.registry import BackendUnsupportedError
 from ._adapters import RosterModel
 
 __tl_layer__ = "L9"
@@ -125,8 +126,6 @@ def _op_inventory_case(trace: Any, model: RosterModel) -> CaseResult:
 
 def _failure_detail(exc: Exception) -> str:
     """Failure detail; a typed backend refusal is tagged ``unsupported[<code>]``."""
-
-    from ..backends.registry import BackendUnsupportedError
 
     text = str(exc)[:300]
     if isinstance(exc, BackendUnsupportedError):

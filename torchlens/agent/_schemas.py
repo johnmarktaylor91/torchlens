@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from ._artifacts import _loads_bounded
 
 #: Result schema id of the schema tool itself.
 SCHEMA_TOOL_SCHEMA = "torchlens.agent.schema.v1"
@@ -69,6 +70,5 @@ def load_schema(schema_id: str) -> dict[str, Any]:
             code="agent_schema_unknown",
             remedy=f"fetch the index first; served ids: {', '.join(schema_index())}",
         )
-    from ._artifacts import _loads_bounded
 
     return _loads_bounded((_SCHEMA_DIR / filename).read_text(encoding="utf-8"))

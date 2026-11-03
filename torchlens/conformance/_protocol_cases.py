@@ -37,6 +37,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
+from ..backends._validation_shared import float_replay_tolerances
+from ..backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 from ._adapters import RosterModel
 from ._c0_protocol_cases import (
     C0_PROTOCOL_CASES as C0_PROTOCOL_CASES,
@@ -195,16 +198,12 @@ def adapter_protocol(adapter: Any) -> Any | None:
 def false_capability_flags(protocol: Any) -> tuple[str, ...]:
     """Refusable capability flags the backend declares False, in table order."""
 
-    from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
-
     table = protocol.capabilities()
     return tuple(flag for flag in REFUSABLE_CAPABILITY_FLAGS if getattr(table, flag, None) is False)
 
 
 def foreign_trace_options(protocol: Any) -> tuple[str, ...]:
     """Public trace options the backend does not implement, in spine order."""
-
-    from ..backends.registry import PUBLIC_OPTION_SPINE_TRACE_OPTIONS
 
     implemented = set(protocol.trace_options())
     return tuple(
@@ -296,8 +295,6 @@ def _tolerance_for(array: Any) -> tuple[float, float] | None:
     """The dtype-honest replay band for a float payload; ``None`` means exact."""
 
     import numpy as np
-
-    from ..backends._validation_shared import float_replay_tolerances
 
     kind = np.asarray(array).dtype.kind
     if kind == "f":

@@ -11,6 +11,11 @@ from typing import Any, cast
 
 from torch import nn
 
+import torchlens
+
+from .._utils.env_flags import closed_bool_env
+from ..bundle import Bundle
+
 _ATTRIBUTE_PART_RE = re.compile(r"(?P<name>[A-Za-z_][A-Za-z0-9_]*)(?P<indexes>(?:\[[0-9]+\])*)")
 _STOP_AFTER_SITE: Any | None = None
 _LAZY_SUBMODULE_EXPORTS = {"dagua", "node_styles"}
@@ -158,8 +163,6 @@ class Session:
             Captured ``Trace`` for this invocation.
         """
 
-        import torchlens
-
         index = len(self.traces)
         trace_fn = cast(Callable[..., Any], torchlens.trace)
         log = trace_fn(
@@ -188,8 +191,6 @@ class Session:
         Any
             ``torchlens.Bundle`` keyed by invocation name.
         """
-
-        from ..bundle import Bundle
 
         return Bundle(
             {str(metadata["name"]): log for metadata, log in zip(self.invocations, self.traces)}
@@ -269,14 +270,10 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
         If ``TORCHLENS_AUTO=1`` is set.
     """
 
-    from .._utils.env_flags import closed_bool_env
-
     if closed_bool_env("TORCHLENS_AUTO"):
         raise RuntimeError("TORCHLENS_AUTO is intentionally unsupported; use auto_capture().")
     if every <= 0:
         raise ValueError("every must be positive.")
-
-    import torchlens
 
     session = AutoCaptureSession(model=model, every=every)
     original_forward = model.forward

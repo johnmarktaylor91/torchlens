@@ -37,6 +37,8 @@ from importlib import metadata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
+from .._io import _json
+from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 from ._adapters import RosterModel, resolve_adapter
 from ._cases import TIER_C0, TIER_C1, TIER_C2, UNSUPPORTED_DETAIL_PREFIX
 from ._graduation import GraduationItem, graduation_items
@@ -234,8 +236,6 @@ def scorecard_from_json(text: str) -> PreviewScorecard:
         The record; its ``sha256`` is the stored digest, not recomputed.
     """
 
-    from .._io import _json
-
     data = _json.loads_bounded(text)
     cells = tuple(
         ScorecardCell(
@@ -420,8 +420,6 @@ def capability_summary(protocol: Any | None, cells: tuple[ScorecardCell, ...]) -
     dict[str, str]
         One entry per refusable capability flag.
     """
-
-    from ..backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
 
     if protocol is None:
         return {}

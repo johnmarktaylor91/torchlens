@@ -46,6 +46,9 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .._io._json import loads_bounded, read_bytes_bounded
+from .._selection.selection import units
+from .._selection.subspace import subspace
+from ..intervention._affine_source import set_affine_coordinates
 
 __all__ = ["LoreftArtifact", "read"]
 
@@ -152,9 +155,6 @@ class LoreftArtifact:
             over the site's label.
         """
 
-        from .._selection.selection import units
-        from .._selection.subspace import subspace
-
         width = int(self.rotation.shape[0])
         label = site if isinstance(site, str) else _checked_site(site, width, positions)
         within: Any = label
@@ -178,8 +178,6 @@ class LoreftArtifact:
     @property
     def edit(self) -> Any:
         """Return ``tl.intervention.set_affine_coordinates(W, bias=b)`` in float64."""
-
-        from ..intervention._affine_source import set_affine_coordinates
 
         return set_affine_coordinates(
             self.weight.to(torch.float64), bias=self.bias.to(torch.float64)

@@ -12,6 +12,7 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._capture.structure_only import ValueDependentBranchError
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
 from torchlens.bridge.hf_attention import (
@@ -21,6 +22,7 @@ from torchlens.bridge.hf_attention import (
     register_attention,
 )
 
+from .. import preprocessing as _preprocessing
 from ..options import merge_capture_options
 
 _MODALITY_KEYS = frozenset({"text", "image", "images", "audio", "videos"})
@@ -422,7 +424,6 @@ def _trace_text_capture(
 
     if not structure_only:
         return _capture_trace(model, cast(Any, text), capture=capture, **kwargs)
-    from torchlens._capture.structure_only import ValueDependentBranchError
 
     try:
         return _capture_trace(model, cast(Any, text), capture=capture, **kwargs)
@@ -662,8 +663,6 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
     InvalidArgumentError
         ``preprocessing_unresolved`` when no authority resolves.
     """
-
-    from .. import preprocessing as _preprocessing
 
     resolution = _preprocessing.resolve(model=model)
     record = resolution.preprocessing

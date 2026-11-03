@@ -16,6 +16,7 @@ from typing import Any
 from .._data_classes.trace import Trace
 from .._errors import InvalidArgumentError
 from .._io.bundle import load
+from ..report._health import health_facts
 
 #: Manifest-declared payload bytes above which loads go LAZY (blobs on disk).
 EAGER_LOAD_MAX_BYTES = 256 * 1024 * 1024
@@ -481,7 +482,6 @@ def load_trace(path_arg: str) -> tuple[Any, dict[str, Any], dict[str, Any]]:
     # WHICH tool touched payloads first, and repeated identical tool calls
     # would not be byte-identical. The cost is bounded by the load plan's
     # declared-entry refusal above.
-    from ..report._health import health_facts
 
     health_facts(loaded)
     if len(_TRACE_CACHE) >= _TRACE_CACHE_MAX:
