@@ -9890,6 +9890,22 @@
  {
   "ambiguous": false,
   "field": "parent_arg_positions",
+  "file": "torchlens/validation/_replay_live_params.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "transform_kind",
+  "file": "torchlens/validation/_replay_live_params.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
   "file": "torchlens/validation/_saved_value_proofs.py",
   "has_default": true,
   "sites": 1,
@@ -9988,7 +10004,7 @@
   "field": "parent_arg_positions",
   "file": "torchlens/validation/core.py",
   "has_default": true,
-  "sites": 5,
+  "sites": 4,
   "via_getattr": true
  },
  {
