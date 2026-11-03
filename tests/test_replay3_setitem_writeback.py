@@ -96,12 +96,17 @@ def test_consumers_after_the_write_back_bind_to_it() -> None:
     assert [trace[parent].label for parent in add.parents] == [second.label]
 
 
-def test_write_into_another_region_keeps_the_mutation_edge() -> None:
+def test_write_into_another_region_validates() -> None:
+    assert _validate(_WriteOtherRegion(), [torch.randn(3, 4)])
+
+
+def test_write_into_another_region_binds_the_receiver_to_the_pre_mutation_producer() -> None:
     trace = tl.trace(_WriteOtherRegion(), [torch.randn(3, 4)])
     (setitem,) = _setitem_ops(trace)
     positions = setitem.parent_arg_positions["args"]
-    assert trace[positions[0]].func_name == "add_"
-    assert positions[0] == positions[2]
+    assert trace[positions[0]].func_name == "__mul__"
+    assert trace[positions[2]].func_name == "add_"
+    assert positions[0] != positions[2]
 
 
 def test_read_of_a_view_mutated_base_still_binds_to_the_mutation() -> None:
