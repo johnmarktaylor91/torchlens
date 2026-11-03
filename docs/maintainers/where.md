@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-85 packages, 1410 modules, 634820 lines, 0 modules without a docstring.
+85 packages, 1410 modules, 634828 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -18,7 +18,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1520 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4585 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37383 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 86 | 37391 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
@@ -287,7 +287,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (86 modules, 37383 lines)
+Core data structures for representing a logged forward pass. (86 modules, 37391 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -318,7 +318,7 @@ Core data structures for representing a logged forward pass. (86 modules, 37383 
 | `_op_save` | Tensor save, grad logging, transform validation and copy logic for ''Op''. | 773 |
 | `_op_transforms` | User-transform application and validation helpers for saved payloads. | 260 |
 | `_preprocessing_provenance` | Preprocessing provenance derivations that live WITH the record (tvscope). | 114 |
-| `_repr` | Shared record representation helpers. | 59 |
+| `_repr` | Shared record representation helpers. | 80 |
 | `_runtime_handles` | Shared runtime handle resolution for TorchLens records. | 77 |
 | `_schema_bindings` | GENERATED storage bindings for the declared record schema. DO NOT EDIT. | 689 |
 | `_schema_bindings_trace` | GENERATED storage bindings for the ''trace'' record. DO NOT EDIT. | 355 |
@@ -376,7 +376,7 @@ Core data structures for representing a logged forward pass. (86 modules, 37383 
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3640 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
 | `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
-| `trace` | Trace: the top-level container for a fully logged forward pass. | 3539 |
+| `trace` | Trace: the top-level container for a fully logged forward pass. | 3526 |
 
 ### `torchlens._data_substrate`
 
