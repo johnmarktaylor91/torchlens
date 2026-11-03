@@ -466,7 +466,7 @@ def _resolve_witness_requests(trace: Any) -> tuple[bool, bool, bool, Any]:
     # ATen recording is the public ``CaptureOptions(aten_ops=True)`` switch,
     # stamped on the trace at entry; nothing else arms it.
     record_escapes = bool(getattr(trace, "is_replayable", False))
-    record_aten = bool(getattr(trace, "_options_aten_ops", False))
+    record_aten = bool(trace._options_aten_ops)
     plane_p = _plane_p_requested()
     event_stream = getattr(trace, "capture_events", None)
     if record_aten and event_stream is not None:
