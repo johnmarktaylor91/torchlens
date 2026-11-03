@@ -2497,7 +2497,7 @@ docs-md	docs/maintainers/where.md	358
 docs-md	docs/maintainers/where.md	359
 docs-md	docs/maintainers/where.md	36
 docs-md	docs/maintainers/where.md	360
-docs-md	docs/maintainers/where.md	36155
+docs-md	docs/maintainers/where.md	36164
 docs-md	docs/maintainers/where.md	363
 docs-md	docs/maintainers/where.md	365
 docs-md	docs/maintainers/where.md	366
@@ -2623,6 +2623,7 @@ docs-md	docs/maintainers/where.md	484
 docs-md	docs/maintainers/where.md	486
 docs-md	docs/maintainers/where.md	487
 docs-md	docs/maintainers/where.md	488
+docs-md	docs/maintainers/where.md	489
 docs-md	docs/maintainers/where.md	49
 docs-md	docs/maintainers/where.md	490
 docs-md	docs/maintainers/where.md	491
@@ -2763,7 +2764,7 @@ docs-md	docs/maintainers/where.md	648
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	656
-docs-md	docs/maintainers/where.md	656657
+docs-md	docs/maintainers/where.md	656675
 docs-md	docs/maintainers/where.md	657
 docs-md	docs/maintainers/where.md	66
 docs-md	docs/maintainers/where.md	660
@@ -2894,7 +2895,7 @@ docs-md	docs/maintainers/where.md	87
 docs-md	docs/maintainers/where.md	870
 docs-md	docs/maintainers/where.md	871
 docs-md	docs/maintainers/where.md	88
-docs-md	docs/maintainers/where.md	8827
+docs-md	docs/maintainers/where.md	8836
 docs-md	docs/maintainers/where.md	885
 docs-md	docs/maintainers/where.md	888
 docs-md	docs/maintainers/where.md	89
@@ -9099,6 +9100,7 @@ test-docstrings	tests/test_io_determinism_fixes.py	64
 test-docstrings	tests/test_io_durability_bounds.py	10
 test-docstrings	tests/test_io_durability_bounds.py	20
 test-docstrings	tests/test_io_durability_bounds.py	256
+test-docstrings	tests/test_io_durability_bounds.py	3.0
 test-docstrings	tests/test_io_durability_bounds.py	390
 test-docstrings	tests/test_io_durability_bounds.py	64
 test-docstrings	tests/test_io_durability_bounds.py	76
