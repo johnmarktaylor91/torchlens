@@ -1498,7 +1498,7 @@ torchlens/validation/core.py::_ground_truth_output_matches_saved	68
 torchlens/validation/core.py::_prepare_input_args_for_validating_layer	122
 torchlens/validation/core.py::validate_parents_of_saved_layer	255
 torchlens/validation/diagnostics.py::describe_tensor_mismatch	97
-torchlens/validation/exemptions.py	2832
+torchlens/validation/exemptions.py	2830
 torchlens/validation/exemptions.py::_addcmul_zero_annihilator_decision	70
 torchlens/validation/exemptions.py::_bool_comparison_straddle_probe	83
 torchlens/validation/exemptions.py::_bool_predicate_influence_probe	78

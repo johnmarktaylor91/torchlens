@@ -95,11 +95,11 @@ def check_foreign_kernel_dependence_exempt(
     row = declared_output_dependence(layer)
     if row is None or not layers_to_perturb:
         return False
-    for label in layers_to_perturb:
-        keys = _positions_of(layer, label)
-        if not keys:
-            return False
-        for key in keys:
-            if not isinstance(key, int) or not row.independent_of(key):
-                return False
-    return True
+    return all(_label_is_declared_independent(row, layer, label) for label in layers_to_perturb)
+
+
+def _label_is_declared_independent(row: OutputDependence, layer: Op, label: str) -> bool:
+    """Return whether every positional key ``label`` occupies is declared independent."""
+
+    keys = _positions_of(layer, label)
+    return bool(keys) and all(isinstance(key, int) and row.independent_of(key) for key in keys)
