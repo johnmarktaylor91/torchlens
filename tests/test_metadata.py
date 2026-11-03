@@ -1236,7 +1236,7 @@ def _get_code_context_with_flag(small_input, save_source_context: bool):
     for label in mh.layer_labels:
         entry = mh[label]
         if not entry.is_input:
-            return entry.code_context, mh
+            return entry.source.frames, mh
     raise RuntimeError("No non-input layer found")
 
 
@@ -1346,9 +1346,9 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
     captured_entries = [
         entry for entry in mh._layer_list if not entry.is_input and entry.func_name != "none"
     ]
-    assert all(len(entry.code_context) > 0 for entry in captured_entries)
+    assert all(len(entry.source.frames) > 0 for entry in captured_entries)
     for entry in captured_entries:
-        for frame in entry.code_context:
+        for frame in entry.source.frames:
             assert frame.file is not None
             assert frame.line_number is not None
             assert frame.code_firstlineno is not None
@@ -1387,7 +1387,7 @@ def test_func_call_location_no_source_state_with_save_code_context_off(small_inp
 
     mh_roundtrip = pickle.loads(pickle.dumps(mh))
     roundtrip_stack = next(
-        entry.code_context for entry in mh_roundtrip._layer_list if not entry.is_input
+        entry.source.frames for entry in mh_roundtrip._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1446,8 +1446,8 @@ def test_custom_num_context_lines(small_input):
     )
     for label in mh.layer_labels:
         entry = mh[label]
-        if not entry.is_input and entry.code_context:
-            for loc in entry.code_context:
+        if not entry.is_input and entry.source.frames:
+            for loc in entry.source.frames:
                 if loc.code_context is not None:
                     assert loc.num_context_lines == 7  # 3 + 1 + 3
                     return

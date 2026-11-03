@@ -33,6 +33,12 @@
      "dilation",
      "groups"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -94,24 +100,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -194,9 +182,7 @@
     },
     "func_name": "conv2d",
     "func_qualname": "_VariableFunctionsClass.conv2d",
-    "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
-    "fx_qualpath": "conv.conv2d",
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
@@ -348,6 +334,27 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -381,6 +388,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -421,7 +434,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -493,9 +505,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "none",
@@ -613,6 +623,10 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -646,6 +660,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -693,7 +713,6 @@
      "1": []
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -765,9 +784,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": null,
@@ -893,6 +910,10 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -929,6 +950,12 @@
      "input",
      "inplace"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -974,16 +1001,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -1055,9 +1072,7 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
@@ -1182,6 +1197,19 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -1934,15 +1962,6 @@
     "activation_transform": null,
     "address": "conv",
     "annotations": {},
-    "arg_expressions": [
-     "input",
-     "weight",
-     "bias",
-     "self.stride",
-     "self.padding",
-     "self.dilation",
-     "self.groups"
-    ],
     "arg_names": [
      "input",
      "weight",
@@ -1962,6 +1981,16 @@
     "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -2147,7 +2176,6 @@
     "cost.macs_forward": 288,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -2233,7 +2261,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -2465,6 +2492,38 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "input",
+     "weight",
+     "bias",
+     "self.stride",
+     "self.padding",
+     "self.dilation",
+     "self.groups"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.conv2d",
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -2512,7 +2571,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -2521,6 +2579,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -2625,7 +2693,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -2669,7 +2736,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -2845,6 +2911,13 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": null,
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -2892,7 +2965,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
@@ -2901,6 +2973,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -3031,7 +3113,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -3090,7 +3171,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -3292,6 +3372,13 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -3339,9 +3426,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [
-     "self.conv(x)"
-    ],
     "arg_names": [
      "input",
      "inplace"
@@ -3353,6 +3437,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -3486,7 +3580,6 @@
     "cost.macs_forward": 0,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -3547,7 +3640,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -3735,6 +3827,24 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "self.conv(x)"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -4726,6 +4836,12 @@
      "dilation",
      "groups"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -4787,24 +4903,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -4887,9 +4985,7 @@
     },
     "func_name": "conv2d",
     "func_qualname": "_VariableFunctionsClass.conv2d",
-    "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
-    "fx_qualpath": "conv.conv2d",
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
@@ -5041,6 +5137,27 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -5074,6 +5191,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -5114,7 +5237,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -5186,9 +5308,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "none",
@@ -5306,6 +5426,10 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -5339,6 +5463,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -5386,7 +5516,6 @@
      "1": []
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -5458,9 +5587,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": null,
@@ -5586,6 +5713,10 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -5622,6 +5753,12 @@
      "input",
      "inplace"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -5667,16 +5804,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -5748,9 +5875,7 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
@@ -5875,6 +6000,19 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -6627,15 +6765,6 @@
     "activation_transform": null,
     "address": "conv",
     "annotations": {},
-    "arg_expressions": [
-     "input",
-     "weight",
-     "bias",
-     "self.stride",
-     "self.padding",
-     "self.dilation",
-     "self.groups"
-    ],
     "arg_names": [
      "input",
      "weight",
@@ -6655,6 +6784,16 @@
     "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -6840,7 +6979,6 @@
     "cost.macs_forward": 288,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -6926,7 +7064,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -7158,6 +7295,38 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "input",
+     "weight",
+     "bias",
+     "self.stride",
+     "self.padding",
+     "self.dilation",
+     "self.groups"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.conv2d",
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -7205,7 +7374,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -7214,6 +7382,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -7318,7 +7496,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -7362,7 +7539,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -7538,6 +7714,13 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": null,
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -7585,7 +7768,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
@@ -7594,6 +7776,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -7724,7 +7916,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -7783,7 +7974,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -7985,6 +8175,13 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -8032,9 +8229,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [
-     "self.conv(x)"
-    ],
     "arg_names": [
      "input",
      "inplace"
@@ -8046,6 +8240,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -8179,7 +8383,6 @@
     "cost.macs_forward": 0,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -8240,7 +8443,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -8428,6 +8630,24 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "self.conv(x)"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -9421,6 +9641,12 @@
      "dilation",
      "groups"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -9482,24 +9708,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -9582,9 +9790,7 @@
     },
     "func_name": "conv2d",
     "func_qualname": "_VariableFunctionsClass.conv2d",
-    "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
-    "fx_qualpath": "conv.conv2d",
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
@@ -9736,6 +9942,27 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -9769,6 +9996,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -9809,7 +10042,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -9881,9 +10113,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "none",
@@ -10001,6 +10231,10 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -10034,6 +10268,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -10081,7 +10321,6 @@
      "1": []
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -10153,9 +10392,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": null,
@@ -10281,6 +10518,10 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -10317,6 +10558,12 @@
      "input",
      "inplace"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -10362,16 +10609,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -10443,9 +10680,7 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
@@ -10570,6 +10805,19 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -11322,15 +11570,6 @@
     "activation_transform": null,
     "address": "conv",
     "annotations": {},
-    "arg_expressions": [
-     "input",
-     "weight",
-     "bias",
-     "self.stride",
-     "self.padding",
-     "self.dilation",
-     "self.groups"
-    ],
     "arg_names": [
      "input",
      "weight",
@@ -11350,6 +11589,16 @@
     "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -11535,7 +11784,6 @@
     "cost.macs_forward": 288,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -11621,7 +11869,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -11853,6 +12100,38 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "input",
+     "weight",
+     "bias",
+     "self.stride",
+     "self.padding",
+     "self.dilation",
+     "self.groups"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.conv2d",
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -11900,7 +12179,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -11909,6 +12187,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -12013,7 +12301,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -12057,7 +12344,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -12233,6 +12519,13 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": null,
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -12280,7 +12573,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
@@ -12289,6 +12581,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -12419,7 +12721,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -12478,7 +12779,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -12680,6 +12980,13 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -12727,9 +13034,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [
-     "self.conv(x)"
-    ],
     "arg_names": [
      "input",
      "inplace"
@@ -12741,6 +13045,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -12874,7 +13188,6 @@
     "cost.macs_forward": 0,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -12935,7 +13248,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -13123,6 +13435,24 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "self.conv(x)"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -14048,6 +14378,12 @@
      "dilation",
      "groups"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -14109,24 +14445,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -14209,9 +14527,7 @@
     },
     "func_name": "conv2d",
     "func_qualname": "_VariableFunctionsClass.conv2d",
-    "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
-    "fx_qualpath": "conv.conv2d",
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
@@ -14363,6 +14679,27 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -14396,6 +14733,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -14436,7 +14779,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -14508,9 +14850,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "none",
@@ -14628,6 +14968,10 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -14661,6 +15005,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -14708,7 +15058,6 @@
      "1": []
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -14780,9 +15129,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": null,
@@ -14908,6 +15255,10 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -14944,6 +15295,12 @@
      "input",
      "inplace"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -14989,16 +15346,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -15070,9 +15417,7 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
@@ -15197,6 +15542,19 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -15949,15 +16307,6 @@
     "activation_transform": null,
     "address": "conv",
     "annotations": {},
-    "arg_expressions": [
-     "input",
-     "weight",
-     "bias",
-     "self.stride",
-     "self.padding",
-     "self.dilation",
-     "self.groups"
-    ],
     "arg_names": [
      "input",
      "weight",
@@ -15977,6 +16326,16 @@
     "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": "<callable ConvolutionBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -16162,7 +16521,6 @@
     "cost.macs_forward": 288,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -16248,7 +16606,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -16480,6 +16837,38 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "input",
+     "weight",
+     "bias",
+     "self.stride",
+     "self.padding",
+     "self.dilation",
+     "self.groups"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.conv2d",
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -16527,7 +16916,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -16536,6 +16924,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -16640,7 +17038,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -16684,7 +17081,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -16860,6 +17256,13 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": null,
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -16907,7 +17310,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
@@ -16916,6 +17318,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -17046,7 +17458,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -17105,7 +17516,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -17307,6 +17717,13 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -17354,9 +17771,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [
-     "self.conv(x)"
-    ],
     "arg_names": [
      "input",
      "inplace"
@@ -17368,6 +17782,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -17501,7 +17925,6 @@
     "cost.macs_forward": 0,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -17562,7 +17985,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -17750,6 +18172,24 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [
+     "self.conv(x)"
+    ],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1_fork_1"
@@ -18760,6 +19200,12 @@
      "dilation",
      "groups"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -18821,24 +19267,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -18921,9 +19349,7 @@
     },
     "func_name": "conv2d",
     "func_qualname": "_VariableFunctionsClass.conv2d",
-    "fx_call_index": 0,
     "fx_label": "conv_conv2d_0",
-    "fx_qualpath": "conv.conv2d",
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ConvolutionBackward0",
@@ -19075,6 +19501,27 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -19108,6 +19555,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -19148,7 +19601,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -19220,9 +19672,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": null,
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "none",
@@ -19340,6 +19790,10 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -19373,6 +19827,12 @@
     "address": null,
     "annotations": {},
     "arg_names": [],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -19407,7 +19867,6 @@
      "1": []
     },
     "co_parents": [],
-    "code_context": [],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -19479,9 +19938,7 @@
     "func_config": {},
     "func_name": "none",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": null,
@@ -19607,6 +20064,10 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -19643,6 +20104,12 @@
      "input",
      "inplace"
     ],
+    "autograd": "<torchlens._data_classes._record_groups_autograd.LayerAutograd>",
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -19688,16 +20155,6 @@
      ]
     },
     "co_parents": [],
-    "code_context": [
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     },
-     {
-      "__ref__": "FuncCallLocation",
-      "label": null
-     }
-    ],
     "conditional_arm_children": {},
     "conditional_branch_stack_ops": {
      "[]": [
@@ -19769,9 +20226,7 @@
     "func_config": {},
     "func_name": "relu",
     "func_qualname": "_VariableFunctionsClass.relu",
-    "fx_call_index": 0,
     "fx_label": null,
-    "fx_qualpath": null,
     "grad": null,
     "grad_fn": null,
     "grad_fn_class_name": "ReluBackward0",
@@ -19896,6 +20351,19 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_peers": [],
+    "source": "<torchlens._data_classes._record_groups_source.LayerSource>",
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -20648,7 +21116,6 @@
     "activation_transform": null,
     "address": "conv",
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [
      "input",
      "weight",
@@ -20668,6 +21135,16 @@
     "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ConvolutionBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ConvolutionBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 2,
     "autograd_memory": "<measured>",
     "backend_address": "conv",
     "bool_value": null,
@@ -20853,7 +21330,6 @@
     "cost.macs_forward": 288,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -20939,7 +21415,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -21151,6 +21626,30 @@
     "short_layer_label": "conv2d_1",
     "siblings": [],
     "site_key": "s1|conv|conv2d||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.conv2d",
+    "source.fx_call_index": 0,
+    "source.fx_path": "conv.conv2d",
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -21198,7 +21697,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -21207,6 +21705,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "none",
+    "autograd.grad_fn_class_qualname": null,
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -21311,7 +21819,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -21355,7 +21862,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": true,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -21528,6 +22034,13 @@
     "short_layer_label": "input_1",
     "siblings": [],
     "site_key": "s1||input||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": null,
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -21575,7 +22088,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -21584,6 +22096,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": null,
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": null,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -21701,7 +22223,6 @@
     "cost.macs_forward": null,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -21760,7 +22281,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -21929,6 +22449,13 @@
     "short_layer_label": "output_1",
     "siblings": [],
     "site_key": "s1||output||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"
@@ -21976,7 +22503,6 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
-    "arg_expressions": [],
     "arg_names": [
      "input",
      "inplace"
@@ -21988,6 +22514,16 @@
     "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
+    "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
+    "autograd.derived_grad": null,
+    "autograd.grad_dtype": null,
+    "autograd.grad_fn": null,
+    "autograd.grad_fn_class_name": "ReluBackward0",
+    "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
+    "autograd.grad_fn_handle": null,
+    "autograd.grad_shape": null,
+    "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
+    "autograd.num_autograd_tensors": 1,
     "autograd_memory": "<measured>",
     "backend_address": null,
     "bool_value": null,
@@ -22121,7 +22657,6 @@
     "cost.macs_forward": 0,
     "cost.param_memory": "<measured>",
     "cost.transformed_activation_memory": "<measured>",
-    "derived_grad": null,
     "detach_saved_activations": false,
     "device_ref": "<torchlens._ir.refs.DeviceRef>",
     "dropped_edge_tensor_args": [],
@@ -22182,7 +22717,6 @@
     "grad_shape": null,
     "gradient_memory": "<measured>",
     "gradient_transform": null,
-    "grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "has_children": false,
     "has_co_parents": false,
     "has_frozen_params": false,
@@ -22350,6 +22884,22 @@
     "short_layer_label": "relu_1",
     "siblings": [],
     "site_key": "s1||relu||1",
+    "source": "<torchlens._data_classes._record_groups_source.OpSource>",
+    "source.arg_expressions": [],
+    "source.frames": [
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     },
+     {
+      "__ref__": "FuncCallLocation",
+      "label": null
+     }
+    ],
+    "source.func_qualname": "_VariableFunctionsClass.relu",
+    "source.fx_call_index": 0,
+    "source.fx_path": null,
+    "source.var_names": [],
     "source_trace": {
      "__ref__": "Trace",
      "label": "plaincnn_1"

@@ -1733,7 +1733,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   spelling refuses typed naming it.
 
 **Autograd-saved bytes**
-: `Op.cost.autograd_memory` / `Op.num_autograd_tensors` count the tensors the captured forward's
+: `Op.cost.autograd_memory` / `Op.autograd.num_autograd_tensors` count the tensors the captured forward's
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
   and `Layer.cost.total_autograd_memory`, `ModuleCall.autograd_memory`,
   `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
@@ -4625,7 +4625,7 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `Op.activation_transform` | The callable applied to this Op's output before it is saved, or `None` |
-| `Op.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
+| `Op.source.arg_expressions` | Source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable |
 | `Op.call.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
 | `Op.call.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
@@ -4645,7 +4645,7 @@ alphabetical order.
 | `Op.buffer_write_kind` | Kind of write that produced this buffer version, or `None` for a static buffer |
 | `Op.children` | Labels of the Ops that directly consume this Op's output |
 | `Op.co_parents` | Labels of other Ops that share at least one child with this Op |
-| `Op.code_context` | Call-stack frames showing where this Op ran |
+| `Op.source.frames` | Call-stack frames showing where this Op ran |
 | `Op.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm |
 | `Op.control_flow.branch_depth` | Number of conditional branches this Op is nested inside; 0 when it is not in a conditional body |
 | `Op.control_flow.branch_stack` | Stack of `(conditional_id, arm_kind)` pairs for the conditional branches this Op is nested inside, outermost first |
@@ -4661,6 +4661,8 @@ alphabetical order.
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
 | `Op.call` | How this Op's function was called: arguments, saved values, RNG and autocast state, and transform boundaries (`tl.types.OpCall`) |
+| `Op.source` | Where this Op's function was called in user code: call-stack frames, argument expressions, assigned variable names and FX identity (`tl.types.OpSource`) |
+| `Op.autograd` | Autograd linkage and saved gradients of this Op: the `grad_fn` node, its class names, saved-gradient records and derived gradients (`tl.types.OpAutograd`) |
 | `Op.call.call_id` | Identifier of the function call that produced this Op; Ops from one call share it |
 | `Op.call.func_transform_kind` | Kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None` |
 | `Op.call.saved_args` | Positional argument values saved for this Op's call, or `None` when not saved |
@@ -4683,7 +4685,7 @@ alphabetical order.
 | `Op.cost.macs_forward` | True forward multiply-accumulate count for this Op, or `None` |
 | `Op.cost.param_memory` | Bytes used by the parameters consumed by this Op |
 | `Op.cost.transformed_activation_memory` | Bytes of this Op's transformed output activation, if one was kept |
-| `Op.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
+| `Op.autograd.derived_grad` | Backend-owned intermediate gradient payload for this Op, or `None` |
 | `Op.call.dropped_edge_tensor_args` | Argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture |
 | `Op.edge_uses` | Tuple of `EdgeUseRecord` entries, one per parent edge use captured for this Op |
 | `Op.equivalence_class` | Key of the equivalence class that loop detection assigned to this Op |
@@ -4692,24 +4694,25 @@ alphabetical order.
 | `Op.call.config` | Dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride` |
 | `Op.call.func_id` | Portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind |
 | `Op.call.non_tensor_args` | Flat list of all non-tensor arguments of this Op's function call |
-| `Op.func_qualname` | Qualified name of the function this Op called |
+| `Op.source.func_qualname` | Qualified name of the function this Op called |
 | `Op.call.rng_states` | RNG state snapshots recorded for this Op's function call |
-| `Op.fx_call_index` | Call index in the `torch.fx`-style identity of this Op, when applicable |
+| `Op.source.fx_call_index` | Call index in the `torch.fx`-style identity of this Op, when applicable |
 | `Op.fx_label` | A `torch.fx`-style label for this Op, or `None` when module context is unavailable |
-| `Op.fx_qualpath` | Module path in the `torch.fx`-style identity of this Op, when applicable |
+| `Op.source.fx_path` | Module path in the `torch.fx`-style identity of this Op, when applicable |
 | `Op.get_children` | Return the child `Op` objects of this Op |
 | `Op.get_parents` | Return the parent `Op` objects of this Op |
-| `Op.grad_dtype` | Dtype of this Op's saved output gradient |
-| `Op.grad_fn_class_name` | Class name of this Op's autograd node |
-| `Op.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
-| `Op.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
+| `Op.autograd.grad_dtype` | Dtype of this Op's saved output gradient |
+| `Op.autograd.grad_fn` | The autograd `grad_fn` node of this Op's output tensor, or `None` |
+| `Op.autograd.grad_fn_class_name` | Class name of this Op's autograd node |
+| `Op.autograd.grad_fn_class_qualname` | Qualified class name of this Op's autograd node |
+| `Op.autograd.grad_fn_handle` | The live PyTorch autograd node object for this Op; not portable |
 | `Op.grad_fn_object_id` | Python `id()` of the autograd node object; valid only within the same session |
-| `Op.grad_for` | Return the saved gradient tensor for one backward pass |
+| `Op.autograd.grad_for` | Return the saved gradient tensor for one backward pass |
 | `Op.grad_ref` | Lazy reference to this Op's gradient blob in a saved bundle, or `None`; the gradient loads only when read |
-| `Op.grad_shape` | Shape of this Op's saved output gradient |
+| `Op.autograd.grad_shape` | Shape of this Op's saved output gradient |
 | `Op.gradient_memory` | Bytes used by this Op's saved output gradient |
 | `Op.gradient_transform` | Transform used for this Op's saved gradient, or `None` when unset |
-| `Op.grads` | Accessor over the per-backward-pass gradient records saved for this Op |
+| `Op.autograd.grads` | Accessor over the per-backward-pass gradient records saved for this Op |
 | `Op.has_children` | Whether this Op has any child Ops |
 | `Op.has_co_parents` | Whether this Op shares children with other Ops |
 | `Op.has_frozen_params` | Whether this Op consumes at least one frozen parameter |
@@ -4777,6 +4780,7 @@ alphabetical order.
 | `Op.call.non_tensor_kwargs` | Non-tensor keyword arguments of this Op's function call |
 | `Op.call.non_tensor_pos_args` | Non-tensor positional arguments of this Op's function call |
 | `Op.call.num_args_total` | Total number of arguments in this Op's function call |
+| `Op.autograd.num_autograd_tensors` | Number of tensors the captured forward's autograd saved for this Op's backward |
 | `Op.num_inputs` | Number of parent Ops of this Op |
 | `Op.call.num_kwargs` | Number of keyword arguments in this Op's function call |
 | `Op.num_param_tensors_frozen` | Number of frozen parameter tensors consumed by this Op |
@@ -4816,7 +4820,7 @@ alphabetical order.
 | `Op.transformed_out_dtype` | Dtype of this Op's saved transformed output |
 | `Op.type_index` | 1-based position of this Op among Ops of the same type |
 | `Op.call.unattributed_tensor_args` | Tensor arguments that could not be attributed to a parent Op |
-| `Op.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
+| `Op.source.var_names` | Variable names the Op's result is assigned to at its call site; empty when unresolved |
 | `Op.visualizer_path` | PNG path used for the node thumbnail in graph renders, or `None` |
 
 #### `tl.Layer`
@@ -4839,7 +4843,7 @@ alphabetical order.
 | `Layer.children` | Union of child layer labels across all ops of this layer, without pass suffixes |
 | `Layer.children_per_pass` | Mapping from pass number to the child layer labels (without pass suffixes) of that pass |
 | `Layer.co_parents` | Union across ops of the co-parent layer labels, without pass suffixes |
-| `Layer.code_context` | The captured call stack of the user code that ran this layer's function, for single-pass layers |
+| `Layer.source.frames` | The captured call stack of the user code that ran this layer's function, for single-pass layers |
 | `Layer.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm |
 | `Layer.control_flow.branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
 | `Layer.control_flow.depth` | Number of distinct conditionals this layer takes part in, derived on read from `in_conditionals` |
@@ -4850,6 +4854,8 @@ alphabetical order.
 | `Layer.control_flow.role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
 | `Layer.control_flow.then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
 | `Layer.call` | How this layer's function was called: argument counts and names, saved arguments, RNG state and parent argument positions (`tl.types.LayerCall`) |
+| `Layer.source` | Where this layer's function was called in user code: call-stack frames and FX identity, for single-pass layers (`tl.types.LayerSource`) |
+| `Layer.autograd` | Autograd linkage of this layer's output: the `grad_fn` node, its class names and the count of tensors autograd saved (`tl.types.LayerAutograd`) |
 | `Layer.call.saved_args` | Positional arguments captured for this layer's function call, for single-pass layers |
 | `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
 | `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
@@ -4876,14 +4882,15 @@ alphabetical order.
 | `Layer.call.config` | Non-tensor configuration of the function call, stored as a dict |
 | `Layer.func_qualname` | Qualified name of the function this layer calls |
 | `Layer.call.rng_states` | RNG states captured for this layer's function call, for single-pass layers |
-| `Layer.fx_call_index` | The FX-style call index of a single-op layer |
+| `Layer.source.fx_call_index` | The FX-style call index of a single-op layer |
 | `Layer.fx_label` | A `torch.fx`-style label for a single-op layer, or `None` |
-| `Layer.fx_qualpath` | The FX-style qualified path of a single-op layer, or `None` |
+| `Layer.source.fx_path` | The FX-style qualified path of a single-op layer, or `None` |
 | `Layer.get_children` | Return the child `Layer` objects of this layer |
 | `Layer.get_parents` | Return the parent `Layer` objects of this layer |
-| `Layer.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
-| `Layer.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
-| `Layer.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |
+| `Layer.autograd.grad_fn` | The autograd `grad_fn` node of this layer's output tensor, or `None` |
+| `Layer.autograd.grad_fn_class_name` | Class name of the autograd node that produced this layer's output, or `None` |
+| `Layer.autograd.grad_fn_class_qualname` | Qualified class name of the autograd node that produced this layer's output, or `None` |
+| `Layer.autograd.grad_fn_handle` | The live autograd node object for this layer's output, not kept in saved files |
 | `Layer.grad_fn_object_id` | The Python `id` of the autograd node object for this layer's output |
 | `Layer.has_children` | Whether any pass of this layer has child layers |
 | `Layer.has_co_parents` | Whether this layer has any co-parent layers besides itself |
@@ -4928,6 +4935,7 @@ alphabetical order.
 | `Layer.multi_output_name` | Name of this output within a multi-output result, derived from its container path, or `None` |
 | `Layer.call.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
 | `Layer.call.num_kwargs` | Number of keyword arguments passed to this layer's function |
+| `Layer.autograd.num_autograd_tensors` | Number of tensors autograd saved for this layer's backward, as carried by the layer |
 | `Layer.num_param_tensors_frozen` | Number of frozen parameter tensors used by this layer |
 | `Layer.num_param_tensors_trainable` | Number of trainable parameter tensors used by this layer |
 | `Layer.num_params_frozen` | Number of frozen parameter elements used by this layer |
@@ -5369,6 +5377,18 @@ alphabetical order.
 
 **`tl.types.OpCall`**
 : How one Op's function was called; `op.call` is the instance an Op serves. `OpCall.arg_names`: names of the arguments in this Op's function call; `OpCall.args_template`: structural template of this Op's positional arguments, used to rebuild the call; `OpCall.autocast_state`: autocast state in effect when this Op's function was called; `OpCall.call_id`: identifier of the function call that produced this Op; Ops from one call share it; `OpCall.config`: dict of lightweight hyperparameters captured from the call, such as `kernel_size` and `stride`; `OpCall.dropped_edge_tensor_args`: argument positions, such as `"arg1"`, whose tensor inputs did not become graph edges at capture; `OpCall.func_id`: portable key identifying the captured function this Op ran: its namespace, qualified name and dispatch kind; `OpCall.func_transform_chain`: tuple of transform tags applied to the function this Op ran; `OpCall.func_transform_config`: configuration of the function transform for this transform-boundary Op; `OpCall.func_transform_fn_name`: name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_qualname`: qualified name of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_fn_source`: source location of the function wrapped by the transform at this boundary Op; `OpCall.func_transform_kind`: kind of function transform at this boundary Op, such as `vmap` or `grad`, or `None`; `OpCall.has_saved_args`: whether this Op's argument values were saved; `OpCall.injection_provenance`: record of which intervention injected this Op and where, or `None` for ordinary model Ops; `OpCall.is_func_transform`: whether this Op is a function-transform boundary node; `OpCall.is_internally_initialized`: alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input; `OpCall.kwargs_template`: structural template of this Op's keyword arguments, used to rebuild the call; `OpCall.non_tensor_args`: flat list of all non-tensor arguments of this Op's function call; `OpCall.non_tensor_kwargs`: non-tensor keyword arguments of this Op's function call; `OpCall.non_tensor_pos_args`: non-tensor positional arguments of this Op's function call; `OpCall.num_args_total`: total number of arguments in this Op's function call; `OpCall.num_kwargs`: number of keyword arguments in this Op's function call; `OpCall.num_pos_args`: number of positional arguments in this Op's function call; `OpCall.parent_arg_positions`: mapping from call argument positions, positional and keyword, to the parent Op label used there; `OpCall.rng_states`: rNG state snapshots recorded for this Op's function call; `OpCall.saved_args`: positional argument values saved for this Op's call, or `None` when not saved; `OpCall.saved_kwargs`: keyword argument values saved for this Op's call, or `None` when not saved; `OpCall.tl_authored_root`: whether this Op is the root of a TorchLens-authored call rather than a model call; `OpCall.unattributed_tensor_args`: tensor arguments that could not be attributed to a parent Op.
+
+**`tl.types.LayerAutograd`**
+: Autograd linkage of one Layer's output; `layer.autograd` is the instance a Layer serves. `LayerAutograd.grad_fn`: the autograd `grad_fn` node of this layer's output tensor, or `None`; `LayerAutograd.grad_fn_class_name`: class name of the autograd node that produced this layer's output, or `None`; `LayerAutograd.grad_fn_class_qualname`: qualified class name of the autograd node that produced this layer's output, or `None`; `LayerAutograd.grad_fn_handle`: the live autograd node object for this layer's output, not kept in saved files; `LayerAutograd.num_autograd_tensors`: number of tensors autograd saved for this layer's backward, as carried by the layer.
+
+**`tl.types.OpAutograd`**
+: Autograd linkage and saved gradients of one Op; `op.autograd` is the instance an Op serves. `OpAutograd.derived_grad`: backend-owned intermediate gradient payload for this Op, or `None`; `OpAutograd.grad_dtype`: dtype of this Op's saved output gradient; `OpAutograd.grad_fn`: the autograd `grad_fn` node of this Op's output tensor, or `None`; `OpAutograd.grad_fn_class_name`: class name of this Op's autograd node; `OpAutograd.grad_fn_class_qualname`: qualified class name of this Op's autograd node; `OpAutograd.grad_fn_handle`: the live PyTorch autograd node object for this Op; not portable; `OpAutograd.grad_for`: return the saved gradient tensor for one backward pass; `OpAutograd.grad_shape`: shape of this Op's saved output gradient; `OpAutograd.grads`: accessor over the per-backward-pass gradient records saved for this Op; `OpAutograd.num_autograd_tensors`: number of tensors the captured forward's autograd saved for this Op's backward.
+
+**`tl.types.LayerSource`**
+: Where one Layer's function was called in user code; its members require a single-pass layer; `layer.source` is the instance a Layer serves. `LayerSource.frames`: the captured call stack of the user code that ran this layer's function, for single-pass layers; `LayerSource.fx_call_index`: the FX-style call index of a single-op layer; `LayerSource.fx_path`: the FX-style qualified path of a single-op layer, or `None`.
+
+**`tl.types.OpSource`**
+: Where one Op's function was called in user code; `op.source` is the instance an Op serves. `OpSource.arg_expressions`: source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable; `OpSource.frames`: call-stack frames showing where this Op ran; `OpSource.func_qualname`: qualified name of the function this Op called; `OpSource.fx_call_index`: call index in the `torch.fx`-style identity of this Op, when applicable; `OpSource.fx_path`: module path in the `torch.fx`-style identity of this Op, when applicable; `OpSource.var_names`: variable names the Op's result is assigned to at its call site; empty when unresolved.
 
 **`tl.types.LayerControlFlow`**
 : Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.

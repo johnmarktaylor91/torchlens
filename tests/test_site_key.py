@@ -367,7 +367,7 @@ def test_witness_on_real_capture_is_operation_frame() -> None:
         if op.type in ("input", "output", "buffer"):
             assert operation_witness(op) is None  # I/O boundary: witness-absent
             continue
-        context = list(op.code_context or ())
+        context = list(op.source.frames or ())
         assert len(context) >= 2
         witness = operation_witness(op)
         # The selected frame is the deepest OPERATION frame [-2] -- never the

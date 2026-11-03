@@ -321,11 +321,11 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
         return mx.sum(mx.multiply(shifted, shifted))
 
     expected = mx.grad(suffix)(hidden_op.out)
-    mx.eval(expected, hidden_op.derived_grad)
+    mx.eval(expected, hidden_op.autograd.derived_grad)
 
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert hidden_op.label in trace.autograd.intermediate_derived_grads
-    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(expected))
+    np.testing.assert_allclose(np.asarray(hidden_op.autograd.derived_grad), np.asarray(expected))
     record = trace.autograd.intermediate_derived_grads[hidden_op.label]
     assert record.provenance["mechanism"] == "mlx_custom_vjp_tap_value_and_grad"
     assert record.provenance["status"] == "exact"
@@ -373,8 +373,8 @@ def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
         return _grad_loss(model.l2(boundary))
 
     expected = mx.grad(suffix)(relu_op.out)
-    mx.eval(expected, relu_op.derived_grad)
-    np.testing.assert_allclose(np.asarray(relu_op.derived_grad), np.asarray(expected))
+    mx.eval(expected, relu_op.autograd.derived_grad)
+    np.testing.assert_allclose(np.asarray(relu_op.autograd.derived_grad), np.asarray(expected))
     assert trace.autograd.intermediate_derived_grads[relu_op.label].provenance["status"] == "exact"
 
 
@@ -408,7 +408,7 @@ def test_mlx_intermediate_derived_grads_perturbation_reference_oracle() -> None:
         op for op in trace._layer_list if op.func_name == "multiply" and op.shape == (2,)
     )
 
-    np.testing.assert_allclose(np.asarray(hidden_op.derived_grad), np.asarray(base_grad))
+    np.testing.assert_allclose(np.asarray(hidden_op.autograd.derived_grad), np.asarray(base_grad))
 
 
 @pytest.mark.optional
@@ -444,7 +444,7 @@ def test_mlx_intermediate_derived_grads_duplicate_signature_skip(
     first_multiply = next(op for op in trace._layer_list if op.func_name == "multiply")
 
     assert first_multiply.label not in trace.autograd.intermediate_derived_grads
-    assert first_multiply.derived_grad is None
+    assert first_multiply.autograd.derived_grad is None
 
 
 @pytest.mark.optional
@@ -511,7 +511,7 @@ def test_mlx_intermediate_derived_grads_oracle_fail_skips_public_record(
 
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) == 0
-    assert all(op.derived_grad is None for op in trace._layer_list)
+    assert all(op.autograd.derived_grad is None for op in trace._layer_list)
 
 
 @pytest.mark.optional
@@ -528,7 +528,7 @@ def test_mlx_intermediate_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 @pytest.mark.optional
@@ -588,7 +588,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 @pytest.mark.optional

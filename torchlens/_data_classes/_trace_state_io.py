@@ -608,11 +608,11 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     for grad_fn_handle in trace._grad_fn_logs.values():
         grad_fn_handle.trace = trace
         if grad_fn_handle.op is not None:
-            grad_fn_handle.op.grad_fn_handle = grad_fn_handle
+            grad_fn_handle.op._autograd_grad_fn_handle = grad_fn_handle
             op_passes = getattr(grad_fn_handle.op, "ops", None)
             if op_passes is not None and hasattr(op_passes, "values"):
                 for layer_pass in op_passes.values():
-                    layer_pass.grad_fn_handle = grad_fn_handle
+                    layer_pass._autograd_grad_fn_handle = grad_fn_handle
     # F44 injections stage 2: split persisted injected-op rows out of
     # layer_list BEFORE the persisted-claim validators run (the site-key
     # totality check would correctly refuse the partial family) and

@@ -237,7 +237,7 @@ def _func_line(op: Any) -> str | None:
     func_name = getattr(op, "func_name", None)
     if not func_name:
         return None
-    grad_fn = getattr(op, "grad_fn_class_name", None)
+    grad_fn = record_member(op, "grad_fn_class_name", None)
     tail = f"   grad_fn {grad_fn}" if grad_fn and grad_fn != "none" else ""
     return f"func   {func_name}(...){tail}"
 

@@ -326,15 +326,15 @@ def _compute_fx_qualpaths(self: "Trace") -> None:
         module_calls = getattr(layer_entry, "modules", None) or []
         op_type_segment = str(layer_entry.func_name or record_type(layer_entry) or "").lower()
         if not module_calls or not op_type_segment:
-            layer_entry.fx_qualpath = None
-            layer_entry.fx_call_index = 0
+            layer_entry._source_fx_path = None
+            layer_entry._source_fx_call_index = 0
             continue
 
         module_address = _module_address_for_fx(module_calls[-1])
         fx_qualpath = f"{module_address}.{op_type_segment}"
-        layer_entry.fx_qualpath = fx_qualpath
-        layer_entry.fx_call_index = fx_call_counts.get(fx_qualpath, 0)
-        fx_call_counts[fx_qualpath] = layer_entry.fx_call_index + 1
+        layer_entry._source_fx_path = fx_qualpath
+        layer_entry._source_fx_call_index = fx_call_counts.get(fx_qualpath, 0)
+        fx_call_counts[fx_qualpath] = layer_entry.source.fx_call_index + 1
 
 
 def _finalize_output_compute_indexs(self: "Trace") -> None:

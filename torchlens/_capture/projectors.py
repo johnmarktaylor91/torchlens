@@ -784,7 +784,7 @@ class RefreshProjector:
         for layer in self.target._layer_list:
             if raw_labels is not None and layer._layer_label_raw not in raw_labels:
                 continue
-            grad_fn_handle = layer.grad_fn_handle
+            grad_fn_handle = layer.autograd.grad_fn_handle
             _register_forward_grad_fn(self.target, grad_fn_handle, layer._layer_label_raw)
             if layer.out is not None:
                 # The logged copy is a graph dead end (for an in-place op the

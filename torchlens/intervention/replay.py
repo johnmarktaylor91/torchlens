@@ -391,8 +391,8 @@ def _clear_op_gradient_projection(site: Op) -> None:
     site._internal_set("grad", None)
     site._internal_set("transformed_grad", None)
     site.has_grad = False
-    site.grad_shape = None
-    site.grad_dtype = None
+    site._autograd_grad_shape = None
+    site._autograd_grad_dtype = None
     site.gradient_memory = Bytes(0)
     site.transformed_grad_shape = None
     site.transformed_grad_dtype = None
@@ -979,7 +979,7 @@ def _install_replay_tensor_hook(log: Trace, site: Op, tensor: torch.Tensor) -> N
     from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
 
     raw_label = getattr(site, "_label_raw", site.layer_label)
-    site.grad_fn_handle = tensor.grad_fn
+    site._autograd_grad_fn_handle = tensor.grad_fn
     if tensor.grad_fn is not None:
         site.grad_fn_object_id = id(tensor.grad_fn)
     _add_tensor_backward_hook(log, tensor, raw_label)

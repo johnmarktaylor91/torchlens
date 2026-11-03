@@ -1427,7 +1427,7 @@ def test_ternary_py311_records_non_none_column_offsets_for_ifexp_frames() -> Non
     trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert any(frame.col_offset is not None for frame in bool_layer.code_context)
+    assert any(frame.col_offset is not None for frame in bool_layer.source.frames)
     assert trace.graph.conditional_arm_entry_edges
 
 

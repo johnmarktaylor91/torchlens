@@ -1713,7 +1713,12 @@
   (`tl.types.OpControlFlow`) and `layer.control_flow` (`tl.types.LayerControlFlow`) hold
   conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`), and
   `op.call` (`tl.types.OpCall`) and `layer.call` (`tl.types.LayerCall`) hold how the function was
-  called (`op.call.call_id`, `op.call.saved_args`, `layer.call.num_pos_args`); a Layer group reads an
+  called (`op.call.call_id`, `op.call.saved_args`, `layer.call.num_pos_args`), `op.source`
+  (`tl.types.OpSource`) and `layer.source` (`tl.types.LayerSource`) hold where it was called
+  (`op.source.frames`, `op.source.arg_expressions`, `layer.source.fx_path`), and `op.autograd`
+  (`tl.types.OpAutograd`) and `layer.autograd` (`tl.types.LayerAutograd`) hold autograd linkage and
+  saved gradients (`op.autograd.grad_fn_class_name`, `op.autograd.grads`,
+  `op.autograd.grad_for(bwd=0)`); a Layer group reads an
   Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
   flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,

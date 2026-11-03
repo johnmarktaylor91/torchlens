@@ -704,7 +704,7 @@ def test_rewalk_failure_removes_hooks_and_clears_refs(
         trace.backward(_output_loss(trace))
 
     assert handle.removed is True
-    assert all(layer.grad_fn_handle is None for layer in trace._layer_list)
+    assert all(layer.autograd.grad_fn_handle is None for layer in trace._layer_list)
 
 
 def test_ordinary_tail_pending_clear_failure_still_removes_hooks(
@@ -757,7 +757,7 @@ def test_ordinary_tail_pending_clear_failure_still_removes_hooks(
         trace.backward(_output_loss(trace))
 
     assert handle.removed is True, "pending-clear failure stranded grad-fn hooks"
-    assert all(layer.grad_fn_handle is None for layer in trace._layer_list), (
+    assert all(layer.autograd.grad_fn_handle is None for layer in trace._layer_list), (
         "pending-clear failure stranded strong forward grad-fn refs"
     )
 
@@ -1002,9 +1002,9 @@ def test_grad_fn_log_back_pointer() -> None:
     """Forward LayerLogs link to corresponding GradFnLogs by identity."""
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
-    assert any(layer.grad_fn is not None for layer in trace._layer_list)
+    assert any(layer.autograd.grad_fn is not None for layer in trace._layer_list)
     assert any(
-        grad_fn_handle.op is not None and grad_fn_handle.op.grad_fn is grad_fn_handle
+        grad_fn_handle.op is not None and grad_fn_handle.op.autograd.grad_fn is grad_fn_handle
         for grad_fn_handle in trace.autograd.grad_fns
     )
 
@@ -1169,7 +1169,7 @@ def test_validate_backward_default_detects_corrupted_captured_op_grad(
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
                 continue
-            record = op.grads.for_pass(1)
+            record = op.autograd.grads.for_pass(1)
             record.grad = torch.full_like(grad, 12345.0)
             corrupted_labels.append(op.label)
             break

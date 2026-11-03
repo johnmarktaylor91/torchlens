@@ -164,6 +164,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 | `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 | `Op.activation_memory` | `Op.cost.activation_memory` | removed |
+| `Op.arg_expressions` | `Op.source.arg_expressions` | removed |
 | `Op.arg_names` | `Op.call.arg_names` | removed |
 | `Op.args_template` | `Op.call.args_template` | removed |
 | `Op.arithmetic_intensity` | `Op.cost.arithmetic_intensity` | removed |
@@ -173,6 +174,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.bytes_peak_at_call` | `Op.cost.bytes_peak_at_call` | removed |
 | `Op.bytes_read` | `Op.cost.bytes_read` | removed |
 | `Op.bytes_written` | `Op.cost.bytes_written` | removed |
+| `Op.code_context` | `Op.source.frames` | removed |
 | `Op.compute_record` | `Op.cost.compute_record` | removed |
 | `Op.conditional_arm_children` | `Op.control_flow.arm_children` | removed |
 | `Op.conditional_branch_depth` | `Op.control_flow.branch_depth` | removed |
@@ -184,6 +186,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.conditional_entry_children` | `Op.control_flow.entry_children` | removed |
 | `Op.conditional_then_children` | `Op.control_flow.then_children` | removed |
 | `Op.conditional_wrapper_kind` | `Op.control_flow.wrapper_kind` | removed |
+| `Op.derived_grad` | `Op.autograd.derived_grad` | removed |
 | `Op.dropped_edge_tensor_args` | `Op.call.dropped_edge_tensor_args` | removed |
 | `Op.flops_backward` | `Op.cost.flops_backward` | removed |
 | `Op.flops_forward` | `Op.cost.flops_forward` | removed |
@@ -194,7 +197,18 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.func_duration` | `Op.cost.duration` | removed |
 | `Op.func_id` | `Op.call.func_id` | removed |
 | `Op.func_non_tensor_args` | `Op.call.non_tensor_args` | removed |
+| `Op.func_qualname` | `Op.source.func_qualname` | removed |
 | `Op.func_rng_states` | `Op.call.rng_states` | removed |
+| `Op.fx_call_index` | `Op.source.fx_call_index` | removed |
+| `Op.fx_qualpath` | `Op.source.fx_path` | removed |
+| `Op.grad_dtype` | `Op.autograd.grad_dtype` | removed |
+| `Op.grad_fn` | `Op.autograd.grad_fn` | removed |
+| `Op.grad_fn_class_name` | `Op.autograd.grad_fn_class_name` | removed |
+| `Op.grad_fn_class_qualname` | `Op.autograd.grad_fn_class_qualname` | removed |
+| `Op.grad_fn_handle` | `Op.autograd.grad_fn_handle` | removed |
+| `Op.grad_for` | `Op.autograd.grad_for` | removed |
+| `Op.grad_shape` | `Op.autograd.grad_shape` | removed |
+| `Op.grads` | `Op.autograd.grads` | removed |
 | `Op.has_saved_args` | `Op.call.has_saved_args` | removed |
 | `Op.in_conditionals` | `Op.control_flow.in_conditionals` | removed |
 | `Op.injection_provenance` | `Op.call.injection_provenance` | removed |
@@ -212,6 +226,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.non_tensor_kwargs` | `Op.call.non_tensor_kwargs` | removed |
 | `Op.non_tensor_pos_args` | `Op.call.non_tensor_pos_args` | removed |
 | `Op.num_args_total` | `Op.call.num_args_total` | removed |
+| `Op.num_autograd_tensors` | `Op.autograd.num_autograd_tensors` | removed |
 | `Op.num_kwargs` | `Op.call.num_kwargs` | removed |
 | `Op.num_pos_args` | `Op.call.num_pos_args` | removed |
 | `Op.param_memory` | `Op.cost.param_memory` | removed |
@@ -228,10 +243,12 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Op.transform_kind` | `Op.call.func_transform_kind` | removed |
 | `Op.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
 | `Op.unattributed_tensor_args` | `Op.call.unattributed_tensor_args` | removed |
+| `Op.var_names` | `Op.source.var_names` | removed |
 | `Layer.activation_memory` | `Layer.cost.activation_memory` | removed |
 | `Layer.arg_names` | `Layer.call.arg_names` | removed |
 | `Layer.autograd_memory` | `Layer.cost.autograd_memory` | removed |
 | `Layer.bool_value` | `Layer.control_flow.bool_value` | removed |
+| `Layer.code_context` | `Layer.source.frames` | removed |
 | `Layer.conditional_arm_children` | `Layer.control_flow.arm_children` | removed |
 | `Layer.conditional_branch_stack_ops` | `Layer.control_flow.branch_stack_ops` | removed |
 | `Layer.conditional_depth` | `Layer.control_flow.depth` | removed |
@@ -246,6 +263,12 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Layer.func_config` | `Layer.call.config` | removed |
 | `Layer.func_duration` | `Layer.cost.duration` | removed |
 | `Layer.func_rng_states` | `Layer.call.rng_states` | removed |
+| `Layer.fx_call_index` | `Layer.source.fx_call_index` | removed |
+| `Layer.fx_qualpath` | `Layer.source.fx_path` | removed |
+| `Layer.grad_fn` | `Layer.autograd.grad_fn` | removed |
+| `Layer.grad_fn_class_name` | `Layer.autograd.grad_fn_class_name` | removed |
+| `Layer.grad_fn_class_qualname` | `Layer.autograd.grad_fn_class_qualname` | removed |
+| `Layer.grad_fn_handle` | `Layer.autograd.grad_fn_handle` | removed |
 | `Layer.in_conditionals` | `Layer.control_flow.in_conditionals` | removed |
 | `Layer.is_in_conditional` | `Layer.control_flow.is_in_conditional` | removed |
 | `Layer.is_in_conditional_body` | `Layer.control_flow.is_in_conditional_body` | removed |
@@ -254,6 +277,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Layer.is_terminal_bool` | `Layer.control_flow.is_terminal_bool` | removed |
 | `Layer.macs_forward` | `Layer.cost.macs_forward` | removed |
 | `Layer.num_args_total` | `Layer.call.num_args_total` | removed |
+| `Layer.num_autograd_tensors` | `Layer.autograd.num_autograd_tensors` | removed |
 | `Layer.num_kwargs` | `Layer.call.num_kwargs` | removed |
 | `Layer.num_pos_args` | `Layer.call.num_pos_args` | removed |
 | `Layer.parent_arg_positions` | `Layer.call.parent_arg_positions` | removed |

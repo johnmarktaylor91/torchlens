@@ -186,7 +186,7 @@ def _build_file_indexes(
         for filename, _line_number in consumer_locations.get(bool_label, ()):
             if filename not in file_indexes:
                 file_indexes[filename] = ast_branches.get_file_index(filename)
-        for frame in bool_layer.code_context:
+        for frame in bool_layer.source.frames:
             if frame.file in file_indexes:
                 continue
             file_indexes[frame.file] = ast_branches.get_file_index(frame.file)
@@ -236,7 +236,7 @@ def _classify_bool_layers(
         branch_classifications = _dedup_branch_classifications(observed)
 
         frame_classification: ast_branches.BoolClassification | None = None
-        for frame in reversed(bool_layer.code_context):
+        for frame in reversed(bool_layer.source.frames):
             frame_candidate = ast_branches.classify_bool(
                 frame.file,
                 frame.line_number,
@@ -539,7 +539,7 @@ def _attribute_branches_forward(
         if getattr(layer, "is_orphan", False):
             continue
         layer._control_flow_branch_stack = _translate_conditional_stack(
-            layer.code_context,
+            layer.source.frames,
             events_by_key,
         )
         layer._control_flow_branch_depth = len(layer.control_flow.branch_stack)

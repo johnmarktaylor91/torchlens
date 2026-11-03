@@ -742,14 +742,14 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
     op1 = _ops_by_type(trace1, "add")[0]
     grad1 = op1.grad.clone()
     operand1 = _ops_by_type(trace1, "sum")[0]
-    assert len(operand1.grads) == 1
+    assert len(operand1.autograd.grads) == 1
     events_after_own_backward = len(trace1.backward_events)
 
     trace2 = tl.trace(model, x, capture=capture)
     _backward_through_own_output(trace2)
     op2 = _ops_by_type(trace2, "add")[0]
     assert op2.grad is not None
-    assert len(op2.grads) == 1
+    assert len(op2.autograd.grads) == 1
     assert len(trace1.backward_events) == events_after_own_backward
     trace2_events = len(trace2.backward_events)
 
@@ -763,11 +763,11 @@ def test_mutation_gradient_hook_records_only_its_own_traces_backward() -> None:
             model(x).sum().backward()
             optimizer.step()
     assert [str(w.message) for w in caught] == []
-    assert len(op1.grads) == 1
+    assert len(op1.autograd.grads) == 1
     assert torch.equal(op1.grad, grad1)
-    assert len(operand1.grads) == 1
+    assert len(operand1.autograd.grads) == 1
     assert len(trace1.backward_events) == events_after_own_backward
-    assert len(op2.grads) == 1
+    assert len(op2.autograd.grads) == 1
     assert len(trace2.backward_events) == trace2_events
 
 

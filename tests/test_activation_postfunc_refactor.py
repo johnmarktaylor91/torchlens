@@ -103,7 +103,7 @@ def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is not None
-    assert layer.grad_shape == tuple(layer.grad.shape)
+    assert layer.autograd.grad_shape == tuple(layer.grad.shape)
     assert layer.transformed_grad is not None
     assert layer.transformed_grad_shape == ()
     assert layer.transformed_grad_dtype == layer.transformed_grad.dtype
@@ -126,8 +126,8 @@ def test_save_raw_grads_false_keeps_raw_metadata_only() -> None:
     layer = next(trace[label] for label in trace.saved_grad_ops.keys())
 
     assert layer.grad is None
-    assert layer.grad_shape is not None
-    assert layer.grad_dtype is not None
+    assert layer.autograd.grad_shape is not None
+    assert layer.autograd.grad_dtype is not None
     assert layer.gradient_memory > 0
     assert layer.transformed_grad is not None
 

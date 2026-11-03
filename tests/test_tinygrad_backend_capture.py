@@ -873,8 +873,8 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
     assert len(trace.autograd.intermediate_derived_grads) > 0
-    assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
-    assert scaled_op.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
+    assert hidden_op.autograd.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
+    assert scaled_op.autograd.derived_grad.tolist() == pytest.approx(oracle_scaled.grad.tolist())
     assert hidden_op.label in trace.autograd.intermediate_derived_grads
     assert trace.autograd.intermediate_derived_grads[hidden_op.label].provenance["mechanism"] == (
         "tinygrad_retained_tensor_backward_no_realize"
@@ -904,7 +904,7 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
@@ -999,7 +999,7 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:

@@ -63,7 +63,7 @@ def grad_for(op: Op, *, bwd: int) -> torch.Tensor:
         Saved raw gradient tensor for the requested pass.
     """
 
-    record = op.grads.for_pass(bwd)
+    record = op.autograd.grads.for_pass(bwd)
     if record.grad is None:
         raise PayloadUnavailableError(
             f"op {op.label} has no saved gradient payload for backward pass {bwd}",

@@ -1224,7 +1224,7 @@ def test_jax_public_surface_matrix(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_jax_capability_flags_match_preview_contract() -> None:

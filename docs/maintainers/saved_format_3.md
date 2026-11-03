@@ -141,7 +141,7 @@ The tlspec bump that ships with the format adds, so that a loaded trace equals t
 - `op.is_constant` (boolean, required at every level, fact): set by the shared constants rule for
   closure constants and literal producers, following `is_buffer`; the Paddle and tinygrad
   constant rules set it the same way.
-- `op.arg_expressions` (value): the computed argument expressions, written at save time.
+- `op.source.arg_expressions` (value): the computed argument expressions, written at save time.
 - Values settled on the live side before writing, so the loaded value equals the live one:
   `op.equivalence_class`, `op.cost.duration`, `op.edge_substitutions`,
   `op.edge_replacement_stamps` (an absent map is written as an empty object, never null), and

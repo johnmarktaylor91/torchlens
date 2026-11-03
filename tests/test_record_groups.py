@@ -48,7 +48,7 @@ def trace() -> Iterator[tl.Trace]:
 def test_cost_group_is_applied() -> None:
     """The cost rows are live in the refusal tables of both records."""
 
-    assert {"cost", "control_flow", "call"} <= ACTIVE_GROUPS
+    assert {"cost", "control_flow", "call", "source", "autograd"} <= ACTIVE_GROUPS
     assert len(_OP_COST_ROWS) == 16
     assert len(_LAYER_COST_ROWS) == 17
     assert {old for old, _, _ in _OP_COST_ROWS} <= set(OP_MOVED_MEMBERS)
@@ -66,6 +66,10 @@ def test_group_classes_are_the_public_types(trace: tl.Trace) -> None:
     assert type(layer.control_flow) is tl.types.LayerControlFlow
     assert type(op.call) is tl.types.OpCall
     assert type(layer.call) is tl.types.LayerCall
+    assert type(op.source) is tl.types.OpSource
+    assert type(layer.source) is tl.types.LayerSource
+    assert type(op.autograd) is tl.types.OpAutograd
+    assert type(layer.autograd) is tl.types.LayerAutograd
     assert "flops_forward" in dir(op.cost)
     assert "total_flops_forward" in dir(layer.cost)
     assert "OpCost" in repr(op.cost)
@@ -233,6 +237,24 @@ def test_call_group_reads_the_call(trace: tl.Trace) -> None:
         _ = layer.saved_args
 
 
+def test_source_and_autograd_groups_read_the_op(trace: tl.Trace) -> None:
+    """The source and autograd groups serve the stored columns on Op and the first pass on Layer."""
+
+    op = trace.ops["linear_1_1"]
+    layer = trace.layers["linear_1"]
+    assert op.source.frames is op._source_frames
+    assert op.source.func_qualname == op._source_func_qualname
+    assert layer.source.frames == op.source.frames
+    assert layer.source.fx_path == op.source.fx_path
+    assert op.autograd.grad_fn_class_name == "AddmmBackward0"
+    assert layer.autograd.grad_fn_class_name == op.autograd.grad_fn_class_name
+    assert op.autograd.num_autograd_tensors == op._autograd_num_autograd_tensors
+    with pytest.raises(FacadeTeachingError):
+        _ = op.code_context
+    with pytest.raises(FacadeTeachingError):
+        _ = layer.grad_fn_class_name
+
+
 class _Twice(nn.Module):
     """One module called twice, so its layer has two passes."""
 
@@ -256,5 +278,7 @@ def test_multi_pass_layer_group_refuses_per_pass_members() -> None:
             _ = layer.call.call_id
         with pytest.raises(InvalidArgumentError, match=r"\.call\.rng_states"):
             _ = layer.call.rng_states
+        with pytest.raises(InvalidArgumentError, match=r"\.source\.frames"):
+            _ = layer.source.frames
     finally:
         captured.cleanup()

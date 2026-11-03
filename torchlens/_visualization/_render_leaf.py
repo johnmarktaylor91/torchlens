@@ -2262,7 +2262,7 @@ def _node_gradient_passes(layer: Any) -> set[int]:
         for pass_log in ops.values():
             pass_indices.update(_node_gradient_passes(pass_log))
         return pass_indices
-    grads = getattr(layer, "grads", None)
+    grads = record_member(layer, "grads", None)
     if grads is None:
         return set()
     return {

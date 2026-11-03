@@ -276,13 +276,13 @@ class Buffer:
     def grad_shape(self) -> Any:
         """Return final observed gradient shape."""
 
-        return None if not self.versions else self.versions[-1].grad_shape
+        return None if not self.versions else self.versions[-1].autograd.grad_shape
 
     @property
     def grad_dtype(self) -> Any:
         """Return final observed gradient dtype."""
 
-        return None if not self.versions else self.versions[-1].grad_dtype
+        return None if not self.versions else self.versions[-1].autograd.grad_dtype
 
     @property
     def grad_memory(self) -> Any:

@@ -184,7 +184,7 @@ def _is_sdpa_op(op: Any) -> bool:
 
     fields = (
         getattr(op, "func_name", None),
-        getattr(op, "func_qualname", None),
+        record_member(op, "func_qualname", None),
         getattr(op, "label", None),
     )
     return any("scaled_dot_product_attention" in str(field) for field in fields)

@@ -195,7 +195,7 @@ def node_doc(entry: Any) -> str:
     paths; the innermost recorded frame is the op's own call site.
     """
 
-    contexts = getattr(entry, "code_context", None) or []
+    contexts = record_member(entry, "code_context", None) or []
     location = ""
     for frame in reversed(list(contexts)):
         file_name = str(getattr(frame, "file", "") or "")
@@ -204,7 +204,7 @@ def node_doc(entry: Any) -> str:
             base = file_name.replace("\\", "/").rsplit("/", 1)[-1]
             location = f"{base}:{line}" if line else base
             break
-    func = str(getattr(entry, "func_qualname", "") or getattr(entry, "func_name", ""))
+    func = str(record_member(entry, "func_qualname", "") or getattr(entry, "func_name", ""))
     # torch's free functions carry an internal holder-class qualname that
     # reads as noise in the sidebar; the bare function name is the fact.
     if "_VariableFunctionsClass." in func:

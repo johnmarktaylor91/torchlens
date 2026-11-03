@@ -26,6 +26,7 @@ from torchlens._trace_core import (
     Transaction,
 )
 from torchlens._trace_core.pools import ClosurePool
+from torchlens._utils._record_group_table import record_member
 
 
 @pytest.mark.smoke
@@ -963,7 +964,7 @@ def test_tlspec_load_adopts_every_record_kind() -> None:
     def op_cell_fcls(t: object) -> list:
         found = []
         for op in t._layer_list:
-            for item in getattr(op, "code_context", None) or ():
+            for item in record_member(op, "code_context", None) or ():
                 if type(item).__name__ == "FuncCallLocation":
                     found.append(item)
         return found

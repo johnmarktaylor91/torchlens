@@ -526,8 +526,8 @@ def _log_tensor_grad(
     """
     trace = op._source_trace
     raw_grad = grad
-    op.grad_shape = tuple(raw_grad.shape)
-    op.grad_dtype = raw_grad.dtype
+    op._autograd_grad_shape = tuple(raw_grad.shape)
+    op._autograd_grad_dtype = raw_grad.dtype
     op.gradient_memory = Bytes(get_memory_amount(raw_grad))
     grad_transform = trace._options_grad_transform if trace is not None else None
     op._internal_set("transformed_grad", None)

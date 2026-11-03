@@ -6072,8 +6072,8 @@ def test_payload_metadata_invariant_allows_evicted_grad_metadata() -> None:
         victim.grad = None
         victim.transformed_grad = None
         victim.has_grad = False
-        victim.grad_shape = (2, 3)
-        victim.grad_dtype = torch.float32
+        victim._autograd_grad_shape = (2, 3)
+        victim._autograd_grad_dtype = torch.float32
         victim.gradient_memory = 24
 
         assert check_metadata_invariants(log) is True
@@ -6255,7 +6255,7 @@ def test_backward_invariants_allow_only_post_trigger_missing_backpointers() -> N
         )
         assert any(
             layer.grad_fn_object_id is not None
-            and layer.grad_fn is None
+            and layer.autograd.grad_fn is None
             and layer.step_index > last_trigger_position
             for layer in log._layer_list
         )
@@ -6356,7 +6356,7 @@ def test_bad_pre_trigger_layer_grad_fn_backpointer_raises() -> None:
         victim = next(
             layer
             for layer in log._layer_list
-            if layer.grad_fn_object_id is not None and layer.grad_fn is not None
+            if layer.grad_fn_object_id is not None and layer.autograd.grad_fn is not None
         )
         victim.grad_fn = None
 

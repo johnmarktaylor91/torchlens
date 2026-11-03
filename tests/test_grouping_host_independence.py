@@ -102,7 +102,7 @@ _SUBPROCESS_SOURCE = _MODEL_SOURCE + textwrap.dedent(
                 continue
             seen.setdefault(op.layer_label, (str(op.func_name), int(op.num_passes or 1)))
         for op in trace.ops:
-            for location in op.code_context or ():
+            for location in op.source.frames or ():
                 if os.path.normcase(os.path.abspath(str(location.file))).startswith(PREFIX):
                     internal.append([op.label, str(location.file), location.func_name])
         print(json.dumps({
@@ -164,7 +164,7 @@ def test_no_torchlens_frame_in_any_code_context() -> None:
     leaked = [
         (op.label, str(location.file))
         for op in trace.ops
-        for location in op.code_context or ()
+        for location in op.source.frames or ()
         if _normalized(str(location.file)).startswith(_PACKAGE_PREFIX)
     ]
     assert leaked == []

@@ -101,13 +101,13 @@ def test_autograd_saved_bytes_on_every_door(variant: str) -> None:
         for op in trace.compute_ops:
             expected_bytes, expected_count = bands[op.layer_label]
             got_bytes = None if op.cost.autograd_memory is None else int(op.cost.autograd_memory)
-            assert (got_bytes, op.num_autograd_tensors) == (expected_bytes, expected_count)
+            assert (got_bytes, op.autograd.num_autograd_tensors) == (expected_bytes, expected_count)
             layer = trace.layers[op.layer_label]
             layer_bytes = (
                 None if layer.cost.autograd_memory is None else int(layer.cost.autograd_memory)
             )
             assert layer_bytes == expected_bytes, op.layer_label
-            assert layer.num_autograd_tensors == expected_count, op.layer_label
+            assert layer.autograd.num_autograd_tensors == expected_count, op.layer_label
             total = layer.cost.total_autograd_memory
             assert (None if total is None else int(total)) == expected_bytes, op.layer_label
         a_bytes, b_bytes = bands["linear_1_1"][0], bands["linear_2_3"][0]

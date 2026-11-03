@@ -397,7 +397,7 @@ def _forward_events(
                     category="autograd_saved",
                     label=label,
                     bytes_value=gross_saved,
-                    tensor_count=int(getattr(op, "num_autograd_tensors", 0) or 0),
+                    tensor_count=int(record_member(op, "num_autograd_tensors", 0) or 0),
                     owner=owner,
                     module_stack=stack,
                     availability="measured" if band is not None else "gross_only",
@@ -437,7 +437,7 @@ def _gradient_events(trace: Any, start_ordinal: int) -> tuple[list[dict[str, Any
         pass_index = int(getattr(backward_pass, "pass_number", 0) or 0)
         for op in getattr(trace, "saved_grad_ops", ()) or ():
             try:
-                grad = op.grad_for(bwd=pass_index)
+                grad = op.autograd.grad_for(bwd=pass_index)
             except (KeyError, ValueError):
                 continue
             if grad is None or not hasattr(grad, "numel"):

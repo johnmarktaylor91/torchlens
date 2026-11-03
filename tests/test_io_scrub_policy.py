@@ -220,8 +220,8 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
         FuncCallLocation: next(
             frame
             for layer in live_log._layer_list
-            for frame in layer.code_context
-            if layer.code_context
+            for frame in layer.source.frames
+            if layer.source.frames
         ),
     }
 
@@ -457,7 +457,7 @@ def _op_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     return {
         "get_children": lambda o: o.get_children(),
         "get_parents": lambda o: o.get_parents(),
-        "grad_for": lambda o: o.grad_for(bwd=0),
+        "grad_for": lambda o: o.autograd.grad_for(bwd=0),
         "materialize_grad": lambda o: o.materialize_grad(),
         "materialize_out": lambda o: o.materialize_out(),
         "show": lambda o: o.show(),

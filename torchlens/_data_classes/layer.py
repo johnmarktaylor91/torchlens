@@ -91,7 +91,9 @@ from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-expo
 )
 from ._record_group_base import _LAYER_DELEGATED_PASS_FIELDS
 from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
+from ._record_groups_autograd import LayerAutograd
 from ._record_groups_call import LayerCall
+from ._record_groups_source import LayerSource
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
@@ -329,11 +331,11 @@ class Layer(_SelectionOperand):
         func_name: Any
         func_qualname: Any
         is_inplace: Any
-        grad_fn_class_name: Any
-        grad_fn_class_qualname: Any
+        _autograd_grad_fn_class_name: Any
+        _autograd_grad_fn_class_qualname: Any
         grad_fn_object_id: Any
-        grad_fn_handle: Any
-        grad_fn: Any
+        _autograd_grad_fn_handle: Any
+        _autograd_grad_fn: Any
         _call_arg_names: Any
         _call_num_args_total: Any
         _call_num_pos_args: Any
@@ -353,7 +355,7 @@ class Layer(_SelectionOperand):
         _cost_transformed_activation_memory: Any
         _cost_autograd_memory: Any
         _cost_total_autograd_memory: Any
-        num_autograd_tensors: Any
+        _autograd_num_autograd_tensors: Any
         output_device: Any
         visualizer_path: Any
         activation_transform: Any
@@ -596,6 +598,18 @@ class Layer(_SelectionOperand):
         return LayerCall(self)
 
     @property
+    def source(self) -> LayerSource:
+        """Where this Layer's call sits in the user's source (``layer.source.fx_path``)."""
+
+        return LayerSource(self)
+
+    @property
+    def autograd(self) -> LayerAutograd:
+        """Autograd facts of this Layer (``layer.autograd.grad_fn``)."""
+
+        return LayerAutograd(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None`` (estimates only)."""
 
@@ -677,18 +691,6 @@ class Layer(_SelectionOperand):
         """Return a torch.fx-style label for a single-Op Layer."""
 
         return cast(str | None, self._single_pass_or_error("fx_label"))
-
-    @property
-    def fx_qualpath(self) -> str | None:
-        """Return the FX-style qualified path for a single-Op Layer."""
-
-        return cast(str | None, self._single_pass_or_error("fx_qualpath"))
-
-    @property
-    def fx_call_index(self) -> int:
-        """Return the FX-style call index for a single-Op Layer."""
-
-        return cast(int, self._single_pass_or_error("fx_call_index"))
 
     @property
     def in_submodule(self) -> bool:
@@ -1123,17 +1125,6 @@ class Layer(_SelectionOperand):
             ``True`` when a grad was saved for the only pass.
         """
         return cast(bool, self._single_pass_or_error("has_grad"))
-
-    @property
-    def code_context(self) -> Any:
-        """Return the captured call stack for a single-pass layer.
-
-        Returns
-        -------
-        Any
-            Function call stack from the only pass.
-        """
-        return self._single_pass_or_error("code_context")
 
     @property
     def pass_index(self) -> int:
@@ -1597,7 +1588,7 @@ class Layer(_SelectionOperand):
             s += f" (x{self.num_passes} passes)"
         s += f"\n\tOutput tensor: shape={self.shape}, dtype={self.dtype}, size={self.cost.activation_memory}"
         if not self.is_input:
-            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.grad_fn_class_name})"
+            s += f"\n\tFunction: {self.func_name} (grad_fn_handle: {self.autograd.grad_fn_class_name})"
             if self.call.config:
                 config_str = format_config_items(self.call.config)
                 s += f"\n\tConfig: {config_str}"

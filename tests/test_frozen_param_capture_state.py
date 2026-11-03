@@ -148,9 +148,9 @@ def test_ops_on_frozen_weights_carry_the_eager_autograd_state() -> None:
     assert eager_hidden.grad_fn is None
     trace = tl.trace(model, x)
 
-    assert _ops_reading(trace, "frozen.weight")[0].grad_fn_class_name is None
-    assert _ops_reading(trace, "scale")[0].grad_fn_class_name is None
-    assert _ops_reading(trace, "head.weight")[0].grad_fn_class_name is not None
+    assert _ops_reading(trace, "frozen.weight")[0].autograd.grad_fn_class_name is None
+    assert _ops_reading(trace, "scale")[0].autograd.grad_fn_class_name is None
+    assert _ops_reading(trace, "head.weight")[0].autograd.grad_fn_class_name is not None
 
 
 def test_saved_and_loaded_trace_keeps_frozen_parameter_fields(tmp_path: Path) -> None:
@@ -186,7 +186,7 @@ def test_backward_capture_on_a_partly_frozen_model() -> None:
         else:
             assert param.grad is not None and torch.allclose(param.grad, eager_grad), name
     head_linear = _ops_reading(trace, "head.weight")[0]
-    assert any(isinstance(record.grad, torch.Tensor) for record in head_linear.grads)
+    assert any(isinstance(record.grad, torch.Tensor) for record in head_linear.autograd.grads)
 
 
 @pytest.mark.parametrize("scope", ["forward", "backward"])
@@ -202,7 +202,7 @@ def test_fully_frozen_model_captures_and_validates_without_autograd() -> None:
     model.requires_grad_(False)
     before = _param_state(model)
     trace = tl.trace(model, x)
-    assert all(op.grad_fn_class_name is None for op in trace.ops)
+    assert all(op.autograd.grad_fn_class_name is None for op in trace.ops)
     assert len(trace.params.frozen) == len(FROZEN) + len(TRAINABLE)
     _assert_same_state(before, _param_state(model))
     assert tl.validate(model, x, scope="forward"), last_validation_failure()
@@ -219,7 +219,7 @@ def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     before = _param_state(model)
 
     plain = tl.trace(model, x)
-    assert _ops_reading(plain, "head.weight")[0].grad_fn_class_name is None
+    assert _ops_reading(plain, "head.weight")[0].autograd.grad_fn_class_name is None
 
     def scoped_capture() -> None:
         with frozen_parameter_gradients():
@@ -228,12 +228,12 @@ def test_gradient_analysis_scope_builds_a_path_through_frozen_weights() -> None:
     captured: list[tl.Trace] = []
     assert all(_flags_inside_forward(model, scoped_capture).values())
     scoped = captured[0]
-    assert _ops_reading(scoped, "frozen.weight")[0].grad_fn_class_name is not None
+    assert _ops_reading(scoped, "frozen.weight")[0].autograd.grad_fn_class_name is not None
     assert all(scoped.params[name].is_trainable is False for name in (*FROZEN, *TRAINABLE))
     _assert_same_state(before, _param_state(model))
 
     analysis = _capture(model, x)
-    assert _ops_reading(analysis, "head.weight")[0].grad_fn_class_name is not None
+    assert _ops_reading(analysis, "head.weight")[0].autograd.grad_fn_class_name is not None
     _assert_same_state(before, _param_state(model))
 
     plain_flags = _flags_inside_forward(model, lambda: tl.trace(model, x))

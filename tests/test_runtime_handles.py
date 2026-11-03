@@ -125,7 +125,7 @@ def test_grad_fn_handle_returns_none_when_trace_refs_are_unavailable() -> None:
     grad_fn = _first_grad_fn_with_handle(trace)
     trace._backward_gradfn_refs = []
     if grad_fn.op is not None:
-        grad_fn.op.grad_fn_handle = None
+        grad_fn.op._autograd_grad_fn_handle = None
 
     assert grad_fn.handle is None
 

@@ -203,7 +203,7 @@ def test_jax_intermediate_derived_grads_zero_tap_public_surface() -> None:
     assert set(trace.autograd.derived_grads.keys()) == {"params.b", "params.w", "inputs.0"}
     assert len(trace.autograd.intermediate_derived_grads) > 0
     assert tanh_op.label in trace.autograd.intermediate_derived_grads
-    assert jnp.allclose(tanh_op.derived_grad, expected_tanh_grad)
+    assert jnp.allclose(tanh_op.autograd.derived_grad, expected_tanh_grad)
     assert all(
         record.provenance["mechanism"] == "jax_zero_tap" and record.provenance["status"] == "exact"
         for record in trace.autograd.intermediate_derived_grads.values()
@@ -297,7 +297,9 @@ def test_jax_intermediate_derived_grads_follow_selective_save() -> None:
     assert set(trace.autograd.intermediate_derived_grads.keys()) == {
         op.label for op in trace.saved_ops if op.func_name == "dot_general"
     }
-    assert all(op.derived_grad is None for op in trace._layer_list if not op.has_saved_activation)
+    assert all(
+        op.autograd.derived_grad is None for op in trace._layer_list if not op.has_saved_activation
+    )
 
 
 def test_jax_intermediate_derived_grads_skip_non_float_outputs() -> None:
@@ -388,7 +390,7 @@ def test_intermediate_derived_grad_accessor_and_op_filter_unverified() -> None:
     set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor({op.label: record}))
 
     assert len(trace.autograd.intermediate_derived_grads) == 0
-    assert op.derived_grad is None
+    assert op.autograd.derived_grad is None
 
 
 def test_jax_intermediate_oracle_catches_off_by_one_tap() -> None:
@@ -479,7 +481,7 @@ def test_jax_derived_grads_are_not_backward_capture() -> None:
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def test_jax_derived_grads_reject_closed_over_scalar_host_state() -> None:

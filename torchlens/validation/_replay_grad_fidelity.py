@@ -188,7 +188,7 @@ def _captured_slot_grad_flags(
         return requires_grad, snapshot_leaf
     if _consumed_a_later_parent_version(layer, parent_layer):
         return True, False
-    return True, getattr(parent_layer, "grad_fn_class_name", None) is None
+    return True, record_member(parent_layer, "grad_fn_class_name", None) is None
 
 
 def _consumed_a_later_parent_version(layer: Op, parent_layer: Op) -> bool:

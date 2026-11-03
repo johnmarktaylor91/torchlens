@@ -272,7 +272,7 @@ def _nonfinite_string(entry: Any, context: AttrContext) -> str | None:
 def _source_string(entry: Any) -> str | None:
     """Return ``basename:line`` of the captured call site (opt-in row)."""
 
-    context_rows = getattr(entry, "code_context", None) or ()
+    context_rows = record_member(entry, "code_context", None) or ()
     for location in context_rows:
         file_name = getattr(location, "file", None)
         line = getattr(location, "line_number", None)

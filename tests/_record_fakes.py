@@ -13,7 +13,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from torchlens._data_classes._record_groups import OpControlFlow, OpCost
+from torchlens._data_classes._record_groups_autograd import OpAutograd
 from torchlens._data_classes._record_groups_call import OpCall
+from torchlens._data_classes._record_groups_source import OpSource
 from torchlens._utils._record_group_table import op_attr
 
 
@@ -42,3 +44,15 @@ class FakeRecord(SimpleNamespace):
         """The real call group over this fake."""
 
         return OpCall(self)
+
+    @property
+    def source(self) -> OpSource:
+        """The real source group over this fake."""
+
+        return OpSource(self)
+
+    @property
+    def autograd(self) -> OpAutograd:
+        """The real autograd group over this fake."""
+
+        return OpAutograd(self)

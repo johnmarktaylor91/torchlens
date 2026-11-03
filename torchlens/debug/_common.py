@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -51,7 +53,7 @@ def _source_line(op: Op) -> str | None:
         ``"file:line"`` or ``None`` when no source context is present.
     """
 
-    context = getattr(op, "code_context", None) or ()
+    context = record_member(op, "code_context", None) or ()
     if not context:
         return None
     location = context[0]

@@ -110,6 +110,6 @@ def test_multi_output_siblings_share_one_function_call_ref(split_trace: tl.Trace
     ):
         assert first_ref is second_ref
     else:
-        assert first_ref.code_context is second_ref.code_context
+        assert first_ref.source.frames is second_ref.source.frames
         assert first_ref.non_tensor_pos_args is second_ref.non_tensor_pos_args
         assert first_ref.func_config is second_ref.func_config

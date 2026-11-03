@@ -129,9 +129,9 @@ def _populate_var_names(self: Trace) -> None:
         return
     for op in self._layer_list:
         if getattr(op, "type", None) == "output":
-            op.var_names = []
+            op._source_var_names = []
             continue
-        op.var_names = resolve_var_names(
-            getattr(op, "code_context", []) or [],
+        op._source_var_names = resolve_var_names(
+            record_member(op, "code_context", []) or [],
             getattr(op, "func_name", None),
         )

@@ -20,6 +20,7 @@ from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
 from .._trace_state import TraceState
+from .._utils._record_group_table import record_member
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
@@ -240,7 +241,7 @@ def _adopt_rerun_backward_graph(trace: Trace, new_log: Trace) -> None:
             trace.__dict__[key] = new_log.__dict__[key]
     for layer in trace._layer_list:
         _register_forward_grad_fn(
-            trace, getattr(layer, "grad_fn_handle", None), layer._layer_label_raw
+            trace, record_member(layer, "grad_fn_handle", None), layer._layer_label_raw
         )
 
 

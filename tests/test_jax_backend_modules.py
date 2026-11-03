@@ -704,7 +704,7 @@ def _assert_pytree_grad_surface(trace: Any, tmp_path: Path) -> None:
     del tmp_path
     assert trace.autograd.has_backward_pass is False
     with pytest.raises(ValueError, match="derived_grads"):
-        _ = trace[0].grads
+        _ = trace[0].autograd.grads
 
 
 def _assert_pytree_backward_surface(trace: Any, tmp_path: Path) -> None:

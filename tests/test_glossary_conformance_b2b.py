@@ -109,8 +109,8 @@ def test_op_and_layer_convenience_properties() -> None:
 
     if op.fx_label is not None:
         assert layer.fx_label == op.fx_label
-        assert layer.fx_qualpath == op.fx_qualpath
-        assert layer.fx_call_index == op.fx_call_index
+        assert layer.source.fx_path == op.source.fx_path
+        assert layer.source.fx_call_index == op.source.fx_call_index
         assert trace[op.fx_label] is op
 
 

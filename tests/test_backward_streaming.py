@@ -152,7 +152,7 @@ def test_bundle_save_load_roundtrip_with_backward(tmp_path: Path) -> None:
     # raw id() values, so the roundtrip contract is the remap image, not raw
     # equality.
     assert restored.autograd.grad_fn_order == list(range(1, len(trace.autograd.grad_fn_order) + 1))
-    assert grad_fn_handle.op.grad_fn_handle is grad_fn_handle
+    assert grad_fn_handle.op.autograd.grad_fn_handle is grad_fn_handle
     assert torch.equal(restored[label].grad, expected[label])
 
 

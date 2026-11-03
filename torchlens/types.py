@@ -16,7 +16,9 @@ from ._capture.outcome import CaptureOutcome, CapturePhase, CaptureStatus, Failu
 from ._captured_run import TraceLike
 from ._data_classes._accessor_base import Accessor
 from ._data_classes._record_groups import LayerControlFlow, LayerCost, OpControlFlow, OpCost
+from ._data_classes._record_groups_autograd import LayerAutograd, OpAutograd
 from ._data_classes._record_groups_call import LayerCall, OpCall
+from ._data_classes._record_groups_source import LayerSource, OpSource
 from ._data_classes._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
 from ._data_classes._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._data_classes.aten_op import AtenOp, OpRef
@@ -66,6 +68,10 @@ __all__ = [
     "OpControlFlow",
     "LayerControlFlow",
     "OpCall",
+    "OpSource",
+    "OpAutograd",
+    "LayerSource",
+    "LayerAutograd",
     "LayerCall",
     "NarrationEvent",
     "RunnableDiagnostic",

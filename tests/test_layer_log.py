@@ -168,7 +168,7 @@ class TestSinglePassDelegation:
         layer_log = next(layer for layer in recurrent_log.layers if layer.num_passes > 1)
 
         with pytest.raises(ValueError, match=r"ops\[0\]\.var_names"):
-            _ = layer_log.var_names
+            _ = layer_log.source.var_names
 
     def test_multi_pass_slotted_ref_fields_raise_guided_value_error(
         self: "TestSinglePassDelegation",

@@ -127,7 +127,9 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
     validate_train_mode_transform_output,
 )
 from ._record_groups import OpControlFlow, OpCost
+from ._record_groups_autograd import OpAutograd
 from ._record_groups_call import OpCall
+from ._record_groups_source import OpSource
 from ._state_adapter import state_items, state_restore
 from .container import (
     container_from_op,
@@ -1223,14 +1225,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _cost_transformed_activation_memory: Bytes | None
         visualizer_path: str | None
         _cost_autograd_memory: Bytes | None
-        num_autograd_tensors: int | None
+        _autograd_num_autograd_tensors: int | None
         _cost_bytes_delta_at_call: Bytes | None
         _cost_bytes_peak_at_call: Bytes | None
         gradient_memory: Bytes | None
         transformed_gradient_memory: Bytes | None
         func_id: FunctionRegistryKey | None
-        code_context: list["FuncCallLocation"]
-        var_names: list[str]
+        _source_frames: list["FuncCallLocation"]
+        _source_var_names: list[str]
         _cost_duration: Duration | None
         _cost_flops_forward: Flops | None
         _cost_flops_backward: Flops | None
@@ -1238,8 +1240,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _param_logs: list["Param"]
         _cost_param_memory: Bytes
         is_orphan: bool
-        fx_qualpath: str | None
-        fx_call_index: int
+        _source_fx_path: str | None
+        _source_fx_call_index: int
         out_ref: "LazyActivationRef" | None
         grad_ref: "LazyActivationRef" | None
         _pending_blob_id: str | None
@@ -1287,14 +1289,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         transformed_grad: Any
         save_grads: Any
         has_grad: Any
-        grad_shape: Any
+        _autograd_grad_shape: Any
         transformed_grad_shape: Any
-        grad_dtype: Any
+        _autograd_grad_dtype: Any
         transformed_grad_dtype: Any
         func: Any
         _call_call_id: Any
         func_name: Any
-        func_qualname: Any
+        _source_func_qualname: Any
         _call_rng_states: Any
         _call_autocast_state: Any
         _call_arg_names: Any
@@ -1305,11 +1307,11 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         _call_non_tensor_kwargs: Any
         _call_non_tensor_args: Any
         is_inplace: Any
-        grad_fn_class_name: Any
-        grad_fn_class_qualname: Any
+        _autograd_grad_fn_class_name: Any
+        _autograd_grad_fn_class_qualname: Any
         grad_fn_object_id: Any
-        grad_fn_handle: Any
-        grad_fn: Any
+        _autograd_grad_fn_handle: Any
+        _autograd_grad_fn: Any
         in_multi_output: Any
         multi_output_index: Any
         multi_output_name: Any
@@ -1673,9 +1675,9 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
                     passes = [record.backward_pass_number for record in saved]
                     raise InvalidArgumentError(
                         f"op {label} has gradients saved from multiple backward passes {passes}; "
-                        "use op.grads[...] / op.grad_for(bwd=k)",
+                        "use op.autograd.grads[...] / op.autograd.grad_for(bwd=k)",
                         code="gradient_pass_ambiguous",
-                        remedy="use op.grads[...] or op.grad_for(bwd=k) to pick one pass",
+                        remedy="use op.autograd.grads[...] or op.autograd.grad_for(bwd=k) to pick one pass",
                         label=str(label),
                     )
             grad = slot("grad")
@@ -1970,6 +1972,18 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpCall(self)
 
     @property
+    def source(self) -> OpSource:
+        """Where this Op's call sits in the user's source (``op.source.frames``)."""
+
+        return OpSource(self)
+
+    @property
+    def autograd(self) -> OpAutograd:
+        """Autograd facts and saved gradients of this Op (``op.autograd.grad_fn``)."""
+
+        return OpAutograd(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None``."""
 
@@ -2039,7 +2053,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def fx_label(self) -> str | None:
         """Return a torch.fx-style label for this Op when module context is available."""
 
-        return _labels.fx_label(self.fx_qualpath, self.fx_call_index)
+        return _labels.fx_label(self.source.fx_path, self.source.fx_call_index)
 
     @property
     def trace(self) -> "Trace":
@@ -2048,7 +2062,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return self.source_trace
 
     @property
-    def grads(self) -> GradientRecordAccessor:
+    def _autograd_grads(self) -> GradientRecordAccessor:
         """Per-pass gradient records saved for this Op.
 
         One record per backward pass that reached this op's output, each the
@@ -2056,7 +2070,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """
 
         trace = self.source_trace
-        raise_if_no_backward_capture(trace, plural_subject="op.grads or saved_grad_ops")
+        raise_if_no_backward_capture(trace, plural_subject="op.autograd.grads or saved_grad_ops")
         records = self._slot("_grad_records")
         if records is None:
             records = []
@@ -2064,15 +2078,15 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return GradientRecordAccessor(records)
 
     @property
-    def derived_grad(self) -> Any | None:
+    def _autograd_derived_grad(self) -> Any | None:
         """Return this op's derived intermediate gradient payload, if available."""
 
-        return _doors.intervention()._op_edits.derived_grad(self)
+        return _doors.intervention()._op_edits.autograd.derived_grad(self)
 
-    def grad_for(self, *, bwd: int) -> torch.Tensor:
+    def _autograd_grad_for(self, *, bwd: int) -> torch.Tensor:
         """Return the saved gradient tensor for one backward pass."""
 
-        return _doors.intervention()._op_edits.grad_for(self, bwd=bwd)
+        return _doors.intervention()._op_edits.autograd.grad_for(self, bwd=bwd)
 
     def _record_gradient(
         self,
@@ -2148,7 +2162,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         TorchLens GradFn record, while ``grad_fn_label`` is the portable label.
         """
 
-        grad_fn = self.grad_fn
+        grad_fn = self.autograd.grad_fn
         if grad_fn is None:
             return None
         return cast("str | None", getattr(grad_fn, "label", None))
@@ -2863,7 +2877,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             )
 
     @property
-    def arg_expressions(self) -> list[str]:
+    def _source_arg_expressions(self) -> list[str]:
         """Return source expressions used for this op's call arguments.
 
         Returns
@@ -2878,12 +2892,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             return cast(list[str], cached)
         from .._postprocess.ast_branches import resolve_arg_expressions
 
-        resolved = resolve_arg_expressions(self.code_context, self.func_name)
+        resolved = resolve_arg_expressions(self.source.frames, self.func_name)
         object.__setattr__(self, "_arg_expressions_cache", resolved)
         return resolved
 
-    @arg_expressions.setter
-    def arg_expressions(self, value: Any) -> None:
+    @_source_arg_expressions.setter
+    def _source_arg_expressions(self, value: Any) -> None:
         """Set or clear the lazy argument-expression cache."""
 
         if value is None:
@@ -2894,8 +2908,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             return
         object.__setattr__(self, "_arg_expressions_cache", list(value))
 
-    @arg_expressions.deleter
-    def arg_expressions(self) -> None:
+    @_source_arg_expressions.deleter
+    def _source_arg_expressions(self) -> None:
         """Drop the cached argument-expression parse result."""
 
         try:

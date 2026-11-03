@@ -213,7 +213,7 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
                 continue
             for spelling in spellings:
                 ops_by_label.setdefault(spelling, []).append(op)
-            if getattr(op, "grad_fn", None) is not None:
+            if record_member(op, "grad_fn", None) is not None:
                 visited_labels.update(spellings)
     if not visited_labels:
         return True
@@ -534,6 +534,7 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
 
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
+from .._utils._record_group_table import record_member  # noqa: E402
 from .invariants import (  # noqa: E402
     MetadataInvariantError,
 )

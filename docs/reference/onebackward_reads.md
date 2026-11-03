@@ -26,7 +26,7 @@ circuit = tl.top_k(k=50, by=table)             # the one-liner: rank sites by th
 ## The substrate is already there
 
 Every op on a finished live torch trace records its real autograd producer
-(`op.grad_fn_handle`), a durable object id, and its output slot
+(`op.autograd.grad_fn_handle`), a durable object id, and its output slot
 (`op.multi_output_index`). The read resolves sites to
 `GradientEdge(node, slot)` addresses from those EXISTING fields -- no arming
 flag, no capture option, any save mode. Saved payloads are clone-insulated

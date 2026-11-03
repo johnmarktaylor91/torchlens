@@ -1694,7 +1694,7 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_code_firstlineno
     )
 
     helper_frames = [
-        next(frame for frame in layer.code_context if frame.func_name == "helper")
+        next(frame for frame in layer.source.frames if frame.func_name == "helper")
         for layer in bool_layers
     ]
 
@@ -1926,13 +1926,13 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
         entry for entry in trace._layer_list if not entry.is_input and entry.func_name != "none"
     ]
     assert captured_entries
-    assert all(len(entry.code_context) > 0 for entry in captured_entries)
+    assert all(len(entry.source.frames) > 0 for entry in captured_entries)
     assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
     with monkeypatch.context() as local_patch:
         local_patch.setattr(linecache, "getlines", _tracking_getlines)
         for entry in captured_entries:
-            for frame in entry.code_context:
+            for frame in entry.source.frames:
                 assert frame.file is not None
                 assert frame.line_number is not None
                 assert frame.code_firstlineno is not None
@@ -1954,7 +1954,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
 
     roundtrip_log = pickle.loads(pickle.dumps(trace))
     roundtrip_stack = next(
-        entry.code_context for entry in roundtrip_log._layer_list if not entry.is_input
+        entry.source.frames for entry in roundtrip_log._layer_list if not entry.is_input
     )
     assert len(roundtrip_stack) > 0
     assert roundtrip_stack[0].source_loading_enabled is False
@@ -1972,8 +1972,8 @@ def test_save_code_context_off_assert_model_has_no_false_positive_if_edges() -> 
 
     assert bool_layer.control_flow.context_kind == "assert"
     assert bool_layer.control_flow.is_terminal_conditional_bool is False
-    assert len(bool_layer.code_context) > 0
-    assert all(frame.source_loading_enabled is False for frame in bool_layer.code_context)
+    assert len(bool_layer.source.frames) > 0
+    assert all(frame.source_loading_enabled is False for frame in bool_layer.source.frames)
     _assert_branchless_log(trace)
 
 
@@ -2142,7 +2142,7 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     negative_sub = _find_only_layer(negative_log, "sub")
 
     if all(
-        frame.col_offset is None for frame in positive_mul.code_context if frame.file == __file__
+        frame.col_offset is None for frame in positive_mul.source.frames if frame.file == __file__
     ):
         pytest.skip(
             "Column offsets are unavailable for this one-line ternary in the current runtime"

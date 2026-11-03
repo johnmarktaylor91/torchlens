@@ -325,12 +325,12 @@ def _add_output_layers(
         # shape only and carries not-applicable (None) compute.
         new_output_node._cost_flops_forward = None
         new_output_node._cost_flops_backward = None
-        new_output_node.code_context = _get_code_context(
+        new_output_node._source_frames = _get_code_context(
             self.num_context_lines,
             source_loading_enabled=self._options_save_source_context,
             disable_col_offset=False,
         )
-        new_output_node.var_names = []
+        new_output_node._source_var_names = []
         new_output_node._cost_duration = Duration(0)
         new_output_node._call_rng_states = (
             log_current_rng_states(torch_only=True) if self._options_save_rng else {}
@@ -342,9 +342,9 @@ def _add_output_layers(
         new_output_node._call_non_tensor_pos_args = []
         new_output_node._call_non_tensor_kwargs = {}
         new_output_node._call_non_tensor_args = []
-        new_output_node.grad_fn_class_name = None
+        new_output_node._autograd_grad_fn_class_name = None
         new_output_node._cost_autograd_memory = None
-        new_output_node.num_autograd_tensors = None
+        new_output_node._autograd_num_autograd_tensors = None
         # An output pseudo-node runs no kernel: "not measured" is None, never
         # a fabricated 0 B (observe item 15 zero-site sweep).
         new_output_node._cost_bytes_delta_at_call = None
@@ -457,7 +457,7 @@ def _add_output_layers(
                 output_node.out if output_node.out is not None else output_node.transformed_out
             )
             _detach_payload = not (
-                torch.is_tensor(_parent_payload) and _parent_payload.grad_fn is not None
+                torch.is_tensor(_parent_payload) and _parent_payload.autograd.grad_fn is not None
             )
             if output_payload_aliases_parent(output_tensor, output_node.out):
                 # HONESTY 13-R1: the producer already retains this exact value,

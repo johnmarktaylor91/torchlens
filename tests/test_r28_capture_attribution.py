@@ -463,8 +463,8 @@ def test_m5_inplace_grad_fn_metadata_is_user_op() -> None:
     )
     inplace_op = _ops_by_func(trace, "add_")[0]
 
-    assert inplace_op.grad_fn_class_name == "AddBackward0"
-    assert "CloneBackward" not in str(inplace_op.grad_fn_class_qualname)
+    assert inplace_op.autograd.grad_fn_class_name == "AddBackward0"
+    assert "CloneBackward" not in str(inplace_op.autograd.grad_fn_class_qualname)
     trace.cleanup()
 
 

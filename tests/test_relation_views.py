@@ -496,7 +496,7 @@ class TestFactBlocks:
         config["__probe__"] = 1
         sibling = trace.ops["conv2d_1_1"]
         assert "__probe__" not in sibling.call.config
-        assert isinstance(op.code_context, list)
+        assert isinstance(op.source.frames, list)
         assert isinstance(op.call.arg_names, tuple)
 
     def test_direct_write_overrides_shared_fact(self) -> None:
@@ -520,5 +520,5 @@ class TestFactBlocks:
         clone = pickle.loads(pickle.dumps(trace))
         op = clone.ops["relu_1_2"]
         assert isinstance(op.call.config, dict)
-        assert isinstance(op.code_context, list)
+        assert isinstance(op.source.frames, list)
         assert op.func_name == "relu"

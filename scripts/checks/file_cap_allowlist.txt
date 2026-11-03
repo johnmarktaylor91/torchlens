@@ -41,7 +41,7 @@ torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	125
 torchlens/_capture/prepare/door.py	1122
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	63
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	132
-torchlens/_capture/projections.py	1592
+torchlens/_capture/projections.py	1593
 torchlens/_capture/projections.py::_build_record_context	81
 torchlens/_capture/projections.py::_grad_record_context_from_op_grad_event	68
 torchlens/_capture/projections.py::_record_from_record_context	104
@@ -97,15 +97,15 @@ torchlens/_data_classes/cleanup.py::cleanup	137
 torchlens/_data_classes/container.py	1179
 torchlens/_data_classes/field_policy.py::build_record_field_policy_table	68
 torchlens/_data_classes/func_call_location.py::FuncCallLocation.__init__	111
-torchlens/_data_classes/grad_fn.py	841
+torchlens/_data_classes/grad_fn.py	842
 torchlens/_data_classes/interface.py::_getitem_after_pass	123
 torchlens/_data_classes/interface.py::_str_after_pass	63
-torchlens/_data_classes/layer.py	1767
+torchlens/_data_classes/layer.py	1758
 torchlens/_data_classes/module.py	2636
 torchlens/_data_classes/module.py::Module.__init__	210
 torchlens/_data_classes/module.py::ModuleCall.__init__	129
 torchlens/_data_classes/module.py::ModuleCall.__setstate__	61
-torchlens/_data_classes/op.py	3605
+torchlens/_data_classes/op.py	3619
 torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
@@ -463,7 +463,7 @@ torchlens/_selection/values.py::_resolve_table_element_grain	65
 torchlens/_selection/values.py::_table_rows_by_label	65
 torchlens/_semantic/_norm_reconstruction.py::reconstruct_norm	96
 torchlens/_semantic/coverage.py::facet_coverage	62
-torchlens/_semantic/facets.py	1998
+torchlens/_semantic/facets.py	1999
 torchlens/_semantic/facets.py::FacetView._compute	85
 torchlens/_semantic/facets.py::register	68
 torchlens/_semantic/logit_lens.py	1397
@@ -558,7 +558,7 @@ torchlens/_visualization/_bundle_graph.py::render_bundle_graph	70
 torchlens/_visualization/_condensed_flow.py	814
 torchlens/_visualization/_condensed_flow.py::_compute_child_condensed_flow_graphs	77
 torchlens/_visualization/_condensed_flow.py::_condensed_edges	65
-torchlens/_visualization/_encoding.py	1847
+torchlens/_visualization/_encoding.py	1850
 torchlens/_visualization/_encoding.py::_coerce_scalar	69
 torchlens/_visualization/_encoding.py::resolve_color_by	91
 torchlens/_visualization/_encoding.py::resolve_size_by	73
@@ -1186,7 +1186,7 @@ torchlens/intervention/replay.py::_reconstruct_args_from_template	63
 torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	153
-torchlens/intervention/rerun.py	1690
+torchlens/intervention/rerun.py	1691
 torchlens/intervention/rerun.py::_append_rerun	104
 torchlens/intervention/rerun.py::_capture_with_active_spec	90
 torchlens/intervention/rerun.py::_chunked_rerun	78

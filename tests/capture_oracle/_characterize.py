@@ -22,6 +22,7 @@ import torchlens as tl
 from torchlens import Recording
 from torchlens._ir.events import OpEvent
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import record_member
 
 from ._models import build_model_case, side_effect_count
 
@@ -918,7 +919,7 @@ def _gradient_projection(product: Any) -> dict[str, Any]:
     else:
         payloads = []
         for op in getattr(product, "_layer_list", ()):
-            for grad in getattr(op, "grads", ()):
+            for grad in record_member(op, "grads", ()):
                 if isinstance(grad, torch.Tensor):
                     payloads.append(
                         {

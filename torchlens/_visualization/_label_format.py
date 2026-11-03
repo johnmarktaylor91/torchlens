@@ -243,7 +243,7 @@ def saved_for_backward_line(layer_log: Any, vis_mode: str) -> str | None:
         Plain-text label row, or ``None`` when no retention was measured.
     """
 
-    count = getattr(layer_log, "num_autograd_tensors", None)
+    count = record_member(layer_log, "num_autograd_tensors", None)
     if count is None or count <= 0:
         return None
     suffix = ""

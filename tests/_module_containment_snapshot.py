@@ -161,8 +161,8 @@ def _op_dict(op: Any) -> dict[str, Any]:
     return {
         "atomic_module_call": _module_call_string(op.atomic_module_call),
         "func_name": func_name,
-        "fx_call_index": op.fx_call_index,
-        "fx_qualpath": op.fx_qualpath,
+        "fx_call_index": op.source.fx_call_index,
+        "fx_qualpath": op.source.fx_path,
         "is_edited": getattr(op, "is_edited", False),
         "is_atomic_module": op.is_atomic_module,
         "is_internal_sink": op.is_internal_sink,

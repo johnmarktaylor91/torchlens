@@ -519,7 +519,7 @@ class TestGradientTracking:
             if entry.has_params:
                 assert entry.has_grad is True
                 assert entry.grad is not None
-                assert entry.grad_shape is not None
+                assert entry.autograd.grad_shape is not None
 
     def test_saved_grad_ops_populated(self):
         model = _make_simple_model()

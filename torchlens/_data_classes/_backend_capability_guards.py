@@ -32,7 +32,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
         Trace (or object carrying ``backend``) owning the accessor.
     plural_subject:
         Sentence subject describing what is unavailable, e.g.
-        ``"op.grads or saved_grad_ops"``.
+        ``"op.autograd.grads or saved_grad_ops"``.
 
     Returns
     -------
@@ -69,7 +69,7 @@ def raise_if_no_backward_capture(trace: Any, *, plural_subject: str) -> None:
             code="backend_unsupported",
             remedy=(
                 "use trace.autograd.derived_grads for leaf-level derived gradients and "
-                "op.derived_grad for exact op-level derived gradients"
+                "op.autograd.derived_grad for exact op-level derived gradients"
             ),
             backend=backend,
         )

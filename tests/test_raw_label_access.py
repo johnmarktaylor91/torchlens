@@ -79,7 +79,7 @@ def test_arg_expressions_returns_call_arguments_from_source() -> None:
     trace = _raw_label_trace()
     op = next(candidate for candidate in trace.ops if candidate.func_name == "relu")
 
-    assert op.arg_expressions == ["x + 1"]
+    assert op.source.arg_expressions == ["x + 1"]
 
 
 def test_to_pandas_converts_new_bool_and_distance_columns() -> None:

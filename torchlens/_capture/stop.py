@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
 
+from .._utils._record_group_table import record_member
 from ..errors import CaptureError
 from ..recording._halt import StopSignal
 from ..recording.exceptions import PredicateError
@@ -355,7 +356,7 @@ def _outputs_carry_autograd_history(outputs: Any) -> bool:
 
     with _state.pause_logging():
         tensors = get_vars_of_type_from_obj(outputs, torch.Tensor, search_depth=5)
-        return any(getattr(t, "grad_fn", None) is not None for t in tensors)
+        return any(record_member(t, "grad_fn", None) is not None for t in tensors)
 
 
 def cleared_inference_only_directive(directive: object, outputs: Any) -> StopDirective | None:

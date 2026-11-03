@@ -30,6 +30,7 @@ from .._ir.container import (
 )
 from .._selection.selection import _SelectionOperand
 from .._utils._callable_safety import FACET_RECIPE_MARKER_ATTR
+from .._utils._record_group_table import record_member
 from ._families import family_entries, family_spec
 from .coverage import facet_coverage as coverage
 
@@ -1718,7 +1719,7 @@ def _recipe_matches(recipe: _RegisteredRecipe, record: Any) -> bool:
     if not _record_scope_matches(recipe.public.target_scope, record):
         return False
     class_name = getattr(record, "class_name", getattr(record, "type", None))
-    class_qualname = getattr(record, "class_qualname", getattr(record, "func_qualname", None))
+    class_qualname = getattr(record, "class_qualname", record_member(record, "func_qualname", None))
     if recipe.public.class_names and class_name not in recipe.public.class_names:
         return False
     if recipe.public.qualnames and class_qualname not in recipe.public.qualnames:
@@ -1760,7 +1761,7 @@ def _recipe_priority(recipe: _RegisteredRecipe, record: Any) -> tuple[int, int]:
     """Return ``(specificity, source)`` for conflict resolution."""
 
     class_name = getattr(record, "class_name", getattr(record, "type", None))
-    class_qualname = getattr(record, "class_qualname", getattr(record, "func_qualname", None))
+    class_qualname = getattr(record, "class_qualname", record_member(record, "func_qualname", None))
     specificity = 0
     if recipe.public.qualnames and class_qualname in recipe.public.qualnames:
         specificity = 3

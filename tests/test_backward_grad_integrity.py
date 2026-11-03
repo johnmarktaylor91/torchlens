@@ -63,7 +63,7 @@ def test_second_backward_does_not_rewrite_recorded_grads(save_mode: str) -> None
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
     ]
     payloads = [p for p in param_payloads + op_payloads if isinstance(p, torch.Tensor)]
     assert payloads, "expected recorded pass-1 gradient payloads"
@@ -130,7 +130,7 @@ def test_op_grad_payloads_charge_the_save_budget() -> None:
     grad_bytes = sum(
         int(record.grad.nelement() * record.grad.element_size())
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
         if isinstance(record.grad, torch.Tensor)
     )
     assert grad_bytes > 0, "expected retained op gradient payloads"
@@ -173,7 +173,7 @@ def test_selective_save_grads_consults_predicate_for_params() -> None:
     op_payloads = [
         record.out if hasattr(record, "out") else record.grad
         for layer in trace._layer_list
-        for record in layer.grads
+        for record in layer.autograd.grads
     ]
     assert all(not isinstance(p, torch.Tensor) for p in op_payloads)
 

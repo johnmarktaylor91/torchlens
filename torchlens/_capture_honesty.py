@@ -245,7 +245,7 @@ def _step_join_fact(header: dict[str, Any]) -> str:
 def _host_source_location(op: Any) -> str | None:
     """Return ``file:line`` of the op's first recorded user frame, when one was kept."""
 
-    for frame in getattr(op, "code_context", None) or ():
+    for frame in record_member(op, "code_context", None) or ():
         file = getattr(frame, "file", None)
         line = getattr(frame, "line_number", None)
         if isinstance(file, str) and isinstance(line, int) and "torchlens" not in file:

@@ -261,7 +261,7 @@ def _collect_norm_rows(
         label = _op_label(op)
         module = getattr(op, "atomic_module_address", None)
         try:
-            grad = op.grad_for(bwd=selected_bwd)
+            grad = op.autograd.grad_for(bwd=selected_bwd)
         except (KeyError, ValueError) as exc:
             rows.append(_unavailable_row(label, module, str(exc)))
             counts["unavailable"] += 1

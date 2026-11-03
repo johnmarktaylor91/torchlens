@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from .._quantities import Bytes
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -154,11 +155,11 @@ def _has_retained_gradient_payloads(self: "Trace") -> bool:
     """
 
     for op in self._layer_list:
-        for record in getattr(op, "grads", ()):
+        for record in record_member(op, "grads", ()):
             if record.grad is not None or record.transformed_grad is not None:
                 return True
     for param in self._param_logs.values():
-        if any(record.grad is not None for record in getattr(param, "grads", ())):
+        if any(record.grad is not None for record in record_member(param, "grads", ())):
             return True
     return False
 
