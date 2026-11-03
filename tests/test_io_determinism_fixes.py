@@ -628,3 +628,25 @@ def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:
         loaded_layer = loaded[label]
         assert isinstance(loaded_layer.input_ancestors, frozenset)
         assert set(loaded_layer.input_ancestors) == set(trace[label].input_ancestors)
+
+
+def test_foreign_defaultdict_factory_keeps_data_and_discloses_the_factory(tmp_path: Path) -> None:
+    """An unsupported factory is never run, and its mapping contents survive load."""
+
+    def factory() -> list:
+        raise AssertionError("a serialized factory must never execute")
+
+    trace = tl.trace(_LinearModel(), torch.ones(1, 2))
+    trace.output_ops[0].func_config = {"lookup": defaultdict(factory, {"seen": [3]})}
+    path = tmp_path / "factory-disclosure.tlspec"
+    trace.save(path)
+    loaded = tl.load(path)
+    assert any(
+        row["kind"] == "unencodable_values_stringified"
+        for row in loaded.annotations["capture_advisories"]
+    )
+    mapping = loaded.output_ops[0].func_config["lookup"]
+    assert type(mapping) is dict
+    assert mapping == {"seen": [3]}
+    manifest = json.loads((path / "manifest.json").read_text())
+    assert any("default_factory" in at for at in manifest["disclosures"]["first"])
