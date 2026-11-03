@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
-from ._errors import ArgumentTypeError
+from ._errors import ArgumentTypeError, InvalidArgumentError
+
+#: File suffixes TorchLens opens as images when a trace input is a path.
+_IMAGE_SUFFIXES = frozenset({".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"})
 
 
 def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
@@ -428,3 +432,93 @@ def _is_audio_like_input(x: Any) -> bool:
     """
 
     return isinstance(x, (list, tuple)) or hasattr(x, "shape")
+
+
+def _image_path_candidate(x: Any) -> str | None:
+    """Return ``x`` as a path string when it names an image file, else ``None``.
+
+    A ``str`` qualifies only when it carries an image suffix and no
+    whitespace (prose never does); any ``os.PathLike`` with an image suffix
+    qualifies.
+    """
+
+    if isinstance(x, os.PathLike):
+        candidate = os.fspath(x)
+    elif isinstance(x, str) and not any(char.isspace() for char in x):
+        candidate = x
+    else:
+        return None
+    if not isinstance(candidate, str):
+        return None
+    suffix = os.path.splitext(candidate)[1].lower()
+    return candidate if suffix in _IMAGE_SUFFIXES else None
+
+
+def _open_image_path(path: str) -> Any:
+    """Open one image file as an RGB PIL image, refusing typed when it cannot be."""
+
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise InvalidArgumentError(
+            f"torchlens.trace: the input {path!r} names an image file but Pillow is "
+            "not installed, so it cannot be opened.",
+            code="image_path_unreadable",
+            remedy="install Pillow (pip install pillow) or pass an already-loaded image",
+            path=path,
+        ) from exc
+    try:
+        with Image.open(path) as image:
+            return image.convert("RGB")
+    except OSError as exc:
+        raise InvalidArgumentError(
+            f"torchlens.trace: the input {path!r} names an image file that could not "
+            f"be decoded ({exc}).",
+            code="image_path_unreadable",
+            remedy="check the file is a readable image, or pass an already-loaded image",
+            path=path,
+        ) from exc
+
+
+def _materialize_image_paths(model: Any, x: Any) -> Any:
+    """Open image files named by a trace input so they take the image path.
+
+    Parameters
+    ----------
+    model:
+        Model passed to ``trace``; a model with a text tokenizer keeps a
+        missing-file string as text.
+    x:
+        Raw trace input: a path (``str`` or ``os.PathLike``) to an image file,
+        a list of them, or anything else.
+
+    Returns
+    -------
+    Any
+        The opened RGB PIL image (or list of them) when ``x`` names existing
+        image files; otherwise ``x`` unchanged.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``image_path_missing`` when ``x`` names an image file that does not
+        exist and the model has no tokenizer to read it as text;
+        ``image_path_unreadable`` when the file cannot be opened as an image.
+    """
+
+    items = x if isinstance(x, list) else [x]
+    candidates = [_image_path_candidate(item) for item in items]
+    if not candidates or any(candidate is None for candidate in candidates):
+        return x
+    missing = [candidate for candidate in candidates if not os.path.isfile(candidate)]
+    if missing:
+        if isinstance(x, str) and _has_text_tokenizer(model):
+            return x
+        raise InvalidArgumentError(
+            f"torchlens.trace: the input names an image file that does not exist: {missing[0]!r}.",
+            code="image_path_missing",
+            remedy="pass the path of an existing image file, or an already-loaded image",
+            path=missing[0],
+        )
+    images = [_open_image_path(candidate) for candidate in candidates if candidate is not None]
+    return images if isinstance(x, list) else images[0]

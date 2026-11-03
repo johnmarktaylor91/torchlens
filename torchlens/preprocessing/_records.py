@@ -214,3 +214,29 @@ def unknown_resolution(reason: str, *, fetch: dict[str, Any] | None = None) -> R
         declared=None,
         input_transform=None,
     )
+
+
+def as_model_metadata(resolution: Resolution, method: str = "model_metadata") -> Resolution:
+    """Re-stamp an explicit-adapter resolution as model-attached metadata.
+
+    ``method`` names how the authority was found: ``"model_metadata"`` for a
+    handle the model object carries, ``"state_match"`` for a torchvision
+    preset recovered from the loaded weights.
+    """
+
+    from torchlens._data_classes.trace import ResolvedPreprocessing
+
+    record = resolution.preprocessing
+    config = dict(record.config)
+    config["resolution_method"] = method
+    return Resolution(
+        preprocessing=ResolvedPreprocessing(
+            source=record.source,
+            identifier=record.identifier,
+            verified=True,
+            config=config,
+            description=record.description,
+        ),
+        declared=resolution.declared,
+        input_transform=resolution.input_transform,
+    )

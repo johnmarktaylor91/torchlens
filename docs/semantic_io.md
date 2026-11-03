@@ -78,7 +78,9 @@ The default `trace.to_pandas()` schema is unchanged.
 
 ## Custom Output Detectors
 
-Register custom output detectors through `tl._autoroute.output.register(...)`.
+Register custom output detectors through `tl.postprocessing.register(...)`
+(the `torchlens.postprocessing` namespace also exports `unregister`, `list`,
+`info`, `snapshot` and the `ResolvedPostprocessing` record).
 A detector runs twice: automatically at the end of every capture, with the
 live model output object and `meta["style"] is None`, and on demand from
 `trace.decode_output(style="my_labels")`, with the retained output tensors
@@ -89,10 +91,10 @@ keyed by head (`{"logits": tensor}`, or the one bare tensor) and
 ```python
 from typing import Any
 
-from torchlens._data_classes.trace import ResolvedPostprocessing
+from torchlens.postprocessing import ResolvedPostprocessing
 
 
-@tl._autoroute.output.register(name="my_labels", priority=5)
+@tl.postprocessing.register(name="my_labels", priority=5)
 def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
     """Resolve a local label bank for decode_output(style='my_labels')."""
 
@@ -118,7 +120,31 @@ rows = trace.decode_output(style="my_labels")
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
 and unregister a temporary detector with
-`tl._autoroute.output.unregister("my_labels")`.
+`tl.postprocessing.unregister("my_labels")`.
+
+## Image Inputs
+
+A PIL image, or a path to an image file, is a complete `tl.trace` input for a
+vision model:
+
+```python
+trace = tl.trace(resnet, "dog.jpg")
+trace = tl.trace(resnet, Image.open("dog.jpg"))
+```
+
+A `str` or `os.PathLike` naming an existing file with an image suffix (`.jpg`,
+`.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a list of them,
+is opened as an RGB PIL image before routing; a string with whitespace is text.
+A missing image path refuses `image_path_missing` (unless the model has a text
+tokenizer, in which case the string is text) and an undecodable file refuses
+`image_path_unreadable`. The image is then preprocessed by the authority
+`torchlens.preprocessing.resolve(model=)` finds: a torchvision model is
+recognised from its loaded state when exactly one preset checkpoint already in
+the torch hub cache equals it (`resolution_method="state_match"`), a timm
+model from its data config, a Hugging Face model from its image processor.
+When nothing resolves the capture refuses `preprocessing_unresolved`; record
+the authority with `torchlens.preprocessing.attach_authority(model, weights)`
+or pass your own transform through `CaptureOptions(input_transform=)`.
 
 ## Original Input Display
 
@@ -347,7 +373,7 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- the read-time `decode_output(style=, head=)` override and `tl._autoroute.output.register(...)`;
+- the read-time `decode_output(style=, head=)` override and `tl.postprocessing.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
 - `trace.input` and `trace.provenance.input_preprocessor` provenance.
 
@@ -360,10 +386,12 @@ core flow runs without downloading external model weights.
 - `Trace.output_table(k=5, batch_items=None, *, style=None, head=None)`
 - `Trace.decode_output(k=None, *, style=None, head=None, tokenizer=None)`
 - `Trace.provenance.output_postprocessor`
-- `tl._autoroute.output.register(...)`
-- `tl._autoroute.output.unregister(...)`
-- `tl._autoroute.output.list()`
-- `tl._autoroute.output.info(...)`
+- `tl.postprocessing.register(...)`
+- `tl.postprocessing.unregister(...)`
+- `tl.postprocessing.list()`
+- `tl.postprocessing.info(...)`
+- `tl.postprocessing.snapshot()`
+- `torchlens.postprocessing.ResolvedPostprocessing`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
 - `Trace.input`
 - `Trace.provenance.input_preprocessor`

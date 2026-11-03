@@ -30,6 +30,7 @@ from torchlens._capture_fingerprint import _never_matching_fragment
 from torchlens._data_classes.trace import ResolvedPostprocessing, Trace
 from torchlens._errors import InvalidArgumentError, PayloadUnavailableError
 from torchlens._ir.container_registry import _is_hf_model_output
+from torchlens._utils.torchvision_weights import match_torchvision_weights
 
 DETECTOR_VERSION = "torchlens-output-a2-v1"
 #: Styles ``Trace.decode_output(style=...)`` resolves itself; a registered
@@ -348,6 +349,10 @@ def semantic_output_cache_key(model: Any) -> dict[str, Any]:
         default_cfg = None
         config_unreadable = _never_matching_fragment("model-default-cfg-getter-raised")
     weights = getattr(model, "_torchlens_weights", None)
+    if weights is None:
+        # No handle planted: a torchvision model still names its preset when
+        # its loaded state equals exactly one cached preset checkpoint.
+        weights = match_torchvision_weights(model)
     return {
         "version": DETECTOR_VERSION,
         "config_unreadable": config_unreadable,
@@ -446,7 +451,7 @@ def refuse_unknown_decode_style(style: Any) -> NoReturn:
         code="decode_style_unknown",
         remedy=(
             "pass a built-in style, or register a custom detector that resolves it "
-            "with tl._autoroute.output.register(...)"
+            "with tl.postprocessing.register(...)"
         ),
         argument=STYLE_KW,
     )

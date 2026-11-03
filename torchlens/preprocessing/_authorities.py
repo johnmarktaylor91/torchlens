@@ -13,7 +13,9 @@ auto-discovery ONLY where the user's own model object genuinely carries
 metadata (a planted torchvision weights handle, a timm ``default_cfg``, an HF
 ``name_or_path``); an explicit offline policy with fetch disclosure; network
 failure yields ``unknown``, never a lower tier's silent guess; torchvision
-weights are NEVER inferred from the model class.
+weights are NEVER inferred from the model class (a handle-less torchvision
+model is matched by its loaded STATE against the cached preset checkpoints:
+exact tensor equality, one unique match, never a download).
 
 Every spelling is DOCUMENTED-UNSTABLE pending the naming sprint.
 """
@@ -26,6 +28,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from torchlens._utils.torchvision_weights import match_torchvision_weights
+
 from ._attached import (
     adapt_torchvision_preset,
     discover_attached,
@@ -33,7 +37,12 @@ from ._attached import (
     probe_torchvision_preset,
 )
 from ._declared_transform import transform_from_declared
-from ._records import DeclaredPreprocessing, Resolution, unknown_resolution
+from ._records import (
+    DeclaredPreprocessing,
+    Resolution,
+    as_model_metadata,
+    unknown_resolution,
+)
 
 __tl_layer__ = "L5"
 
@@ -646,7 +655,8 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
     """Auto-discover an authority from model-attached metadata (memo D8).
 
     Order: no-network tiers first (an authority recorded by
-    ``attach_authority``, a planted torchvision weights handle, a timm
+    ``attach_authority``, a planted torchvision weights handle, a torchvision
+    model whose loaded state equals one cached preset checkpoint, a timm
     ``default_cfg``, an open_clip ``visual.preprocess_cfg``), then the
     network-gated HF processor fetch. A fetch
     failure yields ``unknown`` with the fetch disclosure -- never a silent
@@ -671,7 +681,11 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
     weights = getattr(model, "_torchlens_weights", None)
     if weights is not None and _probe_torchvision_weights(weights):
         resolution = _adapt_torchvision_weights(weights)
-        return _as_model_metadata(resolution)
+        return as_model_metadata(resolution)
+    matched = match_torchvision_weights(model)
+    if matched is not None and _probe_torchvision_weights(matched):
+        resolution = _adapt_torchvision_weights(matched)
+        return as_model_metadata(resolution, method="state_match")
     if isinstance(getattr(model, "default_cfg", None), dict) or hasattr(model, "pretrained_cfg"):
         timm_resolution = _discover_timm(model)
         if timm_resolution is not None:
@@ -680,27 +694,6 @@ def _discover_from_model(model: Any, offline: bool | None) -> Resolution:
     if open_clip_resolution is not None:
         return open_clip_resolution
     return _discover_hf(model, offline)
-
-
-def _as_model_metadata(resolution: Resolution) -> Resolution:
-    """Re-stamp an explicit-adapter resolution as model-attached metadata."""
-
-    from torchlens._data_classes.trace import ResolvedPreprocessing
-
-    record = resolution.preprocessing
-    config = dict(record.config)
-    config["resolution_method"] = "model_metadata"
-    return Resolution(
-        preprocessing=ResolvedPreprocessing(
-            source=record.source,
-            identifier=record.identifier,
-            verified=True,
-            config=config,
-            description=record.description,
-        ),
-        declared=resolution.declared,
-        input_transform=resolution.input_transform,
-    )
 
 
 def _discover_timm(model: Any) -> Resolution | None:
@@ -714,7 +707,7 @@ def _discover_timm(model: Any) -> Resolution | None:
     if data_config is None:
         return None
     resolution = _adapt_timm_config(data_config)
-    return _as_model_metadata(resolution)
+    return as_model_metadata(resolution)
 
 
 def _discover_hf(model: Any, offline: bool | None) -> Resolution:
@@ -745,7 +738,7 @@ def _discover_hf(model: Any, offline: bool | None) -> Resolution:
             fetch=fetch,
         )
     resolution = _adapt_hf_processor(processor)
-    resolution = _as_model_metadata(resolution)
+    resolution = as_model_metadata(resolution)
     resolution.preprocessing.config["fetch"] = fetch
     resolution.preprocessing.config["upstream"] = str(name_or_path)
     return resolution

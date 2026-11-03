@@ -2744,7 +2744,12 @@ deprecation shim owed*
 **torchlens.preprocessing.attach_authority(model, authority)** — *unstable — no deprecation shim owed*
 : Records a model's preprocessing authority on the model so discovery finds
   it: a torchvision model built with `weights=` keeps no handle to its
-  weights, and the preset cannot be inferred from the class. Afterwards
+  weights, and the preset cannot be inferred from the class. Without a
+  handle, discovery matches the model's loaded state against the presets
+  whose checkpoints are already in the torch hub cache (exact tensor
+  equality, one unique match, never a download) and records the match as
+  model metadata with `resolution_method="state_match"`; `attach_authority`
+  remains the explicit route when no cached checkpoint matches. Afterwards
   `resolve(model=model)`, PIL-input autorouting and `check_card` resolve the
   attached authority as model metadata. Accepts any recognized authority;
   an opaque callable refuses `preprocessing_attach_opaque`. Returns the model.
@@ -2757,6 +2762,26 @@ deprecation shim owed*
   `authority=`), returns the field-level `PreprocessingComparison`, and warns
   `preprocessing_card_mismatch` when a field disagrees. Nothing runs it
   automatically. An opaque record compares as unknown, never as a match.
+
+**torchlens.postprocessing** — *unstable — no deprecation shim owed*
+: The public home of custom output detectors (the registry
+  `Trace.decode_output` and the end-of-capture decode consult):
+  `register(name=, priority=)` (a decorator; lower priority runs first),
+  `unregister(name)`, `list(pattern=None)`, `info(name)`, the `snapshot()`
+  save-and-restore context manager, the frozen `Detector` metadata record
+  and the `ResolvedPostprocessing` record a detector returns. A detector
+  receives `(outputs, meta)` and returns `ResolvedPostprocessing` or `None`;
+  registering a name twice refuses `ValueError` naming `unregister`.
+
+**image file path as `tl.trace` input** — *unstable — no deprecation shim owed*
+: A `str` or `os.PathLike` naming an existing file with an image suffix
+  (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a
+  list of them, is opened as an RGB PIL image before routing, so
+  `tl.trace(vision_model, "dog.jpg")` takes the image path with resolved
+  preprocessing instead of the text path. A path string with whitespace is
+  text. A missing image path refuses `image_path_missing` unless the model
+  has a text tokenizer (then the string is text); an undecodable file
+  refuses `image_path_unreadable`.
 
 **torchlens.bridge.pyreft.read(directory, *, repo=None, revision=None)** — *documented-unstable*
 : Read a pyreft LoReFT artifact (the directory `ReftModel.save` writes: `config.json` plus
@@ -3523,6 +3548,13 @@ describe each surface in depth.
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
+| `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `func`) |
+| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`) |
+| `tl.postprocessing.info` | Describe one registered output detector by name |
+| `tl.postprocessing.list` | List registered output detectors, optionally filtered by glob |
+| `tl.postprocessing.register` | Decorator registering a custom output detector (`name=`, `priority=`; lower runs first) |
+| `tl.postprocessing.snapshot` | Context manager saving and restoring the output detector registry |
+| `tl.postprocessing.unregister` | Remove a registered output detector by name |
 | `tl.recording.ModuleStackFrame` | One module frame in a predicate record context stack |
 | `tl.recording.cleanup_partial` | Remove partial recording bundles and sibling temp directories |
 | `tl.recording.dry_run` | Run predicates over one forward pass without retaining tensor payloads |

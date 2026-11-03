@@ -1461,8 +1461,11 @@
   closed authority standing (authoritative/unverified_fallback/unknown); a
   `CaptureOptions(input_transform=)` capture whose transform IS a recognized authority (the object
   `weights.transforms()` returns, an HF image processor) stamps that authority's own
-  record, any other transform honest `user_transform` provenance; `attach_authority`
-  records an authority a model cannot carry (torchvision weights), discovery also reads
+  record, any other transform honest `user_transform` provenance; a torchvision
+  model with no handle is matched by its loaded state against the preset checkpoints
+  already in the torch hub cache (exact tensor equality, one unique match, never a
+  download; `resolution_method="state_match"`), `attach_authority`
+  records an authority a model cannot carry otherwise, discovery also reads
   an open_clip `visual.preprocess_cfg`, and `check_card()` is the ON-REQUEST verifier
   (recorded preprocessing against the model's card, warning
   `preprocessing_card_mismatch`; nothing runs it automatically).
@@ -1880,6 +1883,7 @@ object's docstring):
 - `tl.io.materialize_nested`: Replace any remaining nested portable blob refs on a loaded model log.
 - `tl.model_output`: Create an output selector.
 - `tl.options.HtmlReportOptions`: Emission plumbing for the offline HTML report (C06 house pattern).
+- `tl.postprocessing.register`: Decorator registering a custom output detector (`name=`, `priority=`); the namespace also exports `unregister`, `list`, `info`, `snapshot`, `Detector` and `ResolvedPostprocessing`.
 - `tl.preprocessing.PreprocessingComparison`: The field-level audit report.
 - `tl.receptive_field.GradReceptiveField`: Empirical receptive-field influence set measured by autograd.
 - `tl.report.DiffReport`: The settled two-capture differential: rows plus honest totals.
