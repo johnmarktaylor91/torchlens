@@ -12,11 +12,15 @@ Split from ``validation/exemptions.py`` along this seam (R43 file-size ratchet);
 the proofs are unchanged.
 """
 
-from typing import Any
+from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
+import numpy as np
 import torch
 
-from .._data_classes.op import Op
+if TYPE_CHECKING:
+    from .._data_classes.op import Op
 
 
 def _setitem_index_targets_are_unique(index: Any) -> bool:
@@ -36,25 +40,57 @@ def _setitem_index_targets_are_unique(index: Any) -> bool:
     """
 
     components = index if isinstance(index, tuple) else (index,)
+    integer_components: list[torch.Tensor] = []
     for component in components:
-        if isinstance(component, list):
+        if isinstance(component, (list, np.ndarray)):
             try:
                 component = torch.as_tensor(component)
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, RuntimeError):
                 return False
         if isinstance(component, torch.Tensor):
             if component.dtype == torch.bool:
                 continue
             if not _tensor_is_integer_index(component):
                 return False
-            flattened = component.reshape(-1)
-            if int(flattened.numel()) != int(torch.unique(flattened).numel()):
-                return False
+            integer_components.append(component)
             continue
         if component is None or component is Ellipsis or isinstance(component, (slice, int)):
             continue
         return False
-    return True
+    return _advanced_index_tuples_are_unique(integer_components)
+
+
+def _advanced_index_tuples_are_unique(components: list[torch.Tensor]) -> bool:
+    """Return whether integer advanced-index components never repeat a target.
+
+    Advanced-index components broadcast together and address one element per
+    broadcast position, so a target repeats only when the whole TUPLE of
+    component values repeats. ``x[rows, cols] = v`` with every ``(row, col)``
+    pair distinct writes each element once even though ``rows`` and ``cols``
+    each repeat values.
+
+    Parameters
+    ----------
+    components:
+        Integer index tensors from one index expression, in order.
+
+    Returns
+    -------
+    bool
+        True when no broadcast position repeats another's value tuple; False
+        when the components do not broadcast.
+    """
+
+    if not components:
+        return True
+    try:
+        broadcast = torch.broadcast_tensors(*[component.cpu() for component in components])
+    except RuntimeError:
+        return False
+    stacked = torch.stack([component.reshape(-1) for component in broadcast], dim=-1)
+    if stacked.shape[0] == 0:
+        return True
+    return int(stacked.shape[0]) == int(torch.unique(stacked, dim=0).shape[0])
 
 
 def _index_positions_cover_destination_exactly(
@@ -343,3 +379,25 @@ def _perturbed_parents_only_occupy_out_kwarg(layer: Op, layers_to_perturb: list[
         if not all(_is_out_destination_key(key) for key in occupied_kwargs):
             return False
     return True
+
+
+def _replacement_fits_selection(
+    replacement: Any, selected: torch.Tensor, broadcast_replacement: bool
+) -> bool:
+    """Return whether assigning ``replacement`` writes every element of ``selected``.
+
+    A non-tensor replacement fills the selection. A tensor must match the
+    selected shape exactly, or, with ``broadcast_replacement``, broadcast onto it
+    unchanged: ``__setitem__`` broadcasts its value, so a ``[256]`` value written
+    to a ``[1, 256]`` slice still writes all 256 slots.
+    """
+
+    if not isinstance(replacement, torch.Tensor):
+        return True
+    if not broadcast_replacement:
+        return tuple(selected.shape) == tuple(replacement.shape)
+    try:
+        broadcast = torch.broadcast_shapes(tuple(replacement.shape), tuple(selected.shape))
+    except RuntimeError:
+        return False
+    return tuple(broadcast) == tuple(selected.shape)
