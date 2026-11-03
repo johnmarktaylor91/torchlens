@@ -86,7 +86,43 @@ def _expect_refusal_or_roundtrip(root, original, built_counter):
         loaded, root.parent / (root.name + "-again"), read_manifest(original)["save_level"]
     )
     assert record_table_diffs(root, again) == []
+    before_records = read_manifest(root)["records"]
+    after_records = read_manifest(again)["records"]
+    assert before_records.keys() == after_records.keys()
+    for kind, entry in before_records.items():
+        assert (root / entry["path"]).read_bytes() == (
+            again / after_records[kind]["path"]
+        ).read_bytes(), kind
     return "roundtrip"
+
+
+def _expect_manifest_refusal(root, key, built_counter, *, code="manifest_schema_invalid"):
+    """A rejected manifest mutation names its field and one exact refusal code."""
+
+    with pytest.raises(ArtifactError) as info:
+        _load(root)
+    assert info.value.fields.get("code") == code, key
+    details = "; ".join(info.value.fields.get("errors", ())) or str(info.value)
+    assert key in details, (key, details)
+    assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
+
+
+def _manifest_swap_code(key, value):
+    """Pin the contract's format-window, level and record-coherence refusal doors."""
+
+    if key == "tlspec_version" and type(value) is int and value < contract.RECORD_CONTRACT_FLOOR:
+        return "artifact_version_below_floor"
+    if key in ("format_version", "tlspec_version") and type(value) is int and value >= 0:
+        floor = contract.FORMAT_MAJOR if key == "format_version" else contract.RECORD_CONTRACT_FLOOR
+        if value < floor:
+            return "artifact_version_below_floor"
+        if value > floor:
+            return "artifact_version_above_runtime"
+    if key == "save_level":
+        return "artifact_save_level_invalid"
+    if (key == "payload_policy" and value == {}) or (key == "codecs" and value == []):
+        return "record_schema_invalid"
+    return "manifest_schema_invalid"
 
 
 def _mutable_files(root):
@@ -126,9 +162,11 @@ def test_each_dropped_manifest_key_refuses(saved, tmp_path, built_counter):
         trimmed = dict(manifest)
         del trimmed[key]
         write_manifest(copy, trimmed)
-        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
         if key in contract.MANIFEST_REQUIRED_FIELDS:
-            assert verdict == "refused", key
+            code = "artifact_version_below_floor" if key == "format" else "manifest_schema_invalid"
+            _expect_manifest_refusal(copy, key, built_counter, code=code)
+        else:
+            _expect_refusal_or_roundtrip(copy, root, built_counter)
 
 
 SWAPS = [None, True, 0, -1, 2**53 + 1, 1.5, "", "x", [], {}, {"$tl": "pickle"}]
@@ -150,19 +188,10 @@ def test_swapped_manifest_field_types_refuse(saved, tmp_path, built_counter, val
         swapped = dict(manifest)
         swapped[key] = value
         write_manifest(copy, swapped)
-        if key in VERSION_STAMPS and isinstance(value, str) and value:
-            # A version stamp that does not parse under PEP 440 is malformed manifest data:
-            # the schema check names the field, before any runtime identity policy runs.
-            with pytest.raises(ArtifactError) as info:
-                _load(copy)
-            assert info.value.fields.get("code") == "manifest_schema_invalid", key
-            assert f"{key} must be a PEP 440 version string" in str(info.value), key
-            assert not any(cls.__name__ == "Trace" for cls in built_counter), "a Trace was built"
-            continue
-        verdict = _expect_refusal_or_roundtrip(copy, root, built_counter)
         if key in FREE_TEXT_STAMPS and isinstance(value, str) and value:
+            assert _expect_refusal_or_roundtrip(copy, root, built_counter) == "roundtrip", key
             continue
-        assert verdict == "refused", key
+        _expect_manifest_refusal(copy, key, built_counter, code=_manifest_swap_code(key, value))
 
 
 @pytest.mark.parametrize("value", SWAPS, ids=lambda v: json.dumps(v))

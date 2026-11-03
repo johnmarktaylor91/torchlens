@@ -435,6 +435,7 @@ def bind_runnable_families(trace: Any, families: Mapping[str, Mapping[str, torch
         When a value violates its slot contract.
     """
 
+    # Essential complexity: presence, schema and slot binding form one closed family contract.
     expected_schema = {
         "state_dict": "state_dict_v1",
         "nonpersistent_buffers": "runnable_nonpersistent_buffer_v1",
