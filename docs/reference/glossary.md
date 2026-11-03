@@ -3491,7 +3491,7 @@ deprecation shim owed*
   `tl.observers.register_tensor_connection` registers a tensor connection;
   `tl.debug.isolated_capture` runs a capture in isolation, with `tl.debug.preserved_rng_state()`
   and `tl.debug.clone_input_tree(...)` as its parts; `Trace.capture_backward`
-  (`TraceValidationMixin.capture_backward`) captures a backward pass for validation.
+  (a thin `Trace` method over `backends/torch/_trace_backward.py`) captures a backward pass for validation.
 ### Debugging tools and report results
 **DTypeRangeReport (`tl.debug.DTypeRangeReport`)** — *unstable — no deprecation shim owed*
 : Coverage-bounded dtype range audit result.

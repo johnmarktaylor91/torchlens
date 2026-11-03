@@ -1,9 +1,10 @@
 """Public ATen-operation accessors for ``Trace`` (``CaptureOptions(aten_ops=True)``).
 
-A leaf mixin like ``_trace_narrate``: it reads the trace's primitive-op
-profile (``_primitive_op_profile``, materialized at postprocess step 0 when the
-switch is on and restored from v8+ artifacts) and refuses typed when the
-profile is absent, so an empty answer never masquerades as "nothing dispatched".
+Function bodies behind the ``Trace.has_aten_ops``, ``Trace.aten_ops`` and
+``Trace.aten_gaps`` properties. They read the trace's primitive-op profile
+(``_primitive_op_profile``, materialized at postprocess step 0 when the switch is
+on and restored from v8+ artifacts) and refuse typed when the profile is absent,
+so an empty answer never masquerades as "nothing dispatched".
 """
 
 from __future__ import annotations
@@ -47,45 +48,19 @@ def _require_aten_profile(record: Any, *, what: str) -> _PrimitiveOpProfile:
     return profile
 
 
-class TraceAtenMixin:
-    """Adds ``has_aten_ops``, ``aten_ops`` and ``aten_gaps`` to :class:`Trace`."""
+def has_aten_ops(record: Any) -> bool:
+    """Return whether ``record`` carries a primitive-op profile (possibly empty)."""
 
-    @property
-    def has_aten_ops(self) -> bool:
-        """Whether this trace carries recorded ATen operations.
+    return getattr(record, "_primitive_op_profile", None) is not None
 
-        ``True`` after a capture with ``CaptureOptions(aten_ops=True)`` and after
-        loading an artifact saved from one (a present-but-empty profile counts);
-        ``False`` otherwise. ``run()`` results, fast or not, inherit the recording
-        of the trace they refresh.
-        """
-        return getattr(self, "_primitive_op_profile", None) is not None
 
-    @property
-    def aten_ops(self) -> tuple[AtenOp, ...]:
-        """All recorded ATen operations in dispatch order (forward, then backward).
+def aten_ops(record: Any) -> tuple[AtenOp, ...]:
+    """Return every recorded ATen operation of ``record`` in dispatch order, or refuse typed."""
 
-        Raises
-        ------
-        AtenOpsUnavailableError
-            If the capture recorded none; re-capture with ``aten_ops=True``.
-        """
-        profile = _require_aten_profile(self, what="Trace.aten_ops")
-        return tuple(profile.primitive_ops)
+    return tuple(_require_aten_profile(record, what="Trace.aten_ops").primitive_ops)
 
-    @property
-    def aten_gaps(self) -> tuple[_ModePausedInteriorGap, ...]:
-        """Disclosed stretches where ATen rows are missing by construction.
 
-        Each gap names the capture phase, the dispatch sequence it spans and the
-        owning op references of an interior where the dispatch mode was paused
-        (for example inside a user-injected intervention). An empty tuple means
-        the recorded rows are complete.
+def aten_gaps(record: Any) -> tuple[_ModePausedInteriorGap, ...]:
+    """Return the disclosed ATen-row gaps of ``record``, or refuse typed."""
 
-        Raises
-        ------
-        AtenOpsUnavailableError
-            If the capture recorded no ATen operations.
-        """
-        profile = _require_aten_profile(self, what="Trace.aten_gaps")
-        return tuple(profile.mode_paused_interior)
+    return tuple(_require_aten_profile(record, what="Trace.aten_gaps").mode_paused_interior)

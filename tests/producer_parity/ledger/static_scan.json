@@ -928,14 +928,6 @@
   "via_getattr": true
  },
  {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/_data_classes/_trace_stats.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/_data_classes/_trace_stats_grad_fn_site.py",
@@ -1213,6 +1205,14 @@
   "file": "torchlens/_data_classes/trace.py",
   "has_default": false,
   "sites": 3,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_data_classes/trace.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {
