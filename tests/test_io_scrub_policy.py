@@ -348,8 +348,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
-    "attach_hooks": "mutates the live model's hook registry",
-    "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
     "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
@@ -374,13 +372,11 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
 }

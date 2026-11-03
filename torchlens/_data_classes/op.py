@@ -2615,25 +2615,6 @@ class Op(OpAtenMixin, _SelectionOperand):
             self, value, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this op through the owning Trace."""
-
-        return _doors.intervention()._op_edits.attach_hooks(
-            self,
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
-        )
-
     def materialize_out(
         self,
         *,

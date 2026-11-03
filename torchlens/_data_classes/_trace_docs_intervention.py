@@ -80,42 +80,6 @@ DOCS: dict[str, str] = {
             This model log, with a stale intervention recipe.
         """
     ),
-    "attach_hooks": (
-        """Attach sticky hooks to the current intervention spec.
-        
-        The site decides which tensor a hook sees: a bare site mounts on the
-        activation, ``tl.grad(site)`` on the gradient of the site's output
-        (fired by ``trace.backward(loss)``), and ``tl.grad(site) | site`` on
-        both. Attaching is registration only: nothing runs until the next
-        forward (activation hooks) or backward (gradient hooks).
-        
-        Raw PyTorch ``register_forward_hook`` remains supported for users who
-        need module-local replacement logic outside this API; during active
-        TorchLens captures, returned replacement tensors are instrumented so the
-        graph can continue through downstream ops.
-        
-        Parameters
-        ----------
-        hooks_or_site:
-            Mapping/list batch input or selector-like site.
-        hook:
-            Optional hook for the ``(site, hook)`` input shape.
-        *extra_hooks:
-            Additional hooks to compose at ``hooks_or_site`` in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Any
-            Scoped removable hook handle.
-        """
-    ),
     "remove": (
         """Remove the most recent legacy-returned hook attachment.
         
@@ -170,23 +134,15 @@ DOCS: dict[str, str] = {
             This model log, with a stale recipe if hooks were removed.
         """
     ),
-    "clear_hooks": (
-        """Clear all sticky hooks from the current intervention spec.
-        
-        Parameters
-        ----------
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Trace
-            This model log with hook specs cleared and marked stale.
-        """
-    ),
     "do": (
         """Apply an intervention and dispatch to replay, rerun, or set-only.
+        
+        ``do`` is the one editing verb: ``(site, value)`` stages a value,
+        ``(site, hook)`` stages a sticky hook, and a ``Recipe`` (``tl.when``)
+        stages every rule it carries; the selected engine then propagates.
+        ``engine="set_only"`` stages without running (a ``Recipe`` keeps its
+        hooks sticky for the next ``run``). ``clear_edits`` removes staged
+        edits by site or handle.
         
         The site decides which tensor the edit changes: a bare site edits the
         activation, ``tl.grad(site)`` the gradient of the site's output, and

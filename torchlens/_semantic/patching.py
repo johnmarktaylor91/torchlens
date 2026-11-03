@@ -724,7 +724,7 @@ def _run_patch(
         return result
 
     patched_log = corrupted_log.fork(name)
-    patched_log.attach_hooks(selector, _tracked_hook)
+    patched_log._attach_hooks(selector, _tracked_hook)
     guard.reset()
     patched_log.run(model, corrupted_input)
     try:

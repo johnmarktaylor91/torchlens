@@ -84,7 +84,7 @@ def test_head_selector_writes_on_a_model_that_calls_a_relu_twice() -> None:
     clean = _head_trace(model, x)
     clean_out = _output(clean).clone()
     edited = clean.fork("head")
-    edited.attach_hooks(tl.head(1), tl.zero_ablate())
+    edited._attach_hooks(tl.head(1), tl.zero_ablate())
     edited.run(model, x)
     assert not torch.allclose(_output(edited), clean_out)
     assert torch.count_nonzero(edited.modules["attn"].facets.head(1).q) == 0

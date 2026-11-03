@@ -382,7 +382,7 @@ def test_fork_comparison_workflow_stays_open() -> None:
 
     clean = _capture(model, x)
     ablated = clean.fork("ablated")
-    ablated.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    ablated._attach_hooks(tl.func("relu"), tl.zero_ablate())
     ablated.push()
 
     bundle = tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")

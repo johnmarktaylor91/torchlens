@@ -2754,16 +2754,15 @@ class Trace(TraceOutputMixin, TraceLike):
             self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def attach_hooks(
+    def _attach_hooks(
         self,
         hooks_or_site: Any,
         hook: Any = None,
         *extra_hooks: Any,
         strict: bool = False,
-        prepend: bool = False,
         confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to the current intervention spec."""
+    ) -> tuple[str, ...]:
+        """Stage sticky hooks on the recipe (the ``do`` attach path); returns the handle ids."""
 
         return _doors.intervention()._trace_hooks.attach_hooks(
             self,
@@ -2771,7 +2770,6 @@ class Trace(TraceOutputMixin, TraceLike):
             hook,
             *extra_hooks,
             strict=strict,
-            prepend=prepend,
             confirm_mutation=confirm_mutation,
         )
 
@@ -2809,8 +2807,8 @@ class Trace(TraceOutputMixin, TraceLike):
             self, site, handle, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
-        """Clear all sticky hooks from the current intervention spec."""
+    def _clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+        """Clear every sticky hook from the recipe (internal; ``clear_edits`` is the public door)."""
 
         return _doors.intervention()._trace_hooks.clear_hooks(
             self, confirm_mutation=confirm_mutation

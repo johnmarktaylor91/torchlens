@@ -51,6 +51,14 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "replay": "use trace.push(...) -- Trace.replay was renamed",
     "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
+    "attach_hooks": (
+        "use trace.do(site, edit, model=model, inputs=x) -- attach_hooks folded into do; "
+        "stage without running with intervention=InterventionOptions(engine='set_only')"
+    ),
+    "clear_hooks": (
+        "use trace.clear_edits(site) or trace.clear_edits(handle=...) -- clear_hooks was "
+        "removed; a fresh fork() starts without staged edits"
+    ),
     "save_new_outs": (
         "use trace.run(model, x) -- save_new_outs left the public surface; the refresh engine is internal"
     ),

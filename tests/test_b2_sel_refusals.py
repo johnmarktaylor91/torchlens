@@ -187,7 +187,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     edited = clean.fork("ablated")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        edited.attach_hooks(tl.head(5), tl.zero_ablate())
+        edited._attach_hooks(tl.head(5), tl.zero_ablate())
     reports = [
         w.message
         for w in caught
@@ -206,7 +206,7 @@ def test_unscoped_head_reports_the_sites_it_writes() -> None:
     scoped = clean.fork("scoped")
     with warnings.catch_warnings(record=True) as caught_scoped:
         warnings.simplefilter("always")
-        scoped.attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
+        scoped._attach_hooks(tl.head(5, "q").in_module("transformer.h.0.attn"), tl.zero_ablate())
     assert not [
         w
         for w in caught_scoped

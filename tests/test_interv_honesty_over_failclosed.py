@@ -101,13 +101,13 @@ def test_append_refuses_self_mean_and_permits_tensor_source() -> None:
     """The append gate honors the DERIVED flag in both directions."""
 
     model, x, log = _traced_model()
-    log.attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.mean_ablate(dim=None), confirm_mutation=True)
     log.run(model, x)
     with pytest.raises(AppendBatchDependenceError):
         log.run(model, torch.randn(2, 4), replay=ReplayOptions(append=True))
 
     model2, x2, log2 = _traced_model()
-    log2.attach_hooks(
+    log2._attach_hooks(
         tl.func("relu"), tl.mean_ablate(source=torch.ones(4), dim=None), confirm_mutation=True
     )
     log2.run(model2, x2)

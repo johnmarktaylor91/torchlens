@@ -142,8 +142,8 @@ def test_attach_hooks_door_accepts_spec_unchanged() -> None:
     model = _TinyModel()
     log = _ready_trace(model)
     fork = log.fork()
-    handle = fork.attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
-    assert len(handle.handle_ids) == 1
+    handle = fork._attach_hooks(tl.when(tl.func("relu"), tl.scale(0.0)), confirm_mutation=True)
+    assert len(handle) == 1
 
 
 def test_spec_door_refuses_extra_arguments() -> None:

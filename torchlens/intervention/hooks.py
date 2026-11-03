@@ -1044,7 +1044,7 @@ def _normalize_sticky_hook_specs(
                     "facet scatter wrapper, so firing it would write the whole home "
                     "tensor instead of the selected facet slice. Facet hooks cannot be "
                     "rebuilt from a serialized helper; re-attach the facet intervention "
-                    "on a live trace (e.g. trace.attach_hooks(tl.head(...), helper))."
+                    "on a live trace (e.g. trace.do(tl.head(...), helper, model=model, inputs=x))."
                 )
             entries.append(
                 NormalizedHookEntry(
@@ -1111,7 +1111,7 @@ def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
         f"{hook_spec.metadata.get('direction')!r} keyword; the site now decides the pass, "
         "and this site is an activation. Nothing was attached.",
         code="edit_signal_mismatch",
-        remedy="re-attach the edit on the gradient address: trace.attach_hooks(tl.grad(site), edit)",
+        remedy="re-attach the edit on the gradient address: trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn)",
         argument="hooks_or_site",
         site=repr(site),
     )

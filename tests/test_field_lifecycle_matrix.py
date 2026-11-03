@@ -118,14 +118,14 @@ def test_run_state_transitions() -> None:
 
     stale = _capture_log()
     assert stale.state is TraceState.PRISTINE
-    stale.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    stale._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     assert stale.state is TraceState.SPEC_STALE
     stale.push()
     assert stale.state is TraceState.REPLAY_PROPAGATED
 
     rerun_log = _capture_log()
     assert rerun_log.state is TraceState.PRISTINE
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    rerun_log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     assert rerun_log.state is TraceState.SPEC_STALE
     rerun_log.run(_LifecycleModel(), torch.tensor([[-1.0, 2.0, 3.0]]))
     assert rerun_log.state is TraceState.RERUN_PROPAGATED

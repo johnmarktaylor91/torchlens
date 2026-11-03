@@ -171,8 +171,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
             f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
             "is addressed as a site, tl.grad(site)",
             code="intervention_direction_invalid",
-            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
-            "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
+            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn)",
             argument="direction",
         )
     if is_facet_target(site):
@@ -198,7 +197,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
                 return cast(torch.Tensor, value(out))
             return cast(torch.Tensor, value)
 
-        trace.attach_hooks(
+        trace._attach_hooks(
             site,
             _facet_replacement_hook,
             strict=strict,
@@ -264,8 +263,15 @@ def clear_edits(
         validate_intervention_site(trace, site, strict=strict)
         target_spec = target_spec_from_site(trace, site, strict=strict)
 
+    # ``handle`` is one handle id or the tuple of ids ``do`` staged (``_attach_hooks``).
     handle_values = (
-        tuple(getattr(handle, "handle_ids", (str(handle),))) if handle is not None else (None,)
+        (
+            tuple(str(value) for value in handle)
+            if isinstance(handle, (tuple, list))
+            else (str(handle),)
+        )
+        if handle is not None
+        else (None,)
     )
     removed = 0
     for handle_value in handle_values:
@@ -581,12 +587,11 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 "(site, edit) call shape without a spec",
                 argument="value_or_hook",
             )
-        handle = trace.attach_hooks(
+        return "attach_hooks", trace._attach_hooks(
             hooks_or_site,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
-        return "attach_hooks", tuple(handle.handle_ids)
 
     # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
     # substitutes the region's derived exit values without replaying the
@@ -637,13 +642,12 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             confirm_mutation=confirm_mutation,
         )
         return "set", ()
-    handle = trace.attach_hooks(
+    return "attach_hooks", trace._attach_hooks(
         hooks_or_site,
         value_or_hook,
         strict=strict,
         confirm_mutation=confirm_mutation,
     )
-    return "attach_hooks", tuple(handle.handle_ids)
 
 
 def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> None:
@@ -751,7 +755,7 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
         return
     # A staged edit runs as a live hook on the rerun, so a selector kind that can
     # never be a live hook site (tl.model_input) refuses by its condition, as
-    # attach_hooks does, instead of reporting "matched 0 sites".
+    # the do() attach path does, instead of reporting "matched 0 sites".
     if isinstance(site, BaseSelector):
         _validate_live_site_target(site, allow_replay_only=True)
     max_fanout = max(1, len(trace._layer_list))

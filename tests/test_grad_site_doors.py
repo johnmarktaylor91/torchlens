@@ -536,10 +536,10 @@ def test_attach_hooks_on_a_gradient_site_registers_only() -> None:
     model = _BranchNet()
     trace = _trace(model, backward_ready=True)
     events_before = len(_events(trace))
-    handle = trace.attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
+    handle = trace._attach_hooks(tl.grad(_RELU), tl.scale(0), confirm_mutation=True)
     assert len(_events(trace)) == events_before
     assert len(trace.armed_edits) == 1
-    handle.remove()
+    trace.clear_edits(handle=handle, confirm_mutation=True)
     assert trace.armed_edits == ()
 
 
