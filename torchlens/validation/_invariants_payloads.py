@@ -279,10 +279,6 @@ def _check_op_log_fields(ml: Trace) -> None:
     - Label format: pass-qualified label has ':' iff multi-pass; no-pass label never has ':'.
     """
     name = "op_log_fields"
-    # The trace-level loaded flag is constant across the walk: probe it at
-    # most once (lazily, at the first op that reaches the func checks) rather
-    # than once per op through the Trace attribute-miss path.
-    loaded_from_bundle: bool | None = None
 
     for lpl in ml._layer_list:
         label = lpl.layer_label
@@ -346,9 +342,7 @@ def _check_op_log_fields(ml: Trace) -> None:
             or is_functionless_internal_source
             or is_functionless_replacement
         ):
-            if loaded_from_bundle is None:
-                loaded_from_bundle = bool(getattr(ml, "_loaded_from_bundle", False))
-            if loaded_from_bundle:
+            if ml.__dict__.get("_loaded_from_bundle", False):  # no Trace miss path per op
                 # Loaded-artifact arm (R10-3): ``Op.func`` is FieldPolicy.DROP
                 # and ``__getstate__`` hard-nulls it, so ``callable(func)``
                 # false-fired on EVERY loaded torch trace. The loaded arm

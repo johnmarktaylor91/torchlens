@@ -36,7 +36,6 @@ Field categories (matching the LAYER_PASS_LOG_FIELD_ORDER in constants.py):
     bottom-level submodule output status.
 """
 
-import operator
 import warnings
 import weakref
 from collections import defaultdict
@@ -109,9 +108,19 @@ from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
+from ._op_container_census import (  # noqa: F401  (re-exported for the pooling tests)
+    _census_container_cells,
+    _count_container_ids,
+)
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
+)
+from ._op_row_release import (  # noqa: F401  (re-exported for cleanup and backend importers)
+    _ROW_RELEASE_PROPERTIES,
+    bind_op_facade,
+    register_row_release_property,
+    release_op_row,
 )
 from ._op_save import (  # noqa: F401  (re-exported for backends and postprocess importers)
     _dtype_or_none,
@@ -594,80 +603,6 @@ def _container_member_key(
     return None
 
 
-def _count_container_ids(
-    value: Any,
-    id_counts: dict[int, int],
-    expanded_ids: set[int],
-    depth: int,
-) -> None:
-    """Count every exact builtin MUTABLE container id reachable from one cell.
-
-    The alias census behind the pooling guard: a container whose id is seen
-    more than once across ALL swept cells is aliased in-store, and replacing
-    any of its cell appearances would break the alias for later in-place
-    mutation, so such cells never pool.
-
-    Only ``dict``/``defaultdict``/``list``/``set`` ids matter (the pool key
-    visits exactly those). Hashability bounds the walk: dict KEYS and
-    ``set``/``frozenset`` members must be hashable, so no exact builtin
-    mutable container can hide below them — dict values, list members, and
-    tuple members are the only recursion edges.
-    """
-
-    cls = value.__class__
-    if cls is dict or cls is defaultdict:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value.values():
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is list:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-        if depth < 6 and oid not in expanded_ids:
-            expanded_ids.add(oid)
-            for member in value:
-                _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-    elif cls is set:
-        oid = id(value)
-        id_counts[oid] = id_counts.get(oid, 0) + 1
-    elif cls is tuple and depth < 6 and id(value) not in expanded_ids:
-        expanded_ids.add(id(value))
-        for member in value:
-            _count_container_ids(member, id_counts, expanded_ids, depth + 1)
-
-
-#: Cell classes the pooling sweep acts on (everything else is skipped).
-_SWEEP_CELL_CLASSES = frozenset({tuple, dict, list, set, defaultdict})
-_GET_CLASS = operator.attrgetter("__class__")
-
-
-def _sweep_columns(rows: list[list[Any]], scan_classes: frozenset[type], get_class: Any) -> Any:
-    """Return the field ids whose column holds at least one swept-class cell.
-
-    A ``__class__`` that is not hashable (only a pathological proxy can
-    report one) cannot be tested against the set; every column is swept then.
-    """
-
-    try:
-        return [
-            fid
-            for fid, column in enumerate(zip(*rows))
-            if not scan_classes.isdisjoint(map(get_class, column))
-        ]
-    except TypeError:
-        return range(len(rows[0])) if rows else ()
-
-
-#: ``_container_pool_key`` of an empty exact ``list``/``dict``/``set``.
-_EMPTY_CONTAINER_POOL_KEYS: dict[type, Any] = {
-    list: ("l", ()),
-    dict: ("d", ()),
-    set: ("s", frozenset()),
-}
-
-
 def _pool_container_cells(
     stores: list[tuple[Any, Any]], container_pool: dict[Any, PooledCell]
 ) -> None:
@@ -685,63 +620,13 @@ def _pool_container_cells(
         so equal content pools trace-wide.
     """
 
-    # ONE scan over every cell: the alias census recurses only into cells
-    # whose class can hold a container (everything else is skipped by an
-    # inline class test — the vast majority of cells are scalars/None), and
-    # the same scan collects the pool candidates (container-classed cells at
-    # sanctioned fids) and the singleton-compaction sites (kind-table list
-    # cells), so neither later pass re-walks rows x fields.
-    #
-    # Empty exact dict/list/set cells (most container cells) take an inline
-    # fast path with the same outcome as the general one: their census entry
-    # is the id count alone (nothing to expand), their pool key is the
-    # constant ``_container_pool_key`` returns for an empty container, and a
-    # one-element-list singleton site can never be empty. Empty tuples hold
-    # no container to count. Every cell whose own id is aliased is skipped
-    # before its key is built: that id is the first one the key walk visits,
-    # so the alias guard would refuse it anyway.
-    id_counts: dict[int, int] = {}
-    expanded_ids: set[int] = set()
-    cell_sites: list[tuple[Any, int, Any, Any]] = []
-    singleton_sites: list[tuple[Any, int, int, Any, Any]] = []
-    empty_keys = _EMPTY_CONTAINER_POOL_KEYS
-    get_class = _GET_CLASS
-    scan_classes = _SWEEP_CELL_CLASSES
-    any_swept = False
-    for store, fids in stores:
-        rows = store.rows_building()
-        if rows is None:
-            continue
-        any_swept = True
-        fid_set = None if fids is None else frozenset(fids)
-        # Column filter: a column none of whose cells is a tuple or a swept
-        # container class does nothing in the loop below, so the row-major
-        # walk visits only the other columns (same cells, same order). The
-        # test reads ``__class__`` exactly like the loop does.
-        sweep_fids = _sweep_columns(rows, scan_classes, get_class)
-        for row_idx, row_cells in enumerate(rows):
-            for fid in sweep_fids:
-                value = row_cells[fid]
-                cls = value.__class__
-                if cls is tuple:
-                    if value:
-                        _count_container_ids(value, id_counts, expanded_ids, 0)
-                    continue
-                if not (cls is dict or cls is list or cls is set or cls is defaultdict):
-                    continue
-                if not value and cls is not defaultdict:
-                    oid = id(value)
-                    id_counts[oid] = id_counts.get(oid, 0) + 1
-                    if fid_set is None or fid in fid_set:
-                        cell_sites.append((row_cells, fid, value, empty_keys[cls]))
-                    continue
-                _count_container_ids(value, id_counts, expanded_ids, 0)
-                if fid_set is None or fid in fid_set:
-                    cell_sites.append((row_cells, fid, value, None))
-                if fid_set is None and cls is list:
-                    singleton_sites.append((store, row_idx, fid, row_cells, value))
-    if not any_swept:
+    census = _census_container_cells(stores)
+    if census is None:
         return
+    id_counts, cell_sites, singleton_sites = census
+    # A cell whose own id is aliased is skipped before its key is built: that
+    # id is the first one the key walk visits, so the alias guard would refuse
+    # it anyway. Empty exact dict/list/set cells arrive with their key.
     candidates: list[tuple[Any, int, Any, Any]] = []
     key_counts: dict[Any, int] = {}
     for row_cells, fid, value, key in cell_sites:
@@ -3375,74 +3260,6 @@ def _ensure_detached_store(op: "Op") -> None:
         _object_setattr(op, "_row", 0)
 
 
-#: Class-level ``Op`` properties declared plain stored-cell facades (see
-#: :func:`register_row_release_property`); populated by compat overlays.
-_ROW_RELEASE_PROPERTIES: set[Any] = set()
-
-
-def register_row_release_property(name: str) -> None:
-    """Declare the class property ``Op.<name>`` a plain facade over its stored cell.
-
-    Contract: its getter raises ``AttributeError`` exactly when the backing
-    cell is unset, and its deleter only deletes that cell. Op removal may then
-    release the op's row directly instead of reading and deleting every field
-    through the facade (:func:`release_op_row`).
-
-    Parameters
-    ----------
-    name:
-        Stored field name whose ``Op`` class attribute is the property.
-    """
-
-    _ROW_RELEASE_PROPERTIES.add(vars(Op)[name])
-
-
-def release_op_row(op: "Op", store: Any, row: int) -> bool:
-    """Delete every set cell of ``op``'s row directly, when that equals the facade husk.
-
-    The facade husk reads every stored field (skipping the unset ones) and
-    deletes each one it read. For an exact ``Op`` whose every stored-field
-    class attribute is a generated field descriptor (all share
-    ``_OpField.__delete__``, and each read raises ``AttributeError`` exactly
-    on an unset cell) or a registered plain-facade property, that deletes
-    exactly the row's set cells, which ``store.release_row`` does without the
-    per-field dispatch and without hydrating pooled or shared-fact cells it
-    is about to drop. Anything else (a subclass, a patched attribute, a store
-    without ``release_row``) returns ``False`` and the caller keeps the facade
-    path.
-
-    Parameters
-    ----------
-    op:
-        Op being husked.
-    store:
-        The op's bound row store.
-    row:
-        The op's row id in ``store``.
-
-    Returns
-    -------
-    bool
-        Whether the row was released here.
-    """
-
-    if op.__class__ is not Op:
-        return False
-    release_row = getattr(store.__class__, "release_row", None)
-    if release_row is None:
-        return False
-    namespace = _OP_CLASS_NAMESPACE
-    field_classes = _ROW_RELEASE_FIELD_CLASSES
-    properties = _ROW_RELEASE_PROPERTIES
-    for name in _OP_SLOT_NAMES:
-        attr = namespace.get(name)
-        if attr.__class__ in field_classes or attr in properties:
-            continue
-        return False
-    release_row(store, row)
-    return True
-
-
 def _detach_op_husk(op: "Op") -> None:
     """Rebind a cleared op to an empty detached row.
 
@@ -3713,13 +3530,12 @@ def _install_op_field_descriptors() -> None:
 
 _install_op_field_descriptors()
 
-#: Live view of the ``Op`` class namespace and the generated field descriptor
-#: classes, for :func:`release_op_row`'s facade check. No descriptor class
-#: overrides ``_OpField.__delete__``.
-_OP_CLASS_NAMESPACE = vars(Op)
+#: The generated field descriptor classes, for :func:`release_op_row`'s facade
+#: check. No descriptor class overrides ``_OpField.__delete__``.
 _ROW_RELEASE_FIELD_CLASSES = frozenset(
     {_OpField, _RelationViewField, _GroupViewField, _DataflowField, _FactField}
 )
+bind_op_facade(Op, _OP_SLOT_NAMES, _ROW_RELEASE_FIELD_CLASSES)
 
 
 def _compact_store_rows(store: Any, pool: dict[Any, Any]) -> None:

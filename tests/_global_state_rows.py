@@ -286,8 +286,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/backends/torch/_protocol_redispatch.py", "_LAST_ALIAS_SCAN"),
         # Op class properties declared plain facades over their stored cell,
         # filled once at import by the backends that install them (the ancestor
-        # overlays); mirrors the class namespace, never mutated by a capture.
-        ("torchlens/_data_classes/op.py", "_ROW_RELEASE_PROPERTIES"),
+        # overlays), and the Op facade op.py binds once at import; both mirror
+        # the class namespace and are never mutated by a capture.
+        ("torchlens/_data_classes/_op_row_release.py", "_ROW_RELEASE_PROPERTIES"),
+        ("torchlens/_data_classes/_op_row_release.py", "_OP_FACADE"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed

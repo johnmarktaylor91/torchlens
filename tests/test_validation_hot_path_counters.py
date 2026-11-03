@@ -55,12 +55,12 @@ def _loaded_flag_probes(monkeypatch: pytest.MonkeyPatch, depth: int) -> int:
     return counts["probes"]
 
 
-def test_loaded_flag_probed_at_most_once_per_field_walk(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The per-layer field invariant probes the loaded flag once, whatever the depth."""
+def test_loaded_flag_never_takes_the_trace_miss_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The per-layer field invariant reads the loaded flag without a Trace attribute miss."""
 
     small = _loaded_flag_probes(monkeypatch, 3)
     large = _loaded_flag_probes(monkeypatch, 9)
-    assert small == large == 1, (small, large)
+    assert small == large == 0, (small, large)
 
 
 _HOT_HELPERS = {

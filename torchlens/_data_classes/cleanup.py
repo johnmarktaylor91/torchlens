@@ -218,11 +218,9 @@ def _clear_entry_attributes(log_entry: Op) -> None:
         row_store = None
     if row_store is not None:
         mark_op_row_released(row_store, row)
-        if release_op_row(log_entry, row_store, row):
-            _detach_op_husk(log_entry)
-            return
-    for attr, _ in list(state_items(log_entry)):
-        delattr(log_entry, attr)
+    if row_store is None or not release_op_row(log_entry, row_store, row):
+        for attr, _ in list(state_items(log_entry)):
+            delattr(log_entry, attr)
     # Rebind the emptied facade to a detached row so a user-held husk cannot
     # pin the trace's shared columnar store (slot-era husks pinned nothing).
     _detach_op_husk(log_entry)
