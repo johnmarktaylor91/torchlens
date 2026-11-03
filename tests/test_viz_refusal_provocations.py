@@ -56,7 +56,6 @@ def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
     assert getattr(exc_info.value, "fields", {}).get("code") == "backward_graph_unavailable"
 
 
-@pytest.mark.smoke
 def test_graphviz_render_failure_refuses_typed(
     small_trace, tmp_path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

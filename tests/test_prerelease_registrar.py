@@ -75,7 +75,6 @@ def _tiny_trace() -> Trace:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_registration_requires_declared_drop_policy() -> None:
     keep_field = next(
         name for name, policy in Trace._PORTABLE_STATE_SPEC.items() if policy is FieldPolicy.KEEP
@@ -92,7 +91,6 @@ def test_registration_requires_declared_drop_policy() -> None:
     assert registered_prerelease_fields() == _STANDING_REGISTRATIONS
 
 
-@pytest.mark.smoke
 def test_registry_inventory_and_unregister(planted_field: str) -> None:
     inventory = registered_prerelease_fields()
     assert planted_field in inventory["Trace"]
@@ -129,7 +127,6 @@ def test_gated_field_does_not_persist_by_default(planted_field: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_switch_is_test_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not prerelease_fields_active()
     monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
@@ -164,6 +161,7 @@ def test_switched_write_persists_field_and_carries_marker(planted_field: str) ->
     assert f"Trace.{planted_field}" in marker["fields"]
 
 
+@pytest.mark.smoke
 def test_marked_artifact_refuses_to_load_as_real_current_version(
     planted_field: str, tmp_path
 ) -> None:
@@ -193,7 +191,6 @@ def test_unmarked_artifact_loads_clean_with_no_marker(planted_field: str, tmp_pa
         tl.load(str(plain_path))
 
 
-@pytest.mark.smoke
 def test_malformed_marker_refuses_even_under_switch() -> None:
     tampered = {PRERELEASE_STATE_KEY: {"marker": "wrong-marker"}}
     with activate_prerelease_fields(), pytest.raises(PreReleaseArtifactError, match="malformed"):

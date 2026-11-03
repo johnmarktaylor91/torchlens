@@ -1970,7 +1970,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   and the suite consumed it, `unsupported` when it is `False` and its `c1_refusal_<flag>` cell
   passed (the request refuses with the contracted code), `untested` when it is `False` and the
   refusal cell failed or did not run. Each backend page's can and cannot table equals this
-  summary and renders `untested` as "not yet proven" (`tests/test_backend_docs_lockstep.py`).
+  summary and renders `untested` as "not yet proven" (`scripts/checks/backend_docs_lockstep.py`).
 
 **Conformance case ids added by the protocol**
 : Tier 0, the provider API (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,

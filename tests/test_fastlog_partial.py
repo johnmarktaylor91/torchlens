@@ -265,6 +265,7 @@ def test_failed_recording_rejects_to_trace_and_log_backward() -> None:
         recording.backward(torch.tensor(1.0, requires_grad=True))
 
 
+@pytest.mark.smoke
 def test_partial_build_double_fault_reraises_original(monkeypatch: pytest.MonkeyPatch) -> None:
     """A partial-build failure does not replace the original model exception."""
 

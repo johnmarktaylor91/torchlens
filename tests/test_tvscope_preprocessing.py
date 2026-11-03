@@ -46,7 +46,6 @@ def detection_resolution() -> pp.Resolution:
 class TestResolver:
     """B2: adapters normalize authorities; refusals teach."""
 
-    @pytest.mark.smoke
     def test_torchvision_v2_declares_resize_232(self, resnet50_v2_resolution) -> None:
         """The V2 preset's declared resize is 232 -- the default-guess-is-wrong case."""
 
@@ -94,7 +93,6 @@ class TestResolver:
         assert resolution.declared.resize_size == 256
         assert resolution.declared.interpolation == "bicubic"
 
-    @pytest.mark.smoke
     def test_compose_pipeline_parses(self) -> None:
         """A torchvision/open_clip-style Compose parses into declared fields."""
 
@@ -124,7 +122,6 @@ class TestResolver:
             pp.resolve(42)
         assert excinfo.value.fields["code"] == "preprocessing_authority_unrecognized"
 
-    @pytest.mark.smoke
     def test_opaque_callable_authority_is_unknown_with_transform(self) -> None:
         """An opaque callable declares nothing; the callable is preserved."""
 
@@ -231,7 +228,6 @@ class TestAuditOracle:
         assert mean_row.evidence_class == "mismatch"
         assert "128-image" in mean_row.consequence  # the stimulus set is named
 
-    @pytest.mark.smoke
     def test_strict_mismatch_and_unknown_have_distinct_codes(
         self, resnet50_v2_resolution, detection_resolution
     ) -> None:
@@ -278,14 +274,12 @@ class TestAuditOracle:
         assert all(f.verdict == "unknown" for f in report.findings)
         assert "opaque_transform" in report.unknown_reasons
 
-    @pytest.mark.smoke
     def test_self_audit_of_authoritative_resolution_verifies(self, resnet50_v2_resolution) -> None:
         """Applying the authority's own transform is verified-by-construction."""
 
         report = pp.compare(resnet50_v2_resolution, resnet50_v2_resolution)
         assert report.verdict == "verified"
 
-    @pytest.mark.smoke
     def test_report_round_trips_to_json(self, resnet50_v2_resolution) -> None:
         """The report is JSON-portable (the deferred auto-tier plumbing)."""
 
@@ -443,7 +437,6 @@ class TestFalsePositiveSuite:
         result = pp.diagnose(torch.rand(2, 3, 8, 8), declared=detection_resolution.declared)
         assert list(result.contradictions) == []
 
-    @pytest.mark.smoke
     def test_timm_half_half_batch_not_flagged(self) -> None:
         """A correct 0.5/0.5 batch must not be flagged against its own config."""
 
@@ -456,7 +449,6 @@ class TestFalsePositiveSuite:
         )
         assert list(result.contradictions) == []
 
-    @pytest.mark.smoke
     def test_no_metadata_model_and_opaque_lambda_stay_unknown(self) -> None:
         """Unknown is the honest verdict; never an error-grade claim."""
 

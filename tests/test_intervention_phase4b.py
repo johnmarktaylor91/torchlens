@@ -6,7 +6,6 @@ from collections import namedtuple
 from dataclasses import dataclass
 from typing import Any
 
-import pytest
 import torch
 
 import torchlens as tl
@@ -109,7 +108,6 @@ def _component_values(paths: list[tuple[Any, ...]]) -> list[tuple[Any, ...]]:
     return values
 
 
-@pytest.mark.smoke
 def test_path_walker_supports_required_output_containers() -> None:
     """Path-aware traversal preserves supported output container structure."""
 

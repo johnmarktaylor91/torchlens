@@ -86,7 +86,6 @@ def test_buffer_rows_refuse_until_qualified_names(toy_trace) -> None:
     assert "qualified" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     """columns= accepts a bundle name, an exact list, or +/- deltas."""
 
@@ -101,7 +100,6 @@ def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     assert excinfo.value.fields["code"] == "summary_option_invalid"
 
 
-@pytest.mark.smoke
 def test_filter_discloses_coverage_and_preserves_totals(toy_trace) -> None:
     """Filters are presentation-only: coverage named, totals whole-model."""
 

@@ -111,7 +111,6 @@ def test_conditional_arm_flip_still_diverges(tmp_path: Path) -> None:
         loaded.run(inputs=flipped, seed=0)
 
 
-@pytest.mark.smoke
 def test_sparse_core_tensor_tripwire_still_fires() -> None:
     """The value-free tripwire must still fire on a genuine stray payload."""
 

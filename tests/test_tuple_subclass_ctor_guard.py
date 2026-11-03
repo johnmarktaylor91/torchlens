@@ -84,7 +84,6 @@ def test_coerce_input_args_handles_malformed_fields_subclass():
     assert isinstance(coerced[0], torch.Tensor)
 
 
-@pytest.mark.smoke
 def test_property_fields_subclass_refuses_typed_end_to_end():
     """Plain tl.trace REFUSES a property-``_fields`` tuple subclass input, typed.
 

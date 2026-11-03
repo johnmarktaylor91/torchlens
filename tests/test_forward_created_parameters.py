@@ -207,7 +207,6 @@ def _assert_fails_at(model: nn.Module, x: torch.Tensor, *check_names: str) -> No
     assert failure.check_name in check_names, failure.summary()
 
 
-@pytest.mark.smoke
 def test_lazy_module_built_in_forward_registers_its_parameters_with_provenance() -> None:
     x = _x()
     trace = _trace_without_provenance_warning(LazyBuiltInForward().eval(), x)
@@ -236,7 +235,6 @@ def _assert_validates(model: nn.Module, x: torch.Tensor) -> None:
     assert verdict is True, failure.summary() if failure is not None else "no failure recorded"
 
 
-@pytest.mark.smoke
 def test_lazy_module_built_in_forward_validates() -> None:
     _assert_validates(LazyBuiltInForward().eval(), _x())
 
@@ -272,7 +270,6 @@ def test_lazy_module_registered_at_prep_records_no_creation_advisory() -> None:
     _assert_validates(model, x)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     "build",
     [
@@ -291,7 +288,6 @@ def test_lazy_parameters_outside_the_model_tree_gain_no_provenance(
     _assert_fails_at(build().eval(), x, CHECK_SOURCE_PROVENANCE)
 
 
-@pytest.mark.smoke
 def test_parameter_built_from_a_captured_value_gains_no_provenance() -> None:
     """r77 shape: attached to the tree inside forward, but never a pending lazy slot."""
 

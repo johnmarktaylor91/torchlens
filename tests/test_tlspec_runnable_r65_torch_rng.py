@@ -239,7 +239,6 @@ def test_mtia_and_xpu_random_surfaces_classified() -> None:
                 assert f"{module_path}.{name}" in targets, f"{module_path}.{name}"
 
 
-@pytest.mark.smoke
 def test_accelerator_random_surface_classified() -> None:
     """torch 2.14 named pin: ``torch.accelerator.random`` resolves a frozen row.
 
@@ -479,7 +478,6 @@ def test_generator_method_table_live_return_families() -> None:
             assert isinstance(result, torch.Generator) and result is not scratch, row
 
 
-@pytest.mark.smoke
 def test_unknown_generator_method_flags_uncertainty() -> None:
     """A future unclassified Generator method is monitor UNCERTAINTY, never a miss."""
 
@@ -675,7 +673,6 @@ def test_monitor_get_only_reads_mark_nothing(_torch_rng_state_guard) -> None:
     assert not result.uncertain
 
 
-@pytest.mark.smoke
 def test_monitor_fork_rng_ceilings_transitively(_torch_rng_state_guard) -> None:
     """``fork_rng`` needs no direct row: its restore transits the set_rng_state patch."""
 
@@ -1004,6 +1001,7 @@ def test_checkpoint_model_stays_verified_attested(tmp_path: Path) -> None:
 # ======================================================================================
 
 
+@pytest.mark.smoke_cells("test_r67_private_generator_seed_ceilings_every_run[_HeldGenSeedBranch]")
 @pytest.mark.parametrize("model_cls", [_PrivateGenSeedBranch, _HeldGenSeedBranch])
 def test_r67_private_generator_seed_ceilings_every_run(model_cls: type, tmp_path: Path) -> None:
     """r66 free-F1 (CRITICAL): both private-generator seed spellings ceiling.

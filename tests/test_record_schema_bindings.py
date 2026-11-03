@@ -53,10 +53,6 @@ _SCHEMA = {
 }
 
 
-@pytest.mark.smoke_cells(
-    "test_field_order_view_equals_literal[buffer]",
-    "test_field_order_view_equals_literal[func_call_location]",
-)
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_field_order_view_equals_literal(schema_key: str) -> None:
     """Generated FIELD_ORDER view == the hand-written literal, exactly."""
