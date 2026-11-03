@@ -233,7 +233,7 @@ def _head_nodes(
     to be the output bias or zero.
     """
 
-    stack = attention_head_contributions(trace, layers=address)
+    stack = attention_head_contributions(trace, modules=address)
     attn_out = stack.target_value
     for value in writer_values:
         if attn_out is None or not torch.equal(value, attn_out):

@@ -327,7 +327,9 @@ def _after_record(cell: Cell) -> None:
     # which no capture, trace or record, can see past.
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    recording = tl.record(model, cell.fresh_inputs(), default_op=True)
+    recording = tl.record(
+        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
+    )
     cooked = recording.to_trace()
     from tests.behaviour.harness import execution_order
 

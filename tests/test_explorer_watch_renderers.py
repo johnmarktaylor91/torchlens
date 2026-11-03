@@ -25,7 +25,6 @@ from torchlens._observability import (
     StepTruth,
     WatchRenderError,
     color_by_watch,
-    contact_sheet_pages,
     derived_quantile,
     histogram_payload,
     observation_row,
@@ -115,6 +114,26 @@ def _synthetic_view() -> HistoryView:
     return HistoryView.from_blocks(run, sites, tuple(blocks))
 
 
+def _many_site_view(num_sites: int) -> HistoryView:
+    """One committed step observing ``num_sites`` distinct module sites."""
+
+    run = RunRecord(run_id="run-many", segment_id="seg-1")
+    sites = {
+        f"m:s{index}": SiteRecord(
+            site_id=f"m:s{index}",
+            kind="module",
+            display_label=f"s{index}",
+            module_path=f"s{index}",
+        )
+        for index in range(num_sites)
+    }
+    observations = tuple(
+        _observed(0, site_id, torch.full((4,), float(index)), with_sketch=False)
+        for index, site_id in enumerate(sites)
+    )
+    return HistoryView.from_blocks(run, sites, (_block(0, observations),))
+
+
 @pytest.fixture(scope="module")
 def collector_view() -> HistoryView:
     """A real Route-A collector session: 6 steps, one skipped."""
@@ -165,7 +184,6 @@ class TestDerivedQuantiles:
         values = [derived_quantile(sketch, q).value for q in (0.1, 0.3, 0.5, 0.7, 0.9)]
         assert values == sorted(values)
 
-    @pytest.mark.smoke
     def test_zero_heavy_population_median_is_zero(self) -> None:
         histogram = Histogram()
         histogram.update(torch.zeros(100))
@@ -194,7 +212,6 @@ class TestDerivedQuantiles:
 
 
 class TestHistogramPayload:
-    @pytest.mark.smoke
     def test_bucket_counts_cover_finite_population(self) -> None:
         torch.manual_seed(4)
         data = torch.randn(3000)
@@ -226,7 +243,6 @@ class TestHistogramPayload:
             histogram_payload(obs)
         assert excinfo.value.fields["code"] == "watch_sketch_missing"
 
-    @pytest.mark.smoke
     def test_observation_row_none_payload_for_gaps(self) -> None:
         gap = ObservationRecord(
             global_step=1,
@@ -241,7 +257,6 @@ class TestHistogramPayload:
 
 
 class TestHistoryView:
-    @pytest.mark.smoke
     def test_series_and_refusals(self) -> None:
         view = _synthetic_view()
         series = view.series("m:a")
@@ -293,7 +308,6 @@ class TestHistoryView:
         assert isinstance(frame, pandas.DataFrame)
         assert len(frame) == 10
 
-    @pytest.mark.smoke
     def test_to_pandas_without_pandas_refuses_typed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Absent pandas refuses ``watch_tabular_extra_missing`` with the remedy."""
 
@@ -322,7 +336,6 @@ class TestRenderers:
         assert "nonfinite event" in svg_1  # the injected NaN
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_waterfall_deterministic_with_raster_and_caption(self) -> None:
         view = _synthetic_view()
         svg_1 = histogram_waterfall(view, "m:a")
@@ -332,7 +345,6 @@ class TestRenderers:
         assert "nonfinite" in svg_1
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_contact_sheet_footer_ranking_pagination(self) -> None:
         view = _synthetic_view()
         sheet = contact_sheet(view)
@@ -342,7 +354,7 @@ class TestRenderers:
         ranked = rank_sites(view)
         assert ranked[0][0] == "m:b", "nonfinite site ranks first"
         assert "nonfinite" in ranked[0][2]
-        assert contact_sheet_pages(view, tiles_per_page=1) == 2
+        assert contact_sheet(view, tiles_per_page=1).page_count == 2
         page_2 = contact_sheet(view, page=1, tiles_per_page=1)
         assert "sites 2-2 of 2" in page_2
         with pytest.raises(WatchRenderError) as excinfo:
@@ -350,7 +362,6 @@ class TestRenderers:
         assert excinfo.value.fields["code"] == "watch_page_out_of_range"
         _parse_svg(sheet)
 
-    @pytest.mark.smoke
     def test_detail_sheet_discloses(self) -> None:
         view = _synthetic_view()
         detail = site_detail(view, "m:b")
@@ -359,7 +370,6 @@ class TestRenderers:
         assert "activation" in detail
         _parse_svg(detail)
 
-    @pytest.mark.smoke
     def test_real_collector_views_render(self, collector_view: HistoryView) -> None:
         ranked = rank_sites(collector_view)
         assert ranked, "collector produced rankable sites"
@@ -376,6 +386,44 @@ class TestRenderers:
         skipped_blocks = [b for b in collector_view.blocks if b.block.optimizer_status == "skipped"]
         assert len(skipped_blocks) == 1
         assert not [o for o in skipped_blocks[0].observations if o.stream == "param_delta"]
+
+    @pytest.mark.parametrize(
+        ("num_sites", "expected_pages"), [(0, 1), (1, 1), (12, 1), (13, 2), (340, 29)]
+    )
+    def test_contact_sheet_carries_page_count(self, num_sites: int, expected_pages: int) -> None:
+        view = _many_site_view(num_sites)
+        first = contact_sheet(view, tiles_per_page=12)
+        assert first.page == 0
+        assert first.page_count == expected_pages
+        last = contact_sheet(view, page=expected_pages - 1, tiles_per_page=12)
+        assert last.page == expected_pages - 1
+        assert last.page_count == expected_pages
+        assert f"page {expected_pages} of {expected_pages}" in last
+        assert f"of {num_sites} -- page" in last
+        with pytest.raises(WatchRenderError) as excinfo:
+            contact_sheet(view, page=expected_pages, tiles_per_page=12)
+        assert excinfo.value.fields["pages"] == expected_pages
+
+    def test_contact_sheet_is_the_svg_text(self) -> None:
+        import copy
+        import pickle
+
+        sheet = contact_sheet(_synthetic_view())
+        assert isinstance(sheet, str)
+        assert sheet._repr_svg_() == str(sheet)
+        _parse_svg(sheet)
+        for clone in (copy.copy(sheet), pickle.loads(pickle.dumps(sheet))):
+            assert clone == sheet
+            assert (clone.page, clone.page_count) == (0, 1)
+
+    def test_contact_sheet_pages_helper_is_removed(self) -> None:
+        import torchlens._observability as observability
+        import torchlens._observability._render as render
+
+        with pytest.raises(ImportError):
+            from torchlens._observability import contact_sheet_pages  # noqa: F401
+        assert not hasattr(observability, "contact_sheet_pages")
+        assert not hasattr(render, "contact_sheet_pages")
 
     def test_repr_html_is_contact_sheet(self) -> None:
         html = _synthetic_view()._repr_html_()
@@ -397,7 +445,6 @@ class TestCairosvgRoundTrip:
 
 
 class TestGraphJoin:
-    @pytest.mark.smoke
     def test_color_by_watch_callable(self) -> None:
         from types import SimpleNamespace
 

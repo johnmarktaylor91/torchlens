@@ -57,7 +57,7 @@ class NarrationEvent:
     has_intervention: bool = False
     #: Ordinal distance disclosed on buffered ``followed_by`` releases.
     late: int | None = None
-    stats: TensorStats | None = None
+    value_stats: TensorStats | None = None
     #: Free-form single-line body for ``attempted`` / ``note`` kinds.
     text: str | None = None
     signal: str = "forward"

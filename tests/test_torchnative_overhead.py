@@ -66,7 +66,6 @@ def test_admissible_measurement_produces_full_artifact() -> None:
     assert artifact["refusals"] == list(result.refusals)
 
 
-@pytest.mark.smoke
 def test_physically_impossible_ratio_is_refused() -> None:
     """An 'instrument' faster than its baseline refuses the point estimate."""
 
@@ -82,7 +81,6 @@ def test_physically_impossible_ratio_is_refused() -> None:
     assert any("physically_impossible_ratio" in reason for reason in result.refusals)
 
 
-@pytest.mark.smoke
 def test_witness_divergence_refuses_the_measurement() -> None:
     """Composition row: mismatched arms -- the harness must refuse itself."""
 

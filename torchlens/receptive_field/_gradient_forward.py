@@ -295,15 +295,15 @@ def _build_projective_result(
 
     magnitude = column.detach().abs()
     finite = torch.isfinite(magnitude)
-    nonfinite_count = int((~finite).sum().item())
+    num_nonfinite = int((~finite).sum().item())
     finite_values = magnitude[finite]
     maximum = finite_values.max() if finite_values.numel() else magnitude.new_tensor(0.0)
     support = finite & (magnitude > atol + rtol * maximum)
     result_warnings: tuple[str, ...] = ()
-    if nonfinite_count:
+    if num_nonfinite:
         message = (
             f"Projective gradient from {source.label!r} to {target.label!r} contains "
-            f"{nonfinite_count} NaN or Inf entries; validation is indeterminate."
+            f"{num_nonfinite} NaN or Inf entries; validation is indeterminate."
         )
         warnings.warn(message, RuntimeWarning, stacklevel=3)
         result_warnings = (message,)
@@ -327,7 +327,7 @@ def _build_projective_result(
         cross_batch_influence=cross_batch,
         atol=atol,
         rtol=rtol,
-        nonfinite_count=nonfinite_count,
+        num_nonfinite=num_nonfinite,
         warnings=result_warnings,
         direction=ReceptiveFieldDirection.PROJECTIVE,
         unit_shape=tuple(source.shape),

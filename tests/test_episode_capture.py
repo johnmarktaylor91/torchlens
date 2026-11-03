@@ -215,6 +215,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode
 
 
+@pytest.mark.smoke
 def test_teacher_forcing_is_disclosed_non_verifying():
     model = TinyLM()
     runner = GreedyRunner(model, 3)
@@ -409,6 +410,7 @@ def test_tampered_episode_header_refuses_typed(header_key, header_value, code):
     assert excinfo.value.fields["code"] == code
 
 
+@pytest.mark.smoke
 def test_monotone_prefix_tamper_quarantines_fail_closed():
     log = _capture_episode(n_steps=3)
     payload = dict(log.annotations["episode"])

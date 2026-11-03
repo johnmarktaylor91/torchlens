@@ -98,7 +98,6 @@ def test_the_audited_row_is_the_wrapper_wide_materialization_boundary() -> None:
     assert len(rows) == 1 and rows[0].operator is None and rows[0].reason
 
 
-@pytest.mark.smoke
 def test_materialization_of_a_module_built_in_forward_is_audited(_armed_witness: None) -> None:
     torch.manual_seed(0)
     trace = tl.trace(LazyBuiltInForward().eval(), [torch.randn(BATCH, WIDTH)])

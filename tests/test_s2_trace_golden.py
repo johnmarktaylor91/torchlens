@@ -263,7 +263,7 @@ def test_s2_trace_surfaces_match_exhaustive_projection(case: ModelCase) -> None:
         model,
         x.clone(),
         save=_save_all_ops,
-        include_source_events=True,
+        recording=tl.options.RecordingOptions(include_source_events=True),
         capture=tl.options.CaptureOptions(seed=7),
     )
 

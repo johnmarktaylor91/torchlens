@@ -10,6 +10,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._selection.selector_base import CompositeSelector
+from torchlens.errors import FacadeTeachingError
 from torchlens.options import CaptureOptions, merge_capture_options
 
 
@@ -17,8 +18,10 @@ from torchlens.options import CaptureOptions, merge_capture_options
 def test_removed_capture_fields_reject_constructor_keywords(removed: str) -> None:
     assert removed not in inspect.signature(CaptureOptions).parameters
     assert removed not in CaptureOptions().as_dict()
-    with pytest.raises(TypeError):
+    with pytest.raises(FacadeTeachingError) as excinfo:  # the removed field names save=
         CaptureOptions(**{removed: False})
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "save=" in str(excinfo.value)
 
 
 def test_private_selection_survives_option_merges() -> None:

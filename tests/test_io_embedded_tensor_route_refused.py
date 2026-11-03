@@ -145,9 +145,6 @@ class _Model(nn.Module):
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke_cells(
-    "test_load_from_bytes_refused_before_torch_load[rebuild_chain-_RenameAwareUnpickler]"
-)
 @pytest.mark.parametrize("unpickler", _UNPICKLERS, ids=lambda cls: cls.__name__)
 @pytest.mark.parametrize(
     "payload",

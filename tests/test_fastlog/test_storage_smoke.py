@@ -55,7 +55,9 @@ class DeepLinearModel(nn.Module):
 def test_ram_only_roundtrip_records_in_memory() -> None:
     """RAM-only recording returns an in-memory Recording."""
 
-    recording = tl.record(TinyModel(), torch.ones(1, 3), default_op=True)
+    recording = tl.record(
+        TinyModel(), torch.ones(1, 3), recording=tl.options.RecordingOptions(default_op=True)
+    )
 
     assert recording.path is None
     assert recording.is_recovered is False
@@ -81,7 +83,7 @@ def test_disk_only_roundtrip_loads_bundle(tmp_path: Path) -> None:
         TinyModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
     loaded = tl.load(bundle_path)
 
@@ -134,7 +136,7 @@ def test_keep_grad_disk_only_default_raises_at_construction(tmp_path: Path) -> N
             TinyModel(),
             torch.ones(1, 3),
             storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
         )
 
     assert not bundle_path.exists()
@@ -174,7 +176,7 @@ def test_keep_grad_integer_dtype_rejected_per_record() -> None:
         tl.record(
             IntegerModel(),
             torch.ones(1),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
         )
 
 
@@ -186,7 +188,7 @@ def test_crash_recovery_from_partial_bundle(tmp_path: Path) -> None:
         TinyModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
     partial_path = tmp_path / "partial_unfinalized.tlfast"
     bundle_path.rename(partial_path)

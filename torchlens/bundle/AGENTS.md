@@ -8,11 +8,11 @@ Package whose `__init__.py` holds the `Bundle` record and thin methods that dele
   or directly as `tl.Bundle(...)`.
 - `AmbiguousLabelError` fires on cross-member label lookups that match more than one
   aligned site.
-- The bundle namespace is dual-homed by design: the bundle GRAPH construction
-  behind `torchlens._visualization.show_bundle_graph` lives in `_user_public_impls.py` (the entry
-  point, routed via `user_funcs.py`) and `_visualization/_bundle_graph.py` (the
-  `_add_bundle_forward_nodes` / supergraph-walk helpers), while `_visualization/bundle_diff.py` is the paired-trace
-  DIFF renderer. Keep graph/render logic out of this package either way.
+- The bundle namespace is dual-homed by design: `Bundle.draw` (the merged bundle graph; `Bundle.show()`
+  defaults to it) is a thin method here, while its keyword checks and the graph construction live in
+  `_visualization/_bundle_graph.py` (`draw_bundle`, the `_add_bundle_forward_nodes` / supergraph-walk
+  helpers), and `_visualization/bundle_diff.py` is the paired-trace DIFF renderer. Keep graph/render
+  logic out of this package either way.
 - Public-name changes here must update the glossary and root docs in the same change
   (see the lockstep rule in the root `AGENTS.md`).
 
@@ -27,7 +27,8 @@ verb; each logic body is a function `f(self: Bundle, ...)` in a sibling module:
 | `_members.py` | member parsing and coercion, baseline resolution and auto-detection, capacity and eviction, `add`/`remove`/`remove_except`/`clear`, per-kind shared and divergent name lists |
 | `_lookup.py` | `at`, the cached supergraph, structural consistency |
 | `_aligned_sites.py` | aligned-site tables and the selector-site resolution behind `at` |
-| `_operations.py` | `do`, `fork`, `run`, `map`, `show`, the chronology ledger rows, the effect-table read |
+| `_operations.py` | `do`, `fork`, `run`, `map`, the chronology ledger rows, the effect-table read |
+| `_draw.py` | `draw` and the `show` dispatcher (merged graph, strip, repr, html) |
 | `_comparisons.py` | `compare`, `rank_changes`, the comparability matrix, per-site diffs, relationship evidence; stored comparisons |
 | `_relation_carriage.py` | relation table construction, removal cascades, `relate`, episode status, upstream/downstream |
 | `_save.py` | `save` (the package's one deferred `_io` import) |

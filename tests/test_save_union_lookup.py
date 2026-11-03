@@ -314,7 +314,6 @@ def test_trace_lookup_equals_walker(name: str, monkeypatch: pytest.MonkeyPatch) 
     assert fast[3] == walker[3] is True
 
 
-@pytest.mark.smoke
 def test_twenty_four_site_union_equals_walker_on_both_surfaces(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -335,7 +334,6 @@ def test_twenty_four_site_union_equals_walker_on_both_surfaces(
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_mixed_selectors_keep_the_walker(monkeypatch: pytest.MonkeyPatch) -> None:
     """Another kind, ``&``, ``~``, a label or a callable is not a plain module union."""
 
@@ -403,7 +401,6 @@ def test_mixed_union_counts_equal_the_walker(monkeypatch: pytest.MonkeyPatch) ->
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_pass_qualified_address_saves_only_that_call(monkeypatch: pytest.MonkeyPatch) -> None:
     """``tl.module("shared:2")`` saves the second call only, with and without the lookup."""
 

@@ -241,6 +241,7 @@ class TestArtifact:
         assert excinfo.value.fields["code"] == "merge_input_invalid"
         assert not (tmp_path / "merged.tlspec").exists()
 
+    @pytest.mark.smoke
     def test_failed_overwrite_preserves_previous_artifact(
         self,
         gloo_world: Any,
@@ -383,6 +384,7 @@ class TestDegradedLoadCoherence:
         manifest["descriptor_sha256"] = hashlib.sha256(payload).hexdigest()
         manifest_path.write_text(json.dumps(manifest))
 
+    @pytest.mark.smoke
     def test_unparseable_member_caps_value_status(self, gloo_world, tmp_path):
         """Fail-before: value_status presented ATTESTED_COMPLETE under degradation."""
 
@@ -473,7 +475,6 @@ class TestDegradedLoadCoherence:
             tl.load(art)
         assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
-    @pytest.mark.smoke
     def test_honest_unwitnessed_degraded_load_still_loads(self, gloo_world, tmp_path):
         """The coherence checks refuse forgery, never the honest degraded load."""
 
@@ -482,6 +483,7 @@ class TestDegradedLoadCoherence:
         assert loaded.stored_value_status.value == "unwitnessed"
         assert loaded.alignment.value == "partial"
 
+    @pytest.mark.smoke
     def test_forged_alignment_verdict_refuses(self, gloo_world, tmp_path):
         """A stored_alignment contradicting the cached findings ledger refuses."""
 
@@ -559,6 +561,7 @@ class TestArtifactHardening:
             f"{platform_module.system().lower()}-{platform_module.machine().lower()}"
         )
 
+    @pytest.mark.smoke
     def test_double_fault_restore_discloses_stranded_backup(
         self, gloo_world, tmp_path, monkeypatch
     ):

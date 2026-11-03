@@ -238,15 +238,17 @@ it where you report the number and call the result a descriptive comparison.
   `selected_by`, `successor_of`, `forked_from`, `escalates`), nearest member first.
 - `tl.Bundle({name: b[name] for name in ("a", "b")}).at(site)`: one site across a subset of
   members, so a foreign member such as a small router model does not disable the view for the rest.
-- `torchlens._visualization.show_bundle_graph(b, nodes="members")`: one node per member and one edge per relation row,
+- `b.draw("members.svg", nodes="members")`: one node per member and one edge per relation row,
   drawn from the earlier member to the later one and labelled with the kind, the row's `label`, on
   `fed_by` its basis and coverage, and on `selected_by` the `chosen` decision. Solid edges carry token spans TorchLens checked
   (`verified` or `matched`); every other row is dashed. `nodes="ops"` (the default) keeps the
-  bundle's union op graph.
+  bundle's merged op graph, which `b.show()` also draws.
 - Comparisons: members joined by an ordering path (including `fed_by` and `selected_by`) are not
   comparison operands, and `compare`, `rank_changes`, `store_comparison` and `draw(graph="diff")` run the same
-  comparison gate as `b.at(site).compare()`. Two calls on different prompts refuse `bundle_gate_input_values_differ`
-  instead of reporting distances between unrelated inputs.
+  comparison gate as `b.at(site).compare()`. Two calls on different prompts compare when their graphs line up
+  (equal graph-shape hashes) and their aligned sites have equal shapes; prompts of different token counts refuse
+  `metric_shape_mismatch` at the first site whose shapes differ when their graphs still line up, and calls whose
+  graphs differ refuse `bundle_gate_input_values_differ` (the message names both input shapes when they differ).
 - Row keys of `compare` and `rank_changes`: a multi-pass op (a layer that ran more than once, as in
   an unrolled recurrence) gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`),
   the spelling `trace["tanh_1_1:2"]` already reads; a single-pass op keeps its bare layer label.

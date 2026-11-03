@@ -333,15 +333,19 @@
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
-  `nodes="members"` for the member relation graph) and returns the DOT source.
+  `nodes="members"` for the member relation graph) and returns a `tl.viz.Drawing` (`str()` is the
+  DOT source). Both draw doors take the format from the path's extension (`file_format=` only for a
+  path without one; a disagreement refuses `draw_format_mismatch`), and a bare `trace.draw()` or
+  `b.draw()` in a Jupyter kernel displays inline and writes no file (JMT, Sun 1 Nov 2026).
   `b.token_pairs("critique", "draft")` (relate's argument order) is the one
   verified alignment read: `.pairs` of `(source_pos, reader_pos)`, `.source_positions`,
   `.reader_positions`, `.coverage`, `.excluded` (dicts with side/start/end/reason/row_index);
   only re-verified one-to-one positions pair, declared/retokenized spans stay correspondences.
   Slicing is a docs recipe: `b["draft"][site].out[0, pairs.source_positions]`.
-  `torchlens._visualization.show_bundle_graph(b, nodes="members")` draws members and relation rows;
-  `torchlens._visualization.show_bundle_graph(b, theme="dark", show_legend=True)` takes draw's skin, shapes, fills
-  and key (member lists only where members differ), and `trace.draw(graph="backward", theme="dark")`
+  `b.draw("bundle.svg")` draws the merged bundle graph (the shared model graph, member lists only where
+  members differ; `b.show()` defaults to it, `b.show(kind="strip")` draws each member on its own);
+  `b.draw("members.svg", nodes="members")` draws members and relation rows;
+  `b.draw("bundle.svg", theme="dark", show_legend=True)` takes draw's skin, shapes, fills and key, and `trace.draw(graph="backward", theme="dark")`
   takes the same skin names as `draw`; `tl.load(path, lazy=True)` reaches bundle members.
 - EXPERIMENTS REMEMBER (F03; every spelling DOCUMENTED-UNSTABLE pending
   naming-session ratification; doc of record `docs/reference/experiments.md`):
@@ -457,6 +461,14 @@
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
+- `Trace.draw(highlight="interventions")` (keyword-only) draws the surgery lens: recorded
+  interventions marked on their nodes, the per-lane census in the caption, and the full census
+  written beside the figure as `<path>.census.txt` (beside the collision-safe file a bare draw
+  chose). Any other value refuses `draw_highlight_invalid` listing the allowed values; an
+  un-edited trace refuses `surgery_evidence_missing`.
+- `tl.viz.contact_sheet(view, page=k)` returns a `ContactSheet`: the page's SVG text (a `str`)
+  carrying `page` and `page_count`, so `contact_sheet(view).page_count` says how many pages to
+  ask for.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `Trace.draw(color_by=...)` (UNSTABLE spelling, keyword-only, no deprecation shim owed until
@@ -561,7 +573,10 @@
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `log_backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`
-  rows. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
+  rows; `CaptureOptions(aten_ops="values")` additionally keeps what each call returned in
+  `AtenOp.out` (a tensor, a tuple per `output_tensor_facts`, or `None`), as detached snapshots under
+  the capture's `save=` / `save_mode` / `output_device` / `save_budget` policy, persisted with
+  `Op.out`; any other spelling refuses `aten_ops_invalid`. `trace.has_aten_ops` reports whether rows exist (also after `tl.load` of an artifact saved
   from such a capture), `trace.aten_ops` is every row in dispatch order, `op.aten_ops` the rows an
   op's call dispatched, and `trace.aten_gaps` the disclosed interiors the recorder could not
   observe (empty when complete). With the switch off nothing is installed and every accessor
@@ -850,6 +865,12 @@
   `SelectionError` with `selection_unresolvable` + a closed reason set.
   Producers: `tl.units(site, indices)`, `tl.param(name, mask=None)`,
   `tl.random_like(like=, within=, seed=)` (seeded size-matched control).
+  Unit-level influence: `view.of(units, within=None, method="geometric",
+  probe_budget=256)` on a `receptive_field` / `projective_field` view is the
+  many-unit form of `.at()`: the units `tl.units` takes, a trace-bound Selection
+  back, one region per `within=` site (default model outputs / model inputs),
+  `provenance.basis` and `provenance.field_status` stated; refusals
+  `influence_geometry_unavailable` and `influence_probe_budget`.
   VALUE + STATISTICAL PRODUCERS (producer wave; DOCUMENTED-UNSTABLE):
   `tl.top_k(within, k, by=, largest=)` / `tl.top_fraction(within, fraction)`
   (global deterministic ranking over the population; too-few rankable
@@ -1178,8 +1199,8 @@
   public surface; payloads never inlined; `max_ops` truncation disclosed, never silent).
   `trace.explain(max_tokens=N)` budget-prunes the text report by whole
   sections low-value-first with a disclosed `Truncation` section; capture-status honesty
-  facts and partial-capture failure evidence never drop, and `max_tokens` refuses typed
-  with `format="json"`. Doc: `docs/for-ai-agents.md`.
+  facts and partial-capture failure evidence never drop; the JSON form is
+  `trace.to_agent_json()`, which takes no token budget. Doc: `docs/for-ai-agents.md`.
 - STRUCTURAL FINGERPRINT (`tl.fingerprint`): `tl.fingerprint.model(model, inputs)`,
   `tl.fingerprint.trace(trace)` and `tl.fingerprint.content(...)` compute address-free
   structural hashes; `tl.fingerprint.assert_unchanged(...)` asserts a model still matches a
@@ -1319,7 +1340,7 @@
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
   `EchoSession` and the sinks (the event record is `tl.types.NarrationEvent`);
   `Trace.narrate` replays a finished capture as narration.
-  `NarrationEvent.stats` is a `tl.stats.TensorStats` (or `None`). Read
+  `NarrationEvent.value_stats` is a `tl.stats.TensorStats` (or `None`). Read
   `stats.mean_evidence.population` / `stats.mean_evidence.sample_size` for
   sampled evidence; values are `mean`, `std`, `finite_min`, `finite_max`,
   `numel`, and `nbytes`. The counts are `num_nan`, `num_posinf`, `num_neginf`.

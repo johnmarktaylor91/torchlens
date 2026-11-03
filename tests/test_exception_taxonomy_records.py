@@ -106,9 +106,6 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
 )
 
 
-@pytest.mark.smoke_cells(
-    "test_record_refusals_carry_codes_and_remedies[annotation_not_json_serializable]",
-)
 @pytest.mark.parametrize(
     ("expected_code", "builtin", "trigger"),
     RECORD_DOOR_CASES,
@@ -220,15 +217,16 @@ _CAPTURE_FIELDS = {
 def _door_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Spell former flat record keywords the way the door takes them now.
 
-    Recorder knobs stay flat door keywords, capture knobs ride
+    Recorder knobs ride ``recording=RecordingOptions(...)``, capture knobs ride
     ``capture=CaptureOptions(...)`` and ``halt`` is ``stop_after=``; the typed
-    refusal still fires where the Recorder resolves the merged values.
+    refusal still fires inside the door call (the option constructors validate).
     """
 
     out: dict[str, Any] = {}
     recording = {k: v for k, v in kwargs.items() if k in _RECORDING_FIELDS}
     capture = {k: v for k, v in kwargs.items() if k in _CAPTURE_FIELDS}
-    out.update(recording)
+    if recording:
+        out["recording"] = tl.options.RecordingOptions(**recording)
     if capture:
         out["capture"] = tl.options.CaptureOptions(**capture)
     for key, value in kwargs.items():
@@ -266,7 +264,6 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
     _assert_contract(exc_info.value, expected_code, builtin)
 
 
-@pytest.mark.smoke
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
@@ -287,7 +284,6 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
     _assert_contract(exc_info.value, "spec_format_version_unsupported", ValueError)
 
 
-@pytest.mark.smoke
 def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     """Converted visualization option doors expose codes and remedies."""
 
@@ -311,7 +307,6 @@ def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     _assert_contract(exc_info.value, "collapse_mode_invalid", ValueError)
 
 
-@pytest.mark.smoke
 def test_trace_stack_shape_mismatch_is_typed(small_trace: Any) -> None:
     """Stacking differently-shaped saved outs refuses with the stack code."""
 

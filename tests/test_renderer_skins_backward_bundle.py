@@ -5,7 +5,7 @@ Pins here:
 - ``Trace.draw(graph="backward", theme=...)`` and the functional
   ``torchlens._visualization.draw(graph="backward", visualization=VisualizationOptions(theme=...))``
   paint the skin's page, text ink and typography; an unknown skin refuses;
-- ``_visualization.show_bundle_graph(theme=..., show_legend=True)`` uses the skin's page and
+- ``Bundle.draw(theme=..., show_legend=True)`` uses the skin's page and
   Helvetica face, ``draw``'s node shapes and fills, the key under the header,
   and member lists only on nodes and arrows not every member runs;
 - the dark bundle diff caption takes the page's text ink.
@@ -20,7 +20,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import _visualization
 from torchlens._visualization.bundle_diff import bundle_diff
 from torchlens._visualization.themes import THEME_PRESETS
 from torchlens.options import VisualizationOptions, visualization_to_render_kwargs
@@ -103,14 +102,7 @@ def test_functional_draw_backward_reads_the_grouped_theme(tmp_path: Path) -> Non
 def test_bundle_picture_follows_draw(tmp_path: Path) -> None:
     """Skin page and face, draw's shapes and fills, the key, member lists only where they differ."""
 
-    dot = _visualization.show_bundle_graph(
-        _bundle(),
-        path=str(tmp_path / "bundle_dark"),
-        file_format="svg",
-        theme="dark",
-        show_legend=True,
-    )
-    assert dot is not None
+    dot = _bundle().draw(str(tmp_path / "bundle_dark.svg"), theme="dark", show_legend=True).dot
     assert f'bgcolor="{THEME_PRESETS["dark"].graph["bgcolor"]}"' in dot
     assert "fontname=Helvetica" in dot
     assert "Times" not in dot
@@ -129,12 +121,8 @@ def test_bundle_member_lists_appear_where_members_differ(tmp_path: Path) -> None
     torch.manual_seed(0)
     small = tl.trace(nn.Sequential(nn.Linear(3, 3)), torch.randn(1, 3))
     large = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
-    dot = _visualization.show_bundle_graph(
-        tl.Bundle({"small": small, "large": large}, baseline="small"),
-        path=str(tmp_path / "bundle_diff_members"),
-        file_format="svg",
-    )
-    assert dot is not None
+    bundle = tl.Bundle({"small": small, "large": large}, baseline="small")
+    dot = bundle.draw(str(tmp_path / "bundle_diff_members.svg")).dot
     assert "[large]" in dot
 
 

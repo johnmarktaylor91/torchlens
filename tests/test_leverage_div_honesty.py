@@ -33,7 +33,6 @@ def _traced_toy():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_overlay_zero_match_refuses(tmp_path):
     """A mapping that paints nothing refuses typed — never a blank success."""
 
@@ -64,7 +63,6 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
     assert "node_overlay_partial_match" not in codes
 
 
-@pytest.mark.smoke
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
@@ -143,7 +141,6 @@ def test_when_refuses_raw_string_at_build():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
@@ -196,7 +193,6 @@ def test_address_preflight_classifies_and_names_equivalent():
     assert not live_only.escrowing
 
 
-@pytest.mark.smoke
 def test_address_preflight_output_and_ordinal_deferred():
     report = address_preflight(["output", 5])
     assert all(v.resolution == "deferred" for v in report.verdicts)

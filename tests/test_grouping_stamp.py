@@ -50,7 +50,6 @@ def test_grouping_kwarg_is_keyword_only_and_structural_proceeds() -> None:
     assert log.options.grouping_policy == _healthy()
 
 
-@pytest.mark.smoke
 def test_grouping_entry_refusals() -> None:
     model = nn.Sequential(nn.Linear(4, 4))
     for value, code in (
@@ -103,7 +102,6 @@ def test_stamp_written_on_default_and_degraded_paths() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_validation_rule_matrix() -> None:
     assert validate_grouping_policy_stamp(_healthy()) is None
     assert validate_grouping_policy_stamp("not-a-dict") == "malformed"

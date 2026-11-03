@@ -24,7 +24,6 @@ from scripts.visual_language.models import FIXTURES
 from scripts.visual_language.scale_models import SCALE_FIXTURES
 from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
-from torchlens import _visualization
 from torchlens._record_type import record_type
 from torchlens._visualization import lenses
 from torchlens._visualization._encoding import EncodingChannelRequest
@@ -194,10 +193,9 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         lens = kwargs.pop("lens")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
     if panel.call == "surgery":
-        from torchlens._visualization.surgery_visuals import render_surgery
-
+        # The panel's kwargs carry highlight="interventions"; the edit is made here.
         fork = _fork_edit(trace)
-        graph = render_surgery(fork, **kwargs)
+        graph = fork.draw(**kwargs)
         return str(getattr(graph, "source", graph))
     if panel.call == "surgery_diff":
         fork = _fork_edit(trace)
@@ -208,11 +206,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
-    if panel.call in ("bundle_graph", "bundle_diff"):
-        if panel.call == "bundle_graph":
-            # show_bundle_graph still keeps the engine spelling of the viewer switch.
-            kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
-            return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
+    if panel.call == "bundle_graph":
+        # Bundle.draw takes the draw spellings (open_viewer, never vis_save_only).
+        return str(_bundle(trace).draw(**kwargs))
+    if panel.call == "bundle_diff":
+        # tl.viz.bundle_diff takes the draw spelling of the viewer switch (open_viewer).
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 

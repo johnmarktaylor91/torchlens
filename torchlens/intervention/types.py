@@ -24,6 +24,8 @@ from .._selection.target import (
     TargetSpec as TargetSpec,
     TensorSliceSpec as TensorSliceSpec,
 )
+from .._utils._tensor_layout import CaptureLayout
+from ._hook_spec_match import _hook_spec_matches
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -220,9 +222,13 @@ class FunctionRegistryKey:
 
 @dataclass(frozen=True)
 class ParentRef:
-    """Template component that resolves to a previously captured tensor."""
+    """Template component that resolves to a previously captured tensor.
+
+    ``_capture_layout`` is private and session-only: see :mod:`torchlens._utils._tensor_layout`.
+    """
 
     parent_label: str
+    _capture_layout: CaptureLayout | None = field(default=None, compare=False, repr=False)
 
 
 @dataclass(frozen=True)
@@ -646,36 +652,6 @@ class FrozenInterventionSpec:
     hook_specs: tuple[FrozenHookSpec, ...] = ()
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
-
-
-def _hook_spec_matches(
-    hook_spec: HookSpec,
-    *,
-    site_target: TargetSpec | None,
-    handle: str | None,
-) -> bool:
-    """Return whether a hook spec matches a removal request.
-
-    Parameters
-    ----------
-    hook_spec:
-        Sticky hook spec to inspect.
-    site_target:
-        Optional target spec to match.
-    handle:
-        Optional handle to match.
-
-    Returns
-    -------
-    bool
-        ``True`` when the hook spec should be removed.
-    """
-
-    if handle is not None and hook_spec.handle != handle:
-        return False
-    if site_target is not None and hook_spec.site_target != site_target:
-        return False
-    return handle is not None or site_target is not None
 
 
 class Relationship(str, Enum):
