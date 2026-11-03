@@ -24,6 +24,7 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from .._utils.tensor_utils import safe_copy
 
 __all__ = ["Reducer", "norm", "probe", "top_k"]
 
@@ -58,6 +59,17 @@ class Reducer:
 
     def __repr__(self) -> str:
         return f"Reducer({self.name!r})"
+
+
+def _detached(tensor: torch.Tensor) -> torch.Tensor:
+    """Return a detached view of ``tensor`` through the sanctioned copy primitive.
+
+    Recording paths never call ``.detach()`` bare: :func:`safe_copy` detaches
+    with logging paused, so a reducer that runs while a trace is logging does
+    not record a stray ``detach`` op.
+    """
+
+    return safe_copy(tensor, detach_tensor=True, save_mode="reference")
 
 
 def _position_major(tensor: torch.Tensor, position_dim: int) -> torch.Tensor:
@@ -105,7 +117,7 @@ def norm(ord: float = 2.0, *, dim: int = -1, position_dim: int = 1) -> Reducer:
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
         """Return one norm per position."""
 
-        values = torch.linalg.vector_norm(tensor.detach().float(), ord=ord, dim=dim)
+        values = torch.linalg.vector_norm(_detached(tensor).float(), ord=ord, dim=dim)
         return _position_major(values, position_dim)
 
     return Reducer(f"norm(ord={ord})", reduce)
@@ -155,7 +167,7 @@ def top_k(k: int, *, dim: int = -1, position_dim: int = -2) -> Reducer:
         """Return the ``k`` largest indices per position."""
 
         size = tensor.shape[dim]
-        indices = torch.topk(tensor.detach(), min(k, size), dim=dim).indices
+        indices = torch.topk(_detached(tensor), min(k, size), dim=dim).indices
         return _position_major(indices, position_dim)
 
     return Reducer(f"top_k(k={k})", reduce)
@@ -165,8 +177,8 @@ def _linear_terms(fitted: Any) -> tuple[torch.Tensor, torch.Tensor, str]:
     """Return ``(weight [out, features], bias [out], description)`` of a fitted linear probe."""
 
     if isinstance(fitted, nn.Linear):
-        weight = fitted.weight.detach()
-        bias = fitted.bias.detach() if fitted.bias is not None else torch.zeros(weight.shape[0])
+        weight = fitted.weight
+        bias = fitted.bias if fitted.bias is not None else torch.zeros(weight.shape[0])
         return weight, bias, "nn.Linear"
     if isinstance(fitted, (tuple, list)) and len(fitted) == 2:
         weight = torch.as_tensor(fitted[0])
@@ -219,13 +231,16 @@ def probe(fitted: Any, *, position_dim: int = 1) -> Reducer:
     """
 
     weight, bias, described = _linear_terms(fitted)
-    weight = weight.detach().to(torch.float32)
-    bias = bias.detach().to(torch.float32)
+    # The fitted probe is frozen here: a float32 snapshot taken without grad
+    # carries no autograd edge to the module or tensors it came from.
+    with torch.no_grad():
+        weight = weight.to(torch.float32).clone()
+        bias = bias.to(torch.float32).clone()
 
     def reduce(tensor: torch.Tensor) -> torch.Tensor:
         """Return the probe's decision function per position."""
 
-        x = tensor.detach().to(torch.float32)
+        x = _detached(tensor).to(torch.float32)
         if x.shape[-1] != weight.shape[1]:
             raise InvalidArgumentError(
                 f"the probe was fitted on {weight.shape[1]} features but the site has "

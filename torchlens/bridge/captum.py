@@ -376,7 +376,7 @@ def _site_ordinal(trace: Any, resolved: Any, site_key: str) -> int:
     if not isinstance(target, int):
         return 1
     earlier = 0
-    for record in getattr(trace, "_layer_list", ()) or ():
+    for record in trace._layer_list:
         for op in getattr(record, "ops", None) or (record,):
             index = getattr(op, "raw_index", None)
             if (

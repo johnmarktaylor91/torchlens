@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
+from .._data_classes._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
 from .._data_classes.interface import _format_conditional_branch_stack
 from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
 from .._utils.collections import _path_component_key
@@ -606,6 +607,23 @@ def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
     return {"kind": "batch_topk", "rows": rows}
 
 
+def _session_output_tokenizer(trace: "Trace") -> Any | None:
+    """Return the capturing session's output tokenizer, or ``None`` when there is none.
+
+    ``_output_tokenizer`` is a declared ``FieldPolicy.DROP`` Trace field that
+    exists only during the capturing session: settlement pops it from the
+    instance dict and serialization never writes it, so its absence is the
+    normal settled or reloaded state, read here from the instance dict. A
+    renamed field is not mistaken for that state: once the name leaves the
+    declared spec, the read below is a plain lookup that fails loudly.
+    """
+
+    field = "_output_tokenizer"
+    if field not in TRACE_PORTABLE_STATE_SPEC:
+        return trace.__dict__[field]
+    return trace.__dict__.get(field)
+
+
 def _recompute_text_output(trace: "Trace", postprocessor: Any) -> Any | None:
     """Re-decode a text-style output with the session tokenizer, or ``None``.
 
@@ -614,7 +632,7 @@ def _recompute_text_output(trace: "Trace", postprocessor: Any) -> Any | None:
     refuses typed.
     """
 
-    if getattr(trace, "_output_tokenizer", None) is None:
+    if _session_output_tokenizer(trace) is None:
         return None
     door = _decode_door()
     try:
