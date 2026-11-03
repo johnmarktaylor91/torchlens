@@ -180,8 +180,8 @@ def _distance_value(
             f"{tuple(reference.shape)} and {tuple(candidate.shape)}",
             code="metric_shape_mismatch",
             remedy=(
-                "compare members whose aligned sites hold the same shape; a "
-                "shape-changing edit has no element-wise distance at that site"
+                "compare members whose aligned sites hold the same shape; a shape-changing "
+                "edit or input (a longer prompt) has no element-wise distance at that site"
             ),
             site=site,
             reference_shape=tuple(reference.shape),
@@ -267,9 +267,11 @@ def _gated_baseline(self: Bundle, operation: str, baseline: str | Trace | None) 
     """Resolve the delta baseline, then gate every (baseline, member) operand pair.
 
     The baseline defaults to the configured one, then the first member; the
-    comparison gate (topology, model-axis floor, value-level input identity)
-    then refuses any pair a per-node distance would not mean anything for,
-    such as two unrelated prompts in one harness bundle.
+    comparison gate (topology, model-axis floor, site line-up) then refuses
+    any pair whose sites do not pair one to one, such as two runs whose
+    data-dependent control flow took different branches. Runs on different
+    inputs whose graphs line up compare; a site whose shapes differ refuses
+    at the metric (``metric_shape_mismatch``).
     """
 
     baseline_name = (
