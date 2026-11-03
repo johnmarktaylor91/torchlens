@@ -9,7 +9,7 @@ each backward pass end writes one settle row per arming transaction
 The plan lives in the intervention layer and is reached through
 :func:`_plan`, imported on first use; this module keeps the arming metadata
 keys, the engine choice and the read side of armed gradient rules. The
-mixin methods in ``_trace_intervention`` delegate here.
+``Trace`` methods in ``trace.py`` delegate here.
 """
 
 from __future__ import annotations

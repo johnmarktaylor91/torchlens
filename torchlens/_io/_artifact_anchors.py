@@ -17,7 +17,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from . import ArtifactError
+from .format_errors import ArtifactError
 
 __all__ = ["check_manifest_metadata_anchors"]
 
