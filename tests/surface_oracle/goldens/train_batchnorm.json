@@ -3904,7 +3904,7 @@
     "func_call_id": 1,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "add_",
     "func_non_tensor_args": [
      1
@@ -4302,7 +4302,7 @@
      "\"momentum\"": "0.1"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "batch_norm",
     "func_non_tensor_args": [
      true,
@@ -7047,7 +7047,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -7427,7 +7427,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -13115,7 +13115,7 @@
     "func_call_id": 1,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "add_",
     "func_non_tensor_args": [
      1
@@ -13513,7 +13513,7 @@
      "\"momentum\"": "0.1"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "batch_norm",
     "func_non_tensor_args": [
      true,
@@ -16258,7 +16258,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -16638,7 +16638,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -22204,7 +22204,7 @@
      "alpha"
     ],
     "args_summary": "1",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": "0.0625",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -22302,7 +22302,7 @@
     "func_call_id": 1,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "add_",
     "func_non_tensor_args": [
      1
@@ -22591,7 +22591,7 @@
      "eps"
     ],
     "args_summary": "True, 0.1, 1e-05, True",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": "0.5882352941176471",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -22700,7 +22700,7 @@
      "\"momentum\"": "0.1"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "batch_norm",
     "func_non_tensor_args": [
      true,
@@ -25364,7 +25364,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x2x4x4, float32)",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -25445,7 +25445,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -25731,7 +25731,7 @@
      "inplace"
     ],
     "args_summary": "",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -25825,7 +25825,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -31453,7 +31453,7 @@
     "func_call_id": 1,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "add_",
     "func_non_tensor_args": [
      1
@@ -31851,7 +31851,7 @@
      "\"momentum\"": "0.1"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "batch_norm",
     "func_non_tensor_args": [
      true,
@@ -34596,7 +34596,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -34976,7 +34976,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -40635,7 +40635,7 @@
     "func_call_id": 1,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "add_",
     "func_non_tensor_args": [
      1
@@ -41008,7 +41008,7 @@
      "\"momentum\"": "0.1"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "batch_norm",
     "func_non_tensor_args": [
      true,
@@ -43644,7 +43644,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -43989,7 +43989,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",

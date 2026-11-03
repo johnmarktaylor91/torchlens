@@ -1911,7 +1911,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "conv2d",
     "func_non_tensor_args": [
      [
@@ -2626,7 +2626,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -2999,7 +2999,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -6076,7 +6076,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "conv2d",
     "func_non_tensor_args": [
      [
@@ -6791,7 +6791,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -7164,7 +7164,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -10116,7 +10116,7 @@
      "groups"
     ],
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": "2.235294117647059",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": {
@@ -10232,7 +10232,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "conv2d",
     "func_non_tensor_args": [
      [
@@ -10866,7 +10866,7 @@
     "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(1x2x4x4, float32)",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -10947,7 +10947,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -11226,7 +11226,7 @@
      "inplace"
     ],
     "args_summary": "",
-    "args_template": "<torchlens.intervention.types.CapturedArgTemplate>",
+    "args_template": null,
     "arithmetic_intensity": "0.125",
     "aten_ops": "<raises AtenOpsUnavailableError>",
     "atomic_module": null,
@@ -11320,7 +11320,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -14331,7 +14331,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "conv2d",
     "func_non_tensor_args": [
      [
@@ -15046,7 +15046,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -15419,7 +15419,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -18483,7 +18483,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "conv2d",
     "func_non_tensor_args": [
      [
@@ -19175,7 +19175,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -19513,7 +19513,7 @@
     "func_call_id": 10,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",

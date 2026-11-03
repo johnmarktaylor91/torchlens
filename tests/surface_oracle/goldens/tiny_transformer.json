@@ -14345,7 +14345,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -14735,7 +14735,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -15142,7 +15142,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -15537,7 +15537,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -15939,7 +15939,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -16351,7 +16351,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -16745,7 +16745,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -17135,7 +17135,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -17525,7 +17525,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -18265,7 +18265,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -18712,7 +18712,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -19153,7 +19153,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -19569,7 +19569,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -19981,7 +19981,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -20404,7 +20404,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -20780,7 +20780,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -21176,7 +21176,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -21566,7 +21566,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -21954,7 +21954,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -22355,7 +22355,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -22784,7 +22784,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -23174,7 +23174,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -23572,7 +23572,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -23972,7 +23972,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -24366,7 +24366,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -24760,7 +24760,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -25148,7 +25148,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -25555,7 +25555,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -25954,7 +25954,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -26347,7 +26347,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -26739,7 +26739,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -27131,7 +27131,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -27527,7 +27527,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -27927,7 +27927,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -28327,7 +28327,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -28721,7 +28721,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -48325,7 +48325,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -48715,7 +48715,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -49122,7 +49122,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -49517,7 +49517,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -49919,7 +49919,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -50331,7 +50331,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -50725,7 +50725,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -51115,7 +51115,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -51505,7 +51505,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -52245,7 +52245,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -52692,7 +52692,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -53133,7 +53133,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -53549,7 +53549,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -53961,7 +53961,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -54384,7 +54384,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -54760,7 +54760,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -55156,7 +55156,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -55546,7 +55546,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -55934,7 +55934,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -56335,7 +56335,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -56764,7 +56764,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -57154,7 +57154,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -57552,7 +57552,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -57952,7 +57952,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -58346,7 +58346,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -58740,7 +58740,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -59128,7 +59128,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -59535,7 +59535,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -59934,7 +59934,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -60327,7 +60327,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -60719,7 +60719,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -61111,7 +61111,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -61507,7 +61507,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -61907,7 +61907,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -62307,7 +62307,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -62701,7 +62701,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -82358,7 +82358,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -82748,7 +82748,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -83155,7 +83155,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -83550,7 +83550,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -83952,7 +83952,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -84364,7 +84364,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -84758,7 +84758,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -85148,7 +85148,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -85538,7 +85538,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -86278,7 +86278,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -86725,7 +86725,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -87166,7 +87166,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -87582,7 +87582,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -87994,7 +87994,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -88417,7 +88417,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -88793,7 +88793,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -89189,7 +89189,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -89579,7 +89579,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -89967,7 +89967,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -90368,7 +90368,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -90797,7 +90797,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -91187,7 +91187,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -91585,7 +91585,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -91985,7 +91985,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -92379,7 +92379,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -92773,7 +92773,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -93161,7 +93161,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -93568,7 +93568,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -93967,7 +93967,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -94360,7 +94360,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -94752,7 +94752,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -95144,7 +95144,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -95540,7 +95540,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -95940,7 +95940,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -96340,7 +96340,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -96734,7 +96734,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -116334,7 +116334,7 @@
     "func_call_id": 102,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -116692,7 +116692,7 @@
     "func_call_id": 153,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__add__",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.__add__",
@@ -117067,7 +117067,7 @@
     "func_call_id": 26,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "contiguous",
     "func_non_tensor_args": [],
     "func_qualname": "TensorBase.contiguous",
@@ -117438,7 +117438,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -117817,7 +117817,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -118206,7 +118206,7 @@
      "\"p\"": "0.0"
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "dropout",
     "func_non_tensor_args": [
      "0.0",
@@ -118581,7 +118581,7 @@
     "func_call_id": 29,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      0
@@ -118951,7 +118951,7 @@
     "func_call_id": 32,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      1
@@ -119321,7 +119321,7 @@
     "func_call_id": 35,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "__getitem__",
     "func_non_tensor_args": [
      2
@@ -120031,7 +120031,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -120452,7 +120452,7 @@
      ]
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "layer_norm",
     "func_non_tensor_args": [
      [
@@ -120870,7 +120870,7 @@
      "\"out_features\"": 12
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -121263,7 +121263,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -121653,7 +121653,7 @@
      "\"out_features\"": 8
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -122053,7 +122053,7 @@
      "\"out_features\"": 4
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "linear",
     "func_non_tensor_args": [],
     "func_qualname": "linear",
@@ -122410,7 +122410,7 @@
     "func_call_id": 159,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "none",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.layer_norm",
@@ -122770,7 +122770,7 @@
      "\"dims\"": 2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "permute",
     "func_non_tensor_args": [
      2,
@@ -123138,7 +123138,7 @@
     "func_call_id": 133,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "relu",
     "func_non_tensor_args": [],
     "func_qualname": "_VariableFunctionsClass.relu",
@@ -123504,7 +123504,7 @@
     "func_call_id": 80,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "reshape",
     "func_non_tensor_args": [
      6,
@@ -123878,7 +123878,7 @@
     "func_call_id": 65,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "scaled_dot_product_attention",
     "func_non_tensor_args": [
      null,
@@ -124257,7 +124257,7 @@
     "func_call_id": 23,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "squeeze",
     "func_non_tensor_args": [
      -2
@@ -124623,7 +124623,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -124999,7 +124999,7 @@
      "\"dim1\"": -2
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -125375,7 +125375,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -125747,7 +125747,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -126119,7 +126119,7 @@
      "\"dim1\"": 1
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      0,
@@ -126485,7 +126485,7 @@
      "\"dim1\"": 0
     },
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "transpose",
     "func_non_tensor_args": [
      1,
@@ -126870,7 +126870,7 @@
     "func_call_id": 14,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unflatten",
     "func_non_tensor_args": [
      -1,
@@ -127248,7 +127248,7 @@
     "func_call_id": 17,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "unsqueeze",
     "func_non_tensor_args": [
      0
@@ -127617,7 +127617,7 @@
     "func_call_id": 38,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -127986,7 +127986,7 @@
     "func_call_id": 44,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -128355,7 +128355,7 @@
     "func_call_id": 50,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,
@@ -128727,7 +128727,7 @@
     "func_call_id": 56,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129103,7 +129103,7 @@
     "func_call_id": 59,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129479,7 +129479,7 @@
     "func_call_id": 62,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      2,
@@ -129850,7 +129850,7 @@
     "func_call_id": 92,
     "func_config": {},
     "func_duration": "<measured>",
-    "func_id": "<torchlens.intervention.types.FunctionRegistryKey>",
+    "func_id": null,
     "func_name": "view",
     "func_non_tensor_args": [
      3,

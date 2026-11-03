@@ -1718,3 +1718,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 8b5d4688514d3610db9f0620d266e4db8a30c93a (clean)
 recorded: 2026-11-03T07:27:51.283273+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.253015+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.291254+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.325829+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.366006+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.400848+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: default captures record argument templates for in-process replay; a pickled non-replayable op drops them and func_id stays recorded only for replayable or save_args captures
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 8c10f7b1775e15fd2066b3cab2cbbfa50ffafc22 (clean)
+recorded: 2026-11-03T08:19:04.438910+00:00
