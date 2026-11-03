@@ -71,16 +71,15 @@ def _write_recipe_manifest(
     recipe: Recipe,
     spec_json: dict[str, Any],
     tensor_entries: list[TensorEntry],
-    legacy_format_version: str,
-    save_level: str,
 ) -> None:
     """Write the unified manifest of a standalone recipe (``kind: "recipe"``).
 
     The recipe carries no model and no sites, so the manifest's model fields
-    describe the recipe class itself; ``save_level`` is the public-schema save
-    level and ``legacy_format_version`` the intervention codec version.
+    describe the recipe class itself; the save level is read from ``spec_json``
+    and the manifest's ``format_version`` is the intervention codec version.
     """
 
+    save_level = str(spec_json["save_level"])
     if save_level == "runnable":
         raise InvalidArgumentError(
             "Recipe artifacts do not support save_level='runnable': a recipe "
@@ -96,7 +95,7 @@ def _write_recipe_manifest(
         "digest": spec_json.get("digest"),
     }
     manifest = {
-        "format_version": legacy_format_version,
+        "format_version": TLSPEC_FORMAT_VERSION,
         "tensor_entries": [entry.to_dict() for entry in tensor_entries],
     }
     manifest.update(
@@ -141,8 +140,6 @@ def _write_recipe_tree(
         recipe=recipe,
         spec_json=spec_json,
         tensor_entries=tensor_entries,
-        legacy_format_version=TLSPEC_FORMAT_VERSION,
-        save_level=save_level.value,
     )
     _write_text_file(tmp_path / _README_FILE, _readme_text(spec_json, tensor_entries))
     _fsync_directory(tmp_path / _TENSOR_DIR)
