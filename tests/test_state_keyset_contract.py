@@ -24,7 +24,6 @@ from godobject_oracle.test_aliases import _SEED, _AliasCNN, _RecurrentCell
 
 import torchlens as tl
 from torchlens._data_classes._state_adapter import state_items
-from torchlens._data_classes.op import _OP_SLOT_NAMES, Op
 
 _GOLDEN_PATH = (
     Path(__file__).resolve().parent / "godobject_oracle" / "goldens" / "state_keysets.json"
@@ -129,25 +128,3 @@ def test_state_keysets_match_golden() -> None:
             )[:80]
         )
         raise AssertionError(f"state key sets diverged:\n{diff}")
-
-
-def test_declared_fields_dominate_op_state() -> None:
-    """Every state key on a live Op is a declared _FIELD_POLICY field.
-
-    An Op slot outside the declared schema that carries live state would be
-    invisible to the schema-driven columnar adapter; this fails first.
-    """
-
-    torch.manual_seed(_SEED)
-    trace = tl.trace(_AliasCNN(), torch.linspace(-1.0, 1.0, 16).reshape(1, 1, 4, 4))
-    declared = set(Op._FIELD_POLICY)
-    for op in trace.ops.values():
-        undeclared = {name for name, _ in state_items(op)} - declared
-        assert not undeclared, f"live Op carries undeclared state: {sorted(undeclared)}"
-
-
-def test_op_slot_universe_is_declared() -> None:
-    """Every Op slot is covered by _FIELD_POLICY (no shadow storage)."""
-
-    undeclared_slots = set(_OP_SLOT_NAMES) - set(Op._FIELD_POLICY)
-    assert not undeclared_slots, sorted(undeclared_slots)

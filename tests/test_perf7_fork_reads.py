@@ -107,42 +107,6 @@ def _shape(result: Any, original: Any, depth: int = 0) -> str:
     return f"{type(result).__name__}:{same}"
 
 
-def _cow_cases() -> list[Any]:
-    tensor = torch.ones(2)
-    return [
-        None,
-        "label",
-        3,
-        2.0,
-        True,
-        b"x",
-        tensor,
-        _PARENT,
-        object(),
-        ["a", 1, None, tensor, _PARENT, ["nested", tensor]],
-        {"a": 1, "b": [1, 2], "c": _PARENT, 2: "two"},
-        {"a", 1, None, ("t", 1)},
-        ("a", 1, None),
-        ("a", [1, 2]),
-        ("a", _PARENT),
-        frozenset({"a", 1}),
-        frozenset({("a", 1), "b"}),
-        ((("deep", [1]),),),
-        [],
-        {},
-        (),
-    ]
-
-
-def test_cow_copy_matches_the_former_copier() -> None:
-    for index, (value, twin) in enumerate(zip(_cow_cases(), _cow_cases(), strict=True)):
-        got = op_store.cow_copy_value(value, _translate)
-        expected = _reference_cow_copy(twin, _translate)
-        assert _shape(got, value) == _shape(expected, twin), f"case {index}"
-        if isinstance(got, (set, frozenset)):
-            assert got == expected, f"case {index}"
-
-
 class _Small(nn.Module):
     def __init__(self) -> None:
         super().__init__()

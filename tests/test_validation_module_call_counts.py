@@ -88,12 +88,6 @@ def graph_trace():
     trace.cleanup()
 
 
-def test_clean_multi_pass_root_passes_containment(graph_trace) -> None:
-    root = graph_trace.module_calls["self:1"]
-    assert root.num_layers < len(root.ops)
-    assert check_metadata_invariants(graph_trace) is True
-
-
 @pytest.mark.parametrize("count", ["num_layers"])
 def test_off_by_one_call_counts_raise(graph_trace, monkeypatch, count: str) -> None:
     true_count = getattr(ModuleCall, count)

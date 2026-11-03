@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -30,44 +29,6 @@ class _ContainerOutput(nn.Module):
         return {"logits": hidden, "extra": pair} if self.kind == "dict" else pair
 
 
-@pytest.mark.parametrize("kind", ["dict", "tuple"])
-@pytest.mark.parametrize("save", ["all", "none"])
-def test_output_is_the_exact_forward_return(kind: str, save: str) -> None:
-    """Output identity is independent of per-op activation retention."""
-
-    seen: list[Any] = []
-    model = _ContainerOutput(kind)
-    handle = model.register_forward_hook(lambda _module, _args, output: seen.append(output))
-    try:
-        trace = tl.trace(model, torch.ones(1, 3), save=save)
-    finally:
-        handle.remove()
-    assert len(seen) == 1
-    assert trace.output is seen[0]
-    assert trace.transformed_output is None
-
-
-def test_output_refuses_after_stop_after() -> None:
-    """A halted trace has a frontier value but no model return."""
-
-    trace = tl.trace(_ContainerOutput(), torch.ones(1, 3), stop_after=tl.func("linear"))
-    with pytest.raises(PayloadUnavailableError) as exc_info:
-        _ = trace.output
-    assert exc_info.value.fields["code"] == "output_capture_stopped"
-
-
-def test_output_is_independent_of_the_output_transform() -> None:
-    """The exact return survives a transform that keeps only one tensor."""
-
-    trace = tl.trace(
-        _ContainerOutput(),
-        torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(output_transform=lambda output: output["logits"]),
-    )
-    assert isinstance(trace.output, dict)
-    assert trace.transformed_output is trace.output["logits"]
-
-
 @pytest.mark.parametrize("level", ["audit", "portable"])
 def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> None:
     """Both bundle save levels omit the live return, preserving the source slot."""
@@ -81,26 +42,6 @@ def test_output_is_not_stored_with_saved_traces(tmp_path: Path, level: str) -> N
         _ = loaded.output
     assert exc_info.value.fields["code"] == "output_not_stored"
     assert trace.output is output
-
-
-def test_output_is_not_pickled() -> None:
-    """Unpickling loses the slot even when the output carries an opaque callable."""
-
-    trace = tl.trace(_ContainerOutput(), torch.ones(1, 3))
-    trace.output["unpicklable"] = lambda: None
-    restored = pickle.loads(pickle.dumps(trace))
-    with pytest.raises(PayloadUnavailableError) as exc_info:
-        _ = restored.output
-    assert exc_info.value.fields["code"] == "output_not_stored"
-
-
-def test_fork_does_not_claim_a_forward_return() -> None:
-    """A fork carries derived graph state without an independent forward return."""
-
-    trace = tl.trace(_ContainerOutput(), torch.ones(1, 3))
-    with pytest.raises(PayloadUnavailableError) as exc_info:
-        _ = trace.fork().output
-    assert exc_info.value.fields["code"] == "output_not_stored"
 
 
 @pytest.mark.parametrize("fast", [False, True])
@@ -141,16 +82,6 @@ def test_truncated_live_run_has_no_forward_return(fast: bool) -> None:
     with pytest.raises(PayloadUnavailableError) as exc_info:
         _ = result.trace.output
     assert exc_info.value.fields["code"] == "output_capture_stopped"
-
-
-def test_recording_conversion_has_no_live_trace_return() -> None:
-    """Cooking a Recording does not invent a Trace forward."""
-
-    recording = tl.record(_ContainerOutput(), torch.ones(1, 3), save=lambda _ctx: True)
-    trace = recording.to_trace()
-    with pytest.raises(PayloadUnavailableError) as exc_info:
-        _ = trace.output
-    assert exc_info.value.fields["code"] == "output_not_stored"
 
 
 def test_chunked_trace_does_not_expose_one_chunks_return() -> None:

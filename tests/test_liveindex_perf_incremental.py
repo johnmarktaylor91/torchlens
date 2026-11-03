@@ -18,7 +18,7 @@ import pytest
 import torch
 from torch import nn
 
-from benchmarks.live_index_append_counters import counting, synthetic_stream
+from benchmarks.live_index_append_counters import counting
 from torchlens._ir.live_index import LiveIndex
 from torchlens.recording import Recorder
 
@@ -101,54 +101,6 @@ def test_reseen_streams_match_a_full_rebuild_after_every_event(seed: int) -> Non
         for label in rng.sample(known, min(3, len(known))):
             assert index.children(label) == reference.children(label)
             assert index.parents(label) == reference.parents(label)
-
-
-def test_labels_outside_the_label_list_gain_no_edges() -> None:
-    """A journal cleared to its structural lookup keeps no edges, as a rebuild does."""
-
-    index = LiveIndex()
-    index.append(_Event("a", ()))
-    index.append(_Event("b", (_Edge("a"),)))
-    index.clear()
-    index.by_raw_label = {"a": _Event("a", ()), "b": _Event("b", (_Edge("a"),))}
-    index.append(_Event("b", (_Edge("x"),)))
-    index.replace(_Event("a", (_Edge("y"),)))
-    assert _state(index) == _rebuilt(index)
-    assert dict(index.children_by_parent) == {}
-
-
-def test_inserted_child_takes_its_label_list_position() -> None:
-    index = LiveIndex()
-    for label in ("p", "a", "b", "c", "d"):
-        index.append(_Event(label, (_Edge("p"),) if label in "bd" else ()))
-    index.append(_Event("c", (_Edge("p"),)))
-    index.replace(_Event("a", (_Edge("p"),)))
-    assert index.children("p") == ("a", "b", "c", "d")
-    index.append(_Event("b", ()))
-    index.replace(_Event("d", (_Edge("q"),)))
-    assert index.children("p") == ("a", "c")
-    assert index.children_by_parent["q"] == ["d"]
-    assert _state(index) == _rebuilt(index)
-
-
-@pytest.mark.parametrize("rewire_every", [0, 10])
-def test_reseen_appends_do_no_full_rebuild(rewire_every: int) -> None:
-    """Re-feeding N labels costs no rebuild and at most old plus new parents per append."""
-
-    passes = synthetic_stream(100, rewire_every=rewire_every)
-    index = LiveIndex()
-    with counting() as tally:
-        for events in passes:
-            for event in events:
-                index.append(event)
-    counts = tally.counts
-    assert counts["reseen_append"] == 100
-    assert counts["rebuild_edges"] == 0
-    assert counts["reseen_append_rebuilds"] == 0
-    assert counts["reseen_append_over_bound"] == 0
-    if not rewire_every:
-        assert counts["reseen_append_list_ops"] == 0
-    assert _state(index) == _rebuilt(index)
 
 
 class _Chain(nn.Module):

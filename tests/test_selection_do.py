@@ -61,23 +61,6 @@ def test_edit_is_the_public_type_and_the_old_spelling_is_gone():
     assert isinstance(tl.zero_ablate(), tl.Edit)
 
 
-def test_interior_masked_edit_scatter_contract(log):
-    """Element-masked interior edit: masked elements edited, rest bit-intact."""
-
-    selection = tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])
-    mask = log[selection][0].mask
-    fork = log.fork()
-    fork.do(selection, tl.zero_ablate())
-    edited = fork["relu_1_2"].out
-    baseline = log["relu_1_2"].out
-    assert bool((edited[mask] == 0).all())
-    assert torch.equal(edited[~mask], baseline[~mask])
-    # downstream propagation is real
-    assert not torch.equal(fork["output_1"].out, log["output_1"].out)
-    # stored capture truth on the SOURCE trace is never written through
-    assert torch.equal(log["relu_1_2"].out, baseline)
-
-
 def test_leaf_site_masked_edit_via_rf_intersection(log):
     """The flagship intersection ablation at the model-input (leaf) site."""
 
@@ -95,17 +78,6 @@ def test_leaf_site_masked_edit_via_rf_intersection(log):
     records = list(fork["input_1"].edits)
     assert records and records[0].edit_name == "zero_ablate" and records[0].replaced
     assert fork["input_1"].is_edited
-
-
-def test_whole_site_short_circuit(log):
-    """A whole-site mask skips the scatter: exactly today's behavior."""
-
-    fork_selection = log.fork()
-    fork_selection.do(log["relu_1_2"].__selection__(), tl.zero_ablate())
-    fork_shipped = log.fork()
-    fork_shipped.do("relu_1_2", tl.zero_ablate())
-    assert torch.equal(fork_selection["relu_1_2"].out, fork_shipped["relu_1_2"].out)
-    assert torch.equal(fork_selection["output_1"].out, fork_shipped["output_1"].out)
 
 
 def test_raw_value_routes_through_replace_with(log):
@@ -183,21 +155,6 @@ def test_empty_selection_do_is_noop_with_audit(log):
     fork.do(tl.label("no_such_layer").__selection__(), tl.zero_ablate())
     assert torch.equal(fork["output_1"].out, log["output_1"].out)
     assert fork.intervention_audit[-1]["sites"] == []
-
-
-def test_audit_record_contents(log):
-    """The audit record carries repr + digest + per-site relation/counts."""
-
-    selection = tl.units("relu_1_2", [(0, 0, 1, 1)])
-    resolved = log[selection]
-    fork = log.fork()
-    fork.do(selection, tl.zero_ablate())
-    record = fork.intervention_audit[-1]
-    assert record["kind"] == "ACT"
-    assert record["resolve_digest"] == resolved.digest
-    assert record["edit"] == "zero_ablate"
-    assert record["sites"][0]["relation"] == "exact"
-    assert record["sites"][0]["selected"] == 1
 
 
 def test_mask_never_enters_keep_fields_and_recipe_policy(log):

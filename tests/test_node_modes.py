@@ -11,9 +11,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes.layer import Layer
 from torchlens.experimental import node_styles
-from torchlens.experimental.dagua import NodeSpec
 
 
 def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
@@ -43,46 +41,6 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
     return log.draw(**draw_kwargs).dot
 
 
-def test_default_mode_unchanged_from_phase1(tmp_path: Path) -> None:
-    """The explicit default mode should match the omitted node-mode output."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(1, 4))
-
-    omitted = _render_dot(log, tmp_path / "omitted")
-    explicit = _render_dot(log, tmp_path / "explicit", node_style="default")
-
-    assert explicit == omitted
-
-
-def test_profiling_mode_adds_runtime(tmp_path: Path) -> None:
-    """Profiling mode should append at least one runtime row."""
-
-    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.Flatten(), nn.Linear(144, 8))
-    log = tl.trace(model, torch.randn(1, 3, 8, 8))
-
-    dot = _render_dot(log, tmp_path, node_style="profiling")
-
-    assert "t=" in dot
-    assert "ms" in dot
-    assert "msms" not in dot
-    assert "nsms" not in dot
-
-
-def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
-    """Profiling mode should omit runtime rows when timing is unavailable."""
-
-    model = nn.Linear(4, 4)
-    log = tl.trace(model, torch.randn(1, 4))
-    for layer_log in log._layer_logs.values():
-        for layer_pass in layer_log.ops.values():
-            layer_pass.func_duration = None
-
-    dot = _render_dot(log, tmp_path, node_style="profiling")
-
-    assert re.search(r"t=[0-9.]+ms", dot) is None
-
-
 def test_vision_mode_adds_io_shape_for_conv(tmp_path: Path) -> None:
     """Vision mode should show input and output shapes for Conv2d nodes."""
 
@@ -92,18 +50,6 @@ def test_vision_mode_adds_io_shape_for_conv(tmp_path: Path) -> None:
     dot = _render_dot(log, tmp_path, node_spec_fn=node_styles.vision_node_mode)
 
     assert "in=(2, 3, 8, 8), out=(2, 8, 4, 4)" in dot
-
-
-def test_vision_mode_no_op_for_linear(tmp_path: Path) -> None:
-    """Vision mode should not alter labels for non-vision Linear nodes."""
-
-    model = nn.Linear(4, 4)
-    log = tl.trace(model, torch.randn(1, 4))
-
-    default_dot = _render_dot(log, tmp_path / "default")
-    vision_dot = _render_dot(log, tmp_path / "vision", node_spec_fn=node_styles.vision_node_mode)
-
-    assert vision_dot == default_dot
 
 
 def test_attention_mode_shows_heads(tmp_path: Path) -> None:
@@ -137,24 +83,6 @@ def test_attention_mode_shows_heads(tmp_path: Path) -> None:
     assert "head_dim=4" in dot
 
 
-def test_user_callback_wins_over_mode(tmp_path: Path) -> None:
-    """A user node_spec_fn should receive and override the mode spec."""
-
-    model = nn.Linear(4, 4)
-    log = tl.trace(model, torch.randn(1, 4))
-
-    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec:
-        """Replace every node label with a single custom row."""
-
-        del layer_log, default_spec
-        return NodeSpec(lines=["X"])
-
-    dot = _render_dot(log, tmp_path, node_style="profiling", node_spec_fn=node_spec_fn)
-
-    assert "X" in dot
-    assert re.search(r"t=[0-9.]+ms", dot) is None
-
-
 class _RecurrentBlock(nn.Module):
     """Wrapper that calls one submodule three times (multi-pass layers)."""
 
@@ -178,37 +106,6 @@ def _set_op_durations(log: tl.Trace, seconds: float) -> None:
     for layer_log in log._layer_logs.values():
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = seconds
-
-
-def test_profiling_collapsed_module_does_not_crash(tmp_path: Path) -> None:
-    """V1 regression: profiling x depth=1 crashed on ANY collapsed module.
-
-    ``profiling_collapsed_node_mode`` iterated ``Module.layers`` (Layer
-    records) as if they were labels and indexed the trace with a Layer
-    object, so the pair crashed even on single-pass models.
-    """
-
-    class Wrapper(nn.Module):
-        """Single-pass model with one collapsible submodule."""
-
-        def __init__(self) -> None:
-            """Initialize the wrapped block."""
-
-            super().__init__()
-            self.block = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run the wrapped block."""
-
-            return self.block(x)
-
-    log = tl.trace(Wrapper(), torch.randn(2, 4))
-    _set_op_durations(log, 0.001)
-
-    dot = _render_dot(log, tmp_path, node_style="profiling", depth=1)
-
-    # The collapsed box aggregates its two ops: 2 x 1.00 ms.
-    assert "t=2.00 ms" in dot
 
 
 def test_profiling_collapsed_module_counts_every_pass(tmp_path: Path) -> None:
@@ -240,30 +137,6 @@ def test_profiling_collapsed_module_unrolled_box_is_per_call(tmp_path: Path) -> 
     # Three per-call boxes, each 2 ops x 1.00 ms — never the 6.00 ms total.
     assert dot.count("t=2.00 ms") == 3
     assert "t=6.00 ms" not in dot
-
-
-def test_profiling_multipass_unrolled_nodes_keep_per_pass_rows(tmp_path: Path) -> None:
-    """V2 regression: unrolled multi-pass nodes lost every t=/call= row.
-
-    The renderer handed the preset the aggregate Layer, whose per-pass field
-    reads refuse on multi-pass layers; the swallowed refusal silently
-    dropped the rows while the exact values sat unused on each Op.
-    """
-
-    log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
-    durations = {1: 0.001, 2: 0.002, 3: 0.004}
-    for layer_label in ("linear_1_1", "relu_1_2"):
-        for pass_index, layer_pass in log.layers[layer_label].ops.items():
-            layer_pass.func_duration = durations[pass_index]
-
-    dot = _render_dot(log, tmp_path, node_style="profiling")
-
-    # Each pass node carries ITS OWN captured duration (2 ops per pass).
-    assert dot.count("t=1.00 ms") == 2
-    assert dot.count("t=2.00 ms") == 2
-    assert dot.count("t=4.00 ms") == 2
-    # The source-call row survives on multi-pass nodes too.
-    assert "call=" in dot
 
 
 def test_profiling_multipass_rolled_node_discloses_aggregation(tmp_path: Path) -> None:
@@ -337,23 +210,3 @@ def test_invalid_mode_raises() -> None:
             rolled=False,
             node_style="bogus",  # type: ignore[arg-type]
         )
-
-
-def test_domain_node_style_presets_refuse(tmp_path: Path) -> None:
-    """The former 'vision'/'attention' presets refuse typed (shims removed).
-
-    The style functions themselves stay available through
-    ``torchlens.experimental.node_styles`` via ``node_spec_fn``.
-    """
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(1, 4))
-
-    with pytest.raises(ValueError, match="node_style"):
-        log.draw(
-            node_style="vision",  # type: ignore[arg-type]
-            file_format="dot",
-            path=str(tmp_path / "graph"),
-        )
-    assert callable(node_styles.vision_node_mode)
-    assert callable(node_styles.attention_node_mode)

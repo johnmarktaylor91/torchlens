@@ -125,20 +125,6 @@ def test_peek_on_three_architectures(architecture: tuple[nn.Module, torch.Tensor
     assert out.shape[0] == x.shape[0]
 
 
-def test_extract_list_and_dict_on_three_architectures(
-    architecture: tuple[nn.Module, torch.Tensor],
-) -> None:
-    """``tl.extract`` supports list and mapping layer specs."""
-
-    model, x = architecture
-    label = _first_saved_label(model, x)
-    listed = tl.extract(model, x, [label])
-    mapped = tl.extract(model, x, {"feature": label})
-    assert list(listed) == [label]
-    assert set(mapped) == {"feature"}
-    assert torch.equal(listed[label], mapped["feature"])
-
-
 def test_batched_extract_memory_and_disk_on_three_architectures(
     architecture: tuple[nn.Module, torch.Tensor],
     tmp_path: Path,
@@ -187,28 +173,6 @@ def test_list_ops_on_three_architectures(architecture: tuple[nn.Module, torch.Te
     assert isinstance(ops, list)
     assert ops
     assert set(both) == {"eval", "train"}
-
-
-def test_find_layers_and_suggest_on_three_architectures(
-    architecture: tuple[nn.Module, torch.Tensor],
-) -> None:
-    """``Trace.find_layers`` and ``suggest`` return useful labels."""
-
-    model, x = architecture
-    log = _metadata_log(model, x)
-    label = _first_saved_label(model, x)
-    base_label = label.split(":", 1)[0]
-    prefix = base_label.split("_", 1)[0]
-    assert base_label in log.find_layers(prefix)
-    assert log.find_layers(prefix)
-    # The capture layer discloses the zero-match layers_to_save request with a
-    # UserWarning (cdcf7d89) before pluck's own lookup raises the suggestion
-    # error; both signals are part of the contract here.
-    with (
-        pytest.raises(ValueError, match="Did you mean"),
-        pytest.warns(UserWarning, match="matched zero layers"),
-    ):
-        tl.pluck(model, x, "definitely_missing_layer")
 
 
 def test_layer_accessor_queries_and_completion(

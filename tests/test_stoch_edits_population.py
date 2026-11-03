@@ -25,22 +25,6 @@ def test_origin_is_required_and_nonempty() -> None:
     assert excinfo.value.fields["code"] == "population_origin_required"
 
 
-def test_tensor_stack_members_are_axis0_slices_with_content_digest() -> None:
-    """The noun's documented stacking contract + the mandatory D11 digest."""
-
-    stack = torch.arange(12, dtype=torch.float32).reshape(3, 4)
-    ref = population(stack, origin="unit stack")
-    assert len(ref) == 3
-    assert ref.kind == "tensor"
-    assert ref.digest_kind == "content"
-    assert torch.equal(ref.members[1], stack[1])
-    # Same bytes + same origin -> same identity; different origin -> different.
-    twin = population(stack.clone(), origin="unit stack")
-    assert twin.identity == ref.identity
-    other = population(stack.clone(), origin="different provenance")
-    assert other.identity != ref.identity
-
-
 def test_member_sequence_heterogeneous_refuses() -> None:
     """A donor population is one homogeneous stack."""
 

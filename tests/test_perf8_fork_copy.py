@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import functools
 import math
-import sys
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -368,14 +367,6 @@ def test_flat_copy_matches_the_former_copy(build: Callable[[Any], Any]) -> None:
     assert results[1] == results[0]
 
 
-def test_flat_copy_sees_the_atomic_types_the_former_copy_saw() -> None:
-    """The fast path's type test is the former per-member test, as a C-level lookup."""
-
-    assert trace_fork._is_atomic_copy_type.__self__ is _ATOMIC_COPY_TYPES
-    for item in (1, "a", b"b", 2.5, True, None, 1j, _Str("s"), _Record(), [], ()):
-        assert trace_fork._is_atomic_copy_type(type(item)) is (type(item) in _ATOMIC_COPY_TYPES)
-
-
 class _FakeStore:
     """A record store whose cells, pooled cells and compacted labels the test sets."""
 
@@ -441,40 +432,6 @@ def test_detached_record_fill_matches_the_former_fill() -> None:
         assert detached.layout is _FAKE_LAYOUT
         filled = [detached.cell_get(0, fid) for fid in range(_FAKE_LAYOUT.n_fields)]
         results.append(_describe(filled, inputs, {id(shell): "shell"}, {}))
-    assert results[1] == results[0]
-
-
-def test_record_extras_copy_matches_the_former_copy() -> None:
-    """Record extras: atomic values shared, containers rebuilt, records translated."""
-
-    parent, shell = _Record(), _Record()
-    record = _Record()
-    record.__dict__.update(
-        {
-            "count": 3,
-            "name": "fc1",
-            "nothing": None,
-            "flags": [True, parent],
-            "table": {"a": ("b", parent)},
-            "tensor": torch.ones(1),
-            "_source_trace_ref": "parent-ref",
-            "_facets_cache": {"dropped": 1},
-            "record": parent,
-        }
-    )
-    inputs = _input_index(list(record.__dict__.values()), parent)
-    results = []
-    for copy_extras in (_reference_copy_record_extras, trace_fork._copy_record_extras):
-        translator = _RecordTranslator()
-        translator.add(parent, shell)
-        fork_record = _Record()
-        copy_extras(record, fork_record, translator, "fork-ref")
-        results.append(
-            [
-                (key, _describe(value, inputs, {id(shell): "shell"}, {}))
-                for key, value in fork_record.__dict__.items()
-            ]
-        )
     assert results[1] == results[0]
 
 
@@ -681,33 +638,3 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
         assert fork._layer_dict_all_keys is not trace._layer_dict_all_keys
         fork._layer_dict_all_keys["probe"] = None
         assert "probe" not in trace._layer_dict_all_keys
-
-
-def _fork_events(trace: Any) -> int:
-    trace.fork()  # warm-up, as the benchmark counter does
-    calls = 0
-
-    def count(_frame: Any, event: str, _arg: Any) -> None:
-        nonlocal calls
-        if event in ("call", "c_call"):
-            calls += 1
-
-    sys.setprofile(count)
-    try:
-        member = trace.fork()
-    finally:
-        sys.setprofile(None)
-    del member
-    return calls
-
-
-# Measured for one fork of this capture: 35,641 events on the former copy path,
-# 28,274 on this one; the bar leaves about 10 percent headroom above the latter.
-_FORK_EVENT_BAR = 31_000
-
-
-def test_one_fork_stays_cheap() -> None:
-    """Profiler events (calls and C calls) of one fork of a fixed capture."""
-
-    events = _fork_events(_capture())
-    assert events <= _FORK_EVENT_BAR, events

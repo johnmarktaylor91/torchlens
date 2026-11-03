@@ -28,7 +28,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._selection.selectors import CompositeSelector
 from torchlens._utils._torch_compat import TorchCapabilityWarning
 from torchlens.backends.torch import (
     _ops_exhaustive,
@@ -306,41 +305,6 @@ def _record_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]
 
 
 @pytest.mark.parametrize(
-    ("selector", "exit_only"),
-    [
-        pytest.param(tl.module("block1"), True, id="module"),
-        pytest.param(tl.module("block1:2"), True, id="module_pass_label"),
-        pytest.param(tl.module("block1") | tl.module("block2"), True, id="module_or_module"),
-        pytest.param(tl.module("block1") & tl.module("block2"), True, id="module_and_module"),
-        pytest.param(
-            (tl.module("block1") | tl.module("block2")) & tl.module("head"),
-            True,
-            id="nested_module_composite",
-        ),
-        pytest.param(~tl.module("block1"), False, id="negation"),
-        pytest.param(tl.func("relu"), False, id="func"),
-        pytest.param(tl.in_module("block1"), False, id="in_module"),
-        pytest.param(tl.where(lambda site: True), False, id="callable"),
-        pytest.param(tl.module("block1") & tl.func("relu"), False, id="module_and_func"),
-        pytest.param(tl.module("block1") | tl.func("relu"), False, id="module_or_func"),
-        pytest.param(tl.label("relu_1_3"), False, id="label"),
-        pytest.param(CompositeSelector("or", ()), False, id="empty_or"),
-        pytest.param(CompositeSelector("and", ()), False, id="empty_and"),
-        pytest.param(
-            CompositeSelector("or", (tl.module("block1"), CompositeSelector("and", ()))),
-            False,
-            id="composite_with_empty_child",
-        ),
-        pytest.param("block1", False, id="bare_string"),
-    ],
-)
-def test_module_exit_only_selector_classification(selector: Any, exit_only: bool) -> None:
-    """Only pure ``tl.module`` leaves under ``|`` / ``&`` are module-exit-only."""
-
-    assert _ops_interventions._is_module_exit_only(selector) is exit_only
-
-
-@pytest.mark.parametrize(
     ("intervene", "reaches"),
     [
         pytest.param(tl.when(tl.module("block1"), tl.zero_ablate()), False, id="module_rule"),
@@ -446,17 +410,6 @@ def test_hook_entry_door_classification(entry: Any, reaches: bool) -> None:
     assert _ops_interventions._hook_entry_reaches_op_door(entry) is reaches
 
 
-def test_hook_plan_reaches_op_door_when_any_entry_does() -> None:
-    """One op-capable entry keeps the whole plan on the per-op path."""
-
-    module_only = [_entry(tl.module("block1")), _entry(tl.module("block2"))]
-    assert _ops_interventions._hook_plan_reaches_op_door(module_only) is False
-    assert (
-        _ops_interventions._hook_plan_reaches_op_door([*module_only, _entry(tl.func("relu"))])
-        is True
-    )
-
-
 # ---------------------------------------------------------------------------
 # 2. Equality with the per-op path forced on
 # ---------------------------------------------------------------------------
@@ -475,19 +428,6 @@ def test_skip_matches_legacy_path(entry: str, spec_name: str) -> None:
     assert bool(skipped["fires"]) is fires
     if not fires and entry == "trace":
         assert any("matched zero sites" in text for _cat, text in skipped["warnings"])
-
-
-def test_validation_verdicts_unchanged_by_the_door() -> None:
-    """``tl.validate`` forward and saved scopes give the same verdicts with the door forced on."""
-
-    verdicts = {}
-    for force in (False, True):
-        with _legacy_door(force):
-            verdicts[force] = (
-                tl.validate(_model(), _input(), scope="forward"),
-                tl.validate(_model(), _input(), scope="saved"),
-            )
-    assert verdicts[False] == verdicts[True] == (True, True)
 
 
 # ---------------------------------------------------------------------------

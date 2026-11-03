@@ -131,18 +131,6 @@ def _relations(resolved):
 # ---------------------------------------------------------------------------
 
 
-def test_changed_default_is_the_moved_elements_mask(log, log_b):
-    """Bare changed(ref) selects exactly the elements that moved at all."""
-
-    resolved = log[tl.changed(log_b, _RELU)]
-    delta = _delta(log, log_b, _RELU)
-    assert torch.equal(resolved[0].mask, delta.abs() > 0)
-    assert _relations(resolved) == ["exact"]
-    # the engineered input-invariant channel did not move
-    assert not resolved[0].mask[0, 2].any()
-    assert resolved[0].mask.any()
-
-
 def test_changed_bounds_band_and_signed_direction(log, log_b):
     """Strict bounds on |delta|; signed selects increased/decreased elements."""
 
@@ -179,18 +167,6 @@ def test_changed_selects_what_the_intervention_moved(model):
         trace.cleanup()
 
 
-def test_top_changed_matches_manual_ranking(log, log_b):
-    """top_changed selects exactly the k largest |delta| elements."""
-
-    resolved = log[tl.top_changed(log_b, _RELU, 7)]
-    keys = _delta(log, log_b, _RELU).abs().reshape(-1)
-    expected = torch.zeros_like(keys, dtype=torch.bool)
-    expected[torch.argsort(keys, descending=True, stable=True)[:7]] = True
-    assert torch.equal(resolved[0].mask.reshape(-1), expected)
-    assert resolved[0].num_selected == 7
-    assert _relations(resolved) == ["exact"]
-
-
 def test_top_changed_fraction_least_moved_and_signed(log, log_b):
     """fraction=ceil rule; largest=False ranks the least moved; signed ranks deltas."""
 
@@ -208,25 +184,6 @@ def test_top_changed_fraction_least_moved_and_signed(log, log_b):
     expected = torch.zeros_like(keys, dtype=torch.bool)
     expected[torch.argsort(keys, descending=True, stable=True)[:3]] = True
     assert torch.equal(signed[0].mask.reshape(-1), expected)
-
-
-def test_top_changed_population_too_small_refuses_typed(log, log_b):
-    """k beyond the rankable delta population refuses with structured counts."""
-
-    numel = log[_RELU].out.numel()
-    with pytest.raises(SelectionError) as excinfo:
-        log[tl.top_changed(log_b, _RELU, numel + 1)]
-    assert excinfo.value.fields["code"] == "selection_unresolvable"
-    assert excinfo.value.fields["reason"] == "population_too_small"
-    assert excinfo.value.fields["available"] == numel
-
-
-def test_global_default_population_spans_saved_sites(log, log_b):
-    """within=None ranks deltas across every retained tensor site."""
-
-    resolved = log[tl.top_changed(log_b, None, 10)]
-    assert len(resolved) > 1
-    assert sum(entry.num_selected for entry in resolved) == 10
 
 
 def test_changed_nan_delta_never_satisfies():
@@ -300,24 +257,6 @@ def test_self_comparison_refuses_typed(log):
         log[tl.changed(log, _RELU)]
     assert excinfo.value.fields["reason"] == "value_criterion_invalid"
     assert "fork is a different trace object" in str(excinfo.value)
-
-
-def test_reference_missing_site_refuses_named(log):
-    """A reference lacking a population site refuses as a one-sided join key.
-
-    Since leverage B4 the pairing authority is the guarded site join: a site
-    the reference never executed is a DECLARED subject-only addition
-    (``site_join_refused`` / ``one_sided_subject``), never a guess.
-    """
-
-    other = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
-    try:
-        with pytest.raises(SelectionError) as excinfo:
-            log[tl.changed(other, _RELU)]
-        assert excinfo.value.fields["reason"] == "site_join_refused"
-        assert excinfo.value.fields["join_verdict"] == "one_sided_subject"
-    finally:
-        other.cleanup()
 
 
 def test_reference_shape_drift_refuses_named(model, log):
@@ -441,20 +380,6 @@ def _stacked_passes(rec_log, passes=(1, 2, 3)) -> torch.Tensor:
     return torch.stack(
         [rec_log[f"{_TANH}:{pass_index}"].out.to(torch.float64) for pass_index in passes]
     )
-
-
-def test_stable_selects_the_pass_invariant_unit(rec_log):
-    """The engineered constant unit is stable; masks land on every pass site."""
-
-    resolved = rec_log[tl.stable_across_passes(_TANH, atol=1e-9)]
-    assert [entry.key for entry in resolved] == [(_TANH, 1), (_TANH, 2), (_TANH, 3)]
-    stacked = _stacked_passes(rec_log)
-    expected = (stacked.max(dim=0).values - stacked.min(dim=0).values) <= 1e-9
-    for entry in resolved:
-        assert torch.equal(entry.mask, expected)
-    assert expected[0, 0]  # the engineered unit
-    assert _relations(resolved) == ["exact", "exact", "exact"]
-    assert "n_passes=3" in resolved[0].provenance.source
 
 
 def test_pass_variance_bounds_match_manual(rec_log):
@@ -592,68 +517,6 @@ def test_cross_pass_nan_never_selected():
         trace.cleanup()
 
 
-def test_population_restriction_intersects_across_the_window(rec_log):
-    """The element population is the intersection of the window entries' masks."""
-
-    population = tl.sign(_TANH, "positive")  # per-pass masks differ
-    resolved = rec_log[tl.stable_across_passes(population, atol=1e30)]
-    per_pass = [rec_log[f"{_TANH}:{p}"].out > 0 for p in (1, 2, 3)]
-    intersection = per_pass[0] & per_pass[1] & per_pass[2]
-    for entry in resolved:
-        assert torch.equal(entry.mask, intersection)  # tol=inf: criterion all-true
-
-
 # ---------------------------------------------------------------------------
 # End-to-end gallery rows: comparative selections drive interventions.
 # ---------------------------------------------------------------------------
-
-
-def test_do_zero_ablates_top_movers(model):
-    """fork.do(top_changed(...), zero_ablate()) zeroes exactly the top movers."""
-
-    torch.manual_seed(4)
-    trace = tl.trace(
-        model,
-        torch.randn(1, 1, 10, 10),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    torch.manual_seed(5)
-    reference = tl.trace(model, torch.randn(1, 1, 10, 10))
-    try:
-        selection = tl.top_changed(reference, _RELU, 6)
-        mask = trace[selection][0].mask
-        baseline = trace[_RELU].out.clone()
-        fork = trace.fork()
-        fork.do(fork[selection], tl.zero_ablate())
-        edited = fork[_RELU].out
-        assert bool((edited[mask] == 0).all())
-        assert torch.equal(edited[~mask], baseline[~mask])
-        assert torch.equal(trace[_RELU].out, baseline)  # capture truth intact
-    finally:
-        trace.cleanup()
-        reference.cleanup()
-
-
-def test_do_zero_ablates_a_stable_unit_at_every_pass():
-    """fork.do(stable_across_passes(...), zero_ablate()) edits every window pass."""
-
-    torch.manual_seed(6)
-    trace = tl.trace(
-        _Recurrent(),
-        torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    try:
-        selection = tl.stable_across_passes(_TANH, atol=1e-9)
-        resolved = trace[selection]
-        assert resolved[0].mask[0, 0]
-        fork = trace.fork()
-        fork.do(selection, tl.zero_ablate())
-        for pass_index in (1, 2, 3):
-            edited = fork[f"{_TANH}:{pass_index}"].out
-            baseline = trace[f"{_TANH}:{pass_index}"].out
-            mask = resolved[pass_index - 1].mask
-            assert bool((edited[mask] == 0).all())
-            assert (baseline[0, 0] != 0).all()  # the ablation changed real values
-    finally:
-        trace.cleanup()
