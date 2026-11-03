@@ -112,7 +112,7 @@ torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
 torchlens/_data_classes/param.py	1083
 torchlens/_data_classes/param.py::Param.__init__	75
-torchlens/_data_classes/trace.py	3537
+torchlens/_data_classes/trace.py	3526
 torchlens/_data_classes/trace.py::Trace.__init__	366
 torchlens/_data_classes/trace.py::Trace.save	83
 torchlens/_data_substrate/artifact.py::ArtifactWriter.commit_shard	67
@@ -321,10 +321,9 @@ torchlens/_observability/_overhead.py::measure_overhead	83
 torchlens/_observability/_payloads.py::histogram_payload	70
 torchlens/_observability/_quantiles.py::derived_quantile	61
 torchlens/_observability/_region.py::region	74
-torchlens/_observability/_render.py	956
+torchlens/_observability/_render.py	885
 torchlens/_observability/_render.py::HistoryView.series	62
 torchlens/_observability/_render.py::_waterfall_raster	61
-torchlens/_observability/_render.py::render_contact_sheet	62
 torchlens/_observability/_render.py::render_waterfall	61
 torchlens/_observability/_schema.py::merge_observations	67
 torchlens/_observe/_device_memory.py::settle_sample	74
@@ -630,7 +629,7 @@ torchlens/_visualization/bundle_diff.py::_build_dot	128
 torchlens/_visualization/bundle_diff.py::bundle_diff	101
 torchlens/_visualization/code_panel.py::resolve_code_panel_source	80
 torchlens/_visualization/collapse_ladder.py::collapse_schedule	128
-torchlens/_visualization/collapse_optimizer.py	4093
+torchlens/_visualization/collapse_optimizer.py	4084
 torchlens/_visualization/collapse_optimizer.py::_condense_plan_with_child_segments	110
 torchlens/_visualization/collapse_optimizer.py::_frontier_auto_result	180
 torchlens/_visualization/collapse_optimizer.py::_frontier_can_reach_band	90
