@@ -30,13 +30,14 @@ from .._data_classes._trace_rerun_state import (
 from .._data_classes.trace import _USE_STORED_TRANSFORM
 from .._deprecations import MISSING, MissingType
 from .._errors import InvalidArgumentError, KeywordConflictError, RecordBindingError
-from .._fast_live_steer import refusal_code
+from .._fast_live_steer import refusal_code, refuse_unfired_fast_run, stages_user_entries
 from .._fast_run import (
     _FastLiveSession,
     _FastSparseSession,
     close_fast_run_session,
     live_source_model,
 )
+from .._input_route import _fast_run_inputs, _route_transformed_input
 from .._runnable import (
     DivergencePolicy,
     PathFaithfulness,
@@ -185,7 +186,7 @@ def try_guarded_fast_rerun(
         # hooked-run ceiling belongs to the explicit run(inputs=, fast=True) door.
         session.reports_hooked_ceiling = False
         session.output_transform = output_transform
-        session.run(inputs, seed=None)
+        session.run(_fast_run_inputs(inputs), seed=None)
     except (RunCapabilityUnavailableError, PathDivergenceError, RuntimeSignatureDriftError) as exc:
         return False, refusal_code(exc)
     finally:
@@ -631,8 +632,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             _warn_stateful_live_run_once(trace, live_model)
 
         if fast:
-            from .._fast_live_steer import refuse_unfired_fast_run
-
             with zero_fire_policy_scope(zero_fire_policy):
                 fast_result = run_fast_live_trace(trace, run_inputs, seed=seed, until=until)
                 refuse_unfired_fast_run(fast_result.trace)
@@ -719,8 +718,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
     # Any typed refusal (ineligible save scope or target, a real
     # divergence) falls back to the capture rerun below, with the code in
     # ``last_run``. A trace with nothing staged keeps the capture rerun.
-    from .._fast_live_steer import stages_user_entries
-
     fast_refused: str | None = None
     with zero_fire_policy_scope(zero_fire_policy):
         if (
@@ -729,8 +726,6 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
             and replay_options.chunk_size is None
             and stages_user_entries(trace)
         ):
-            from .._fast_live_steer import refuse_unfired_fast_run
-
             fast_done, fast_refused = try_guarded_fast_rerun(
                 trace, run_model, transformed_input, output_transform=resolved_output_transform
             )
@@ -766,11 +761,11 @@ def _apply_rerun_transform(
     except AttributeError:
         stored_transform = None
     if transform is _USE_STORED_TRANSFORM and stored_transform is not None:
-        return stored_transform(user_input)
+        return _route_transformed_input(user_input, stored_transform(user_input))
     if transform is False:
         return user_input
     if callable(transform):
-        return transform(user_input)
+        return _route_transformed_input(user_input, transform(user_input))
     return user_input
 
 

@@ -12,7 +12,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
-from .._input_coerce import _coerce_input_args
+from .._input_coerce import _coerce_inputs
 from .._output_slot import returned as output_returned
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -151,7 +151,7 @@ def record(
     model:
         PyTorch module to execute.
     inputs:
-        Tensor, list, or tuple of positional model inputs.
+        Tensor, list, or tuple of positional model inputs; for a Hugging Face model also a string, PIL image or modality dict, resolved as ``tl.trace`` resolves it.
     input_kwargs:
         Optional keyword arguments for the model call.
     save:
@@ -243,7 +243,7 @@ def record(
     knobs = _unfold_recording_options(recording)
     postprocess = knobs.pop("postprocess")
     validate_postprocess(postprocess)
-    inputs = _coerce_input_args(model, inputs)
+    inputs, input_kwargs = _coerce_inputs(model, inputs, input_kwargs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
     # storage, sparse layouts break copy/print/FLOPs paths, symbolic shapes break metadata).
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard

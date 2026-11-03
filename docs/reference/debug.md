@@ -3,7 +3,11 @@
 `tl.debug` inspects a completed trace when the graph itself is the diagnostic: it can
 locate non-finite saved tensors, walk dependencies, compare runs, rank cost and
 recomputation candidates, audit saved gradients, and infer a runnable input shape. Capture
-with the normal `tl.trace(...)` API, then pass the resulting trace to a helper.
+with the normal `tl.trace(...)` API, then pass the resulting trace to a helper. A helper that
+takes `inputs` itself (`bisect_precision`, `check_determinism`, `find_nan`, `graph_breaks`,
+`isolated_capture`, `nonfinite_origin`, `tl.report.flops_vs_dispatch`) takes every input form
+`tl.trace` takes: a tensor, a positional list or tuple, and for a Hugging Face model a string, PIL
+image or modality dict, resolved as the trace resolves it.
 
 ## The report object (`Report`)
 
