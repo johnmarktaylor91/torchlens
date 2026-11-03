@@ -105,6 +105,11 @@ from ._trace_accessors import (
 from ._trace_missing_attrs import _raise_missing_trace_attribute
 from ._trace_narrate import TraceNarrateMixin
 from ._trace_output import TraceOutputMixin
+from ._trace_pickle_state import (
+    _initialize_output_metadata,
+    _restore_pickled_verification,
+    _sanitize_pickled_verification,
+)
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass
 from .container import reconstruct_container, reconstruct_output
@@ -1757,8 +1762,7 @@ class Trace(
         self.transformed_output = transformed_output
         self._decoded_output: Any | None = None
         self._provenance_output_postprocessor: ResolvedPostprocessing | None = None
-        self.output_id2label: dict[int, str] | None = None
-        self.output_num_classes: int | None = None
+        _initialize_output_metadata(self)
         self._output_transform = output_transform
         self._output_slot = None
         self._options_save_transformed_output = save_transformed_output
@@ -2998,18 +3002,7 @@ class Trace(
         state["_capture_outcome"] = (
             outcome.to_payload() if outcome is not None and hasattr(outcome, "to_payload") else None
         )
-        # grind-r5 P7 (b3 opus R10-1 / b6 opus R16-1): the producer's NEGATIVE
-        # verification claim persists -- a capture TorchLens itself refused to
-        # bless must not round-trip into "no claim". A POSITIVE claim never
-        # persists (a tampered artifact could otherwise forge verified=True;
-        # verdicts may only degrade across persistence). ``rescue_rerun``
-        # stays session-time per the migration doc.
-        if state.get("_provenance_verified") is False:
-            reason = state.get("_provenance_verification_reason")
-            state["_provenance_verification_reason"] = reason if isinstance(reason, str) else None
-        else:
-            state["_provenance_verified"] = None
-            state["_provenance_verification_reason"] = None
+        _sanitize_pickled_verification(state)
         state["tlspec_version"] = TLSPEC_VERSION
         return state
 
@@ -3046,19 +3039,7 @@ class Trace(
         """Restore pickle state and rebuild weakref-backed links."""
         state["_output_slot"] = None
         pickle_module_accessor_state = state.pop("_pickle_module_accessor_state", None)
-        # P7/R10: restore the persisted NEGATIVE verification disclosure. The
-        # row is string-only and can only ever WORSEN a verdict: anything but
-        # the exact {"verified": False} shape is ignored (stays "no claim"), so
-        # a forged row cannot bless a capture and a stripped row merely reverts
-        # to the historical launder this closes for honest artifacts.
-        verification_row = state.pop("_capture_verification", None)
-        if (
-            isinstance(verification_row, dict)
-            and verification_row.get("verified") is False
-            and isinstance(verification_row.get("reason"), (str, type(None)))
-        ):
-            state["_provenance_verified"] = False
-            state["_provenance_verification_reason"] = verification_row.get("reason")
+        _restore_pickled_verification(state)
         for field_name in (
             *LEGACY_TRACE_BUILD_STATE_KEYS,
             # "_build_state" is the pre-M10 flat scratchpad key; the three

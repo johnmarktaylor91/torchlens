@@ -30,6 +30,7 @@ from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from ._render_utils import DEFAULT_DRAW_STEM, collision_safe_outpath, strip_known_extension
+from ._trace_draw_arguments import _forward_render_arguments
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
 
@@ -80,6 +81,7 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     show_module_paths: bool,
     show_grad_values: bool,
 ) -> Any:
+    """Render ``graph="backward"`` for the draw door in the backward renderer's spellings."""
     return render_backward_graph(
         trace,
         vis_outpath=outpath,
@@ -213,52 +215,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         )
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
-        rendered = _render_draw(
-            trace,
-            vis_mode=vis_mode,
-            vis_call_depth=depth,
-            vis_outpath=outpath,
-            announce_path=path is None,
-            vis_graph_overrides=graph_overrides,
-            module=module,
-            node_mode=node_style,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            collapse_fn=collapse_fn,
-            collapse=collapse,
-            fold_repeats=fold_repeats,
-            fold_patterns=fold_patterns,
-            skip_fn=skip_fn,
-            vis_edge_overrides=edge_overrides,
-            vis_grad_edge_overrides=grad_edge_overrides,
-            vis_module_overrides=module_overrides,
-            vis_save_only=not open_viewer,
-            vis_fileformat=file_format,
-            show_buffer_layers=show_buffers,
-            direction="bottomup" if direction is None else direction,
-            vis_node_placement=layout,
-            vis_renderer=renderer,
-            vis_theme=theme,
-            vis_intervention_mode=intervention_mode,
-            vis_show_cone=show_cone,
-            code_panel=code_panel,
-            node_overlay=node_overlay,
-            node_label_fields=node_label_fields,
-            show_legend=show_legend,
-            font_size=font_size,
-            dpi=dpi,
-            order_siblings=order_siblings,
-            show_containers=show_containers,
-            container_max_inline=container_max_inline,
-            show_input_transform_summary=show_input_transform_summary,
-            show_orphans=show_orphans,
-            color_by=resolve_color_source(trace, color_by),
-            size_by=size_by,
-            scale=size_scale,
-            stack_by=stack_by,
-            show_redundant_args=show_redundant_args,
-            show_saved_for_backward=show_saved_for_backward,
-        )
+        rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
     written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
     return Drawing(
         dot=str(rendered),
