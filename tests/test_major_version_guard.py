@@ -163,12 +163,12 @@ class _Repo:
         )
 
     def markers(self, base: str, head: str) -> int:
-        """Run the pre-push marker scan over ``base..head`` as raw git would feed it."""
+        """Run the pre-push marker scan over ``base..head`` with raw git's stdin refspec."""
 
         env = {k: v for k, v in os.environ.items() if not k.startswith("PRE_COMMIT")}
         env.update(self.env)
         return subprocess.run(
-            [sys.executable, str(_HOOK), "--pre-push", "origin", "unused"],
+            [sys.executable, str(_HOOK), "--pre-push"],
             cwd=self.root,
             env=env,
             input=f"refs/heads/main {head} refs/heads/main {base}\n",
