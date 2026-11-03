@@ -712,7 +712,7 @@ funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
 # (``Tensor.share_memory_`` calls ``_typed_storage()``) would otherwise lose its
 # bottom-level barcode and go uncaptured.
 _BARCODE_TRANSPARENT_FUNCS = frozenset(
-    {"as_subclass", "untyped_storage", "_typed_storage", "storage"}
+    {"as_subclass", "__index__", "untyped_storage", "_typed_storage", "storage"}
 )
 
 # Print functions get special handling: intercepted to add TorchLens label

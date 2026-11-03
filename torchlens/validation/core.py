@@ -53,6 +53,11 @@ from .._utils.tensor_utils import (
 from . import _replay_grad_fidelity as _grad_fidelity
 from ._autograd_grad_replay import execute_replay_func
 from ._destination_coverage import _perturbed_parents_only_occupy_out_kwarg
+from ._domain_perturbations import (
+    _parent_label_occupies_arg_position,
+    _perturb_domain_sensitive_parent_values,
+    _tensor_is_binary_draw,
+)
 from ._edge_boundary import (
     _capture_payload_equal,
     _check_edge_intervention_boundary,
@@ -60,11 +65,14 @@ from ._edge_boundary import (
     _tensor_content_digest,
 )
 from ._index_domain import (
+    _INDEX_SINGLE_ENTRY_STRATEGY,
     _parent_is_index_domain_arg,
+    _raise_retry_strategies,
     index_domain_rotation_values,
     index_domain_single_entry_values,
     layer_has_index_domain_parent,
 )
+from ._non_pass_record import record_replay_exception as _record_replay_exception
 from ._pre_replay import (
     CoreBindings,
     _is_provable_functionless_source_or_boundary,
@@ -81,7 +89,11 @@ from ._replay_storage_context import (
     restore_receiver_storage_context,
     write_replay_slot,
 )
-from ._replay_warnings import replay_warnings_ignored
+from ._replay_warnings import (
+    collecting_replay_exceptions,
+    note_replay_exception,
+    replay_warnings_ignored,
+)
 from ._saved_outs_steps import (
     _fail_bfs_incomplete,
     _fail_dispatch_census,
@@ -750,12 +762,14 @@ def _comparator_self_test() -> None:
     from .._state import pause_logging
 
     with pause_logging():
-        base = torch.tensor([1.0, -2.0, 0.0, 0.5])
-        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75])
-        nan_pair = torch.tensor([float("nan"), 1.0])
-        nan_vs_number = torch.tensor([0.25, 1.0])
-        neg_zero = torch.tensor([-0.0, 1.0])
-        pos_zero = torch.tensor([0.0, 1.0])
+        # Sentinels pin float32, the dtype whose band the pairs derive; float64 would misjudge.
+        fp32 = torch.float32
+        base = torch.tensor([1.0, -2.0, 0.0, 0.5], dtype=fp32)
+        unequal = torch.tensor([1.0, -2.0, 0.0, 0.75], dtype=fp32)
+        nan_pair = torch.tensor([float("nan"), 1.0], dtype=fp32)
+        nan_vs_number = torch.tensor([0.25, 1.0], dtype=fp32)
+        neg_zero = torch.tensor([-0.0, 1.0], dtype=fp32)
+        pos_zero = torch.tensor([0.0, 1.0], dtype=fp32)
         # R74r6-F1: bound the EFFECTIVE fp32 band from BOTH sides, not just
         # non-vacuity. The loosest sentinel above is a 1/3 relative gap, so
         # any rtol below 0.333 used to pass -- a 5,461x-loosened band ran
@@ -771,10 +785,8 @@ def _comparator_self_test() -> None:
         # surface a poisoned/corrupted band lives in and must not be able to
         # move its own tripwire. (Headroom walk-out is pinned separately by
         # tests/test_replay_tolerance_dtype_tripwire.py's literal pins.)
-        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0])
-        fp32_replay_rtol = derive_float_tolerances(
-            torch.float32, _ACCUMULATING_REPLAY_ULP_HEADROOM
-        )[0]
+        band_probe = torch.tensor([1.0, -1.0, 0.5, 2.0], dtype=fp32)
+        fp32_replay_rtol = derive_float_tolerances(fp32, _ACCUMULATING_REPLAY_ULP_HEADROOM)[0]
         band_reject = band_probe * (1.0 + 16.0 * fp32_replay_rtol)
         band_accept = band_probe * (1.0 + 1.0e-6)
         healthy = (
@@ -1952,26 +1964,6 @@ def _check_arglocs_correct_for_arg(
     return ValidationCheckResult.validated("arg_logging_matched")
 
 
-def _tensor_is_binary_draw(value: torch.Tensor) -> bool:
-    """Return whether a tensor holds only 0/1 values (a bernoulli draw shape).
-
-    Parameters
-    ----------
-    value:
-        Tensor to classify.
-
-    Returns
-    -------
-    bool
-        True when every element is exactly 0 or 1 (NaN/Inf elements fail the
-        comparison, so a corrupted buffer never classifies as a draw).
-    """
-
-    if value.numel() == 0:
-        return False
-    return bool(torch.all((value == 0) | (value == 1)))
-
-
 def _tensor_arg_value_is_trivial(value: torch.Tensor) -> bool:
     """Return whether a saved arg tensor value is too generic to attribute.
 
@@ -2406,7 +2398,7 @@ def _execute_func_with_restored_state(
     The caller treats ``None`` as a failed replay execution for normal replay
     and an unverified perturbation execution exception for perturbation replay.
 
-    Returns the recomputed output tensor, or None on exception.
+    Returns the recomputed output tensor, or None on exception (filed via ``note_replay_exception``).
     """
     layer_func = layer.func
 
@@ -2419,6 +2411,7 @@ def _execute_func_with_restored_state(
         # Broad catch: perturbed values can trigger any exception (shape
         # mismatch, index OOB, dtype error, etc.).  Returning None lets the
         # caller decide whether this is acceptable.
+        note_replay_exception(e)
         if verbose:
             print(
                 f"Perturbation of {layers_to_perturb} for layer "
@@ -2650,6 +2643,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
         layers_to_perturb = []
 
     layer = _op_for_validation_label(self, layer_to_validate_parents_for_label)
+    validated_label = layer_to_validate_parents_for_label
     _raise_if_replay_arg_version_data_incomplete(self, layer)
 
     # Early exits for layers that cannot or should not be replayed.
@@ -2685,32 +2679,34 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if input_args is None:
         return ValidationCheckResult.unverified(unverified_reason or "missing_saved_args")
 
-    recomputed_output = _execute_func_with_restored_state(
-        layer, input_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
-    )
+    replay_exceptions: list[Exception] = []
+    with collecting_replay_exceptions(replay_exceptions):
+        recomputed_output = _execute_func_with_restored_state(
+            layer, input_args, layers_to_perturb, validated_label, verbose
+        )
 
-    # A perturbed execution that RAISES proves the op read the perturbed value
-    # but leaves the sensitivity check unrun. Retry with minimal deterministic
-    # step perturbations (+1/-1 for integers, one representable step for
-    # floats): domain-constrained control parents (``softmax`` dim, ``view``
-    # sizes -- round-31 H2 records them as real parents) usually admit an
-    # adjacent valid value even when the wide random draw does not. The retry
-    # result flows through the SAME pass/fail comparison as a first-try
-    # perturbation, so this can only convert ``unverified`` into an
-    # evidence-backed verdict (validated OR failed), never mask one.
-    if recomputed_output is None and perturb:
-        for retry_strategy in _raise_retry_strategies(layer, layers_to_perturb):
-            retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
-                self, layer, layers_to_perturb, perturb_strategy=retry_strategy
-            )
-            if retry_args is None:
-                break
-            recomputed_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
-            )
-            if recomputed_output is not None:
-                input_args = retry_args
-                break
+        # A perturbed execution that RAISES proves the op read the perturbed value
+        # but leaves the sensitivity check unrun. Retry with minimal deterministic
+        # step perturbations (+1/-1 for integers, one representable step for
+        # floats): domain-constrained control parents (``softmax`` dim, ``view``
+        # sizes -- round-31 H2 records them as real parents) usually admit an
+        # adjacent valid value even when the wide random draw does not. The retry
+        # result flows through the SAME pass/fail comparison as a first-try
+        # perturbation, so this can only convert ``unverified`` into an
+        # evidence-backed verdict (validated OR failed), never mask one.
+        if recomputed_output is None and perturb:
+            for retry_strategy in _raise_retry_strategies(layer, layers_to_perturb):
+                retry_args, _retry_reason = _prepare_input_args_for_validating_layer(
+                    self, layer, layers_to_perturb, perturb_strategy=retry_strategy
+                )
+                if retry_args is None:
+                    break
+                recomputed_output = _execute_func_with_restored_state(
+                    layer, retry_args, layers_to_perturb, validated_label, verbose
+                )
+                if recomputed_output is not None:
+                    input_args = retry_args
+                    break
 
     # None means execution raised an exception (see _execute_func_with_restored_state).
     if recomputed_output is None:
@@ -2740,6 +2736,9 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.failed_result("replay_execution_exception")
         # Perturbed execution raised -- the perturbed values caused an invalid
         # input (e.g., wrong shape). It is unverified, not a pass.
+        _record_replay_exception(
+            self, layer_to_validate_parents_for_label, layers_to_perturb, replay_exceptions
+        )
         return ValidationCheckResult.unverified("perturbation_execution_exception")
 
     matches_saved = tensor_nanequal(recomputed_output, saved_output, allow_tolerance=True)
@@ -2770,11 +2769,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             )
             snapshot_output = (
                 _execute_func_with_restored_state(
-                    layer,
-                    snapshot_args,
-                    layers_to_perturb,
-                    layer_to_validate_parents_for_label,
-                    verbose,
+                    layer, snapshot_args, layers_to_perturb, validated_label, verbose
                 )
                 if snapshot_args is not None
                 else None
@@ -2852,7 +2847,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             if retry_args is None:
                 break
             retry_output = _execute_func_with_restored_state(
-                layer, retry_args, layers_to_perturb, layer_to_validate_parents_for_label, verbose
+                layer, retry_args, layers_to_perturb, validated_label, verbose
             )
             if retry_output is not None and not tensor_nanequal(
                 retry_output, layer.out, allow_tolerance=False
@@ -2868,23 +2863,16 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
             return ValidationCheckResult.exempted("ulp_swamped_perturbation")
         # A genuine perturbation-insensitivity failure: the output did not
         # change when a parent's value was perturbed and no posthoc excuse applied.
-        from .diagnostics import (
-            CHECK_PERTURBATION,
-            ValidationFailure,
-            record_validation_failure,
-        )
+        # A degenerate forward (all non-finite output, identically zero
+        # autograd.grad gradient) is recorded under its own check; it fails
+        # exactly the same way.
+        from ._degenerate_forward import perturbation_insensitive_failure
+        from .diagnostics import record_validation_failure
 
         record_validation_failure(
             self,
-            ValidationFailure(
-                check_name=CHECK_PERTURBATION,
-                op_label=layer_to_validate_parents_for_label,
-                func_name=getattr(layer, "func_name", None),
-                message=(
-                    "output insensitive to perturbing parent(s) "
-                    f"{layers_to_perturb}; the parent does not influence this op's value"
-                ),
-                extra={"perturbed_parents": list(layers_to_perturb)},
+            perturbation_insensitive_failure(
+                layer, layer_to_validate_parents_for_label, list(layers_to_perturb)
             ),
         )
         return ValidationCheckResult.failed_result("perturbation_insensitive")
@@ -3471,31 +3459,6 @@ def _op_is_value_discretizing(layer: Op) -> bool:
     )
 
 
-_INDEX_SINGLE_ENTRY_STRATEGY = "index_single_entry"
-
-
-def _raise_retry_strategies(layer: Op, layers_to_perturb: list[str]) -> tuple[str, ...]:
-    """Return the retries for a first perturbation whose execution raised.
-
-    Parameters
-    ----------
-    layer:
-        Child op being validated.
-    layers_to_perturb:
-        Labels of the parents this check perturbs.
-
-    Returns
-    -------
-    tuple of str
-        ``step_up``/``step_down``; only the in-domain single-entry move for an
-        index-domain parent (see ``_perturbation_retry_strategies``).
-    """
-
-    if any(_parent_is_index_domain_arg(layer, label) for label in layers_to_perturb):
-        return (_INDEX_SINGLE_ENTRY_STRATEGY,)
-    return ("step_up", "step_down")
-
-
 def _perturbation_retry_strategies(
     layer: Op, layers_to_perturb: list[str] | None = None
 ) -> list[str]:
@@ -3716,491 +3679,6 @@ def _integer_step_distinct_from(tensor: torch.Tensor) -> torch.Tensor:
     return stepped.to(tensor.dtype)
 
 
-def _perturb_domain_sensitive_parent_values(
-    layer: Op,
-    parent_label: str,
-    parent_values: torch.Tensor,
-) -> torch.Tensor | None:
-    """Return deterministic valid perturbations for domain-sensitive ops.
-
-    Parameters
-    ----------
-    layer:
-        Child op being replayed.
-    parent_label:
-        Parent label selected for perturbation.
-    parent_values:
-        Saved parent tensor values.
-
-    Returns
-    -------
-    torch.Tensor or None
-        A valid alternate parent value for ops whose naive range sampling can
-        stay inside a saturated/invalid region, otherwise ``None``.
-    """
-
-    if not parent_values.is_floating_point():
-        return None
-    if layer.func_name in {"__mul__", "mul"} and _output_is_all_inf(layer.out):
-        return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
-    if layer.func_name in {"bernoulli", "bernoulli_"} and _bernoulli_probability_slot_hit(
-        layer, parent_label
-    ):
-        complement = _bernoulli_complement_probabilities(layer, parent_values)
-        if complement is not None:
-            return complement
-    if not _parent_label_occupies_arg_position(layer, parent_label, 0):
-        return None
-    if layer.func_name == "log":
-        return _finite_fill_distinct_from(parent_values, 2.0, 3.0)
-    if layer.func_name == "exp":
-        return _finite_fill_distinct_from(parent_values, 0.0, 1.0)
-    if layer.func_name in {"__pow__", "pow"}:
-        exponent = _pow_exponent(layer)
-        if isinstance(exponent, (int, float)) and exponent > 0:
-            return _finite_fill_distinct_from(parent_values, 0.5, 2.0)
-    if layer.func_name == "sign":
-        return _sign_boundary_crossing_values(parent_values)
-    if layer.func_name == "ceil":
-        return _ceil_boundary_crossing_values(parent_values)
-    if layer.func_name == "floor":
-        return _floor_boundary_crossing_values(parent_values)
-    if layer.func_name == "round":
-        return _round_boundary_crossing_values(parent_values)
-    if layer.func_name == "clamp":
-        return _clamp_boundary_crossing_values(layer, parent_values)
-    if layer.func_name in {"hardtanh", "hardsigmoid"}:
-        return _saturated_activation_boundary_values(layer, parent_values)
-    if layer.func_name in {"relu", "relu_"}:
-        parent_float = torch.nan_to_num(parent_values.detach().float(), nan=-1.0)
-        candidate = torch.where(
-            parent_float > 0, torch.zeros_like(parent_float), torch.ones_like(parent_float)
-        )
-        return candidate.to(parent_values.dtype)
-    return None
-
-
-def _bernoulli_has_explicit_probability(layer: Op) -> bool:
-    """Return whether a ``bernoulli_`` call carries an explicit probability arg.
-
-    ``dest.bernoulli_(p)`` supplies probabilities at positional slot 1 or the
-    ``p`` keyword; bare ``x.bernoulli_()`` / ``torch.bernoulli(x)`` draw from
-    the slot-0 tensor's own values.
-
-    Parameters
-    ----------
-    layer:
-        Captured bernoulli-family op.
-
-    Returns
-    -------
-    bool
-        True when an explicit probability argument is present.
-    """
-
-    if len(getattr(layer, "saved_args", None) or ()) > 1:
-        return True
-    return "p" in (getattr(layer, "saved_kwargs", None) or {})
-
-
-def _bernoulli_probability_slot_hit(layer: Op, parent_label: str) -> bool:
-    """Return whether the perturbed parent feeds the bernoulli PROBABILITY slot.
-
-    Parameters
-    ----------
-    layer:
-        Captured bernoulli-family op being replayed.
-    parent_label:
-        Parent label selected for perturbation.
-
-    Returns
-    -------
-    bool
-        True when the parent occupies the probability argument. Out-of-place
-        ``bernoulli`` reads probabilities from slot 0; ``bernoulli_(p)`` reads
-        them from slot 1 / ``p=`` (slot 0 is the overwritten destination).
-        Bare ``x.bernoulli_()`` has NO probability edge at all: it fills every
-        element with Bernoulli(0.5) draws and IGNORES the destination's values
-        (verified empirically -- ``zeros.bernoulli_()`` produces ones), so its
-        slot-0 parent is a pure template handled by the posthoc exemption.
-    """
-
-    if layer.func_name == "bernoulli_":
-        if not _bernoulli_has_explicit_probability(layer):
-            return False
-        kwarg_positions = (getattr(layer, "parent_arg_positions", None) or {}).get("kwargs", {})
-        return _parent_label_occupies_arg_position(layer, parent_label, 1) or (
-            kwarg_positions.get("p") == parent_label
-        )
-    return _parent_label_occupies_arg_position(layer, parent_label, 0)
-
-
-def _bernoulli_complement_probabilities(
-    layer: Op,
-    parent_values: torch.Tensor,
-) -> torch.Tensor | None:
-    """Return complement probabilities that provably flip every drawn element.
-
-    A small in-domain probability perturbation under restored RNG replays
-    IDENTICAL samples (the draw only changes where the perturbation crosses
-    the resampled uniforms), so the genuine values-as-probabilities edge
-    looked ``perturbation_insensitive`` and real bernoulli models could not
-    validate (deephunt L17). Probabilities at the deterministic extremes
-    remove the RNG from the comparison entirely: ``bernoulli(1) == 1`` and
-    ``bernoulli(0) == 0`` regardless of RNG state, so feeding
-    ``1 - saved_draw`` forces the replay output to differ from the saved draw
-    at EVERY element when the edge is live. A genuinely dropped edge still
-    replays unchanged and still fails.
-
-    Parameters
-    ----------
-    layer:
-        Captured bernoulli-family op being replayed.
-    parent_values:
-        Saved probability-parent tensor values.
-
-    Returns
-    -------
-    torch.Tensor | None
-        Complement-of-saved-draw probabilities, or ``None`` when the saved
-        output is not an elementwise 0/1 draw of the same shape (broadcast
-        probabilities keep the generic perturbation).
-    """
-
-    saved_draw = getattr(layer, "out", None)
-    if not isinstance(saved_draw, torch.Tensor) or not saved_draw.is_floating_point():
-        return None
-    if tuple(saved_draw.shape) != tuple(parent_values.shape):
-        return None
-    if not _tensor_is_binary_draw(saved_draw):
-        return None
-    return (1.0 - saved_draw.detach()).to(parent_values.dtype)
-
-
-def _sign_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
-    """Return sign-op inputs across the zero boundary.
-
-    Parameters
-    ----------
-    parent_values:
-        Saved sign input tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Candidate values on the opposite side of zero.
-    """
-
-    parent_float = torch.nan_to_num(parent_values.detach().float(), nan=0.0)
-    candidate = torch.where(
-        parent_float >= 0, -torch.ones_like(parent_float), torch.ones_like(parent_float)
-    )
-    return candidate.to(parent_values.dtype)
-
-
-def _ceil_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
-    """Return ceil-op inputs across the nearest integer boundary.
-
-    Parameters
-    ----------
-    parent_values:
-        Saved ceil input tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Candidate values whose ceil should differ from the saved ceil result.
-    """
-
-    parent_float = parent_values.detach().float()
-    finite = torch.isfinite(parent_float)
-    floored = torch.floor(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
-    is_integer = finite & (parent_float == floored)
-    candidate = torch.where(is_integer, parent_float + 1.0, floored)
-    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
-
-
-def _floor_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
-    """Return floor-op inputs across the nearest integer boundary.
-
-    Parameters
-    ----------
-    parent_values:
-        Saved floor input tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Candidate values whose floor should differ from the saved floor result.
-    """
-
-    parent_float = parent_values.detach().float()
-    finite = torch.isfinite(parent_float)
-    ceiled = torch.ceil(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
-    is_integer = finite & (parent_float == ceiled)
-    candidate = torch.where(is_integer, parent_float - 1.0, ceiled)
-    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
-
-
-def _round_boundary_crossing_values(parent_values: torch.Tensor) -> torch.Tensor:
-    """Return round-op inputs across a rounding boundary.
-
-    Parameters
-    ----------
-    parent_values:
-        Saved round input tensor.
-
-    Returns
-    -------
-    torch.Tensor
-        Candidate values whose rounded result should differ from the saved
-        rounded result.
-    """
-
-    parent_float = parent_values.detach().float()
-    finite = torch.isfinite(parent_float)
-    rounded = torch.round(torch.where(finite, parent_float, torch.zeros_like(parent_float)))
-    candidate = rounded + 1.0
-    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
-
-
-def _clamp_boundary_crossing_values(layer: Op, parent_values: torch.Tensor) -> torch.Tensor | None:
-    """Return clamp inputs across a clamp edge when scalar bounds are known.
-
-    Parameters
-    ----------
-    layer:
-        Clamp op being replayed.
-    parent_values:
-        Saved clamp input tensor.
-
-    Returns
-    -------
-    torch.Tensor or None
-        Boundary-crossing candidate, or ``None`` when bounds are not scalar.
-    """
-
-    lower, upper = _clamp_scalar_bounds(layer)
-    if lower is None and upper is None:
-        return None
-    return _bounded_activation_candidate(parent_values, lower, upper)
-
-
-def _saturated_activation_boundary_values(
-    layer: Op,
-    parent_values: torch.Tensor,
-) -> torch.Tensor | None:
-    """Return inputs across known saturated activation edges.
-
-    Parameters
-    ----------
-    layer:
-        Saturating activation op being replayed.
-    parent_values:
-        Saved activation input tensor.
-
-    Returns
-    -------
-    torch.Tensor or None
-        Boundary-crossing candidate for known scalar-bound activations.
-    """
-
-    if layer.func_name == "hardsigmoid":
-        return _bounded_activation_candidate(parent_values, -3.0, 3.0)
-    lower, upper = _clamp_scalar_bounds(layer)
-    return _bounded_activation_candidate(parent_values, lower, upper)
-
-
-def _bounded_activation_candidate(
-    parent_values: torch.Tensor,
-    lower: float | None,
-    upper: float | None,
-) -> torch.Tensor | None:
-    """Return candidate values crossing scalar lower/upper saturation edges.
-
-    Parameters
-    ----------
-    parent_values:
-        Saved activation input tensor.
-    lower:
-        Lower saturation edge, if any.
-    upper:
-        Upper saturation edge, if any.
-
-    Returns
-    -------
-    torch.Tensor or None
-        Candidate tensor, or ``None`` when no finite edge can be crossed.
-    """
-
-    if lower is None and upper is None:
-        return None
-    parent_float = parent_values.detach().float()
-    finite = torch.isfinite(parent_float)
-    inside = _inside_scalar_bounds(lower, upper)
-    if lower is not None and upper is not None:
-        below_candidate = torch.full_like(parent_float, inside)
-        above_candidate = torch.full_like(parent_float, inside)
-        interior_candidate = torch.full_like(parent_float, upper + 1.0)
-        candidate = torch.where(parent_float <= lower, below_candidate, interior_candidate)
-        candidate = torch.where(parent_float >= upper, above_candidate, candidate)
-    elif lower is not None:
-        below_candidate = torch.full_like(parent_float, lower + 1.0)
-        interior_candidate = torch.full_like(parent_float, lower - 1.0)
-        candidate = torch.where(parent_float <= lower, below_candidate, interior_candidate)
-    else:
-        assert upper is not None
-        above_candidate = torch.full_like(parent_float, upper - 1.0)
-        interior_candidate = torch.full_like(parent_float, upper + 1.0)
-        candidate = torch.where(parent_float >= upper, above_candidate, interior_candidate)
-    return torch.where(finite, candidate, torch.zeros_like(parent_float)).to(parent_values.dtype)
-
-
-def _inside_scalar_bounds(lower: float | None, upper: float | None) -> float:
-    """Return a finite value inside scalar saturation bounds.
-
-    Parameters
-    ----------
-    lower:
-        Lower edge, if any.
-    upper:
-        Upper edge, if any.
-
-    Returns
-    -------
-    float
-        A value inside the bounded region.
-    """
-
-    if lower is not None and upper is not None:
-        return (lower + upper) / 2.0
-    if lower is not None:
-        return lower + 1.0
-    if upper is not None:
-        return upper - 1.0
-    return 0.0
-
-
-def _clamp_scalar_bounds(layer: Op) -> tuple[float | None, float | None]:
-    """Return scalar clamp-style bounds from saved args/kwargs.
-
-    Parameters
-    ----------
-    layer:
-        Clamp-like op.
-
-    Returns
-    -------
-    tuple[float or None, float or None]
-        Lower and upper scalar bounds when available.
-    """
-
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
-    saved_kwargs = getattr(layer, "saved_kwargs", {}) or {}
-    lower = saved_kwargs.get("min", saved_kwargs.get("min_val"))
-    upper = saved_kwargs.get("max", saved_kwargs.get("max_val"))
-    if lower is None and len(saved_args) > 1:
-        lower = saved_args[1]
-    if upper is None and len(saved_args) > 2:
-        upper = saved_args[2]
-    return _scalar_float_or_none(lower), _scalar_float_or_none(upper)
-
-
-def _scalar_float_or_none(value: Any) -> float | None:
-    """Return ``value`` as a finite scalar float when possible.
-
-    Parameters
-    ----------
-    value:
-        Candidate scalar value.
-
-    Returns
-    -------
-    float or None
-        Finite scalar float, otherwise ``None``.
-    """
-
-    if isinstance(value, torch.Tensor):
-        if value.numel() != 1:
-            return None
-        value = value.item()
-    if not isinstance(value, (int, float)):
-        return None
-    value_float = float(value)
-    if not torch.isfinite(torch.tensor(value_float)):
-        return None
-    return value_float
-
-
-def _output_is_all_inf(output: Any) -> bool:
-    """Return whether ``output`` is a non-empty all-inf tensor.
-
-    Parameters
-    ----------
-    output:
-        Candidate operation output.
-
-    Returns
-    -------
-    bool
-        True when ``output`` is a tensor whose elements are all infinite.
-    """
-
-    return (
-        isinstance(output, torch.Tensor)
-        and output.numel() > 0
-        and bool(torch.all(torch.isinf(output)).item())
-    )
-
-
-def _finite_fill_distinct_from(
-    tensor: torch.Tensor,
-    primary: float,
-    fallback: float,
-) -> torch.Tensor:
-    """Return a finite fill tensor distinct from ``tensor`` when possible.
-
-    Parameters
-    ----------
-    tensor:
-        Tensor whose dtype/device/shape should be preserved.
-    primary:
-        Preferred fill value.
-    fallback:
-        Alternate fill value when the primary exactly matches ``tensor``.
-
-    Returns
-    -------
-    torch.Tensor
-        Filled tensor with the same dtype/device/shape as ``tensor``.
-    """
-
-    candidate = torch.full_like(tensor, primary)
-    if torch.equal(candidate, tensor):
-        return torch.full_like(tensor, fallback)
-    return candidate
-
-
-def _pow_exponent(layer: Op) -> Any:
-    """Return a captured exponent operand for ``pow``-style ops.
-
-    Parameters
-    ----------
-    layer:
-        Candidate power op.
-
-    Returns
-    -------
-    Any
-        Positional or keyword exponent value, if captured.
-    """
-
-    saved_args = cast(Sequence[Any], getattr(layer, "saved_args", ()) or ())
-    if len(saved_args) > 1:
-        return saved_args[1]
-    return (getattr(layer, "saved_kwargs", {}) or {}).get("exponent")
-
-
 def _perturb_one_hot_indices(
     layer: Op,
     parent_label: str,
@@ -4234,29 +3712,6 @@ def _perturb_one_hot_indices(
     if num_classes is None or num_classes <= 1:
         return None
     return (parent_values + 1).remainder(num_classes)
-
-
-def _parent_label_occupies_arg_position(layer: Op, parent_label: str, position: int) -> bool:
-    """Return whether a parent label occupies a positional argument.
-
-    Parameters
-    ----------
-    layer:
-        Op whose parent-argument map should be inspected.
-    parent_label:
-        Parent label to find.
-    position:
-        Positional argument index.
-
-    Returns
-    -------
-    bool
-        True when ``parent_label`` is registered at ``args[position]``.
-    """
-
-    return (getattr(layer, "parent_arg_positions", None) or {}).get("args", {}).get(
-        position
-    ) == parent_label
 
 
 def _one_hot_num_classes(layer: Op) -> int | None:

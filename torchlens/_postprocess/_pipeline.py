@@ -563,7 +563,7 @@ PIPELINE: tuple[PipelineStep, ...] = (
     ),
     PipelineStep(
         name="release_param_refs",
-        module="_data_classes._trace_validation",
+        module="_data_classes._trace_removal",
         run=ex._run_release_param_refs,
         reads=("_param_logs",),
         writes=("_param_logs",),

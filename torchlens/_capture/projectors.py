@@ -164,7 +164,7 @@ def train_mode_norm_writers_eligible() -> Iterator[None]:
         _TRAIN_MODE_NORM_WRITERS_ELIGIBLE.reset(token)
 
 
-#: Fields ``Trace._refresh_rerun_op_from`` never copies from a rerun, and the
+#: Fields ``_trace_rerun_state.refresh_rerun_op_from`` never copies from a rerun, and the
 #: extra non-ordered fields it does copy; the until= prefix projection mirrors both
 #: (``tests/test_run_until_projection_cost.py`` pins the equivalence).
 _RERUN_KEPT_OP_FIELDS = frozenset(
@@ -407,7 +407,7 @@ class RefreshProjector:
     def _project_prefix_op(self, layer: Any, new_layer: Any) -> None:
         """Copy one executed op's refreshed per-call fields onto its target op.
 
-        The net effect of ``Trace._refresh_rerun_op_from`` followed by restoring
+        The net effect of ``_trace_rerun_state.refresh_rerun_op_from`` followed by restoring
         every non-dynamic field the target op already holds (the full
         ``project`` sequence), computed directly: only the dynamic per-call
         fields, and fields the target op does not hold yet, are copied. Copying
