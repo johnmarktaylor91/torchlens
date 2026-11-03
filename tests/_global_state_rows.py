@@ -280,6 +280,10 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # third-party handler tables at unwrap; drained by the next wrap's shim
         # install, so it is install bookkeeping, not capture state.
         ("torchlens/backends/torch/_protocol_redispatch.py", "_ALIAS_JOURNAL"),
+        # One-slot record of what the last unwrap's alias scan read (modules,
+        # distinct tables, keys examined); replaced whole by every scan, a
+        # deterministic diagnostic counter, not capture state.
+        ("torchlens/backends/torch/_protocol_redispatch.py", "_LAST_ALIAS_SCAN"),
         # First-read source digests for conditional/source attribution (deep-hunt
         # C4, fix/postproc 7a58a021). Deliberately NOT a _PROCESS_CACHES row:
         # clearing it is not correctness-neutral (the pin is the fail-closed

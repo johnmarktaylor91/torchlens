@@ -35,13 +35,18 @@ builds. The next wrap removes exactly the keys it added
 contents only while torch is unwrapped. Residual: a table hidden deeper (a
 closure, an instance attribute, a frozenset) is not aliased; its wrapped calls
 still redispatch.
+
+Each scan records what it read (:func:`last_alias_scan_count`): post-wrap
+modules visited, distinct tables scanned, and keys examined. A table reachable
+from several namespaces (a re-export, a class attribute aliasing a module
+table) is scanned once per unwrap.
 """
 
 from __future__ import annotations
 
 import re
 import sys
-from typing import Any
+from typing import Any, NamedTuple
 
 import torch
 
@@ -50,7 +55,9 @@ from ..._utils import _torch_compat
 
 __all__ = [
     "STILL_DECLINED",
+    "AliasScanCount",
     "alias_wrapper_keyed_tables",
+    "last_alias_scan_count",
     "redispatch_declined",
     "undo_table_aliases",
 ]
@@ -74,6 +81,21 @@ _PRE_WRAP_MODULES: frozenset[str] = frozenset(sys.modules)
 # Original keys added by the last unwrap, as (table, original, added value);
 # the next wrap removes them, so a foreign table is touched only while unwrapped.
 _ALIAS_JOURNAL: list[tuple[Any, Any, Any]] = []
+
+
+class AliasScanCount(NamedTuple):
+    """What one :func:`alias_wrapper_keyed_tables` scan read (deterministic)."""
+
+    #: Post-wrap, non-excluded ``sys.modules`` entries whose namespace was read.
+    modules: int
+    #: Distinct ``dict``/``set`` tables scanned (each at most once per scan).
+    tables: int
+    #: Keys examined across those tables.
+    objects: int
+
+
+# The last scan's count, replaced whole by every scan (one slot, never grown).
+_LAST_ALIAS_SCAN: list[AliasScanCount] = [AliasScanCount(0, 0, 0)]
 
 
 def _declined_this_function(exc: TypeError, func_name: str) -> bool:
@@ -201,7 +223,9 @@ def redispatch_declined(
 def _alias_container(container: Any, ledger: dict[int, Any]) -> int:
     """Give every wrapper key in one ``dict``/``set`` its original beside it.
 
-    Each addition is journaled for :func:`undo_table_aliases`.
+    Each addition is journaled for :func:`undo_table_aliases`. The keys are
+    read once without copying the table; the table changes only after the
+    read, and only for wrapper keys.
 
     Parameters
     ----------
@@ -216,9 +240,10 @@ def _alias_container(container: Any, ledger: dict[int, Any]) -> int:
         The number of original keys added.
     """
 
+    wrapper_keys = [key for key in container if id(key) in ledger]
     added = 0
-    for key in list(container):
-        original = ledger.get(id(key))
+    for key in wrapper_keys:
+        original = ledger[id(key)]
         if original is None or original in container:
             continue
         if isinstance(container, dict):
@@ -254,7 +279,7 @@ def alias_wrapper_keyed_tables() -> int:
     next wrap undoes it (:func:`undo_table_aliases`). A ``sys.modules`` entry
     without a namespace, or a table subclass that refuses iteration or
     insertion, is skipped: aliasing serves unwrapped dispatch only and is never
-    a capture fact.
+    a capture fact. The scan's count is kept for :func:`last_alias_scan_count`.
 
     Returns
     -------
@@ -264,9 +289,28 @@ def alias_wrapper_keyed_tables() -> int:
 
     ledger, _ = _state.wrap_epoch_ledgers()
     if not ledger:
+        _LAST_ALIAS_SCAN[0] = AliasScanCount(0, 0, 0)
         return 0
+    added, count = _alias_module_tables(list(sys.modules.items()), ledger)
+    _LAST_ALIAS_SCAN[0] = count
+    return added
+
+
+def _alias_module_tables(
+    modules: list[tuple[str, Any]], ledger: dict[int, Any]
+) -> tuple[int, AliasScanCount]:
+    """Alias the tables of ``modules`` (``sys.modules`` items); return added keys and the count.
+
+    A table reached through several namespaces is scanned once: a second scan
+    of the same table finds every original already present and adds nothing.
+    """
+
     added = 0
-    for name, module in list(sys.modules.items()):
+    visited_modules = 0
+    scanned_tables = 0
+    examined_keys = 0
+    seen_tables: set[int] = set()
+    for name, module in modules:
         if module is None or name in _PRE_WRAP_MODULES:
             continue
         if name.split(".", 1)[0] in _EXCLUDED_PACKAGES:
@@ -275,12 +319,28 @@ def alias_wrapper_keyed_tables() -> int:
             tables = _module_tables(name, module)
         except TypeError:  # a sys.modules entry with no __dict__
             continue
+        visited_modules += 1
         for table in tables:
+            if id(table) in seen_tables:
+                continue
+            seen_tables.add(id(table))
+            scanned_tables += 1
             try:
+                examined_keys += len(table)
                 added += _alias_container(table, ledger)
             except (TypeError, RuntimeError, KeyError):  # a refusing table subclass
                 continue
-    return added
+    return added, AliasScanCount(visited_modules, scanned_tables, examined_keys)
+
+
+def last_alias_scan_count() -> AliasScanCount:
+    """Return what the last :func:`alias_wrapper_keyed_tables` scan read.
+
+    Modules visited, distinct tables scanned and keys examined; all zero before
+    the first scan and for a scan with an empty wrapper ledger.
+    """
+
+    return _LAST_ALIAS_SCAN[0]
 
 
 def undo_table_aliases() -> None:
