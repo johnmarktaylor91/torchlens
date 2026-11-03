@@ -26,7 +26,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-import _gallery as gallery  # the sibling module; scripts here run from this folder
+import _figures as figures  # sibling modules; scripts here run from this folder
+import _gallery as gallery
 import torch
 from torch import nn
 
@@ -721,7 +722,10 @@ def run(out_dir: Path | None, n_facts: int = VERDICT_FACTS, window: int = 1) -> 
         "shared_setup": gallery.count_region_lines(source, "shared"),
         "reference": "not measured",
     }
-    return gallery.report(entry, out_dir, "cpu", started)
+    summary = gallery.report(entry, out_dir, "cpu", started)
+    if out_dir is not None:
+        figures.draw_causal_tracing(Path(out_dir))
+    return summary
 
 
 def reported_grid(
@@ -775,7 +779,7 @@ def main(argv: list[str] | None = None) -> int:
     Parameters
     ----------
     argv:
-        Arguments (``--out DIR``, ``--facts N``, ``--window W``).
+        Arguments (``--out DIR``, ``--facts N``, ``--window W``, ``--figure-only``).
 
     Returns
     -------
@@ -787,7 +791,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, default=None, help="output directory")
     parser.add_argument("--facts", type=int, default=VERDICT_FACTS, help="facts, 10-30")
     parser.add_argument("--window", type=int, default=1, help="reported window width")
+    parser.add_argument(
+        "--figure-only",
+        action="store_true",
+        help="redraw the figure from causal_tracing.json in --out; no model run",
+    )
     args = parser.parse_args(argv)
+    if args.figure_only:
+        if args.out is None:
+            parser.error("--figure-only needs --out")
+        figures.draw_causal_tracing(args.out)
+        return 0
     run(args.out, args.facts, args.window)
     return 0
 

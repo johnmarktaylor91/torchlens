@@ -17,7 +17,9 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
+import _figures as figures
 import _gallery as gallery
+import numpy as np
 import torch
 from torch import nn
 from torchvision import models
@@ -47,44 +49,6 @@ def iou(left: torch.Tensor, right: torch.Tensor) -> float:
     """
     union = int((left | right).sum())
     return float((left & right).sum()) / union if union else 0.0
-
-
-def draw_fields(
-    x: torch.Tensor,
-    spatial: torch.Tensor,
-    empirical: torch.Tensor,
-    projected: torch.Tensor,
-    changed: torch.Tensor,
-    out: Path,
-) -> None:
-    """Save the field overlay and projective support as a diagnostic figure.
-
-    Parameters
-    ----------
-    x, spatial, empirical, projected, changed, out:
-        Input, geometric and measured masks, and output folder. Single seeded run;
-        no uncertainty intervals. Colour limits and stimulus order are fixed.
-    """
-    import matplotlib.pyplot as plt
-
-    image = x[0].permute(1, 2, 0).detach().numpy()
-    image = (image - image.min()) / (image.max() - image.min())
-    fig, axes = plt.subplots(1, 3, figsize=(12, 4), layout="constrained")
-    axes[0].imshow(image)
-    axes[0].contour(spatial.numpy(), levels=[0.5], colors=["black"], linewidths=2)
-    axes[0].imshow(empirical.numpy(), cmap="Blues", alpha=0.3, vmin=0, vmax=1)
-    axes[0].set_title(f"Input field / gradient support\nIoU = {iou(spatial, empirical):.4f}")
-    axes[1].imshow(projected.numpy(), cmap="Greys", vmin=0, vmax=1)
-    axes[1].set_title("Projective field\nblack = potential influence")
-    axes[2].imshow(changed.numpy(), cmap="Greys", vmin=0, vmax=1)
-    axes[2].set_title(f"Changed downstream units\nIoU = {iou(projected, changed):.4f}")
-    for axis in axes:
-        axis.set_xlabel("Horizontal position (pixels or feature units)")
-        axis.set_ylabel("Vertical position")
-    fig.suptitle("ResNet-18: geometric and observed influence (single seeded input)")
-    fig.savefig(out / "cnn_fields.png", dpi=160)
-    fig.savefig(out / "cnn_fields.svg")
-    plt.close(fig)
 
 
 def record_check(
@@ -230,7 +194,7 @@ def measure(
             (serial_lo, serial_hi) != (lo, hi),
         ),
     )
-    draw_fields(x, spatial, empirical, projected_mask, plain_changed, out)
+    save_figure_inputs(x, spatial, empirical, projected_mask, plain_changed, patch, out)
     trace.annotations["gallery"] = {"layer": layer, "unit": list(unit), "baseline": baseline}
     artifact = out / "cnn_fields.tlspec"
     trace.save(artifact, level="portable", overwrite=True)
@@ -266,7 +230,15 @@ def main() -> None:
     )
     parser.add_argument("--channel", type=int, default=0)
     parser.add_argument("--arch", choices=("resnet18",), default="resnet18")
+    parser.add_argument(
+        "--figure-only",
+        action="store_true",
+        help="redraw the figure from the saved files in --out; no model run",
+    )
     args = parser.parse_args()
+    if args.figure_only:
+        figures.draw_cnn_fields(args.out)
+        return
     started = time.time()
     torch.set_num_threads(2)
     torch.manual_seed(SEED)
@@ -300,6 +272,8 @@ def main() -> None:
     }
     entry.lines["reference"] = "not measured"
     gallery.report(entry, args.out, "cpu", started)
+    if (args.out / "cnn_fields_figure.npz").exists():
+        figures.draw_cnn_fields(args.out)
 
 
 # endregion
@@ -407,3 +381,40 @@ def gradient_mask(model: nn.Module, x: torch.Tensor, layer: str, unit: tuple) ->
 
 if __name__ == "__main__":
     main()
+
+
+def save_figure_inputs(
+    x: torch.Tensor,
+    spatial: torch.Tensor,
+    empirical: torch.Tensor,
+    projected: torch.Tensor,
+    changed: torch.Tensor,
+    patch: torch.Tensor,
+    out: Path,
+) -> Path:
+    """Save the arrays the figure needs; ``_figures.draw_cnn_fields`` draws from them.
+
+    Parameters
+    ----------
+    x, spatial, empirical, projected, changed, patch, out:
+        Input, geometric and measured masks, the input patch mask and the output folder.
+        Single seeded run; no uncertainty intervals.
+
+    Returns
+    -------
+    Path
+        The ``cnn_fields_figure.npz`` written.
+    """
+    image = x[0].permute(1, 2, 0).detach().numpy()
+    image = (image - image.min()) / (image.max() - image.min())
+    path = out / "cnn_fields_figure.npz"
+    np.savez(
+        path,
+        image=image,
+        spatial=spatial.numpy(),
+        empirical=empirical.numpy(),
+        projected=projected.numpy(),
+        changed=changed.numpy(),
+        patch=patch.any(dim=(0, 1)).numpy(),
+    )
+    return path

@@ -16,6 +16,7 @@ import time
 from pathlib import Path
 from typing import Any
 
+import _figures as figures
 import _gallery as gallery
 import torch
 
@@ -289,114 +290,94 @@ def save_measurement(
 # endregion
 
 
-def draw_measurement(scores: dict[str, float], out: Path) -> None:
-    """Draw the recorded head ROC and strongest head-to-head connections.
+def figure_data(
+    scores: dict[str, float], k: int = 26, edges: int = 20, run: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Reduce the edge table to what the figures draw: the head ROC and the top edges.
 
     Parameters
     ----------
     scores:
         Complete aggregate edge table from one run; no uncertainty intervals.
-    out:
-        Destination for PNG and vector SVG figures.
-    """
-    import matplotlib.pyplot as plt
+    k:
+        The head count whose recall is marked on the ROC curve.
+    edges:
+        How many head-to-head edges (largest absolute score) to keep.
+    run:
+        Run facts for the figure's setup line (``rows``, ``steps``), if known.
 
+    Returns
+    -------
+    dict
+        JSON-ready figure inputs (``ioi_circuit_figure.json``).
+    """
     # Question: does outgoing attribution recover Wang membership? Primary: ROC.
     # Context: chance diagonal; all 144 heads, 26 positives, one fixed-seed run.
-    # Diagnostic: 20 largest absolute head-to-head edges; q/k/v scores stay separate.
-    # Expected direction: above chance. Audience: gallery; 760-pixel display width.
+    # Diagnostic: the largest absolute head-to-head edges; q/k/v scores stay separate.
+    # Expected direction: above chance. Audience: gallery pages at 760 CSS px.
     heads = head_scores(scores)
     members = {f"a{layer}.h{head}" for group in HEAD_GROUPS.values() for layer, head in group}
     ordered = sorted(heads, key=lambda name: (-heads[name], name))
+    negatives = len(heads) - len(members)
     true_positive = false_positive = 0
-    xs, ys = [0.0], [0.0]
+    roc = [[0.0, 0.0]]
     for index, name in enumerate(ordered):
         true_positive += name in members
         false_positive += name not in members
         if index == len(ordered) - 1 or heads[name] != heads[ordered[index + 1]]:
-            xs.append(false_positive / (len(heads) - len(members)))
-            ys.append(true_positive / len(members))
-    fig, ax = plt.subplots(figsize=(7.6, 5.2), layout="constrained")
-    ax.plot(xs, ys, color="#0072b2", linewidth=2)
-    ax.plot([0, 1], [0, 1], color="#888888", linestyle=":")
-    ax.text(0.65, 0.5, "Chance", color="#555555")
-    ax.set(xlim=(0, 1), ylim=(0, 1.03), xlabel="False positive rate", ylabel="True positive rate")
-    ax.set_title(f"Wang head membership: ROC AUC {roc_auc(heads, members):.4f}")
-    for suffix in ("png", "svg"):
-        fig.savefig(out / f"ioi_roc.{suffix}", dpi=200)
-    plt.close(fig)
-    draw_connections(scores, out)
+            roc.append([false_positive / negatives, true_positive / len(members)])
+    hits = len(set(top_heads(scores, k)) & members)
+    pattern = re.compile(r"a(\d+)\.h(\d+)->a(\d+)\.h(\d+)<([qkv])>")
+    matches = [m for m in (pattern.fullmatch(name) for name in scores) if m]
+    strongest = sorted(matches, key=lambda m: (-abs(scores[m.group(0)]), m.group(0)))[:edges]
+    return {
+        **(run or {}),
+        "auc": roc_auc(heads, members),
+        "roc": roc,
+        "k": k,
+        "recall_at_k": hits / len(members),
+        "fpr_at_k": (k - hits) / negatives,
+        "positives": len(members),
+        "heads": len(heads),
+        "layers": 12,
+        "heads_per_layer": 12,
+        "groups": {label: [list(pair) for pair in pairs] for label, pairs in HEAD_GROUPS.items()},
+        "edges": [
+            {
+                "source": [int(m.group(1)), int(m.group(2))],
+                "target": [int(m.group(3)), int(m.group(4))],
+                "channel": m.group(5),
+                "score": scores[m.group(0)],
+            }
+            for m in strongest
+        ],
+    }
 
 
-def draw_connections(scores: dict[str, float], out: Path) -> None:
-    """Draw the strongest directed head connections, with Wang classes colored.
+def draw_measurement(
+    scores: dict[str, float], out: Path, k: int = 26, run: dict[str, Any] | None = None
+) -> list[Path]:
+    """Save the figure inputs and draw the head ROC and the strongest edges.
 
     Parameters
     ----------
     scores:
-        Signed edge scores; width encodes absolute magnitude, not causal necessity.
+        Complete aggregate edge table from one run.
     out:
-        Figure destination.
-    """
-    import matplotlib.pyplot as plt
+        Destination for ``ioi_circuit_figure.json`` and the PNG and SVG figures.
+    k:
+        The head count marked on the ROC curve.
+    run:
+        Run facts for the setup line (``rows``, ``steps``), if known.
 
-    colors = ("#0072b2", "#d55e00", "#009e73", "#cc79a7", "#e69f00", "#56b4e9", "#000000")
-    fig, ax = plt.subplots(figsize=(7.6, 6.4), layout="constrained")
-    edges = [name for name in scores if re.fullmatch(r"a\d+\.h\d+->a\d+\.h\d+<[qkv]>", name)]
-    selected = sorted(edges, key=lambda name: (-abs(scores[name]), name))[:20]
-    scale = max((abs(scores[name]) for name in selected), default=1.0)
-    for name in selected:
-        source, target = name.split("->")
-        x0, y0 = map(int, re.findall(r"\d+", source))
-        x1, y1 = map(int, re.findall(r"\d+", target))
-        ax.annotate(
-            "",
-            (x1, y1),
-            (x0, y0),
-            arrowprops={
-                "arrowstyle": "->",
-                "color": "#888888",
-                "alpha": 0.65,
-                "lw": 0.5 + 2 * abs(scores[name]) / scale,
-            },
-            zorder=1,
-        )
-    ax.scatter(
-        [i for i in range(12) for _ in range(12)],
-        list(range(12)) * 12,
-        s=18,
-        color="#dddddd",
-        zorder=2,
-    )
-    for (label, group), color in zip(HEAD_GROUPS.items(), colors, strict=True):
-        ax.scatter(
-            [layer for layer, _ in group],
-            [head for _, head in group],
-            s=48,
-            color=color,
-            label=label,
-            zorder=3,
-        )
-    ax.set(
-        xticks=range(12),
-        yticks=range(12),
-        xlabel="Layer (zero-based)",
-        ylabel="Head index (zero-based)",
-        xlim=(-0.4, 11.4),
-        ylim=(-0.4, 11.4),
-    )
-    ax.set_title("Twenty strongest head-to-head attribution edges")
-    ax.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.12),
-        ncol=3,
-        fontsize=9,
-        frameon=False,
-        title="Wang head classes; grey nodes are other heads",
-    )
-    for suffix in ("png", "svg"):
-        fig.savefig(out / f"ioi_circuit.{suffix}", dpi=200)
-    plt.close(fig)
+    Returns
+    -------
+    list[Path]
+        The figure files written.
+    """
+    data = figure_data(scores, k, run=run)
+    (out / "ioi_circuit_figure.json").write_text(json.dumps(data, indent=1) + "\n")
+    return figures.draw_ioi_circuit(out)
 
 
 def main() -> int:
@@ -413,10 +394,22 @@ def main() -> int:
     parser.add_argument("--rows", type=int, default=ROWS)
     parser.add_argument("--steps", type=int, default=STEPS)
     parser.add_argument("--k", type=int, default=26)
+    parser.add_argument(
+        "--figure-only",
+        action="store_true",
+        help="redraw the figures from edge_scores.json in --out; no model run",
+    )
     args = parser.parse_args()
     if min(args.rows, args.steps, args.k) < 1:
         parser.error("rows, steps and k must be positive")
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.figure_only:
+        scores = json.loads((args.out / "edge_scores.json").read_text())
+        summary_path = args.out / "ioi_circuit.json"
+        pinned = json.loads(summary_path.read_text())["pinned"] if summary_path.exists() else {}
+        run = {key: pinned[key] for key in ("rows", "steps") if key in pinned}
+        draw_measurement(scores, args.out, args.k, run)
+        return 0
     started = time.time()
     torch.set_num_threads(2)
     torch.manual_seed(SEED)
@@ -500,7 +493,7 @@ def main() -> int:
         "plain": gallery.count_region_lines(Path(__file__), "plain"),
         "reference": "not measured",
     }
-    draw_measurement(scores, args.out)
+    draw_measurement(scores, args.out, args.k, {"rows": count, "steps": steps})
     gallery.report(entry, args.out, "cpu", started)
     return 0
 

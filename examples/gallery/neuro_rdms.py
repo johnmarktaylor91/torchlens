@@ -19,6 +19,7 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import _figures as figures
 import _gallery as gallery
 import numpy as np
 import rsatoolbox
@@ -88,54 +89,6 @@ def pearson(left: np.ndarray, right: np.ndarray) -> float:
         Pearson coefficient (NaN fails all the fixed checks).
     """
     return float(np.corrcoef(left, right)[0, 1])
-
-
-def draw_rdms(
-    matrices: Any,
-    correlations: dict[str, float],
-    shuffled: dict[str, float],
-    out: Path,
-) -> None:
-    """Save common-scale RDMs and the one-sided order-error comparison.
-
-    Parameters
-    ----------
-    matrices, correlations, shuffled, out:
-        Selected-stage RDMs, every-site correlations, control correlations and folder.
-        Single extraction run, not statistical inference; no uncertainty intervals.
-    """
-    import matplotlib.pyplot as plt
-
-    values = matrices.get_matrices()
-    fig = plt.figure(figsize=(14, 7), layout="constrained")
-    grid = fig.add_gridspec(2, len(values))
-    axes = [fig.add_subplot(grid[0, i]) for i in range(len(values))]
-    for i, axis in enumerate(axes):
-        image = axis.imshow(values[i], vmin=0, vmax=2, cmap="cividis")
-        axis.set_title(str(matrices.rdm_descriptors["requested"][i]))
-        axis.set_xlabel("Stimulus index")
-        axis.set_ylabel("Stimulus index")
-    fig.colorbar(image, ax=axes, label="Correlation distance (unitless)", shrink=0.7)
-    axis = fig.add_subplot(grid[1, :])
-    keys = list(correlations)
-    positions = list(range(len(keys)))
-    axis.plot(positions, list(correlations.values()), "o-", color="black")
-    axis.plot(positions, list(shuffled.values()), "s--", color="#0072B2")
-    axis.text(positions[-1] + 0.15, correlations[keys[-1]], "Aligned", va="center")
-    axis.text(positions[-1] + 0.15, shuffled[keys[-1]], "Shuffled", va="center")
-    axis.axhline(CORRELATION_MIN, color="black", linestyle=":", linewidth=1)
-    axis.axhline(SHUFFLED_MAX, color="#0072B2", linestyle=":", linewidth=1)
-    axis.set_xticks(positions, keys, rotation=45, ha="right", fontsize=9)
-    axis.set(
-        xlim=(-0.5, len(keys) + 1),
-        ylim=(-1, 1.12),
-        ylabel="RDM Pearson correlation",
-        xlabel="Selected stages, then every residual addition in execution order",
-    )
-    fig.suptitle("Extraction correctness: aligned order and one-sided shuffle (single run)")
-    fig.savefig(out / "neuro_rdms.png", dpi=160)
-    fig.savefig(out / "neuro_rdms.svg")
-    plt.close(fig)
 
 
 def measure(
@@ -247,7 +200,7 @@ def measure(
     stage_rdms = tl.neuro.rdms(
         trace, sites=stages, metric="correlation", pattern_descriptors={"stimulus_id": ids}
     )
-    draw_rdms(stage_rdms, correlations, shuffled, out)
+    save_figure_inputs(stage_rdms, out)
     trace.annotations["gallery"] = {
         "stimulus_ids": ids,
         "sites": sites,
@@ -295,7 +248,15 @@ def main() -> None:
     parser.add_argument("--quick", action="store_true", help="eight stimuli instead of 24")
     parser.add_argument("--arch", choices=("resnet18", "vit_b_16"), default="resnet18")
     parser.add_argument("--stimuli", type=int, default=None)
+    parser.add_argument(
+        "--figure-only",
+        action="store_true",
+        help="redraw the figure from the saved files in --out; no model run",
+    )
     args = parser.parse_args()
+    if args.figure_only:
+        figures.draw_neuro_rdms(args.out)
+        return
     started = time.time()
     torch.set_num_threads(2)
     torch.manual_seed(SEED)
@@ -327,6 +288,8 @@ def main() -> None:
     summary["stamp"]["stimulus_order_mismatch"] = entry.measured.get("stimulus_order_mismatch")
     (args.out / "neuro_rdms.json").write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n")
     print("STAMP: " + json.dumps(summary["stamp"], sort_keys=True))
+    if (args.out / "neuro_rdms_figure.npz").exists():
+        figures.draw_neuro_rdms(args.out)
 
 
 # endregion
@@ -439,3 +402,29 @@ def reference_rdm(features: torch.Tensor) -> np.ndarray:
 
 if __name__ == "__main__":
     main()
+
+
+def save_figure_inputs(matrices: Any, out: Path) -> Path:
+    """Save the selected-stage RDMs; ``_figures.draw_neuro_rdms`` draws from them.
+
+    Parameters
+    ----------
+    matrices:
+        The rsatoolbox RDMs of the selected stages, in request order.
+    out:
+        The output folder.
+
+    Returns
+    -------
+    Path
+        The ``neuro_rdms_figure.npz`` written.
+    """
+    path = out / "neuro_rdms_figure.npz"
+    np.savez(
+        path,
+        rdms=matrices.get_matrices(),
+        stages=np.array([str(s) for s in matrices.rdm_descriptors["requested"]]),
+        correlation_min=CORRELATION_MIN,
+        shuffled_max=SHUFFLED_MAX,
+    )
+    return path
