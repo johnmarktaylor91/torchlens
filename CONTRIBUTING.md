@@ -82,6 +82,12 @@ working, so find and fix the capture bug. The only legitimate exemption is behav
 correct by design and provably outside the check's contract, and even then the carve-out is
 narrow and still fails on the unintended case.
 
+## Public claims
+
+A sentence in the README or docs that states a number, a comparison or an "every" or "any"
+claim needs a row in `docs/migration/_claims_ledger.json` pointing at the test or artifact
+behind it.
+
 ## Public repository
 
 This repository is public. Internal notes, plans, sprint records and run logs are never
