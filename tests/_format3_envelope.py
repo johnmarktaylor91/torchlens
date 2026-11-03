@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io.format3 import contract
+from torchlens._io.format3.runnable import DESCRIPTOR_PATH
 from torchlens.options import CaptureOptions
 
 MANIFEST = contract.MANIFEST_FILE
@@ -74,6 +76,28 @@ def redigest(root: Path, relpath: str) -> None:
         if record.get("path") == relpath:
             record.update(entry)
     write_manifest(root, manifest)
+
+
+def read_runnable_descriptor(root: Path) -> dict[str, Any]:
+    """The runnable descriptor (what a 2.x manifest held under ``run``)."""
+
+    return json.loads((root / DESCRIPTOR_PATH).read_text(encoding="utf-8"))
+
+
+def mutate_runnable_descriptor(root: Path, mutate: Callable[[dict[str, Any]], None]) -> None:
+    """Apply ``mutate`` to the runnable descriptor and re-digest it.
+
+    The re-digest keeps the file-table check true, so the mutation reaches the
+    descriptor check under test.
+    """
+
+    descriptor = read_runnable_descriptor(root)
+    mutate(descriptor)
+    (root / DESCRIPTOR_PATH).write_text(
+        json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=False),
+        encoding="utf-8",
+    )
+    redigest(root, DESCRIPTOR_PATH)
 
 
 def read_record(root: Path, kind: str) -> dict[str, Any]:
