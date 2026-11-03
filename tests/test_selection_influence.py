@@ -459,16 +459,18 @@ def test_data_dependent_routing_refuses_geometry_typed(routed) -> None:
     assert "method='gradient'" in str(excinfo.value)
 
 
-def test_attention_without_windowed_axes_refuses_geometry_typed() -> None:
-    """Pure attention has no windowed axis; geometry refuses typed, not silently."""
+def test_attention_without_windowed_axes_answers_the_whole_extent() -> None:
+    """Pure attention has no windowed axis; the set query covers the mixed axes whole."""
 
     torch.manual_seed(4)
     trace = tl.trace(_Attention(), torch.randn(2, 2, 3, 2))
     try:
         seed = tl.units(trace.input_ops[0].label, [(0, 0, 0, 0)])
-        with pytest.raises(SelectionError) as excinfo:
-            trace[_influence(seed)]
-        assert excinfo.value.fields["code"] == "influence_geometry_unavailable"
+        (entry,) = trace[_influence(seed)]
+        assert entry.provenance.field_status == "upper_bound"
+        expected = torch.zeros(2, 2, 3, 2, dtype=torch.bool)
+        expected[0, 0] = True
+        assert torch.equal(entry.mask, expected)
     finally:
         trace.cleanup()
 

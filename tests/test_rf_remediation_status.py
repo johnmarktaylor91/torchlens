@@ -201,7 +201,7 @@ def test_sdpa_feature_axis_upper_bound_contains_query_gradients() -> None:
     assert tuple(axis.kind for axis in descriptor.axes) == (
         "pointwise",
         "pointwise",
-        "full",
+        "pointwise",
         "full",
     )
     results = cross_validate(

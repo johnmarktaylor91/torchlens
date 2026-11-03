@@ -1,11 +1,11 @@
-"""Projective fields through attention: per-target status and the gradient fallback.
+"""Projective fields through attention: per-target status, geometry and the gradient method.
 
-Attention mixes positions by data-dependent weights, so the field engine has no
-per-unit index geometry through it and the geometric method refuses. The
-gradient method is the documented fallback: it needs a capture with
-``backward_ready=True`` and ``save_mode="reference"``, whose saved payloads stay
-connected to the autograd graph (including payloads of non-mutating operator
-dunders such as ``__mul__``).
+Attention mixes positions by data-dependent weights; the geometric set query
+answers with the causal prefix (position ``i`` reaches ``i..``) and the
+gradient method narrows it empirically. The gradient method needs a capture
+with ``backward_ready=True`` and ``save_mode="reference"``, whose saved
+payloads stay connected to the autograd graph (including payloads of
+non-mutating operator dunders such as ``__mul__``).
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.errors import SelectionError
 from torchlens.receptive_field import ReceptiveFieldStatus
 from torchlens.receptive_field._errors import ReceptiveFieldUnavailableError
 
@@ -170,21 +169,19 @@ def test_gpt2_projective_status_answers_per_target(gpt2) -> None:
 
 
 @pytest.mark.heavy
-def test_gpt2_geometric_refusal_names_the_gradient_capture(gpt2) -> None:
-    """The geometric method refuses through attention and names the capture the fallback needs."""
+def test_gpt2_geometric_answer_through_attention_is_the_causal_suffix(gpt2) -> None:
+    """The geometric method answers on a plain capture: position 3 reaches positions 3 and 4."""
 
     model, ids = gpt2
     trace = tl.trace(model, ids)
     try:
         view = _only_output(trace, "transformer.h.0.mlp.act").projective_field
+        target = _only_output(trace, "transformer.h.1.attn.c_proj")
         units = [(0, _SEED_POSITION, j) for j in range(4)]
-        with pytest.raises(SelectionError) as excinfo:
-            view.of(units, within="transformer.h.1.attn.c_proj")
-        assert excinfo.value.fields["code"] == "influence_geometry_unavailable"
-        message = str(excinfo.value)
-        assert "method='gradient'" in message
-        assert "backward_ready=True" in message
-        assert 'save_mode="reference"' in message
+        reached = view.of(units, within="transformer.h.1.attn.c_proj")
+        row = _row(reached, target)
+        assert row.provenance.basis == "geometric"
+        assert _positions_reached(row.mask) == list(range(_SEED_POSITION, _SEQ))
     finally:
         trace.cleanup()
 

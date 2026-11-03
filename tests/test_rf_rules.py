@@ -151,7 +151,7 @@ def test_group_and_current_stat_instance_norm_globalize_normalized_axes() -> Non
 
 
 def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
-    """Bound attention on sequence and feature axes, preserving batch and head locality."""
+    """Bound attention on sequence and feature axes; ``is_causal`` makes the sequence windowed."""
 
     class Attention(nn.Module):
         """Small scaled-dot-product attention fixture."""
@@ -173,13 +173,13 @@ def test_attention_mask_changes_exact_whole_domain_to_upper_bound() -> None:
     unmasked = tl.trace(Attention(causal=False), query)
     masked = tl.trace(Attention(causal=True), query)
 
-    for trace in (unmasked, masked):
+    for trace, sequence_kind in ((unmasked, "full"), (masked, "windowed")):
         descriptor = _descriptor(_op(trace, "scaled_dot_product_attention"))
         assert descriptor.status is ReceptiveFieldStatus.UPPER_BOUND
         assert tuple(axis.kind for axis in descriptor.axes) == (
             "pointwise",
             "pointwise",
-            "full",
+            sequence_kind,
             "full",
         )
         assert descriptor.batch_coupled is False
