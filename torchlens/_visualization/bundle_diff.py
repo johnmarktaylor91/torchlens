@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal
@@ -11,7 +10,7 @@ import graphviz
 import torch
 
 from .._errors import InvalidArgumentError
-from ._render_utils import html_escape, render_dot_to_file, strip_known_extension
+from ._render_utils import _add_svg_accessibility, render_dot_to_file, strip_known_extension
 from .themes import resolve_theme, theme_edge_attrs, theme_graph_attrs, theme_node_attrs
 
 if TYPE_CHECKING:
@@ -849,38 +848,6 @@ def _interpolate(start: str, end: str, fraction: float) -> str:
     from ._encoding import interpolate_hex
 
     return interpolate_hex(start, end, fraction)
-
-
-def _add_svg_accessibility(path: str, aria_label: str) -> None:
-    """Add figure-level accessibility attributes to a rendered SVG.
-
-    Parameters
-    ----------
-    path:
-        Rendered SVG path.
-    aria_label:
-        Root SVG accessibility label.
-
-    Returns
-    -------
-    None
-        The SVG is updated in place when it exists.
-    """
-
-    if not os.path.exists(path):
-        return
-    with open(path, encoding="utf-8") as handle:
-        svg = handle.read()
-    if "aria-label=" not in svg:
-        escaped_label = html_escape(aria_label).replace('"', "&quot;")
-        svg = re.sub(
-            r"<svg\b",
-            f'<svg role="img" aria-label="{escaped_label}"',
-            svg,
-            count=1,
-        )
-    with open(path, "w", encoding="utf-8") as handle:
-        handle.write(svg)
 
 
 __all__ = ["bundle_diff"]
