@@ -110,6 +110,7 @@ TRACE_OPTION_PROBES: dict[str, Callable[[], Any]] = {
     "inference_only": lambda: True,
     "chunk_size": lambda: 1,
     "chunk_paths": lambda: (0,),
+    "facets": lambda: (lambda record: {},),
 }
 
 #: Spine option -> the options its probe also passes. ``chunk_paths`` alone trips the

@@ -46,7 +46,7 @@ class _BackendCapability:
     public_spine: bool = False
 
 
-_INTERVENTIONS = _BackendCapability("can_intervene", ("intervene", "halt", "facets"), gated=True)
+_INTERVENTIONS = _BackendCapability("can_intervene", ("intervene", "halt"), gated=True)
 _STREAMING = _BackendCapability("has_streaming", ("storage", "streaming"), gated=True)
 _BACKWARD_CAPTURE = _BackendCapability(
     "backward_capture", ("save_grads", "backward_ready"), gated=True
@@ -70,6 +70,8 @@ _INFERENCE_ONLY = _BackendCapability("inference_only", ("inference_only",), publ
 _FORWARD_CHUNKING = _BackendCapability(
     "forward_chunking", ("chunk_size", "chunk_paths"), public_spine=True
 )
+_FACET_RECIPES = _BackendCapability("facet_recipes", ("facets",), public_spine=True)
+"""Per-trace facet recipes: backend-neutral, so every backend implements them."""
 _STATIC_ARGNUMS = _BackendCapability("static_argnums", ("jax_static_argnums",))
 _GRAD_OPTIONS = _BackendCapability("grad_options", ("grad_options",))
 
@@ -86,6 +88,7 @@ _BACKEND_CAPABILITIES: tuple[_BackendCapability, ...] = (
     _CONTAINER_STRUCTURE,
     _INFERENCE_ONLY,
     _FORWARD_CHUNKING,
+    _FACET_RECIPES,
     _STATIC_ARGNUMS,
     _GRAD_OPTIONS,
 )
@@ -154,19 +157,24 @@ _JAX_TRACE_OPTION_CAPABILITIES: tuple[_BackendCapability, ...] = (
     _GRAD_OPTIONS,
     _CONTROL_FLOW,
     _MODULE_IDENTITY,
+    _FACET_RECIPES,
 )
 """Trace-option capabilities the JAX preview backend implements."""
 
 JAX_TRACE_OPTIONS: tuple[str, ...] = _trace_option_names(_JAX_TRACE_OPTION_CAPABILITIES)
 """Trace options implemented by the JAX preview backend."""
 
-_IDENTITY_AND_GRADS: tuple[_BackendCapability, ...] = (_MODULE_IDENTITY, _GRAD_OPTIONS)
-"""The two trace-option capabilities every eager preview backend implements."""
+_EAGER_PREVIEW_CAPABILITIES: tuple[_BackendCapability, ...] = (
+    _MODULE_IDENTITY,
+    _GRAD_OPTIONS,
+    _FACET_RECIPES,
+)
+"""The trace-option capabilities every eager preview backend implements."""
 
-_MLX_TRACE_OPTION_CAPABILITIES = _IDENTITY_AND_GRADS
-_TINYGRAD_TRACE_OPTION_CAPABILITIES = _IDENTITY_AND_GRADS
-_PADDLE_TRACE_OPTION_CAPABILITIES = _IDENTITY_AND_GRADS
-_TF_TRACE_OPTION_CAPABILITIES = _IDENTITY_AND_GRADS
+_MLX_TRACE_OPTION_CAPABILITIES = _EAGER_PREVIEW_CAPABILITIES
+_TINYGRAD_TRACE_OPTION_CAPABILITIES = _EAGER_PREVIEW_CAPABILITIES
+_PADDLE_TRACE_OPTION_CAPABILITIES = _EAGER_PREVIEW_CAPABILITIES
+_TF_TRACE_OPTION_CAPABILITIES = _EAGER_PREVIEW_CAPABILITIES
 
 MLX_TRACE_OPTIONS: tuple[str, ...] = _trace_option_names(_MLX_TRACE_OPTION_CAPABILITIES)
 """Trace options implemented by the MLX preview backend."""

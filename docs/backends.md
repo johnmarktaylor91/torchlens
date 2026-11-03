@@ -157,6 +157,7 @@ Declared future options:
 | `module_identity_mode` | Backend module-mode selection; JAX supports raw `function_root` and Equinox/Flax NNX `pytree_module`; tinygrad, MLX, Paddle, and TensorFlow support raw `function_root` and callable object `object_module` |
 | `payload_policy` | Backend payload codec/materialization policy; JAX/tinygrad/MLX/Paddle/TF use `array_payloads` |
 | `save_preview` | Future non-torch save preview flag; JAX/tinygrad/MLX/Paddle/TF support static-label `save=` |
+| `facets` | Per-trace facet recipes, backend-neutral: every backend (torch, JAX, tinygrad, MLX, Paddle, TF) snapshots them onto `trace.facet_functions` through one shared helper; a non-callable refuses `trace_option_unsupported` |
 
 Capability epochs keep the public API, `CaptureOptions`, backend specs, per-backend capability
 mirrors, cache keys, docs, and tests changing together.
@@ -281,8 +282,8 @@ FAILS CLOSED: a selector matching captured ops whose calls never passed through 
 helper actions are `zero_ablate`, `scale`, and `add`, plus plain callables; replacements must
 preserve shape and dtype. Conditions must be static selectors; a gradient site (`tl.grad(...)`),
 value-dependent callable conditions, shape-changing replacements, graph-only entries, and
-combining `intervene=` with `grad_options=` refuse typed. `halt=` and `recipes=` keep typed
-refusals inside the capture path.
+combining `intervene=` with `grad_options=` refuse typed. `halt=` keeps its typed refusal inside
+the capture path; `facets=` attaches per-trace facet recipes on both the eager and the static path.
 
 TensorFlow true backward capture, `halt=`, fastlog/`tl.record()`, streaming, and value-dependent
 predicates remain deferred. These surfaces raise typed backend errors instead of silently
@@ -351,7 +352,7 @@ way (`unwrapped_op_in_capture`), or refuses with that code when the caller asks 
 see [the MLX page](backends/mlx.md).
 
 MLX rejects `tl.model_output(...)`, `tl.where(...)`,
-`tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates, `recipes=`,
+`tl.followed_by(...)`, `tl.preceded_by(...)`, value-dependent predicates,
 gradient-site (`tl.grad(...)`) interventions, streaming, `save_grads=`, `backward_ready=True`, and
 `tl.record(backend="mlx")`. Portable MLX saves
 materialize forward and derived array payloads and load them back as `mlx.core.array` values when the

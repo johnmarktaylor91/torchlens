@@ -12,6 +12,8 @@ an intervened value as captured-native.
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 import pytest
 
@@ -227,11 +229,20 @@ def test_mlx_shape_changing_hook_refuses_typed() -> None:
     assert info.value.code == "intervention_result_invalid"
 
 
-def test_mlx_recipes_refuses_typed() -> None:
-    """Recipe specs stay refused; only tl.when static predicates dispatch."""
+def test_mlx_recipes_snapshot_dispatches() -> None:
+    """facets= attaches a per-trace facet registry snapshot; non-callables refuse typed."""
 
-    with pytest.raises(BackendUnsupportedError, match="recipe"):
+    def recipe(record: Any) -> dict[str, Any]:
+        return {"is_relu": "relu" in str(getattr(record, "label", ""))}
+
+    trace = tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=[recipe])
+    snapshot = trace.facet_functions
+    assert snapshot is not None
+    assert any("recipe" in entry.public.name for entry in snapshot.functions)
+
+    with pytest.raises(BackendUnsupportedError, match="recipe callables") as info:
         tl.trace(_TwoLayerMLP(), _input(), backend="mlx", facets=object())
+    assert info.value.code == "trace_option_unsupported"
 
 
 def test_mlx_halt_non_selector_refuses_typed() -> None:

@@ -13,10 +13,7 @@ from typing import Any, cast
 from torchlens.backends.registry import BackendUnsupportedError
 
 from ..._capture.outcome import stamp_backend_finalized
-from ..._data_classes.derived_grad import (
-    DerivedGradAccessor,
-    IntermediateDerivedGradAccessor,
-)
+from ..._data_classes.derived_grad import DerivedGradAccessor, IntermediateDerivedGradAccessor
 from ..._data_classes.param import Param, ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
@@ -48,6 +45,7 @@ from ...validation.status import (
     ValidationStatus,
     count_importer_region_annotations,
 )
+from .._facet_recipes import attach_facet_recipes, pop_facet_recipes
 from .._finalize import (
     attach_function_root_module,
     attach_object_module_logs,
@@ -367,9 +365,8 @@ class TinygradBackend:
         grad_options
             tinygrad ``GradOptions`` for bracketed leaf-level derived gradients.
         capture
-            Grouped ``CaptureOptions``. The sole post-sprint spelling for the
-            flat capture kwargs above; an explicit field here is merged in
-            (``merge_capture_options``) ahead of this backend's own defaults.
+            Grouped ``CaptureOptions``, the sole spelling for the flat capture kwargs
+            above; an explicit field is merged in (``merge_capture_options``) first.
         **kwargs
             Extra public trace kwargs rejected by this backend.
 
@@ -380,9 +377,9 @@ class TinygradBackend:
         """
 
         save_predicate = pop_static_label_save_predicate(kwargs, backend_name="tinygrad")
+        facet_recipes = pop_facet_recipes(kwargs)
         self._reject_extra_kwargs(kwargs)
-        # N5 fix: ``trace()`` no longer passes these as flat kwargs at all --
-        # see the matching comment in ``backends/jax/backend.py``.
+        # N5: ``trace()`` passes none of these as flat kwargs; see ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
             layers_to_save=layers_to_save,
@@ -560,6 +557,7 @@ class TinygradBackend:
                 captured_output=output,
                 grad_options=cast(GradOptions, grad_options),
             )
+        attach_facet_recipes(trace, facet_recipes, backend_name="tinygrad")
         freeze_trace_relation_views(trace)
         stamp_backend_finalized(trace)
         return trace

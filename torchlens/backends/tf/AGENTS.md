@@ -11,10 +11,11 @@ TensorFlow preview backend. It fills the backend protocol (`maturity="preview"`,
 - `intervene=` combined with `grad_options=` refuses typed (the derived-gradient
   replay reruns the un-intervened forward). Both surfaces require eager live
   capture; the static path refuses each.
-- `halt=` and `facets=` refuse typed as deferred on TF (NOT torch-only
-  elsewhere: Paddle's preview ships both `halt=` and `facets=`), even though
-  the registry `interventions` flag admits them through the shared option
-  gate.
+- `halt=` refuses typed as deferred on TF (NOT torch-only elsewhere:
+  Paddle's preview ships `halt=`), even though the registry `interventions`
+  flag admits it through the shared option gate. `facets=` attaches per-trace
+  facet recipes on both the eager and the static capture path through the
+  shared `backends/_facet_recipes.py` helper (the `facet_recipes` record).
 - `_finish_trace(recurrence_detection=...)` runs the shared neutral grouper via
   `.._finalize.finalize_single_pass_trace`; the eager path passes the user's
   request, the static FuncGraph path stays ungrouped and stores the honest
@@ -62,8 +63,8 @@ TensorFlow preview backend. It fills the backend protocol (`maturity="preview"`,
   `get_tf_capability_snapshot()` feed doctor/compat reporting.
 
 ## Local Invariants
-- Deferred surfaces refuse typed, never silently no-op: `halt=`, `facets=`,
-  true backward capture, value-dependent predicate conditions.
+- Deferred surfaces refuse typed, never silently no-op: `halt=`, true
+  backward capture, value-dependent predicate conditions.
 - `grad_options=` and `intervene=` never combine; static FuncGraph captures
   refuse both and keep `recurrence_detection=False`.
 - `capabilities.py` only re-exports registry truth; never hardcode flags here.

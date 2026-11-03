@@ -33,6 +33,7 @@ _PUBLIC_SPINE_OPTION_VALUES: dict[str, Any] = {
     "inference_only": True,
     "chunk_size": 2,
     "chunk_paths": [("args", 0)],
+    "facets": (lambda record: {},),
 }
 
 _PREVIEW_POLICIES: tuple[PreviewTraceOptionPolicy, ...] = (
