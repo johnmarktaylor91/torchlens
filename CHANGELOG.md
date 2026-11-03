@@ -5,6 +5,12 @@
 
 ### Behavior changes
 
+- **intervention**: `Trace.set`, `Layer.set` and `Op.set` are removed (decision walk api.1, 2 Nov 2026).
+  Stage a one-shot replacement with `trace.do(site, value, intervention=tl.options.InterventionOptions(engine="set_only"))`
+  (on a layer, `layer.do(value, intervention=...)`). The set-only route is unchanged; `do()` gains no new keyword.
+  The old `Trace.set` and `Layer.set` refuse with the typed `facade_redirect` error naming the replacement. The
+  `intervention_direction_invalid` refusals that only `set(..., direction=)` raised are gone with it; the code still
+  covers `Rule(direction=)`.
 - **intervention**: `torchlens.intervention.sites` (the `sites()` builder with `SiteCollection` and
   `SiteSpec`) is removed (round-2 walk names.7). Pass selectors to
   `torchlens.experiment.sweep_sites(...)` directly. The old names refuse with the typed

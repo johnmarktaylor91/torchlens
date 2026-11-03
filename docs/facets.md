@@ -216,7 +216,7 @@ Static patching uses the same scatter-back path:
 ```python
 patch = torch.zeros_like(log.modules["blocks.0.attn"].facets.head(3).q)
 edited = log.fork("patched")
-edited.set(tl.facet("q").head(3), patch)
+edited.do(tl.facet("q").head(3), patch, intervention=tl.options.InterventionOptions(engine="set_only"))
 edited.run(model, x)
 ```
 

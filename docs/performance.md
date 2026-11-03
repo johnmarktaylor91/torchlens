@@ -336,7 +336,7 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+on an existing trace, prefer `trace.fork()`, `do(..., intervention=InterventionOptions(engine="set_only"))` or `attach_hooks(...)`, and `push()`
 (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts

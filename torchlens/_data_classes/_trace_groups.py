@@ -379,9 +379,7 @@ class TraceAutograd(_TraceGroup):
             not record into this Trace.
         """
 
-        from . import _doors
-
-        _doors.intervention()._trace_run.disarm(self._trace)
+        self._trace._disarm_autograd()
 
     @property
     def backward_passes(self) -> Any:

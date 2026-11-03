@@ -4,7 +4,7 @@
 | --- | --- | --- |
 | Trace a model invocation | `tl.trace(model, x, save=tl.func("relu"))` | TorchLens stores a completed `Trace` after execution. |
 | Save a node value | Use `save=selector`, then access `log.find_sites(selector).first().out` | Equivalent for captured activations. |
-| Assign into a traced value | `log.fork().set(site, value).push()` (replay the recorded graph) or `.run(model, x)` (run the model again) | TorchLens recipes are explicit and auditable. |
+| Assign into a traced value | `log.fork().do(site, value, intervention=tl.options.InterventionOptions(engine="set_only")).push()` (replay the recorded graph) or `.run(model, x)` (run the model again) | TorchLens recipes are explicit and auditable. |
 | Invoke with intervention in one block | `tl.trace(model, x, intervene=tl.when(site, helper_or_value), save=site)` | Capture-time intervention is the direct one-forward path. |
 | Scan modules by path | `tl.in_module("path")`, `tl.module("path")`, `log.find_sites(...)` | Similar workflow; labels differ. |
 | Remote execution (NDIF), vLLM serving, tensor parallelism, quantized models | No equivalent | TorchLens captures a local eager PyTorch forward; for those back ends NNsight is the tool. |

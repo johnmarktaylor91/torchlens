@@ -493,6 +493,11 @@ class TraceValidationMixin(_TraceMixinBase):
         """
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
+    def _disarm_autograd(self: "Trace") -> None:
+        """Forward to ``_trace_run.disarm`` (the ``trace.autograd.disarm`` body)."""
+
+        _doors.intervention()._trace_run.disarm(self)
+
     def _remove_log_entry(
         self: "Trace",
         log_entry: Op,

@@ -133,7 +133,11 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "mylog.tlspec"
 
     log.save_intervention(path, level="audit")
@@ -1056,7 +1060,11 @@ def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "target.tlspec"
     log.save_intervention(path, level="audit")
 
@@ -1107,7 +1115,11 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 
     log = _log()
-    log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.zeros(2, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     target = tmp_path / "crash.tlspec"
 
     def crashing_writer(**kwargs: Any) -> Any:

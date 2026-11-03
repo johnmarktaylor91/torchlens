@@ -32,7 +32,11 @@ def _interventions() -> tl.Trace:
         x,
         capture=CaptureOptions(replayable=True, seed=0),
     )
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     return log
 
 

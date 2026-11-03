@@ -1,7 +1,7 @@
 """The pristine reading of a Trace, derived from the evidence it carries.
 
 A trace is pristine when nothing ever intervened on it: no capture-time
-``intervene=``, no staged hook or value replacement, no ``do()``/``set()``/
+``intervene=``, no staged hook or value replacement, no ``do()``/
 region edit, no hooked rerun or run, no direct write. The reading is DERIVED at
 read time from records that already persist with the trace (``Trace.save`` /
 ``tl.load``, pickle, ``copy.deepcopy``, ``fork()``), never stored as a flag of

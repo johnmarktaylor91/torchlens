@@ -222,7 +222,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
     """Refuse a rerun whose staged edits are addressed by finalized labels.
 
     A live rerun matches selectors while the forward runs, before postprocess
-    labels exist, so an entry staged on a final label (``Trace.set(label, ...)``,
+    labels exist, so an entry staged on a final label (``do(label, value)`` with the ``set_only`` engine,
     ``attach_hooks(tl.label(...), ...)``, or a predicate-door entry whose
     predicate the trace no longer carries) can never fire. The live matcher
     would refuse it mid-capture with a remedy aimed at authoring selectors; this
@@ -259,7 +259,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
         origin = (
             "a capture-time intervene= predicate this trace no longer carries"
             if metadata.get("created_by") == "intervene_predicate"
-            else "Trace.set() or attach_hooks()"
+            else "a set_only do() or attach_hooks()"
         )
         raise LiveModeLabelError(
             f"This trace stages an edit on tl.{target.selector_kind}({value!r}), staged by "
@@ -267,7 +267,7 @@ def refuse_unmatchable_staged_labels(capture_spec: Any) -> None:
             "selectors during the forward, before those labels exist, so the edit "
             "could never fire; the rerun is refused and the trace is unchanged. "
             "Remedy: re-stage the edit with a selector a live forward can match, "
-            "for example trace.set(tl.module('fc2'), value) or "
+            "for example trace.do(tl.module('fc2'), value, intervention=InterventionOptions(engine='set_only')) or "
             "trace.attach_hooks(tl.func('relu'), helper), or propagate the edit on "
             "the captured input with Trace.push",
             code="rerun_staged_label_unmatchable",

@@ -452,7 +452,7 @@ def op_has_genuine_replacement_evidence(layer: Op, trace: Trace | None = None) -
     # the placeholder synthesizer writes ``interventions=[]``), AND (2) the
     # trace itself owns an ARMED intervention spec -- one with actual
     # targets/hooks/values, populated only by ``trace(intervene=...)`` /
-    # ``attach_hooks`` / ``set``. Plain captures carry an EMPTY spec object,
+    # ``attach_hooks`` / a ``set_only`` do. Plain captures carry an EMPTY spec object,
     # so a stale ``_tl_live_fire_results`` leak into a plain capture carries
     # records but no armed spec and stays refused.
     if _intervention_spec_is_armed(getattr(trace, "_intervention_spec", None)):

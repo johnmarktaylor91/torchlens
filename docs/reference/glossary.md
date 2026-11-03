@@ -1316,7 +1316,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
   (a staged steer edited since capture). A staged edit addressed by a finalized label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) can never fire during a live
+  (`do(label, value)` with the `set_only` engine, `attach_hooks(tl.label(...))`) can never fire during a live
   forward, so a rerun refuses it up front with `rerun_staged_label_unmatchable` (trace
   unchanged). A staged edit whose selector matches sites on the trace but fires at none
   during a rerun of the same graph on the same inputs refuses with
@@ -1899,7 +1899,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
-  `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
+  `tl.head` selector serves (`attach_hooks`, `Trace.do`,
   `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
   `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read

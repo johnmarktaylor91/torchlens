@@ -390,7 +390,11 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     # set() only stages the replacement; each run applies it.
-    trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+    trace.do(
+        tl.module("fc1"),
+        lambda out: out * 2.0,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     for _ in range(3):
         trace.run(model, x)
@@ -646,18 +650,22 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
 
 
 def test_set_label_rerun_refuses_with_a_set_remedy(mlp) -> None:
-    """Seat 2 F7: ``set(label, value)`` + rerun refuses before the forward, naming ``set()``."""
+    """Seat 2 F7: ``set(label, value)`` + rerun refuses before the forward, naming the ``set_only`` do."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
     label = trace.find_sites(tl.module("fc2"))[0].layer_label
-    trace.set(label, torch.full_like(trace[label].out, 0.3), confirm_mutation=True)
+    trace.do(
+        label,
+        torch.full_like(trace[label].out, 0.3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     readout = trace.output_ops[0].out.clone()
     with pytest.raises(LiveModeLabelError) as excinfo:
         trace.run(model, x2)
     assert excinfo.value.fields["code"] == "rerun_staged_label_unmatchable"
-    assert "Trace.set()" in str(excinfo.value)
+    assert "a set_only do()" in str(excinfo.value)
     assert "tl.module(" in str(excinfo.value)
     assert _staged(trace) == staged
     assert torch.equal(trace.output_ops[0].out, readout)
@@ -753,7 +761,11 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace.do(tl.module("fc1"), tl.scale(2.0))
     elif door == "set":
         trace = tl.trace(model, x, capture=ready)
-        trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+        trace.do(
+            tl.module("fc1"),
+            lambda out: out * 2.0,
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     else:
         trace = tl.trace(model, x)
         handle = trace.attach_hooks(tl.module("fc1"), tl.scale(2.0), confirm_mutation=True)

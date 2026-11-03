@@ -719,7 +719,11 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     """Intervention saves now emit the full unified manifest field set."""
 
     log = _captured_log(replayable=True)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / f"intervention_{level}.tlspec"
 
     log.save_intervention(path, level=level)

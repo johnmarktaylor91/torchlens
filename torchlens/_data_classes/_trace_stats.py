@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any, Literal, TextIO, cast
 
 if TYPE_CHECKING:
     from .._trace_slice import TraceSlice
+    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
         ReceptiveFieldProfile,
@@ -702,6 +703,23 @@ class TraceStatsMixin(_TraceMixinBase):
         """
 
         return _doors.visualization()._trace_collapse.collapse_order(self, mode)
+
+    def _collapse_plan(
+        self: "Trace",
+        mode: Literal["auto", "max"] | float = "auto",
+        context: "RenderContext | None" = None,
+    ) -> "CollapsePlan":
+        """Forward to ``_trace_collapse.collapse_plan`` (the ``Drawing.collapse_plan`` body)."""
+
+        return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
+
+    def _collapse_schedule(
+        self: "Trace",
+        context: "RenderContext | None" = None,
+    ) -> "CollapseSchedule":
+        """Forward to ``_trace_collapse.collapse_schedule`` (the ``Drawing.collapse_schedule`` body)."""
+
+        return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
 
     def modules_with_facet(self: "Trace", name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now.

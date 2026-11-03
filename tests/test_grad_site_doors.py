@@ -238,19 +238,6 @@ def test_push_refuses_a_recipe_holding_a_gradient_rule() -> None:
     assert "Replay re-executes forward ops only" in str(excinfo.value)
 
 
-@pytest.mark.parametrize("direction", ["backward", "both", "sideways"])
-def test_set_refuses_a_gradient_or_unknown_direction(direction: str) -> None:
-    """``Trace.set`` keeps only its activation path; gradients are sites (tl.grad)."""
-
-    trace = _trace(_BranchNet()).fork()
-    label = _relu_label(trace)
-    recipe_before = trace.recipe
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.set(label, torch.zeros_like(trace[label].out), direction=direction)
-    assert excinfo.value.fields["code"] == "intervention_direction_invalid"
-    assert trace.recipe == recipe_before
-
-
 # ---------------------------------------------------------------------------
 # Settle rows (A20, A27) driven directly
 # ---------------------------------------------------------------------------

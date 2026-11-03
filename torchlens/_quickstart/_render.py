@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from torch import nn
 
-from .._errors import CaptureNotActiveError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError, refuse_cleaned_up
 from ._gate import require_gold
 from ._primitive import ExecutionReceipt, capture_concrete
 from ._provenance import InputProvenance
@@ -179,9 +179,7 @@ class Drawing:
             If this drawing retains no trace.
         """
 
-        from .._visualization import _trace_collapse
-
-        return _trace_collapse.collapse_plan(self._retained_trace("collapse_plan"), mode, context)
+        return self._retained_trace("collapse_plan")._collapse_plan(mode, context)
 
     def collapse_schedule(self, context: RenderContext | None = None) -> CollapseSchedule:
         """Return the monotone float collapse schedule for the trace behind this drawing.
@@ -205,17 +203,13 @@ class Drawing:
             If this drawing retains no trace.
         """
 
-        from .._visualization import _trace_collapse
-
-        return _trace_collapse.collapse_schedule(self._retained_trace("collapse_schedule"), context)
+        return self._retained_trace("collapse_schedule")._collapse_schedule(context)
 
     def _retained_trace(self, name: str) -> Any:
         """Return the retained trace, or refuse typed when the draw kept none."""
 
         if self.trace is None:
-            from .._errors import TraceCleanedUpError
-
-            raise TraceCleanedUpError(
+            refuse_cleaned_up(
                 f"this Drawing retains no trace, so {name}() has nothing to plan on",
                 remedy="draw with return_trace=True and call it before close()",
                 attribute=name,

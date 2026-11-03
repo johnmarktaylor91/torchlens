@@ -1,7 +1,7 @@
 """Trace intervention mixin: the thin shell of the intervention verbs.
 
 Every method forwards to a function taking the trace first. The bodies live in
-``torchlens.intervention._trace_edits`` (``do``, ``set``, ``remove``,
+``torchlens.intervention._trace_edits`` (``do``, ``remove``,
 ``clear_edits``, ``save_intervention`` and their helpers), ``_trace_selection_edits``
 (selection-kind ``do``), ``_trace_hooks`` (``attach_hooks``, ``clear_hooks``),
 reached through the ``_doors.intervention`` door, and in the L1 modules
@@ -114,43 +114,6 @@ class TraceInterventionMixin(_TraceMixinBase):
         """Forward to ``_trace_intervention_records.history_site_payload``."""
 
         return _trace_intervention_records.history_site_payload(site)
-
-    def set(
-        self: "Trace",
-        site: Any,
-        value: Any,
-        *,
-        direction: str = "forward",
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set a site out recipe without propagating it.
-
-        Parameters
-        ----------
-        site:
-            Selector-like target for the out to replace.
-        value:
-            Static replacement tensor or one-shot callable accepting the
-            matched out and returning a replacement tensor.
-        direction:
-            Signal direction to replace: ``"forward"``, ``"backward"``, or
-            ``"both"``.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-
-        Returns
-        -------
-        Trace
-            This model log, with a stale intervention recipe.
-        """
-
-        return _doors.intervention()._trace_edits.set_site(
-            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
-        )
 
     def attach_hooks(
         self: "Trace",

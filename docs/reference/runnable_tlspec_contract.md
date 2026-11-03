@@ -1175,7 +1175,7 @@ would not apply (`run_staged_spec_unapplied`).
 
 `user_intervention_unsupported` is the SAVE-time producer refusal (stage
 `producer_user_intervention`) for a capture whose taken path carries at least one
-user-intervention-replaced op (`trace(intervene=...)`, `set`, or a raw forward hook that
+user-intervention-replaced op (`trace(intervene=...)`, a `set_only` `do`, or a raw forward hook that
 substituted a value). The replacement value has no traceable function, so a sparse runnable
 replay could only recompute the UN-intervened computation -- a different function than the
 provenance the artifact archives -- and would permanently ceiling `unverifiable`. The

@@ -1670,7 +1670,6 @@ torchlens.intervention.spec:refuse_invalid_loss:InvalidArgumentError::1	CONTRACT
 torchlens.intervention.spec:refuse_invalid_loss:InvalidArgumentError::2	CONTRACTED	do_loss_without_gradient_site	grad-site P3: loss= with no tl.grad site refuses before any mutation
 torchlens._data_classes._trace_grad_sites:select_signal_plan_engine:InvalidArgumentError::1	CONTRACTED	intervention_engine_invalid	grad-site P3: unknown engine on a gradient-site do
 torchlens._data_classes._trace_grad_sites:select_signal_plan_engine:InvalidArgumentError::2	CONTRACTED	replay_gradient_edit_unsupported	grad-site P3: replay or a model-less auto engine with a gradient site refuses before any mutation
-torchlens.intervention._trace_edits:set_site:InvalidArgumentError::2	CONTRACTED	intervention_direction_invalid	grad-site P3: set(direction='backward'|'both') no longer edits gradients; the remedy names tl.grad(site)
 torchlens.intervention.replay:_refuse_armed_gradient_rules:InvalidArgumentError::1	CONTRACTED	replay_gradient_edit_unsupported	grad-site P3: push on a recipe holding tl.grad rules refuses (replay never runs a backward)
 torchlens.stats._aggregate:aggregate:InvalidArgumentError::1	CONTRACTED	aggregate_loss_fn_required	grad-site P3: a tl.grad metric key needs loss_fn= (replaces the untyped TypeError)
 torchlens._selection.selectors:grad:SelectorCompositionError:_grad_refusal:1	CONTRACTED	grad_selector_nested	grad-site integration: tl.grad of a GradSelector refuses at construction (SPEC 1.3)

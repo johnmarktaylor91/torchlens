@@ -82,7 +82,7 @@ The older `replay()` and `rerun()` spellings are removed; `push()` and `run()` r
 
 ## Mutate In Place and Fork First
 
-`set`, `attach_hooks`, and `do` mutate the `Trace` they are called on. A root trace warns once
+`attach_hooks` and `do` (including `do` with the `set_only` engine) mutate the `Trace` they are called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -113,7 +113,7 @@ captured evidence where safe.
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
 push overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set`, `attach_hooks` or `do` when the edit should be part of the recipe.
+intervention. Use `attach_hooks` or `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 

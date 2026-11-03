@@ -2607,19 +2607,6 @@ class Op(_SelectionOperand):
             self, input_transform, model=model, inputs=inputs, intervention=intervention
         )
 
-    def set(
-        self,
-        value: Any,
-        *,
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set this op's out recipe through the owning Trace."""
-
-        return _doors.intervention()._op_edits.set(
-            self, value, strict=strict, confirm_mutation=confirm_mutation
-        )
-
     def attach_hooks(
         self,
         hook: Any = None,

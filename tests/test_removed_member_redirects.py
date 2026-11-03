@@ -65,6 +65,7 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "animate_ops", "animate"),
     ("Trace", "disarm_triggers", "autograd.disarm"),
     ("Trace", "log_backward", "backward"),
+    ("Trace", "set", "do"),
     ("Trace", "collapse_plan", "draw"),
     ("Trace", "collapse_schedule", "draw"),
     ("Bundle", "replay", "do"),
@@ -132,6 +133,18 @@ def test_removed_module_name_raises_typed_redirect(
     parts = replacement.split(".")
     for part in parts[1:] if parts[0] == "torchlens" else parts:
         target = getattr(target, part)
+
+
+def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:
+    """``Layer.set`` was replaced by ``Layer.do`` with the ``set_only`` engine."""
+
+    layer = next(iter(owners["Trace"].layers))
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        layer.set
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "set_only" in str(excinfo.value)
+    assert getattr(layer, "set", "absent") == "absent"
+    assert callable(layer.do)
 
 
 @pytest.mark.parametrize("owner", ["Trace", "Bundle", "VisualizationOptions", "VisualizationTheme"])

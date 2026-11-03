@@ -116,7 +116,11 @@ def _intervened_trace(model_key: str):
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         relu = next(layer for layer in trace.ops if layer.func_name == "relu")
-        trace.set(tl.func("relu"), torch.zeros(relu.shape))
+        trace.do(
+            tl.func("relu"),
+            torch.zeros(relu.shape),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
         return trace
 
     return _build
@@ -2126,7 +2130,7 @@ SECTIONS: list[Section] = [
                 title="vis_intervention_mode: 'node_mark' vs 'as_node'",
                 caption=(
                     "An intervention-ready trace with a PLANNED zero intervention registered at the relu "
-                    "site (trace.set(tl.func('relu'), zeros) -- the renderer visualizes planned "
+                    "site (trace.do(tl.func('relu'), zeros, intervention=tl.options.InterventionOptions(engine='set_only')) -- the renderer visualizes planned "
                     "intervention sites). 'node_mark' (default) "
                     "marks the edited op node itself (purple ring and a bold purple edit row such as "
                     "'\u0394 set(v)'); 'as_node' inserts explicit "
