@@ -1065,7 +1065,7 @@ class _GradPayloadContext:
         self.backward_pass_number = pass_index
         self.shape = op.shape
         self.dtype = op.dtype
-        self.tensor_device = getattr(op, "output_device", None)
+        self.tensor_device = record_member(op, "output_device", None)
 
 
 def _param_log_for_exact_address(trace: "Trace", address: str) -> Any | None:

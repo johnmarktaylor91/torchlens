@@ -411,7 +411,7 @@ def test_buffer_layer_fields():
     for label in mh.layer_labels:
         entry = mh[label]
         if entry.graph.is_buffer:
-            assert isinstance(entry.address, str)
+            assert isinstance(entry.buffer_address, str)
             found = True
             break
     assert found, "BufferModel should have buffer layers"

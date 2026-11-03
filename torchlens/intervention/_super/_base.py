@@ -8,6 +8,7 @@ from typing import Any, ClassVar, Generic, Literal, TypeVar, cast
 import torch
 
 from ..._errors import InvalidArgumentError, PayloadUnavailableError
+from ..._utils._record_group_table import record_member
 from ...errors._episode import ParamEvidenceMissingError
 from .._metrics import is_scalar_like, relative_l1, resolve_metric
 
@@ -550,7 +551,7 @@ class _TensorBearing:
             return
         member_names = list(self._members)
         first = next(iter(self._members.values()))
-        param_address = str(getattr(first, "address", None) or self._label)
+        param_address = str(record_member(first, "address", None) or self._label)
         quoted = [f"'{name}'" for name in member_names]
         named = " and ".join(quoted) if len(quoted) == 2 else ", ".join(quoted)
         any_live = any(basis is not None and basis.basis == "live_ref" for basis in bases.values())

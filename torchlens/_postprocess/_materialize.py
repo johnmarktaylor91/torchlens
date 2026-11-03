@@ -837,7 +837,7 @@ def _equivalent_ops_by_label(
     buffer_address_by_label = dict(buffer_addresses_by_label)
     for event in buffer_write_events:
         label_raw = getattr(event, "version_label_raw", None)
-        address = getattr(event, "address", None)
+        address = record_member(event, "address", None)
         if isinstance(label_raw, str) and isinstance(address, str):
             buffer_address_by_label[label_raw] = address
     for event in op_events:
@@ -1457,7 +1457,7 @@ def _buffer_write_fields(
             continue
         producer_label_raw = getattr(event, "producer_label_raw", None)
         fields: dict[str, object] = {
-            "address": getattr(event, "address", None),
+            "address": record_member(event, "address", None),
             "buffer_write_kind": getattr(event, "kind", None),
             "buffer_value_changed": getattr(event, "value_changed", None),
             "buffer_source": producer_label_raw if producer_label_raw in op_event_labels else None,
@@ -1671,7 +1671,7 @@ def _param_logs_for_event(param_logs_registry: Any, params: tuple[object, ...]) 
 
     param_logs: list[Any] = []
     for param in params:
-        address = getattr(param, "address", None)
+        address = record_member(param, "address", None)
         if address is not None and address in param_logs_registry:
             param_logs.append(param_logs_registry[address])
     return param_logs

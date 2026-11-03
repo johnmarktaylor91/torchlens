@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
+from .._utils._record_group_table import record_member
 from .errors import HookSignatureError
 
 if TYPE_CHECKING:
@@ -160,7 +161,7 @@ def _multi_call_addresses(record: Any) -> tuple[str, ...] | None:
         return None
     if num_calls == 1 and len(getattr(record, "ops", ())) == 1:
         return None
-    address = getattr(record, "address", "")
+    address = record_member(record, "address", "")
     return tuple(f"{address}:{index}" for index in range(1, max(int(num_calls), 1) + 1))
 
 
@@ -284,7 +285,7 @@ def _snapshot_layer_log(layer_log: Any | None) -> dict[str, Any]:
         if isinstance(layer_log, Mapping):
             value = layer_log.get(field_name)
         else:
-            value = getattr(layer_log, field_name, None)
+            value = record_member(layer_log, field_name, None)
         snapshot[field_name] = value
     return snapshot
 

@@ -268,7 +268,7 @@ def _make_trace_pickleable(trace: Any) -> None:
                 layer._internal_set(field_name, value.detach().cpu())
         layer.func = None
         layer._autograd_grad_fn_handle = None
-        layer.grad_fn_object_id = 0 if layer.grad_fn_object_id is not None else None
+        layer._grad_fn_object_id = 0 if layer._grad_fn_object_id is not None else None
         layer._autograd_grad_fn_handle = None
         layer._source_frames = []
         layer._source_trace_ref = None

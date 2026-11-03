@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Literal
 
 import torch
 
+from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import layer_grad_tolerances_for_dtype
 
 if TYPE_CHECKING:
@@ -101,7 +102,7 @@ def _module_exit_leaf_counts(trace: Trace) -> dict[tuple[str, int], int]:
     exit_leaf_counts: dict[tuple[str, int], int] = {}
     for exit_event in getattr(events, "module_exit_events", ()) or ():
         exit_key = (
-            str(getattr(exit_event, "address", "")),
+            str(record_member(exit_event, "address", "")),
             int(getattr(exit_event, "call_index", 0) or 0),
         )
         exit_leaf_counts[exit_key] = int(getattr(exit_event, "output_tensor_leaf_count", -1))
@@ -165,7 +166,7 @@ def _compare_module_output_grads(
     pass_dict = getattr(modules_map, "_pass_dict", {}) if modules_map is not None else {}
     candidate_calls: set[tuple[str, int]] = set()
     for call_log in list(pass_dict.values()):
-        addr = getattr(call_log, "address", None)
+        addr = record_member(call_log, "address", None)
         call_index = getattr(call_log, "call_index", None)
         if addr is None or call_index is None:
             continue

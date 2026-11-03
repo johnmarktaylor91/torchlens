@@ -47,7 +47,7 @@ def _assert_buffers_are_module_state(dataset: Any, trace: Any, model: nn.Module)
     assert set(dataset.data_vars) == {"out", *labels}
     for op in buffers:
         variable = dataset[op.layer_label]
-        expected = model.get_buffer(op.address).detach().numpy()
+        expected = model.get_buffer(op.buffer_address).detach().numpy()
         assert variable.dims == tuple(f"{op.layer_label}_dim_{i}" for i in range(expected.ndim))
         assert "presentation" not in variable.dims
         assert variable.dtype == expected.dtype
@@ -55,7 +55,7 @@ def _assert_buffers_are_module_state(dataset: Any, trace: Any, model: nn.Module)
         assert variable.values.tobytes() == op.out.detach().numpy().tobytes()
         assert variable.attrs["torchlens_kind"] == "module_state"
         assert variable.attrs["layer_label"] == op.layer_label
-        assert variable.attrs["buffer_address"] == op.address
+        assert variable.attrs["buffer_address"] == op.buffer_address
     assert "torchlens_kind" not in dataset["out"].attrs
 
 

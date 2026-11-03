@@ -21,6 +21,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ._accessor import ReadEdgeIndex, SiteEdge
 from ._errors import ReadError
 
@@ -98,7 +99,7 @@ def _resolve_mlp_out(trace: Any, index: ReadEdgeIndex) -> FrozenResolution:
         if _facet_available(module, "output")
     ]
     for module in candidates:
-        address = getattr(module, "address", repr(module))
+        address = record_member(module, "address", repr(module))
         try:
             facet = module.facets["output"]
             spec = facet.spec

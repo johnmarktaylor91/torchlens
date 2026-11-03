@@ -27,6 +27,7 @@ from torchlens._data_classes._nonfinite import (
     unexamined_payload_count,
 )
 from torchlens._io.lazy import LazyActivationRef
+from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
 
@@ -109,7 +110,7 @@ def test_disk_backed_reports_do_not_materialize_payloads(
         save=tl.func("relu"),
         storage=tl.to_disk(str(tmp_path / "run.tlspec")),
     )
-    assert any(getattr(op, "out_ref", None) is not None for op in trace._layer_list)
+    assert any(record_member(op, "out_ref", None) is not None for op in trace._layer_list)
 
     def fail_materialization(
         self: LazyActivationRef,

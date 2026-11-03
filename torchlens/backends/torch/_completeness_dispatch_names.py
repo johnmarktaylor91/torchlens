@@ -12,6 +12,7 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._utils._record_group_table import record_member
 from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from ._tl import (
     get_tensor_label,
@@ -226,7 +227,7 @@ def _record_escape_source_tensor(
     # even when the state ALSO feeds a traced graph op -- bound-ness never exempts the
     # escape witness).
     meta = get_tensor_meta(source)
-    address = getattr(meta, "address", None) if meta is not None else None
+    address = record_member(meta, "address", None) if meta is not None else None
     # r18 + r19-C: a PARAMETER host escape resolves by state slot exactly like a buffer. A buffer
     # keeps a graph SOURCE node, so its ``.detach()`` host read survives orphan-pruning and witnesses
     # by its kept op; a parameter carries NO source node, so a param-rooted read op is orphan-pruned

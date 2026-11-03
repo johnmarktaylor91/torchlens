@@ -258,7 +258,7 @@ def _persistent_events(trace: Any) -> tuple[list[dict[str, Any]], int]:
     persistent_bytes = 0
     emitted_param_addresses: set[str] = set()
     for param in getattr(trace, "params", ()) or ():
-        address = str(getattr(param, "address", "") or "")
+        address = str(record_member(param, "address", "") or "")
         emitted_param_addresses.add(address)
         bytes_value = int(record_member(param, "param_memory", 0) or 0)
         counted_alias = alias_of.get(address)
@@ -312,7 +312,7 @@ def _buffer_event(buffer_record: Any) -> dict[str, Any]:
 
     address = str(
         getattr(buffer_record, "buffer_address", None)
-        or getattr(buffer_record, "address", "")
+        or record_member(buffer_record, "address", "")
         or ""
     )
     shape = tuple(getattr(buffer_record, "shape", ()) or ())
@@ -490,7 +490,7 @@ def _parameter_gradient_events(
                 phase=f"backward:{final_pass}",
                 kind="parameter_gradient",
                 category="parameter_gradient",
-                label=str(getattr(param, "address", "") or ""),
+                label=str(record_member(param, "address", "") or ""),
                 bytes_value=int(grad.numel() * grad.element_size()),
                 dtype=str(grad.dtype),
                 device=str(grad.device),

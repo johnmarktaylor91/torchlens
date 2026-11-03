@@ -262,7 +262,7 @@ def _payload(op: Any) -> torch.Tensor | None:
     """Return the op's saved output tensor, or ``None`` when unreadable."""
 
     readable = bool(
-        getattr(op, "has_saved_activation", False) or getattr(op, "out_ref", None) is not None
+        getattr(op, "has_saved_activation", False) or record_member(op, "out_ref", None) is not None
     )
     if not readable:
         return None

@@ -27,7 +27,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
-from .._utils._record_group_table import record_member
+from .._utils._record_group_table import record_member, record_storage_attr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._small_raw import _small_raw_value
@@ -329,7 +329,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     params = sorted(
         (state.get("_param_logs") or {}).values(),
         key=lambda param: (
-            str(getattr(param, "address", "")),
+            str(record_member(param, "address", "")),
             str(getattr(param, "name", "")),
         ),
     )
@@ -490,7 +490,7 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
         for next_id in getattr(grad_fn, "next_grad_fn_ids", ()) or ():
             register_grad_id(next_id)
     for record in (*ops, *layers):
-        register_grad_id(getattr(record, "grad_fn_object_id", None))
+        register_grad_id(record_member(record, "grad_fn_object_id", None))
     # grind-r5 b3 R21-1: the BACKWARD-PASS rows carry the same autograd
     # identities in ``root_grad_fn_ids``; the a169e886 dense-ordinal fix never
     # reached them, so a raw grad_fn memory address persisted verbatim into
@@ -523,7 +523,11 @@ def _scrub_nondeterministic_identities(state: dict[str, Any]) -> None:
     roots = state.get("_autograd_backward_root_grad_fn_object_ids") or ()
     state["_autograd_backward_root_grad_fn_object_ids"] = [remap_grad_id(g) for g in roots]
     for record in (*ops, *layers):
-        record.grad_fn_object_id = remap_grad_id(getattr(record, "grad_fn_object_id", None))
+        setattr(
+            record,
+            record_storage_attr(record, "grad_fn_object_id"),
+            remap_grad_id(record_member(record, "grad_fn_object_id", None)),
+        )
     for pass_record in pass_records:
         root_ids = getattr(pass_record, "root_grad_fn_ids", None)
         if root_ids:
@@ -1945,6 +1949,6 @@ def _blob_label_for_owner(owner: Any) -> str:
         return str(getattr(owner, "label"))
     if hasattr(owner, "call_label") and getattr(owner, "call_label") is not None:
         return str(getattr(owner, "call_label"))
-    if hasattr(owner, "address") and getattr(owner, "address") is not None:
-        return str(getattr(owner, "address"))
+    if record_member(owner, "address", None) is not None:
+        return str(record_member(owner, "address"))
     return type(owner).__name__

@@ -24,6 +24,7 @@ from typing import Any, Literal
 
 import torch
 
+from ..._utils._record_group_table import record_member
 from ..facets import AbsenceReason, Facet, FacetSpec, MissingFacet, register
 from ..reconstruction import find_sdpa_op
 from ._helpers import (
@@ -167,7 +168,7 @@ def _with_attention_common(
 def _no_attention_evidence(module: Any) -> AbsenceReason:
     """Return the teaching absence for a module with no captured score path."""
 
-    label = getattr(module, "address", "<unknown>")
+    label = record_member(module, "address", "<unknown>")
     implementation = attention_implementation(module)
     if implementation is not None and implementation not in ("eager", "sdpa"):
         return needs_capture(

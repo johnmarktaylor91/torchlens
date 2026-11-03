@@ -431,7 +431,7 @@ class FacetSpec(_SelectionOperand):
         return cls(
             home_kind=home_kind,
             home_label=getattr(home, "label", getattr(home, "call_label", None)),
-            home_address=getattr(home, "address", None),
+            home_address=record_member(home, "address", None),
             pass_index=getattr(home, "pass_number", None),
             call_index=getattr(home, "call_index", None),
             output_path=tuple(getattr(home, "container_path", ()) or ()),
@@ -1184,7 +1184,7 @@ class FacetView(Mapping[FacetKey, Any]):
         """Describe a facet no registered recipe produces here, naming what exists."""
 
         record = self._record
-        owner = getattr(record, "address", None) or getattr(record, "label", None) or "record"
+        owner = record_member(record, "address", None) or getattr(record, "label", None) or "record"
         class_name = getattr(record, "class_name", None) or _owning_module_class_name(record)
         available = sorted(str(key) for key in self._cache)
         detail = (

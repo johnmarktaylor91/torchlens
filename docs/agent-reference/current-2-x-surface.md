@@ -1727,7 +1727,12 @@
   (`tl.types.OpGraph`) and `layer.graph` (`tl.types.LayerGraph`) hold graph position
   (`op.graph.has_parents`, `op.graph.min_distance_from_input`, `layer.graph.is_orphan`); a Layer group reads an
   Op-only member of its group through the single pass (`layer.control_flow.branch_stack`); a former
-  flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
+  flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one.
+  `op.address` and `layer.address` are renamed `op.buffer_address` and `layer.buffer_address`; the
+  removed flat members refuse the same way and name their remedy: `activation_transform`,
+  `detach_saved_activations` and `output_device` are capture settings read from `trace.options`,
+  the `out_ref` and `grad_ref` refs give way to `op.out` / `op.payload.materialize_out()` and
+  `op.grad` / `op.payload.materialize_grad()`, and `grad_fn_object_id` to `op.autograd.grad_fn`. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`

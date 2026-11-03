@@ -33,6 +33,7 @@ from typing import Any
 import torch
 
 from .._semantic.tolerances import within_reconstruction_tolerance
+from .._utils._record_group_table import record_member
 from ._errors import refuse
 from ._factored import FactoredMatrix
 
@@ -132,7 +133,7 @@ def _weight_params(trace: Any, attn_address: str) -> list[Any]:
 
     params = []
     for module in trace.modules:
-        address = str(getattr(module, "address", ""))
+        address = str(record_member(module, "address", ""))
         if address != attn_address and not address.startswith(attn_address + "."):
             continue
         for param in getattr(module, "params", ()) or ():
@@ -415,7 +416,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
     """
 
     module = trace.modules[attention] if isinstance(attention, str) else attention
-    address = str(getattr(module, "address", ""))
+    address = str(record_member(module, "address", ""))
     view = module.facets
     n_q_heads = int(_facet(view, "n_q_heads"))
     n_kv_heads = int(_facet(view, "n_kv_heads"))
@@ -493,7 +494,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
         source_weights[role] = param.value
         sources[role] = ProjectionSource(
             role=role,
-            module_address=str(getattr(proj_module, "address", "")),
+            module_address=str(record_member(proj_module, "address", "")),
             class_name=class_name,
             orientation=orientation,
             has_fused_qkv=fused,
@@ -513,7 +514,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
     source_weights["o"] = o_param.value
     sources["o"] = ProjectionSource(
         role="o",
-        module_address=str(getattr(o_module, "address", "")),
+        module_address=str(record_member(o_module, "address", "")),
         class_name=o_class,
         orientation=o_orientation,
         has_fused_qkv=False,

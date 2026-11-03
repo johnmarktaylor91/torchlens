@@ -245,7 +245,10 @@ def _layer_feeds_recorded_backward_roots(trace: Trace, layer: Layer | Op) -> boo
                 # node for it; a grad-severed child (detach, no-grad
                 # interior) ends this path without reaching the walked
                 # region.
-                if any(getattr(child, "grad_fn_object_id", None) is not None for child in children):
+                if any(
+                    record_member(child, "grad_fn_object_id", None) is not None
+                    for child in children
+                ):
                     frontier.append(child_label)
     return False
 

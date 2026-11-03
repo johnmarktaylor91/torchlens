@@ -233,7 +233,7 @@ def test_buffer_sole_output_traces_with_output_layer() -> None:
         assert len(output_layer.parents) == 1
         parent = log[output_layer.parents[0]]
         assert parent.graph.is_buffer
-        assert parent.address == "buf"
+        assert parent.buffer_address == "buf"
         assert parent.layer_label in {label.rsplit(":", 1)[0] for label in log.buffer_layers} | set(
             log.buffer_layers
         )
@@ -330,7 +330,7 @@ def test_duplicate_direct_buffer_outputs_share_one_buffer_parent() -> None:
 
         buffer_parent = log[output_1.parents[0]]
         assert buffer_parent.graph.is_buffer
-        assert buffer_parent.address == "buf"
+        assert buffer_parent.buffer_address == "buf"
         assert check_metadata_invariants(log) is True
     finally:
         log.cleanup()
@@ -349,8 +349,8 @@ def test_prefix_colliding_buffer_outputs_bind_exact_addresses() -> None:
         parent_1 = log[output_1.parents[0]]
         parent_2 = log[output_2.parents[0]]
 
-        assert parent_1.address == "a"
-        assert parent_2.address == "abc"
+        assert parent_1.buffer_address == "a"
+        assert parent_2.buffer_address == "abc"
         assert torch.equal(output_1.out, parent_1.out)
         assert torch.equal(output_2.out, parent_2.out)
         assert check_metadata_invariants(log) is True
@@ -428,13 +428,13 @@ def test_unlogged_buffer_before_reassigned_buffer_output() -> None:
         assert torch.equal(static_output.out, model.static_buf)
         static_parent = log[static_output.parents[0]]
         assert static_parent.graph.is_buffer
-        assert static_parent.address == "static_buf"
+        assert static_parent.buffer_address == "static_buf"
 
         state_output = log["output_2"]
         assert torch.equal(state_output.out, model.state)
         state_parent = log[state_output.parents[0]]
         assert state_parent.graph.is_buffer
-        assert state_parent.address == "state"
+        assert state_parent.buffer_address == "state"
 
         assert check_metadata_invariants(log) is True
     finally:

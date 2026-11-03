@@ -367,8 +367,8 @@ def save_activation(
         target_device = t.device
         if save_mode == "cpu_async":
             target_device = torch.device("cpu")
-        elif op.output_device not in ("same", str(t.device)):
-            target_device = torch.device(op.output_device)
+        elif op._output_device not in ("same", str(t.device)):
+            target_device = torch.device(op._output_device)
         save_raw_activations = trace._options_save_raw_activations if trace is not None else True
         store_raw = save_raw_activations or activation_transform is None
         # Explorer P2 (same gate as the exhaustive hot path): a declared
@@ -403,12 +403,12 @@ def save_activation(
             # Clone the tensor, optionally detaching from autograd graph.
             raw_out = copy_tensor_payload(
                 t,
-                detach_tensor=op.detach_saved_activations,
+                detach_tensor=op._detach_saved_activations,
                 save_mode=save_mode,
             )
             # Move to the user-requested output device if needed.
-            if op.output_device not in [str(raw_out.device), "same"]:
-                raw_out = safe_to(raw_out, op.output_device)
+            if op._output_device not in [str(raw_out.device), "same"]:
+                raw_out = safe_to(raw_out, op._output_device)
             _stamp_reference_out(op.annotations, raw_out, save_mode)
 
         op.shape = tuple(raw_out.shape)

@@ -24,7 +24,7 @@ Observed pre-fix, all silent wrong results:
   scored a PASS -- the bug was hiding in the zero-collateral evidence.)
 
 The corruption also reaches plain, save-free public metadata:
-``trace["buffer_1"].address`` reported a name that was not that tensor's.
+``trace["buffer_1"].buffer_address`` (then ``.address``) reported a name that was not that tensor's.
 
 PRE-EXISTING (byte-identical at ``10975d98``) and DISTINCT from the documented
 multi-positional-arg residual, which is cross-capture, needs a prior save, and
@@ -64,7 +64,9 @@ _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cac
 def _buffer_addresses(trace: Any) -> list[tuple[str, str | None]]:
     """Return ``(layer_label, address)`` for every materialized buffer op."""
 
-    return [(op.layer_label, op.address) for op in trace if record_type(op, None) == "buffer"]
+    return [
+        (op.layer_label, op.buffer_address) for op in trace if record_type(op, None) == "buffer"
+    ]
 
 
 def _capture(model: nn.Module, x: torch.Tensor) -> Any:
@@ -225,7 +227,9 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
 
     trace = _capture(_Nested(), torch.randn(2, 4, 8, 8))
     by_address = {
-        op.address: op for op in trace._layer_list if op.graph.is_buffer and op.address is not None
+        op.buffer_address: op
+        for op in trace._layer_list
+        if op.graph.is_buffer and op.buffer_address is not None
     }
 
     assert by_address["child.q"].backend_address is None, "plain-attr has no backend address"
@@ -237,7 +241,9 @@ def test_display_address_and_backend_address_are_decoupled(tmp_path: Path) -> No
     trace.save(path)
     loaded = tl.load(path)
     loaded_by_address = {
-        op.address: op for op in loaded._layer_list if op.graph.is_buffer and op.address is not None
+        op.buffer_address: op
+        for op in loaded._layer_list
+        if op.graph.is_buffer and op.buffer_address is not None
     }
     assert loaded_by_address["child.q"].backend_address is None
     assert loaded_by_address["child.cb"].backend_address == "child.cb"

@@ -181,7 +181,7 @@ def dtype_string(entry: Any) -> str | None:
 def _device_string(entry: Any) -> str | None:
     """Return the output device spelling, if recorded."""
 
-    device = getattr(entry, "output_device", None)
+    device = record_member(entry, "output_device", None)
     return str(device) if device else None
 
 

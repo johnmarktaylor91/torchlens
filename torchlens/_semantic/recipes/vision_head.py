@@ -259,7 +259,7 @@ def _pooled_norm(head: Any) -> _PooledNorm | AbsenceReason:
 def _tower_address(norm: Any) -> str:
     """Return the address of the module that owns the head's final norm."""
 
-    address = str(getattr(norm, "address", ""))
+    address = str(record_member(norm, "address", ""))
     parent, sep, _ = address.rpartition(".")
     return parent if sep else "self"
 
@@ -363,7 +363,7 @@ def _output_leaf_spec(module: Any, role: str) -> FacetSpec | AbsenceReason:
     if trace is None:
         return structural("module trace is unavailable")
     try:
-        if str(getattr(module, "address", "")) == "self":
+        if str(record_member(module, "address", "")) == "self":
             candidates = [
                 item if hasattr(item, "container_path") else trace.ops[item]
                 for item in tuple(getattr(trace, "output_ops", ()) or ())

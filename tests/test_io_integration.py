@@ -158,7 +158,7 @@ def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> No
     for layer in saved_layers[:3]:
         tensor = layer.payload.materialize_out()
         assert isinstance(tensor, torch.Tensor)
-        assert layer.out_ref is not None
+        assert layer._out_ref is not None
 
     parquet_path = tmp_path / "streamed_layers.parquet"
     tl.export.parquet(lazy_log, parquet_path)
@@ -193,7 +193,7 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
         for layer in lazy_log._layer_list
         if layer.call.saved_args is not None and _contains_blob_ref(layer.call.saved_args)
     )
-    assert nested_blob_layer.out_ref is not None
+    assert nested_blob_layer._out_ref is not None
     assert _contains_blob_ref(nested_blob_layer.call.saved_args)
 
     materialize_nested(lazy_log)
@@ -236,7 +236,7 @@ def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
     eager_layer = _first_saved_layer(eager_log)
 
     assert streamed_layer.out is None
-    assert streamed_layer.out_ref is not None
+    assert streamed_layer._out_ref is not None
     tensor = streamed_layer.payload.materialize_out()
 
     assert isinstance(tensor, torch.Tensor)
@@ -261,7 +261,7 @@ def test_streaming_keep_outs_in_memory_true_keeps_tensor_and_ref(tmp_path: Path)
     assert saved_layers
     for layer in saved_layers:
         assert isinstance(layer.out, torch.Tensor)
-        assert layer.out_ref is not None
+        assert layer._out_ref is not None
 
 
 @pytest.mark.rare

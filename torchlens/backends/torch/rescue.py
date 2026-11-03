@@ -41,6 +41,7 @@ from torch.overrides import TorchFunctionMode
 
 from ... import _state
 from ..._errors import CaptureGapWarning, OutputAttributionError
+from ..._utils._record_group_table import record_member
 from ..._utils.display import user_stacklevel
 from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from ...errors._base import TorchLensWarning
@@ -423,7 +424,7 @@ def _partial_buffer_write_labels(exc: BaseException) -> tuple[str, ...] | None:
     if events is None:
         return None
     return tuple(
-        str(getattr(event, "address", None) or "?")
+        str(record_member(event, "address", None) or "?")
         for event in events
         if getattr(event, "value_changed", None) is not False
     )

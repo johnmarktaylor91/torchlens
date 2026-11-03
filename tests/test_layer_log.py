@@ -8,6 +8,7 @@ import torchlens as tl
 from torchlens._data_classes.layer import Layer
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.trace import Trace
+from torchlens._errors import FacadeTeachingError
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -174,13 +175,14 @@ class TestSinglePassDelegation:
         self: "TestSinglePassDelegation",
         recurrent_log: Trace,
     ) -> None:
-        """Slotted per-pass ref fields use the same multi-pass guidance."""
+        """The removed per-pass ref fields refuse typed on a multi-pass Layer."""
 
         layer_log = next(layer for layer in recurrent_log.layers if layer.num_passes > 1)
 
         for field_name in ("out_ref", "grad_ref"):
-            with pytest.raises(ValueError, match=rf"ops\[0\]\.{field_name}"):
+            with pytest.raises(FacadeTeachingError) as excinfo:
                 getattr(layer_log, field_name)
+            assert excinfo.value.fields["code"] == "facade_redirect"
 
     def test_tracing_finished_reads_from_trace(self, simple_log):
         for layer_log in simple_log._layer_logs.values():

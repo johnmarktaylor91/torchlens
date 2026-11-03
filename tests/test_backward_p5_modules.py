@@ -256,6 +256,6 @@ def test_multi_pass_module_grad_fns_keep_layer_label_and_hooks_see_their_own_pas
             (f"{linear.layer_label}:2", 2),
         ]
         for grad_fn_label, (pass_label, _pass_index) in by_node.items():
-            assert trace[pass_label].grad_fn_object_id == addmm[grad_fn_label].grad_fn_object_id
+            assert trace[pass_label]._grad_fn_object_id == addmm[grad_fn_label].grad_fn_object_id
     finally:
         trace.cleanup()

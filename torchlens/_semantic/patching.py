@@ -1069,7 +1069,7 @@ def _modules_with_facet(log: Any, facet_name: str) -> list[str]:
     return [
         str(module.address)
         for module in log.modules
-        if getattr(module, "address", None) != "self" and module.facets.has(facet_name)
+        if record_member(module, "address", None) != "self" and module.facets.has(facet_name)
     ]
 
 

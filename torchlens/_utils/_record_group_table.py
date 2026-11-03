@@ -30,8 +30,15 @@ ACTIVE_GROUPS: frozenset[str] = frozenset(
         "module_context",
         "payload",
         "graph",
+        "rename",
+        "removed",
     }
 )
+
+#: ``(record, former flat name)`` rows of an active group that stay flat for
+#: now. ``Op.site_key`` is the selector address the public selector text tells
+#: users to pass; removing it waits on the replacement spelling for that text.
+PENDING_REMOVALS: frozenset[tuple[str, str]] = frozenset({("Op", "site_key")})
 
 #: ``(former flat name, group | "rename" | "removed", new leaf name)``.
 OP_MEMBER_MOVES: tuple[tuple[str, str, str], ...] = (
@@ -277,7 +284,17 @@ _RECORD_VARS = {"Op": "op", "Layer": "layer"}
 _MOVES = {"Op": OP_MEMBER_MOVES, "Layer": LAYER_MEMBER_MOVES}
 
 #: Remedies for removed members without a direct replacement.
-_REMOVED_REMEDIES: Mapping[str, str] = {}
+_REMOVED_REMEDIES: Mapping[str, str] = {
+    "activation_transform": "use trace.options.activation_transform -- the transform is a capture setting",
+    "detach_saved_activations": (
+        "use trace.options.detach_saved_activations -- detaching is a capture setting"
+    ),
+    "output_device": "use trace.options.output_device -- the output device is a capture setting",
+    "out_ref": "use {var}.out or {var}.payload.materialize_out() -- the lazy reference is internal",
+    "grad_ref": "use {var}.grad or {var}.payload.materialize_grad() -- the lazy reference is internal",
+    "grad_fn_object_id": "use {var}.autograd.grad_fn -- the autograd node record replaces its id",
+    "grad_fn_cls": "use {var}.autograd.grad_fn_class_name -- the class is recorded by name",
+}
 
 
 def storage_attr(group: str, old: str, leaf: str) -> str:
@@ -314,7 +331,11 @@ def storage_attr(group: str, old: str, leaf: str) -> str:
 def _active_rows(record: str) -> tuple[tuple[str, str, str], ...]:
     """Return the applied rows for ``record`` (``"Op"`` or ``"Layer"``)."""
 
-    return tuple(row for row in _MOVES[record] if row[1] in ACTIVE_GROUPS)
+    return tuple(
+        row
+        for row in _MOVES[record]
+        if row[1] in ACTIVE_GROUPS and (record, row[0]) not in PENDING_REMOVALS
+    )
 
 
 def _remedy(record: str, old: str, group: str, leaf: str) -> str:
@@ -324,7 +345,10 @@ def _remedy(record: str, old: str, group: str, leaf: str) -> str:
     if group == "rename":
         return f"use {var}.{leaf} -- {record}.{old} was renamed"
     if group == "removed":
-        return _REMOVED_REMEDIES.get(old, f"{record}.{old} has no public replacement")
+        remedy = _REMOVED_REMEDIES.get(old)
+        if remedy is None:
+            return f"{record}.{old} has no public replacement"
+        return remedy.format(var=var)
     return f"use {var}.{group}.{leaf} -- {record}.{old} moved to the {group} group"
 
 
@@ -433,8 +457,8 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
 
     Duck-typed readers accept an ``Op``, a ``Layer`` or another record with
     the same flat name (``Module.total_flops_forward``); on an Op or Layer the
-    former name reads through its current spelling, on anything else this is
-    plain ``getattr``.
+    former name reads through its current spelling (a removed member reads its
+    stored value), on anything else this is plain ``getattr``.
 
     Parameters
     ----------
@@ -465,10 +489,17 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
             if default is _NO_DEFAULT:
                 raise AttributeError(name)
             return default
+        # Read it on the pass record itself: a removed member's private storage
+        # attribute (``_out_ref``) never delegates from the Layer to its pass.
+        ops = getattr(obj, "ops", None)
+        if ops:
+            return record_member(ops[0], name, default)
         path = _SPELLING_PATHS["Op"][name]
     try:
         if path is None:
-            return getattr(obj, name)
+            # A renamed or removed member keeps its value under its storage
+            # attribute; internal readers still need it.
+            return getattr(obj, name if kind is None else record_storage_attr(obj, name))
         value = obj
         for part in path:
             value = getattr(value, part)
@@ -530,6 +561,7 @@ def record_storage_attr(obj: Any, field: str) -> str:
 
 __all__ = [
     "ACTIVE_GROUPS",
+    "PENDING_REMOVALS",
     "LAYER_MEMBER_MOVES",
     "LAYER_MOVED_MEMBERS",
     "LAYER_STORAGE_ATTRS",

@@ -116,7 +116,7 @@ def _get_hidden_parent_buffer_addresses(
             parent_node = trace._layer_logs[parent_label]
         if not parent_node.graph.is_buffer or _is_buffer_visible(parent_node, show_buffer_layers):
             continue
-        address = parent_node.address
+        address = parent_node.buffer_address
         if address is None or address in seen_addresses:
             continue
         hidden_addresses.append(address)
@@ -1767,11 +1767,13 @@ def _get_node_address_shape_color(
             _rolling_annotation(source_node, "rolled") if isinstance(source_node, Layer) else None
         )
         if annotation is not None and annotation.buffer_versions:
-            address = f"{source_node.address}:{_compact_int_ranges(annotation.buffer_versions)}"
-        elif self._buffer_num_calls[source_node.address] == 1:
-            address = source_node.address
+            address = (
+                f"{source_node.buffer_address}:{_compact_int_ranges(annotation.buffer_versions)}"
+            )
+        elif self._buffer_num_calls[source_node.buffer_address] == 1:
+            address = source_node.buffer_address
         else:
-            address = f"{source_node.address}:{record_member(source_node, 'buffer_pass')}"
+            address = f"{source_node.buffer_address}:{record_member(source_node, 'buffer_pass')}"
         node_address = "<br/>@" + address
         node_shape = "cylinder"
         node_color = "black"

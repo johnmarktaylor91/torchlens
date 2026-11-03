@@ -384,9 +384,9 @@ def test_jax_codec_fixture_loads_lazy_refs_as_jax_arrays(tmp_path: Path) -> None
     loaded_op = _first_saved_op(loaded)
 
     assert loaded_op.out is None
-    assert loaded_op.out_ref is not None
-    assert loaded_op.out_ref.logical_backend == "jax"
-    materialized = loaded_op.out_ref.materialize()
+    assert loaded_op._out_ref is not None
+    assert loaded_op._out_ref.logical_backend == "jax"
+    materialized = loaded_op._out_ref.materialize()
     assert isinstance(materialized, jax.Array)
     np.testing.assert_allclose(np.asarray(materialized), expected)
 
@@ -422,9 +422,9 @@ def test_jax_codec_runtime_missing_loads_audit_only(
     assert getattr(loaded, "payload_load_status") == "audit_only_missing_runtime"
     assert loaded_op.has_saved_activation is True
     assert loaded_op.out is None
-    assert loaded_op.out_ref is not None
+    assert loaded_op._out_ref is not None
     with pytest.raises(BackendRuntimeCompatibilityError, match="jax runtime unavailable"):
-        loaded_op.out_ref.materialize()
+        loaded_op._out_ref.materialize()
 
 
 def test_jax_payload_codec_map_location_failure_raises_typed() -> None:
@@ -665,14 +665,14 @@ def test_jax_sharded_array_lazy_and_op_materialize_accept_payload_hints(
     trace.save(path, level="portable")
     lazy_loaded = tl.load(path, lazy=True, payload_hints=hint)
     lazy_op = _first_saved_op(lazy_loaded)
-    assert lazy_op.out_ref is not None
-    direct_value = lazy_op.out_ref.materialize()
+    assert lazy_op._out_ref is not None
+    direct_value = lazy_op._out_ref.materialize()
     op_value = lazy_op.payload.materialize_out()
 
     override_loaded = tl.load(path, lazy=True)
     override_op = _first_saved_op(override_loaded)
-    assert override_op.out_ref is not None
-    override_op._internal_set("grad_ref", override_op.out_ref)
+    assert override_op._out_ref is not None
+    override_op._internal_set("grad_ref", override_op._out_ref)
     override_op._internal_set("grad", None)
     grad_value = override_op.payload.materialize_grad(payload_hints=hint)
 

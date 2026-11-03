@@ -347,10 +347,10 @@ def _leaf_condition(op: str, value: Any) -> str:
         "pass_index": f"int(op.pass_number or 1) == {value!r}",
         "saved": f"bool(op.has_saved_activation) is {value!r}",
         "payload_state": {
-            "present": ("getattr(op, 'out_ref', None) is None and bool(op.has_saved_activation)"),
-            "lazy": "getattr(op, 'out_ref', None) is not None",
+            "present": ("getattr(op, '_out_ref', None) is None and bool(op.has_saved_activation)"),
+            "lazy": "getattr(op, '_out_ref', None) is not None",
             "unsaved": (
-                "getattr(op, 'out_ref', None) is None and not bool(op.has_saved_activation)"
+                "getattr(op, '_out_ref', None) is None and not bool(op.has_saved_activation)"
             ),
         }.get(str(value), "False"),
         "is_output": (f"(str(op.label) in {{str(o.label) for o in log.output_ops}}) is {value!r}"),

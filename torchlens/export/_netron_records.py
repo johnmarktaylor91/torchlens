@@ -150,7 +150,7 @@ def _entry_node_id(entry: Any, repeated: set[str]) -> str:
 def _is_noise_buffer(entry: Any) -> bool:
     """Return whether the buffer's address ends in a ``meaningful``-hidden name."""
 
-    address = getattr(entry, "address", None)
+    address = record_member(entry, "address", None)
     if not address:
         return False
     return str(address).rsplit(".", 1)[-1] in _NOISE_BUFFER_NAMES

@@ -1295,7 +1295,7 @@ def _build_op_slot_drafts(
         role = _op_slot_role(op)
         if role is TensorSlotRole.BUFFER:
             buffer_names = set((getattr(trace, "_buffer_initial_values", {}) or {}).keys())
-            address = getattr(op, "address", None)
+            address = record_member(op, "address", None)
             if address not in buffer_names:
                 role = TensorSlotRole.CONSTANT_LIKE_TENSOR
                 diagnostics.append(
@@ -1473,7 +1473,7 @@ def _add_persistent_buffer_slot_drafts(
             parameter_names = set()
             param_logs = trace._param_logs
             for param_log in tuple(param_logs) if param_logs is not None else ():
-                address = getattr(param_log, "address", None)
+                address = record_member(param_log, "address", None)
                 if address is not None:
                     parameter_names.add(str(address))
                 for alias_address in getattr(param_log, "all_addresses", ()) or ():
@@ -2280,7 +2280,7 @@ def _parameter_refs(param: Any) -> tuple[Any, ...]:
     model = source_model_ref() if callable(source_model_ref) else None
     named_parameters = getattr(model, "named_parameters", None)
     if callable(named_parameters):
-        addresses = {str(getattr(param, "address", ""))}
+        addresses = {str(record_member(param, "address", ""))}
         addresses.update(str(address) for address in getattr(param, "all_addresses", ()) or ())
         try:
             for name, value in named_parameters(remove_duplicate=False):
@@ -3243,7 +3243,7 @@ def _escape_witnesses(
         # A bound param/buffer escape source (state address recorded) is witnessed by
         # PASS A's state digest; do NOT re-witness it as a tensor-op slot, and never
         # treat it as INCOMPLETE here (its state digest already covers the escape).
-        address = getattr(op, "address", None)
+        address = record_member(op, "address", None)
         if address is not None and str(address) in state_names:
             if is_escape:
                 covered_labels.add(str(op.label))
@@ -4354,7 +4354,7 @@ def _buffer_binding(trace: Any, op: Any) -> StateSlotBinding | None:
     but never claim or require a canonical state-dict key.
     """
 
-    address = getattr(op, "address", None)
+    address = record_member(op, "address", None)
     if not isinstance(address, str) or not address:
         return None
     persistence = getattr(trace, "_buffer_persistence", {}) or {}

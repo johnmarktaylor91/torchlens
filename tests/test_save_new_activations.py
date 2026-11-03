@@ -15,6 +15,7 @@ import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._postprocess.graph_traversal import output_payload_aliases_parent
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation import check_metadata_invariants
 
 # =============================================================================
@@ -165,7 +166,7 @@ def test_save_new_outs_fast_path_does_not_attach_streaming_refs() -> None:
     log.save_new_outs(model, torch.randn(2, 5), seed=42, layers_to_save=[output_label])
 
     assert getattr(log, "_out_writer", None) is None
-    assert all(getattr(layer, "out_ref", None) is None for layer in log._layer_list)
+    assert all(record_member(layer, "out_ref", None) is None for layer in log._layer_list)
     log.cleanup()
 
 

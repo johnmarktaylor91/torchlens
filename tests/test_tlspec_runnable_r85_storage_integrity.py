@@ -596,10 +596,10 @@ def test_backend_address_op_node_and_output_layer_agree() -> None:
     out = by_type["output"]
 
     # Op nodes keep backend_address coupled to their module address (not None).
-    assert conv.backend_address == conv.address == "c"
-    assert bn.backend_address == bn.address == "bn"
+    assert conv.backend_address == conv.buffer_address == "c"
+    assert bn.backend_address == bn.buffer_address == "bn"
     # The output layer aliases the bn module and MUST agree with the bn op node.
-    assert out.address == "bn"
+    assert out.buffer_address == "bn"
     assert out.backend_address == bn.backend_address == "bn"
 
 
@@ -622,6 +622,8 @@ def test_backend_address_registered_vs_plain_attr_decoupling_preserved() -> None
 
     torch.manual_seed(0)
     log = tl.trace(_MixedBuffers(), torch.randn(4), capture=_CAPTURE)
-    by_address = {layer.address: layer for layer in log if record_member(layer, "is_buffer", False)}
+    by_address = {
+        layer.buffer_address: layer for layer in log if record_member(layer, "is_buffer", False)
+    }
     assert by_address["rb"].backend_address == "rb"  # registered state keeps both
     assert by_address["pa"].backend_address is None  # plain-attr not declared state

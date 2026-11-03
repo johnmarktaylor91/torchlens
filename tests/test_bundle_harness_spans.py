@@ -497,7 +497,7 @@ def test_lazy_load_reaches_bundle_members(tmp_path: Path, model: _TinyLM) -> Non
         assert eager[name].payload_load_status != "loaded_lazy"
         pairs = zip(lazy[name]._layer_list, eager[name]._layer_list, strict=True)
         lazy_op, eager_op = next((a, b) for a, b in pairs if a.has_saved_activation)
-        assert lazy_op.out_ref is not None  # the payload stayed on disk until read
+        assert lazy_op._out_ref is not None  # the payload stayed on disk until read
         assert torch.equal(lazy_op.out, eager_op.out)
 
 

@@ -405,7 +405,7 @@ def _module_line(entry: Any) -> str | None:
     """
 
     if record_member(entry, "is_buffer", False):
-        addr = getattr(entry, "address", None)
+        addr = record_member(entry, "address", None)
         return f"@{addr}" if addr else "@buffer"
     addr = getattr(entry, "module", None)
     if addr:
@@ -880,7 +880,7 @@ def trace_to_dagua_graph(
     if hasattr(trace, "modules"):
         try:
             module_logs = {
-                m.address: m for m in trace.modules if getattr(m, "address", "self") != "self"
+                m.address: m for m in trace.modules if record_member(m, "address", "self") != "self"
             }
         except Exception:
             module_logs = {}

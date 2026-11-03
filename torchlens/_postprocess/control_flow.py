@@ -983,15 +983,15 @@ def _fix_buffer_layers(self: Trace) -> None:
                     safe_copy(self[layer.graph.buffer_source].out, detach_tensor=True)
                 )
 
-        if layer.address is None:
+        if layer.buffer_address is None:
             equivalence_class = str(record_member(layer, "equivalence_class", ""))
             if equivalence_class.startswith("buffer_"):
                 recovered_address = equivalence_class.removeprefix("buffer_")
                 if recovered_address and recovered_address != "None":
-                    layer.address = recovered_address
-        if layer.address is None:
-            layer.address = f"anonymous_buffer_{layer._label_raw}"
-        buffer_hash = str(layer.modules) + str(layer.graph.buffer_source) + layer.address
+                    layer.buffer_address = recovered_address
+        if layer.buffer_address is None:
+            layer.buffer_address = f"anonymous_buffer_{layer._label_raw}"
+        buffer_hash = str(layer.modules) + str(layer.graph.buffer_source) + layer.buffer_address
         buffer_hash_groups[buffer_hash].append(layer_label)
 
     deferred_buffer_removals: dict[str, tuple[Op, Op]] = {}
@@ -1012,7 +1012,7 @@ def _fix_buffer_layers(self: Trace) -> None:
 
     for layer_label in self.buffer_layers:
         layer = self[layer_label]
-        address = layer.address
+        address = layer.buffer_address
         layer.buffer_pass = buffer_counter[address]
         self._buffer_num_calls[address] = buffer_counter[address]
         buffer_counter[address] += 1

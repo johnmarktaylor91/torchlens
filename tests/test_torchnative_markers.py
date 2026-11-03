@@ -70,7 +70,7 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
         ),
     )
     has_grad_fn = all(
-        op.grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
+        op._grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
     )
     log.cleanup()
     assert has_grad_fn, "backward_ready capture recorded no grad_fn on its linear ops"

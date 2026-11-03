@@ -184,12 +184,12 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
     bundle_path = _build_bundle(tmp_path)
     lazy_log = load(bundle_path, lazy=True)
     layer = next(layer for layer in lazy_log._layer_list if layer.has_saved_activation)
-    ref = layer.out_ref
+    ref = layer._out_ref
     assert ref is not None
 
     outside_blob_path = tmp_path / "outside_materialize.safetensors"
     shutil.copy2(_first_blob_path(bundle_path), outside_blob_path)
-    layer.out_ref = replace(ref, relative_path="../outside_materialize.safetensors")
+    layer._out_ref = replace(ref, relative_path="../outside_materialize.safetensors")
 
     with pytest.raises(ArtifactError, match="Bundle rejected"):
         layer.payload.materialize_out()

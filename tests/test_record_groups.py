@@ -12,6 +12,7 @@ from __future__ import annotations
 # record-groups: keep-flat
 import pickle
 from collections.abc import Iterator
+from pathlib import Path
 
 import pytest
 import torch
@@ -25,13 +26,21 @@ from torchlens._utils._record_group_table import (
     LAYER_MOVED_MEMBERS,
     OP_MEMBER_MOVES,
     OP_MOVED_MEMBERS,
+    PENDING_REMOVALS,
     record_member,
 )
 
 _OP_COST_ROWS = [row for row in OP_MEMBER_MOVES if row[1] == "cost"]
 _LAYER_COST_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] == "cost"]
-_OP_ACTIVE_ROWS = [row for row in OP_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
-_LAYER_ACTIVE_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
+_FLAT = ("rename", "removed")
+_OP_ACTIVE_ROWS = [row for row in OP_MEMBER_MOVES if row[1] in ACTIVE_GROUPS - set(_FLAT)]
+_LAYER_ACTIVE_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] in ACTIVE_GROUPS - set(_FLAT)]
+_FLAT_ROWS = [
+    (record, old, group, leaf)
+    for record, moves in (("Op", OP_MEMBER_MOVES), ("Layer", LAYER_MEMBER_MOVES))
+    for old, group, leaf in moves
+    if group in _FLAT and (record, old) not in PENDING_REMOVALS
+]
 
 
 @pytest.fixture(scope="module")
@@ -115,6 +124,37 @@ def test_layer_flat_spelling_refuses_typed(
     getattr(getattr(layer, group), leaf)
 
 
+@pytest.mark.parametrize(("record", "old", "group", "leaf"), _FLAT_ROWS)
+def test_renamed_and_removed_spellings_refuse_typed(
+    trace: tl.Trace, record: str, old: str, group: str, leaf: str
+) -> None:
+    """A renamed spelling names its new flat name; a removed one names its remedy."""
+
+    target = trace.ops["linear_1_1"] if record == "Op" else trace.layers["linear_1"]
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        getattr(target, old)
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    moved = OP_MOVED_MEMBERS if record == "Op" else LAYER_MOVED_MEMBERS
+    assert moved[old] in str(excinfo.value)
+    assert not hasattr(target, old)
+    if group == "rename":
+        assert f".{leaf}" in moved[old]
+        getattr(target, leaf)
+
+
+def test_renamed_buffer_address_reads_the_persisted_column() -> None:
+    """``buffer_address`` serves the persisted ``address`` column on a buffer Layer."""
+
+    captured = tl.trace(nn.BatchNorm1d(3).eval(), torch.ones(2, 3), save="none")
+    try:
+        buffers = [node for node in captured._layer_dict_main_keys.values() if node.graph.is_buffer]
+        assert buffers
+        assert buffers[0].buffer_address.startswith("running_")
+        assert record_member(buffers[0], "address") == buffers[0].buffer_address
+    finally:
+        captured.cleanup()
+
+
 def test_layer_flat_spelling_refuses_writes(trace: tl.Trace) -> None:
     """Writing or deleting a former flat Layer spelling refuses instead of shadowing it."""
 
@@ -189,6 +229,25 @@ def test_record_member_follows_moves(trace: tl.Trace) -> None:
 
     assert record_member(_Other(), "flops_forward") == 7
     assert record_member(object(), "flops_forward", None) is None
+
+
+def test_record_member_reads_removed_op_member_through_layer_pass(tmp_path: Path) -> None:
+    """A single-pass Layer reads a removed Op-only member (``out_ref``) from its pass."""
+
+    torch.manual_seed(0)
+    source = tl.trace(
+        nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.ones(1, 3), save=tl.func("relu")
+    )
+    path = tmp_path / "lazy.tlspec"
+    source.save(path)
+    loaded = tl.load(path, lazy=True)
+    try:
+        layer = next(lay for lay in loaded.layers if lay.ops[0]._slot("out_ref") is not None)
+        assert layer.num_passes == 1
+        assert record_member(layer, "out_ref") is layer.ops[0]._slot("out_ref")
+    finally:
+        loaded.cleanup()
+        source.cleanup()
 
 
 class _Branchy(nn.Module):

@@ -2,7 +2,7 @@
 
 The substrate already exists on every finished torch trace: each op records
 its real autograd producer (``op.grad_fn_handle``, live), a durable object id
-(``op.grad_fn_object_id``, portable), and its output slot
+(the Op's private grad-fn object id, portable), and its output slot
 (``op.multi_output_index`` when ``op.in_multi_output``). This module is the
 XS-S accessor over those EXISTING fields -- no new recording, no arming flag,
 no capture option: any graph-alive trace under any save mode is addressable
@@ -276,7 +276,7 @@ def _resolve_node(op: Any, rejoin_map: dict[int, Any]) -> tuple[Any, bool] | Non
     handle = record_member(op, "grad_fn_handle", None)
     if handle is not None:
         return handle, False
-    object_id = getattr(op, "grad_fn_object_id", None)
+    object_id = record_member(op, "grad_fn_object_id", None)
     if object_id is not None:
         node = rejoin_map.get(object_id)
         if node is not None:
@@ -296,7 +296,7 @@ def _build_index(trace: Any, token: tuple[Any, ...]) -> ReadEdgeIndex:
         label = op.label
         resolved = _resolve_node(op, rejoin_map)
         if resolved is None:
-            has_id = getattr(op, "grad_fn_object_id", None) is not None
+            has_id = record_member(op, "grad_fn_object_id", None) is not None
             unaddressable[label] = "handle_dead" if has_id else "no_grad_fn"
             continue
         node, via_rejoin = resolved

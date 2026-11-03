@@ -122,7 +122,7 @@ def _param_for_entry(trace: Trace, entry: Site) -> Param:
 
     address = entry.key[0]
     for param in getattr(trace, "params", ()):
-        if getattr(param, "address", None) == address or param.name == address:
+        if record_member(param, "address", None) == address or param.name == address:
             return param
     raise _underivable(
         f"parameter {address!r} is not recorded on this trace.",
@@ -710,13 +710,13 @@ def buffer_operand_selection(trace: Trace, selection: Any) -> Any:
     if not isinstance(node, _ParamTerm):
         return None
     if any(
-        getattr(param, "address", None) == node.name or param.name == node.name
+        record_member(param, "address", None) == node.name or param.name == node.name
         for param in getattr(trace, "params", ())
     ):
         return None
     buffers = getattr(trace, "buffers", None)
     buffer = buffers[node.name] if buffers is not None and node.name in buffers else None
-    if buffer is None or getattr(buffer, "address", None) != node.name:
+    if buffer is None or record_member(buffer, "address", None) != node.name:
         # Full buffer addresses only: a short name is never guessed.
         return None
     versions = tuple(getattr(buffer, "versions", ()) or ())

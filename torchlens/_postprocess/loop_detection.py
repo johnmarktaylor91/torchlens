@@ -437,22 +437,22 @@ def _buffer_group_keys(
         if writer is None:
             entries.append(node)
             continue
-        keyed[node._label_raw] = ("buffer", node.address, op_keys[writer])
-        written_by_address[node.address].append(node)
+        keyed[node._label_raw] = ("buffer", node.buffer_address, op_keys[writer])
+        written_by_address[node.buffer_address].append(node)
     sizes: dict[tuple[Any, ...], int] = defaultdict(int)
     for key in keyed.values():
         sizes[key] += 1
     for node in entries:
         later = [
             version
-            for version in written_by_address.get(node.address, ())
+            for version in written_by_address.get(node.buffer_address, ())
             if version.raw_index > node.raw_index
         ]
         first = min(later, key=lambda version: version.raw_index, default=None)
         if first is not None and sizes[keyed[first._label_raw]] > 1:
             keyed[node._label_raw] = keyed[first._label_raw]
         else:
-            keyed[node._label_raw] = ("buffer", node.address, "entry", node._label_raw)
+            keyed[node._label_raw] = ("buffer", node.buffer_address, "entry", node._label_raw)
     return [(node, keyed[node._label_raw]) for node in buffers]
 
 
@@ -481,7 +481,7 @@ def _group_by_call_sites(self: "Trace") -> None:
         node = self[label]
         if record_member(node, "is_orphan", False):
             continue
-        if node.graph.is_buffer and node.address:
+        if node.graph.is_buffer and node.buffer_address:
             buffers.append(node)
             continue
         keys[label] = _call_site_group_key(node, classes)

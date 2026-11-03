@@ -452,7 +452,9 @@ def _check_backend_neutral_accessor_refs(trace: Trace) -> None:
     for record in records:
         if not _record_has_backend_neutral_accessor_metadata(record):
             continue
-        label = getattr(record, "layer_label", getattr(record, "address", type(record).__name__))
+        label = getattr(
+            record, "layer_label", record_member(record, "address", type(record).__name__)
+        )
         resolver_status = getattr(record, "resolver_status", None)
         if resolver_status is not None and resolver_status not in valid_statuses:
             raise MetadataInvariantError(

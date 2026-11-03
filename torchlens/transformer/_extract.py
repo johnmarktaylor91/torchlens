@@ -57,7 +57,7 @@ def _modules_with_pattern(trace: Any) -> list[str]:
     return [
         str(module.address)
         for module in getattr(trace, "modules", ())
-        if getattr(module, "address", None) != "self" and _has_facet(module, "pattern")
+        if record_member(module, "address", None) != "self" and _has_facet(module, "pattern")
     ]
 
 

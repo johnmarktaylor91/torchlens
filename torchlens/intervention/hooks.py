@@ -19,6 +19,7 @@ from .._selection.selectors import (
     NotSelector,
     label,
 )
+from .._utils._record_group_table import record_member
 from ..errors import TorchLensWarning
 from ._hooks_support import (
     _display_label,
@@ -1474,7 +1475,7 @@ def _scoped_facet_view(record: Any, selector: FacetSelector) -> Any:
     with ``facet_selector_module_multi_call`` when the selector is scoped to it.
     """
 
-    record_address = getattr(record, "address", None)
+    record_address = record_member(record, "address", None)
     if selector.module_address is not None and record_address != selector.module_address:
         return None
     call_addresses = _multi_call_addresses(record)

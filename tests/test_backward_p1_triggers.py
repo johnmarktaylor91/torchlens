@@ -182,7 +182,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
         capture=tl.options.CaptureOptions(save_grads="all"),
         save=["linear_2"],
     )
-    grad_fn_object_id = trace["linear_2"].grad_fn_object_id
+    grad_fn_object_id = trace["linear_2"]._grad_fn_object_id
     assert grad_fn_object_id is not None
     registered_ids = {
         grad_fn_object_id

@@ -322,7 +322,7 @@ def _debug_label_spec_fn() -> Any:
         """Append dtype/device label rows where the layer carries them."""
 
         dtype = getattr(layer, "dtype", None)
-        device = getattr(layer, "output_device", None)
+        device = record_member(layer, "output_device", None)
         parts = []
         if dtype is not None:
             parts.append(f"dtype: {str(dtype).replace('torch.', '')}")

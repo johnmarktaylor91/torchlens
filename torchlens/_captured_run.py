@@ -267,12 +267,16 @@ class TraceLike:
         ctx = getattr(activation, "ctx", None)
         if ctx is not None:
             return getattr(ctx, "address", None)
-        buffer_address = getattr(activation, "address", None)
-        # Op and Layer keep ``is_buffer`` in their graph group; other activations
-        # carry it flat. Read the group directly so this vocabulary module stays
-        # free of record-table imports.
+        # Op and Layer keep ``is_buffer`` in their graph group and name the buffer
+        # ``buffer_address``; other activations carry both flat. Read them directly
+        # so this vocabulary module stays free of record-table imports.
         graph = getattr(activation, "graph", None)
-        is_buffer = getattr(graph if graph is not None else activation, "is_buffer", False)
+        if graph is not None:
+            is_buffer = getattr(graph, "is_buffer", False)
+            buffer_address = getattr(activation, "buffer_address", None)
+        else:
+            is_buffer = getattr(activation, "is_buffer", False)
+            buffer_address = getattr(activation, "address", None)
         if is_buffer and isinstance(buffer_address, str):
             return buffer_address
         module = getattr(activation, "module", None)

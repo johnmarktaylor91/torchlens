@@ -74,7 +74,7 @@ torchlens/_constants.py::_get_torch_overridable_functions	104
 torchlens/_data_classes/_compaction.py::compact_op_metadata	63
 torchlens/_data_classes/_lookup_keys.py::_get_lookup_help_str	63
 torchlens/_data_classes/_lookup_keys.py::_give_user_feedback_about_lookup_key	80
-torchlens/_data_classes/_nonfinite.py	885
+torchlens/_data_classes/_nonfinite.py	887
 torchlens/_data_classes/_op_dedup.py::_dedup_cached_identity_out	66
 torchlens/_data_classes/_op_dedup.py::_dedup_saved_activation_out	109
 torchlens/_data_classes/_op_save.py::_log_tensor_grad	104
@@ -110,7 +110,7 @@ torchlens/_data_classes/op.py::Op.__getattribute__	96
 torchlens/_data_classes/op.py::Op.__init__	96
 torchlens/_data_classes/op.py::_pool_container_cells	88
 torchlens/_data_classes/op.py::_pool_container_members	74
-torchlens/_data_classes/param.py	1083
+torchlens/_data_classes/param.py	1084
 torchlens/_data_classes/param.py::Param.__init__	75
 torchlens/_data_classes/trace.py	3518
 torchlens/_data_classes/trace.py::Trace.__init__	366
@@ -213,7 +213,7 @@ torchlens/_io/paths.py::resolve_bundle_blob_path	61
 torchlens/_io/payload_codec.py	1935
 torchlens/_io/payload_codec.py::JaxPayloadCodec.from_numpy	82
 torchlens/_io/payload_codec.py::materialize_transport_tensor	73
-torchlens/_io/rehydrate.py	1511
+torchlens/_io/rehydrate.py	1512
 torchlens/_io/rehydrate.py::_materialize_blob_ref	90
 torchlens/_io/rehydrate.py::_materialize_recursive_blob_refs	89
 torchlens/_io/rehydrate.py::_rehydrate_nested_object	213
@@ -265,11 +265,11 @@ torchlens/_io/runnable_load.py::attach_sparse_run_readiness	178
 torchlens/_io/runnable_load.py::parse_sparse_run_descriptor	111
 torchlens/_io/runnable_load.py::preflight_sparse_run_descriptor	110
 torchlens/_io/save_policy.py::_resolve_include_flags	101
-torchlens/_io/scrub.py	1950
+torchlens/_io/scrub.py	1954
 torchlens/_io/scrub.py::_effective_policy	79
 torchlens/_io/scrub.py::_is_runtime_only_trace_field	67
 torchlens/_io/scrub.py::_rebuild_tuple_value	67
-torchlens/_io/scrub.py::_scrub_nondeterministic_identities	223
+torchlens/_io/scrub.py::_scrub_nondeterministic_identities	227
 torchlens/_io/scrub.py::scrub_for_save	110
 torchlens/_io/sidecar.py::register_sidecar_family	97
 torchlens/_io/state_contract.py::inspect_state_contract	108
@@ -466,7 +466,7 @@ torchlens/_semantic/coverage.py::facet_coverage	62
 torchlens/_semantic/facets.py	1999
 torchlens/_semantic/facets.py::FacetView._compute	85
 torchlens/_semantic/facets.py::register	68
-torchlens/_semantic/logit_lens.py	1397
+torchlens/_semantic/logit_lens.py	1398
 torchlens/_semantic/logit_lens.py::_reduce_projection_row	91
 torchlens/_semantic/logit_lens.py::logit_lens	72
 torchlens/_semantic/logit_lens.py::logit_lens_predictions	121
@@ -477,7 +477,7 @@ torchlens/_semantic/patching.py::_run_patch	80
 torchlens/_semantic/patching.py::activation_patch_residual_stream	129
 torchlens/_semantic/patching.py::attribution_patch_attention_heads	72
 torchlens/_semantic/recipes/__init__.py::activate_entrypoint_recipes	63
-torchlens/_semantic/recipes/attention.py	801
+torchlens/_semantic/recipes/attention.py	802
 torchlens/_semantic/recipes/attention.py::_eager_result_checked	68
 torchlens/_semantic/recipes/lm_head.py::language_model_head	62
 torchlens/_semantic/reconstruction.py::_result_or_missing	65
@@ -601,11 +601,11 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2110
+torchlens/_visualization/_render_nodes.py	2112
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	161
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	254
 torchlens/_visualization/_render_nodes.py::_build_layer_node	168
-torchlens/_visualization/_render_nodes.py::_get_node_address_shape_color	66
+torchlens/_visualization/_render_nodes.py::_get_node_address_shape_color	68
 torchlens/_visualization/_render_nodes.py::_render_raw_input	63
 torchlens/_visualization/_render_nodes.py::_render_raw_input_image_batch	61
 torchlens/_visualization/_render_nodes.py::compute_default_node_lines	110
@@ -655,7 +655,7 @@ torchlens/_visualization/lenses/audit/battery.py::build_packet	96
 torchlens/_visualization/node_spec.py::make_intervention_node_spec_fn	134
 torchlens/_visualization/node_universe.py::_project_endpoint_units	70
 torchlens/_visualization/node_universe.py::build_node_universe	125
-torchlens/_visualization/render_ir.py	1288
+torchlens/_visualization/render_ir.py	1289
 torchlens/_visualization/render_ir.py::_node_from_unit	63
 torchlens/_visualization/render_ir.py::_resolve_node_decision	109
 torchlens/_visualization/render_ir.py::build_render_ir	98
@@ -934,7 +934,7 @@ torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1787
+torchlens/backends/torch/buffer_writes.py	1788
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61
@@ -971,13 +971,13 @@ torchlens/backends/torch/model_prep.py::module_forward_decorator.decorated_forwa
 torchlens/backends/torch/model_prep.py::prepare_buffer_tensors	72
 torchlens/backends/torch/model_prep.py::release_model	62
 torchlens/backends/torch/offload_hooks.py::install_offload_hook_shims	66
-torchlens/backends/torch/prehook_provenance.py	1003
+torchlens/backends/torch/prehook_provenance.py	1004
 torchlens/backends/torch/prehook_provenance.py::_ensure_observer	66
 torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
 torchlens/backends/torch/prehook_provenance.py::_snapshot_state	82
-torchlens/backends/torch/rescue.py	935
+torchlens/backends/torch/rescue.py	936
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120
@@ -1114,7 +1114,7 @@ torchlens/fingerprint.py::_update_content_digest	114
 torchlens/intervention/_affine_source.py::set_affine_coordinates	65
 torchlens/intervention/_audit.py::build_fire_record	71
 torchlens/intervention/_audit.py::record_intervention_event	152
-torchlens/intervention/_binding.py	1547
+torchlens/intervention/_binding.py	1548
 torchlens/intervention/_binding.py::_consider_op	112
 torchlens/intervention/_binding.py::_make_boundary_hook	61
 torchlens/intervention/_compose.py::compose	104
@@ -1201,7 +1201,7 @@ torchlens/intervention/_trace_selection_edits.py::apply_leaf_selection_edits	70
 torchlens/intervention/_trace_selection_edits.py::apply_selection_batch_do	71
 torchlens/intervention/_trace_selection_edits.py::apply_selection_do	78
 torchlens/intervention/_types.py	835
-torchlens/intervention/hooks.py	1784
+torchlens/intervention/hooks.py	1785
 torchlens/intervention/hooks.py::_adapt_tensor_backward_hook	64
 torchlens/intervention/hooks.py::_normalize_sticky_hook_specs	75
 torchlens/intervention/hooks.py::_normalize_value_specs	63
@@ -1362,7 +1362,7 @@ torchlens/report/_cost_perf.py::roofline	117
 torchlens/report/_cost_scaling.py::padding_waste	79
 torchlens/report/_cost_tree.py	842
 torchlens/report/_cost_tree.py::_TreeBuilder._emit_call	62
-torchlens/report/_explain.py	1052
+torchlens/report/_explain.py	1054
 torchlens/report/_explain.py::_anomaly_lines	74
 torchlens/report/_explain.py::_capture_status_lines	72
 torchlens/report/_explain.py::explain	72
@@ -1472,7 +1472,7 @@ torchlens/validation/_exemptions.py::_sdpa_zero_query_decision	61
 torchlens/validation/_exemptions.py::_softmax_singleton_dim_decision	65
 torchlens/validation/_invariants_backward_domain.py::_check_backward_pass_domain_invariants	110
 torchlens/validation/_invariants_backward_domain.py::_check_journal_seq_invariants	160
-torchlens/validation/_invariants_backward_domain.py::_layer_feeds_recorded_backward_roots	90
+torchlens/validation/_invariants_backward_domain.py::_layer_feeds_recorded_backward_roots	93
 torchlens/validation/_invariants_backward_flow.py::_check_backward_event_flow_invariants	258
 torchlens/validation/_invariants_backward_flow.py::op_has_genuine_replacement_evidence	121
 torchlens/validation/_invariants_backward_graph.py::_check_backward_grad_fn_handle_records	115

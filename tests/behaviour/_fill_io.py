@@ -438,7 +438,7 @@ def _check_streamed_payloads(cell: Cell, trace: Any, plain: Any) -> None:
     # forward_match oracle call ``trace.run``, which refuses typed on a streamed trace
     # (``trace_option_unsupported``, IO-8), so the payloads stay the bundle's here too.
     unstreamed = sorted(
-        op.label for op in trace.saved_ops if op.out_ref is None and not _is_output(op)
+        op.label for op in trace.saved_ops if op._out_ref is None and not _is_output(op)
     )
     cell.expect(not unstreamed, f"saved ops without a blob on disk: {unstreamed[:8]}")
     # Reading ``op.out`` on a capture with predicate keywords (save=, stop_after=, intervene=)

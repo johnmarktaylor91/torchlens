@@ -16,6 +16,7 @@ import torch
 
 from torchlens._ir.events import OpEvent
 
+from .._utils._record_group_table import record_member
 from .._utils.tensor_utils import safe_copy, tensor_nanequal
 
 
@@ -67,7 +68,7 @@ def _buffer_addresses_by_label(
         producer_event = op_events_by_label.get(producer_label_raw)
         if producer_event is None:
             continue
-        address = getattr(write_event, "address", None)
+        address = record_member(write_event, "address", None)
         if not isinstance(address, str) or not address.endswith(".num_batches_tracked"):
             continue
         for edge in producer_event.parents:
@@ -202,7 +203,7 @@ def _buffer_alias_snapshots_by_address(
         Final snapshots for buffer addresses that were updated only through an alias.
     """
 
-    directly_written = {getattr(event, "address", None) for event in buffer_write_events}
+    directly_written = {record_member(event, "address", None) for event in buffer_write_events}
     model = None if source_model_ref is None else source_model_ref()
     if model is None or not hasattr(model, "named_buffers"):
         return {}
