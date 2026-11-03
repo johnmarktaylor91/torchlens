@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import warnings
 from pathlib import Path
 from typing import Any
@@ -187,9 +188,16 @@ def _tp_rank(rank: int, world_size: int, init_file: str, out_dir: str, hf_dir: s
 
 
 def _hf_tp_checkpoint(tmp_path: Path) -> str:
-    """Save a seeded tiny Llama for ``tp_plan`` loading, or return ``""`` when unsupported."""
+    """Save a seeded tiny Llama for ``tp_plan`` loading, or return ``""`` when unsupported.
+
+    transformers refuses a ``tp_plan`` on any machine with an MPS device, so that half of the row
+    does not run on Apple silicon.
+    """
 
     if not hasattr(transformers, "DistributedConfig"):
+        return ""
+    mps = getattr(torch.backends, "mps", None)
+    if mps is not None and mps.is_available():
         return ""
     try:
         import accelerate  # noqa: F401  (transformers requires it for tp_plan loading)
@@ -219,6 +227,10 @@ def test_dtensor_tensor_parallel_on_a_two_process_cpu_mesh_refuses_typed(
     # The row is a CPU mesh. On a CUDA host transformers would bind each rank to its own GPU,
     # so the spawned ranks (which inherit this environment) see no CUDA device.
     monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "")
+    if sys.platform == "darwin" and "GLOO_SOCKET_IFNAME" not in os.environ:
+        # gloo on macOS otherwise binds the hostname's interface, and the shard scatter in
+        # parallelize_module waits out its 30-minute timeout; the mesh is local, so use loopback.
+        monkeypatch.setenv("GLOO_SOCKET_IFNAME", "lo0")
     world_size = 2
     mp.spawn(
         _tp_rank,
