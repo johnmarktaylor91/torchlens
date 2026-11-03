@@ -149,8 +149,8 @@ and `show_containers` styling are unaffected.
 ## `collapse_plan()` diagnostics
 
 `Drawing.collapse_plan(mode=...)` exposes the renderer-faithful plan for one requested mode. The
-diagnostics live on the draw result, so render with `return_trace=True` and ask the drawing
-(`tl.render(model, x, return_trace=True).collapse_plan("max")`); a drawing that kept no trace
+diagnostics live on the draw result, so draw the trace and ask the drawing
+(`trace.draw(path).collapse_plan("max")`); a `tl.draw` picture or a closed drawing keeps no trace and
 refuses with the typed `trace_cleaned_up` error.
 `Drawing.collapse_schedule()` exposes its ordered float steps, targets, visible counts, and collapsed
 module addresses. Use these diagnostics to inspect a rendering decision rather than inferring it

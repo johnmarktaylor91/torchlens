@@ -37,8 +37,8 @@
   `facade_redirect` error.
 - **draw**: the collapse diagnostics moved off Trace onto the draw result (round-2 walk names.1):
   `Trace.collapse_plan(mode)` is now `Drawing.collapse_plan(mode)` and `Trace.collapse_schedule()`
-  is now `Drawing.collapse_schedule()`. Render with `tl.render(..., return_trace=True)` and ask the
-  drawing; a drawing that kept no trace refuses typed. `Trace.collapse_order` is unchanged. The old
+  is now `Drawing.collapse_schedule()`. Draw with `trace.draw(...)` and ask the
+  drawing; a `tl.draw` picture or a closed drawing keeps no trace and refuses typed. `Trace.collapse_order` is unchanged. The old
   Trace spellings refuse with the typed `facade_redirect` error.
 - **backward**: `Trace.log_backward(loss)` is gone; `trace.backward(loss)` is the one spelling (round-2
   walk names.5). It was already an alias of `log_backward`, so the behaviour and keywords

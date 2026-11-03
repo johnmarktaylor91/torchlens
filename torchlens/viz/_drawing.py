@@ -54,7 +54,7 @@ class Drawing:
     policy:
         Resolved render policy: theme, collapse, module focus, depth.
     trace:
-        A retained trace when the caller asked to keep one; ``close()`` (and
+        The trace behind a ``trace.draw(...)`` result (``tl.draw`` keeps none); ``close()`` (and
         leaving the ``with`` block) releases it.
     """
 
@@ -122,7 +122,7 @@ class Drawing:
         """Return the diagnostic collapse plan for the trace behind this drawing.
 
         The plan is computed on the trace the draw retained, so it needs
-        ``return_trace=True`` and an open drawing (not yet ``close()``d).
+        a ``trace.draw(...)`` result that is still open (not yet ``close()``d).
 
         Parameters
         ----------
@@ -186,7 +186,7 @@ class Drawing:
         if self.trace is None:
             refuse_cleaned_up(
                 f"this Drawing retains no trace, so {name}() has nothing to plan on",
-                remedy="draw with return_trace=True and call it before close()",
+                remedy="draw with trace.draw(...) and call it before close()",
                 attribute=name,
             )
         return self.trace
