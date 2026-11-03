@@ -811,8 +811,9 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
     manifest["backward_summary"]["gradient_blob_kinds"] = ["grad", "legacy_grad"]
     (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
 
-    with pytest.raises(ValueError, match="gradient_blob_kinds"):
+    with pytest.raises(ArtifactError, match="gradient_blob_kinds") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 @pytest.mark.parametrize("invalid_identity", ["", None, 7])
@@ -847,8 +848,9 @@ def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     nested["bogus_round5_field"] = True
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="unsupported fields"):
+    with pytest.raises(ArtifactError, match="unsupported fields") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_shipped_tlspec_schema_keywords_are_all_walker_supported() -> None:
