@@ -1821,6 +1821,14 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   suggestion names the install extra when the framework is absent, otherwise the first failed
   cell.
 
+**`HAS_MODULE_CALL_DISPATCH_FRAME` (torch capability flag)**
+: True when TorchLens can tell a direct `module.forward(x)` call from a normal `module(x)` call on
+  this torch, measured by a behavioural probe (never a version parse). Shown in the torch
+  capability snapshot that `tl.report.doctor()` reports. When it is False no call is
+  classed direct, so the fast run keeps refusing a hook-invisible module call as
+  `fast_live_module_hook_unobserved`. Spelling decided (JMT 1 Nov 2026 3:01 PM PT, walk names.4,
+  confirm).
+
 **torchlens.conformance.graduation_report(backend)**
 : Returns a `GraduationReport(backend, items)` of six `GraduationItem(id, met, detail)` rows
   computed from the backend's shipped scorecard, the repository and the registry;
