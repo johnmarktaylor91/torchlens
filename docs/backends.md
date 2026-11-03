@@ -28,8 +28,8 @@ internal capture seam; it is not the backend contract.
 decision; `stable` requires every graduation item below to be met in the backend's shipped
 scorecard. Each page has a runnable tutorial, a can and cannot table and the backend's framework
 requirement (supported version range, the version the per-change CI leg pins, and the install
-extra). `tests/test_backend_docs_lockstep.py` holds this table to the registry and each page's
-can and cannot table to the backend's shipped capability summary.
+extra). The repository check `scripts/checks/backend_docs_lockstep.py` holds this table to the
+registry and each page's can and cannot table to the backend's shipped capability summary.
 
 Shared rules every backend follows:
 

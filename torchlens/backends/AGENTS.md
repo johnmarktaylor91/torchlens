@@ -48,7 +48,7 @@ Protocol obligations that every backend shares:
   `python -m torchlens.conformance.scorecard --backend <name> --write` on the
   pinned version, never hand-edited; its docs page `docs/backends/<name>.md`
   keeps a tutorial and a can and cannot table equal to the record's capability
-  summary (`tests/test_backend_docs_lockstep.py`).
+  summary (`scripts/checks/backend_docs_lockstep.py`).
 
 ## The orchestration adapter (torch-internal)
 
