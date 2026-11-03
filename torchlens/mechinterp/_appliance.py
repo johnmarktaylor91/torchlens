@@ -73,7 +73,7 @@ class MechInterpAppliance:
 
         return ov_circuit(self._trace, attention)
 
-    def logit_lens(
+    def logit_lens(  # noqa: PLR0913 -- mirrors the private lens's keyword set one-to-one
         self,
         *,
         facet: str = "resid_post",
@@ -114,7 +114,7 @@ class MechInterpAppliance:
         return _logit_lens(
             self._trace,
             facet=facet,
-            layers=modules,
+            modules=modules,
             lens=lens,
             verify=verify,
             rtol=rtol,

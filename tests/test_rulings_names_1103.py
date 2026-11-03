@@ -100,7 +100,7 @@ def test_names5_logit_lens_forwards_to_the_private_lens(monkeypatch: pytest.Monk
     monkeypatch.setattr(kit_module, "_logit_lens", fake)
     assert trace.using("mechinterp").logit_lens(modules=["dec"], verify=False) == "lens"
     assert seen["trace"] is trace
-    assert seen["layers"] == ["dec"]
+    assert seen["modules"] == ["dec"]
     assert seen["verify"] is False
     assert seen["facet"] == "resid_post"
 
@@ -117,8 +117,8 @@ def test_names5_logit_lens_keeps_the_fail_closed_refusal() -> None:
 
 
 def _ablated_pair() -> tuple[tl.Trace, tl.Bundle]:
-    # do() on this base still needs replayable=True (names.1 lands with replay-templates).
-    trace = tl.trace(_Blocks(), torch.randn(2, 4), replayable=True)
+    # do() on this base still needs a replayable capture (the plain-trace do() lands with replay-templates).
+    trace = tl.trace(_Blocks(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     fork = trace.fork()
     fork.do(tl.label(str(trace.modules["dec.0"].calls[0].output_ops[0])), tl.zero_ablate())
     return trace, tl.Bundle({"base": trace, "edited": fork}, baseline="base")
@@ -165,7 +165,7 @@ def test_names8_recorder_takes_recording_options_like_tl_record() -> None:
     x = torch.randn(2, 4)
     with pytest.raises(TypeError, match="default_op"):
         Recorder(model, default_op=True)
-    one_shot = tl.record(model, x, default_op=True, history_size=4)
+    one_shot = tl.record(model, x, recording=RecordingOptions(default_op=True, history_size=4))
     with Recorder(model, recording=RecordingOptions(default_op=True, history_size=4)) as recorder:
         recorder(x)
     assert _op_labels(recorder.recording) == _op_labels(one_shot)
