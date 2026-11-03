@@ -1,0 +1,321 @@
+{
+  "measured_on": "2026-11-03",
+  "host": {
+    "name": "a shared 32-core Intel Xeon 2.80 GHz Linux CPU worker, one torch thread per process, load average about 40",
+    "cpus": 32,
+    "torch_threads": 1,
+    "loadavg_1min_range": [
+      40,
+      46
+    ]
+  },
+  "versions": {
+    "python": "3.10.20",
+    "torch": "2.13.0 (CPU build)",
+    "torchvision": "0.28.0",
+    "transformers": "5.18.0",
+    "torchlens": "2.36.3",
+    "nnsight": "0.8.1",
+    "captum": "0.9.0",
+    "transformer-lens": "4.3.0"
+  },
+  "harness": "benchmarks/capture (driver.py for the LSTM tagger; mi_workloads.matrix for GPT-2)",
+  "gpt2": {
+    "cache/hooks": {
+      "median_s": 33.70007136603817,
+      "min_s": 33.70007136603817,
+      "max_s": 33.70007136603817,
+      "n": 1,
+      "n_forwards": 16,
+      "batch": 16,
+      "seq_len": 32
+    },
+    "steer_sweep/hooks": {
+      "median_s": 26.69518712721765,
+      "min_s": 25.36309020780027,
+      "max_s": 27.99648770596832,
+      "n": 3,
+      "n_forwards": 12,
+      "batch": 16,
+      "seq_len": 32
+    },
+    "steer_sweep/tl_bind": {
+      "median_s": 27.151699285022914,
+      "min_s": 26.80433241603896,
+      "max_s": 27.737925407942384,
+      "n": 3,
+      "n_forwards": 12,
+      "batch": 16,
+      "seq_len": 32
+    },
+    "patch_sweep/hooks": {
+      "median_s": 7.810437293257564,
+      "min_s": 7.676381293684244,
+      "max_s": 8.122413026168942,
+      "n": 3,
+      "n_forwards": 50,
+      "batch": 16,
+      "seq_len": 32
+    }
+  },
+  "gpt2_bind_vs_hooks_max_abs_diff": 0.0,
+  "lstm_tagger": {
+    "A/single_module_output/raw": {
+      "median_ms": 1.42,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/single_module_output/hooks": {
+      "median_ms": 1.75,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/single_module_output/nnsight": {
+      "median_ms": 2.0,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/single_module_output/tl_trace_sparse": {
+      "median_ms": 77.96,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/single_module_output/tl_extract": {
+      "median_ms": 82.93,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/matched_retained/raw": {
+      "median_ms": 1.61,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/matched_retained/hooks": {
+      "median_ms": 1.72,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/matched_retained/nnsight": {
+      "median_ms": 2.09,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/matched_retained/tl_trace_sparse": {
+      "median_ms": 80.36,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/matched_retained/tl_extract": {
+      "median_ms": 58.28,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/replacement_edit/raw": {
+      "median_ms": 1.54,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/replacement_edit/hooks": {
+      "median_ms": 1.7,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/replacement_edit/nnsight": {
+      "median_ms": 2.06,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/replacement_edit/tl_trace_sparse": {
+      "median_ms": 75.73,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/replacement_edit/tl_bind": {
+      "median_ms": 2.78,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/repeated_steering/raw": {
+      "median_ms": 12.39,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/repeated_steering/hooks": {
+      "median_ms": 12.52,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/repeated_steering/nnsight": {
+      "median_ms": 15.96,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/repeated_steering/tl_trace_sparse": {
+      "median_ms": 640.23,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/repeated_steering/tl_bind": {
+      "median_ms": 25.6,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/same_site_gradient/raw": {
+      "median_ms": 3.49,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/same_site_gradient/hooks": {
+      "median_ms": 4.4,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/same_site_gradient/tl_trace_sparse": {
+      "median_ms": 117.5,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/raw": {
+      "median_ms": 9.69,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/hooks": {
+      "median_ms": 10.21,
+      "processes": 3,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/nnsight": {
+      "median_ms": 11.9,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/tl_trace_sparse": {
+      "median_ms": 277.86,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/tl_extract": {
+      "median_ms": 329.91,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "A/ordered_dataset_features/tl_extract_dataset": {
+      "median_ms": 356.0,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/raw_forward/reference": {
+      "median_ms": 1.47,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/hooks_all_modules/reference": {
+      "median_ms": 1.61,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/raw_forward_wrapped/torchlens": {
+      "median_ms": 1.5,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/full_trace_default/torchlens": {
+      "median_ms": 81.38,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/full_trace_declared/torchlens": {
+      "median_ms": 83.49,
+      "processes": 2,
+      "samples_per_process": 20
+    },
+    "B/backward_capture/torchlens": {
+      "median_ms": 91.45,
+      "processes": 2,
+      "samples_per_process": 20
+    }
+  },
+  "page_rows": [
+    {
+      "section": "live",
+      "text": "| GPT-2 small, CPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | forward hooks | 26.70 s |"
+    },
+    {
+      "section": "live",
+      "text": "| GPT-2 small, CPU, 12 steered forwards (3 layers by 4 strengths) on a batch of 16 sequences of 32 tokens, n=3 | `tl.when(...).bind(model)` | 27.15 s |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, one module replaced by zeros, n=3 processes of 20 samples | plain forward, nothing attached | 1.54 ms |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, one module replaced by zeros, n=3 processes of 20 samples | forward hook | 1.70 ms |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, one module replaced by zeros, n=3 processes of 20 samples | `tl.when(...).bind(model)` | 2.78 ms |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, one module replaced by zeros, n=3 processes of 20 samples | nnsight 0.8.1 | 2.06 ms |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, plain forward with TorchLens imported and torch wrapped, n=2 processes of 20 samples | wrapped, not capturing | 1.50 ms |"
+    },
+    {
+      "section": "live",
+      "text": "| LSTM tagger, CPU, plain forward with TorchLens imported and torch wrapped, n=2 processes of 20 samples | plain forward | 1.47 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, full trace of every operation, n=2 processes of 20 samples | `tl.trace(model, x)` | 81.38 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, full trace of every operation, n=2 processes of 20 samples | forward hooks on every module | 1.61 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, one module's output, n=3 processes of 20 samples | `tl.trace(..., save=tl.module(site))` | 77.96 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, one module's output, n=3 processes of 20 samples | `tl.extract` | 82.93 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, one module's output, n=3 processes of 20 samples | forward hook | 1.75 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, eight steering strengths through a trace and rerun, n=3 processes of 20 samples | `tl.trace` then `fork().do(...)` | 640.23 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, eight steering strengths, n=3 processes of 20 samples | `tl.when(...).bind(model)` | 25.60 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, eight steering strengths, n=3 processes of 20 samples | forward hooks | 12.52 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, one module's output over 16 stimuli in batches of 4, n=2 processes of 20 samples | `tl.extract_dataset` | 356.00 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, one module's output over 16 stimuli in batches of 4, n=3 processes of 20 samples | forward hook | 10.21 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, gradient at one module output, n=3 processes of 20 samples | `tl.trace` with gradients saved | 117.50 ms |"
+    },
+    {
+      "section": "slower",
+      "text": "| LSTM tagger, CPU, gradient at one module output, n=3 processes of 20 samples | tensor hook | 4.40 ms |"
+    }
+  ]
+}

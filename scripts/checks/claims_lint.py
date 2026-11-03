@@ -261,6 +261,49 @@ PLANTED: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
             "module outputs; nnsight's .source reaches operations inside a forward.",
         ),
     ),
+    "artifact-compatibility-window": (
+        (
+            "A saved .tlspec artifact stays loadable for five years.",
+            "Artifacts written by this release load for 24 months.",
+        ),
+        (
+            "The intended window for 3.x artifacts is five years; it becomes a promise "
+            "when each prerequisite below is green.",
+        ),
+    ),
+    "comparison-landscape-currency": (
+        (
+            "TransformerLens 3.x is the current release.",
+            "nnsight 0.7 remains the latest stable release.",
+            "penzai is actively maintained.",
+            "Sparse autoencoders are the production monitor of choice.",
+        ),
+        (
+            "TransformerLens v4.3.0 (2026-10-23) is the latest release; penzai is archived; "
+            "probes are the production monitoring instrument and SAEs a discovery tool.",
+        ),
+    ),
+    "attribution-destinations": (
+        (
+            "TorchLens ships influence functions and adversarial attacks.",
+            "TorchLens provides DeepLift and LIME for text models.",
+        ),
+        (
+            "For influence functions and adversarial attacks, use Captum; TorchLens ships no "
+            "influence functions.",
+            "TorchLens provides no DeepLift or LIME for text; use Captum or inseq.",
+        ),
+    ),
+    "transformers-5-supported-version": (
+        (
+            "transformers 5.x is supported.",
+            "TorchLens adds support for transformers 5 models.",
+        ),
+        (
+            "Tested with transformers 5.18; transformers 5 is otherwise a candidate.",
+            "transformers 5.18 is supported on the tested leg.",
+        ),
+    ),
 }
 
 
