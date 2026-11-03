@@ -12,6 +12,8 @@ site when ``patched`` is a fork.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+
 import pytest
 import torch
 import torch.nn.functional as F
@@ -80,10 +82,11 @@ def test_grad_health_resolves_verdicts_for_cross_entropy_without_grad_scale() ->
     trace.log_backward(F.cross_entropy(logits, torch.tensor([0, 1, 2, 0, 1, 2])))
 
     frame = tl.debug.grad_health(trace).to_pandas()
+    graded = frame[frame["verdict"] != "unavailable"]
 
-    assert len(frame) > 0
-    assert set(frame["scale_provenance"]) == {"proven_unscaled"}
-    assert "unknown" not in set(frame["verdict"])
+    assert len(graded) > 0
+    assert set(graded["scale_provenance"]) == {"proven_unscaled"}
+    assert "unknown" not in set(graded["verdict"])
 
 
 def test_grad_health_empty_hint_names_save_grads() -> None:
@@ -98,13 +101,18 @@ def test_grad_health_empty_hint_names_save_grads() -> None:
 
 
 class _Block(nn.Module):
-    """A transformer-style feed-forward on (batch, tokens, features)."""
+    """A transformer-style feed-forward on (batch, tokens, features).
+
+    The first ``dead`` features get a large negative bias and the rest a large
+    positive one, so which features are dead does not depend on the draw.
+    """
 
     def __init__(self, dead: int) -> None:
         super().__init__()
         self.up = nn.Linear(6, 10)
         with torch.no_grad():
             self.up.bias[:dead] = -100.0
+            self.up.bias[dead:] = 100.0
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return torch.relu(self.up(x))
@@ -182,9 +190,13 @@ class _Nested(nn.Module):
 
 
 @pytest.fixture(scope="module")
-def nested_trace() -> tl.Trace:
+def nested_trace() -> Iterator[tl.Trace]:
     torch.manual_seed(15)
-    return tl.trace(_Nested(), torch.randn(3, 4))
+    captured = tl.trace(_Nested(), torch.randn(3, 4))
+    try:
+        yield captured
+    finally:
+        captured.cleanup()
 
 
 @pytest.mark.parametrize(

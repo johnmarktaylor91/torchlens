@@ -565,7 +565,7 @@ def dead_neurons_rows(
             skipped += 1
             continue
         feature_dim = None if reason else _feature_dim(trace, op, out, dim, axes)
-        if feature_dim is None:
+        if feature_dim is None or not isinstance(out, torch.Tensor):
             skipped += 1
             rows.append(
                 {

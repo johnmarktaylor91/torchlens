@@ -168,7 +168,7 @@ def test_hot_path_frame_is_unchanged(trace: Any) -> None:
 
 
 def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
-    rows, attrs = _dead_neurons_rows(trace, dim=1, threshold=0.0)
+    rows, attrs = _dead_neurons_rows(trace, dim=None, threshold=0.0)
     columns = [
         "op",
         "total_units",
