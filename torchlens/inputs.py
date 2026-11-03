@@ -103,7 +103,8 @@ def register(
             prepared = func(model, payload)
             if prepared is None:
                 return None
-            return _trace_preprocessed(model, payload, prepared, func, name, trace_kwargs)
+            transform = _prepared_transform(model, payload, prepared, func, name)
+            return _trace_preprocessed(model, payload, transform, trace_kwargs)
 
         detector.__doc__ = func.__doc__
         detector.__qualname__ = getattr(func, "__qualname__", name)
@@ -138,19 +139,13 @@ def unregister(name: str) -> None:
     _input_registry.unregister(name)
 
 
-def _trace_preprocessed(
-    model: Any,
-    payload: Any,
-    prepared: Any,
-    func: Callable[..., Any],
-    name: str,
-    trace_kwargs: dict[str, Any],
-) -> Any:
-    """Trace ``model`` with ``func`` as the capture's input transform.
+def _prepared_transform(
+    model: Any, payload: Any, prepared: Any, func: Callable[..., Any], name: str
+) -> Callable[[Any], Any]:
+    """Return the input transform that runs ``func``, stamped with its provenance record.
 
     The transform reuses the already prepared value for the raw payload the
-    route saw, so ``func`` runs once per trace; the raw value is kept as
-    ``trace.input`` exactly as an explicit ``input_transform=`` would keep it.
+    route saw, so ``func`` runs once per trace.
     """
 
     def transform(raw: Any) -> Any:
@@ -165,6 +160,18 @@ def _trace_preprocessed(
         config={"preprocessor": name},
         description=f"registered input preprocessor {name!r}",
     )
+    return transform
+
+
+def _trace_preprocessed(
+    model: Any, payload: Any, transform: Callable[[Any], Any], trace_kwargs: dict[str, Any]
+) -> Any:
+    """Trace ``model`` with ``transform`` as the capture's input transform.
+
+    The raw value is kept as ``trace.input`` exactly as an explicit
+    ``input_transform=`` would keep it.
+    """
+
     capture = merge_capture_options(
         capture=trace_kwargs.pop("capture", None),
         input_transform=transform,
