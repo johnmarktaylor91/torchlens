@@ -37,6 +37,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import mutate_runnable_descriptor
 from torch import nn
 
 import torchlens as tl
@@ -991,15 +992,10 @@ def test_sparse_refuses_opaque_output_save(tmp_path: Path) -> None:
 def _tamper_context_field(bundle_path: Path) -> None:
     """Corrupt a persisted ambient context field to an out-of-vocabulary value."""
 
-    import json
+    def edit(descriptor: dict[str, Any]) -> None:
+        descriptor["ambient_context"]["float32_matmul_precision"] = "quantum_highest"
 
-    manifest_path = bundle_path / "manifest.json"
-    data = json.loads(manifest_path.read_text())
-    run_desc = data.get("run")
-    assert run_desc is not None, "no run descriptor in manifest"
-    ambient = run_desc.setdefault("ambient_context", {})
-    ambient["float32_matmul_precision"] = "quantum_highest"
-    manifest_path.write_text(json.dumps(data))
+    mutate_runnable_descriptor(bundle_path, edit)
 
 
 @pytest.mark.parametrize(
