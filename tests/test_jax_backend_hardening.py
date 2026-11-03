@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -12,6 +11,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
@@ -283,7 +283,7 @@ def _write_jax_codec_fixture(path: Path) -> tuple[Any, np.ndarray]:
         save_level="portable",
     )
     with (path / "metadata.pkl").open("wb") as handle:
-        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        dump_canonical_metadata(scrubbed_state, handle)
     _mark_fixture_manifest_materialized(path)
     return trace, np.asarray(blob_specs[0].value)
 

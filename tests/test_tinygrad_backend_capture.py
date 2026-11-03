@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import pickle
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +10,7 @@ import numpy as np
 import pytest
 
 import torchlens as tl
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io.bundle import _build_manifest, _write_payload_blob
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._io.scrub import scrub_for_save
@@ -401,7 +401,7 @@ def _write_tinygrad_codec_fixture(path: Path) -> tuple[Any, np.ndarray, str, str
         save_level="portable",
     )
     with (path / "metadata.pkl").open("wb") as handle:
-        pickle.dump(scrubbed_state, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        dump_canonical_metadata(scrubbed_state, handle)
     _mark_fixture_manifest_materialized(path)
     first_payload = blob_specs[0].value
     return (
