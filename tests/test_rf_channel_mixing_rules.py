@@ -195,10 +195,8 @@ def test_channels_last_block_passes_the_gradient_tripwire() -> None:
     """The zero-tolerance containment check passes on the exact channels-last block."""
 
     model = _ChannelsLastMixer().eval()
-    capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(
-        model, torch.randn(1, 4, 8, 8, requires_grad=True), capture=capture, save_mode="reference"
-    )
+    capture = tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
+    trace = tl.trace(model, torch.randn(1, 4, 8, 8, requires_grad=True), capture=capture)
     target = _ops(trace, "conv2d")[-1]
     result = target.receptive_field.check((0, 1, 4, 4))
     assert result.status is ReceptiveFieldValidationStatus.PASS
