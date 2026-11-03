@@ -2552,54 +2552,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "is_edited",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "modules",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "source_trace",
-  "file": "torchlens/report/_notebook/cards.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/report/_notebook/cardtree.py",
-  "has_default": false,
-  "sites": 2,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/report/_notebook/frontier.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "policy",
   "file": "torchlens/_observability/_artifact.py",
@@ -8997,6 +8949,54 @@
   "file": "torchlens/report/_flops_report.py",
   "has_default": false,
   "sites": 10,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "is_edited",
+  "file": "torchlens/report/_notebook/cards.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/report/_notebook/cards.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/report/_notebook/cards.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "source_trace",
+  "file": "torchlens/report/_notebook/cards.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/report/_notebook/cardtree.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/report/_notebook/frontier.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

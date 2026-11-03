@@ -5,13 +5,13 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-82 packages, 1336 modules, 621467 lines, 0 modules without a docstring.
+82 packages, 1335 modules, 621439 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 66 | 31468 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 65 | 31438 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1237 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
@@ -25,7 +25,6 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35653 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
-| `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
 | `torchlens._observe` | Observe kit: memory truth + diagnostics substrates. | 6 | 1507 |
 | `torchlens._partial` | Partial capture helpers for failed TorchLens forward ops. | 1 | 500 |
@@ -75,7 +74,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5828 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34307 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34309 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
@@ -87,6 +86,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 18 | 5789 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 33 | 13914 |
+| `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
 | `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 16 | 6303 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 4862 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 4571 |
@@ -98,13 +98,13 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31468 lines)
+TorchLens - extract outs and metadata from PyTorch models. (65 modules, 31438 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens - extract outs and metadata from PyTorch models. | 782 |
 | `__main__` | ''python -m torchlens'': the tiered read-only CLI (torchlens.agent.cli). | 15 |
-| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 262 |
+| `_architecture` | The layer map: one declared stratum per package/module ( item 1). | 261 |
 | `_call_fingerprint` | Native-forward twin of the capture-time ordered call fingerprint. | 159 |
 | `_capture_attr_observer` | Plain-attribute leg of the capture observer bracket. | 546 |
 | `_capture_fingerprint` | Capture-cache content fingerprints and instance-attribute key fragments. | 423 |
@@ -118,7 +118,6 @@ TorchLens - extract outs and metadata from PyTorch models. (66 modules, 31468 li
 | `_debug_report` | The one typed ''tl.debug'' report object (spelling DOCUMENTED-UNSTABLE). | 402 |
 | `_deploy_env` | Deployment-envelope detection helpers (R5). | 192 |
 | `_deprecations` | The MISSING kwarg-omission sentinel. | 35 |
-| `_diagnostics` | The debugging tools one public namespace re-exports (today: ''tl.debug''). | 29 |
 | `_distributed` | Honest detection of distributed (DTensor / device-mesh / TP / PP) model state. | 1149 |
 | `_episode_spec` | The episode declaration dataclass for ''tl.trace(..., episode=...)''. | 173 |
 | `_errors` | Shared TorchLens exception types. | 692 |
@@ -512,22 +511,6 @@ Cross-rank trace merging (merge-ranks tier (c), rung ). (13 modules, 5849 lines)
 | `_relation_table` | The per-kind relation table the merge derivation checks at each join key. | 213 |
 | `_rules` | Shared identity, boundary and provenance rules over rank-core evidence. | 344 |
 | `_witness` | The totalized per-join witness verdict (design-merge-ranks-c v5, 3.3; demote-only). | 236 |
-
-### `torchlens._notebook`
-
-Extras-gated notebook namespace with no public objects yet. (9 modules, 2412 lines)
-
-| Module | What it holds | Lines |
-| --- | --- | ---: |
-| `__init__` | Extras-gated notebook namespace with no public objects yet. | 106 |
-| `_access` | The copy-expression root ladder (B2, treescope memo section 4). | 143 |
-| `_axis_labels` | Semantic axis labels, token decoding, and the SDPA hint (B3). | 171 |
-| `_grid` | The native static array grid (B3): budgeted, masked, motif-coded. | 336 |
-| `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 264 |
-| `_truncation` | Balanced truncation budgets, ported from treescope (B3). | 290 |
-| `cards` | The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace. | 540 |
-| `cardtree` | CardTree: presentation-only HTML card IR + native safe renderer (B1). | 411 |
-| `frontier` | The diagnostic frontier: first-dirty sites plus one hop (B6). | 151 |
 
 ### `torchlens._observability`
 
@@ -1552,7 +1535,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (69 modules, 34307 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (69 modules, 34309 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1582,7 +1565,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 138 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 275 |
-| `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 708 |
+| `_resolver_registry` | Function registry keys and their trust-gated resolution at the execution boundary. | 710 |
 | `_runtime_gradient` | Backward-pass and hook-identity helpers for live intervention hooks. | 300 |
 | `_runtime_probes` | Storage-mutation probes for live intervention hook outputs. | 199 |
 | `_runtime_sites` | Site-scope and provisional-site helpers for live intervention hooks. | 267 |
@@ -1839,6 +1822,22 @@ Reports that describe a completed trace: summary, cost, profile, FLOPs and healt
 | `_summary_result` | Rebuilt summary result assembly (summary memo item 12, 3.7/3.8). | 379 |
 | `_trace_facts` | Trace fact functions reached from the records through ''_data_classes._doors.report''. | 206 |
 | `_trace_summary` | Trace summary, HTML repr and first-nonfinite functions (record rebuild destination). | 167 |
+
+### `torchlens.report._notebook`
+
+Extras-gated notebook namespace with no public objects yet. (9 modules, 2412 lines)
+
+| Module | What it holds | Lines |
+| --- | --- | ---: |
+| `__init__` | Extras-gated notebook namespace with no public objects yet. | 106 |
+| `_access` | The copy-expression root ladder (B2, treescope memo section 4). | 143 |
+| `_axis_labels` | Semantic axis labels, token decoding, and the SDPA hint (B3). | 171 |
+| `_grid` | The native static array grid (B3): budgeted, masked, motif-coded. | 336 |
+| `_motifs` | Six-state status motifs and the diverging-around-zero value map (B3). | 264 |
+| `_truncation` | Balanced truncation budgets, ported from treescope (B3). | 290 |
+| `cards` | The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace. | 540 |
+| `cardtree` | CardTree: presentation-only HTML card IR + native safe renderer (B1). | 411 |
+| `frontier` | The diagnostic frontier: first-dirty sites plus one hop (B6). | 151 |
 
 ### `torchlens.stats`
 
