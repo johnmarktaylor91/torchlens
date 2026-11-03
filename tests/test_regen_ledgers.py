@@ -160,3 +160,18 @@ def test_verify_deltas_names_undeclared_and_sums_declared(tmp_path: Path) -> Non
     lane_two.write_text("toy\tb\t1\n")
     with pytest.raises(rl.LedgerRefusal):
         rl.load_deltas([lane_two])
+
+
+def test_report_prints_moved_rows_as_deltas_and_unfilled_reasons_are_refused(
+    tmp_path: Path,
+) -> None:
+    repo = _tree(tmp_path, "a\t2\n", a=3)
+    run = rl.regenerate(repo, [_counts_ledger()], keep=False, env=_ENV)
+    delta_rows = [line for line in rl.summary_lines(run, report=True) if line.startswith("DELTA")]
+    assert delta_rows == ["DELTA\ttoy\ta\t2\t3\t<why>"]
+    pasted = tmp_path / "LEDGER-DELTA.tsv"
+    pasted.write_text(delta_rows[0] + "\n")
+    with pytest.raises(rl.LedgerRefusal, match="reason"):
+        rl.load_deltas([pasted])
+    pasted.write_text(delta_rows[0].replace("<why>", "one more line") + "\n")
+    assert rl.load_deltas([pasted])[0].lane == "3"

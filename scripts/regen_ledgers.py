@@ -8,7 +8,7 @@ Run from anywhere in a checkout::
     python scripts/regen_ledgers.py --base REF --verify-deltas A.tsv B.tsv
 
 The ledgers are the committed files a regenerator derives from the tree (the
-where-index page, the file-cap allowlist, the census and ratchet TSVs, the
+where-index and persisted-fields pages, the file-cap allowlist, the census and ratchet TSVs, the
 oracle baselines and the producer static ledger). They run in a fixed
 dependency order: a later ledger may read an earlier one (the harvest and
 numeral censuses read ``docs/maintainers/where.md``). The step writes those
@@ -34,10 +34,11 @@ when torch is absent. Rendered images (``docs/images/``) are never touched.
 
 Deltas. A branch declares the ledger rows it moves in a tab-separated file
 with the header ``ledger key train_value lane_value reason`` (``-`` marks an
-absent row). ``--verify-deltas`` compares the regen against ``--base`` and
+absent row). ``--report --base REF`` prints every moved row in that form
+(prefixed ``DELTA``, reason ``<why>`` to fill in; an unfilled reason is refused). ``--verify-deltas`` compares the regen against ``--base`` and
 names every change no file declares and every declaration the regen does not
 show. Numeric values add up across files (base plus the sum of each file's
-``lane - train``). Ledgers marked ``auto`` (the where-index page, allowlist
+``lane - train``). Ledgers marked ``auto`` (the generated pages, allowlist
 tightenings, the numeral baseline, provenance records) need no declaration.
 
 Exit codes: 0 clean or written; 1 ``--check`` drift or undeclared deltas;
@@ -60,6 +61,7 @@ REPO = Path(__file__).resolve().parents[1]
 PINNED = ((3, 10), "2.13.0")
 NEVER_TOUCHED = ("docs/images/",)
 ABSENT = "-"
+UNFILLED = "<why>"
 DELTA_HEADER = ("ledger", "key", "train_value", "lane_value", "reason")
 
 
@@ -102,6 +104,7 @@ class Outcome:
     after: str | None = None
     skipped: str = ""
     dedupes: list[str] = field(default_factory=list)
+    reference: str = ""
 
     @property
     def changed(self) -> bool:
@@ -250,6 +253,13 @@ def render_where(repo: Path) -> str:
     import where_index
 
     return where_index.render(where_index.collect_packages())
+
+
+def render_persisted_fields(repo: Path) -> str:
+    sys.path.insert(0, str(repo / "tools" / "docs"))
+    import persisted_fields
+
+    return persisted_fields.render()
 
 
 def render_harvest(repo: Path) -> str:
@@ -409,6 +419,13 @@ LEDGERS: tuple[Ledger, ...] = (
         free_shrink=True,
     ),
     Ledger("where", "docs/maintainers/where.md", render_where, markdown_table_rows, "auto"),
+    Ledger(
+        "persisted-fields",
+        "docs/maintainers/persisted_fields.md",
+        render_persisted_fields,
+        markdown_table_rows,
+        "auto",
+    ),
     Ledger(
         "harvest",
         "tests/composition_expectations/data/harvest_counts.tsv",
@@ -572,6 +589,7 @@ def run_ledger(
     if problem:
         outcome.dedupes.append(f"committed file {problem}: regenerated whole")
     ref_text = reference_text(repo, ledger, base, outcome.before or "")
+    outcome.reference = ref_text
     ref_rows, ref_problem = safe_rows(ledger, ref_text)
     if ref_problem and ledger.guard is not None:
         run.refusals.append(f"{ledger.path}: reference {ref_problem}; cannot check the guard")
@@ -696,7 +714,9 @@ def load_deltas(paths: Iterable[Path]) -> list[Delta]:
             cells = line.split("\t")
             if tuple(cells) == DELTA_HEADER:
                 continue
-            if len(cells) != len(DELTA_HEADER) or not cells[4].strip():
+            if cells and cells[0] == "DELTA":
+                cells = cells[1:]
+            if len(cells) != len(DELTA_HEADER) or cells[4].strip() in {"", UNFILLED}:
                 raise LedgerRefusal(
                     f"{path}:{number}: want 5 tab-separated cells with a reason: {line!r}"
                 )
@@ -708,6 +728,13 @@ def _numeric(value: str) -> int | None:
     if value == ABSENT:
         return 0
     return int(value) if value.lstrip("-").isdigit() else None
+
+
+def _shrank(old: str, new: str) -> bool:
+    """A row dropped or a number lowered (allowlist tightening)."""
+
+    old_n, new_n = _numeric(old), _numeric(new)
+    return new == ABSENT or (old_n is not None and new_n is not None and new_n < old_n)
 
 
 def expected_value(base_value: str, declared: list[Delta]) -> str:
@@ -789,14 +816,28 @@ def summary_lines(run: Run, report: bool) -> list[str]:
 
 
 def _report_lines(outcome: Outcome) -> list[str]:
+    """Row counts, shrink-only totals, and the moved rows in LEDGER-DELTA.tsv form."""
+
     before = single(safe_rows(outcome.ledger, outcome.before or "")[0])
     after = single(outcome.ledger.rows(outcome.after or ""))
     lines = [f"         rows {len(before)} -> {len(after)}"]
-    if outcome.ledger.policy == "guarded":
-        old, new = _ints(before), _ints(after)
+    old, new = _ints(before), _ints(after)
+    if outcome.ledger.free_shrink:
         lines.append(f"         shrink-only total {sum(old.values())} -> {sum(new.values())}")
-        if outcome.ledger.name != "file-cap":
-            lines.extend(f"         {key} {old.get(key)} -> {value}" for key, value in new.items())
+    elif outcome.ledger.policy == "guarded":
+        lines.extend(
+            f"         {key} {old.get(key, ABSENT)} -> {value}" for key, value in new.items()
+        )
+    if outcome.ledger.policy == "auto":
+        return lines
+    reference = collapse(safe_rows(outcome.ledger, outcome.reference)[0])
+    for key in sorted(set(reference) | set(after)):
+        old_value, new_value = reference.get(key, ABSENT), after.get(key, ABSENT)
+        free = outcome.ledger.free_shrink and _shrank(old_value, new_value)
+        if old_value != new_value and not free:
+            lines.append(
+                f"DELTA\t{outcome.ledger.name}\t{key}\t{old_value}\t{new_value}\t{UNFILLED}"
+            )
     return lines
 
 
