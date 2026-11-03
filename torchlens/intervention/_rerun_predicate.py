@@ -16,7 +16,9 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any
 
+from .._ir.selector_eval import normalize_selector_like
 from .errors import ControlFlowDivergenceError, LiveModeLabelError
+from .spec import Recipe, Rule
 
 _LABEL_SELECTOR_KINDS = frozenset({"label", "contains", "regex"})
 
@@ -131,6 +133,14 @@ def plan_rerun_spec(log: Any, spec: Any) -> RerunSpecPlan:
     # Session-only field, absent on traces that never armed a predicate.
     options = log.__dict__.get("_predicate_save_options")
     predicate = getattr(options, "intervene", None)
+    saved_rules = getattr(spec, "metadata", {}).get("_capture_rules", ())
+    if predicate is None and saved_rules:
+        predicate = Recipe(
+            tuple(
+                Rule(normalize_selector_like(target, lifecycle="live"), edit)
+                for target, edit in saved_rules
+            )
+        )
     if not door_hooks or predicate is None:
         return RerunSpecPlan(capture_spec=spec)
     door_targets = {hook_spec.site_target.freeze() for hook_spec in door_hooks}

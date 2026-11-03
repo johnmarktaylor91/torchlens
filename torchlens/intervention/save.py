@@ -26,6 +26,7 @@ from .._io.format3.recipe import (
     RecipeHeader,
     read_recipe,
     recipe_placeholders,
+    trace_capture_rules,
 )
 from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
 from .._io.format_contract import below_floor_error
@@ -156,6 +157,7 @@ def save_intervention(
             append_state=_append_state_for_json(trace),
             function_registry_keys=_serialize_function_registry_keys(trace),
             spec_derived=_spec_is_predicate_derived(spec),
+            capture_rules=trace_capture_rules(trace),
         )
         intervention_entry, disclosures = write_intervention_recipe(
             spec, tmp_path, store=store, header=header
@@ -467,7 +469,14 @@ def spec_from_recipe(recipe: Mapping[str, Any]) -> InterventionSpec:
         records are not part of a recipe (a saved trace carries them per op).
     """
 
-    spec = InterventionSpec()
+    spec = InterventionSpec(
+        metadata={
+            "_capture_rules": [
+                (_target(rule["selector"]), _edit(rule["edit"]))
+                for rule in recipe.get("capture_rules", ())
+            ]
+        }
+    )
     for rule in recipe.get("rules", ()):
         target = _target(rule["selector"])
         if target not in spec.targets:

@@ -341,6 +341,11 @@ with its own version line and its own loader; a column would couple the two vers
   need the callable refuses `run_intervention_spec_not_persisted` (code kept for exactly this
   case; row text rewritten by the writer stream to say "a callable edit was replaced by a
   placeholder at <position>"). Everything else about a loaded intervened trace reruns.
+- Original portable capture predicates travel in `capture_rules` under the contract's
+  recipe schema. They supplement the staged label rules: a loaded rerun re-arms the original
+  built-in selector and checks the same exact staged-site and helper identity as a live rerun.
+  Callable edits require an audit save; a portable trace save refuses
+  `intervention_spec_not_portable`, as does the standalone intervention save.
 - `Trace._intervention_spec` changes policy from `DROP` to a non-column carrier: the writer
   reads it and emits `intervention.json`; the reader sets it from the file. The guard in
   `intervention/_intervened_rerun_guard.py` narrows from "loaded intervened traces never
