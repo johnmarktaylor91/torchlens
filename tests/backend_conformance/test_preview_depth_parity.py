@@ -112,7 +112,7 @@ def test_paddle_depth_parity() -> None:
         lambda capture: tl.trace(M(), paddle.ones([1, 4]), backend="paddle", capture=capture)
     )
     base = tl.trace(M(), paddle.ones([1, 4]), backend="paddle")
-    assert base.recurrence_detection is True
+    assert base.options.recurrence_detection is True
     ungrouped = tl.trace(
         M(),
         paddle.ones([1, 4]),
