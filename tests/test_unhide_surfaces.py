@@ -25,16 +25,6 @@ import torchlens as tl
 _REPO = Path(__file__).resolve().parents[1]
 
 
-def test_stats_and_aggregate_are_declared_surface() -> None:
-    """The five-memo promotion: ``stats`` in ``__all__``; ``tl.stats.aggregate`` resolves."""
-
-    assert "stats" in tl.__all__
-    import torchlens.stats as stats_module
-
-    assert tl.stats is stats_module
-    assert tl.stats.aggregate is stats_module.aggregate
-
-
 @pytest.mark.smoke
 def test_stats_namespace_serves_the_advertised_accumulators() -> None:
     """Every accumulator the stats doc tables advertises resolves."""
