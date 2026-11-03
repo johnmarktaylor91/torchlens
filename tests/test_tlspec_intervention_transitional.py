@@ -86,6 +86,7 @@ def _remove_unified_marker(path: Path) -> None:
     recipe = _read_json(path / "intervention.json")
     recipe["format_version"] = "2"
     _write_json(path / "spec.json", recipe)
+    (path / "intervention.json").unlink()
     _write_json(path / "manifest.json", manifest)
 
 
