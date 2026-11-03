@@ -660,7 +660,7 @@ def test_injected_record_rows_have_their_declared_identity(tmp_path: Path) -> No
     assert all("fired at zero sites" in str(notice.message) for notice in notices)
     try:
         root = tmp_path / "injected.tlspec"
-        trace.save(root)
+        trace.save(root, level="audit")
         columns = _records(root)["op"]["columns"]
         injected = [index for index, value in enumerate(columns["injection_provenance"]) if value]
         assert injected
