@@ -399,7 +399,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # post-split measurement (2750; ~2760 with the F10 union). Supersedes the
     # F10-side 2950 -> 3000 raise (dropped at the T74b reconcile merge) --
     # the bounce froze this ceiling, so the split is the fix, not the raise.
-    "torchlens/_data_classes/module.py": 2800,
+    # 2800 -> 2650: the ModuleCall/Module facade stored-field tables split to
+    # _data_classes/_module_facade_fields.py (2635 measured); the ceiling follows down.
+    "torchlens/_data_classes/module.py": 2650,
     # 2100 -> 2150 (2026-08-29 F11 T74b fix): +9 lines documenting the
     # `fingerprints` parameter on the three run-fold assemblers (the D417
     # lint-ratchet fix for this same bounce); doc mass, not code growth.

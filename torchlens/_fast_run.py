@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 import threading
 import time
 import weakref
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager, nullcontext
 from typing import Any, cast
 
@@ -19,14 +18,11 @@ from . import _state
 from ._call_fingerprint import (
     fingerprinting,
     install_module_token_hooks,
-    module_fingerprint_address,
 )
 from ._capture._fused_attention_hold import hold_fused_attention_fastpath_off
 from ._data_classes._trace_accessors import boundary_label_rows
 from ._fast_live_plans import (
-    DirectForwardRoute,
     _admitted_collection_labels,
-    _direct_call,
     _drop_uncollected_payloads,
     _FastOutputPlan,
     _live_modules_by_address,
@@ -34,9 +30,11 @@ from ._fast_live_plans import (
     _output_tensor_leaves,
     _pair_output_leaves,
     _remove_fast_live_hooks,
+    build_direct_forward_routes,
     build_function_plans,
     build_module_plans,
     collected_function_output,
+    direct_forward_routes_installed,
     install_collection_hooks,
     repeats_last_function_output,
     require_distinct_plan_modules,
@@ -133,12 +131,9 @@ from ._runnable.witness_contracts import (
     _tensor_leaf_paths,
     _unbound_state_escape_stale,
 )
-from ._utils._module_call_dispatch import forward_entered_through_module_call
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .backends.torch._ops_container_base import _try_build_container_spec
-from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
-from .backends.torch._tl import get_module_meta
 from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 
@@ -1061,6 +1056,18 @@ class _FastLiveSession:
         ):
             yield fingerprint
 
+    def _live_model(self) -> nn.Module:
+        """Return the live source model, refusing once it has been collected."""
+
+        model = self.model_ref()
+        if model is None:
+            raise RunCapabilityUnavailableError(
+                "The fast live session's source model is no longer available.",
+                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
+                provider=RunProvider.LIVE,
+            )
+        return model
+
     def run(self, inputs: Any, *, seed: int | None, until: Any = None) -> RunResult:
         """Execute one native forward and enforce the cached static graph guard.
 
@@ -1071,13 +1078,7 @@ class _FastLiveSession:
         """
 
         self.run_started_at = time.monotonic()
-        model = self.model_ref()
-        if model is None:
-            raise RunCapabilityUnavailableError(
-                "The fast live session's source model is no longer available.",
-                code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
-                provider=RunProvider.LIVE,
-            )
+        model = self._live_model()
         input_args, input_kwargs, input_size_changed = self._admit_inputs(inputs)
         rearm_cleared_sites(self.trace, self.cleared_by_until)
         self.cleared_by_until = ()
@@ -1339,15 +1340,8 @@ class _FastLiveSession:
         assert values is not None
         return values
 
-    def _refresh_boundary_payloads(
-        self,
-        input_args: Any,
-        input_kwargs: Mapping[str, Any],
-        output: Any,
-        *,
-        inputs_only: bool = False,
-    ) -> None:
-        """Refresh saved model-input/output payloads from the native call boundaries."""
+    def _refresh_input_payloads(self, input_args: Any, input_kwargs: Mapping[str, Any]) -> None:
+        """Refresh saved model-input payloads from the native call's input leaves."""
 
         input_leaves = _live_runtime_input_leaves(input_args, input_kwargs)
         if input_leaves is not None:
@@ -1372,6 +1366,18 @@ class _FastLiveSession:
             for op, value in zip(input_ops, input_leaves, strict=True):
                 if op is not None and bool(getattr(op, "has_saved_activation", False)):
                     op.save_activation(value, (), {}, False)
+
+    def _refresh_boundary_payloads(
+        self,
+        input_args: Any,
+        input_kwargs: Mapping[str, Any],
+        output: Any,
+        *,
+        inputs_only: bool = False,
+    ) -> None:
+        """Refresh saved model-input/output payloads from the native call boundaries."""
+
+        self._refresh_input_payloads(input_args, input_kwargs)
         if inputs_only:
             return
         output_labels = tuple(getattr(self.trace, "output_layers", ()))
@@ -1420,96 +1426,6 @@ class _FastLiveSession:
 
         self.trace._output_slot = returned(output)
         self.trace.transformed_output = transform(output) if transform is not None else None
-
-
-def _was_called_directly(module: nn.Module) -> bool:
-    """Return whether a capture marked ``module`` as entered by a direct call."""
-
-    meta = get_module_meta(module)
-    return meta is not None and meta.direct_forward_called
-
-
-def build_direct_forward_routes(
-    model: nn.Module,
-    modules: Mapping[str, nn.Module],
-    plan_addresses: tuple[str, ...],
-    steer_modules: Mapping[str, nn.Module],
-) -> tuple[DirectForwardRoute, ...]:
-    """Build one route per live module a capture entered by a direct ``forward()`` call.
-
-    ``model`` is the live root (never routed: capture leaves the root undecorated),
-    ``modules`` every live address with alias spellings, ``plan_addresses`` the
-    addresses the session collects through a forward hook and ``steer_modules``
-    the steered address to live module map the steer plan resolved.
-    """
-
-    routes: list[DirectForwardRoute] = []
-    for name, module in model.named_modules():
-        if module is model or not _was_called_directly(module):
-            continue
-        collect = [
-            planned
-            for planned in plan_addresses
-            if modules.get("" if planned == "self" else planned) is module
-        ]
-        routes.append(
-            DirectForwardRoute(
-                module_ref=weakref.ref(module),
-                token=_state.module_token(module_fingerprint_address(module, name)),
-                steer_addresses=tuple(
-                    steered for steered, target in steer_modules.items() if target is module
-                ),
-                collect_address=collect[0] if collect else None,
-            )
-        )
-    return tuple(routes)
-
-
-class _RoutedForward(_SessionForward):
-    """A per-run ``forward`` that runs the session hook work on a direct call only."""
-
-    __wrapped__: Callable[..., Any]  # the base's record of the module's own forward
-
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        """Pass a ``Module.__call__`` call through; route a direct call."""
-
-        if forward_entered_through_module_call(sys._getframe(1)):
-            return self.__wrapped__(*args, **kwargs)
-        return self._delegate(*args, **kwargs)
-
-
-@contextmanager
-def direct_forward_routes_installed(
-    routes: tuple[DirectForwardRoute, ...], session_ref: weakref.ReferenceType[Any]
-) -> Iterator[None]:
-    """Install the routes for one native forward, then restore every ``forward``.
-
-    A module whose ``forward`` no longer holds the route at exit (the model
-    reassigned it mid-forward) keeps the newer value, as session cleanup does.
-    """
-
-    installed: list[tuple[nn.Module, Any, _RoutedForward]] = []
-    try:
-        for route in routes:
-            module = route.module_ref()
-            if module is None:
-                continue
-            prior = module.__dict__.get("forward", _NO_INSTANCE_FORWARD)
-            original = module.forward
-            wrapper = _RoutedForward(
-                _direct_call(route, module, original, session_ref), module, original, prior
-            )
-            module.__dict__["forward"] = wrapper
-            installed.append((module, prior, wrapper))
-        yield
-    finally:
-        for module, prior, wrapper in reversed(installed):
-            if module.__dict__.get("forward") is not wrapper:
-                continue
-            if prior is _NO_INSTANCE_FORWARD:
-                module.__dict__.pop("forward", None)
-            else:
-                module.__dict__["forward"] = prior
 
 
 def live_source_model(trace: Any) -> nn.Module | None:

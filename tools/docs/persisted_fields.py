@@ -110,16 +110,39 @@ def _binding_fields(call: ast.expr) -> tuple[str, str | None]:
 
 
 def read_bindings(path: Path = BINDINGS) -> dict[str, dict[str, tuple[str, str | None]]]:
-    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings."""
+    """Return ``{binding key: {field: (kind, annotation)}}`` from the generated bindings.
+
+    A record table may be split into a sibling generated module and named in
+    ``STORAGE_BINDINGS`` by a ``from .<module> import <TABLE>`` binding; such a
+    name resolves to that module's top-level ``<TABLE>`` dict literal.
+    """
 
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    imported = {
+        alias.asname or alias.name: path.parent / f"{node.module}.py"
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.level == 1 and node.module
+        for alias in node.names
+    }
+
+    def _table_node(value: ast.expr) -> ast.expr:
+        if not isinstance(value, ast.Name) or value.id not in imported:
+            return value
+        source = imported[value.id]
+        for item in ast.parse(source.read_text(encoding="utf-8"), filename=str(source)).body:
+            if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
+                if item.target.id == value.id and item.value is not None:
+                    return item.value
+        raise SystemExit(f"{source}: no {value.id} table found")
+
     for node in tree.body:
         if not isinstance(node, ast.AnnAssign) or not isinstance(node.target, ast.Name):
             continue
         if node.target.id != "STORAGE_BINDINGS" or not isinstance(node.value, ast.Dict):
             continue
         table: dict[str, dict[str, tuple[str, str | None]]] = {}
-        for record_node, fields_node in zip(node.value.keys, node.value.values, strict=True):
+        for record_node, value_node in zip(node.value.keys, node.value.values, strict=True):
+            fields_node = _table_node(value_node)
             if record_node is None or not isinstance(fields_node, ast.Dict):
                 continue
             fields = {}

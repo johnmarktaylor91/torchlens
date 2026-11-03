@@ -66,6 +66,41 @@ def _op_site_id(label: str) -> str:
     return f"op:{label}"
 
 
+def _facet_placeholder_row(label: str, numel: int) -> PlanRow:
+    """Return the plan row that discloses a declared facet splitter at plan time.
+
+    Parameters
+    ----------
+    label
+        Op label the facet splitter is declared on.
+    numel
+        Element count of that op's output.
+
+    Returns
+    -------
+    PlanRow
+        A zero-byte placeholder row for the wildcard facet site.
+    """
+
+    facet_site = SiteRecord(
+        site_id=_facet_site_id(label, "*"),
+        kind="facet",
+        display_label=f"{label}#<facets>",
+        module_path=label,
+    )
+    # Facet identities materialize at the first observed split;
+    # the placeholder row discloses the declared splitter now.
+    return PlanRow(
+        site_id=facet_site.site_id,
+        stream="activation",
+        elements_per_step=numel,
+        bytes_per_step=0,
+        cadence=1,
+        sketch_cadence=1,
+        note="facet splitter declared; identities land at first step",
+    )
+
+
 def _facet_site_id(label: str, facet: str) -> str:
     """Stable facet-site identity from parent op site + facet key."""
 
@@ -293,25 +328,7 @@ class OpTierCollector:
                 )
             )
             if label in self.facets:
-                facet_site = SiteRecord(
-                    site_id=_facet_site_id(label, "*"),
-                    kind="facet",
-                    display_label=f"{label}#<facets>",
-                    module_path=label,
-                )
-                # Facet identities materialize at the first observed split;
-                # the placeholder row discloses the declared splitter now.
-                rows.append(
-                    PlanRow(
-                        site_id=facet_site.site_id,
-                        stream="activation",
-                        elements_per_step=numel,
-                        bytes_per_step=0,
-                        cadence=1,
-                        sketch_cadence=1,
-                        note="facet splitter declared; identities land at first step",
-                    )
-                )
+                rows.append(_facet_placeholder_row(label, numel))
         if self.writer is not None:
             for site in self._sites_by_id.values():
                 self.writer.add_site(site)

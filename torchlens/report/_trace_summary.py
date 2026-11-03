@@ -86,6 +86,30 @@ def repr_html(trace: Trace) -> str:
     return card + summary_html
 
 
+def _refuse_one_call_only(**one_call_only: Any) -> None:
+    """Refuse the one-call execution options on a summary of an existing capture.
+
+    Parameters
+    ----------
+    **one_call_only
+        ``input_shape``, ``execution_mode`` and ``grad_mode`` as passed.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``summary_one_call_only`` when any of them is set.
+    """
+
+    offending = sorted(name for name, value in one_call_only.items() if value is not None)
+    if offending:
+        raise InvalidArgumentError(
+            f"trace.summary() reports an EXISTING capture; {', '.join(offending)} "
+            "only make sense on the one-call door that runs the forward.",
+            code="summary_one_call_only",
+            remedy="use tl.summary(model, x, ...) for one-call execution options",
+        )
+
+
 def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a named keyword
     trace: Trace,
     level: str | None = None,
@@ -115,19 +139,9 @@ def summary(  # noqa: PLR0913 - the ratified public grammar: every axis is a nam
     **unsupported: Any,
 ) -> str:
     """Body of ``Trace.summary``; the method docstring is the contract."""
-    one_call_only = {
-        "input_shape": input_shape,
-        "execution_mode": execution_mode,
-        "grad_mode": grad_mode,
-    }
-    offending = sorted(name for name, value in one_call_only.items() if value is not None)
-    if offending:
-        raise InvalidArgumentError(
-            f"trace.summary() reports an EXISTING capture; {', '.join(offending)} "
-            "only make sense on the one-call door that runs the forward.",
-            code="summary_one_call_only",
-            remedy="use tl.summary(model, x, ...) for one-call execution options",
-        )
+    _refuse_one_call_only(
+        input_shape=input_shape, execution_mode=execution_mode, grad_mode=grad_mode
+    )
     new_kwargs: dict[str, Any] = {}
     for name, value in (
         ("view", view),
