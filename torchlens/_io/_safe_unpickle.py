@@ -796,16 +796,12 @@ class _BundleAllowlistPolicy:
         if (module, name) == ("torch.storage", "_load_from_bytes"):
             raise pickle.UnpicklingError(
                 "Blocked torch.storage._load_from_bytes during bundle metadata "
-                "unpickle: this file embeds a tensor in its metadata in the format "
-                "TorchLens 2.36.2 and earlier wrote (an annotation value such as one "
-                "logged with tl.observers.log_value, or a small raw input or output), "
-                "which this release no longer reads. To recover it, re-run the capture "
-                "with this release and save it again; or load the file with the "
-                "release that wrote it, replace the tensors in trace.annotations with "
-                "plain values (for example tensor.tolist()), set "
-                "trace._options_save_raw_input = False and trace._options_save_transformed_output = False, and "
-                "save: the re-saved file loads here. If no TorchLens release wrote "
-                "this file, it is corrupt."
+                "unpickle: this file embeds a raw tensor in its metadata, which no "
+                "writer of this format produces (only torchlens 2.36.2 and earlier "
+                "stored annotation tensors this way, and a file saved by torchlens 2.x "
+                "refuses with ArtifactTooOldError before this point). The file is "
+                "corrupt or was not written by TorchLens; capture the model again with "
+                "this release and save that."
             )
         # The TorchLens-owned inline tensor reduction: validated arguments, an exact
         # byte-length check and a non-resizable buffer-backed storage.

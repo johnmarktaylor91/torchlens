@@ -56,6 +56,7 @@ from ._input_coerce import (
     _reject_non_mapping_input_kwargs,
     _reject_unrouted_forward_kwargs,
 )
+from ._registry._facet_snapshot import register_facet_snapshot_provider
 from ._selection.selectors import BaseSelector
 from ._utils.tensor_utils import SaveMode
 from .backends.registry import (
@@ -75,6 +76,22 @@ from .options import (
 )
 from .recording.options import HaltPredicateFn, PredicateFn
 from .types import _GradientPostfunc
+
+
+def _facet_snapshot_provider(extra_recipes: Any) -> Any:
+    """Build a trace's facet snapshot, loading the facets appliance on first use.
+
+    ``tl.trace(model, x, facets=[fn])`` accepts plain callables, so a capture can carry
+    recipes before anything imported ``torchlens._semantic.facets``; this facade door
+    (Rule F) registers the lazy load so the engine never imports upward itself.
+    """
+
+    from ._semantic import facets as _facets  # deferred: startup cost (facade door)
+
+    return _facets.snapshot(extra_recipes)
+
+
+register_facet_snapshot_provider(_facet_snapshot_provider)
 
 
 def clear_cache(cache_dir: str | Path | None = None) -> int:

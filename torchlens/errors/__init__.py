@@ -211,6 +211,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._errors",
         "BackwardStreamUnavailableError",
     ),
+    "AtenOpsUnavailableError": ("torchlens._errors", "AtenOpsUnavailableError"),
     "AmbiguousBackendError": ("torchlens.backends.registry", "AmbiguousBackendError"),
     "BackendCapabilityConformanceError": (
         "torchlens.backends.registry",
@@ -236,7 +237,7 @@ _LAZY_EXCEPTION_PATHS = {
     # users from the public ``Op.multi_output_type`` property, so its except
     # must be spellable from the public error surface.
     "ContainerReconstructionError": (
-        "torchlens._ir.container",
+        "torchlens._ir._container_errors",
         "ContainerReconstructionError",
     ),
     "CompileCountsUnavailableError": (
@@ -433,6 +434,7 @@ def __dir__() -> list[str]:
 
 
 __all__ = [
+    "AtenOpsUnavailableError",
     "BufferSinkRoutingError",
     "BundleExperimentError",
     "BundleRelationError",

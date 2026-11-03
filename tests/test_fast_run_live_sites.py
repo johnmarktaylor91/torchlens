@@ -11,7 +11,8 @@ import warnings
 import pytest
 import torch
 from torch import nn
-from torch.distributions import Normal
+from torch.distributions import Normal, TransformedDistribution
+from torch.distributions.transforms import TanhTransform
 from torch.nn import functional as F
 
 import torchlens as tl
@@ -233,7 +234,7 @@ def test_fast_run_names_an_unrecorded_direct_forward_call_as_a_capability_refusa
 
 
 class DistributionOutput(nn.Module):
-    """Returns a ``torch.distributions.Normal``, an opaque output container."""
+    """Returns a ``torch.distributions.Normal``: a structured output keyed by parameter name."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -246,10 +247,69 @@ class DistributionOutput(nn.Module):
         return Normal(self.mu(x), self.log_std(x).clamp(-5, 2).exp())
 
 
+class SquashedDistributionOutput(DistributionOutput):
+    """Returns a tanh-squashed Normal: its transform list is state capture cannot record."""
+
+    def forward(self, x: torch.Tensor) -> TransformedDistribution:  # type: ignore[override]
+        """Squash the parent's Normal."""
+
+        return TransformedDistribution(super().forward(x), [TanhTransform()])
+
+
+class _Holder:
+    """A plain class holding tensors: an output capture walks only by attribute search."""
+
+    def __init__(self, first: torch.Tensor, second: torch.Tensor) -> None:
+        self.first = first
+        self.second = second
+
+
+class OpaqueHolderOutput(nn.Module):
+    """Returns a plain object holding two tensors."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(3, 2)
+
+    def forward(self, x: torch.Tensor) -> _Holder:
+        """Hold two derived tensors."""
+
+        y = self.lin(x)
+        return _Holder(y, y.relu())
+
+
+def test_fast_run_pairs_a_distribution_output_by_parameter_name() -> None:
+    """A Normal output runs fast: live ``loc`` and ``scale`` pair with the recorded ops."""
+
+    model = DistributionOutput()
+    x = torch.arange(6.0).view(2, 3)
+    trace = tl.trace(model, x)
+    result = trace.run(inputs=x, fast=True)
+    assert trace.last_run["engine"] == "guarded_fast"
+    assert isinstance(result.output, Normal)
+    with torch.no_grad():
+        live = model(x)
+    assert torch.equal(result.output.loc.detach(), live.loc)
+    assert torch.equal(result.output.scale.detach(), live.scale)
+
+
+def test_fast_run_refuses_a_lossy_distribution_output() -> None:
+    """A distribution capture flags lossy keeps the honest capability refusal."""
+
+    model = SquashedDistributionOutput()
+    x = torch.arange(6.0).view(2, 3)
+    trace = tl.trace(model, x)
+    with pytest.raises(RunCapabilityUnavailableError) as info:
+        trace.run(inputs=x, fast=True)
+    assert info.value.fields["code"] == "run_capability_unavailable"
+    assert "TransformedDistribution" in str(info.value)
+    assert "distribution_state_unrecordable" in str(info.value)
+
+
 def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> None:
     """A collapsed opaque boundary is refused as unpairable, not as a changed structure."""
 
-    model = DistributionOutput()
+    model = OpaqueHolderOutput()
     # Capture's own advisory for an unsupported output container (the BFS
     # fallback) is the documented behaviour here, not the subject.
     with warnings.catch_warnings():
@@ -258,7 +318,7 @@ def test_fast_run_names_an_opaque_output_container_as_a_capability_refusal() -> 
         with pytest.raises(RunCapabilityUnavailableError) as info:
             trace.run(inputs=torch.arange(6.0).view(2, 3), fast=True)
     assert info.value.fields["code"] == "run_capability_unavailable"
-    assert "Normal" in str(info.value)
+    assert "_Holder" in str(info.value)
 
 
 class ClonesItsActivation(nn.Module):

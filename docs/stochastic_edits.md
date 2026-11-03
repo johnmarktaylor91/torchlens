@@ -4,7 +4,7 @@ Causal scrubbing, resampling ablation and mean ablation replace an activation wi
 from, or averaged over, other inputs. TorchLens builds them from one population noun and one
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
 this page lives in `torchlens.intervention` (not at the `tl.` root), except `tl.mean_ablate` (the root
-helper) and `SamplingRecord`, which imports from `torchlens.intervention.types`. All are
+helper); `SamplingRecord` is exported there beside `FireRecord`. All are
 DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 
 ## The pieces

@@ -128,11 +128,12 @@ def _validate_format_version(format_version: Any, *, path: Path | None = None) -
 
     row = next((r for r in SPEC_FORMAT_VERSIONS if r.version == str(format_version)), None)
     if row is not None and row.status == "refused":
-        from .._io._pre3_module_paths import pre_3_artifact_error
+        from .._io._pre3_module_paths import INTERVENTION_V1_NOTE, pre_3_artifact_error
 
         raise pre_3_artifact_error(
             f"intervention format_version={row.version}",
             path=None if path is None else str(path),
+            remedy_note=INTERVENTION_V1_NOTE,
             code="artifact_version_below_floor",
         )
     if row is None:

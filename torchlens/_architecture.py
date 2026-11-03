@@ -203,7 +203,6 @@ TORCH_PRIVATE_LICENSED_PACKAGES: frozenset[str] = frozenset(
         "intervention",
         "_ir",
         "_io",
-        "_kernel_telemetry",
         "_merged",
         "_postprocess",
         "_runnable",

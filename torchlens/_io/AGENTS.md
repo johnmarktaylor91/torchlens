@@ -98,7 +98,7 @@ hostile input, and every load path here is fail-closed.
 ## Local invariants
 - Fail-closed everywhere: unknown pickle globals raise, oversized/deep JSON refuses,
   symlinked bundle members are rejected.
-- Artifacts older than tlspec v6 refuse with `ArtifactTooOldError`
+- Artifacts older than the current tlspec (saved by torchlens 2.x) refuse with `ArtifactTooOldError`
   (drop-not-resurrect; no field-alias ladders).
 - The sparse runnable core must stay tensor-value-free:
   `assert_sparse_core_has_no_tensor_payload()` enforces it at descriptor build.

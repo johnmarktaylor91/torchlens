@@ -46,6 +46,8 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_trace_docs_validation.py` | Docstring table: `Trace` validation, run and backward methods |
 | `_trace_field_spec.py` | `Trace._PORTABLE_STATE_SPEC`, the persisted-field policy table |
 | `_trace_removal.py` | Log-entry removal and parameter-reference release behind `Trace._remove_log_entry` and friends |
+| `_trace_aten.py` | Bodies of the public `Trace.has_aten_ops`, `aten_ops` and `aten_gaps` properties; typed refusal when no ATen rows were recorded |
+| `_trace_source_introspection.py` | Live source-model fallbacks behind the `Trace._source_*` signature and docstring properties |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
 | `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
 | `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |

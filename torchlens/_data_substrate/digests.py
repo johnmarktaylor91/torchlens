@@ -32,7 +32,7 @@ from typing import Any
 import torch
 
 from .._errors import InvalidArgumentError
-from .._utils.tensor_leaves import tensor_payload_bytes
+from .._utils.tensor_leaves import flat_byte_view, tensor_payload_bytes
 
 __tl_layer__ = "L3"
 
@@ -287,7 +287,7 @@ def value_reduction(name: str, tensor: torch.Tensor) -> str:
     flat = tensor.detach().reshape(-1)
     if flat.numel() > 0:
         flat = flat.contiguous()
-        byte_view = flat.view(torch.uint8)
+        byte_view = flat_byte_view(flat)
         weights = _position_weights(byte_view.device)
         n = byte_view.numel()
         for start in range(0, n, _HORNER_BLOCK):

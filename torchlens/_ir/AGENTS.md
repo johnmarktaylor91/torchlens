@@ -46,6 +46,9 @@ rules, not an internal refactor.
   `reconstruction_is_lossy()` gates what may round-trip.
 - `ContainerRegistry`, `walk_container()`, `ContainerRecord`/`ContainerSnapshot` record
   container occurrences by `Role`/`Phase` and site (`FuncSite`/`ModuleSite`/`ModelSite`).
+- `_container_errors.py` defines `ContainerReconstructionError` (public via `tl.errors`);
+  `container.py` re-exports it. It sits below `container.py` and `distribution_container.py`
+  so the two import it without importing each other.
 
 ## Selection and predicates
 - `predicate.py`: `RecordContext` is the predicate-visible view during capture; deferred
@@ -66,7 +69,7 @@ rules, not an internal refactor.
   holding the duck-typed plan nodes (label, substring, regex, func, func-transform,
   grad-kind and backward-pass matchers) and the per-lifecycle subject adapters
   (label universes, module-address and module-output candidates, output roles,
-  module-scope aliases, GradFn type and call readers). The `tl.grad` nodes live in
+  module-scope aliases, GradFn type and call readers, the GradFn pass pairing). The `tl.grad` nodes live in
   `selector_eval.py`: on a forward lane `grad` matches what its inner names, and
   on the `grad_fn` lane it is the only bridge from a forward selector to the GradFn
   behind it (a bare forward kind never matches a GradFn).

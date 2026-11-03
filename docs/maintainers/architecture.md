@@ -8,8 +8,9 @@ line; this page names only what you need before editing. Testing is in
 [testing.md](testing.md), the review rules in [review_checklist.md](review_checklist.md),
 setup and gates in [CONTRIBUTING.md](https://github.com/johnmarktaylor91/torchlens/blob/main/CONTRIBUTING.md) at the repository root.
 
-Two notes on currency. A consolidation into about 12 internal packages behind an
-`import-linter` graph gate is planned, not landed; nothing below describes that target. The
+Two notes on currency. A consolidation into about 12 internal packages is planned, not
+landed; nothing below describes that target. Today's layer separations are already enforced
+by the import-linter contracts in `.importlinter` (`python scripts/checks/run_all.py`). The
 second-round moves have landed: the former fastlog package is `torchlens.recording`, and the
 capture, user_funcs, captured_run, semantic and visualization packages are private
 (`_capture/`, `_user_funcs/`, `_captured_run/`, `_semantic/`, `_visualization/`); the
@@ -91,7 +92,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Eager capture | `tl.trace` | `user_funcs.py`, `capture/`, `backends/torch/` | `test_toy_models.py`, `test_capture_*.py`, `capture_oracle/`, `classics_corpus/` |
 | Backend registry and previews | `tl.trace(backend=...)`, `tl.backends` | `backends/` and `backends/<name>/` | `backends/`, `backend_conformance/`, `backend_parity/` |
 | Sparse recording | `tl.record`, `Recording` | `recording/`, `_capture/projections.py`, `_ir/events.py` | `test_fastlog/`, `test_record_*.py` |
-| Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors), `_ir/predicate_registry.py` | `test_selection_*.py`, `test_capture_*.py` |
+| Capture options and predicates | `tl.options.CaptureOptions`, `tl.func`, `tl.when`, `tl.in_module` | `options.py`, `intervention/` (selectors) | `test_selection_*.py`, `test_capture_*.py` |
 | Capture outcomes and partial captures | `Trace.outcome`, `tl.partial` | `_capture/outcome.py`, `_partial/` | `test_capture_outcomes*.py`, `test_postprocess_*.py` |
 | Graph postprocess | (internal, runs inside `tl.trace`) | `_postprocess/` | `test_postprocess_*.py`, `test_loop_*.py`, `test_conditional_*.py` |
 | Product types and lookup | `tl.Trace`, `tl.Op`, `tl.Layer`, `trace[label]` | `_data_classes/`, `_trace_core/`, `appliances/` | `test_metadata*.py`, `test_layer_log.py`, `godobject_oracle/` |
@@ -121,7 +122,7 @@ tests; `tests/AGENTS.md` has the full area table.
 | Quickstart ladder | `torchlens._user_funcs.render`, `tl.summary(model, input_size=...)`, `torchlens._quickstart.InputSpec` | `_quickstart/` | `test_quickstart*.py` |
 | Agent surface | `trace.to_agent_json`, `tl.report.explain`, `tl.bridge.mcp` | `agent/`, `report/`, `bridge/` | `test_agent*.py`, `agent_surface_goldens/` |
 | External tool bridges | `tl.bridge.<tool>`, `tl.callbacks` | `bridge/`, `bridge/lit/`, `callbacks/` | `test_bridges_*.py` |
-| Environment report | `tl.utils.doctor()`, `tl.compat.report()` | `report/_environment.py`, `compat/` | `test_doctor*.py`, `test_compat*.py` |
+| Environment and model report | `tl.report.doctor()` | `report/_doctor.py`, `report/_environment.py`, `compat/_report.py` | `test_doctor*.py`, `test_compat*.py` |
 | Episode capture | `tl.options.EpisodeSpec` | `_episode_spec.py`, `capture/`, `bundle/` | `test_episode*.py` |
 | Kernel telemetry | `torchlens._kernel_telemetry` | `_kernel_telemetry.py` | `test_kernel_telemetry*.py` |
 
