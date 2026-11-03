@@ -203,7 +203,6 @@ _MD_LINK = re.compile(r"\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)|^\[[^\]]+\]:\s*(\S+)",
 _PENDING_INTERNAL_LINKS = frozenset(
     {
         ("reference/glossary.md", "reference/merged_trace_contract.md"),
-        ("reference/glossary.md", "reference/predicate_runtime.md"),
         ("reference/glossary.md", "reference/runnable_tlspec_contract.md"),
     }
 )
