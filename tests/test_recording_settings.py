@@ -43,7 +43,8 @@ def test_options_reads_back_every_door_as_live_values() -> None:
         capture=tl.options.CaptureOptions(
             activation_transform=_double, save_grads=True, lookback=2
         ),
-        recording=tl.options.RecordingOptions(history_size=5, on_predicate_error="accumulate"),
+        history_size=5,
+        on_predicate_error="accumulate",
     )
     settings = recording.options
     assert isinstance(settings, tl.types.RecordingSettings)

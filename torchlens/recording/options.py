@@ -111,7 +111,7 @@ class RecordingOptions:
     on_forward_error: ForwardErrorMode
     default_grad: bool | CaptureSpec
     #: Post-capture finalization pass: ``"none"`` (the default) or the
-    #: ``validate_postprocess`` vocabulary (``tl.record(recording=...)``).
+    #: ``validate_postprocess`` vocabulary (``tl.record(postprocess=...)``).
     postprocess: str
     _specified_fields: frozenset[str] = field(
         default_factory=frozenset,

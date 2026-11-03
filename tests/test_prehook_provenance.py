@@ -579,7 +579,7 @@ def test_record_to_trace_ram_and_disk_preserve_provenance(tmp_path: Path) -> Non
             model,
             torch.ones(1),
             storage=streaming,
-            recording=tl.options.RecordingOptions(default_op=True),
+            default_op=True,
         )
         trace = recording.to_trace()
         assert torch.equal(_call(trace).inputs_after_pre_hooks.args[0], torch.tensor([2.0]))

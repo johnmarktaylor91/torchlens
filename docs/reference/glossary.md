@@ -83,7 +83,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
   `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
   `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
-  `recording=RecordingOptions(...)` (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
+  the flat `tl.record` keywords (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
   `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
   `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
   `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
@@ -1595,7 +1595,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
   `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
   `jax_static_argnums`, `grad_options`, `chunk_size` included), and `tl.record`'s
-  recorder knobs ride `recording=RecordingOptions(...)` (`default_op`,
+  recorder knobs stay flat keywords on the door (`default_op`,
   `default_module`, `history_size`, `include_source_events`,
   `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
   `default_grad`, `postprocess`). The door keywords are `save=`, `intervene=`,

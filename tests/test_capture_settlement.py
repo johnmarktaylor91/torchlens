@@ -561,7 +561,7 @@ def test_hostile_str_fastlog_return_partial_builds_failed_recording() -> None:
         _HostileStrModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
+        on_forward_error="return_partial",
     )
     assert recording.is_failed is True
     assert recording.status == "partial_error"
@@ -578,7 +578,7 @@ def test_hostile_repr_fastlog_return_partial_records_fallback_repr() -> None:
         _HostileReprModel(),
         torch.ones(1, 3),
         save=lambda ctx: ctx.kind == "op",
-        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
+        on_forward_error="return_partial",
     )
     assert recording.is_failed is True
     assert recording.error_repr == "<unrepresentable _HostileReprError: __repr__ raised>"
