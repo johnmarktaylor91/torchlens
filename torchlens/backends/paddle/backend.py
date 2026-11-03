@@ -563,7 +563,7 @@ class PaddleBackend:
                 trace.stop_reason = trace._graph_stop_frontier = halt_signal.reason
                 trace.transformed_output = None
             elif intervention_runtime is not None:
-                intervention_runtime.warn_if_zero_matches()
+                intervention_runtime.settle_unfired(trace)
             if halt_signal is None:
                 trace.transformed_output = (
                     output_transform(output) if callable(output_transform) else None

@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ... import _state
+from ..._capture._stop_after_policy import settle_unfired_stop_after
 from ..._ir.intervention import FireResult
 from ..._ir.predicate import RecordContext
 from ..._selection.selectors import BaseSelector
@@ -268,6 +269,15 @@ class PaddleInterventionRuntime:
             decision.hook,
             helper=helper_spec,
             metadata={"created_by": "intervene_predicate", "signal": "forward"},
+        )
+
+    def settle_unfired(self, trace: Any) -> None:
+        """Disclose an unfired intervene selector; refuse an unfired stop_after like torch."""
+
+        self.warn_if_zero_matches()
+        # A selector is the selector-shaped site; any other callable is exploratory.
+        settle_unfired_stop_after(
+            trace, self.halt, selector_shaped=isinstance(self.halt, BaseSelector)
         )
 
     def warn_if_zero_matches(self) -> None:
