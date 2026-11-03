@@ -193,6 +193,20 @@ def test_tf_where_selectv2_is_classified_and_replayed() -> None:
     assert select and select[0]["decision"] == "validated", select
 
 
+def test_tf_broadcast_to_is_classified_and_replayed() -> None:
+    """``tf.broadcast_to`` runs ``BroadcastTo`` (BERT's mask expansion); validation replays it."""
+
+    def fn(v: Any) -> Any:
+        return tf.broadcast_to(tf.reduce_sum(v, axis=0), [2, 4]) * v
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    assert any(op.func_name == "BroadcastTo" for op in trace._layer_list)
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    broadcast = [r for r in status.decisions if r["func_name"] == "BroadcastTo"]
+    assert broadcast and broadcast[0]["decision"] == "validated", broadcast
+
+
 def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     """A11: a tampered payload yields ``failed`` naming the op in message and decisions."""
 

@@ -46,6 +46,7 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "AvgPool": _replay_pool,
         "BatchMatMulV2": _replay_batch_matmul_v2,
         "BiasAdd": _replay_bias_add,
+        "BroadcastTo": lambda item, args: _raw(item).BroadcastTo(input=args[0], shape=args[1]),
         "Cast": _replay_cast,
         "ConcatV2": _replay_concat_v2,
         "Conv2D": _replay_conv2d,

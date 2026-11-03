@@ -31,6 +31,7 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
         "AvgPool",
         "BatchMatMulV2",
         "BiasAdd",
+        "BroadcastTo",
         "Cast",
         "ConcatV2",
         "Conv2D",
@@ -75,12 +76,11 @@ _PURE_REPLAY_ALLOWLIST = frozenset(
     }
 )
 
-#: Literal producers (SPEC section 2, rule 2): ops whose every input is a host
-#: literal or shape, so the op has no graph parents and its output is a
-#: constant of the forward. ``Fill`` is also a variable-initializer op type;
-#: the classification keeps the initializer-contamination failure for a
-#: ``Fill`` nothing in the forward consumed and admits only a ``Fill`` whose
-#: output feeds a materialized op (``_is_literal_producer``).
+#: Literal producers (SPEC section 2, rule 2): ops whose every input is a host literal or
+#: shape, so the op has no graph parents and its output is a constant of the forward.
+#: ``Fill`` is also a variable-initializer op type; the classification keeps the
+#: initializer-contamination failure for a ``Fill`` nothing in the forward consumed and
+#: admits only a ``Fill`` whose output feeds a materialized op (``_is_literal_producer``).
 _LITERAL_PRODUCER_OPS = frozenset({"Fill"})
 
 #: Validation decision reasons this backend emits. All are members of the
