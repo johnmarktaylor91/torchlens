@@ -467,8 +467,7 @@ class TinygradBackend:
         args = self._normalize_input_args(input_args)
         module_tree = discover_tinygrad_module_tree(model)
         use_object_module = _resolve_tinygrad_module_identity_mode(
-            cast(str | None, module_identity_mode),
-            module_tree,
+            cast(str | None, module_identity_mode), module_tree
         )
         self._reject_unsupported_options(
             layers_to_save=layers_to_save,
@@ -525,12 +524,13 @@ class TinygradBackend:
             raise BackendUnsupportedError(
                 "tinygrad backend preview cannot capture Tensor.assign(), Tensor.replace(), "
                 "or setitem input mutation inside the traced callable yet; return a pure lazy "
-                "tinygrad expression instead."
+                "tinygrad expression instead.",
+                code="input_mutation_unsupported",
             )
-        outputs = tuple(self._tensor_leaves(output))
-        if not outputs:
+        if not (outputs := tuple(self._tensor_leaves(output))):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires at least one tinygrad Tensor output."
+                "tinygrad backend preview requires at least one tinygrad Tensor output.",
+                code="tensor_output_required",
             )
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
@@ -1284,11 +1284,11 @@ class TinygradBackend:
         if getattr(trace, "tinygrad_payload_policy", None) != "dev_python_realized_copy":
             raise BackendUnsupportedError(
                 "tinygrad derived gradients require live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot expose trace.autograd.derived_grads."
+                "audit-only traces cannot expose trace.autograd.derived_grads.",
+                code="live_payloads_required",
             )
         input_argnums = _normalize_tinygrad_input_grad_argnums(
-            grad_options.input_grad_argnums,
-            len(args),
+            grad_options.input_grad_argnums, len(args)
         )
         leaves = _differentiated_input_leaves(self, args, input_argnums)
         if not leaves and not grad_options.intermediate_grads:
@@ -1296,7 +1296,7 @@ class TinygradBackend:
         snapshots = _snapshot_tinygrad_grads(self, leaves)
         try:
             if grad_options.intermediate_grads:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,
@@ -1390,13 +1390,10 @@ class TinygradBackend:
             op for op in trace._layer_list if op.has_saved_activation and not op.is_input
         )
         trace_signatures = _tinygrad_trace_op_signatures(
-            selected_ops,
-            getattr(trace, "tinygrad_uop_captures", ()),
+            selected_ops, getattr(trace, "tinygrad_uop_captures", ())
         )
         live_candidates = _tinygrad_live_intermediate_candidates(
-            backend=self,
-            outputs=outputs,
-            observed_tensors=observed_tensors,
+            backend=self, outputs=outputs, observed_tensors=observed_tensors
         )
         cast(Any, loss).backward()
         if not _tinygrad_outputs_close(self, derived_output, captured_output):
@@ -1441,7 +1438,8 @@ class TinygradBackend:
         if not captures:
             raise BackendUnsupportedError(
                 "tinygrad validation requires live DEV=PYTHON realized-copy payloads; "
-                "audit-only traces cannot be replay validated."
+                "audit-only traces cannot be replay validated.",
+                code="live_payloads_required",
             )
         ops_by_raw_label = {getattr(op, "_label_raw", ""): op for op in trace._layer_list}
         hidden_outputs_by_label = dict(getattr(trace, "_selective_save_hidden_payloads", {}))
@@ -1722,7 +1720,8 @@ class TinygradBackend:
 
         if not any(self.is_tensor(leaf) for _path, leaf in _tree_leaves_with_paths(tuple(args))):
             raise BackendUnsupportedError(
-                "tinygrad backend preview requires positional tinygrad Tensor inputs."
+                "tinygrad backend preview requires positional tinygrad Tensor inputs.",
+                code="tinygrad_input_required",
             )
 
     def _reject_unsupported_options(self, **options: Any) -> None:
@@ -2579,7 +2578,8 @@ class _reject_mid_capture_execution:
             raise BackendUnsupportedError(
                 "tinygrad backend preview cannot capture Tensor.realize(), Tensor.assign(), "
                 "or TinyJit execution inside the traced callable yet; return a lazy tinygrad "
-                "expression instead."
+                "expression instead.",
+                code="mid_capture_execution_unsupported",
             )
 
         tensor_module.run_linear = rejected_run_linear

@@ -568,7 +568,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.intervention.Rule` with `target` (the selector or predicate) and `edit` (the helper or
   callable). `Rule.signal` is a read-only property derived from the target, never a field and
   never saved: `"backward"` for a gradient site (`tl.grad(...)`) or a node selector, `"forward"`
-  for an activation site, `"both"` for a union of the two. `Recipe.merge(*others)`
+  for an activation site, `"both"` for a union of the two. The site decides the pass: `Rule`
+  has no `direction` field, and `Rule(..., direction=...)` (or the old third positional
+  value) refuses `intervention_direction_invalid`. `Recipe.merge(*others)`
   (also `recipe_a & recipe_b`) returns one `tl.Recipe` joining the clauses; a duplicate clause
   refuses `spec_rules_duplicate`.
 
@@ -907,7 +909,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   member against the baseline (or `relative_to`), with lineage status, payload fidelity, value
   residual and comparability reported as separate axes. `b.provenance.summary()` is the per-member list of
   the same facts. Both are derived views; nothing is stored. Reference:
-  `docs/reference/experiment_ledger.md`.
+  `docs/reference/experiments.md`.
 
 **Bundle.vary** *(spelling documented-unstable)*
 : `b.vary(mapping, *, unmentioned=None)` applies one explicit intervention spec (or `None`, the
@@ -1072,6 +1074,18 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   encoding is then undisclosed). On `Trace.draw` the key sits in the top-left block under the
   header and above the graph, so a top crop keeps both. The `None` value is *(unstable — no deprecation shim owed)* pending ratification.
 
+**show_containers / container_max_inline (Trace.draw kwargs)**
+: `show_containers` accepts `False` (default: the plain graph, container paths on the node
+  labels), `"labels"` (the key or index on each edge into a container leaf), `"collapsed"`
+  (`"labels"` plus: an unrolled container with more than `container_max_inline` leaves of
+  identical shape folds into one dashed summary box) or `"nodes"` (`"collapsed"` plus one dashed
+  record node per container, grey keyed source and sink edges, dashed member-of ties for mid-graph
+  containers, and a dotted box around an op-returned tuple whose leaves share one module). Any
+  string setting forces the `dot` engine. `container_max_inline` (default 12) is read only under
+  `"collapsed"` and `"nodes"`. The former `"auto"` (drew `"collapsed"`) and `"cluster"` (drew
+  `"labels"` plus the tuple box) spellings refuse `visualization_show_containers_invalid` with the
+  replacement named. Guide: `docs/containers.md`.
+
 ## Backend-neutral identity
 
 **Backend**
@@ -1091,6 +1105,16 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.label` (exact final label), `tl.label_contains` (label substring), and `tl.label_matches` (label
   regex pattern) select ops by their public labels. `tl.where` filters a table with a
   predicate callable.
+
+**tl.all_sites** — *unstable — no deprecation shim owed*
+: `tl.all_sites()` is the universal selector: `trace[tl.all_sites()]` selects every op of the
+  trace as a whole site, the same result as `trace[tl.label_matches(".*")]` (it stores that
+  kind and pattern, so it matches, binds and persists the same way; a saved spec reloads as
+  `tl.label_matches(".*")`). It composes with `|`, `&`, `-` and `~` like any selector.
+  `tl.all_sites() - region` is the complement of a region in the whole trace; the graph
+  producers and `trace.subgraph` read it as the sites outside `region`, because a site whose
+  element mask is empty seeds nothing. Resolution refuses typed (`non_tensor_site` /
+  `no_index_space`) when some op has no output index space, rather than dropping it.
 
 **Structural selectors**
 : `tl.func` / `tl.module` / `tl.in_module(address)` select by callable or module context
@@ -1405,7 +1429,12 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 
 **Validation entry**
 : `tl.validate(model, x, scope=...)` validates a model/input pair for a requested scope
-  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself.
+  (for example `"saved"` or `"receptive_field"`), capturing what it needs itself. Like
+  `tl.trace`, it seeds the global RNG streams (Python `random`, NumPy, torch CPU and CUDA) for
+  its own runs and restores the caller's streams on return and on error; the lower-level
+  `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
+  promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
+  RNG state.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
@@ -1565,9 +1594,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   autograd saved for that op's backward (each storage once within the op; a view counts in full),
   and `Layer.total_autograd_memory`, `ModuleCall.autograd_memory`,
   `Module.total_autograd_memory` and `Trace.cost.total_autograd_memory` sum those per-op bands, so a
-  tensor two ops save counts twice. Capture runs floating Parameters with `requires_grad=True`
-  unless `backward_ready=True`, so on frozen Parameters these and `Trace.cost.pinned_autograd_memory`
-  exceed what an eager forward saves; with `backward_ready=True` they match eager.
+  tensor two ops save counts twice. Capture never changes a Parameter's `requires_grad`, so on
+  frozen Parameters these and `Trace.cost.pinned_autograd_memory` match what an eager forward saves.
 
 **Module and call counts**
 : `len(ModuleCall.ops)` counts the call's pass-qualified Ops (the root call included: a Layer it
@@ -1718,6 +1746,16 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
   | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
   | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
+  | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
+  | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |
+  | `input_mutation_unsupported` | the traced tinygrad callable mutates an input (`Tensor.assign`, `Tensor.replace`, setitem) |
+  | `tensor_output_required` | the traced tinygrad callable returns no tinygrad Tensor |
+  | `tinygrad_input_required` | no positional input of the tinygrad call is a tinygrad Tensor |
+  | `live_payloads_required` | tinygrad replay validation or derived gradients were asked of an audit-only trace, which has no live realized-copy payloads |
+  | `mid_capture_execution_unsupported` | the traced tinygrad callable realizes a tensor or runs a `TinyJit` function during capture |
+  | `traced_transform_entry_unsupported` | the MLX capture entry is an `mx.compile`, `mx.grad` or `mx.vmap` wrapper rather than the eager module or callable |
+  | `intervention_with_derived_grads_unsupported` | MLX `grad_options=` combined with `intervene=` or `halt=` in one call |
+  | `intervention_result_invalid` | an MLX intervention returned something other than an `mx.array`, or changed the output's shape or dtype |
 
   Codes the backends already raised before the registry (`value_dependent_branch_unsupported`,
   `followed_by_unsupported`, `torchscript_boundary` and the rest) are members too; the frozenset is
@@ -1725,11 +1763,26 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
 
 **tl.backends.VALIDATION_REASONS** (validation decision reasons)
 : The closed list of per-op decision reasons a backend's `validate` uses in
-  `ValidationStatus.decisions[*]["reason"]` and the status reason counts: `replay_mismatch`,
-  `parent_payload_missing`, `no_replayable_function`, `constant_producer_leaf`,
-  `constant_parent_payload`, `user_intervention_replacement`, `effectful_region`,
-  `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
-  `capture_inconsistent`. `op_unclassified`: an op the checker cannot classify (outside every
+  `ValidationStatus.decisions[*]["reason"]` and the status reason counts. One word per failure: a
+  backend whose cause matches a definition uses that name, and a different cause has its own entry.
+  Shared: `replay_mismatch` (re-executing the op from its saved inputs did not reproduce its saved
+  output), `parent_payload_missing` (a payload the replay needs is absent: the op's own saved output
+  or a parent's), `no_replayable_function` (no callable can re-execute the op: none was recorded for
+  a computational op, or a preview backend could not rebuild or re-invoke the saved call),
+  `constant_producer_leaf`, `constant_parent_payload`, `user_intervention_replacement`,
+  `effectful_region`, `perturbation_insensitive`, `dtype_tolerance_exceeded`, `op_unclassified`,
+  `capture_inconsistent`. Torch's own: `arg_logging_mismatch` (the logged parent-argument positions
+  disagree with the data parents, or a parent's saved output disagrees with the argument snapshot at
+  its logged position), `missing_saved_args` (the argument snapshots replay needs were not
+  captured), `dispatch_op_count_mismatch` (replay saw a different number of dispatcher-level ops
+  than capture recorded), `bfs_incomplete` (the walk from outputs back to inputs did not reach every
+  op), `metadata_invariant_exception` (a metadata invariant check raised),
+  `replay_execution_exception` (the recorded function raised on re-execution),
+  `unattributed_tensor_arg` (a tensor argument matches no recorded parent and no known source),
+  `dropped_parent_edge_witness` (the completeness witness shows a parent edge capture dropped).
+  MLX's own: `declared_parents_inconsistent` (an op's declared parents disagree with the arrays its
+  saved call reads), `replay_coverage_incomplete` (the replay did not cover every captured op).
+  `op_unclassified`: an op the checker cannot classify (outside every
   classification table, or an initializer that contaminated the forward), recorded as a failed
   `metadata`-phase decision on that op. `capture_inconsistent`: capture records that disagree with
   each other (a callback self-consistency failure, an equation or op count mismatch, a replay kind
@@ -2154,7 +2207,8 @@ deprecation shim owed (do/Selection spellings slate-ratified subject to D7)*
   `(N sites, M elements)`. The former `SiteTable` (`resolve_sites`, `.first`, `.where`) folded into it:
   `selection[0]` and `trace[selector & other]` spell those. TWO-LEVEL DENOTATION:
   (touched-site family, selected-element set); zero-mask entries are retained
-  first-class; `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
+  first-class (`len()` and iteration count them; the graph producers and
+  `trace.subgraph` do not seed from them); `.is_empty`/`__bool__` are ELEMENT-level; `bool()` on the QUERY
   type refuses typed (`selection_bool_ambiguous`). Anything region-shaped
   implements `__selection__`; `Site.mask` returns a FRESH materialization
   (mutation cannot alter the selection). Masks are exact AS SETS; producer
@@ -2236,8 +2290,14 @@ no deprecation shim owed*
   error). Operands are site label strings (a bare layer label on a
   multi-pass layer is the all-passes Layer spelling), `Op`/`Layer` handles,
   or any ACT selection; `between` endpoints also accept lists of regions.
-  Element masks never shrink a graph region (a touched site is a touched
-  node — family semantics). Membership is a structural fact about THIS
+  A seed or endpoint site that carries at least one selected element counts
+  as its whole node (a partial mask never shrinks a graph region). A site
+  whose element mask is EMPTY seeds nothing: `x - y` keeps every site `x`
+  touched, with an empty mask where `y` removed all of it, and those sites
+  are not part of the region the closure grows from, so
+  `tl.neighborhood(tl.all_sites() - region, ...)` grows from the sites
+  outside `region`. `trace.subgraph(selection)` takes the same member set.
+  Membership is a structural fact about THIS
   capture, so entries are whole-site masks with
   `provenance.relation="exact"`. PARAM/EDGE operands refuse
   `selection_kind_incompatible`; unknown sites refuse `site_not_in_trace`;
@@ -3449,6 +3509,9 @@ describe each surface in depth.
 | `tl.bridge.transformers.trace_text` | Trace a Hugging Face language model with raw text input |
 | `tl.errors.AttributionError` | Error raised for unsupported or invalid attribution requests |
 | `tl.errors.MissingFacetError` | Raised when a declared facet needs a different capture to be available |
+| `tl.experiment.GridCell` | One cell of a `SweepGrid`: coordinates, status, value, error and member name |
+| `tl.experiment.SweepGrid` | The labeled result of `sweep_grid`: float64 `values` shaped by the axes (NaN for refused or failed cells) beside the Bundle |
+| `tl.experiment.sweep_grid` | Sweep the product of named axes (sites, at most one axis of edits); one member per cell, baseline first |
 | `tl.facets.FacetFunction` | Registered facet recipe metadata |
 | `tl.facets.MissingGrad` | Sentinel for a known facet gradient that is not currently saved |
 | `tl.facets.describe` | List registered facet function names and declared facets for a class name |
@@ -3833,7 +3896,6 @@ The sections above describe each surface in depth.
 | `tl.errors.TraceMutationWarning` | First root-log mutation; Trace mutators operate in place |
 | `tl.errors.TransformContractError` | Raised when a transform spec, chain, or plan violates its contract |
 | `tl.errors.UserTransformError` | Raised when activation_transform or grad_transform raises |
-| `tl.experiment.read_ledger` | Read a saved experiment ledger from disk and return a read-only reader that never arms it: `.overview`, `.entry(entry_id, *, page, page_size)`, `.evidence(entry_id, index)` |
 | `tl.experiment.sweep_sites` | Ablate every candidate site, one member per candidate, baseline first |
 | `tl.export.describe_target` | Return one export target's registration metadata (tier row included) |
 | `tl.export.list_targets` | Return the registered export-target names |
@@ -3996,6 +4058,7 @@ The sections above describe each surface in depth.
 | `Edit.name` | The edit's public name (the builder that made it, such as `zero_ablate`) |
 | `Edit.signal` | Pass an edit is bound to: `"forward"` for edits that read recorded activations, `None` for neutral edits |
 | `EffectsView.rank_changes` | Rank candidates by the size of their change from baseline, descending |
+| `EffectsView.to_grid` | Rebuild the `SweepGrid` of a `sweep_grid` operation from its effect table and recorded axes |
 | `EffectsView.to_selection` | Convert the view to a selection: the union of its WHERE regions |
 | `EpisodeOptions.acknowledge_step_cost` | Accept a step declaration beyond the cost ceiling |
 | `EpisodeOptions.crossings` | Declared exogenous crossings: step indices whose inputs come from outside the capture |
@@ -4006,9 +4069,6 @@ The sections above describe each surface in depth.
 | `EpisodeOptions.on_feed_break` | What a feed break does: `"disclose"` (default) returns the trace with the break disclosed; `"refuse"` raises |
 | `EpisodeOptions.rng` | Seeding discipline; only `"managed"` ships |
 | `EpisodeOptions.step_input_from` | Which stepped-call argument carries the step input: a position, a keyword name, or `None` |
-| `ExperimentLedger.begin_step` | Write the durable started event before the step's work |
-| `ExperimentLedger.end_step` | Finalize one step after its work |
-| `ExperimentLedger.open_entry` | Open the next entry (one question per entry) |
 | `FindNanReport.bad_tensors` | Tensor positions found non-finite (`("output",)` for an eager finding) |
 | `FindNanReport.first_bad_thing` | Project this result into the shared first-bad-thing vocabulary |
 | `FindNanReport.found` | Whether a NaN or Inf was found |
@@ -4040,6 +4100,12 @@ The sections above describe each surface in depth.
 | `GradRecordContext.pass_number` | Pass number of the op whose gradient is recorded |
 | `GraduationItem.met` | Whether this graduation check holds |
 | `GraduationReport.met` | Whether all six graduation items hold |
+| `GridCell.candidate_id` | The cell id: the comma-joined value names in axis order, also the retained member's name |
+| `GridCell.coords` | Axis name to value name for this cell |
+| `GridCell.error` | The refusal (`grid_cell_unresolved`, `grid_cell_multi_site`) or failure text; None otherwise |
+| `GridCell.member_name` | The retained member's name, None when the cell holds no member |
+| `GridCell.status` | `completed`, `released`, `refused` or `failed` |
+| `GridCell.value` | The metric value, None for a refused or failed cell |
 | `GuessInputShapeReport.attempts` | Probe diary as `(shape, outcome)` tuples |
 | `GuessInputShapeReport.constraining_module` | Module qualname that constrained the inferred shape, when known |
 | `GuessInputShapeReport.constraining_op` | Operation name that constrained the inferred shape, when known |
@@ -4075,7 +4141,6 @@ The sections above describe each surface in depth.
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `Layer.short_label` | Short pass-qualified label of a single-pass layer |
 | `Layer.short_layer_label` | Short layer label (no pass suffix) |
-| `LedgerEntry.is_draft` | Whether the entry is still a draft (no hypothesis declared yet) |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
 | `MachineBalance.peak_bytes_per_s` | Peak memory bandwidth used for the roofline, in bytes per second |
@@ -4182,6 +4247,22 @@ The sections above describe each surface in depth.
 | `SummaryTotals.retained_bytes` | Bytes this object holds now |
 | `Super.absent_names` | Return bundle member names not represented by this view |
 | `Super.is_complete` | Return whether every bundle member is represented |
+| `SweepGrid.axes` | Axis name to value names, in declaration order |
+| `SweepGrid.baseline_value` | The metric on the un-edited baseline |
+| `SweepGrid.bundle` | The Bundle (baseline plus retained members) the grid's effect table lives on |
+| `SweepGrid.candidate_id` | The cell id at the given coordinates (every axis by keyword) |
+| `SweepGrid.cell` | The `GridCell` at the given coordinates |
+| `SweepGrid.cells` | Every cell in product order |
+| `SweepGrid.coords` | The coordinates of a cell id (the inverse of `candidate_id`) |
+| `SweepGrid.deltas` | `values - baseline_value`; NaN stays NaN |
+| `SweepGrid.edit_axis` | The axis holding edits, None when edit= served every cell |
+| `SweepGrid.effects` | The `EffectsView` over the grid's effect table |
+| `SweepGrid.failed` | Cell ids whose forward or metric raised |
+| `SweepGrid.history_id` | The recorded `site_sweep` operation's id |
+| `SweepGrid.index` | The integer index tuple into `values` at the given coordinates |
+| `SweepGrid.refused` | Cell ids refused at preflight (never run) |
+| `SweepGrid.to_pandas` | Long format, one row per cell (needs the `tabular` extra) |
+| `SweepGrid.values` | float64 tensor shaped by the axes; NaN for refused or failed cells |
 | `TapRecord.signal` | Pass the tapped value belongs to: `"forward"` or `"backward"` |
 | `TensorInputObservation.mutation_version` | Captured PyTorch version counter of the input tensor (diagnostic, not portable) |
 | `TensorInputObservation.python_object_id` | In-process Python object identity of the input tensor (diagnostic, not portable) |
@@ -5141,11 +5222,13 @@ alphabetical order.
 | Spelling | Meaning |
 | --- | --- |
 | `address=` | keyword of `tl.in_module`: the module address whose contained sites the selector matches |
+| `axes=` | keyword of `tl.experiment.sweep_grid`: axis name -> values (a list or a mapping of value name -> value), in declaration order |
 | `breakdown_k=` | keyword of `tl.report.flops`: how many rows the breakdown lists |
 | `builder=` | field of `RosterModel`: zero-argument factory returning `(model, example_input)` |
 | `captured_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `captured_saved_ops=` | field and constructor keyword of `MemoryFacts` |
 | `degradations=` | field and constructor keyword of `MergeReport` |
+| `edit_axis=` | field and constructor keyword of `SweepGrid`: the axis holding edits, None when edit= served every cell |
 | `expected_intermediates=` | field of `RosterModel`: NumPy-computed intermediate values per op kind |
 | `facet_functions=` | constructor keyword of `Trace`: the session facet functions; never saved |
 | `fire_record=` | field and constructor keyword of `GradFnCall` |
@@ -5190,6 +5273,8 @@ alphabetical order.
 | `is_verified=` | field and constructor keyword of `CaptureFacts` |
 | `item_list=` | keyword of `tl.types.Accessor`: the ordered records |
 | `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
+| `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
+| `member_name=` | field and constructor keyword of `GridCell`: the retained member's name, None when the cell holds no member |
 | `met=` | field and constructor keyword of `GraduationItem` |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |

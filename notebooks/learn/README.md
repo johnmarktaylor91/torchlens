@@ -1,0 +1,39 @@
+# Learn TorchLens
+
+Eleven notebooks, in order. Start with `00_quickstart.ipynb` (five minutes); each later notebook
+is one rung up and stands on its own. Every notebook runs on a laptop CPU in about a minute and
+downloads nothing: the models come from `learn_models.py` beside the notebooks.
+
+## How to run
+
+From the repository root, in a fresh virtual environment (JupyterLab opens in your browser; pick
+the kernel of this venv if it asks):
+
+```bash
+python3 -m venv .venv-learn && source .venv-learn/bin/activate
+python -m pip install -e ".[viz]" -r notebooks/learn/requirements-learn.txt
+dot -V || brew install graphviz        # drawings need the Graphviz binary; apt install graphviz on Debian/Ubuntu
+jupyter lab notebooks/learn/00_quickstart.ipynb
+```
+
+Each notebook imports `learn_models.py` from its own folder, so open the notebooks from
+`notebooks/learn/` (JupyterLab does this when launched as above). Rendered pictures go to a
+temporary directory, nothing is written beside the notebooks.
+
+| # | Notebook | Rung | Trigger |
+|---|---|---|---|
+| 00 | `00_quickstart.ipynb` | 0 to 2 | You have a model and want to see inside it |
+| 01 | `01_capture_and_look.ipynb` | 0 | A model in hand |
+| 02 | `02_address_and_read.ipynb` | 1 | You want a number out |
+| 03 | `03_see_it.ipynb` | 1 | The summary is too long to read |
+| 04 | `04_keep_what_you_need.ipynb` | 2 | Memory or time ran out |
+| 05 | `05_change_and_rerun.ipynb` | 2 to 3 | Does this layer matter? |
+| 06 | `06_gradients.ipynb` | 2 | What drives this unit? |
+| 07 | `07_compare_runs.ipynb` | 3 to 4 | You ran it twice |
+| 08 | `08_semantic_shortcuts.ipynb` | 3 to 5 | You keep typing "head 3's query" |
+| 09 | `09_scale.ipynb` | 4 | Thousands of batches |
+| 10 | `10_beyond_one_forward.ipynb` | 4 to 5 | Your field's experiment |
+
+Rungs: 0 one call; 1 read like a dict; 2 one more keyword on the same call; 3 compose pieces;
+4 objects for scale and record; 5 extend. The three-line recipe cards live in `examples/5min/`,
+the longer workflows in `examples/50min/`, and the API spec in `docs/reference/glossary.md`.

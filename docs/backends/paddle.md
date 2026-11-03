@@ -91,6 +91,7 @@ Other refusals the backend raises: `explicit_seed_unsupported` (`random_seed=`),
 combined with `intervene=`/`halt=`), `module_identity_mode_unsupported`,
 `value_dependent_branch_unsupported` (a tensor turned into a Python scalar inside the
 forward), `rng_replay_unsupported` (a stochastic Paddle op inside the forward),
+`inplace_op_unsupported` (an in-place or global-state Paddle op inside the forward),
 `foreign_tensor_input` and `predicate_return_invalid`.
 
 Known limits: static-graph and PIR modes are refused (code `runtime_mode_unsupported`);

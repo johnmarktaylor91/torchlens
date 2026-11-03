@@ -5,10 +5,10 @@
 # OPEN = declared universe whose derivation lands in a later wave (counted as missing).
 universe_id	cardinality
 U-BACKENDS	6
-U-PUBLIC-OPERATIONS	83
+U-PUBLIC-OPERATIONS	84
 U-CAPTURE-OPTIONS	49
-U-RAISE-SITES	3875
-U-WARN-SITES	245
+U-RAISE-SITES	3870
+U-WARN-SITES	243
 U-ENV-VARS	17
 U-SAVE-LEVELS	4
 U-EXTRAS	39

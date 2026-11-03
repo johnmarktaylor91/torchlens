@@ -920,7 +920,7 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
             code="facet_selector_fanout",
             site_count=len(written),
         ),
-        stacklevel=4,
+        stacklevel=5,
     )
 
 

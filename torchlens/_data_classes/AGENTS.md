@@ -30,45 +30,47 @@ Accessors (`LayerAccessor`, `ModuleAccessor`, `ParamAccessor`, `BufferAccessor`,
 | `_accessor_base.py` | Shared ordered dict-like accessor base |
 | `_doors.py` | FACADE-role deferred doors from the records to the packages above them (Rule F); the only record-side module holding upward imports |
 | `_labels.py` | The one label vocabulary: raw, pass-qualified op and pass-free layer label conversions |
-| `_trace_views.py` | Trace group-view and field-derived accessor functions (record rebuild destination) |
+| `_trace_views.py` | Bodies of the `Trace` view properties (`ops`, `layers`, `module_calls`, saved/compute subsets, graph degrees, autograd accessors) as `f(trace)` functions |
 | `_trace_state_io.py` | Trace pickle state helpers off `__getstate__`/`__setstate__` (record rebuild destination) |
 | `_trace_rerun_state.py` | Trace rerun-state family (record rebuild destination) |
 | `_trace_annotations.py` | Trace annotation family (record rebuild destination) |
 | `_op_save.py` | Op tensor-save and payload functions (record rebuild destination) |
 | `_op_relations.py` | Op relation functions: parents, children, siblings, containment (record rebuild destination) |
 | `_op_cost.py` | Op cost functions: FLOPs, bytes, timing (record rebuild destination) |
-| `_layer_views.py` | Layer view functions: pass delegation and graph unions (record rebuild destination) |
+| `_layer_views.py` | Layer view functions: per-pass aggregation, graph unions, row export and mirror materialization moved off `Layer` |
 | `trace.py` | `Trace`, conditional event records, save/load/intervention/summary helpers |
 | `_trace_accessors.py` | Trace-level typed accessor construction |
-| `_trace_export.py` | Trace tabular export, decoded-output helpers, and the `to_agent_json()` agent dump entry point |
-| `_trace_intervention.py` | Trace intervention surface; fork dispatch, replay, and rerun helpers |
+| `_trace_export.py` | Thin `Trace` export methods (`to_pandas`, `decode_output`, `output_table`, `to_agent_json`); bodies live in `export/_trace_tables.py` and `report/_agent_json.py` |
+| `_trace_intervention.py` | Trace intervention mixin: thin shell of the intervention verbs; bodies live in `intervention/_trace_edits.py`, `intervention/_trace_selection_edits.py`, `intervention/_trace_hooks.py` (via `_doors`), `_trace_intervention_records.py` and `_fork_lineage.py` |
+| `_trace_intervention_records.py` | Intervention spec state and history records of a `Trace` (record rebuild destination) |
+| `_fork_lineage.py` | Fork lineage functions: fork verb, fork naming, owner-ref rebinding (record rebuild destination) |
 | `_trace_fork.py` | M11 copy-on-write fork builder (COW shells over `OpStoreView`s) |
 | `_compaction.py` | Freeze-seam Op metadata pooling (M11 fold) + M14 duplicate/empty container-cell pooling (`PooledCell`, hydrate-on-read) + singleton label-list compaction (bare str + identity-gated store registry, kind tables only) |
 | `_layer_spec.py` | `_LAYER_MIRROR_SPEC` and the Layer mirror-field spec (split out of `layer.py`) |
 | `_layer_accessors.py` | `OpAccessor`/`LayerAccessor` dict-like lookup (split out of `layer.py`; re-exported there) |
 | `_schema_bindings.py` | GENERATED per-field `StorageBinding` axes — DO NOT EDIT; regenerate with `tools/generate_record_schema.py` |
 | `_trace_components.py` | Declared `TRACE_FIELD_OWNERSHIP` component map — 329 entries, pinned equal to the `_FIELD_POLICY` key set (the 229-name `MODEL_LOG_FIELD_ORDER` is a strict subset) |
-| `_trace_stack.py` | Order-aligned activation stacking for completed traces |
+| `_trace_stack.py` | `StackedActivations` and `stack_traces()`; `Trace.stack` is a thin method over it |
 | `_trace_rehydrate.py` | Load-side Trace rehydration |
 | `_backend_capability_guards.py` | Backend capability guard helpers |
 | `_nonfinite.py` | Nonfinite scan/abort helpers |
 | `prehook.py` | Pre-hook effect records |
-| `_trace_profile.py` | Trace profiling and timing helpers |
-| `_trace_stats.py` | Trace aggregate stats and backward-pass projections |
-| `_trace_validation.py` | Trace validation and log-entry removal helpers |
-| `_trace_viz.py` | Trace visualization entrypoints |
+| `_trace_profile.py` | `ModelProfile` and the `model_profile(trace)` body behind `Trace.model_profile` |
+| `_trace_stats.py` | `TraceStatsMixin`: thin stats/view methods forwarding to `_trace_views`, `_call_tree`, `_trace_inventory`, `_trace_profile`, `_trace_stats_grad_fn_site` and the `_doors` destinations; backward-pass projection sync stays here |
+| `_trace_validation.py` | Trace validation, run and backward mixin: thin methods over the record-rebuild destinations, plus the log-entry removal helpers |
+| `_trace_viz.py` | Thin `Trace` visualization and summary methods; bodies live in `_visualization/_trace_draw.py` and `report/_trace_summary.py` |
 | `op.py` | `Op` two-word row facade (`_core`/`_row` over `_trace_core`), tensor save, per-pass fields |
 | `_op_transforms.py` | User-transform apply + train-mode/streaming output validation helpers (split from `op.py`; `op.py` re-exposes them) |
 | `layer.py` | `Layer` aggregate, pass delegation, graph unions |
 | `buffer.py` | `Buffer` and `BufferAccessor` |
 | `module.py` | `ModuleCall`, `Module`, `ModuleAccessor` |
-| `_call_tree.py` | ModuleCall ASCII call-tree printer + call-scope op resolution/edge-count helpers (split from `module.py`) |
+| `_call_tree.py` | ModuleCall ASCII call-tree printer, call-scope op resolution/edge-count helpers, and the `root_call`/`walk_calls`/`show_call_tree` bodies behind the `Trace` methods |
 | `param.py` | `Param`, lazy grad access, `ParamAccessor` |
 | `backward_pass.py` | Per-invocation backward-pass records and accessor |
 | `grad_fn.py` | Backward graph `GradFn` and accessor |
 | `grad_fn_call.py` | Per-pass backward graph record |
 | `container.py` | Structured output/container specs and reconstruction helpers |
-| `derived_grad.py` | Derived-gradient payload records |
+| `derived_grad.py` | Derived-gradient payload records and `set_intermediate_derived_grads(trace, records)` (the backend installer) |
 | `field_policy.py` | Structural field policy table helpers |
 | `func_call_location.py` | Structured call stack frames and lazy source access |
 | `interface.py` | Imported `Trace` access/query custom_methods |

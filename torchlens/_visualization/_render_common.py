@@ -116,7 +116,7 @@ from .render_ir import (
     finalize_forward_regions,
     projected_antiparallel_endpoint_pairs,
 )
-from .request import RenderContext
+from .request import RenderContext, ShowContainersLiteral
 from .themes import (
     VisualizationTheme,
     _theme_annotation_ink,
@@ -191,7 +191,6 @@ if TYPE_CHECKING:
     from .auto_collapse import ModuleRepeatFold
 
 BaseGraphNode = Union["Op", "Layer"]
-ShowContainersLiteral = Literal[False, "labels", "cluster", "collapsed", "auto", "nodes"]
 
 
 @dataclass

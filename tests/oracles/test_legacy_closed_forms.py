@@ -541,11 +541,11 @@ def test_grad_fn_pairing_with_a_grad_requiring_input() -> None:
 
 @pytest.mark.parametrize("backward_ready", [False, True])
 def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> None:
-    # TwoLinear: a = Linear(4, 8) frozen, relu, b = Linear(8, 2). Default
-    # capture gives frozen parameters a grad during the forward, so a and
-    # relu get autograd nodes; backward_ready=True keeps them frozen, so
-    # only b has a node. Backward FLOPs are the multiplier estimate where a
-    # node runs (a 2*216, relu 24, b 2*102) and zero where none does.
+    # TwoLinear: a = Linear(4, 8) frozen, relu, b = Linear(8, 2). Capture
+    # never changes a parameter's requires_grad, so under either setting a
+    # and relu get no autograd node (as in eager) and only b has one.
+    # Backward FLOPs are the multiplier estimate where a node runs (b 2*102)
+    # and zero where none does (a, relu).
     torch.manual_seed(0)
     model = TwoLinear().eval()
     trace = tl.trace(
@@ -558,11 +558,10 @@ def test_backward_flops_follow_the_backward_that_runs(backward_ready: bool) -> N
         for node in nodes:
             node.register_hook(_counting_hook(ran, type(node).__name__))
         loss.backward()
-        a_runs = not backward_ready
-        assert ran["AddmmBackward0"] == (2 if a_runs else 1)
-        assert ran["ReluBackward0"] == (1 if a_runs else 0)
+        assert ran["AddmmBackward0"] == 1
+        assert ran["ReluBackward0"] == 0
         ops, _, _, _ = _by_label(trace)
-        expected = {"linear_1_1:1": 432 if a_runs else 0, "relu_1_2:1": 24 if a_runs else 0}
+        expected = {"linear_1_1:1": 0, "relu_1_2:1": 0}
         expected["linear_2_3:1"] = 204
         for label, flops in expected.items():
             assert int(ops[label].flops_backward) == flops, label
