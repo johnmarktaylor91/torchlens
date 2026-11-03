@@ -6,7 +6,7 @@ stable site/call identity -- NO rule registry, NO composites, NO canonizers,
 NO architecture support table (twice reaffirmed). Maintained research-rule
 catalogs remain the LRP ecosystem's territory; TorchLens supplies the
 mechanism, and the epsilon-LRP litmus recipe in
-``docs/recipes/lrp_epsilon_litmus.md`` shows it in use.
+``docs/field-guide/lrp_epsilon_litmus.md`` shows it in use.
 
 Pairing rule: forward firings of one site push in execution order; backward
 firings pop in REVERSE execution order (autograd visits a reused module's

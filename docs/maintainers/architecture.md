@@ -139,7 +139,7 @@ before you move it. The four split hubs (`backends/torch/ops.py`,
 `backends/torch/completeness_witness.py`, `validation/invariants.py`, `_runnable/execution.py`)
 import their split modules at the bottom of the file, after their own definitions; a test
 patches a private name on the module that defines it and on every module that binds it
-(`docs/agent-reference/known-gotchas.md`).
+(`docs/internal/agent-reference/known-gotchas.md`).
 
 **The god objects.** `Trace` is `_data_classes/trace.py` (about 3,700 lines of thin methods and
 the dataclass) over the `_data_classes/_trace_*.py` function modules and the destination
@@ -175,7 +175,7 @@ the generated index gives each one's first docstring line.
 
 - A module's one-line purpose and size: [where.md](where.md).
 - Step order and contracts in postprocess: `torchlens/_postprocess/_contracts.py`.
-- The invariants a change must keep: `docs/agent-reference/critical-invariants.md`.
+- The invariants a change must keep: `docs/internal/agent-reference/critical-invariants.md`.
 - The saved-file contract: `torchlens/schemas/writer_contract_v11.json` and
   `docs/reference/runnable_tlspec_contract.md`.
 - Every persisted key of the saved format, with its type, save level, policy and public

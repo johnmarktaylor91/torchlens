@@ -76,6 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -90,7 +91,6 @@ from .._runnable.seam import (
 )
 from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
-from .._utils.fail_open import fail_open
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
 from ..intervention.types import (
@@ -116,6 +116,7 @@ from . import (
 from ._accessor_base import Accessor
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
+from ._repr import trace_honesty_suffix
 from ._trace_accessors import (
     OrphanAccessor,
     TraceGradFnCallAccessor,
@@ -843,7 +844,6 @@ class Trace(TraceOutputMixin, TraceLike):
         backward_ready: bool = False,
         inference_only: bool = False,
         chunked_forward: bool = False,
-        module_filter: Callable[[Any], bool] | None = None,
         emit_nvtx: bool = False,
         measure_python_peak_memory: bool = False,
         distributed_witness: str = "none",
@@ -1025,7 +1025,6 @@ class Trace(TraceOutputMixin, TraceLike):
         self._options_backward_ready = backward_ready
         self._options_inference_only = inference_only
         self._options_chunk_size = chunked_forward
-        self._module_filter = module_filter
         self._options_emit_nvtx = emit_nvtx
         self.measure_python_peak_memory = measure_python_peak_memory
         self.distributed_witness = distributed_witness
@@ -1673,20 +1672,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
 
-        tokens: list[str] = []
-        outcome = fail_open(lambda: self.outcome, lambda _error: None)
-        status = getattr(getattr(outcome, "status", None), "value", None)
-        if status and status != "complete":
-            tokens.append(f"outcome={status}")
-        verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
-        if verdict == "checked_and_clean":
-            tokens.append("no NaN/Inf (exact)")
-        elif verdict == "found":
-            tokens.append("NaN/Inf FOUND (.nonfinite_ops)")
-        armed = fail_open(self._armed_summary_line, lambda _error: None)
-        if armed:
-            tokens.append(armed)
-        return f" [{'; '.join(tokens)}]" if tokens else ""
+        return trace_honesty_suffix(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
         """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.
@@ -3087,10 +3073,10 @@ class Trace(TraceOutputMixin, TraceLike):
     def save_new_outs(
         self,
         model: torch.nn.Module,
-        input_args: torch.Tensor | list[Any],
+        inputs: torch.Tensor | list[Any],
         input_kwargs: dict[Any, Any] | None = None,
-        layers_to_save: str | list[str] = "all",
-        grad_layers_to_save: str | list[str] | None = "all",
+        save: str | list[str] = "all",
+        save_grads: str | list[str] | None = "all",
         seed: int | None = None,
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
@@ -3099,10 +3085,10 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
-            layers_to_save=layers_to_save,
-            grad_layers_to_save=grad_layers_to_save,
+            save=save,
+            save_grads=save_grads,
             seed=seed,
             backward_ready=backward_ready,
             _run_until_plan=_run_until_plan,
@@ -3380,6 +3366,7 @@ class Trace(TraceOutputMixin, TraceLike):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         file_format: str = "pdf",
         open_viewer: bool = False,
+        highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 

@@ -3,7 +3,7 @@
 The FIELD_ORDER literals in ``constants.py`` remain the hand-written declared
 schema; ``_FIELD_POLICY`` tables and the generated ``StorageBinding`` tables
 must agree with them exactly, in both directions, for all 11 record classes
-(docs/reference/trace_core_design.md section 3.4).
+(docs/internal/reference/trace_core_design.md section 3.4).
 """
 
 from __future__ import annotations

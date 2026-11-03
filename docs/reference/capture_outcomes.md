@@ -18,7 +18,7 @@ the record or on the stable refusal codes below — never on exception text.
 
 `phase` is FAILED-only, not FAILED-required: a `FAILED` outcome normally
 carries a `phase`, but two writers legitimately emit `FAILED` with
-`phase=None` — the fastlog recorder fallback stamp (when the runtime trace's
+`phase=None` — the sparse-recording recorder fallback stamp (when the runtime trace's
 settled record is unavailable or non-failed) and the legacy `partial_error`
 derivation. When present, `phase` is one of (`FORWARD` — the model forward raised;
 `FINALIZE` — the forward completed but finalize/output-extraction/cleanup

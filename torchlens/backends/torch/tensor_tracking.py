@@ -246,8 +246,8 @@ def _add_tensor_backward_hook(
     # Deferred gradient selectors (all selective grad selections, including
     # positive integer ordinals — FINAL layer numbers unknowable during the
     # forward) install their hooks post-postprocess from the reference escrow.
-    should_defer_hook = getattr(
-        trace, "_deferred_gradient_selector", None
+    should_defer_hook = trace.__dict__.get(
+        "_deferred_gradient_selector"
     ) is not None and not getattr(trace, "_installing_deferred_gradient_hooks", False)
     if not getattr(trace, "capture_tensor_grad_hooks", True) or (
         _grad_fn is None and not _requires_grad

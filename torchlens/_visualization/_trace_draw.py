@@ -15,6 +15,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -123,6 +124,21 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     )
 
 
+def _draw_policy(
+    graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
+) -> dict[str, Any]:
+    """Return the policy a :class:`Drawing` records: the options that shaped it."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
     trace: Trace,
     path: str | None = None,
@@ -174,8 +190,15 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
     file_format: str = "pdf",
     open_viewer: bool = False,
+    highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
+
+    if highlight is not None:
+        from ._highlight import draw_highlighted, explicit_draw_kwargs
+
+        # locals() is read before any parameter below is reassigned.
+        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
 
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(

@@ -14,7 +14,7 @@ from .._io._field_policy import FieldPolicy
 class StorageKind(Enum):
     """Physical storage class of one declared field in the trace core.
 
-    The declared schema (docs/reference/trace_core_design.md section 3.4)
+    The declared schema (docs/internal/reference/trace_core_design.md section 3.4)
     carries one storage kind per field; the column layout, facade
     descriptors, and state adapters are generated from it. Persistence
     policy (``FieldPolicy``) NEVER implies a storage kind — the axes stay

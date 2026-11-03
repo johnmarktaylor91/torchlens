@@ -40,6 +40,7 @@ from ._option_receipt import (
     _resolve_option_value,
     _set_frozen_fields,
 )
+from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
     _validate_buffer_visibility,
@@ -52,6 +53,7 @@ from ._options_validation import (
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
@@ -97,7 +99,6 @@ _CAPTURE_FIELDS: Final[tuple[str, ...]] = (
     "name",
     "cache",
     "cache_dir",
-    "module_filter",
     "jax_control_flow",
     "jax_max_control_flow_unroll",
     "module_identity_mode",
@@ -223,7 +224,6 @@ _CAPTURE_FLAT_TO_GROUP: Final[dict[str, str]] = {
     "name": "name",
     "cache": "cache",
     "cache_dir": "cache_dir",
-    "module_filter": "module_filter",
     "jax_control_flow": "jax_control_flow",
     "jax_max_control_flow_unroll": "jax_max_control_flow_unroll",
     "module_identity_mode": "module_identity_mode",
@@ -493,18 +493,6 @@ class CaptureOptions:
             ``torchlens.clear_cache()`` empties the cache.
         cache_dir:
             Optional directory for content-hash cache entries.
-        module_filter:
-            Optional THIRD save gate composed (AND) with ``save=``: an op's
-            payload is retained only when the save selection picks it AND this
-            predicate returns truthy. The
-            predicate receives an op-record namespace (the legacy-shaped
-            ``SimpleNamespace`` of captured op fields such as ``func_name``,
-            ``layer_label``, and ``modules``), NEVER an
-            ``nn.Module`` instance — a filter written against modules (e.g.
-            ``lambda m: isinstance(m, nn.Linear)``) matches nothing and saves
-            ZERO payloads. Returning ``False`` keeps metadata but skips payload
-            saving; a capture whose every selected payload was suppressed by
-            this gate emits a ``module_filter_zero_saved`` warning.
         jax_control_flow:
             Declared JAX control-flow policy. Backends other than torch reject
             explicit use until their implementation phase supports it.
@@ -687,7 +675,6 @@ class CaptureOptions:
     name: str | None = None
     cache: bool = False
     cache_dir: str | Path | None = None
-    module_filter: Callable[[Any], bool] | None = None
     jax_control_flow: Literal["reject", "unroll", "region"] = "unroll"
     jax_max_control_flow_unroll: int = 64
     module_identity_mode: str | None = None
@@ -716,6 +703,7 @@ class CaptureOptions:
     aten_ops: bool = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
+    @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
     def __init__(
         self,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
@@ -749,7 +737,6 @@ class CaptureOptions:
         name: str | None | MissingType = MISSING,
         cache: bool | MissingType = MISSING,
         cache_dir: str | Path | None | MissingType = MISSING,
-        module_filter: Callable[[Any], bool] | None | MissingType = MISSING,
         jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING,
         jax_max_control_flow_unroll: int | MissingType = MISSING,
         module_identity_mode: str | None | MissingType = MISSING,
@@ -791,6 +778,16 @@ class CaptureOptions:
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified))
+
+    # Runtime only: under TYPE_CHECKING the hook would make every attribute
+    # type-check as Any, hiding typos and the removed spellings from mypy.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Name the replacement for a removed public member, else fail as usual."""
+
+            refuse_removed_member("CaptureOptions", name, REMOVED_CAPTURE_MEMBERS)
+            return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
@@ -914,20 +911,6 @@ class _SaveTransforms:
         _set_frozen_fields(instance, _SAVE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
-
-
-#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
-_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
-    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
-    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
-    "for_paper": 'use VisualizationOptions.theme="paper"',
-    "return_graph": "read Drawing.dot on the returned Drawing",
-    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
-    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
-    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
-    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
-}
 
 
 @dataclass(frozen=True, init=False)
@@ -1202,11 +1185,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from ._utils.facade import refuse_removed_member
-
-            refuse_removed_member(
-                "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
-            )
+            refuse_removed_member("VisualizationOptions", name, REMOVED_VISUALIZATION_MEMBERS)
             return object.__getattribute__(self, name)
 
     def to_dict(self) -> dict[str, Any]:
