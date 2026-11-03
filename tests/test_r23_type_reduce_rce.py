@@ -37,11 +37,13 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import ArtifactError
-from torchlens._io._safe_unpickle import SafeBundleUnpickler
+from torchlens._io import ArtifactError, ArtifactTooOldError
+from torchlens._io._safe_unpickle import SafeBundleUnpickler, _PurePythonBundleUnpickler
+from torchlens._io.bundle import _RenameAwareUnpickler
 from torchlens.intervention._resolver_registry import resolve_import_ref
 from torchlens.intervention._spec_values import LazyImportRef
 from torchlens.intervention.errors import UntrustedCallableError
@@ -69,18 +71,6 @@ class _SmallLinear(nn.Module):
         return torch.relu(self.lin(v)) * self.scale
 
 
-def _has_unpickling_error(exc: BaseException | None) -> bool:
-    """Return whether an UnpicklingError appears anywhere in the cause/context chain."""
-
-    seen: set[int] = set()
-    while exc is not None and id(exc) not in seen:
-        seen.add(id(exc))
-        if isinstance(exc, pickle.UnpicklingError):
-            return True
-        exc = exc.__cause__ or exc.__context__
-    return False
-
-
 class _LazyImportRefTypeReduceGadget:
     """``__reduce__`` -> a forged ``LazyImportRef`` INVOKED with an attacker command.
 
@@ -104,29 +94,59 @@ class _LazyImportRefTypeReduceGadget:
 # --------------------------------------------------------------------------- #
 
 
-def test_lazyimportref_type_reduce_rce_denied_through_tl_load(tmp_path: Path) -> None:
-    """A forged LazyImportRef REDUCE in metadata.pkl raises + never runs os.system."""
+def _forbid_unpicklers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every unpickler door fails the test if loading a planted artifact reaches one."""
+
+    def _boom(*args: object, **kwargs: object) -> object:
+        raise AssertionError("an unpickler ran while loading a planted artifact")
+
+    for owner, name in (
+        (pickle, "Unpickler"),
+        (pickle, "loads"),
+        (pickle, "load"),
+        (torch, "load"),
+        (SafeBundleUnpickler, "load"),
+        (_PurePythonBundleUnpickler, "load"),
+        (_RenameAwareUnpickler, "load"),
+    ):
+        monkeypatch.setattr(owner, name, _boom)
+
+
+@pytest.mark.parametrize("planted", ["metadata.pkl", "records/trace.json"])
+def test_lazyimportref_type_reduce_rce_denied_through_tl_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, planted: str
+) -> None:
+    """A forged LazyImportRef REDUCE planted in a real artifact raises + never runs os.system.
+
+    The reader has two places a planted pickle can sit: a 2.x ``metadata.pkl`` at the
+    artifact root (refused as a 2.x artifact before anything is read) and the trace record
+    (parsed as bounded UTF-8 JSON, refused at the JSON gate). Neither door may reach an
+    unpickler, so the gadget's REDUCE never runs; the unpickler's own deny of the
+    ``LazyImportRef`` type is pinned by ``test_lazyimportref_type_denied_at_unpickler``.
+    """
 
     marker = tmp_path / "R23_PWNED"
     victim = tmp_path / "victim.tlspec"
     tl.trace(_SmallLinear(), torch.randn(2, 4), save=tl.func("relu"), capture=_CAP).save(
         victim, level="runnable", include_weights=True
     )
-    with (victim / "metadata.pkl").open("wb") as handle:
-        pickle.dump(
-            _LazyImportRefTypeReduceGadget(f"touch {marker}"),
-            handle,
-            protocol=pickle.HIGHEST_PROTOCOL,
-        )
+    gadget = pickle.dumps(
+        _LazyImportRefTypeReduceGadget(f"touch {marker}"), protocol=pickle.HIGHEST_PROTOCOL
+    )
+    (victim / planted).write_bytes(gadget)
+    if planted != "metadata.pkl":
+        redigest(victim, planted)
 
-    raised: BaseException | None = None
-    try:
+    _forbid_unpicklers(monkeypatch)
+    with pytest.raises(ArtifactError) as caught:
         tl.load(victim)
-    except (ArtifactError, pickle.UnpicklingError) as exc:
-        raised = exc
 
-    assert raised is not None, "forged LazyImportRef type-reduce was not blocked"
-    assert _has_unpickling_error(raised), "denial must surface an UnpicklingError"
+    expected = {
+        "metadata.pkl": (ArtifactTooOldError, "artifact_version_below_floor"),
+        "records/trace.json": (ArtifactError, "bundle_metadata_integrity_refused"),
+    }[planted]
+    assert isinstance(caught.value, expected[0]), repr(caught.value)
+    assert caught.value.fields["code"] == expected[1], caught.value.fields
     assert not marker.exists(), "os.system marker written -> RCE via type-reduce"
 
 

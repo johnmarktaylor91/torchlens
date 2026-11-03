@@ -291,10 +291,13 @@ writes the same file in its own directory: one grammar, two homes.
   `kwargs` is replaced in place by the same object with `position` set to
   `"<rule index>.<argument path>"` (`"0.kwargs.transform"`). Either way the manifest's
   `intervention.executable` is false and the rule loads as an audit-only edit.
-- Such a recipe is written only at the audit level: either `Trace.save(level="portable")`
+- Such a recipe is never written at the portable level: either `Trace.save(level="portable")`
   or `save_intervention(level="portable")` on a
   recipe holding a user callable, or a value the format cannot carry, refuses at save time with
-  `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits.
+  `intervention_spec_not_portable`; the remedy is `level="audit"` or built-in edits. At
+  `level="executable_with_callables"` the recipe is written with `executable` false and the
+  callable placeholder, and the save keeps outs and argument snapshots; at `level="audit"` it
+  is written payload-free.
 - `capture_rules` is an optional array (absent means empty) preserving original built-in
   capture predicates alongside the canonical staged `rules`. Each entry has exactly `index`
   (its zero-based array position), `selector` (the same closed TargetSpec object as a rule),

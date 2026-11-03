@@ -114,7 +114,7 @@ from .format3.writer import (
     settle_live_side,
     write_trace_envelope,
 )
-from .format_errors import OpaqueCallableError
+from .format_errors import DENSE_REMEDY, OpaqueCallableError
 from .lazy import LazyActivationRef, _read_materialization_manifest
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
 from .paths import (
@@ -736,7 +736,7 @@ def save(
             )
             if blob_spec.logical_backend != "torch":
                 raise BackendPayloadUnsupportedError(error_text, code="metadata_value_unportable")
-            raise ArtifactError(error_text, code="metadata_value_unportable")
+            raise ArtifactError(error_text, code="metadata_value_unportable", remedy=DENSE_REMEDY)
 
         source_manifest_cache: dict[Path, dict[str, TensorEntry]] = {}
         for fast_copy_spec in fast_copy_specs:

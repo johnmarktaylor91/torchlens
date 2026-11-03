@@ -109,11 +109,16 @@ class Edit:
 
         Raises
         ------
+        NonExecutableSpecError
+            If the spec is an audit-only placeholder with no runtime factory.
         TypeError
-            If the spec does not carry a runtime factory.
+            If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
+            from .errors import _refuse_placeholder_edit
+
+            _refuse_placeholder_edit(self.name, self.portability)
             raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
 
@@ -164,14 +169,9 @@ class Edit:
         factory-dropping pickle path.
         """
 
-        import copy as _copy
+        from ._edit_copy import deepcopy_edit
 
-        cls = type(self)
-        clone = cls.__new__(cls)
-        memo[id(self)] = clone
-        for key, value in self.__dict__.items():
-            object.__setattr__(clone, key, _copy.deepcopy(value, memo))
-        return clone
+        return deepcopy_edit(self, memo)
 
 
 @dataclass(frozen=True, slots=True)
