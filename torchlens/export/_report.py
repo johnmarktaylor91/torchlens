@@ -211,7 +211,7 @@ def _array_plan(log: Any, arrays: Any, share_safe: bool) -> _ArrayPlan:
         ``report_arrays_invalid`` for an unrecognized ``arrays=`` value.
     """
 
-    from .._notebook.frontier import nonfinite_frontier
+    from ..report._notebook.frontier import nonfinite_frontier
 
     frontier = nonfinite_frontier(log) if not _is_partial(log) else None
     flagged_total = frontier.flagged_total if frontier else 0
@@ -295,7 +295,7 @@ def _site_tensor(log: Any, label: str) -> Any | None:
 def _site_render(tensor: Any) -> tuple[str | None, str | None]:
     """Stats line + thumbnail grid for one payload, degrade-safe."""
 
-    from .._notebook._grid import GridBudgets, array_grid_html
+    from ..report._notebook._grid import GridBudgets, array_grid_html
 
     line: str | None = None
     try:
@@ -658,8 +658,8 @@ def write_report(
 def _partial_body(log: Any) -> str:
     """Failure-first body for a PartialTrace report."""
 
-    from .._notebook.cards import partial_trace_card
-    from .._notebook.cardtree import render_card_html
+    from ..report._notebook.cards import partial_trace_card
+    from ..report._notebook.cardtree import render_card_html
 
     try:
         card = render_card_html(partial_trace_card(log), include_css=True)

@@ -10,8 +10,8 @@ from typing import TYPE_CHECKING, Any, Literal
 
 from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
 from .._errors import CaptureNotActiveError, InvalidArgumentError
-from .._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
+from ._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
 from ._summary_config import resolve_config
 from ._summary_report import SummaryReport
 from ._summary_result import build_rebuilt_summary

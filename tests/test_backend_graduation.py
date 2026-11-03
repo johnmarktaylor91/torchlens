@@ -9,16 +9,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
-from torchlens.backends.registry import get_backend_spec
-from torchlens.conformance import GraduationItem, GraduationReport, graduation_report
-from torchlens.conformance._graduation import GRADUATION_IDS, graduation_items, repository_root
-from torchlens.conformance._scorecard import (
+from tests.conformance import GraduationItem, GraduationReport, graduation_report
+from tests.conformance._graduation import GRADUATION_IDS, graduation_items, repository_root
+from tests.conformance._scorecard import (
     SCORECARD_VERSION,
     PreviewScorecard,
     ScorecardCell,
     _with_digest,
 )
+from torchlens.backends._backend_protocol import REFUSABLE_CAPABILITY_FLAGS
+from torchlens.backends.registry import get_backend_spec
 
 _ROW_CASES = (
     "c1_capture_completes",

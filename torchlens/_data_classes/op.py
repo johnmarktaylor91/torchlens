@@ -3135,7 +3135,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         when the bridge just rendered this object (memo 3.6).
         """
 
-        from .._notebook.cards import op_repr_html
+        from ..report._notebook.cards import op_repr_html
 
         return op_repr_html(self)
 

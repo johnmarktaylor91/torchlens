@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from .._snoop._narrate import narrate_trace
+from ..debug._snoop._narrate import narrate_trace
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace

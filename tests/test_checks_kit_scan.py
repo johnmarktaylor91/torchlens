@@ -18,7 +18,7 @@ import torch.nn as nn
 
 import torchlens.errors
 import torchlens.report
-from torchlens.checks import _constants, _records, _scan
+from torchlens.debug._checks import _constants, _records, _scan
 
 
 class _TiedNet(nn.Module):

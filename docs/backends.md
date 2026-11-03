@@ -53,11 +53,11 @@ Shared rules every backend follows:
 
 ### Scorecards and `tl.report.doctor()`
 
-The shared conformance suite (`torchlens.conformance`) runs the same case ids over every backend
+The shared conformance suite (the repository's `tests/conformance/` harness, run from a checkout) runs the same case ids over every backend
 and records each cell as `passed`, `failed`, `unsupported` (a typed refusal with a registered code)
 or `not_run`; every cell stays in the denominator. Each backend ships the result as
 `torchlens/backends/<name>/scorecard.json`, written by
-`python -m torchlens.conformance.scorecard --backend <name> --write` on the backend's pinned
+`python -m tests.conformance.scorecard --backend <name> --write` on the backend's pinned
 version and checked by `--check` in its CI leg, so the record is a measured fact, never hand-edited.
 The record's capability summary reads each `BackendCapabilities` flag as `supported` (True and
 exercised), `unsupported` (False, and the request refuses with the contracted code) or `untested`
@@ -73,8 +73,7 @@ suggestion names the install extra or the first failed cell.
 
 ### Graduation
 
-`torchlens.conformance.graduation_report(backend)` (also
-`python -m torchlens.conformance.scorecard --backend <name> --graduation`) checks six items and
+`python -m tests.conformance.scorecard --backend <name> --graduation` (run from a checkout) checks six items and
 never changes `maturity`:
 
 | Item | Criterion |
