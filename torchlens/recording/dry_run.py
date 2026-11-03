@@ -14,7 +14,7 @@ from .types import DryRun
 
 def dry_run(
     model: nn.Module,
-    input_args: Any,
+    inputs: Any,
     input_kwargs: dict[str, Any] | None = None,
     *,
     save: PredicateFn | None = None,
@@ -28,7 +28,7 @@ def dry_run(
     ----------
     model:
         PyTorch module to execute.
-    input_args:
+    inputs:
         Tensor, list, or tuple of positional model inputs.
     input_kwargs:
         Optional keyword arguments for the model call.
@@ -41,7 +41,7 @@ def dry_run(
         Chronological event contexts and any accumulated predicate failures.
     """
 
-    input_args = _coerce_input_args(model, input_args)
+    inputs = _coerce_input_args(model, inputs)
     recorder_kwargs: dict[str, Any] = {
         "save": save,
         "history_size": history_size,
@@ -60,7 +60,7 @@ def dry_run(
         if recorder._capture_events is None:  # noqa: SLF001
             raise RuntimeError("Recorder capture events were not initialized")
         recorder._state.no_tensor_capture = True  # noqa: SLF001
-        recorder(input_args, input_kwargs)
+        recorder(inputs, input_kwargs)
         contexts = tuple(recorder._state.all_contexts)  # noqa: SLF001
         decisions = tuple(
             bool(getattr(event, "predicate_matched", False))

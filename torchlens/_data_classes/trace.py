@@ -3102,7 +3102,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def save_new_outs(
         self,
         model: torch.nn.Module,
-        input_args: torch.Tensor | list[Any],
+        inputs: torch.Tensor | list[Any],
         input_kwargs: dict[Any, Any] | None = None,
         layers_to_save: str | list[str] = "all",
         grad_layers_to_save: str | list[str] | None = "all",
@@ -3114,7 +3114,7 @@ class Trace(TraceOutputMixin, TraceLike):
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,
-            input_args,
+            inputs,
             input_kwargs=input_kwargs,
             layers_to_save=layers_to_save,
             grad_layers_to_save=grad_layers_to_save,
