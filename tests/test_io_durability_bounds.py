@@ -420,6 +420,71 @@ def test_metadata_pkl_non_mapping_payload_refuses_typed(tmp_path: Path, monkeypa
     assert calls == []
 
 
+def _load_pickle_payload(tmp_path: Path, payload: object, **policy) -> object:
+    """Drive the retained ``metadata.pkl`` reader at its own seam.
+
+    ``tl.load`` refuses every ``metadata.pkl`` root before this reader (pinned by
+    the two tests above), so its guards are provoked directly, under a forged
+    current-version manifest with no tensors.
+    """
+
+    bundle_dir = tmp_path / "pickle_payload"
+    (bundle_dir / "blobs").mkdir(parents=True)
+    (bundle_dir / "metadata.pkl").write_bytes(pickle.dumps(payload))
+    forged = Manifest.from_dict(
+        {
+            "tlspec_version": manifest_mod.TLSPEC_VERSION,
+            "torchlens_version": tl.__version__,
+            "torch_version": torch.__version__,
+            "python_version": "{}.{}.{}".format(*sys.version_info[:3]),
+            "platform": sys.platform,
+            "created_at": "2026-01-01T00:00:00Z",
+            "bundle_format": "directory",
+            "n_layers": 0,
+            "n_out_blobs": 0,
+            "n_grad_blobs": 0,
+            "n_auxiliary_blobs": 0,
+            "tensors": [],
+            "unsupported_tensors": [],
+        }
+    )
+    return bundle_mod._load_trace_payload(
+        bundle_dir,
+        forged,
+        lazy=True,
+        map_location="cpu",
+        materialize_nested=False,
+        payload_hints=None,
+        **policy,
+    )
+
+
+def test_pickle_reader_opcode_ceiling_refuses_object_bomb(tmp_path: Path, monkeypatch) -> None:
+    """The retained pickle reader refuses an object bomb on opcode count, typed.
+
+    Fail-before: the byte cap admitted a pickle whose expansion happened before
+    any structural check, and the refusal escaped as a raw stdlib TypeError.
+    """
+
+    monkeypatch.setattr(bundle_mod, "_METADATA_PKL_PRESCAN_BYTES", 0)
+    monkeypatch.setattr(bundle_mod, "_MAX_METADATA_PKL_OPCODES", 1_000)
+    with pytest.raises(ArtifactError, match="opcode allocation ceiling") as excinfo:
+        _load_pickle_payload(tmp_path, [0] * 100_000)
+    assert excinfo.value.fields["code"] == "metadata_object_count_exceeded"
+
+
+def test_pickle_reader_non_mapping_payload_refuses_typed(tmp_path: Path) -> None:
+    """The retained pickle reader refuses a non-mapping payload typed.
+
+    Fail-before: a plain list escaped as ``ValueError: dictionary update
+    sequence element #0 ...`` from the downstream dict() walk, with no code.
+    """
+
+    with pytest.raises(ArtifactError, match="not a metadata mapping") as excinfo:
+        _load_pickle_payload(tmp_path, [[0] * 3] * 3)
+    assert excinfo.value.fields["code"] == "metadata_payload_not_a_mapping"
+
+
 def test_unverified_capture_disclosure_survives_save_and_load(tmp_path: Path) -> None:
     """P7/R10: capture_verified=False must not launder to no-claim across save.
 
