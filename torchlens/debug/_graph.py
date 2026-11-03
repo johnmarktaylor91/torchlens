@@ -620,6 +620,8 @@ def _layer_output_ops(trace: Trace) -> list[Op]:
     inside a composite activation (the ``tanh`` of a tanh-approximated GELU,
     the ``sigmoid`` of ``x * sigmoid(x)``) are not layer outputs and get no
     row: their saturation says nothing about whether the layer's units fire.
+    The trace's output boundary nodes (``is_output``) are clones of the
+    returned ops and are left out, so no tensor is counted twice.
 
     Parameters
     ----------
@@ -635,8 +637,11 @@ def _layer_output_ops(trace: Trace) -> list[Op]:
     return [
         op
         for op in _compute_ops(trace)
-        if bool(getattr(op, "is_module_output", False))
-        or bool(getattr(op, "is_output_parent", False))
+        if not bool(getattr(op, "is_output", False))
+        and (
+            bool(getattr(op, "is_module_output", False))
+            or bool(getattr(op, "is_output_parent", False))
+        )
     ]
 
 
