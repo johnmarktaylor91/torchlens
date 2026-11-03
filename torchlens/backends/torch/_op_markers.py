@@ -17,7 +17,9 @@ from typing import Any
 
 import torch
 
+from ..._errors import InvalidArgumentError
 from ..._events import active_profiler_session
+from ._completeness_cross_thread import _internal_read_active
 
 
 def _nvtx_host_available() -> bool:
@@ -46,7 +48,6 @@ def refuse_unavailable_nvtx(emit_nvtx: bool) -> None:
 
     if not emit_nvtx or _nvtx_host_available():
         return
-    from ..._errors import InvalidArgumentError
 
     raise InvalidArgumentError(
         "emit_nvtx=True needs a CUDA device with an NVIDIA driver, and torch reports "
@@ -125,8 +126,6 @@ def _op_marker_labels(func_name: str, func_call_id: int) -> tuple[str, str]:
         ``(visual_name, join_name)``: the human-readable NVTX/Nsight range
         name and the opaque exact-key ``record_function`` marker name.
     """
-
-    from ._completeness_cross_thread import _internal_read_active
 
     if _internal_read_active():
         visual = f"torchlens::internal::{func_name}#{func_call_id}"

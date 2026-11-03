@@ -21,8 +21,13 @@ from ..backends.registry import (
     CaptureBackend,
     resolve_backend_spec,
 )
+from ..backends.torch.structure_only_belt import structure_only_forward_boundary
 from ..recording._halt import StopSignal
+from ..recording.types import CaptureSpec, ModuleStackFrame
+from ._weightsfree_admission import weightsfree_forward_scope
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
+from .predicates import _is_halt_only_capture, _module_capture_spec
+from .projections import _build_record_context, append_projected_event, get_active_recording_state
 from .session import (
     CaptureSession,
 )
@@ -82,9 +87,6 @@ def _weightsfree_and_belt_boundary(trace: "Trace") -> "Iterator[None]":
     state restores on any exit path. No-op without a pending admission
     (real-substrate structure-only captures).
     """
-
-    from ..backends.torch.structure_only_belt import structure_only_forward_boundary
-    from ._weightsfree_admission import weightsfree_forward_scope
 
     with weightsfree_forward_scope(trace), structure_only_forward_boundary(trace):
         yield
@@ -389,14 +391,6 @@ def _run_predicate_forward_with_root_frame(
     Any
         Raw model output.
     """
-
-    from ..recording.types import CaptureSpec, ModuleStackFrame
-    from .predicates import _is_halt_only_capture, _module_capture_spec
-    from .projections import (
-        _build_record_context,
-        append_projected_event,
-        get_active_recording_state,
-    )
 
     state = get_active_recording_state()
     root_frame = ModuleStackFrame(

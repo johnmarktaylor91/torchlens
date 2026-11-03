@@ -8,6 +8,7 @@ from typing import Any
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
 from .._trace_options import TF_TRACE_OPTIONS
+from ..tf.validation import validate_tf_trace_status
 
 #: The TensorFlow requirement, stated once (SPEC 1.2; the ceiling is F-M's
 #: ``tested_through`` arm). ``pinned`` is the version the per-change CI leg
@@ -84,7 +85,6 @@ class TFProtocol(SpecBackedProtocol):
         """
 
         del ground_truth
-        from ..tf.validation import validate_tf_trace_status
 
         return validate_tf_trace_status(trace)
 

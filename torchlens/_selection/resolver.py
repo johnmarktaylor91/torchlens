@@ -9,6 +9,7 @@ from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
+from .._capture._episode_ledger import capture_kind_for
 from .._ir.selector_eval import (
     _is_grad_fn,
     _label_site_index,
@@ -18,6 +19,7 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from ..intervention.hooks import _resolve_facet_specs
 from .errors import (
     AmbiguousSiteError,
     MultiMatchWarning,
@@ -404,7 +406,6 @@ def _resolve_facet_sites(
     """
 
     from .._semantic.facets import Facet
-    from ..intervention.hooks import _resolve_facet_specs
 
     facets = tuple(Facet(spec) for _, spec in _resolve_facet_specs(log, selector))
     if not facets:
@@ -627,7 +628,6 @@ def _guard_episode_step_query(log: Trace, selector: Any) -> None:
         selector, "episode_step", unwrap=True
     ):
         return
-    from .._capture._episode_ledger import capture_kind_for
 
     if capture_kind_for(log) != "episode":
         raise SiteResolutionError(

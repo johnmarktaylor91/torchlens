@@ -8,9 +8,13 @@ from typing import Any
 
 import torch
 
+from torchlens._input_walk import _instance_fields, declares_namedtuple_fields
+from torchlens._ir.container import get_registered_container
+
 from .._ir.container import (
     ContainerSpec,
 )
+from .._utils._torch_compat import torch_structseq_field_names
 from . import (
     ControlWitness,
     ControlWitnessKind,
@@ -56,7 +60,6 @@ def _hybrid_registered_flatten_children(value: Any) -> list[Any] | None:
 
     if not isinstance(value, (Mapping, list, tuple)):
         return None
-    from torchlens._ir.container import get_registered_container
 
     registration = get_registered_container(type(value))
     if registration is None:
@@ -303,8 +306,6 @@ def _container_kind(value: Any) -> str:
     honest identical run then false-DIVERGED with OUTPUT_STRUCTURE_MISMATCH.
     """
 
-    from torchlens._ir.container import get_registered_container
-
     if isinstance(value, torch.Tensor):
         return "tensor"
     # Registration is checked by TYPE (mirroring classify_input_container and the
@@ -374,8 +375,6 @@ def _container_field_names(value: Any) -> tuple[str, ...]:
         not a field-addressable container.
     """
 
-    from torchlens._input_walk import _instance_fields, declares_namedtuple_fields
-
     if not isinstance(value, tuple):
         return ()
     if declares_namedtuple_fields(value):
@@ -403,8 +402,6 @@ def _torch_structseq_field_names(value: Any) -> tuple[str, ...]:
         Public structseq field names, or an empty tuple when ``value`` is not
         a fully named ``torch.return_types`` value.
     """
-
-    from .._utils._torch_compat import torch_structseq_field_names
 
     return torch_structseq_field_names(value)
 

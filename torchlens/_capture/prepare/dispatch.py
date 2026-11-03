@@ -44,6 +44,7 @@ from ...backends._options import (
     reject_extra_trace_kwargs,
 )
 from ...backends._trace_options import _CONTROL_FLOW
+from ...backends.mlx import MLXBackend
 from ...backends.registry import (
     BackendSpec,
     get_backend_spec,
@@ -202,7 +203,6 @@ def _trace_mlx_model(
         else:
             model_input_args = transformed_input
             model_input_kwargs = None
-    from ...backends.mlx import MLXBackend
 
     backend = MLXBackend()
     trace = backend.capture_trace(

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from torch import nn
 
 from ... import _state
+from ..._utils._call_site import register_module_boundary_wrapper
 from ..._utils._module_call_dispatch import forward_entered_through_module_call
 from ..._utils._tensor_label import (
     get_module_meta,
@@ -230,7 +231,6 @@ def install_session_forward_wrappers(trace: Trace, model: nn.Module) -> None:
         Submodule ``forward`` attributes are replaced in place.
     """
 
-    from ..._utils._call_site import register_module_boundary_wrapper
     from .model_prep import module_forward_decorator
 
     register_module_boundary_wrapper(module_forward_decorator, "decorated_forward")

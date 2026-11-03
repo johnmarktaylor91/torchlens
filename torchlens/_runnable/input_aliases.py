@@ -7,6 +7,8 @@ from typing import Any, cast
 
 import torch
 
+from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
+from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 from torchlens._runnable import ContractCheck
 
 from .. import _state
@@ -422,9 +424,6 @@ def _runtime_nontensor_leaf_paths(root: Any) -> set[tuple[str | int, ...]]:
     lists/tuples descend by index, empty containers surface as synthetic marker
     paths, and every other value is a scalar leaf recorded at its path.
     """
-
-    from torchlens._input_walk import tagged_mapping_key_component, walk_input_boundary
-    from torchlens._io.runnable import EMPTY_CONTAINER_PATH_MARKER
 
     paths: set[tuple[str | int, ...]] = set()
     walk_input_boundary(

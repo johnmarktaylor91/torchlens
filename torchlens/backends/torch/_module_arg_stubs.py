@@ -18,6 +18,7 @@ import torch
 
 from ..._ir.workspaces import ReleasedTensorStub
 from ..._utils._tensor_label import get_tensor_label
+from ..._utils.introspection import get_vars_of_type_from_obj
 
 _MODULE_ARG_STUB_MAX_DEPTH = 5
 
@@ -79,8 +80,6 @@ def first_stub_shape(value: Any, search_depth: int = 5) -> tuple[int, ...] | Non
     tuple[int, ...] | None
         First stub shape, or ``None`` when no stub is present.
     """
-
-    from ..._utils.introspection import get_vars_of_type_from_obj
 
     stubs = get_vars_of_type_from_obj(value, ReleasedTensorStub, search_depth=search_depth)
     if stubs:

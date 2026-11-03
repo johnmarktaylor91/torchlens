@@ -25,8 +25,12 @@ from .._capture_attr_observer import (
     settle_module_attrs,
     snapshot_module_attrs,
 )
+from .._data_classes._state_adapter import state_items
 from .._data_classes._trace_missing_attrs import is_live_trace
+from .._data_classes.module import set_attribute_writes
 from .._storage_bindings import rebind_if_moved, record_storage_binding
+from .._utils.rng import log_current_rng_states, set_rng_from_saved_states
+from ..errors import TorchLensWarning
 from .state import (
     LiveDeclaredStateSnapshot,
     declared_slot_unchanged,
@@ -92,7 +96,6 @@ def _unalias_trace_payloads(trace: Any, changed: list[torch.Tensor]) -> None:
         # A reference-mode capture asked for aliases: restoring the live buffer is
         # then a post-capture mutation its reference tripwire must still see.
         return
-    from .._data_classes._state_adapter import state_items
 
     if not is_live_trace(trace):
         # A PartialTrace (failed capture) or husked trace holds no layer payloads.
@@ -212,8 +215,6 @@ def _observed_modules(model: Any) -> list[tuple[str, Any]]:
 def snapshot_capture_observer_state(model: Any) -> CaptureObserverSnapshot:
     """Snapshot the state a default (pure-observer) capture restores afterwards."""
 
-    from .._utils.rng import log_current_rng_states
-
     modules = _observed_modules(model)
     buffers: list[tuple[Any, str, torch.Tensor]] = []
     clones: dict[int, torch.Tensor] = {}
@@ -289,9 +290,6 @@ def restore_capture_observer_state(
     be restored is named in one ``capture_state_restore_incomplete`` warning.
     """
 
-    from .._utils.rng import set_rng_from_saved_states
-    from ..errors import TorchLensWarning
-
     failed: list[str] = []
     with _state.pause_logging(), torch.no_grad():
         try:
@@ -339,8 +337,6 @@ def attach_attribute_writes(
     Runs for a completed capture only (a failed capture's partial product
     carries no record); a module the trace has no record for is skipped.
     """
-
-    from .._data_classes.module import set_attribute_writes
 
     records = getattr(trace, "modules", None) if trace is not None else None
     if records is None:

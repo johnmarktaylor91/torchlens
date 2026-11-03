@@ -18,6 +18,8 @@ from typing import Any, TypeAlias
 
 import torch
 
+from .._io.runnable_load import _unwrap_decorated
+from .._utils._torch_symbols import torch_attr
 from ..errors import RunCapabilityUnavailableError
 from . import (
     LiteralTorchSymbol,
@@ -26,6 +28,7 @@ from . import (
     TensorSlotDescriptor,
     TensorSlotRole,
 )
+from .state import _allocation_budget_bytes, _slot_device, _torch_dtype
 
 _VIEW_LOGICAL_ELEMENT_CEILING = 1 << 32
 """Largest logical extent the admitted pure-view slots of one run may have, summed.
@@ -144,9 +147,6 @@ def _resolved_forms(
     entries: Mapping[tuple[str, str], frozenset[_LiteralPosition]],
 ) -> dict[Any, frozenset[_LiteralPosition]]:
     """Resolve ``(namespace, name)`` keys to unwrapped callables, keeping their forms."""
-
-    from .._io.runnable_load import _unwrap_decorated
-    from .._utils._torch_symbols import torch_attr
 
     resolved: dict[Any, frozenset[_LiteralPosition]] = {}
     for (namespace, name), forms in entries.items():
@@ -395,8 +395,6 @@ def _preflight_retention_floor(
     own no storage, so they are the only op outputs the floor does not charge.
     """
 
-    from .state import _allocation_budget_bytes, _slot_device, _torch_dtype
-
     slots = {slot.slot_id: slot for slot in descriptor.tensor_slots}
     floor: dict[str, int] = defaultdict(int)
     devices: dict[str, torch.device] = {}
@@ -462,7 +460,6 @@ def _check_unretained_extent(
     off_cpu = admitted_view and value.device.type != "cpu"
     if numel <= _VIEW_LOGICAL_ELEMENT_CEILING and not off_cpu:
         return
-    from .state import _allocation_budget_bytes
 
     logical_bytes = numel * int(value.element_size())
     available = _allocation_budget_bytes(value.device)

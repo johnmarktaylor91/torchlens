@@ -39,6 +39,7 @@ import threading
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
+from ..recording.exceptions import PredicateError
 from .predicate import RecordContext, RetroactiveCaptureDecision
 
 if TYPE_CHECKING:
@@ -158,7 +159,6 @@ def register_predicate(
                 "underlying plain predicate callable instead, or pass the selector "
                 "directly (raw callables never need registration)."
             )
-        from ..recording.exceptions import PredicateError
 
         with _REGISTRY_LOCK:
             if name in _BUILTIN_PREDICATES:

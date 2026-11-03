@@ -30,6 +30,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 from torch import get_default_dtype, nn
 
 from torchlens import _state
+from torchlens._ir.capture_events import CaptureEvents
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import CompiledCapturePrep
@@ -327,8 +328,6 @@ def _attach_sessions(
     grad_layers_to_save: str | list[str | int] | None,
 ) -> None:
     """Open the event stream, fix the stop directive and attach the capture sessions."""
-
-    from torchlens._ir.capture_events import CaptureEvents
 
     self.capture_events = CaptureEvents()
     run.capture_events = self.capture_events

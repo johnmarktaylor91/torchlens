@@ -19,6 +19,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .._quantities import Bytes
+
 
 def process_rss_bytes() -> int:
     """Return the current process resident-set size in bytes, or 0 if unavailable.
@@ -355,8 +357,6 @@ def record_forward_peak(
         Whether the capture opted in with ``measure_host_peak_memory=True``.
     """
 
-    from .._quantities import Bytes
-
     peak, trace._cost_forward_peak_memory_reason = forward_peak_value(
         backend,
         measured,
@@ -384,8 +384,6 @@ def record_backward_peak(trace: Any, backend: str, peak_delta: int) -> None:
     peak_delta:
         The pass's peak above its starting baseline, in bytes.
     """
-
-    from .._quantities import Bytes
 
     if backend == "cpu" and not getattr(trace, "measure_host_peak_memory", False):
         trace._cost_backward_peak_memory = None

@@ -24,11 +24,14 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
+from .._state import pause_logging
+from ._internal_read import internal_scalar_read
 from ._tensor_label import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
     get_functorch_wrapped_tensor_checker,
+    get_tracing_tensor_types,
 )
 from ._torch_symbols import torch_attr
 from .env_flags import closed_bool_env
@@ -510,7 +513,6 @@ def tensor_nanequal(
     Returns:
         True if the tensors are considered equal.
     """
-    from .._state import pause_logging
 
     if is_functorch_wrapped_tensor(tensor_a) or is_functorch_wrapped_tensor(tensor_b):
         return False
@@ -681,7 +683,6 @@ def safe_to(obj: Any, device: str) -> Any:
     Returns:
         The tensor on the target device, or the original object if not a tensor.
     """
-    from .._state import pause_logging
 
     if isinstance(obj, torch.Tensor):
         with pause_logging():
@@ -846,8 +847,6 @@ def concatenate_batch_tensors(left: torch.Tensor, right: torch.Tensor) -> torch.
     torch.Tensor
         Tensor containing ``left`` followed by ``right`` on dimension 0.
     """
-
-    from .._state import pause_logging
 
     with pause_logging():
         return torch.cat([left, right], dim=0)
@@ -1042,8 +1041,6 @@ def _paused_internal_reads() -> Iterator[None]:
     must run under ``pause_logging`` plus ``internal_scalar_read`` or they
     would register as user raw-pointer escapes on witness-armed captures.
     """
-    from .._state import pause_logging
-    from ._internal_read import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1060,7 +1057,6 @@ def _deferred_storage_key(x: torch.Tensor) -> tuple[int, int, str] | None:
     fires, and the entry guard's own contract is that FakeTensors never reach
     pointer-reading metadata (grind-r5 b6 R16, order-dependent repro).
     """
-    from ._torch_compat import get_tracing_tensor_types
 
     tracing_types = get_tracing_tensor_types()
     if tracing_types and isinstance(x, tracing_types):
@@ -1151,7 +1147,6 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)
@@ -1699,7 +1694,6 @@ def _clone_tensor_payload(
         Tensor payload with TorchLens raw label preserved, or a rewrapped
         parameter payload for parameter inputs.
     """
-    from .._state import pause_logging
 
     with pause_logging():
         if save_mode not in SAVE_MODES:
@@ -1870,7 +1864,6 @@ def print_override(t: torch.Tensor, func_name: str) -> str:
     Returns:
         Human-readable string representation of the tensor.
     """
-    from .._state import pause_logging
 
     try:
         with pause_logging():

@@ -61,6 +61,7 @@ from .mask import (
     _mask_union,
     _mask_whole,
 )
+from .selectors import _grad_selection_refusal
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -1093,7 +1094,6 @@ def _resolve_combinator(node: _Combinator, trace: Any, kind: str) -> Selection:
 def _resolve_selector_term(node: _SelectorTerm, trace: Any) -> Selection:
     """Resolve a lifted selector to whole-site masks over its matched sites."""
     from .resolver import _normalize_query, _resolve_branch_sites, split_site_branches
-    from .selectors import _grad_selection_refusal
 
     matched: list[Any] = []
     for branch in split_site_branches(node.selector):
@@ -1517,7 +1517,6 @@ def random_like(
 def _selection_from_selector(selector: Any) -> Selector:
     """Lift a BaseSelector as a selector-term (predicate meaning intact)."""
     from .resolver import split_site_branches
-    from .selectors import _grad_selection_refusal
 
     branches = split_site_branches(selector)
     if any(branch.universe == "gradient" for branch in branches):

@@ -64,6 +64,7 @@ from .._selection.selection import Selection, Selector, Site, _Combinator, _lift
 from .._selection.subspace import _basis_digest, _SubspaceTerm
 from ._affine_source import AFFINE_SOURCE_NAME, SourceCall, check_source_shape
 from ._subspace_edits import _orthonormal_rows
+from .masked_edit import _masked_factory
 from .types import Edit
 
 __all__ = [
@@ -457,8 +458,6 @@ def masked_subspace_edit(edit: Edit, mask: _Mask, site_label: str) -> Edit:
     ``mask_sha256``, and the hook scatters only the masked elements, exactly as
     the session-time masked edit does, so a reload applies bit-identically.
     """
-
-    from .masked_edit import _masked_factory
 
     if edit.factory is None:
         raise _refusal_for(edit.name, code="subspace_edit_unsupported")

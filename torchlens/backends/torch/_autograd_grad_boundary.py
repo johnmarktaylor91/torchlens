@@ -15,6 +15,7 @@ from collections.abc import Callable
 from typing import Any
 
 from ._autograd_grad_marker import AUTOGRAD_GRAD_RECORDER_ATTR
+from .wrappers import _set_transform_metadata, torch_func_decorator
 
 AUTOGRAD_GRAD_FUNC_NAME = "autogradgrad"
 """Op type / func name of the boundary op."""
@@ -125,8 +126,6 @@ def record_autograd_grad_boundary(
     Any
         The gradients, as ``torch.autograd.grad`` returns them.
     """
-
-    from .wrappers import _set_transform_metadata, torch_func_decorator
 
     # One shot: the recorder keeps no reference to the live call (its roots
     # hold the whole forward graph) once the engine pass has run, and it can

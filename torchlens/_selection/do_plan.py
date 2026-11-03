@@ -14,6 +14,9 @@ from typing import Any
 import torch
 
 from .._data_classes._trace_intervention_records import _edit_identity
+from ..intervention._subspace_projection import subspace_projection_of
+from ..intervention.masked_edit import _derive_masked_edit
+from ..intervention.types import Edit
 from .resolver import _label_index_scope
 from .selection import (
     Selection,
@@ -35,7 +38,6 @@ def _build_selection_do_plan(
             "do(selection, edit) requires an edit: pass an Edit/Edit "
             "(e.g. tl.zero_ablate()), a hook callable, or a replacement tensor."
         )
-    from ..intervention._subspace_projection import subspace_projection_of
 
     # A bare tl.subspace(...) target is projection-valued: the edit acts on
     # the component along the basis (resolve() still reports the support).
@@ -46,9 +48,6 @@ def _build_selection_do_plan(
         # Refuse at do(), before anything is staged: a [k, d] map needs a basis.
         raise needs_subspace(repr(selection_like), code="affine_source_needs_subspace")
     resolved = _resolve_do_target(trace, selection_like)
-
-    from ..intervention.masked_edit import _derive_masked_edit
-    from ..intervention.types import Edit
 
     if not isinstance(edit, Edit) and not callable(edit):
         # Raw replacement TENSORS route through the shipped replace_with helper and

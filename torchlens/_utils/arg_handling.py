@@ -14,7 +14,8 @@ from typing import Any, cast
 import torch
 from torch import nn
 
-from .._state import ReentrantTraceError
+from .._errors import InvalidArgumentError
+from .._state import ReentrantTraceError, pause_logging
 from ._input_tree import (
     INPUT_TREE_MAX_DEPTH,
     _inspect_instance_state_items,
@@ -97,8 +98,6 @@ def rebuild_tuple_like(arg_type: type[Any], items: list[Any]) -> Any:
         Verified rebuilt instance, or ``None`` when no constructor shape
         reproduces the items (callers fall back without crashing).
     """
-
-    from .._state import pause_logging
 
     if _is_structseq_type(arg_type):
         builds: tuple[Any, ...] = (lambda: arg_type(items),)
@@ -899,9 +898,6 @@ def safe_copy_input_tree(
         unexpected copy failures use the historical clone/by-reference
         fallbacks but are explicitly reported as unverifiable.
     """
-
-    from .._errors import InvalidArgumentError
-    from .._state import pause_logging
 
     memo: dict[int, Any] = {}
     in_progress: set[int] = set()

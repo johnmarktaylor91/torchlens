@@ -15,14 +15,22 @@ import torch
 from torch import nn
 
 from .._capture.prepare.chunked import iter_chunked_inputs, normalize_chunk_paths, plan_chunks
+from .._capture.run_entry import _run_model_and_save_specified_outs
+from .._capture_state_helpers import (
+    _reject_opaque_wrappers,
+    _unwrap_data_parallel,
+    unwrap_compiled_model,
+)
 from .._data_classes._trace_accessors import boundary_label_rows
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._input_coerce import _coerce_input_args
+from .._robustness import check_model_and_input_variants
+from .._runnable.state import CAPTURE_STATE_CLONE
 from .._trace_state import TraceState
 from .._utils._torch_compat import tensor_has_named_dims
 from .._utils.hashing import compute_graph_shape_hash
-from ..backends.torch.backward import _register_forward_grad_fn
+from ..backends.torch.backward import _BACKWARD_TRACE_SLOTS, _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
 from ._rerun_ledger import _build_ledger_record
@@ -278,8 +286,6 @@ def _release_backward_registry_slot(trace: Trace) -> None:
     trace:
         The discarded trace.
     """
-
-    from ..backends.torch.backward import _BACKWARD_TRACE_SLOTS
 
     slot = _BACKWARD_TRACE_SLOTS.pop(trace, None)
     if slot is not None:
@@ -941,7 +947,6 @@ def _preflight(log: Trace, model: nn.Module, x: Any) -> None:
             remedy="pass the forward input explicitly as log.run(model, x)",
             argument="inputs",
         )
-    from .._capture_state_helpers import _reject_opaque_wrappers
 
     _reject_opaque_wrappers(model)
 
@@ -959,8 +964,6 @@ def _unwrap_compiled_model(model: nn.Module) -> nn.Module:
     nn.Module
         The eager source when ``model`` is a compiled Dynamo wrapper.
     """
-
-    from .._capture_state_helpers import unwrap_compiled_model
 
     return unwrap_compiled_model(model)
 
@@ -1002,10 +1005,6 @@ def _capture_with_active_spec(
     Trace
         Fresh log built off to the side.
     """
-
-    from .._capture.run_entry import _run_model_and_save_specified_outs
-    from .._capture_state_helpers import _unwrap_data_parallel
-    from .._robustness import check_model_and_input_variants
 
     model = _unwrap_data_parallel(model)
     x = _coerce_input_args(model, x)
@@ -1120,8 +1119,6 @@ def _share_source_state_clones(log: Trace) -> Iterator[None]:
     log:
         Source trace of the rerun.
     """
-
-    from .._runnable.state import CAPTURE_STATE_CLONE
 
     source_state = getattr(log._runnable, "capture_state", None)
     if not isinstance(source_state, Mapping):

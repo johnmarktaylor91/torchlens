@@ -4,6 +4,8 @@ from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from .._quantities import Bytes
+from ..backends import TORCH_BACKEND_NAME
+from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -117,13 +119,11 @@ def refresh_pinned_autograd_memory(trace: "Trace", saved_ops: Iterable[object]) 
     """
 
     from .._quantities import Bytes
-    from ..backends import TORCH_BACKEND_NAME
 
     backend_name = str(trace._provenance_backend or TORCH_BACKEND_NAME)
     if backend_name != TORCH_BACKEND_NAME:
         trace._cost_pinned_autograd_memory = None
         return
-    from ..backends.torch._pinned_graph import pinned_autograd_bytes
 
     payloads = [
         payload

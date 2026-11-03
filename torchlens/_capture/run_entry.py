@@ -41,6 +41,7 @@ from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )
 from ..intervention.predicates import InterventionPredicate
+from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
 from ..recording.exceptions import PredicateError
 from ..recording.options import HaltPredicateFn, PredicateFn
 from ._run_setup import (
@@ -443,8 +444,6 @@ def _forward_under_minter(trace: Trace, r: SimpleNamespace, reservation_token: o
     """
 
     from contextlib import nullcontext
-
-    from ..intervention.site_keys import armed_live_minter, predicate_needs_live_site_keys
 
     live_minter_scope = (
         armed_live_minter()

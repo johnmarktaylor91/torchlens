@@ -48,6 +48,7 @@ from ...backends.registry import (
     get_backend_spec,
     require_capability_implementation,
 )
+from ...errors import TorchLensWarning
 from ...recording._halt import StopSignal
 from ...recording.types import CaptureSpec
 from .._finalize import (
@@ -2212,7 +2213,6 @@ class MLXBackend:
                 "policy to keep the trace marked capture_verified=False instead",
                 code=UNWRAPPED_OP_REASON,
             )
-        from ...errors import TorchLensWarning
 
         warnings.warn(
             TorchLensWarning(

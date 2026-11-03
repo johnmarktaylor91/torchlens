@@ -12,12 +12,15 @@ import torch
 from torchlens._runnable import ContractCheck, ReadinessReport
 
 from .. import _state
+from .._capture.projectors import train_mode_norm_writers_eligible
 from .._errors import InvalidArgumentError
 from .._runnable_until import (
     _until_dependency_closure,
     _until_execution_partition,
     _until_stop_raw_index,
 )
+from .._trace_selector_helpers import canonical_module_site_key
+from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 from .._utils.rng import (
     restore_host_rng,
     snapshot_host_rng,
@@ -26,6 +29,7 @@ from ..errors import (
     PathDivergenceError,
     RunCapabilityUnavailableError,
     RuntimeSignatureDriftError,
+    StateBindingError,
 )
 from ..intervention.replay import _CallConeNode, _walk_call_cone
 from . import (
@@ -49,6 +53,7 @@ from .state import (
     RunResourceCeiling,
     runnable_tensor_byte_digest,
 )
+from .state_live import LiveStateRestoreFailure, restore_live_declared_state
 
 __all__ = (
     "_execute_loaded_sparse_transaction",
@@ -540,10 +545,7 @@ def _validated_until_tokens(until: Any) -> list[Any]:
 def _resolve_until_site(trace: Any, token: str) -> tuple[list[Any], list[str], list[str]]:
     """Resolve ONE until= token to (layers, requested names, layer labels)."""
 
-    from .._trace_selector_helpers import canonical_module_site_key
-
     token = canonical_module_site_key(trace, token) or token
-    from .._errors import InvalidArgumentError
 
     if token == "saved":
         saved_layers = [
@@ -601,8 +603,6 @@ def _loaded_until_cut(
     certified-fresh vocabulary is not yet shipped) and the run discloses the
     ``sequential_prefix`` regime with the ``unprovable_independence`` cause tag.
     """
-
-    from .._errors import InvalidArgumentError
 
     calls = tuple(descriptor.calls)
     requested = set(plan.requested_layer_labels)
@@ -715,7 +715,6 @@ def _attempt_live_forward(
         # input divergence, so the native error re-raises raw -- the old
         # ``None`` behavior, now explicit (R22-2).
         first_failed = None
-    from .._capture.projectors import train_mode_norm_writers_eligible
 
     try:
         with train_mode_norm_writers_eligible():
@@ -1123,9 +1122,7 @@ def _restore_declared_state_or_mark(trace: Any, fork: Any, snapshot: Any) -> Non
     alias groups restored before the failure, and chains the restore exception.
     """
 
-    from ..errors import StateBindingError
     from . import mark_trace_path_status
-    from .state_live import LiveStateRestoreFailure, restore_live_declared_state
 
     try:
         restore_live_declared_state(snapshot, trace=fork)
@@ -1161,8 +1158,6 @@ def _live_runtime_input_leaves(input_args: Any, input_kwargs: Any) -> list[torch
     ``input_layers`` ordering. Returns ``None`` on any traversal failure -- the
     caller then skips classification entirely (never masks the native error).
     """
-
-    from .._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT, get_vars_of_type_from_obj
 
     try:
         if isinstance(input_args, (list, tuple)):

@@ -24,6 +24,7 @@ from ..._data_classes.op import (
 from ..._ir.op_record import amend_lookback_retention
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._ir.refs import TensorRef
+from ..._ir.selector_eval import split_followed_by_conjunction
 from ..._selection.selectors import (
     BaseSelector,
 )
@@ -422,8 +423,6 @@ def _append_trace_predicate_context(trace: Trace, ctx: RecordContext) -> None:
 
 def _trace_followed_by_candidate_selector(trace: Trace) -> BaseSelector | None:
     """Return the candidate selector for ``candidate & followed_by(successor)``."""
-
-    from ..._ir.selector_eval import split_followed_by_conjunction
 
     options = getattr(trace, "_predicate_save_options", None)
     predicate = None if options is None else options.keep_op

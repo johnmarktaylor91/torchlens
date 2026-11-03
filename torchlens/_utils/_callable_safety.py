@@ -143,6 +143,8 @@ from typing import Any
 
 import torch
 
+from ._torch_compat import get_disable_torch_function_context, get_tensorbase_class
+
 # Module identities (exact name or dotted-prefix ancestor) whose callables are
 # pure forward/tensor ops safe to resolve from an untrusted bundle key. Derived
 # by enumerating every callable reachable through the resolvers' allowlisted
@@ -804,8 +806,6 @@ def _tensor_method_owners() -> frozenset[type]:
     (``HAS_TENSORBASE_CLASS``, r-b4 R26-2) instead of a duplicated local probe.
     """
 
-    from ._torch_compat import get_tensorbase_class
-
     owners: set[type] = {torch.Tensor}
     tensorbase = get_tensorbase_class()
     if tensorbase is not None:
@@ -977,8 +977,6 @@ def _iter_tensor_getset_descriptor_names() -> tuple[str, ...]:
     a new tensor property is seen by the classifier automatically.
     """
 
-    from ._torch_compat import get_tensorbase_class
-
     base = get_tensorbase_class()
     if base is None:  # pragma: no cover - torch always exposes the C tensor base here.
         return ()
@@ -1010,8 +1008,6 @@ def _mode_free_probe_context() -> Iterator[None]:
     The neutralization is scoped to the probe only; the caller's ambient
     grad/inference/default-device state is untouched on exit.
     """
-
-    from ._torch_compat import get_disable_torch_function_context
 
     with ExitStack() as stack:
         # r-b4 R26-2: resolved through _torch_compat (HAS_DISABLE_TORCH_FUNCTION).

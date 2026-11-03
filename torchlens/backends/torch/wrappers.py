@@ -103,6 +103,7 @@ from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
 from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
+from ._torch_ops_calls import install_torch_ops_call_recorders, uninstall_torch_ops_call_recorders
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
     TRANSFORM_BUILDER_SITES,
@@ -122,6 +123,7 @@ from ._weightsfree_ctx import active_factory_device as _active_factory_device
 from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
 from .arg_names import get_arg_names
+from .belt import restore_belt_references, sweep_stale_belt_references
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_or_late_index_buffer_address,
@@ -144,6 +146,7 @@ from .param_mutation import (
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
+from .tensor_tracking import _add_tensor_backward_hook
 
 if TYPE_CHECKING:
     pass
@@ -696,7 +699,6 @@ def _register_inplace_live_grad_hook(
 
     if not isinstance(tensor, torch.Tensor):
         return
-    from .tensor_tracking import _add_tensor_backward_hook
 
     # The live tensor is what downstream ops consume, so it takes gradient
     # ownership of the label; the logged copy's hook (if any) stops emitting.
@@ -2490,7 +2492,6 @@ def _unwrap_torch_locked() -> None:
     reset_detector_tables()
     _state._escape_detector_mode = "off"
     _state._completeness_witness_mode = "off"
-    from .belt import restore_belt_references
 
     restore_belt_references()
     from .backward import uninstall_autograd_wrappers
@@ -2499,7 +2500,6 @@ def _unwrap_torch_locked() -> None:
     from .legacy_ctors import uninstall_legacy_constructor_wrappers
 
     uninstall_legacy_constructor_wrappers()
-    from ._torch_ops_calls import uninstall_torch_ops_call_recorders
 
     uninstall_torch_ops_call_recorders()
 
@@ -2732,8 +2732,6 @@ def _wrap_torch_locked(
     # that landed after the first wrap gets its custom ops decorated here.
     _ensure_torchvision_ops_decorated()
 
-    from ._torch_ops_calls import install_torch_ops_call_recorders
-    from .belt import sweep_stale_belt_references
     from .legacy_ctors import install_legacy_constructor_wrappers
 
     # Legacy ``torch.<dtype>Tensor`` / ``Variable`` classes are patched in place

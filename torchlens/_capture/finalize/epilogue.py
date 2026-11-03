@@ -25,6 +25,7 @@ from ..._data_classes.trace import (
 )
 from ..._errors import InvalidArgumentError
 from ..._utils.display import _vprint, ensure_trace_visualizer_dir
+from ...errors import TorchLensWarning
 from .._episode_ledger import (
     EPISODE_ANNOTATIONS_KEY,
     EpisodeLedger,
@@ -240,7 +241,6 @@ def _check_stop_after_fired(trace: Trace, facts: dict[str, Any]) -> None:
         stop_annotations.setdefault("unmatched_capture_selectors", []).append(
             {"slot": "stop_after", "selector": site_repr}
         )
-    from ...errors import TorchLensWarning
 
     warnings.warn(
         TorchLensWarning(

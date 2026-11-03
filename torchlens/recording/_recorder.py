@@ -16,7 +16,15 @@ from torchlens._ir.capture_events import CaptureEvents
 
 from .. import _state
 from .._capture.finalize.settle import _extract_and_mark_outputs
-from .._capture.outcome import safe_exception_repr, safe_exception_str
+from .._capture.outcome import (
+    CaptureOutcome,
+    CaptureStatus,
+    classify_failure_origin,
+    outcome_for,
+    safe_exception_repr,
+    safe_exception_str,
+    stamp_recording_outcome,
+)
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
 from .._capture.projections import (
     RecordingState,
@@ -166,12 +174,6 @@ def _resolve_train_mode_default(
 
 def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
     """Stamp the finalized recording with its capture outcome when none is present."""
-
-    from .._capture.outcome import (
-        CaptureOutcome,
-        CaptureStatus,
-        stamp_recording_outcome,
-    )
 
     if getattr(recording, "_outcome", None) is not None:
         return
@@ -653,7 +655,6 @@ class Recorder:
         if self._state is None:
             raise RecorderStateError("calling a Recorder requires an active with-block")
         _mark_recording_halted(self._state.recording, pass_index, halt_exc.reason)
-        from .._capture.outcome import CaptureOutcome, CaptureStatus, stamp_recording_outcome
 
         stamp_recording_outcome(
             self._state.recording,
@@ -783,14 +784,6 @@ class Recorder:
         # (the orchestrator's finally already classified phase/origin) with
         # the recorder-level committed-op count.
         from dataclasses import replace as dataclass_replace
-
-        from .._capture.outcome import (
-            CaptureOutcome,
-            CaptureStatus,
-            classify_failure_origin,
-            outcome_for,
-            stamp_recording_outcome,
-        )
 
         runtime_trace = self._state.runtime_trace if self._state is not None else None
         settled = outcome_for(runtime_trace) if runtime_trace is not None else None

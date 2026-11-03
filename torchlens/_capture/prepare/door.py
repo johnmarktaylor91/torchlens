@@ -62,6 +62,7 @@ from ...backends.torch.bound_root import (
     TLBoundMethodRoot,
     is_bound_method_of_module,
 )
+from ...backends.torch.model_prep import release_model
 from ...errors.episode import EpisodeDeclarationError
 from ...intervention.errors import ChunkedForwardConfigError
 from ...options import (
@@ -201,8 +202,6 @@ def _release_preparation_after_failed_capture(model: nn.Module) -> None:
         coded (``failed_capture_release_incomplete``) and never masks the
         capture exception.
     """
-
-    from ...backends.torch.model_prep import release_model
 
     try:
         release_model(model)

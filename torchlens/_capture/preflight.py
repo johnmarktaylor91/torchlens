@@ -22,6 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from .._ir.selector_eval import module_exit_bound_addresses, selector_contains_kind
 from .._trace_selector_helpers import _selector_component_is_final_only
 
 __all__ = ["AddressPreflight", "AddressVerdict", "address_preflight", "cone_preflight"]
@@ -86,7 +87,6 @@ def _classify(component: Any) -> tuple[str, str]:
         return "live", "module paths and bare type names resolve during the forward"
     if isinstance(component, int):
         return "live", "negative ordinals resolve through a bounded rolling window"
-    from .._ir.selector_eval import module_exit_bound_addresses, selector_contains_kind
     from .._selection.selectors import BaseSelector
 
     if isinstance(component, BaseSelector) and selector_contains_kind(component, "module"):

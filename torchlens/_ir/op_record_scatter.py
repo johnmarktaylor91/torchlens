@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from .op_record import FACET_DEFAULTS, IngestExtras, OpRecord
+from .op_record import _FACET_ATTRIBUTES, FACET_DEFAULTS, IngestExtras, OpRecord
 
 CELL_SOURCE_MANIFEST_VERSION = 2
 
@@ -278,8 +278,6 @@ EXTRA_KEY_CHANNELS: frozenset[str] = frozenset(
 
 def _facet(record: OpRecord, name: str) -> Any:
     """Return one facet of ``record``, materializing its checked-in default if absent."""
-
-    from .op_record import _FACET_ATTRIBUTES
 
     value = getattr(record, _FACET_ATTRIBUTES[name])
     if value is not None:

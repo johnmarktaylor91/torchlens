@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._deprecations import MISSING
+from ._backend_protocol import refusal_code_for_capability
 from .registry import (
     _GATED_TRACE_OPTION_FLAGS,
     BackendCapabilityConformanceError,
@@ -80,8 +81,6 @@ def _option_refusal_code(option_name: str) -> str:
     str
         A member of ``REFUSAL_CODES``.
     """
-
-    from ._backend_protocol import refusal_code_for_capability
 
     gate = TRACE_OPTION_CAPABILITY_GATES.get(option_name)
     if gate is None:

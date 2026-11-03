@@ -12,9 +12,11 @@ import inspect
 from collections.abc import Sequence
 from typing import Any
 
+from ...options import CaptureOptions
 from .._backend_protocol import FrameworkRequirement, SpecBackedProtocol
 from .._errors import BackendUnsupportedError
 from .._trace_options import TORCH_TRACE_OPTIONS
+from ..torch._ops_containers import _walk_output_tensors_with_paths
 
 TORCH_FRAMEWORK = FrameworkRequirement(
     distributions=("torch",),
@@ -33,8 +35,6 @@ def replay_ready_capture() -> Any:
     and RNG state, which a default ``tl.trace`` does not record (the preview
     backends record what their replay needs by default).
     """
-
-    from ...options import CaptureOptions
 
     return CaptureOptions(save_args=True, save_rng=True)
 
@@ -189,8 +189,6 @@ def _ground_truth_tensors(ground_truth: Any) -> list[Any]:
     its own ground truth), so leaf order and deduplication match how the trace
     recorded its outputs.
     """
-
-    from ..torch._ops_containers import _walk_output_tensors_with_paths
 
     tensors: list[Any] = []
     seen: set[tuple[Any, ...]] = set()

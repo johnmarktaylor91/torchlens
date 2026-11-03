@@ -13,6 +13,7 @@ import torch
 
 from torchlens._ir.capture_events import CaptureEvents
 
+from .._data_classes.op import _set_saved_out_metadata
 from .._errors import InvalidArgumentError
 from .._ir.container import (
     DataclassField,
@@ -23,10 +24,13 @@ from .._ir.container import (
     TupleIndex,
 )
 from .._quantities import Bytes
+from .._runnable import refuse_poisoned_trace
 from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
+from ..backends.torch.backward import _purge_trace_from_backward_registry
+from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
 from ..errors._base import TorchLensError
 from ..options import ReplayOptions, merge_replay_options
 from ._param_fingerprint import (
@@ -404,8 +408,6 @@ def _reset_backward_projection(log: Trace) -> None:
     log:
         Replay fork to reset.
     """
-
-    from ..backends.torch.backward import _purge_trace_from_backward_registry
 
     _purge_trace_from_backward_registry(log)
     log._capture_events = CaptureEvents()
@@ -1069,8 +1071,6 @@ def _install_replay_tensor_hook(log: Trace, site: Op, tensor: torch.Tensor) -> N
         Recomputed output tensor.
     """
 
-    from ..backends.torch.tensor_tracking import _add_tensor_backward_hook
-
     raw_label = getattr(site, "_label_raw", site.layer_label)
     site.grad_fn_handle = tensor.grad_fn
     if tensor.grad_fn is not None:
@@ -1420,8 +1420,6 @@ def _apply_out_update(site: Op, tensor: torch.Tensor) -> None:
         Replacement out.
     """
 
-    from .._data_classes.op import _set_saved_out_metadata
-
     site._internal_set("out", tensor)
     site._internal_set("transformed_out", None)
     _set_saved_out_metadata(site, tensor)
@@ -1435,8 +1433,6 @@ def _preflight_log(log: Trace) -> None:
     log:
         Model log to validate.
     """
-
-    from .._runnable import refuse_poisoned_trace
 
     refuse_poisoned_trace(log, "path-assuming intervention chaining")
     unmet = _unmet_log_precondition(log)

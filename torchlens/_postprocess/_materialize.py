@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, cast
 import torch
 from torch import nn
 
+from torchlens._data_classes.op import Op
 from torchlens._io import BlobRef as PortableBlobRef
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import (
@@ -21,6 +22,8 @@ from torchlens._ir.events import (
     ModulePrepEvent,
     OpEvent,
 )
+from torchlens._ir.op_record import OpRecord, op_record_from_event
+from torchlens._ir.op_record_scatter import scatter_record_to_cells
 from torchlens.intervention.types import EdgeUseRecord
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -70,8 +73,6 @@ def materialize_log_from_fields(fields_dict: dict[str, object], store: object | 
     Op
         Materialized operation or buffer log.
     """
-
-    from torchlens._data_classes.op import Op
 
     pending_blob_ids = _pop_pending_blob_ids(fields_dict)
     # r83 C2: the display ``address`` and the backend-native ``backend_address``
@@ -268,9 +269,6 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
     are restaged as ``Step0Result`` payloads (X2: the raw-log registration
     map is LOCAL and the payload derives from it).
     """
-
-    from torchlens._ir.op_record import OpRecord, op_record_from_event
-    from torchlens._ir.op_record_scatter import scatter_record_to_cells
 
     journal = inputs.journal
     op_store = inputs.op_row_store

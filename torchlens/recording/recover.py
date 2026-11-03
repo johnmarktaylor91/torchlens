@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from .._io.lazy import _file_identity
+from .._utils.hashing import sha256_file
+
 __tl_layer__ = "L3"
 
 import dataclasses
@@ -416,9 +419,6 @@ def _load_verified_blob_tensor(blob_path: Path, expected_sha256: str) -> Any:
     materialized through the mmap-backed safetensors file loader (matching the
     main bundle path's ``sha256_file`` + ``load_file`` discipline).
     """
-
-    from .._io.lazy import _file_identity
-    from .._utils.hashing import sha256_file
 
     # R59 TOCTOU (lazy.py discipline): the digest and the mmap-backed load are
     # two opens of the same path, so bracket the hash with the file identity and

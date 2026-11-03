@@ -39,6 +39,7 @@ from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import get_memory_amount, safe_copy
+from ._completeness_origins import internal_scalar_read
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 
@@ -129,8 +130,6 @@ def _frozen_receiver_flag(receiver: torch.nn.Parameter) -> Iterator[None]:
         Control for the wrapped call.
     """
 
-    from ._completeness_origins import internal_scalar_read
-
     with _state.pause_logging(), internal_scalar_read():
         receiver.requires_grad_(False)
     try:
@@ -187,7 +186,6 @@ def frozen_parameter_receiver_context(
     receiver = args[0]
     if not isinstance(receiver, torch.nn.Parameter):
         return nullcontext()
-    from ._completeness_origins import internal_scalar_read
 
     with internal_scalar_read():
         is_forced_leaf = receiver.requires_grad and receiver.is_leaf

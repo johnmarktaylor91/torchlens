@@ -22,7 +22,9 @@ from .. import _state
 from .._transport import digest_byte_view
 from .._utils._torch_compat import tensor_has_named_dims, tensor_version_or_none
 from .._utils._torch_symbols import torch_attr
+from .._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
 from .._utils.lazy_state import raise_if_pending_state_slots
+from ..backends.torch.rescue import _state_bytes_equal
 from ..errors import RunCapabilityUnavailableError, RunPreconditionError, StateBindingError
 from ..errors._base import TorchLensWarning
 from . import (
@@ -755,8 +757,6 @@ def snapshot_state_alias_topology(model: object) -> Mapping[str, Any] | None:
     model exposes no named state accessors.
     """
 
-    from .._utils.alias_footprint import tensor_byte_footprint, touched_bytes_relation
-
     named_parameters = getattr(model, "named_parameters", None)
     named_buffers = getattr(model, "named_buffers", None)
     if not callable(named_parameters) or not callable(named_buffers):
@@ -931,8 +931,6 @@ def snapshot_live_declared_state(model: object) -> LiveDeclaredStateSnapshot:
 
 def declared_slot_unchanged(original: torch.Tensor, clone: torch.Tensor) -> bool:
     """Return whether a live state slot still holds its snapshot bytes (byte-exact, NaN-safe)."""
-
-    from ..backends.torch.rescue import _state_bytes_equal
 
     try:
         return (

@@ -11,6 +11,7 @@ from torch import nn
 
 from torchlens.backends.registry import BackendUnsupportedError
 
+from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 from ...backends.registry import (
     CaptureBackend,
     get_backend_spec,
@@ -23,6 +24,7 @@ from ..outcome import (
     set_capture_phase,
     settle_failed,
 )
+from ..projectors import RefreshProjector
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -249,8 +251,6 @@ def _project_refreshed(
 ) -> None:
     """Project the refreshed capture onto ``self`` (prefix-scoped when a latch fired)."""
 
-    from ..projectors import RefreshProjector
-
     projected_layer_nums = (
         "all" if layer_nums_to_save == "all" else tuple(cast(list[int], layer_nums_to_save))
     )
@@ -387,8 +387,6 @@ def _scrub_failed_capture_transients(self: "Trace") -> None:
     -------
     None. Mutates ``self.__dict__``.
     """
-
-    from ..._utils.tensor_utils import synchronize_pending_cpu_async_copies
 
     # A failed forward may leave in-flight cpu_async D2H copies whose
     # pinned host buffers escape on ``exc.partial_trace`` (R36-1): fence them

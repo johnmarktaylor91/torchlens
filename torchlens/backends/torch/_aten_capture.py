@@ -22,6 +22,8 @@ from ..._ir.events import (
 )
 from ..._utils._torch_compat import get_current_autograd_node_fn
 from ._backward_markers import _ACTIVE_BACKWARD_GRAD_FN_REFS, executing_grad_fn_ref
+from ._completeness_types import _WitnessState
+from .completeness_witness import _CompletenessDispatchMode
 
 _RECORD_ATEN_FOR_TESTS: ContextVar[bool] = ContextVar(
     "torchlens_record_aten_for_tests", default=False
@@ -586,8 +588,6 @@ def _capture_backward_aten(trace: Any, pass_index: int) -> Iterator[None]:
         with nullcontext():
             yield
         return
-    from ._completeness_types import _WitnessState
-    from .completeness_witness import _CompletenessDispatchMode
 
     state = _WitnessState(
         trace=trace,

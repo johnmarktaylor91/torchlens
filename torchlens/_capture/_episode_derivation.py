@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 from .._utils.collections import _path_component_key
 from .._utils.hashing import sha256_canonical_json
+from .._utils.tensor_utils import safe_copy
 from ..errors.episode import EpisodeDeclarationError
 
 if TYPE_CHECKING:
@@ -178,8 +179,6 @@ def _flat_cpu_snapshot(value: Any) -> Any:
     guardrail) instead of a bare ``.detach()``; the copy is consumed by byte
     reinterpretation or ``tolist`` and never re-enters capture state.
     """
-
-    from .._utils.tensor_utils import safe_copy
 
     return safe_copy(value, detach_tensor=True).cpu().reshape(-1)
 

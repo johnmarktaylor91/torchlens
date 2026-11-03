@@ -24,6 +24,8 @@ from ..intervention.predicates import as_intervention_decision
 from ..intervention.types import InterventionDecision
 from ..recording.exceptions import PredicateError
 from ..recording.types import CaptureSpec, ModuleStackFrame, RecordContext
+from .projections import _build_record_context
+from .stop import StopDirective
 
 if TYPE_CHECKING:
     from ..recording.options import RecordingOptions
@@ -294,8 +296,6 @@ def _evaluate_halt(
         If ``options.halt`` returns a non-bool value.
     """
 
-    from .stop import StopDirective
-
     StopDirective(halt_options=options).evaluate_halt(ctx, frontier_output=frontier_output)
 
 
@@ -520,8 +520,6 @@ def build_op_record_context(
     RecordContext
         Frozen predicate context.
     """
-
-    from .projections import _build_record_context
 
     return _build_record_context(
         kind=kind,

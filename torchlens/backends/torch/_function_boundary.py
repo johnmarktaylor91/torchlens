@@ -38,7 +38,13 @@ import torch
 
 from ... import _state
 from ..._data_classes.internal_types import FuncExecutionContext
+from ..._errors import TorchLensWarning
+from ..._utils._tensor_label import clear_tensor_label, get_tensor_label, set_tensor_label
+from ..._utils._torch_compat import get_current_dispatch_mode_stack
+from ..._utils.introspection import get_vars_of_type_from_obj
 from ..._utils.rng import log_current_autocast_state, log_current_rng_states
+from ._ops_emission import log_function_output_tensors
+from .escape_detection import ExpectedOriginalToken
 
 FOREIGN_FUNCTION_FUNC_NAME = "autogradfunction"
 """Op type / func name of the boundary op."""
@@ -236,7 +242,6 @@ def _active_witness_state(trace: Any) -> Any | None:
     carries the state of every armed census, runnable or not.
     """
 
-    from ..._utils._torch_compat import get_current_dispatch_mode_stack
     from . import completeness_witness
 
     for mode in reversed(get_current_dispatch_mode_stack() or []):
@@ -369,8 +374,6 @@ def _reown_witness_events(
 ) -> None:
     """Hand every dispatch event of the frame to one accounted boundary token."""
 
-    from .escape_detection import ExpectedOriginalToken
-
     token = ExpectedOriginalToken(
         raw_id=id(call.spec.original),
         original=call.spec.original,
@@ -392,9 +395,6 @@ def _snapshot_arg_labels(
 ) -> list[tuple[Any, str | None]]:
     """Record each tensor argument's live label before the forward runs."""
 
-    from ..._utils._tensor_label import get_tensor_label
-    from ..._utils.introspection import get_vars_of_type_from_obj
-
     tensors = get_vars_of_type_from_obj(
         (args, kwargs), torch.Tensor, subclass_exceptions=[torch.nn.Parameter], search_depth=4
     )
@@ -410,8 +410,6 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
     for that argument must come from the label the object carried before the forward.
     """
 
-    from ..._utils._tensor_label import clear_tensor_label, get_tensor_label, set_tensor_label
-
     for tensor, label in snapshot:
         current = get_tensor_label(tensor)
         if current == label or current not in interior_labels:
@@ -424,8 +422,6 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
 
 def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
     """Log the returned tensors as the call's one boundary op."""
-
-    from ._ops_emission import log_function_output_tensors
 
     def emit() -> None:
         """Record the boundary op through the ordinary output logger."""
@@ -455,8 +451,6 @@ def _log_boundary_op(trace: Any, call: _BoundaryCall) -> None:
 
 def _warn_foreign_boundary(trace: Any, cls: type[Any], exits: tuple[str, ...]) -> None:
     """Disclose one collapsed Function class per capture."""
-
-    from ..._errors import TorchLensWarning
 
     function_name = f"{cls.__module__}.{cls.__qualname__}"
     warned = trace.__dict__.setdefault("_foreign_kernel_warned", set())

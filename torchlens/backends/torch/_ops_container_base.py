@@ -20,6 +20,20 @@ from ..._ir.events import (
     ModuleFrame,
 )
 from ..._ir.intervention import FireResult
+from ..._ir.op_record import (
+    AncestryFacet,
+    AnnotationsFacet,
+    AutogradFacet,
+    ControlFacet,
+    GraphFacet,
+    InterventionFacet,
+    ModulesFacet,
+    OpCore,
+    OpRecord,
+    ParamsFacet,
+    PolicyFacet,
+    TransformFacet,
+)
 from ..._utils._torch_compat import (
     torch_structseq_field_names,
 )
@@ -64,21 +78,6 @@ def _op_record_from_log(
     ``op_record_from_event`` applied to the equivalent compat event (S5:
     absent facet != fabricated empty facet).
     """
-
-    from ..._ir.op_record import (
-        AncestryFacet,
-        AnnotationsFacet,
-        AutogradFacet,
-        ControlFacet,
-        GraphFacet,
-        InterventionFacet,
-        ModulesFacet,
-        OpCore,
-        OpRecord,
-        ParamsFacet,
-        PolicyFacet,
-        TransformFacet,
-    )
 
     tensor_ref, module_stack, transformed_ref, backend_semantics = _exhaustive_freeze_refs(
         fields_dict, tensor, module_stack

@@ -77,6 +77,7 @@ from ...backends._finalize import (
 from ...backends.registry import BackendName, BackendUnsupportedError, get_backend_spec
 from ...options import CaptureOptions, merge_capture_options
 from ...recording.types import CaptureSpec
+from .._finalize import _attach_param_usage
 from .._invariants import run_metadata_invariants
 from .._options import (
     JAX_EXTRA_KWARG_POLICY,
@@ -2459,8 +2460,6 @@ class JAXBackend:
         None
             Op parameter fields and reverse parameter usage lists are updated.
         """
-
-        from .._finalize import _attach_param_usage
 
         equation_labels = [
             label

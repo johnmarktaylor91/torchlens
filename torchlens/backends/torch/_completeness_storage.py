@@ -14,6 +14,8 @@ from typing import Any
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
+from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
+
 from ... import _state
 from ..._utils import _exception_notes
 from ..._utils._tensor_label import (
@@ -294,8 +296,6 @@ def _completeness_census_active() -> bool:
     disarmed the belt in exactly the census-blind regions it exists to cover,
     converting a belt-witnessed escape into an unwitnessed one (false VERIFIED).
     """
-
-    from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
 
     stack = get_current_dispatch_mode_stack()
     if stack is None:

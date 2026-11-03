@@ -47,6 +47,9 @@ from typing import TYPE_CHECKING, Any
 
 from .._constants import _RAW_LABEL_SUFFIX
 from .._utils._exception_notes import annotate_guarded
+from ..errors import TorchLensError
+from .finalize.settle import _extract_and_mark_outputs
+from .outcome import StopRequest
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -214,7 +217,6 @@ def _rewrite_nonfinite_error(trace: Any, exc: BaseException, *, finalized: bool)
             ]
         else:
             fields["parents"] = []
-    from ..errors import TorchLensError
 
     if isinstance(exc, TorchLensError) and isinstance(exc.affected_sites, list):
         exc.affected_sites = [label] if label is not None else []
@@ -229,8 +231,6 @@ def _rewrite_nonfinite_error(trace: Any, exc: BaseException, *, finalized: bool)
 
 def _is_latched_nonfinite_abort(stop_request: Any, exc: BaseException) -> bool:
     """Whether ``exc`` is the latched nonfinite abort recorded on the stop request."""
-
-    from .outcome import StopRequest
 
     return (
         isinstance(stop_request, StopRequest)
@@ -248,8 +248,6 @@ def _finalize_nonfinite_prefix_body(
     frontier_output: Any,
 ) -> None:
     """Recover the frontier, then clean the session, extract outputs and postprocess."""
-
-    from .finalize.settle import _extract_and_mark_outputs
 
     if frontier_output is None:
         raw_layer_dict = trace._raw_graph_ws.raw_layer_dict

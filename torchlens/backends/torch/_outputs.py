@@ -14,6 +14,7 @@ import torch
 
 from torchlens._utils import _tensor_label as _tl
 
+from ..._capture.projections import _record_context_from_event
 from ..._errors import OutputAttributionError
 from ..._io import BlobRef as PortableBlobRef
 from ..._ir._output_occurrences import container_path_to_address, occurrences_by_raw_label
@@ -28,6 +29,7 @@ from ..._utils.introspection import (
     get_vars_of_type_from_obj,
     nested_assign,
 )
+from ...recording._storage_resolver import _resolve_storage
 from ...recording.types import CaptureSpec, StorageIntent
 from ._ops_containers import _walk_output_tensors_with_paths, runnable_output_losslessness
 from .buffer_writes import reconcile_buffer_writes
@@ -127,8 +129,6 @@ def _retain_output_parent_payloads(
     """
 
     intent, output_device, spec = storage
-
-    from ...recording._storage_resolver import _resolve_storage
 
     # Output-parent promotion retains real payloads and must be visible to
     # the save-budget accountant like every other RAM retention: this path
@@ -266,8 +266,6 @@ def _promote_layers_to_save_output_parent(
         or event.output.has_saved_activation
     ):
         return event.output, event.policy, event.predicate_matched, event.capture_spec
-
-    from ..._capture.projections import _record_context_from_event
 
     ctx = dataclasses.replace(_record_context_from_event(event), is_output_parent=True)
     storage = _output_parent_storage_intent(trace)

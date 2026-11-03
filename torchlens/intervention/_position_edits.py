@@ -20,6 +20,7 @@ import torch
 
 from .._errors import InvalidArgumentError
 from .errors import HookValueError
+from .helpers import _helper_spec
 from .hooks import HookContext, normalize_hook
 from .types import Edit
 
@@ -180,8 +181,6 @@ def positions(
             return torch.where(where, edited.to(dtype=out.dtype), out)
 
         return _hook
-
-    from .helpers import _helper_spec
 
     return _helper_spec(
         "at_positions",

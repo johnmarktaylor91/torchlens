@@ -16,6 +16,8 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from ..._validation_status import ValidationStatus
+
 if TYPE_CHECKING:
     from ..._validation_status import ValidationReplaySource, ValidationStatus
 
@@ -184,7 +186,6 @@ def fold_status(
             )
         )
     folded = PaddleReplayOutcome(tuple(decisions))
-    from ..._validation_status import ValidationStatus
 
     return ValidationStatus.from_replay_counts(
         backend=backend,

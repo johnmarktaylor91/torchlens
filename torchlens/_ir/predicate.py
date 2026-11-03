@@ -7,6 +7,7 @@ from typing import Any, Literal
 
 from typing_extensions import Self
 
+from ..recording.exceptions import RecordContextFieldError
 from .refs import DeviceRef, DtypeRef
 
 EventKind = Literal["op", "module_enter", "module_exit", "input", "buffer"]
@@ -250,8 +251,6 @@ class RecordContext:
 
     def __getattr__(self, name: str) -> Any:
         """Raise a schema-specific error for unknown predicate fields."""
-
-        from ..recording.exceptions import RecordContextFieldError
 
         raise RecordContextFieldError(name)
 

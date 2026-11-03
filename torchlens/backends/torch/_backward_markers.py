@@ -18,6 +18,8 @@ from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
 
+from .tensor_tracking import _current_backward_graph_task_id
+
 _Marker = tuple[int, int, int, int, int | None]
 """``(node object id, call index, pass index, owner trace id, engine graph-task id)``."""
 
@@ -28,8 +30,6 @@ _ACTIVE_BACKWARD_GRAD_FN_REFS: ContextVar[tuple[_Marker, ...]] = ContextVar(
 
 def _graph_task_id() -> int | None:
     """Return the running engine's graph-task id, or ``None`` without one."""
-
-    from .tensor_tracking import _current_backward_graph_task_id
 
     return _current_backward_graph_task_id()
 
