@@ -16,8 +16,10 @@ from pathlib import Path
 
 import pytest
 import torch
+from _format3_envelope import redigest
 
 import torchlens as tl
+from torchlens._io import ArtifactTooOldError
 from torchlens._io.sidecar import SidecarError
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import (
@@ -504,16 +506,17 @@ def test_tampered_artifact_span_refuses_at_load(tmp_path: Path, model: _TinyLM) 
     bundle.save(source)
     tampered = tmp_path / "tampered.tlspec"
     shutil.copytree(source, tampered)
-    metadata_path = tampered / "bundle.json"
+    metadata_path = tampered / "relations.json"
     metadata = json.loads(metadata_path.read_text())
     metadata["member_relations"][0]["params"]["token_spans"] = [[0, 3, 0, 3]]
     metadata_path.write_text(json.dumps(metadata))
+    redigest(metadata_path.parent, "relations.json")
     with pytest.raises(BundleRelationError) as excinfo:
         tl.load(tampered)
     assert _code(excinfo) == "bundle_relation_span_unverified"
 
 
-def test_v9_stamped_bundle_still_loads(tmp_path: Path, model: _TinyLM) -> None:
+def test_v9_stamped_bundle_refuses_before_relations(tmp_path: Path, model: _TinyLM) -> None:
     bundle = _harness(model).relate("successor_of", "critique", "draft")
     path = tmp_path / "v9.tlspec"
     bundle.save(path)
@@ -521,8 +524,9 @@ def test_v9_stamped_bundle_still_loads(tmp_path: Path, model: _TinyLM) -> None:
     manifest = json.loads(manifest_path.read_text())
     manifest["tlspec_version"] = 9
     manifest_path.write_text(json.dumps(manifest))
-    loaded = tl.load(path)
-    assert loaded.relations == bundle.relations
+    with pytest.raises(ArtifactTooOldError) as caught:
+        tl.load(path)
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
 
 
 def test_writer_contract_records_the_relation_vocabulary() -> None:

@@ -586,6 +586,14 @@ def _render_schema_bindings() -> str:
     return _render(_collect())
 
 
+def _render_trace_schema_bindings() -> str:
+    """Return the generated companion containing the complete Trace binding group."""
+
+    from tools.generate_record_schema import _collect, _format_trace_bindings, _render
+
+    return _format_trace_bindings(_render({"trace": _collect()["trace"]}, split_trace=False))
+
+
 def _render_op_record_manifest() -> str:
     """Return a fresh rendering of the op-record cell-source manifest.
 
@@ -815,6 +823,11 @@ GENERATED_ARTIFACTS: tuple[GeneratedArtifact, ...] = (
     GeneratedArtifact(
         "torchlens/_data_classes/_schema_bindings.py",
         _render_schema_bindings,
+        "python tools/generate_record_schema.py",
+    ),
+    GeneratedArtifact(
+        "torchlens/_data_classes/_schema_bindings_trace.py",
+        _render_trace_schema_bindings,
         "python tools/generate_record_schema.py",
     ),
     GeneratedArtifact(

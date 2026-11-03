@@ -3,6 +3,7 @@
 from typing import Literal
 
 from .._errors import KeywordConflictError, SelectionError
+from .._io.format_errors import OpaqueCallableError as OpaqueCallableError
 from .._selection.errors import (
     AmbiguousSiteError as AmbiguousSiteError,
     BindingPreflightError as BindingPreflightError,
@@ -137,10 +138,6 @@ class UntrustedCallableError(ReplayPreconditionError):
             InterventionError.__init__(self, message, **fields)  # type: ignore[arg-type]
             return
         super().__init__(*args, **fields)
-
-
-class OpaqueCallableError(ConfigurationError, ValueError):
-    """Raised when an executable intervention save would require opaque code."""
 
 
 SpecPortabilityError = OpaqueCallableError

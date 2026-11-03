@@ -17,6 +17,7 @@ import base64
 import dataclasses
 import enum
 import math
+from collections import defaultdict
 from collections.abc import Callable, Mapping
 from functools import cache
 from importlib import import_module
@@ -61,6 +62,25 @@ TAG_FIELDS: dict[str, tuple[str, ...]] = {
     "unencodable": UNENCODABLE_FIELDS,
     "callable_placeholder": CALLABLE_PLACEHOLDER_FIELDS,
 }
+
+
+#: Builtin factory identities admitted by the defaultdict subtype.
+_DEFAULT_FACTORIES = (list, dict, set, int, float, str, tuple)
+
+
+@cache
+def tuple_subtypes() -> dict[str, type]:
+    """Return the code-owned tuple constructors; wire strings only select this table."""
+
+    result: dict[str, type] = {"torch.Size": torch.Size}
+    result.update(
+        {
+            f"torch.return_types.{name}": cls
+            for name, cls in vars(torch.return_types).items()
+            if not name.startswith("_") and isinstance(cls, type) and issubclass(cls, tuple)
+        }
+    )
+    return result
 
 
 def class_path(cls: type) -> str:
@@ -306,6 +326,8 @@ class ValueEncoder:
         record_cls = record_type_table().get(class_path(type(value)))
         if record_cls is not None:
             return self._record_value(value, at, depth)
+        if isinstance(value, tuple) and type(value) in tuple_subtypes().values():
+            return self._tuple(value, at, depth)
         if isinstance(value, Mapping) and type(value).__module__ == "collections":
             return self._mapping(value, at, depth)
         for base in (bool, int, float, str):
@@ -343,7 +365,10 @@ class ValueEncoder:
     def _tuple(self, value: tuple[Any, ...], at: str, depth: int) -> dict[str, Any]:
         """Encode a plain tuple."""
 
-        return tagged("tuple", items=self._items(value, at, depth))
+        fields: dict[str, Any] = {"items": self._items(value, at, depth)}
+        if type(value) is not tuple:
+            fields["subtype"] = class_path(type(value))
+        return tagged("tuple", **fields)
 
     def _set(self, value: set[Any] | frozenset[Any], at: str, depth: int) -> dict[str, Any]:
         """Encode a set or frozenset with members in the canonical order."""
@@ -357,7 +382,9 @@ class ValueEncoder:
 
         self._enter(value, at)
         try:
-            if all(type(key) is str and key != TYPED_VALUE_KEY for key in value):
+            if not isinstance(value, defaultdict) and all(
+                type(key) is str and key != TYPED_VALUE_KEY for key in value
+            ):
                 return {
                     key: self._encode(item, f"{at}[{key!r}]", depth + 1)
                     for key, item in value.items()
@@ -369,7 +396,19 @@ class ValueEncoder:
                 ]
                 for index, (key, item) in enumerate(value.items())
             ]
-            return tagged("dict", items=pairs)
+            fields: dict[str, Any] = {"items": pairs}
+            if isinstance(value, defaultdict):
+                factory = value.default_factory
+                fields["subtype"] = "collections.defaultdict"
+                factory_name = next(
+                    (cls.__name__ for cls in _DEFAULT_FACTORIES if factory is cls), None
+                )
+                fields["default_factory"] = (
+                    factory_name
+                    if factory_name is not None
+                    else self.unencodable(factory, f"{at}.default_factory")
+                )
+            return tagged("dict", **fields)
         finally:
             self._active.discard(id(value))
 

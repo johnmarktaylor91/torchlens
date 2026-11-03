@@ -9,9 +9,11 @@ with no supported payload codec, refuses with ``metadata_value_unportable``.
 
 from __future__ import annotations
 
+from collections import defaultdict
 from pathlib import Path
 
 import pytest
+import torch
 
 from torchlens._io import ArtifactError
 from torchlens._io.format3.decode import decode_value
@@ -77,6 +79,15 @@ def test_unencodable_value_loads_back_as_the_public_stand_in() -> None:
         {"$tl": "tuple"},
         {"$tl": "tuple", "items": 3},
         {"$tl": "dtype", "name": "float99"},
+        {"$tl": "tuple", "items": [], "subtype": "unlisted.Tuple"},
+        {"$tl": "tuple", "items": ["bad-dimension"], "subtype": "torch.Size"},
+        {"$tl": "dict", "items": [], "subtype": "unlisted.Mapping"},
+        {
+            "$tl": "dict",
+            "items": [],
+            "subtype": "collections.defaultdict",
+            "default_factory": "eval",
+        },
     ],
 )
 def test_cell_failing_its_type_check_refuses_record_schema_invalid(cell: dict) -> None:
@@ -86,3 +97,46 @@ def test_cell_failing_its_type_check_refuses_record_schema_invalid(cell: dict) -
         decode_value(cell, at="op[0].func_config")
     assert caught.value.fields["code"] == "record_schema_invalid"
     assert "op[0].func_config" in str(caught.value)
+
+
+@pytest.mark.parametrize("factory", [list, dict, set, int, float, str, tuple])
+def test_builtin_defaultdict_factory_has_a_closed_wire_identity(factory: type) -> None:
+    """Every allowed factory is data in the carrier; encoding never calls it."""
+
+    encoder = ValueEncoder()
+    cell = encoder.encode(defaultdict(factory, {"seen": 3}), "op[0].func_config")
+    assert cell == {
+        "$tl": "dict",
+        "subtype": "collections.defaultdict",
+        "default_factory": factory.__name__,
+        "items": [["seen", 3]],
+    }
+    assert not encoder.disclosures
+
+
+def test_foreign_defaultdict_factory_is_disclosed_without_losing_contents() -> None:
+    """A foreign factory is never called or serialized as an executable reference."""
+
+    calls = []
+
+    def factory() -> list:
+        calls.append(True)
+        return []
+
+    encoder = ValueEncoder()
+    cell = encoder.encode(defaultdict(factory, {"seen": 3}), "op[0].func_config")
+    assert cell["items"] == [["seen", 3]]
+    assert cell["default_factory"]["$tl"] == "unencodable"
+    assert cell["default_factory"]["at"] == "op[0].func_config.default_factory"
+    assert len(encoder.disclosures) == 1
+    assert not calls
+
+
+@pytest.mark.parametrize("value", [torch.Size([2, 3]), torch.return_types.max((2, 3))])
+def test_known_tuple_subtype_retains_its_closed_identity(value: tuple) -> None:
+    """Size and result tuples preserve their constructor identity and all members."""
+
+    cell = ValueEncoder().encode(value, "op[0].func_config")
+    assert cell["$tl"] == "tuple"
+    assert cell["items"] == [2, 3]
+    assert cell["subtype"] == f"{type(value).__module__}.{type(value).__qualname__}"

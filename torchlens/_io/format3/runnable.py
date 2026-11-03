@@ -35,6 +35,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import torch
@@ -66,11 +67,13 @@ __tl_layer__ = "L1"
 #: Descriptor file of the runnable component.
 DESCRIPTOR_PATH = f"{RUNNABLE_DIR}/descriptor.json"
 #: Families: manifest key to (file stem under ``runnable/``, chunked, bound family name).
-FAMILIES: dict[str, tuple[str, bool, str]] = {
-    "state_dict": ("state_dict", True, "state_dict"),
-    "buffers": ("buffers", False, "nonpersistent_buffers"),
-    "activations": ("activations", True, "activations"),
-}
+FAMILIES: Mapping[str, tuple[str, bool, str]] = MappingProxyType(
+    {
+        "state_dict": ("state_dict", True, "state_dict"),
+        "buffers": ("buffers", False, "nonpersistent_buffers"),
+        "activations": ("activations", True, "activations"),
+    }
+)
 #: Required keys of the manifest's ``runnable`` object (versions plus the descriptor).
 _REQUIRED_KEYS = frozenset(
     {
