@@ -163,7 +163,9 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=CaptureSpec(save_out=True, save_grad=True),
+            recording=tl.options.RecordingOptions(
+                default_op=CaptureSpec(save_out=True, save_grad=True)
+            ),
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(_histo64), save_raw_activations=False
             ),
@@ -186,7 +188,9 @@ class TestFastlogCarveOut:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, save_grad=True),
+                recording=tl.options.RecordingOptions(
+                    default_op=CaptureSpec(save_out=True, save_grad=True)
+                ),
                 capture=tl.options.CaptureOptions(activation_transform=_histo64),
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"
@@ -199,8 +203,7 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=True,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(default_op=True, include_source_events=True),
             capture=tl.options.CaptureOptions(
                 activation_transform=summary(_histo64), save_raw_activations=False
             ),

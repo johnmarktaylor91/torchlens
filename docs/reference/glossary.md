@@ -83,13 +83,13 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
   `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
   `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
-  the flat `tl.record` keywords (`RecordingSettings.keep_op`, `RecordingSettings.default_op`,
+  `recording=RecordingOptions(...)` (`RecordingSettings.default_op`,
   `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
   `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
-  `RecordingSettings.intervene`, `RecordingSettings.max_predicate_failures`,
-  `RecordingSettings.on_predicate_error`, `RecordingSettings.on_forward_error`,
-  `RecordingSettings.postprocess`) and the door keywords (`RecordingSettings.stop_after`,
-  `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
+  `RecordingSettings.max_predicate_failures`, `RecordingSettings.on_predicate_error`,
+  `RecordingSettings.on_forward_error`, `RecordingSettings.postprocess`) and the door keywords
+  (`RecordingSettings.keep_op` from `save=`, `RecordingSettings.intervene` from `intervene=`,
+  `RecordingSettings.stop_after`, `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
   recorder used, never repr strings; there is no public constructor. A recording recovered from
   disk keeps the plain values (bools, numbers, strings); callables and objects are not stored with
   saved recordings and read `None` there.
@@ -1629,10 +1629,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
   `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
   `jax_static_argnums`, `grad_options`, `chunk_size` included), and `tl.record`'s
-  recorder knobs stay flat keywords on the door (`default_op`,
+  recorder knobs ride `recording=RecordingOptions(...)` (`default_op`,
   `default_module`, `history_size`, `include_source_events`,
   `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
-  `default_grad`, `postprocess`). The door keywords are `save=`, `intervene=`,
+  `default_grad`, `postprocess`), matching `tl.trace`'s `capture=`. The door keywords are
+  `save=`, `intervene=`, `recording=` (on `tl.record`),
   `stop_after=` (a site or a predicate; the former `halt=`), `storage=`,
   `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`, `input_shape=`
   and `on_zero_fire=`.
@@ -3871,12 +3872,15 @@ describe each surface in depth.
 
 | Spelling | Meaning |
 | --- | --- |
+| `RecordingOptions.default_grad` | Gradient capture decision for events the predicate does not decide; giving it installs gradient hooks for a later `Recording.backward()` |
 | `RecordingOptions.default_module` | Capture decision for module events the predicate does not decide |
 | `RecordingOptions.default_op` | Capture decision for operation events the predicate does not decide |
 | `RecordingOptions.history_size` | Number of earlier events kept for predicate history; 0 to 1024 |
 | `RecordingOptions.include_source_events` | Whether source events appear in the predicate lookback of recent ops |
 | `RecordingOptions.max_predicate_failures` | Maximum number of predicate failures stored on the recording; further ones are counted as overflow |
+| `RecordingOptions.on_forward_error` | Failed-forward handling: `"raise"` (default), `"attach_partial"` or `"return_partial"` |
 | `RecordingOptions.on_predicate_error` | Predicate error handling: `"auto"`, `"accumulate"` or `"fail-fast"` |
+| `RecordingOptions.postprocess` | Post-capture enrichment preset applied to the recording; `"none"` by default |
 
 ### Keywords
 | Spelling | Meaning |

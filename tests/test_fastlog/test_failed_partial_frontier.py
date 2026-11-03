@@ -50,9 +50,9 @@ def _failed_partial() -> tl.Recording:
         return tl.record(
             _FrontierModel(),
             torch.ones(1, 3),
-            default_op=True,
-            default_module=True,
-            on_forward_error="return_partial",
+            recording=tl.options.RecordingOptions(
+                default_op=True, default_module=True, on_forward_error="return_partial"
+            ),
         )
 
 
