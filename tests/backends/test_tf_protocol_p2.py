@@ -183,7 +183,7 @@ def test_tf_where_selectv2_is_classified_and_replayed() -> None:
     """
 
     def fn(v: Any) -> Any:
-        return tf.where(v > 0.0, v * 2.0, tf.zeros_like(v) - 1.0)
+        return tf.where(v > 0.0, v * 2.0, v - 1.0)
 
     trace = tl.trace(fn, _x(), backend="tf")
     assert any(op.func_name == "SelectV2" for op in trace._layer_list)
