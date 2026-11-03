@@ -94,7 +94,7 @@ def test_control_flow_summary_has_no_escape_bytes() -> None:
         capture=tl.options.CaptureOptions(layers_to_save=None),
     )
     try:
-        for text in (str(log.summary(level="op")), log.provenance._summary()):
+        for text in (str(log.summary(level="op")), log.provenance.summary()):
             assert "\x1b" not in text
     finally:
         log.cleanup()

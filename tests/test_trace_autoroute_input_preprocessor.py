@@ -49,7 +49,7 @@ def test_summary_includes_input_preprocessing_when_present() -> None:
     )
 
     # Preprocessing provenance lives on provenance() (summary memo 3.6).
-    provenance = log.provenance._summary()
+    provenance = log.provenance.summary()
 
     assert "Input preprocessing:" in provenance
     assert "ImageNet default (UNVERIFIED): resize 256" in provenance
@@ -74,7 +74,7 @@ def test_unverified_input_preprocessing_detail_is_reachable() -> None:
     assert record.verified is False
     assert record.source == "imagenet_default"
     assert record.identifier == "ImageNet-default-resize256-crop224"
-    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance._summary()
+    assert "ImageNet default (UNVERIFIED): resize 256" in log.provenance.summary()
 
 
 def test_input_transform_summary_render_is_opt_in() -> None:

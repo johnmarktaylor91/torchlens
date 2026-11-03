@@ -162,6 +162,9 @@
   value.
   The `TraceLike` lookups take `activations_by_pass(pass_number)` and
   `activation_by_raw_label(raw_label, pass_number=)`.
+- **trace**: `trace.provenance.summary()` is public (walk names.3); it was the interim private
+  `trace.provenance._summary()`, which is gone. It returns the same capture-provenance text block,
+  the Trace twin of `Bundle.provenance.summary()`.
 
 ### Features
 

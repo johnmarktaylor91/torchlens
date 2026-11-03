@@ -1157,7 +1157,7 @@
   are one-call-only (`summary_one_call_only` on `trace.summary()`). Result
   API: `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` +
   scalar raw ints (the raw-numbers pin); the report survives model/Trace
-  teardown; the provenance group's text block (interim private spelling `trace.provenance._summary()`, public name pending) serves the relocated preamble byte-exact;
+  teardown; the provenance group's text block (`trace.provenance.summary()`) serves the relocated preamble byte-exact;
   `Trace._repr_html_` delegates to the summary HTML table. Pins re-derive via
   `tools/derive_summary_pins.py`; perf ratio published at
   `docs/benchmarks/summary_performance.md`. Docs: `docs/reference/summary.md`,

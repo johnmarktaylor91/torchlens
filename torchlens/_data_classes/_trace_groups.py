@@ -474,10 +474,8 @@ class TraceProvenance(_TraceGroup):
 
     __slots__ = ()
 
-    def _summary(self) -> str:
+    def summary(self) -> str:
         """The capture-provenance block (the relocated summary preamble).
-
-        Interim private spelling: the public name of this block is pending.
 
         Returns the historical discoverability preamble BYTE-FOR-BYTE
         (summary memo 3.6): agent/MCP consumers that parsed it out of the

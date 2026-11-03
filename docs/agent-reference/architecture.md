@@ -62,7 +62,7 @@ Key entry points:
   zero-input (reuses `guess_input_shape`'s verified trace, synthesis
   disclosed). Result API: `render`/`print`/`details`/`to_pandas`/
   `to_markdown`/`to_html` + scalar raw ints; survives model/Trace teardown;
-  the provenance group's text block (interim private spelling `trace.provenance._summary()`, public name pending) serves the relocated preamble byte-exact;
+  the provenance group's text block (`trace.provenance.summary()`) serves the relocated preamble byte-exact;
   `Trace._repr_html_` delegates to the summary HTML. Pins:
   `tools/derive_summary_pins.py`; ratio page:
   `docs/benchmarks/summary_performance.md`; docs: `docs/reference/summary.md`,
