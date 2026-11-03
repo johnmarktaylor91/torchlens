@@ -121,6 +121,7 @@ def test_construction_and_identity_are_backend_free() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_mlx_live_leg_refuses_new_family() -> None:
     """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
 

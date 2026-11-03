@@ -151,6 +151,7 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_mlx_halted_capture_settles_halted() -> None:
     pytest.importorskip("mlx.core")
     import mlx.core as mx
@@ -176,6 +177,7 @@ def test_mlx_halted_capture_settles_halted() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_halted_capture_settles_halted() -> None:
     pytest.importorskip("paddle")
     import paddle

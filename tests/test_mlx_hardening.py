@@ -27,7 +27,7 @@ import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends.mlx import GradOptions  # noqa: E402
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx]
 
 
 class TinyMLP(nn.Module):

@@ -62,7 +62,7 @@ import mlx.nn as nn  # noqa: E402
 tinygrad = pytest.importorskip("tinygrad")
 from tinygrad import Tensor as TinygradTensor  # noqa: E402
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx, pytest.mark.backend_tinygrad]
 
 
 class _MlxMlp(nn.Module):

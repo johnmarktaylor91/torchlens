@@ -852,6 +852,13 @@ jobs:
             dev: PYTHON
             import_check: "import tinygrad"
             executed_floor: 25
+            # Tests that drive MLX and tinygrad in one process carry both
+            # markers (tests/test_backends_finalize_cert10.py) and run as a
+            # second selection here, after MLX (the mlx leg's pin) is added.
+            pair_install: '"mlx==0.26.3"'
+            pair_marker: backend_mlx and backend_tinygrad
+            pair_import_check: "import mlx.core, mlx.nn, tinygrad"
+            pair_floor: 4
           - backend: paddle
             # Pinned to the 3.3 minor stream the preview suite is validated
             # against (paddle 3.3.x in the parity env); paddle minors have
@@ -952,6 +959,38 @@ jobs:
           mkdir -p "${{ runner.temp }}/ecosystem"
           python -m tests.conformance.scorecard --backend "$BACKEND" \
             > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
+
+      - name: Run the ${{ matrix.backend }} slow preview tests
+        # Rare preview tests that are also slow (the pretrained ecosystem
+        # rows, e.g. tests/test_paddle_ecosystem.py) run here with the
+        # ecosystem switch on, after the roster step fetched or restored their
+        # weights. A leg with no such test collects nothing (pytest exit 5).
+        env:
+          TORCHLENS_CONFORMANCE_ECOSYSTEM: "1"
+          MLX_DISABLE_COMPILE: "1"
+          TORCHLENS_RUN_UNSTABLE_MLX_TESTS: "1"
+          DEV: ${{ matrix.dev || '' }}
+        run: |
+          mkdir -p "${{ runner.temp }}/ecosystem"
+          rc=0
+          pytest tests/ -m "${{ matrix.marker }} and slow" --tb=short \
+            --junitxml="${{ runner.temp }}/ecosystem/preview-slow-${{ matrix.backend }}.junit.xml" || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then exit "$rc"; fi
+
+      - name: Run the ${{ matrix.backend }} leg's cross-framework preview tests
+        # Only legs that declare a pair: add the second framework, prove both
+        # import, run the tests marked for both, and declare their floor.
+        if: ${{ !cancelled() && matrix.pair_marker }}
+        env:
+          MLX_DISABLE_COMPILE: "1"
+          TORCHLENS_RUN_UNSTABLE_MLX_TESTS: "1"
+          DEV: ${{ matrix.dev || '' }}
+        run: |
+          uv pip install --system ${{ matrix.pair_install }}
+          python -c '${{ matrix.pair_import_check }}'
+          pytest tests/ -m "${{ matrix.pair_marker }} and not slow" --tb=short \
+            --junitxml="${{ runner.temp }}/junit/preview-${{ matrix.backend }}-pair.junit.xml"
+          echo "preview-${{ matrix.backend }}-pair.junit.xml ${{ matrix.pair_floor }}" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload the ${{ matrix.backend }} ecosystem scorecard
         if: ${{ !cancelled() }}
