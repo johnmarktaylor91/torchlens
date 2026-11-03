@@ -1,0 +1,356 @@
+"""The extract front door: ``tl.pluck`` and ``tl.extract`` and their helpers.
+
+The package root re-exports ``pluck`` and ``extract`` lazily; the extraction
+engine and the dataset extractor import the private helpers from here, so no
+layered module needs the package root for them.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import TYPE_CHECKING, Any as _Any
+
+import torch
+
+from .._user_public_impls import trace as _capture_trace
+
+if TYPE_CHECKING:
+    from torch import nn
+
+    from .._data_classes.trace import Trace
+
+__tl_layer__ = "L5"
+
+
+def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
+    """Build a short suggestion suffix for lookup failures.
+
+    Parameters
+    ----------
+    name:
+        Lookup string supplied by the user.
+    suggestions:
+        Candidate layer labels.
+
+    Returns
+    -------
+    str
+        Human-readable lookup error.
+    """
+
+    if suggestions:
+        suggestion_str = ", ".join(repr(item) for item in suggestions)
+        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+    return f"Layer {name!r} not found."
+
+
+def _out_from_log(trace: Trace, layer: str) -> torch.Tensor:
+    """Return a saved out from a layer lookup.
+
+    Parameters
+    ----------
+    trace:
+        Log containing saved outs.
+    layer:
+        Layer label, module path, pass-qualified label, or unique substring.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved layer out.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``op_lookup_not_found`` if the layer cannot be resolved;
+        ``activation_not_saved`` if it resolved but kept no out.
+    """
+
+    from .._extract_refusals import (
+        TorchLensError,
+        refuse_activation_not_saved,
+        refuse_lookup_not_found,
+    )
+    from .._trace_selector_helpers import canonical_module_site_key
+
+    try:
+        layer_log = trace[canonical_module_site_key(trace, layer) or layer]
+    except TorchLensError:
+        # A typed refusal (ambiguity, pass qualifier, index) already names its
+        # condition; a "not found" would hide it.
+        raise
+    except (KeyError, ValueError) as exc:
+        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
+        refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
+
+    out = getattr(layer_log, "out", None)
+    if out is None:
+        refuse_activation_not_saved(layer)
+    if not isinstance(out, torch.Tensor):
+        raise TypeError(f"Layer {layer!r} out is not a torch.Tensor.")
+    return out
+
+
+def _normalize_extract_layers(layers: _Iterable[str] | _Mapping[str, str]) -> dict[str, str]:
+    """Normalize list or mapping layer specs to ``output_key -> lookup``.
+
+    Parameters
+    ----------
+    layers:
+        List of layer lookups or mapping from user label to layer lookup.
+
+    Returns
+    -------
+    dict[str, str]
+        Normalized extraction plan.
+    """
+
+    if isinstance(layers, _Mapping):
+        return {str(label): str(pattern) for label, pattern in layers.items()}
+    return {str(layer): str(layer) for layer in layers}
+
+
+def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
+    """Return saved layer labels matching an extraction pattern.
+
+    Parameters
+    ----------
+    trace:
+        Log containing candidate layer labels.
+    pattern:
+        Exact label or substring pattern.
+
+    Returns
+    -------
+    list[str]
+        Matching no-pass layer labels in execution order.
+    """
+
+    from .._errors import AmbiguousOpLookupError
+    from .._trace_selector_helpers import canonical_module_site_key
+
+    if pattern in trace._layer_dict_all_keys:
+        return [pattern]
+    if pattern in trace._layer_logs:
+        return [pattern]
+    if canonical_module_site_key(trace, pattern) is not None:
+        # A wrapper-relative or dot-flattened module name keys by the caller's spelling.
+        return [pattern]
+    lower_pattern = pattern.lower()
+    matches = [
+        label
+        for label in trace.layer_labels
+        if lower_pattern in label.lower() and label in trace.saved_ops
+    ]
+    if matches:
+        return matches
+    try:
+        resolved = trace[pattern]
+    except AmbiguousOpLookupError:
+        raise
+    except (KeyError, ValueError):
+        return []
+    label = getattr(resolved, "layer_label", pattern)
+    return [str(label)]
+
+
+def pluck(
+    model: nn.Module, inputs: _Any, layer: str, stop_after: _Any | None = None
+) -> torch.Tensor:
+    """Return the saved out for one layer.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    inputs:
+        Positional input argument or argument container for ``model.forward``.
+    layer:
+        Layer label, module path, pass-qualified label, or unique substring.
+        Resolves strictly to one result; ambiguous lookups refuse typed.
+    stop_after:
+        Stop-early site, passed to the capture as
+        ``CaptureOptions(stop_after=...)``: the forward halts inclusively after
+        the site, and an unsupported spelling refuses typed. ``None`` reads the
+        ambient ``tl.experimental.stop_after`` site, if one is active.
+
+    Returns
+    -------
+    torch.Tensor
+        Saved out for the requested layer.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``op_lookup_not_found`` if ``layer`` does not resolve;
+        ``activation_not_saved`` if it produced no saved tensor.
+    """
+
+    from .._extract_refusals import CaptureOptions
+
+    # an explicit site rides the capture options, where the trace
+    # validates it; without one the trace reads the ambient site itself.
+    capture = (
+        CaptureOptions(layers_to_save=[layer])
+        if stop_after is None
+        else CaptureOptions(layers_to_save=[layer], stop_after=stop_after)
+    )
+    trace = _capture_trace(model, inputs, capture=capture)
+    return _out_from_log(trace, layer)
+
+
+def _extract_facet_plan(layers: _Any) -> dict[str, _Any]:
+    """Return ``output_key -> facet selector`` for the facet selectors in an extract request.
+
+    A list entry keys by the selector's spelling; a mapping entry by the user label.
+    """
+
+    from .._selection.selectors import FacetSelector
+
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    return {
+        repr(value) if label is None else str(label): value
+        for label, value in items
+        if isinstance(value, FacetSelector)
+    }
+
+
+def _extract_with_facets(
+    model: nn.Module,
+    x: _Any,
+    layers: _Any,
+    facet_plan: dict[str, _Any],
+    *,
+    detach_saved_activations: bool,
+) -> tuple[Trace, dict[str, torch.Tensor], dict[str, _Any]]:
+    """Extract a request holding facet selectors: each facet's value, as ``trace[selector]`` reads it.
+
+    One facet alone captures with ``save=selector`` (its homes); a mixed or
+    several-facet request captures with every op saved. Other entries resolve
+    as in a plain extract, from the same trace.
+    """
+
+    from ..options import CaptureOptions as _LazyCaptureOptions
+
+    capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
+    only = next(iter(facet_plan.values())) if len(facet_plan) == len(layers) == 1 else None
+    if only is not None:
+        trace = _capture_trace(model, x, capture=capture, save=only)
+    else:
+        trace = _capture_trace(model, x, capture=capture)
+    outputs: dict[str, torch.Tensor] = {}
+    views: dict[str, _Any] = {}
+    items = layers.items() if isinstance(layers, _Mapping) else ((None, v) for v in layers)
+    for label, value in items:
+        key = (
+            str(label)
+            if label is not None
+            else (repr(value) if value in facet_plan.values() else str(value))
+        )
+        if key in facet_plan:
+            facet = trace[facet_plan[key]]
+            outputs[key], views[key] = facet.value, facet
+        else:
+            outputs[key] = _out_from_log(trace, str(value))
+            views[key] = trace[str(value)]
+    return trace, outputs, views
+
+
+def _extract_layers_with_trace(
+    model: nn.Module,
+    x: _Any,
+    layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
+) -> tuple[Trace, dict[str, torch.Tensor], dict[str, _Any]]:
+    """Run one selective capture and resolve the requested layers.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    x:
+        Positional input argument or argument container for ``model.forward``.
+    layers:
+        Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        Whether the returned outs are detached from the autograd graph.
+
+    Returns
+    -------
+    tuple[Trace, dict[str, torch.Tensor], dict[str, Any]]
+        The capture trace, the saved outs keyed as :func:`extract` keys them,
+        and the resolved ``Layer`` views under the same keys.
+
+    Raises
+    ------
+    InvalidArgumentError
+        ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
+    """
+
+    from .._extract_refusals import CaptureOptions, refuse_lookup_not_found
+    from .._trace_selector_helpers import canonical_module_site_key
+
+    facet_plan = _extract_facet_plan(layers)
+    if facet_plan:
+        return _extract_with_facets(
+            model, x, layers, facet_plan, detach_saved_activations=detach_saved_activations
+        )
+    layer_plan = _normalize_extract_layers(layers)
+    capture = CaptureOptions(
+        layers_to_save=list(layer_plan.values()), detach_saved_activations=detach_saved_activations
+    )
+    trace = _capture_trace(model, x, capture=capture)
+    outputs: dict[str, torch.Tensor] = {}
+    views: dict[str, _Any] = {}
+    if isinstance(layers, _Mapping):
+        for label, pattern in layer_plan.items():
+            outputs[label] = _out_from_log(trace, pattern)
+            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+        return trace, outputs, views
+
+    for pattern in layer_plan.values():
+        matches = _matching_saved_layer_labels(trace, pattern)
+        if not matches:
+            suggestions = trace.find_layers(pattern)
+            refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
+        for match in matches:
+            outputs[match] = _out_from_log(trace, match)
+            views[match] = trace[match]
+    return trace, outputs, views
+
+
+def extract(
+    model: nn.Module,
+    inputs: _Any,
+    layers: _Iterable[str] | _Mapping[str, str],
+    *,
+    detach_saved_activations: bool = True,
+) -> dict[str, torch.Tensor]:
+    """Return saved outs for many layers.
+
+    Parameters
+    ----------
+    model:
+        PyTorch model to run.
+    inputs:
+        Positional input argument or argument container for ``model.forward``.
+    layers:
+        Either a list of layer lookups or a mapping of ``user_label -> layer_lookup``.
+    detach_saved_activations:
+        DOCUMENTED-UNSTABLE. Defaults to ``True``: the outs are detached
+        copies. ``False`` returns graph-connected outs (``grad_fn`` set
+        wherever the model's forward carries autograd history), so a loss
+        built from them backpropagates into the model's parameters.
+
+    Returns
+    -------
+    dict[str, torch.Tensor]
+        Mapping from user labels to outs for mapping inputs, or from
+        resolved layer labels to outs for list inputs.
+    """
+
+    _trace, outputs, _views = _extract_layers_with_trace(
+        model, inputs, layers, detach_saved_activations=detach_saved_activations
+    )
+    return outputs
