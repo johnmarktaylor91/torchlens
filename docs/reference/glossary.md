@@ -4755,7 +4755,7 @@ alphabetical order.
 | `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
 | `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
-| `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (extra keywords pass to `Trace.log_backward`); returns the Trace |
+| `Trace.backward` | Run backward from `loss` and populate this Trace with backward metadata (`save_grads=` and other extra keywords go to the backward capture, which forwards the rest to `torch.Tensor.backward`); returns the Trace |
 | `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
