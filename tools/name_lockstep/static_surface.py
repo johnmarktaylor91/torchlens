@@ -115,7 +115,9 @@ def _code_defaults(args: ast.arguments) -> set[str]:
     """Return the string defaults of parameters named ``code``."""
 
     positional = args.posonlyargs + args.args
-    pairs = list(zip(positional[len(positional) - len(args.defaults) :], args.defaults))
+    pairs: list[tuple[ast.arg, ast.expr | None]] = list(
+        zip(positional[len(positional) - len(args.defaults) :], args.defaults)
+    )
     pairs += list(zip(args.kwonlyargs, args.kw_defaults))
     found: set[str] = set()
     for arg, default in pairs:
