@@ -15,6 +15,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -103,6 +104,21 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     )
 
 
+def _draw_policy(
+    graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
+) -> dict[str, Any]:
+    """Return the policy a :class:`Drawing` records: the options that shaped it."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
     trace: Trace,
     path: str | None = None,
@@ -154,8 +170,16 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
     file_format: str = "pdf",
     open_viewer: bool = False,
+    highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
+
+    if highlight is not None:
+        from ._highlight import draw_highlighted, explicit_draw_kwargs
+
+        # locals() is read before any parameter below is reassigned.
+        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
+
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(
             f"graph must be 'forward', 'backward', or 'combined'; received {graph!r}",
@@ -164,14 +188,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             argument="graph",
         )
     num_ops = len(trace) if hasattr(trace, "__len__") else None
-    policy: dict[str, Any] = {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
+    policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
@@ -222,7 +239,6 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         path=written if written.exists() else None,
         num_ops=num_ops,
         policy=policy,
-        trace=trace,
     )
 
 

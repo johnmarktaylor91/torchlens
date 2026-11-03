@@ -457,6 +457,14 @@
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
+- `Trace.draw(highlight="interventions")` (keyword-only) draws the surgery lens: recorded
+  interventions marked on their nodes, the per-lane census in the caption, and the full census
+  written beside the figure as `<path>.census.txt` (beside the collision-safe file a bare draw
+  chose). Any other value refuses `draw_highlight_invalid` listing the allowed values; an
+  un-edited trace refuses `surgery_evidence_missing`.
+- `tl.viz.contact_sheet(view, page=k)` returns a `ContactSheet`: the page's SVG text (a `str`)
+  carrying `page` and `page_count`, so `contact_sheet(view).page_count` says how many pages to
+  ask for.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `Trace.draw(color_by=...)` (UNSTABLE spelling, keyword-only, no deprecation shim owed until

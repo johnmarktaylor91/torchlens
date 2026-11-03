@@ -76,6 +76,7 @@ from .._ir.workspaces import (
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -90,7 +91,6 @@ from .._runnable.seam import (
 )
 from .._save_budget import SaveBudget, SaveBudgetOption
 from .._trace_state import TraceState
-from .._utils.fail_open import fail_open
 from .._utils.tensor_utils import SaveMode
 from ..backends import BackendName
 from ..intervention.types import (
@@ -116,6 +116,7 @@ from . import (
 from ._accessor_base import Accessor
 from ._nonfinite import nonfinite_coverage, nonfinite_op_labels
 from ._preprocessing_provenance import status_of
+from ._repr import trace_honesty_suffix
 from ._trace_accessors import (
     OrphanAccessor,
     TraceGradFnCallAccessor,
@@ -1660,20 +1661,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def _repr_honesty_suffix(self) -> str:
         """Outcome + health suffix tokens for the identity repr (F10)."""
 
-        tokens: list[str] = []
-        outcome = fail_open(lambda: self.outcome, lambda _error: None)
-        status = getattr(getattr(outcome, "status", None), "value", None)
-        if status and status != "complete":
-            tokens.append(f"outcome={status}")
-        verdict = fail_open(lambda: self.nonfinite_verdict, lambda _error: None)
-        if verdict == "checked_and_clean":
-            tokens.append("no NaN/Inf (exact)")
-        elif verdict == "found":
-            tokens.append("NaN/Inf FOUND (.nonfinite_ops)")
-        armed = fail_open(self._armed_summary_line, lambda _error: None)
-        if armed:
-            tokens.append(armed)
-        return f" [{'; '.join(tokens)}]" if tokens else ""
+        return trace_honesty_suffix(self)
 
     def __treescope_repr__(self, path: Any, subtree_renderer: Any) -> Any:
         """Thin lazy treescope hook (memo 3.2): the dataclass-dump guard.
@@ -3335,6 +3323,7 @@ class Trace(TraceOutputMixin, TraceLike):
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
         file_format: str = "pdf",
         open_viewer: bool = False,
+        highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":
         """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 
