@@ -37,6 +37,9 @@ def hf_multimodal(model: Any, payload: Any, **kwargs: Any) -> Trace | None:
     if not _hf._is_hf_multimodal_input(payload):
         return None
     if not _hf._can_resolve_hf_processor(model):
+        # An uncached processor on a Hugging Face model refuses typed rather
+        # than letting the raw modality dict reach the model's forward.
+        _hf._refuse_uncached_multimodal_processor(model, payload)
         return None
     return _hf.trace_multimodal(model, cast("dict[str, Any]", payload), **kwargs)
 
