@@ -168,6 +168,41 @@ def test_wandb_builds_scalar_safe_table_and_logs_to_run(
             assert cell is None or isinstance(cell, primitive)
 
 
+def test_wandb_table_cells_stay_primitive_for_nullable_missing_columns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Missing cells of nullable columns reach the W&B table as ``None``, never ``pd.NA``."""
+
+    log = _small_trace()
+    rows = len(log._layer_list)
+    nullable = pd.DataFrame(
+        {
+            "count": pd.array([None] + [1] * (rows - 1), dtype="Int64"),
+            "flag": pd.array([None] + [True] * (rows - 1), dtype="boolean"),
+            "name": pd.array([None] + ["x"] * (rows - 1), dtype="string"),
+        }
+    )
+    monkeypatch.setattr(type(log), "to_pandas", lambda self: nullable)
+    built: list[Any] = []
+
+    class _Table:
+        def __init__(self, dataframe: Any) -> None:
+            self.dataframe = dataframe
+            built.append(self)
+
+    monkeypatch.setitem(sys.modules, "wandb", SimpleNamespace(Table=_Table, run=None))
+
+    tl.export.wandb(log)
+
+    dataframe = built[0].dataframe
+    assert list(dataframe.columns) == ["count", "flag", "name"]
+    assert [dataframe[column].iloc[0] for column in dataframe.columns] == [None, None, None]
+    assert [dataframe[column].iloc[1] for column in dataframe.columns] == [1, True, "x"]
+    for column in dataframe.columns:
+        for cell in dataframe[column]:
+            assert cell is None or isinstance(cell, (str, int, float, bool))
+
+
 def test_wandb_names_extra_when_dependency_missing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
