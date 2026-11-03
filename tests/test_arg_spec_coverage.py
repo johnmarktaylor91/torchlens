@@ -719,10 +719,14 @@ class _BackwardInForwardModel(torch.nn.Module):
             param.grad = None
         torch.tanh(self.fc1(x.detach())).sum().backward()
         torch.autograd.backward(self.fc1(x.detach()).sum(), inputs=[self.fc1.bias])
-        return self.fc2(x) * self.fc1.weight.grad.mean() * self.fc1.bias.grad.sum()
+        weight_grad, bias_grad = self.fc1.weight.grad, self.fc1.bias.grad
+        assert weight_grad is not None and bias_grad is not None
+        return self.fc2(x) * weight_grad.mean() * bias_grad.sum()
 
 
-def test_backward_inside_forward_calls_are_arg_spec_covered(monkeypatch) -> None:
+def test_backward_inside_forward_calls_are_arg_spec_covered(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An in-forward backward leaves no name uncovered in the usage-stats lookup gate.
 
     ``Tensor.backward`` is decorated and counted as ``backward``; it returns ``None``, so it
