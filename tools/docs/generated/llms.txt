@@ -25,7 +25,7 @@
 - [Collect features to train a linear probe](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/field-guide/extract_features.md): Extract one layer over labelled stimuli, then fit any classifier on the saved features.
 - [Open an interactive viewer of a trace](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/export.md): Writes a self-contained HTML page of the graph and its operations.
 - [Diagnose a capture problem](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/agent-reference/common-patterns.md): Checks the environment and the model wrapper and reports versioned rows.
-- [Inspect an artifact you did not make](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/for-ai-agents.md): The read-only tools read the manifest first and never unpickle until asked.
+- [Inspect an untrusted artifact](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/for-ai-agents.md): The read-only tools read the manifest first and never unpickle until asked.
 - [Record activations across a whole generation](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/agent-reference/common-patterns.md): One recording spans every step of generate(), with the KV cache on.
 - [Gather activations to train a sparse autoencoder](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/recipes/sae_trainers.md): Write one layer's activations over a dataset, then hand them to an SAE trainer.
 - [Build a representational dissimilarity matrix](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/semantic_io.md): One call turns stimulus-by-feature activations into an RDM.

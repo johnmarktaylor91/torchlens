@@ -388,7 +388,7 @@ cards:
     avoid_calls: []
 
   - id: agent-inspect
-    task: 'Inspect an artifact you did not make'
+    task: 'Inspect an untrusted artifact'
     one_liner: 'The read-only tools read the manifest first and never unpickle until asked.'
     canonical: 'overview = tl.agent.call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})'
     avoid: 'Calling tl.load on an untrusted artifact before reading its manifest.'

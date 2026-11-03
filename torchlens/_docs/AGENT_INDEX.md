@@ -52,7 +52,7 @@ trace = tl.load("run.tlspec")
 | Collect features to train a linear probe | `tl.extract_dataset(model, stimuli, ["layer4"], path="probe_features")` | Calling tl.trace per batch to gather probe features. | docs/field-guide/extract_features.md |
 | Open an interactive viewer of a trace | `tl.export.html(tl.trace(model, x), "trace.html")` | Screenshots of a static graph. | docs/reference/export.md |
 | Diagnose a capture problem | `print(tl.report.doctor(model=model, inputs=x).to_markdown())` | Guessing before reading the report. | docs/agent-reference/common-patterns.md |
-| Inspect an artifact you did not make | `overview = tl.agent.call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})` | Calling tl.load on an untrusted artifact before reading its manifest. | docs/for-ai-agents.md |
+| Inspect an untrusted artifact | `overview = tl.agent.call_tool("torchlens_overview", {"path": "run.tlspec", "mode": "manifest"})` | Calling tl.load on an untrusted artifact before reading its manifest. | docs/for-ai-agents.md |
 | Record activations across a whole generation | `recording = tl.record(lm, ids, save=tl.module("model.layers.6"), generate_kwargs={"max_new_tokens": 16, "do_sample": False})` | A separate tl.trace per generated token. | docs/agent-reference/common-patterns.md |
 | Gather activations to train a sparse autoencoder | `tl.extract_dataset(model, stimuli, ["layer4"], batch_size=64, path="sae_acts")` | Calling tl.trace per batch to build an SAE training set. | docs/recipes/sae_trainers.md |
 | Build a representational dissimilarity matrix | `rdm = tl.repgeom.rdm(features)` | A hand-written pairwise distance loop. | docs/semantic_io.md |

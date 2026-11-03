@@ -83,8 +83,10 @@ recipe. It, the skill router, the capabilities list and `llms.txt` are generated
 task cards, `docs/field-guide/task_cards.yaml`, by `tools/docs/build_agent_index.py`.
 
 - The installable skill for Claude Code and Codex is `skills/torchlens/` (a thin `SKILL.md`
-  plus `ROUTER.md`, the same text as the index); the repository root is also a Claude Code
-  plugin marketplace (`.claude-plugin/`).
+  plus `ROUTER.md`, the same text as the index). Copy that folder into `~/.claude/skills/` or a
+  project's `.claude/skills/` for Claude Code, or into `~/.codex/skills/` for Codex. The
+  repository root is also a Claude Code plugin marketplace (`.claude-plugin/`): run
+  `/plugin marketplace add johnmarktaylor91/torchlens`, then `/plugin install torchlens@torchlens`.
 - [Agent capabilities](reference/agent_capabilities.md) lists what TorchLens covers under
   common interpretability capability names.
 - `tools/docs/generated/llms.txt` is the llms.txt index of the task pages.

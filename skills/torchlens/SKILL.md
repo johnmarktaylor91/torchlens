@@ -19,5 +19,5 @@ To make every future session in a project find it, run `torchlens agent init` th
 short marked block to `AGENTS.md` (or each `--file`), and `torchlens agent init --remove` takes
 it out again.
 
-To inspect a saved artifact you did not make, use the read-only tools, manifest first:
-`torchlens guide` prints their contract.
+Open your own or a trusted saved file with `tl.load`. Inspect an untrusted one with the read-only
+tools, manifest first: `torchlens guide` prints their contract.
