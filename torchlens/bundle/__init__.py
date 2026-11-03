@@ -1030,36 +1030,36 @@ class Bundle:
         *,
         k: int = 10,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "cosine",
+        by: Literal["site", "module"] = "site",
     ) -> list[tuple[str, float]]:
         """Rank sites by out distance from a baseline (the SITE axis).
 
-        Each site's score is the ``metric`` distance from the baseline's
-        activation to every other member's, AVERAGED across those members —
-        the answer to "where did the bundle diverge", never "which member
-        mattered" (the member axis lives on the effect table).
-
-        Sites pair through the structural alignment (:attr:`supergraph`), not
-        by literal label; a site some member lacks is not scored.
+        Each site's score is the ``metric`` distance from the baseline's activation to every
+        other member's, AVERAGED across them ("where did the bundle diverge", never "which
+        member mattered"). Sites pair through the structural alignment (:attr:`supergraph`),
+        not by literal label; a site some member lacks is not scored.
 
         Parameters
         ----------
         baseline:
             Optional baseline override.
         k:
-            Maximum rows to RETURN. Every site is scored first; this is a
-            display cap on the sorted result, not a compute bound.
+            Maximum rows to RETURN after every site is scored (a display cap).
         metric:
             Pairwise tensor metric.
+        by:
+            ``"site"`` (default): one row per op. ``"module"``: one row per module address
+            (``transformer.h.9``) scored by its most changed site (ops outside every module
+            keep their site rows); ``k`` caps after the fold.
 
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending. A multi-pass op
-            scores one row per pass, keyed by its pass-qualified label
-            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op scores one row per
+            pass, keyed ``tanh_1_1:2``; a single-pass op keeps its bare layer label.
         """
 
-        return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
+        return _comparisons.rank_changes(self, baseline, k=k, metric=metric, by=by)
 
     def compare(
         self,
