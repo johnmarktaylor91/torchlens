@@ -291,6 +291,9 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
             errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
+    backend = manifest.get("backend")
+    if not isinstance(backend, str) or not backend:
+        errors.append("backend must be a non-empty string naming the artifact's backend")
     policy = manifest["payload_policy"]
     if not isinstance(policy, dict) or not all(
         isinstance(key, str) and isinstance(value, bool) for key, value in policy.items()

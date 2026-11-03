@@ -11,6 +11,7 @@ touches a class attribute or property: only instance slots the schema names.
 
 from __future__ import annotations
 
+import inspect
 from collections.abc import Mapping
 from functools import cache
 from typing import Any, Final
@@ -22,6 +23,7 @@ from .schema import record_schema
 __all__ = ["computed_columns", "restore_record", "true_up_record"]
 
 TLSPEC_KEY: Final = "tlspec_version"
+_UNSET: Final = object()
 
 
 @cache
@@ -57,24 +59,36 @@ def restore_record(obj: Any, row: Mapping[str, Any], *, version: int, kind: str)
     true_up_record(obj, row, kind)
 
 
+def _writable_field(cls: type, name: str) -> bool:
+    """Whether ``name`` is instance state the true-up may write: absent from the class, or
+    a data descriptor that is not a property (a record's row-cell field). A property, a
+    method or a class constant is never written: the writer recomputes those."""
+
+    attr = inspect.getattr_static(cls, name, _UNSET)
+    if attr is _UNSET:
+        return True
+    return not isinstance(attr, property) and hasattr(type(attr), "__set__")
+
+
 def true_up_record(obj: Any, row: Mapping[str, Any], kind: str) -> None:
     """Restore the saved value of every stored column the state hook changed.
 
     A column saved ``null`` whose attribute the hook filled with a typed default goes back
     to ``None``; a stored column the save level omitted, left unset by the hook, is set to
-    ``None`` so the properties over it answer. A name the class defines (a property, a
-    descriptor, a class attribute) is never written: the writer recomputes those.
+    ``None`` so the properties over it answer. Row-cell fields (data descriptors) are
+    written through the descriptor; a property, method or class constant is never written:
+    the writer recomputes those.
     """
 
-    slots = getattr(obj, "__dict__", None)
-    if slots is None:
+    if getattr(obj, "__dict__", None) is None:
         return
     cls = type(obj)
     for name in _stored_columns(kind):
-        if hasattr(cls, name):
+        if not _writable_field(cls, name):
             continue
+        current = getattr(obj, name, _UNSET)
         if name in row:
-            if row[name] is None and slots.get(name) is not None:
-                slots[name] = None
-        elif name not in slots:
-            slots[name] = None
+            if row[name] is None and current is not None and current is not _UNSET:
+                setattr(obj, name, None)
+        elif current is _UNSET:
+            setattr(obj, name, None)

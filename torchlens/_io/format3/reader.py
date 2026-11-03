@@ -390,7 +390,9 @@ class DecodedArtifact:
         self.root = root
         self.manifest = manifest
         self.version: int = manifest[TLSPEC_KEY]
-        self.sink = TensorRefSink(codecs=tuple(manifest["codecs"]), files=manifest["files"])
+        self.sink = TensorRefSink(
+            codecs=tuple(manifest["codecs"]), files=manifest["files"], backend=manifest["backend"]
+        )
         self.decoder = Decoder(self.sink.add, defer_records=True)
         self.tables: dict[str, list[dict[str, Any]]] = {}
         self.objects: dict[str, list[Any]] = {}
