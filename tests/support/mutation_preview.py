@@ -8,8 +8,9 @@ purpose. This module hand-rosters up to eight mutants per preview backend on
 its replay / perturbation / coverage path and scores them with the driver's
 protocol:
 
-* the UNMUTATED suite runs first (pristine control); a red control refuses
-  every verdict;
+* the UNMUTATED suite runs first (pristine control); its reds are recorded
+  and excluded from attribution (``--strict-control`` refuses them outright,
+  the driver's CI posture), so a baseline red never reads as a kill;
 * ``killers = mutant_failures - control_failures``; a red run with no
   parseable failed test id is ERROR, never a kill; a run past the deadline is
   TIMEOUT;
@@ -377,6 +378,12 @@ def main() -> None:
     parser.add_argument("--python", default=sys.executable, help="python to run pytest with")
     parser.add_argument("--results", type=Path, help="write the JSON results record here")
     parser.add_argument("--timeout", type=float, default=None, help="per-mutant deadline (s)")
+    parser.add_argument(
+        "--strict-control",
+        action="store_true",
+        help="refuse to score when the unmutated suite is red (CI mode); by default "
+        "control reds are recorded, excluded from kill attribution, and reported",
+    )
     args = parser.parse_args()
 
     repo = Path(__file__).resolve().parents[2]
@@ -418,7 +425,12 @@ def main() -> None:
     print(f"control: rc={control.returncode} {control_wall:.0f}s {summary}", flush=True)
     if control.returncode != 0:
         named = "\n".join(sorted(control_failures)) or control.stdout[-2000:]
-        raise SystemExit(f"PRISTINE CONTROL RED -- fix the baseline before scoring:\n{named}")
+        if args.strict_control or not control_failures:
+            raise SystemExit(f"PRISTINE CONTROL RED -- fix the baseline before scoring:\n{named}")
+        # Host or train reds on the unmutated tree are a finding in their own
+        # right (reported in the record); they never attribute a kill, and
+        # every mutant they would have killed loses that margin here.
+        print(f"CONTROL REDS (excluded from attribution):\n{named}", flush=True)
     timeout = args.timeout if args.timeout else max(300.0, 4.0 * control_wall)
 
     record: dict[str, object] = {
@@ -426,7 +438,11 @@ def main() -> None:
         "marker": marker,
         "python": args.python,
         "suite": suite,
-        "control": {"wall_s": round(control_wall, 1), "summary": summary},
+        "control": {
+            "wall_s": round(control_wall, 1),
+            "summary": summary,
+            "reds": sorted(control_failures),
+        },
         "mutants": {},
     }
     survivors: list[str] = []
