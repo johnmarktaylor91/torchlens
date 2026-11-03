@@ -62,26 +62,6 @@ def show(trace: Trace, kind: str | None = None, **kwargs: Any) -> Any:
     return trace.draw(**kwargs)
 
 
-def _draw_policy(  # noqa: PLR0913 - one entry per policy key the Drawing records
-    graph: GraphLiteral,
-    rolled: bool,
-    theme: str,
-    collapse: CollapseLiteral,
-    module: Module | str | None,
-    depth: int,
-) -> dict[str, Any]:
-    """Return the resolved render policy a draw door's ``Drawing`` records."""
-
-    return {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
-
-
 def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw door
     trace: Trace,
     *,
@@ -137,6 +117,27 @@ def _draw_policy(
         "module": module,
         "depth": depth,
     }
+
+
+def _drawing_for(  # noqa: PLR0913 - the fields one Drawing records about its render
+    trace: Trace,
+    rendered: Any,
+    outpath: str,
+    file_format: str,
+    num_ops: int | None,
+    policy: dict[str, Any],
+) -> Drawing:
+    """Return the :class:`Drawing` for one rendered draw; it keeps ``trace`` for its diagnostics."""
+
+    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
+    return Drawing(
+        dot=str(rendered),
+        file_format=file_format,
+        path=written if written.exists() else None,
+        num_ops=num_ops,
+        policy=policy,
+        trace=trace,
+    )
 
 
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
@@ -252,15 +253,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
         rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
-    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
-    return Drawing(
-        dot=str(rendered),
-        file_format=file_format,
-        path=written if written.exists() else None,
-        num_ops=num_ops,
-        policy=policy,
-        trace=trace,
-    )
+    return _drawing_for(trace, rendered, outpath, file_format, num_ops, policy)
 
 
 def animate(
