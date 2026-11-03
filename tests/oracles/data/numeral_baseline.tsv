@@ -10082,6 +10082,7 @@ test-names	tests/test_conditional_invariants.py	12_
 test-names	tests/test_conditional_invariants.py	13_
 test-names	tests/test_conditional_invariants.py	14_
 test-names	tests/test_conditional_invariants.py	15_
+test-names	tests/test_dataclass_defaults_collect.py	311_
 test-names	tests/test_distributed_c0_core.py	10
 test-names	tests/test_distributed_census_topologies.py	10
 test-names	tests/test_draw_header_focus_key.py	1024_
