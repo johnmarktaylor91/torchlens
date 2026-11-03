@@ -21,7 +21,6 @@ from torchlens._autoroute._decode_heads import (
 from torchlens._autoroute._decode_spellings import (
     HEAD_KW,
     STYLE_KW,
-    TOKENIZER_KW,
     UNDETECTED_REMEDY,
 )
 from torchlens._autoroute.output import register
@@ -208,11 +207,10 @@ def decode_trace_output(
     decoded = _decode_selected(logits_info[0], resolved, meta, top_n=top_n)
     if decoded is None and resolved.style == "hf_text":
         raise DecodeStyleUnknownError(
-            f"{STYLE_KW}='hf_text' needs a tokenizer with a decode method and rank-2 or "
-            "rank-3 logits",
+            f"{STYLE_KW}='hf_text' needs rank-2 [seq, vocab] or rank-3 [batch, seq, vocab] logits",
             code="decode_style_unknown",
-            remedy=f"pass {TOKENIZER_KW}= the model's tokenizer",
-            argument=TOKENIZER_KW,
+            remedy=f"pass {HEAD_KW}= the logits head of this trace",
+            argument=HEAD_KW,
         )
     if decoded is None:
         raise PayloadUnavailableError(

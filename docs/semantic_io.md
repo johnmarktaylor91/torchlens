@@ -39,7 +39,11 @@ detector resolves refuses typed (`decode_style_unknown`) with a did-you-mean
 over the built-in styles (`classification`, `imagenet`, `imagenet1k`,
 `hf_text`); a `head` that is not an output head refuses `decode_head_unknown`
 with the available heads, and several qualifying heads with none named
-refuse `decode_head_ambiguous`.
+refuse `decode_head_ambiguous`. A trace captured without a tokenizer (any
+capture outside the bridge) still decodes with `style="hf_text"`: the rows carry
+the argmax `token_ids` and `text` is `None` until a `tokenizer=` is passed.
+Passing the removed `output_style=` or `output_head=` to `CaptureOptions` or
+`tl.trace` refuses naming `trace.decode_output(...)`.
 
 Text models traced from a raw string (`tl.trace(model, "text")` routes a
 Hugging Face language model through `tl.bridge.transformers.trace_text`)
