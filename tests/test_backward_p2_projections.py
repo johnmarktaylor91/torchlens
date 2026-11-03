@@ -53,12 +53,10 @@ def _captured_two_pass_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _TwoPassModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
     return trace
 
 
@@ -78,10 +76,10 @@ def test_backward_passes_and_grad_fn_calls_are_event_projections() -> None:
             grad_fn for grad_fn in trace.autograd.grad_fns if len(grad_fn.calls) == 2
         )
         assert [call.ordinal for call in reused_grad_fn.calls.values()] == [1, 2]
-        assert [call.backward_pass_index for call in reused_grad_fn.calls.values()] == [1, 2]
+        assert [call.backward_pass_number for call in reused_grad_fn.calls.values()] == [1, 2]
         assert reused_grad_fn.calls[0].label == f"{reused_grad_fn.label}:1"
         assert reused_grad_fn.calls.for_pass(2).label == f"{reused_grad_fn.label}:2"
-        assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_index == 2
+        assert trace.autograd.grad_fn_calls[f"{reused_grad_fn.label}:2"].backward_pass_number == 2
     finally:
         trace.cleanup()
 
@@ -501,12 +499,11 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     try:
-        trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)
-        trace.log_backward(trace[-1].out.sum(), create_graph=True)
+        trace.backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)
+        trace.backward(trace[-1].out.sum(), create_graph=True)
         assert "_backward_grad_fn_type_counter" not in trace.__dict__
         trace.save(str(tmp_path / "two_pass.tlspec"))
     finally:

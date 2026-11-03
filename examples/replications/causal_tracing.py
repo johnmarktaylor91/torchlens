@@ -219,8 +219,13 @@ def trace_fact(
     block[:, subject] += NOISE_SCALE * sigma * noise
     corrupted = block.repeat(len(positions), 1, 1)
 
-    clean = tl.trace(wrapped, clean_embeds, capture=tl.options.CaptureOptions(layers_to_save="all"))
-    corrupt = tl.trace(wrapped, corrupted, capture=_LOGITS_AND_MLPS)
+    clean = tl.trace(wrapped, clean_embeds, save="all")
+    corrupt = tl.trace(
+        wrapped,
+        corrupted,
+        capture=_LOGITS_AND_MLPS,
+        save=["lm.lm_head", *(f"lm.transformer.h.{layer}.mlp.c_proj" for layer in range(12))],
+    )
     try:
         modules = [
             str(module.address)
@@ -254,9 +259,7 @@ def trace_fact(
 
 #: Corrupted and restored runs keep only the logits (the metric's input) and each MLP's
 #: ``c_proj`` output (the restored ``down_out`` facet's home), not every op of the batch.
-_LOGITS_AND_MLPS = tl.options.CaptureOptions(
-    layers_to_save=["lm.lm_head", *(f"lm.transformer.h.{layer}.mlp.c_proj" for layer in range(12))]
-)
+_LOGITS_AND_MLPS = tl.options.CaptureOptions()
 
 
 def _probability(trace: Any, target: int) -> torch.Tensor:
@@ -478,7 +481,7 @@ def _save_clean_trace(
     ids = tokenizer(fact["prompt"], return_tensors="pt").input_ids
     with torch.no_grad():
         embeds = wrapped.lm.transformer.wte(ids)
-    trace = tl.trace(wrapped, embeds, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(wrapped, embeds, save="all")
     try:
         common.save_trace(trace, out_dir, "causal_tracing")
     finally:

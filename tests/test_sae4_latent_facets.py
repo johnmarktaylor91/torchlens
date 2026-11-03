@@ -2,8 +2,8 @@
 
 ``tl.bridge.sae.register("res", sae, site="fc1")`` makes the SAE's latents the
 facet family ``"res"`` at ``fc1``; ``tl.facet("res").latent(k)`` addresses
-latent ``k`` at the doors a ``tl.head`` selector serves (``Trace.set``,
-``Trace.do`` with a site or a mapping, ``fork().do``) and
+latent ``k`` at the doors a ``tl.head`` selector serves (``Trace.do`` with a
+site or a mapping, on any engine, ``fork().do``) and
 ``trace["fc1"].facets["res[k]"]`` reads it. An edit adds the decoder-space
 change of the edited latents to the site and leaves the reconstruction error
 alone. ``tl.attribution.SiteTarget("fc1", sae=sae, unit=k)`` attributes latent

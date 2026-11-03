@@ -196,13 +196,15 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
         Trace with a present primitive profile.
     """
 
-    capture = tl.options.CaptureOptions(backward_ready=backward_ready, aten_ops=True)
-    kwargs = {"save_mode": "reference"} if backward_ready else {}
+    capture = tl.options.CaptureOptions(
+        backward_ready=backward_ready,
+        aten_ops=True,
+        **({"save_mode": "reference"} if backward_ready else {}),
+    )
     return tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=backward_ready),
         capture=capture,
-        **kwargs,
     )
 
 
@@ -295,7 +297,7 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     """The shared observer attributes engine dispatches to active GradFn calls."""
 
     trace = _armed_trace(backward_ready=True)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
 
     backward_rows = [
         row for row in trace._primitive_op_profile.primitive_ops if row.capture_phase == "backward"
@@ -324,14 +326,9 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
 ) -> None:
     """Delayed links remain typed across CopySlices and in-place/view cases."""
 
-    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True)
-    trace = tl.trace(
-        model,
-        torch.ones(2, 3, requires_grad=True),
-        capture=capture,
-        save_mode="reference",
-    )
-    trace.log_backward(trace.output_ops[0].out)
+    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True, save_mode="reference")
+    trace = tl.trace(model, torch.ones(2, 3, requires_grad=True), capture=capture)
+    trace.backward(trace.output_ops[0].out)
 
     rows = trace._primitive_op_profile.primitive_ops
     assert any(row.operator == expected_operator for row in rows)
@@ -346,7 +343,7 @@ def test_primitive_rows_retain_no_tensor_grad_fn_or_callable_objects() -> None:
     """The value-free profile holds no strong runtime object references."""
 
     trace = _armed_trace(backward_ready=True)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
 
     def assert_value_free(value: object) -> None:
         """Recursively reject tensors, autograd nodes, and callables.

@@ -2,14 +2,10 @@
  "schema": "interaction-matrix/1",
  "features": {
   "save": {
-   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions, save_mode, lookback)",
+   "summary": "Selective capture: which ops keep payloads (save=, CaptureOptions: save_mode, lookback, reconstruction_ready)",
    "trace_kwargs": [
     "save",
-    "save_mode",
-    "lookback",
-    "lookback_payload_policy",
-    "capture",
-    "reconstruction_ready"
+    "capture"
    ],
    "options": [
     "CaptureOptions"
@@ -26,31 +22,25 @@
    ]
   },
   "halt": {
-   "summary": "Stop the forward early at a site (halt=)",
+   "summary": "Stop the forward early at a site or on a predicate (stop_after=)",
    "trace_kwargs": [
-    "halt"
+    "stop_after"
    ],
    "options": []
   },
   "storage": {
-   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, streaming=, chunking)",
+   "summary": "Payloads streamed or written to disk (storage=tl.to_disk, CaptureOptions.chunk_size, chunk_paths)",
    "trace_kwargs": [
     "storage",
-    "streaming",
-    "chunk_size",
     "chunk_paths"
    ],
    "options": [
-    "SaveOptions",
     "StorageOptions"
    ]
   },
   "backward": {
-   "summary": "Gradient capture: backward_ready, save_grads, grad options, log_backward",
-   "trace_kwargs": [
-    "grad_transform",
-    "grad_options"
-   ],
+   "summary": "Gradient capture: backward_ready, save_grads, grad options, backward",
+   "trace_kwargs": [],
    "options": []
   },
   "episode": {
@@ -65,17 +55,14 @@
   "backend": {
    "summary": "Non-torch backends (backend=, JAX static args)",
    "trace_kwargs": [
-    "backend",
-    "jax_static_argnums"
+    "backend"
    ],
    "options": []
   },
   "reporting": {
-   "summary": "Capture-time reporting: profile, echo, grouping",
+   "summary": "Capture-time reporting: narrate=, CaptureOptions.grouping",
    "trace_kwargs": [
-    "profile",
-    "narrate",
-    "grouping"
+    "narrate"
    ],
    "options": [
     "NarrationOptions"
@@ -180,6 +167,7 @@
  "plain_trace_kwargs": [
   "model",
   "input_args",
+  "extra_positional",
   "input_kwargs",
   "input_shape",
   "forward_kwargs"
@@ -512,7 +500,7 @@
    "status": "asymmetry",
    "asymmetry": "A10",
    "confidence": "high",
-   "note": "tl.record installs gradient hooks only when asked and refuses log_backward on a halted Recording; the Trace path allows both."
+   "note": "tl.record installs gradient hooks only when asked and refuses backward on a halted Recording; the Trace path allows both."
   },
   {
    "a": "backward",
@@ -550,7 +538,7 @@
    "status": "asymmetry",
    "asymmetry": "A11",
    "confidence": "high",
-   "note": "Gradients stream to disk on log_backward, but backward_ready=True refuses disk saves and a disk-only record refuses save_grads."
+   "note": "Gradients stream to disk on backward, but backward_ready=True refuses disk saves and a disk-only record refuses save_grads."
   },
   {
    "a": "backward",
@@ -2615,7 +2603,7 @@
     "backward",
     "record"
    ],
-   "summary": "On the Trace path log_backward works after a halt and by default; tl.record installs gradient hooks only with backward_ready, save_grads or default_grad, refuses log_backward without them (recording_backward_not_requested), refuses it on a halted Recording (recording_backward_halted), and rejects save_grads with a disk-only store.",
+   "summary": "On the Trace path backward works after a halt and by default; tl.record installs gradient hooks only with backward_ready, save_grads or default_grad, refuses backward without them (recording_backward_not_requested), refuses it on a halted Recording (recording_backward_halted), and rejects save_grads with a disk-only store.",
    "evidence": "docs/reference/capture_outcomes.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2626,7 +2614,7 @@
     "backward",
     "storage"
    ],
-   "summary": "Gradient payloads stream to disk on trace.log_backward, but backward_ready=True refuses disk saves (backward_ready_conflict), chunk_size refuses backward capture, and a disk-only record refuses save_grads (predicate_storage_conflict).",
+   "summary": "Gradient payloads stream to disk on trace.backward, but backward_ready=True refuses disk saves (backward_ready_conflict), chunk_size refuses backward capture, and a disk-only record refuses save_grads (predicate_storage_conflict).",
    "evidence": "tests/test_backward_streaming.py::test_streamed_bundle_honors_per_call_save_grads_override",
    "recommendation": "document",
    "ruling": "pending"
@@ -2863,14 +2851,6 @@
    "ruling": "pending"
   },
   {
-   "id": "A34",
-   "pair": [],
-   "summary": "The same disk option is spelled storage= and streaming= on tl.trace and tl.record; both together refuse storage_argument_conflict, and a silent conflict case is ledgered (accepted then discarded).",
-   "evidence": "tests/composition_expectations/data/composition_ledger.md",
-   "recommendation": "close",
-   "ruling": "pending"
-  },
-  {
    "id": "A35",
    "pair": [],
    "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
@@ -2889,7 +2869,7 @@
   {
    "id": "A37",
    "pair": [],
-   "summary": "Which sites to keep is spelled save= on trace and record, layers on extract, and layers_to_save in CaptureOptions; using both save= and layers_to_save refuses save_selection_conflict.",
+   "summary": "Which sites to keep is spelled save= on trace and record, and layers on extract. CaptureOptions configures capture mechanics.",
    "evidence": "docs/reference/error_refusal_contract.md",
    "recommendation": "document",
    "ruling": "pending"
@@ -2901,14 +2881,6 @@
    "evidence": "tests/test_exception_taxonomy_records.py",
    "recommendation": "close",
    "ruling": "closed"
-  },
-  {
-   "id": "A39",
-   "pair": [],
-   "summary": "Early stop has two spellings: halt= (a predicate) and stop_after= (a selector or site); setting both refuses stop_after_halt_conflict, and only stop_after refuses chunking with its own code.",
-   "evidence": "docs/reference/error_refusal_contract.md",
-   "recommendation": "document",
-   "ruling": "pending"
   },
   {
    "id": "A40",

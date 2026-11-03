@@ -604,7 +604,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save="all",
             ),
             None,
             None,
@@ -626,7 +627,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             include_source_events=True,
-            seed=_SEED,
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
     if config == "two_pass_negative":
@@ -634,7 +635,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[-1], seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save=[-1],
             ),
             None,
             None,
@@ -644,7 +646,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save=[1, -1], seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save=[1, -1],
             ),
             None,
             None,
@@ -655,9 +658,9 @@ def _run_capture(
             model,
             input_tensor,
             save=selector,
-            lookback=4,
-            lookback_payload_policy="detached_raw",
-            capture=tl.options.CaptureOptions(seed=_SEED),
+            capture=tl.options.CaptureOptions(
+                seed=_SEED, lookback=4, lookback_payload_policy="detached_raw"
+            ),
         )
         return trace, None, None
     if config == "intervene_trace":
@@ -676,7 +679,7 @@ def _run_capture(
             save=_save_all_ops,
             intervene=tl.when(tl.func("relu"), tl.add(0.0)),
             include_source_events=True,
-            seed=_SEED,
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
     if config == "halt_trace":
@@ -684,7 +687,7 @@ def _run_capture(
             model,
             input_tensor,
             save=_save_all_ops,
-            halt=_halt_on_relu,
+            stop_after=_halt_on_relu,
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return trace, None, None
@@ -693,38 +696,32 @@ def _run_capture(
             model,
             input_tensor,
             save=_save_all_ops,
-            halt=_halt_on_relu,
+            stop_after=_halt_on_relu,
             include_source_events=True,
-            seed=_SEED,
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
     if config == "backward_trace":
         trace = tl.trace(
             model,
             input_tensor.requires_grad_(True),
-            capture=tl.options.CaptureOptions(
-                layers_to_save="all", save_grads="all", backward_ready=True, seed=_SEED
-            ),
+            capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True, seed=_SEED),
+            save="all",
         )
         output_op = trace[trace.output_layers[0]]
         if not getattr(output_op, "has_saved_activation", False):
             raise AssertionError("backward trace output activation was not saved")
-        trace.log_backward(output_op.out.sum())
+        trace.backward(output_op.out.sum())
         return trace, None, None
     if config == "backward_record":
-        output, recording = cast(
-            tuple[torch.Tensor, Recording],
-            tl.record(
-                model,
-                input_tensor.requires_grad_(True),
-                save=_save_all_ops,
-                save_grads=True,
-                backward_ready=True,
-                include_source_events=True,
-                return_output=True,
-                seed=_SEED,
-            ),
+        recording = tl.record(
+            model,
+            input_tensor.requires_grad_(True),
+            save=_save_all_ops,
+            include_source_events=True,
+            capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
         )
+        output = cast(torch.Tensor, recording.output)
         recording.backward(output.sum(), save_grads=True)
         return recording, None, output
     if config == "disk_exhaustive":
@@ -732,7 +729,8 @@ def _run_capture(
             model,
             input_tensor,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+            capture=tl.options.CaptureOptions(seed=_SEED),
+            save="all",
         )
         return trace, None, None
     if config == "disk_predicate":
@@ -751,7 +749,7 @@ def _run_capture(
             save=_save_all_ops,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
             include_source_events=True,
-            seed=_SEED,
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
     if config == "failed_record":
@@ -761,7 +759,7 @@ def _run_capture(
             save=_save_all_ops,
             include_source_events=True,
             on_forward_error="return_partial",
-            seed=_SEED,
+            capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, RuntimeError("capture-oracle intentional forward failure"), None
     if config == "failed_trace":
@@ -769,7 +767,8 @@ def _run_capture(
             tl.trace(
                 model,
                 input_tensor,
-                capture=tl.options.CaptureOptions(layers_to_save="all", seed=_SEED),
+                capture=tl.options.CaptureOptions(seed=_SEED),
+                save="all",
             )
         except tl.errors.TraceCaptureError as exc:
             # The door raises TraceCaptureError from the forward's exception;

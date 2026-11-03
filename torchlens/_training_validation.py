@@ -56,7 +56,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
     ``torch.no_grad()`` or ``torch.inference_mode()`` builds no autograd graph,
     so it implies ``inference_only=True`` unless a backward-related option asks
     for one. The Trace then reports ``inference_only=True`` and a later
-    ``log_backward`` refusal names the cause. An implied value is provisional:
+    ``backward`` refusal names the cause. An implied value is provisional:
     the capture clears it after the forward if an output still carries
     autograd history (``torch.enable_grad()`` inside the forward), see
     :func:`torchlens._capture.stop.cleared_inference_only_directive`.
@@ -75,7 +75,7 @@ def effective_inference_only(capture_options: CaptureOptions, *, backward_reques
         The ``inference_only`` value the capture runs with.
     """
 
-    if capture_options.is_field_explicit("inference_only"):
+    if capture_options._is_field_explicit("inference_only"):
         return bool(capture_options.inference_only)
     return not backward_requested and autograd_disabled_at_entry()
 

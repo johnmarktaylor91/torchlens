@@ -670,7 +670,7 @@ class FacetSpec(_SelectionOperand):
         return (
             f"Facet gradient unavailable for home {label!r}: {detail}. "
             "Recapture with backward_ready=True and save_grads including "
-            f"{label!r}, then run trace.log_backward(...) or a recorded backward pass."
+            f"{label!r}, then run trace.backward(...) or a recorded backward pass."
         )
 
     def _validate_intervention_safe(self, *, alias_policy: str | None) -> None:

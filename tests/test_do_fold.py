@@ -40,9 +40,7 @@ from torchlens.options import (
 replay_module = importlib.import_module("torchlens.intervention.replay")
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
-_GRAD_CAPTURE = tl.options.CaptureOptions(
-    layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
-)
+_GRAD_CAPTURE = tl.options.CaptureOptions(save_grads="all", replayable=True, backward_ready=True)
 _SET_ONLY = InterventionOptions(engine="set_only")
 
 

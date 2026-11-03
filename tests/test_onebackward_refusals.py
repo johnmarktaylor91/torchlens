@@ -104,8 +104,7 @@ class TestLivenessGate:
     @_requires_gradient_edge
     def test_graph_freed_refuses_typed(self) -> None:
         trace = _trace(
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         # Free the graph with a user backward WITHOUT retain_graph.
         trace["output_1"].out.sum().backward()
@@ -146,7 +145,7 @@ class TestTargetNormalizer:
         """On a selectively-retained trace the payload route dies before the
         read; the read-level refusal for a non-tensor target is typed."""
 
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         unsaved = trace["output_1"].out  # None on a zero-retention capture
         assert unsaved is None
         error = _read_error(
@@ -157,7 +156,7 @@ class TestTargetNormalizer:
 
     @_requires_gradient_edge
     def test_wrong_shape_cotangent_names_recorded_shape(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,
@@ -282,7 +281,7 @@ class TestPopulationContract:
 
     @_requires_gradient_edge
     def test_explicit_unretained_site_preflight_refusal(self) -> None:
-        trace = _trace(capture=tl.options.CaptureOptions(layers_to_save=[]))
+        trace = _trace(save=[])
         error = _read_error(
             lambda: ob.read(
                 trace,
@@ -353,7 +352,7 @@ class TestBudgetAndSaveModes:
 
     @_requires_gradient_edge
     def test_view_save_mode_fails_closed_for_activation_methods(self) -> None:
-        trace = _trace(save_mode="view")
+        trace = _trace(capture=tl.options.CaptureOptions(save_mode="view"))
         _read_error(
             lambda: ob.read(
                 trace,
@@ -478,7 +477,7 @@ class TestTypedDoorProvocations:
 
     @_requires_gradient_edge
     def test_read_payload_untrustworthy(self) -> None:
-        trace = _trace(save_mode="view")
+        trace = _trace(capture=tl.options.CaptureOptions(save_mode="view"))
         with pytest.raises(ob.ReadError) as excinfo:
             ob.read(
                 trace,

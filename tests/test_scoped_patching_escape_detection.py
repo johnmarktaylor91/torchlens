@@ -604,7 +604,7 @@ def test_record_fastlog_uses_same_guard_and_backward_boundary_is_explicit() -> N
     assert recording.escape_diagnostics == []
     trace = tl.trace(Model(), torch.randn(3, requires_grad=True))
     assert trace.autograd.escape_detector_backward_coverage == "not_armed"
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     assert trace.autograd.has_backward_pass is True
 
 
@@ -735,9 +735,7 @@ def test_guard_pass_metadata_is_machine_readable() -> None:
             return torch.relu(x)
 
     wrap_torch(escape_detector="shadow")
-    trace = tl.trace(
-        Model(), torch.randn(3), capture=tl.options.CaptureOptions(layers_to_save=["relu"])
-    )
+    trace = tl.trace(Model(), torch.randn(3), save=["relu"])
     assert trace.capture_guard_passes
     assert all(
         item["owner_thread_id"] == trace.provenance.owner_thread_id

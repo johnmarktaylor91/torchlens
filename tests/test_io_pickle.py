@@ -48,12 +48,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
             save_args=True,
             save_rng=True,
             save_source_context=True,
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -137,7 +137,7 @@ def test_trace_setstate_refuses_pre_versioning_state() -> None:
 
 
 def test_trace_setstate_default_fills_grad_fn_param_refs() -> None:
-    """A state dict predating ``_grad_fn_param_refs`` must not crash ``log_backward()``.
+    """A state dict predating ``_grad_fn_param_refs`` must not crash ``backward()``.
 
     Regression gate for cert8 BLOCKER-1: ``_grad_fn_param_refs`` is a real,
     populated ``FieldPolicy.KEEP`` field written unconditionally (no
@@ -173,7 +173,7 @@ def test_trace_setstate_default_fills_grad_fn_param_refs() -> None:
     assert restored._replay_arg_version_data_complete is True
 
     out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
+    restored.backward(out.sum())
 
     # The field is genuinely populated by the backward walk, not just
     # present-but-empty -- confirms the fill value is functionally correct,
@@ -203,7 +203,8 @@ def test_plain_pickle_roundtrip_still_works() -> None:
     live_log = trace_fn(
         _PlainPickleModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0),
+        capture=tl.options.CaptureOptions(seed=0),
+        save="all",
     )
     restored = pickle.loads(pickle.dumps(live_log))
 
@@ -247,7 +248,7 @@ def test_trace_setstate_coerces_legacy_backward_gradfn_refs_dict() -> None:
     assert restored._backward_gradfn_refs == []
 
     out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
+    restored.backward(out.sum())
 
     assert isinstance(restored._backward_gradfn_refs, list)
 
@@ -265,7 +266,7 @@ def test_trace_getstate_setstate_roundtrip_backward_gradfn_refs_stays_list() -> 
 
     assert isinstance(restored._backward_gradfn_refs, list)
     out = restored[restored.output_layers[0]].out
-    restored.log_backward(out.sum())
+    restored.backward(out.sum())
     assert isinstance(restored._backward_gradfn_refs, list)
 
 

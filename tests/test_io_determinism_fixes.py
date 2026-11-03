@@ -174,7 +174,7 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
 
     value = torch.ones(1, 2, requires_grad=True)
     trace = tl.trace(_LinearModel(), value, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     path = tmp_path / "backward.tlspec"
     trace.save(path)
 
@@ -196,8 +196,8 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     trace = tl.trace(
         _ComplexModel(),
         torch.tensor([1 + 2j], dtype=torch.complex64),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=lambda value: value.conj()),
+        capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
+        save="all",
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"

@@ -51,6 +51,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from .._errors import InvalidArgumentError
+from ._encoding_request import EncodingChannelRequest
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -182,7 +183,7 @@ _DERIVED_COMPOSITE_INPUTS: dict[str, tuple[str, ...]] = {
 }
 
 _PER_PASS_FIELDS = frozenset({"func_duration", "fx_call_index", "pass_index"})
-
+_ROW_ALIAS = {"pass_number": "pass_index"}  # the source spelling rides Layer.pass_index's row
 _SHAPE_FIELDS = frozenset({"shape", "transformed_out_shape"})
 
 #: Sources classified per-name for rolled multi-pass resolution. Built below
@@ -466,20 +467,6 @@ def interpolate_hex(start: str, end: str, fraction: float) -> str:
 
 
 @dataclass(frozen=True)
-class EncodingChannelRequest:
-    """A color source paired with an explicit transform (lens layer door).
-
-    The lens roster's performance rows pass this as ``color_by`` so the
-    view-resolved member arrives WITH its rank transform; a bare string or
-    callable ``color_by`` keeps the historical linear default.
-    """
-
-    source: Any
-    transform: str = "linear"
-    display_name: str | None = None
-
-
-@dataclass(frozen=True)
 class EncodingChannelSpec:
     """One resolved channel request (option-validation product).
 
@@ -699,7 +686,7 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
             )
         from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
-        if color_by in LAYER_SOURCE_ROWS or color_by in LAYER_PASS_LOG_FIELD_ORDER:
+        if color_by in {*LAYER_SOURCE_ROWS, *LAYER_PASS_LOG_FIELD_ORDER} - set(_ROW_ALIAS.values()):
             return EncodingChannelSpec(
                 channel="color",
                 source_kind="field",
@@ -1169,7 +1156,7 @@ def _resolve_device_time(
 def _resolve_field_on_rolled(state: EncodingState, node: Any, field_name: str) -> float | None:
     """Resolve a FIELD source on a rolled multi-pass Layer per the allowlist."""
 
-    row = LAYER_SOURCE_ROWS.get(field_name)
+    row = LAYER_SOURCE_ROWS.get(_ROW_ALIAS.get(field_name, field_name))
     if row is None:
         raise _encoding_error(
             f"color_by source {field_name!r} has no declared rolled-aggregate "
@@ -1276,7 +1263,7 @@ def _size_rolled_refusal(node: Any, field_name: str, why: str) -> InvalidArgumen
 def _require_size_rolled_row(node: Any, field_name: str) -> str:
     """Return a declared rolled-size row or raise the typed source refusal."""
 
-    row = LAYER_SOURCE_ROWS.get(field_name)
+    row = LAYER_SOURCE_ROWS.get(_ROW_ALIAS.get(field_name, field_name))
     if row is None:
         raise _encoding_error(
             f"size_by source {field_name!r} has no declared rolled-aggregate "

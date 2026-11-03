@@ -16,7 +16,7 @@ unnameable remainder is a truth-mechanism bug, not a coverage number.
 Cells:
   forward:  gpt2 (transformers pin per artifact) @ batch 16 x seq 64, eval;
             torchvision resnet50 IMAGENET1K_V2 @ batch 32, eval.
-  backward: same models, train, fwd+bwd via trace.log_backward; first AND
+  backward: same models, train, fwd+bwd via trace.backward; first AND
             second backward measured separately.
 
 Usage (cluster lane, manual/periodic per testing-panel T3; CI stays CPU):
@@ -89,13 +89,12 @@ def run_cell(cell: str) -> dict[str, Any]:
             trace = tl.trace(
                 model,
                 inputs,
-                capture=tl.options.CaptureOptions(backward_ready=True),
-                save_mode="reference",
+                capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
             )
             output = trace.output_ops[0].out
             loss = (output.logits if hasattr(output, "logits") else output).float().sum()
-            trace.log_backward(loss, retain_graph=True)
-            trace.log_backward(loss)  # second backward: accumulation cell
+            trace.backward(loss, retain_graph=True)
+            trace.backward(loss)  # second backward: accumulation cell
             torch.cuda.synchronize()
         join = obs.join_session(active, trace)
         backward_facts = {

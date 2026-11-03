@@ -273,7 +273,8 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
+        capture=CaptureOptions(save_args=True, output_device="cpu"),
+        save="all",
     )
     devices = {op.out.device.type for op in trace._layer_list if op.out is not None}
     assert devices == {"cpu"}

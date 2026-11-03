@@ -1,6 +1,6 @@
 """Trace run functions reached from the records through ``_data_classes._doors.intervention``.
 
-``Trace.run`` and ``Trace.disarm_triggers`` are the thin methods;
+``Trace.run`` and ``trace.autograd.disarm`` are the thin methods;
 the ``_runnable`` / ``_fast_run`` / ``_fast_live_steer`` dispatch lives here.
 """
 
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = [
-    "disarm_triggers",
+    "disarm",
     "run",
 ]
 
@@ -746,6 +746,6 @@ def _resolve_rerun_output_transform(
     return None
 
 
-def disarm_triggers(trace: Trace) -> None:
-    """Body of ``Trace.disarm_triggers``; the method carries the documented contract."""
+def disarm(trace: Trace) -> None:
+    """Body of ``trace.autograd.disarm``; the method carries the documented contract."""
     _disarm_triggers_impl(trace)

@@ -25,6 +25,7 @@ from .._ir.container import (
 from .._quantities import Bytes
 from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
+from .._utils._tensor_layout import relay_to_layout
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..errors._base import TorchLensError
@@ -57,6 +58,7 @@ from ._replay_sites import (
     _is_source_record,
     _keeps_captured_draw,
     _no_func_message,
+    _parent_value,
     _unmet_log_precondition,
 )
 from ._replay_values import (
@@ -298,7 +300,7 @@ def _reset_backward_projection(log: Trace) -> None:
     log._capture_events = CaptureEvents()
     log.__dict__.pop("_tl_backward_hooked_tensor_keys", None)
     log.__dict__.pop("_tl_grad_hook_owner_by_label", None)
-    log.__dict__.pop("_active_backward_pass_index", None)
+    log.__dict__.pop("_active_backward_pass_number", None)
     log.__dict__.pop("_implicit_backward_pass_open", None)
     getattr(log, "_warned_once", set()).discard("implicit_backward_pass")
     log.__dict__.pop("_tl_backward_triggers_disarmed", None)
@@ -873,38 +875,9 @@ def _resolve_arg_component(
                 f"({', '.join(repr(key) for key in parent_keys)}); refusing to guess a pass."
             )
         parent = trace._layer_dict_all_keys[parent_keys[0] if parent_keys else parent_label]
-        parent_key = _replay_site_key(parent)
         _warn_if_unexpected_parent(pass_log, parent, label_keys, strict=strict)
-        if parent_key in overlay:
-            return overlay[parent_key]
-        versions = getattr(parent, "out_versions_by_child", {}) or {}
-        child_spelling = next(
-            (
-                spelling
-                for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
-                if spelling in versions
-            ),
-            None,
-        )
-        if child_spelling is not None:
-            version = versions[child_spelling]
-            if isinstance(version, torch.Tensor):
-                if differentiable_frontier is not None:
-                    return _frontier_leaf(
-                        differentiable_frontier,
-                        f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
-                        version,
-                    )
-                return version
-        if isinstance(parent.out, torch.Tensor):
-            if differentiable_frontier is not None:
-                return _frontier_leaf(
-                    differentiable_frontier, _disclosure_label(parent), parent.out
-                )
-            return parent.out
-        raise ReplayPreconditionError(
-            f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
-        )
+        value = _parent_value(parent, pass_log, overlay, differentiable_frontier)
+        return relay_to_layout(value, component._capture_layout)
     if isinstance(component, LiteralTensor):
         return checked_param_value(component, pass_log)
     if isinstance(component, LiteralValue):

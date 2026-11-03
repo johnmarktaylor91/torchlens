@@ -61,6 +61,23 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
+    "collapse_plan": (
+        "use trace.draw(path).collapse_plan(mode) on the draw result -- "
+        "Trace.collapse_plan moved to the draw result"
+    ),
+    "collapse_schedule": (
+        "use trace.draw(path).collapse_schedule() on the draw result -- "
+        "Trace.collapse_schedule moved to the draw result"
+    ),
+    "log_backward": "use trace.backward(loss) -- Trace.log_backward was renamed",
+    "disarm_triggers": (
+        "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"
+    ),
+    "set": (
+        "use trace.do(site, value, intervention=tl.options.InterventionOptions("
+        "engine='set_only')) -- Trace.set was replaced by the set_only engine of do"
+    ),
+    "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
         "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
@@ -94,9 +111,9 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
         # raw AttributeError naming whichever private field the reader hit
         # first (b6-opus R25: summary/iteration/getitem/draw/receptive_fields
         # each leaked a different private name).
-        from .._errors import TraceCleanedUpError
+        from .._errors import refuse_cleaned_up
 
-        raise TraceCleanedUpError(
+        refuse_cleaned_up(
             f"this Trace was husked by cleanup(), so {name!r} (like every "
             "logged field) has been deleted",
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",

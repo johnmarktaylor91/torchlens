@@ -67,10 +67,11 @@ def _logged_backward_stream(
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=CaptureOptions(save_grads=True),
+        save="all",
         storage=tl.to_disk(bundle_path, retain_in_memory=retain_in_memory),
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     expected = (
         {label: trace[label].grad.detach().clone() for label in trace.saved_grad_ops.keys()}
         if retain_in_memory
@@ -79,7 +80,7 @@ def _logged_backward_stream(
     return trace, expected
 
 
-def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:
+def test_backward_streams_grads_to_disk(tmp_path: Path) -> None:
     """Gradient streaming should write grad blobs into the bundle."""
 
     bundle_path = tmp_path / "backward_stream.tl"
@@ -100,12 +101,13 @@ def test_streamed_bundle_honors_per_call_save_grads_override(tmp_path: Path) -> 
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(layers_to_save="all", save_grads=True),
+        capture=CaptureOptions(save_grads=True),
+        save="all",
         storage=tl.to_disk(bundle_path),
     )
     trace._options_save_grads = None
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), save_grads=True)
 
     manifest = Manifest.read(bundle_path / "manifest.json")
     assert any(entry.kind == "grad" for entry in manifest.tensors)
@@ -165,10 +167,10 @@ def test_train_mode_disk_save_rejected_for_grads(tmp_path: Path) -> None:
             model,
             inputs,
             capture=CaptureOptions(
-                layers_to_save="all",
                 save_grads=True,
                 backward_ready=True,
             ),
+            save="all",
             storage=tl.to_disk(tmp_path / "bad.tl"),
         )
 

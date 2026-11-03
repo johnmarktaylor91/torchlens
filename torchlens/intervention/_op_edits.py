@@ -1,4 +1,4 @@
-"""Op-level intervention verbs: ``do``, ``set``, ``grad_for``, facets.
+"""Op-level intervention verbs: ``do``, ``grad_for``, facets.
 
 Reached from ``Op`` through ``_data_classes._doors.intervention()``.
 """
@@ -20,7 +20,6 @@ __all__ = [
     "derived_grad",
     "grad_for",
     "do",
-    "set",
 ]
 
 
@@ -109,38 +108,4 @@ def do(
         model=model,
         inputs=inputs,
         intervention=intervention,
-    )
-
-
-def set(
-    op: Op,
-    value: Any,
-    *,
-    strict: bool = False,
-    confirm_mutation: bool = False,
-) -> Trace:
-    """Set this op's out recipe through the owning Trace.
-
-    Parameters
-    ----------
-    op:
-        The op record this function reads and writes.
-    value:
-        Static replacement value or one-shot callable.
-    strict:
-        Whether site resolution should reject non-portable selectors.
-    confirm_mutation:
-        Suppress root mutation warnings when intentionally mutating.
-
-    Returns
-    -------
-    Trace
-        Source Trace with a stale intervention recipe.
-    """
-
-    return op._source_trace_or_error().set(
-        op.layer_label,
-        value,
-        strict=strict,
-        confirm_mutation=confirm_mutation,
     )

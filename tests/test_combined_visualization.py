@@ -7,7 +7,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import _visualization
 from torchlens._visualization._render_common import GRADIENT_ARROW_COLOR
 from torchlens._visualization._render_leaf import (
     _module_key_for_grad_fn,
@@ -69,7 +68,7 @@ class _SingleParamModel(nn.Module):
         return self.scale(x).sum()
 
 
-def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
+def _backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Return a Trace with backward metadata captured.
 
     Parameters
@@ -86,7 +85,7 @@ def _log_backward_model(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """
 
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return trace
 
 
@@ -108,20 +107,20 @@ def _log_two_backward_passes(model: nn.Module, x: torch.Tensor) -> tl.Trace:
 
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"))
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss)
     return trace
 
 
 def test_draw_combined_tinymlp_smoke(tmp_path: Path) -> None:
     """draw_combined returns DOT with forward and backward nodes."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "combined"),
-        vis_save_only=True,
         file_format="svg",
-    )
+    ).dot
 
     assert "combined forward/backward graph" in dot
     assert "linear_1_1" in dot
@@ -131,24 +130,21 @@ def test_draw_combined_tinymlp_smoke(tmp_path: Path) -> None:
 
 @pytest.mark.smoke
 def test_draw_combined_top_level_function(tmp_path: Path) -> None:
-    """Top-level draw_combined renders a Trace."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    """``graph="combined"`` with an explicit path renders a Trace."""
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = _visualization.draw_combined(
-        trace,
-        visualization=tl.options.VisualizationOptions(
-            container_path=str(tmp_path / "top_level_combined"),
-            save_only=True,
-            file_format="svg",
-        ),
-    )
+    dot = trace.draw(
+        graph="combined",
+        path=str(tmp_path / "top_level_combined"),
+        file_format="svg",
+    ).dot
 
     assert "relu_back" in dot
 
 
 def test_draw_combined_module_clusters() -> None:
     """Paired backward nodes are placed in the forward op's module cluster."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
     addmm = next(
         grad_fn_handle
         for grad_fn_handle in trace.autograd.grad_fns
@@ -160,17 +156,17 @@ def test_draw_combined_module_clusters() -> None:
 
 def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
     """The outside mode leaves intervening grad_fns out of module clusters."""
-    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
         grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "outside"),
-        vis_save_only=True,
         file_format="svg",
         intervening_cluster="outside",
-    )
+    ).dot
 
     assert _module_key_for_grad_fn(trace, intervening, "outside") is None
     assert "cluster___intervening__" not in dot
@@ -178,17 +174,17 @@ def test_draw_combined_intervening_cluster_outside(tmp_path: Path) -> None:
 
 def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
     """The own mode creates the dedicated intervening cluster."""
-    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
         grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "own"),
-        vis_save_only=True,
         file_format="svg",
         intervening_cluster="own",
-    )
+    ).dot
 
     assert _module_key_for_grad_fn(trace, intervening, "own") == "__intervening__"
     assert "cluster___intervening__" in dot
@@ -196,7 +192,7 @@ def test_draw_combined_intervening_cluster_own_cluster(tmp_path: Path) -> None:
 
 def test_draw_combined_intervening_cluster_inherits() -> None:
     """Upstream and downstream inheritance modes are deterministic."""
-    trace = _log_backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
+    trace = _backward_model(_ViewModel(), torch.randn(2, 6, requires_grad=True))
     intervening = next(
         grad_fn_handle for grad_fn_handle in trace.autograd.grad_fns if not grad_fn_handle.has_op
     )
@@ -210,7 +206,7 @@ def test_draw_combined_intervening_cluster_inherits() -> None:
 
 def test_draw_combined_accumulategrad_attribution() -> None:
     """AccumulateGrad attribution uses the serialized label-keyed parameter map."""
-    trace = _log_backward_model(_SingleParamModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_SingleParamModel(), torch.randn(2, 3, requires_grad=True))
     accumulate_grad = next(
         grad_fn_handle
         for grad_fn_handle in trace.autograd.grad_fns
@@ -223,15 +219,15 @@ def test_draw_combined_accumulategrad_attribution() -> None:
 
 def test_draw_combined_rolled_raises_notimplementederror() -> None:
     """Combined rolled rendering is explicitly deferred."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     with pytest.raises(NotImplementedError):
-        trace.draw_combined(vis_mode="rolled", vis_save_only=True)
+        trace.draw(graph="combined", rolled=True)
 
 
 def test_draw_combined_backward_node_spec_fn_callback(tmp_path: Path) -> None:
     """Combined rendering accepts a separate backward node callback."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
     def backward_node_spec_fn(grad_fn_handle: object, default_spec: NodeSpec) -> NodeSpec:
         """Tint one backward node."""
@@ -239,25 +235,25 @@ def test_draw_combined_backward_node_spec_fn_callback(tmp_path: Path) -> None:
             default_spec.fillcolor = "#ABCDEF"
         return default_spec
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "callback"),
-        vis_save_only=True,
         file_format="svg",
         backward_node_spec_fn=backward_node_spec_fn,
-    )
+    ).dot
 
     assert "#ABCDEF" in dot
 
 
 def test_draw_combined_correspondence_edge_constraint_false(tmp_path: Path) -> None:
     """Paired forward/backward edges are dashed and unconstrained."""
-    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    trace = _backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "correspondence"),
-        vis_save_only=True,
         file_format="svg",
-    )
+    ).dot
 
     assert f'color="{GRADIENT_ARROW_COLOR}"' in dot
     assert "constraint=false" in dot
@@ -268,12 +264,12 @@ def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> Non
     """Combined rendering accepts a one-based backward pass filter."""
     trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "combined_filtered"),
-        vis_save_only=True,
         file_format="svg",
         bwd=2,
-    )
+    ).dot
 
     assert "shown: 2" in dot
     assert "bwd 2" in dot
@@ -288,15 +284,14 @@ def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> No
         capture=tl.options.CaptureOptions(save_grads=tl.in_backward_pass(2)),
     )
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss, retain_graph=True)
-    trace.log_backward(loss)
+    trace.backward(loss, retain_graph=True)
+    trace.backward(loss)
 
     dot = trace.draw(
         path=str(tmp_path / "forward_partial_bwd"),
-        vis_save_only=True,
         file_format="svg",
-        vis_mode="rolled",
-    )
+        rolled=True,
+    ).dot
 
     assert "bwd 2" in dot
 
@@ -308,13 +303,13 @@ def test_draw_combined_ties_carry_no_cluster_clipping(tmp_path: Path) -> None:
     attributes; with it they either warned (both endpoints inside the cluster)
     or clipped the tie at a cluster border, hiding which grad_fn it names.
     """
-    trace = _log_backward_model(_SingleParamModel(), torch.randn(3, requires_grad=True))
+    trace = _backward_model(_SingleParamModel(), torch.randn(3, requires_grad=True))
 
-    dot = trace.draw_combined(
+    dot = trace.draw(
+        graph="combined",
         path=str(tmp_path / "ties"),
-        vis_save_only=True,
         file_format="dot",
-    )
+    ).dot
 
     tie_lines = [line for line in dot.splitlines() if "->" in line and "constraint=false" in line]
     assert tie_lines

@@ -227,11 +227,12 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     trace = tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, aten_ops=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, aten_ops=True, save_mode="reference"
+        ),
     )
     forward_count = len(trace.aten_ops)
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
 
     rows = trace.aten_ops
     assert len(rows) > forward_count
@@ -273,7 +274,8 @@ def test_classics_smoke_model_records_and_validates() -> None:
         inputs,
         # save_args keeps the replay arguments; without it the per-op replay
         # reports the whole model as a region it cannot replay, switch or not.
-        capture=tl.options.CaptureOptions(aten_ops=True, layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(aten_ops=True, save_args=True),
+        save="all",
     )
     assert trace.has_aten_ops is True
     assert trace.aten_ops

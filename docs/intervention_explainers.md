@@ -11,7 +11,7 @@ questions, so pick by what you need back, not by habit.
 | Ask "what if this saved value had been different" on an input you already traced | `trace.fork().do(site, action)` | no: the edit is pushed down the recorded graph from saved values | the fork, with its saved values updated |
 | The same question when the edit may change control flow, randomness or module state | `trace.fork().do(site, action, model=model, inputs=x)`, or `trace.run(model, x)` | yes | the fork, re-executed under the edit |
 | Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, and `spec.bind(model).generate(...)` for HF `generate()` | yes, every call | the model's own outputs, plus `last_report` fire counts |
-| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | yes, every call | the output and a sparse `Recording` |
+| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec)` | yes, every call | a sparse `Recording`; the output is `recording.output` |
 
 `do()` picks its engine from its arguments: with neither `model=` nor `inputs=` it pushes over the saved
 graph; with both it re-executes the model. Pass
@@ -87,7 +87,7 @@ removed spellings).
 
 ## Mutate In Place and Fork First
 
-`set` and `do` mutate the `Trace` they are called on. A root trace warns once
+`do` (including `do` with the `set_only` engine) mutates the `Trace` it is called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -117,7 +117,7 @@ captured evidence where safe.
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
 replay overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set` or `do` when the edit should be part of the recipe.
+intervention. Use `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 

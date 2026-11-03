@@ -55,31 +55,6 @@ DOCS: dict[str, str] = {
             Frozen public view of the current mutable intervention spec.
         """
     ),
-    "set": (
-        """Set a site out recipe without propagating it.
-        
-        Parameters
-        ----------
-        site:
-            Selector-like target for the out to replace.
-        value:
-            Static replacement tensor or one-shot callable accepting the
-            matched out and returning a replacement tensor.
-        direction:
-            Signal direction to replace: ``"forward"``, ``"backward"``, or
-            ``"both"``.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress the once-per-root mutate-in-place warning for callers that
-            intentionally mutate this log.
-        
-        Returns
-        -------
-        Trace
-            This model log, with a stale intervention recipe.
-        """
-    ),
     "clear_edits": (
         """Detach sticky hooks by site or handle.
         

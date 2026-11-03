@@ -1,6 +1,6 @@
 """Trace backward-capture functions reached from the records through ``_data_classes._doors.backends_torch``.
 
-``Trace.log_backward`` and ``Trace.capture_backward`` are the thin methods; the two refusals here
+``Trace.backward`` and ``Trace.capture_backward`` are the thin methods; the two refusals here
 (``_refuse_loaded_backward_capture``, ``_refuse_stats_capture``) are shared with the validation and run
 destinations, which import them downward.
 """
@@ -19,8 +19,8 @@ from ...errors import RunCapabilityUnavailableError
 from .._backend_protocol import refuse_backward_capture_unsupported
 from ..registry import get_backend_spec
 from .backward import (
-    log_backward as _log_backward_impl,
     recording_backward as _recording_backward_impl,
+    trace_backward as _trace_backward_impl,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "capture_backward",
-    "log_backward",
+    "backward",
 ]
 
 
@@ -36,10 +36,10 @@ def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
     """Refuse live backward capture on a bundle-loaded analysis trace.
 
     WT1 A-IV item 21 (lane A08): a loaded trace carries no live autograd
-    handles tied to its recorded forward, so ``log_backward`` used to hook
+    handles tied to its recorded forward, so ``backward`` used to hook
     whatever FOREIGN graph the caller's loss came from, half-mutate the trace
     (backward passes and grad_fns from an unrelated forward), and die with an
-    untyped ``AttributeError`` -- after which ``draw_backward`` silently
+    untyped ``AttributeError`` -- after which the backward drawing silently
     rendered that wrong graph. Refuse typed BEFORE any mutation.
     """
     try:
@@ -56,7 +56,7 @@ def _refuse_loaded_backward_capture(trace: Trace, entry_point: str) -> None:
         "forward, so a backward here would capture whatever unrelated graph "
         "the loss came from and record a wrong backward pass. Re-capture "
         "live (tl.trace(model, x, capture=tl.options.CaptureOptions("
-        "backward_ready=True))) and call log_backward on that Trace, or inspect the "
+        "backward_ready=True))) and call backward on that Trace, or inspect the "
         "backward metadata this artifact already persisted.",
         code=RunnableErrorCode.RUN_CAPABILITY_UNAVAILABLE.value,
         detection_stage="loaded_backward_capture",
@@ -98,18 +98,18 @@ def _require_live_replay(trace: Any) -> None:
     _refuse_stats_capture(trace, "live_replay")
 
 
-def log_backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:
-    """Body of ``Trace.log_backward``; the method carries the documented contract."""
+def backward(trace: Trace, loss: torch.Tensor, **backward_kwargs: Any) -> Trace:
+    """Body of ``Trace.backward``; the method carries the documented contract."""
     # N3: the backward projection assumes a structurally complete captured
     # forward graph; HALTED stays allowed (the autograd graph of a halted
     # capture IS the captured prefix).
     require_capture_capability(trace, "backward")
     require_structure_only_capability(trace, "backward_grads")
     _refuse_stats_capture(trace, "backward_grads")
-    _refuse_loaded_backward_capture(trace, "log_backward")
+    _refuse_loaded_backward_capture(trace, "backward")
     spec = get_backend_spec(trace._provenance_backend)
     refuse_backward_capture_unsupported(spec)
-    return cast("Trace", _log_backward_impl(trace, loss, **backward_kwargs))
+    return cast("Trace", _trace_backward_impl(trace, loss, **backward_kwargs))
 
 
 def capture_backward(trace: Trace) -> Any:

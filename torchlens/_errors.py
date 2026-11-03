@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import Any, NoReturn, cast
 
 from .errors._base import CaptureError, ConfigurationError, TorchLensWarning
 
@@ -367,6 +367,30 @@ class TraceCleanedUpError(_ActionableErrorMixin, CaptureError, AttributeError):
             remedy=remedy,
             **cast(dict[str, Any], context),
         )
+
+
+def refuse_cleaned_up(problem: str, *, remedy: str, **context: object) -> NoReturn:
+    """Raise the one typed ``TraceCleanedUpError`` (code ``trace_cleaned_up``).
+
+    A husked ``Trace`` and a ``Drawing`` that retains no trace share this single
+    raise site, so both refuse with the same stable code and message shape.
+
+    Parameters
+    ----------
+    problem:
+        What the reader tried to touch.
+    remedy:
+        Concrete caller action that resolves the refusal.
+    **context:
+        Structured diagnostic context.
+
+    Raises
+    ------
+    TraceCleanedUpError
+        Always.
+    """
+
+    raise TraceCleanedUpError(problem, remedy=remedy, **context)
 
 
 class FacadeTeachingError(_ActionableErrorMixin, ConfigurationError, AttributeError):

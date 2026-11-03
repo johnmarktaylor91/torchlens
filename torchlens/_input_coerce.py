@@ -101,35 +101,34 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
     )
 
 
-def _reject_extra_positional_input(grad_transform: Any) -> None:
-    """Refuse a tensor landing in ``trace()``'s fourth positional slot.
+def _reject_extra_positional_input(extra_positional: tuple[Any, ...]) -> None:
+    """Refuse anything past ``trace()``'s two positional slots.
 
     Parameters
     ----------
-    grad_transform:
-        The value ``trace()`` received in its ``grad_transform`` slot. A
-        ``torch.Tensor`` here is almost always an extra positional model
-        input that overflowed past ``input_args``.
+    extra_positional:
+        Positional values ``trace()`` received after ``input_args``. Only
+        ``model`` and the inputs are positional; a value here is almost always
+        an extra positional model input that overflowed past ``input_args``, or
+        an ``input_kwargs`` mapping passed by position.
 
     Raises
     ------
     ArgumentTypeError
-        With code ``extra_positional_input_invalid`` when the slot holds a
-        tensor.
+        With code ``extra_positional_input_invalid`` when the tuple is not empty.
     """
 
-    import torch
-
-    if not isinstance(grad_transform, torch.Tensor):
+    if not extra_positional:
         return
 
+    kinds = ", ".join(type(value).__name__ for value in extra_positional)
     raise ArgumentTypeError(
-        "grad_transform (the fourth positional slot) received a "
-        "torch.Tensor -- this is almost always an extra positional model "
-        "input. Bundle model inputs as one tuple, e.g. "
-        "tl.trace(model, (input_a, input_b, input_c)).",
+        f"trace() takes only model and inputs by position; received {len(extra_positional)} "
+        f"extra positional value(s) ({kinds}). Bundle model inputs as one tuple, e.g. "
+        "tl.trace(model, (input_a, input_b, input_c)), and pass keyword inputs as "
+        "input_kwargs={...}.",
         code="extra_positional_input_invalid",
-        remedy="bundle positional inputs into one tuple",
+        remedy="bundle positional inputs into one tuple; every other argument is a keyword",
     )
 
 

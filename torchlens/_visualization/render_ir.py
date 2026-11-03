@@ -556,7 +556,7 @@ def _normalize_backward_nodes(
         for call in grad_fn.calls.values():
             if not _grad_fn_call_matches_backward_filter(call, pass_filter):
                 continue
-            pass_index = getattr(call, "backward_pass_index", None)
+            pass_index = getattr(call, "backward_pass_number", None)
             if pass_index is None:
                 continue
             visible_by_pass[int(pass_index)].append((grad_fn, call))
@@ -874,7 +874,7 @@ def _resolve_node_decision(
         container_max_inline=context.container_max_inline,
         pending_nodes=[],
     )
-    theme = resolve_theme(context.theme, for_paper=context.for_paper)
+    theme = resolve_theme(context.theme)
     resolved_specs: list[Any] = []
     if emission.kind == "module_box":
         _build_collapsed_module_node(

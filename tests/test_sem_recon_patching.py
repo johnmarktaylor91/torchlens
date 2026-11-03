@@ -127,7 +127,7 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
     """The autograd/param-restore crash: red on ANY parameterized model pre-fix.
 
     The guard's unconditional ``copy_`` bumped every parameter's autograd
-    version counter between the two baseline captures, so ``log_backward``
+    version counter between the two baseline captures, so ``backward``
     raised "modified by an inplace operation". Equality-gated restore leaves
     value-equal parameters untouched.
     """
@@ -331,12 +331,12 @@ def test_user_capture_composes_required_fields() -> None:
 
 @pytest.mark.smoke
 def test_explicitly_conflicting_capture_refuses_typed() -> None:
-    with pytest.raises(ValueError, match="require capture options"):
+    with pytest.raises(ValueError, match="require save"):
         tl.facets.patching.activation_patch_attention_output(
             ParamToy(),
             *_inputs(),
             _metric,
-            trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save=["block"])},
+            trace_kwargs={"save": ["block"]},
         )
 
 
@@ -349,6 +349,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save="all", save_args=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_args=True)},
     )
     assert table.shape == (1,)

@@ -2,7 +2,7 @@
 
 The rank engine positions IR units only. Orphan islands
 (``show_orphans=True``) and standalone intervention hook nodes
-(``vis_intervention_mode="as_node"``) are drawn only by the Graphviz dot path,
+(``intervention_mode="as_node"``) are drawn only by the Graphviz dot path,
 so a rank render without them must say so instead of dropping them silently.
 """
 
@@ -53,11 +53,10 @@ def _draw(trace: tl.Trace, tmp_path: Path, name: str, **kwargs: object) -> tuple
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         source = trace.draw(
-            vis_save_only=True,
             file_format="dot",
             path=str(tmp_path / name),
             **kwargs,
-        )
+        ).dot
     messages = [
         str(entry.message) for entry in caught if issubclass(entry.category, TorchLensWarning)
     ]
@@ -81,21 +80,19 @@ def test_rank_layout_discloses_orphans_it_does_not_draw(tmp_path: Path) -> None:
     )
     try:
         assert trace.graph.orphans
-        dot_source, dot_messages = _draw(
-            trace, tmp_path, "dot", show_orphans=True, vis_node_placement="dot"
-        )
+        dot_source, dot_messages = _draw(trace, tmp_path, "dot", show_orphans=True, layout="dot")
         assert "orphan__" in dot_source
         assert not _omission_messages(dot_messages)
 
         rank_source, rank_messages = _draw(
-            trace, tmp_path, "rank", show_orphans=True, vis_node_placement="rank"
+            trace, tmp_path, "rank", show_orphans=True, layout="rank"
         )
         assert "orphan__" not in rank_source
         (omission,) = _omission_messages(rank_messages)
         assert f"{len(trace.graph.orphans)} orphan node" in omission
-        assert "vis_node_placement='dot'" in omission
+        assert "layout='dot'" in omission
 
-        _, hidden_messages = _draw(trace, tmp_path, "rank_hidden", vis_node_placement="rank")
+        _, hidden_messages = _draw(trace, tmp_path, "rank_hidden", layout="rank")
         assert not _omission_messages(hidden_messages)
     finally:
         trace.cleanup()
@@ -107,7 +104,7 @@ def test_rank_layout_keeps_the_dropped_orphan_husk_warning(tmp_path: Path) -> No
     torch.manual_seed(0)
     trace = tl.trace(_WithOrphanIsland(), torch.ones(1, 4))
     try:
-        _, messages = _draw(trace, tmp_path, "rank", show_orphans=True, vis_node_placement="rank")
+        _, messages = _draw(trace, tmp_path, "rank", show_orphans=True, layout="rank")
         assert any("re-trace with keep_orphans=True" in message for message in messages)
         assert not _omission_messages(messages)
     finally:
@@ -124,15 +121,19 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
     )
     try:
         with pytest.warns(tl.errors.TraceMutationWarning):
-            trace.set(tl.func("relu"), torch.zeros(2, 3))
+            trace.do(
+                tl.func("relu"),
+                torch.zeros(2, 3),
+                intervention=tl.options.InterventionOptions(engine="set_only"),
+            )
         dot_source, dot_messages = _draw(
-            trace, tmp_path, "dot", vis_intervention_mode="as_node", vis_node_placement="dot"
+            trace, tmp_path, "dot", intervention_mode="as_node", layout="dot"
         )
         assert "intervention_hook_relu" in dot_source
         assert not _omission_messages(dot_messages)
 
         rank_source, rank_messages = _draw(
-            trace, tmp_path, "rank", vis_intervention_mode="as_node", vis_node_placement="rank"
+            trace, tmp_path, "rank", intervention_mode="as_node", layout="rank"
         )
         assert "intervention_hook_" not in rank_source
         (omission,) = _omission_messages(rank_messages)
@@ -142,8 +143,8 @@ def test_rank_layout_discloses_hook_nodes_it_does_not_draw(tmp_path: Path) -> No
             trace,
             tmp_path,
             "rank_mark",
-            vis_intervention_mode="node_mark",
-            vis_node_placement="rank",
+            intervention_mode="node_mark",
+            layout="rank",
         )
         assert not _omission_messages(mark_messages)
     finally:

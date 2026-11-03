@@ -135,11 +135,12 @@ def _aggregate_backward_loop(
         log = trace(
             model,
             model_input,
-            capture=CaptureOptions(layers_to_save=layers_to_save, save_grads=save_grads),
+            capture=CaptureOptions(save_grads=save_grads),
+            save=layers_to_save,
         )
         try:
             loss = loss_fn(_metric_value_from_log(log, "output"), *loss_args)
-            log.log_backward(loss)
+            log.backward(loss)
             for name, stat in metrics.items():
                 site = sites[name]
                 if isinstance(site, str) or not _is_gradient_key(site):
@@ -168,7 +169,7 @@ def _aggregate_traced_loop(
     layers_to_save, _save_grads = _metric_capture_layers(sites)
     for batch in dataloader:
         model_input, _loss_args = _split_batch_for_loss(batch)
-        log = trace(model, model_input, capture=CaptureOptions(layers_to_save=layers_to_save))
+        log = trace(model, model_input, save=layers_to_save)
         try:
             for name, stat in metrics.items():
                 stat.update(_site_value(log, name, sites[name]))
@@ -220,7 +221,7 @@ def _aggregate_out_loop(
             log = trace(
                 model,
                 model_input,
-                capture=CaptureOptions(layers_to_save=capture_layers),
+                save=capture_layers,
             )
             try:
                 resolved_sites = _update_from_trace(log, metrics)

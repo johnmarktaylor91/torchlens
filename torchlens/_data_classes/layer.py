@@ -99,7 +99,11 @@ _LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref"
 
 #: Public Layer members removed by the do fold (remove-and-rename, no alias).
 _REMOVED_LAYER_MEMBERS: dict[str, str] = {
-    "attach_hooks": "use layer.do(site_or_hooks, ...) -- do stages the hooks"
+    "attach_hooks": "use layer.do(site_or_hooks, ...) -- do stages the hooks",
+    "set": (
+        "use layer.do(value, intervention=tl.options.InterventionOptions("
+        "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
+    ),
 }
 
 # Typed container defaults for every non-Optional container field Layer stores
@@ -1588,37 +1592,6 @@ class Layer(_SelectionOperand):
             model=model,
             inputs=inputs,
             intervention=intervention,
-        )
-
-    def set(
-        self,
-        value: Any,
-        *,
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set this layer's out recipe through the owning Trace.
-
-        Parameters
-        ----------
-        value:
-            Static replacement value or one-shot callable.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Trace
-            Source Trace with a stale intervention recipe.
-        """
-
-        return self._source_trace_or_error().set(
-            self._intervention_site(),
-            value,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
         )
 
     def to_pandas(self) -> "pd.DataFrame":

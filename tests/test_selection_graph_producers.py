@@ -426,7 +426,7 @@ def test_slice_offers_no_capture_capabilities(log) -> None:
     """A slice is a presenter: no save/run/validate/draw surfaces exist."""
 
     view = log.between("linear_1_1", "add_1_5")
-    for capability in ("save", "run", "validate", "log_backward", "draw", "fork"):
+    for capability in ("save", "run", "validate", "backward", "draw", "fork"):
         assert not hasattr(view, capability)
 
 
@@ -487,7 +487,8 @@ def test_slice_do_gallery_row(model) -> None:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     try:
         view = log.between("linear_1_1", "relu_1_2")

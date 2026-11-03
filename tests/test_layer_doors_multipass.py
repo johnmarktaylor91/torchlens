@@ -1,4 +1,4 @@
-"""``Layer.do`` (edit or value) and ``Layer.set`` address every pass of a multi-pass layer.
+"""``Layer.do`` (edit or value, propagated or ``set_only``) addresses every pass of a multi-pass layer.
 
 A bare layer label addresses only a single-pass layer, so the Layer doors
 must not forward it for a layer that ran several passes: a module reused in a
@@ -86,12 +86,12 @@ def _zero(t: torch.Tensor) -> torch.Tensor:
     return torch.zeros_like(t)
 
 
-@pytest.mark.parametrize("door", ("do", "do_value", "set"))
+@pytest.mark.parametrize("door", ("do", "do_value", "set_only"))
 def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) -> None:
     """Each Layer door on a two-pass layer edits both passes, matching plain torch.
 
-    ``do`` propagates at once (the fold of set or attach plus push); ``set`` stages
-    the value on both passes and leaves the outputs as captured.
+    ``do`` propagates at once (the fold of set or attach plus push); the ``set_only``
+    engine stages the value on both passes and leaves the outputs as captured.
     """
 
     model, x, trace = captured
@@ -104,8 +104,13 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
         elif door == "do_value":
             layer.do(torch.zeros(2, 3))
         else:
-            layer.set(torch.zeros(2, 3), confirm_mutation=True)
-    if door == "set":
+            layer.do(
+                torch.zeros(2, 3),
+                intervention=tl.options.InterventionOptions(
+                    engine="set_only", confirm_mutation=True
+                ),
+            )
+    if door == "set_only":
         # One staged value entry covers both passes; nothing propagates yet.
         assert len(fork._intervention_spec.target_value_specs) == 1
         assert fork._intervention_spec.hook_specs == []

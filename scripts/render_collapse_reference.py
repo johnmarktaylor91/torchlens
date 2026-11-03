@@ -19,6 +19,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
+from torchlens._visualization._trace_collapse import (
+    collapse_plan as _trace_collapse_plan,
+    collapse_schedule as _trace_collapse_schedule,
+)
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 AUDIT_DIR = REPO_ROOT / "notebooks" / "audit"
 VISUAL_DIR = AUDIT_DIR / "visual"
@@ -102,7 +107,7 @@ def _draw(trace: Any, output: Path, **kwargs: object) -> None:
     trace.draw(
         path=str(output.with_suffix("")),
         file_format="svg",
-        vis_save_only=True,
+        open_viewer=False,
         show_containers=False,
         **kwargs,
     )
@@ -119,9 +124,9 @@ def _diagnostics_svg(trace: Any, output: Path) -> None:
         Destination SVG path.
     """
 
-    schedule = trace.collapse_schedule()
-    rows = ["collapse_plan(mode='auto')", repr(trace.collapse_plan(mode="auto")), ""]
-    rows.extend(["collapse_plan(mode='max')", repr(trace.collapse_plan(mode="max")), ""])
+    schedule = _trace_collapse_schedule(trace)
+    rows = ["collapse_plan(mode='auto')", repr(_trace_collapse_plan(trace, mode="auto")), ""]
+    rows.extend(["collapse_plan(mode='max')", repr(_trace_collapse_plan(trace, mode="max")), ""])
     rows.append("t      target  visible  collapsed module addresses")
     for step in schedule.steps:
         rows.append(
@@ -199,7 +204,7 @@ def render(out_dir: Path, *, copy_for_review: bool = True) -> None:
 
     recurrence = _trace("rnn_cell_loop")
     try:
-        _draw(recurrence, out_dir / "recurrence.svg", vis_mode="rolled")
+        _draw(recurrence, out_dir / "recurrence.svg", rolled=True)
     finally:
         recurrence.cleanup()
 

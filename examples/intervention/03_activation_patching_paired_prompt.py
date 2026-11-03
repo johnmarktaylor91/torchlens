@@ -1,9 +1,9 @@
-"""Classic clean-versus-corrupted out patching.
+"""Classic clean-versus-corrupted activation patching.
 
 What this demonstrates
 ----------------------
 Capture a clean run and a corrupted run, then patch the corrupted ReLU
-out with the clean out.
+out with the clean activation.
 
 How to run
 ----------

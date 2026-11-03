@@ -56,7 +56,7 @@ repair stale bindings. Coverage is now:
   (for example an `autograd.grad` boundary is a known no-provenance source); no rescue runs.
 - Ineligible captures skip only the RE-RUN, never the disclosure. Every channel the re-run would
   invoke a second time refuses (fail closed): streaming saves, `streaming.on_save` callbacks, disk grad
-  storage, `halt=` predicates, `intervene=` predicates, pre-attached `hooks=`, and the
+  storage, `stop_after=` predicates, `intervene=` predicates, pre-attached `hooks=`, and the
   `activation_transform`, `grad_transform`, and `output_transform` callables. A live escape
   signal on such a capture still settles `capture_verified=False` with reason
   `"escape_rescue_unrecovered"` (`skipped_reason == "rescue_ineligible"`, `forward_runs == 1`)
@@ -93,7 +93,7 @@ repair stale bindings. Coverage is now:
 ## Shadow detector semantics
 
 `escape_detector="shadow"` observes raw callable execution using exact object/code identity. It
-reports a `TorchLensCaptureGapWarning` with the callable, registered export sites, source callsite,
+reports a `tl.errors.CaptureGapWarning` with the callable, registered export sites, source callsite,
 storage hint, short stack, and remediation. Reports also appear in `trace.escape_diagnostics`, and
 a diagnostic now also TRIGGERS the rescue re-run (the report from the primary run is preserved in
 `trace.rescue_rerun["primary_escape_diagnostics"]`).
@@ -160,7 +160,7 @@ round-trip.
 | Worker process preprocessing before model invocation | Outside the armed model-forward domain |
 | Model tensor work delegated to another thread/process | Unsupported; owner-thread qualification applies; TENSOR-crossing escapes are disclosed. A PRE-EXISTING thread running a stale op whose result crosses back only as a python scalar (a float, never a tensor) is a declared SILENT residual — no mode, belt, or tripwire observes it |
 | OWNER-thread stale op whose result crosses to host as a scalar only (`stale_norm(x).item() > t`: no intermediate tensor op consumes it) | Declared SILENT residual on default captures. The scalar-protocol read of the untracked intermediate emits no record, and unlabeled receivers cannot be flagged without false-positives on parameter/attribute scalar reads. The armed shadow detector reports the stale call itself; default captures never claim `capture_verified=True`, so no verdict is inflated |
-| Deferred `trace.log_backward(...)` / `Recording.backward(...)` | Explicitly `not_armed` in this rollout |
+| Deferred `trace.backward(...)` / `Recording.backward(...)` | Explicitly `not_armed` in this rollout |
 | `torch.func` / functorch transform internals | Existing transform boundary warning/marker remains authoritative |
 | `stacklevel`-attributed torch warnings raised inside wrapped Python functionals (e.g. `F.softmax` implicit-dim) | Declared residual while wrappers are installed: the wrapper adds one Python frame, so the warning is attributed to torch internals instead of the user call site, and Python's default-filter dedup (keyed on the attributed location) collapses DISTINCT user call sites into one warning per process. The frame is inherent to Python-level wrapping; pinned by `test_wrapped_functional_warning_attribution_residual_shape` |
 | User/extension `__torch_function__` handler tables keyed by a namespace read taken WHILE wrappers are installed (`HANDLED = {torch.mean: ...}` after the first capture — the official "Extending torch" `@implements` pattern in a library imported mid-session) | Declared residual: the C protocol delivers the ORIGINAL as `func`, so a wrapper-keyed table silently misses during the wrapped epoch and after unwrap. TorchLens shims torch-INTERNAL tables only; it cannot rewrite arbitrary user registries. Remedies: build handler tables before the first capture, key by `torch.overrides.resolve_name(func)`, or normalize keys through `unwrap_torch()` |

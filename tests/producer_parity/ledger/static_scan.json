@@ -2641,6 +2641,14 @@
  },
  {
   "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/_observability/_op_tier.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "kind",
   "file": "torchlens/_observability/_schema.py",
   "has_default": false,
@@ -3403,14 +3411,6 @@
   "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_quickstart/_primitive.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "policy",
-  "file": "torchlens/_quickstart/_render.py",
   "has_default": false,
   "sites": 1,
   "via_getattr": false
@@ -4395,6 +4395,14 @@
   "ambiguous": false,
   "field": "parent_arg_positions",
   "file": "torchlens/_visualization/_mutated_params.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": false,
+  "field": "pass_index",
+  "file": "torchlens/_visualization/_pass_animation.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
@@ -5780,7 +5788,7 @@
   "field": "output",
   "file": "torchlens/backends/tf/backend.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -8712,11 +8720,19 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/receptive_field/_view.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/receptive_field/_view.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 9,
   "via_getattr": false
  },
  {
@@ -8776,6 +8792,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/recording/_generation.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "pass_index",
   "file": "torchlens/recording/_generation.py",
@@ -8825,6 +8849,46 @@
  },
  {
   "ambiguous": false,
+  "field": "has_internal_source_ancestor",
+  "file": "torchlens/recording/_types_ancestry.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/recording/_types_ancestry.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "layer_type",
+  "file": "torchlens/recording/_types_ancestry.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/recording/_types_ancestry.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
+  "field": "root_ancestors",
+  "file": "torchlens/recording/_types_ancestry.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": false,
   "field": "predicate_matched",
   "file": "torchlens/recording/dry_run.py",
   "has_default": true,
@@ -8864,14 +8928,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": false,
-  "field": "has_internal_source_ancestor",
-  "file": "torchlens/recording/types.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": true,
   "field": "kind",
   "file": "torchlens/recording/types.py",
@@ -8884,7 +8940,7 @@
   "field": "label_raw",
   "file": "torchlens/recording/types.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -8897,35 +8953,11 @@
  },
  {
   "ambiguous": false,
-  "field": "layer_type",
-  "file": "torchlens/recording/types.py",
-  "has_default": true,
-  "sites": 1,
-  "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "parents",
-  "file": "torchlens/recording/types.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
-  "ambiguous": false,
   "field": "predicate_matched",
   "file": "torchlens/recording/types.py",
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": false,
-  "field": "root_ancestors",
-  "file": "torchlens/recording/types.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
  },
  {
   "ambiguous": false,
@@ -10126,6 +10158,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "policy",
+  "file": "torchlens/viz/_drawing.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": false,

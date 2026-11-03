@@ -161,7 +161,7 @@ Freeze is PER-PLANE, not one switch:
   bundle finalize, out-eviction, param-ref release); the whole core freezes after step
   20, exactly where `_compact_ancestor_sets` runs today — the freeze step inherits the
   compaction passes' role and the standalone passes are deleted.
-- `log_backward` appends an atomic backward **EPOCH** (generation bump), preserving the
+- `backward` appends an atomic backward **EPOCH** (generation bump), preserving the
   exact lazy watermark/revision invalidation semantics.
 - Direct writes and interventions land in the sparse versioned **overlay**.
 - Derived caches stay disposable.

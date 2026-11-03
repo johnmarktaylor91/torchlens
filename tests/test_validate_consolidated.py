@@ -94,12 +94,12 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
     """The consolidated default must inspect captured gradient payloads."""
 
     model, x = model_and_input
-    original_log_backward = tl.Trace.log_backward
+    original_backward = tl.Trace.backward
 
     def corrupt_captured_grad(trace: tl.Trace, *args: object, **kwargs: object) -> object:
         """Corrupt one captured module-output grad after backward logging."""
 
-        result = original_log_backward(trace, *args, **kwargs)
+        result = original_backward(trace, *args, **kwargs)
         for op in trace._layer_list:
             grad = getattr(op, "grad", None)
             if not isinstance(grad, torch.Tensor) or not getattr(op, "modules", None):
@@ -108,7 +108,7 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
             break
         return result
 
-    monkeypatch.setattr(tl.Trace, "log_backward", corrupt_captured_grad)
+    monkeypatch.setattr(tl.Trace, "backward", corrupt_captured_grad)
 
     assert not tl.validate(model, x, scope="backward", seed=42)
 

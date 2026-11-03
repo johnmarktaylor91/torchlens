@@ -39,40 +39,20 @@ def test_direction_refuses_typed() -> None:
 
 def test_renderer_refuses_typed(small_trace) -> None:
     with pytest.raises(InvalidArgumentError) as exc_info:
-        small_trace.draw(vis_renderer="bogus", vis_save_only=True)
+        small_trace.draw(renderer="bogus")
     assert exc_info.value.fields["code"] == "visualization_renderer_invalid"
 
 
-def test_vis_mode_refuses_typed(small_trace) -> None:
-    # The forward draw path reached source_graph's raw ValueError while only
-    # the backward/combined gates were typed; all three doors now carry the
-    # one code.
+def test_graph_refuses_typed(small_trace) -> None:
+    # An unknown graph name refuses typed at the one draw door.
     with pytest.raises(InvalidArgumentError) as exc_info:
-        small_trace.draw(vis_mode="sideways", vis_save_only=True)
+        small_trace.draw(graph="sideways")
     assert exc_info.value.fields["code"] == "visualization_mode_invalid"
-
-
-@pytest.mark.parametrize("spelling", ["view", "vis_mode"])
-def test_vis_mode_refusal_names_the_spelling_passed(small_trace, spelling: str) -> None:
-    # The refusal names the keyword the caller actually used and lists every
-    # value draw() accepts, "none" included.
-    with pytest.raises(InvalidArgumentError) as exc_info:
-        small_trace.draw(**{spelling: "sideways"}, vis_save_only=True)
-    error = exc_info.value
-    assert error.fields["code"] == "visualization_mode_invalid"
-    assert error.fields["argument"] == spelling
-    message = str(error)
-    assert message.startswith(f"{spelling} must be")
-    for accepted in ("'none'", "'rolled'", "'unrolled'", "'sideways'"):
-        assert accepted in message
-    other = "vis_mode" if spelling == "view" else "view"
-    assert f"{other} " not in message
-    assert f"{other}=" not in error.fields["remedy"]
 
 
 def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
     with pytest.raises(Exception) as exc_info:
-        small_trace.draw_backward(vis_save_only=True)
+        small_trace.draw(graph="backward")
     assert getattr(exc_info.value, "fields", {}).get("code") == "backward_graph_unavailable"
 
 
@@ -88,5 +68,5 @@ def test_graphviz_render_failure_refuses_typed(
 
     monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _boom)
     with pytest.raises(GraphvizRenderError) as exc_info:
-        small_trace.draw(path=str(tmp_path / "g"), vis_save_only=True)
+        small_trace.draw(path=str(tmp_path / "g"))
     assert exc_info.value.fields["code"] == "graphviz_render_failed"

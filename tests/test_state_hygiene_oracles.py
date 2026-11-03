@@ -333,7 +333,7 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
         torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
-        recorded = tl.record(model, x, default_op=True, intervene=spec).to_trace()
+        recorded = tl.record(model, x, intervene=spec, default_op=True).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
 
@@ -387,7 +387,11 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     model, x, expected = net
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     # set() only stages the replacement; each run applies it.
-    trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+    trace.do(
+        tl.module("fc1"),
+        lambda out: out * 2.0,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     for _ in range(3):
         trace.run(model, x)
@@ -463,7 +467,10 @@ def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
     outs = {
         "trace": tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))),
         "record": tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), tl.scale(0.5)),
+            default_op=True,
         ).to_trace(),
         "fork_do": fork,
         "rerun": rerun,
@@ -642,14 +649,18 @@ def test_predicate_rerun_names_a_changed_steer_as_the_cause() -> None:
     assert len(staged.records) == 0
 
 
-def test_set_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
-    """``set(label, value)`` + rerun applies the value on new inputs and leaves the spec staged."""
+def test_set_only_label_rerun_applies_the_set_value_and_leaves_the_source_staged(mlp) -> None:
+    """A ``set_only`` ``do(label, value)`` + rerun applies the value and leaves the spec staged."""
 
     model, x, x2 = mlp
     trace = tl.trace(model, x)
     label = trace.find_sites(tl.module("fc2"))[0].layer_label
     value = torch.full_like(trace[label].out, 0.3)
-    trace.set(label, value, confirm_mutation=True)
+    trace.do(
+        label,
+        value,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     staged = _staged(trace)
     result = trace.run(model, x2)
     assert result is trace
@@ -720,7 +731,10 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         lambda: tl.trace(model, x, intervene=tl.when(tl.module("fc2"), interrupt)),
         lambda: tl.when(tl.module("fc2"), interrupt).bind(model)(x),
         lambda: tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), interrupt)
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), interrupt),
+            default_op=True,
         ),
     ):
         with pytest.raises(KeyboardInterrupt):
@@ -747,7 +761,11 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
         trace.do(tl.module("fc1"), tl.scale(2.0))
     elif door == "set":
         trace = tl.trace(model, x, capture=ready)
-        trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
+        trace.do(
+            tl.module("fc1"),
+            lambda out: out * 2.0,
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
     else:
         trace = tl.trace(model, x)
         _stage(trace, tl.module("fc1"), tl.scale(2.0))

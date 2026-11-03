@@ -73,7 +73,8 @@ def _head_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
 

@@ -35,16 +35,16 @@ def _input() -> torch.Tensor:
     return torch.randn(3, 4, requires_grad=True)
 
 
-def test_recording_log_backward_grad_fn_id_link() -> None:
+def test_recording_backward_grad_fn_id_link() -> None:
     """Fastlog joins a ReLU grad_fn_handle back to its forward RecordContext."""
 
-    out, recording = tl.record(
+    recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
-        save_grads=True,
-        return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=True),
     )
+    out = recording.output
     recording.backward(out.sum())
 
     assert len(recording.grad_records) == 1
@@ -54,18 +54,18 @@ def test_recording_log_backward_grad_fn_id_link() -> None:
     assert ctx.has_op is True
 
 
-def test_recording_log_backward_intervening_grad_fn() -> None:
+def test_recording_backward_intervening_grad_fn() -> None:
     """Callable save_grads can capture an intervening grad_fn_handle as metadata."""
 
-    out, recording = tl.record(
+    recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         # A record-time predicate opts in to gradient hooks; the per-backward
         # predicate below overrides it.
-        save_grads=lambda _ctx: False,
-        return_output=True,
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
+    out = recording.output
 
     def keep_intervening(ctx: GradRecordContext) -> CaptureSpec | bool:
         """Keep the first intervening backward node."""
@@ -77,40 +77,42 @@ def test_recording_log_backward_intervening_grad_fn() -> None:
     assert any(not record.ctx.has_op for record in recording.grad_records)
 
 
-def test_recording_log_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
+def test_recording_backward_disk_only_rejects_save_grads(tmp_path: Path) -> None:
     """Static save_grads=True rejects disk-only storage before backward runs."""
 
-    out, recording = tl.record(
+    recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
-        save_grads=lambda _ctx: False,  # opts in to gradient hooks
-        return_output=True,
+        # opts in to gradient hooks
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
+    out = recording.output
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
         recording.backward(out.sum(), save_grads=True)
     assert not recording.grad_records
 
 
-def test_recording_log_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
+def test_recording_backward_disk_only_dynamic_save_grads_resolves(tmp_path: Path) -> None:
     """Dynamic save_grads predicates hit the late storage resolver gate."""
 
-    out, recording = tl.record(
+    recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
         storage=tl.to_disk(tmp_path / "grad.tlfast"),
-        save_grads=lambda _ctx: False,  # opts in to gradient hooks
-        return_output=True,
+        # opts in to gradient hooks
+        capture=tl.options.CaptureOptions(save_grads=lambda _ctx: False),
     )
+    out = recording.output
 
     with pytest.raises(InvalidStorageError, match="disk-only"):
         recording.backward(out.sum(), save_grads=lambda _ctx: CaptureSpec(save_grad=True))
 
 
-def test_recording_log_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
+def test_recording_backward_grad_fn_id_reuse_does_not_misjoin() -> None:
     """Sequential Recorder rollouts do not join a grad_fn_handle to a stale forward."""
 
     model = TinyRelu()
@@ -139,15 +141,14 @@ def test_fastlog_keep_grad_selector_is_removed() -> None:
             _input(),
             save=lambda ctx: ctx.label == "relu_1",
             keep_grad=True,
-            return_output=True,
         )
 
-    out, recording = tl.record(
+    recording = tl.record(
         TinyRelu(),
         _input(),
         save=lambda ctx: ctx.label == "relu_1",
-        return_output=True,
     )
+    out = recording.output
     with pytest.raises(TypeError, match="keep_grad"):
         recording.backward(out.sum(), keep_grad=True)
 
@@ -160,10 +161,11 @@ def test_gradient_transform_alias_silent() -> None:
         trace = tl.trace(
             TinyRelu(),
             _input(),
-            grad_transform=lambda grad: torch.zeros_like(grad),
-            capture=tl.options.CaptureOptions(save_grads="all"),
+            capture=tl.options.CaptureOptions(
+                save_grads="all", grad_transform=lambda grad: torch.zeros_like(grad)
+            ),
         )
-    trace.log_backward(trace[trace.output_layers[-1]].out.sum())
+    trace.backward(trace[trace.output_layers[-1]].out.sum())
 
     assert not any("grad_transform" in str(warning.message) for warning in caught)
     assert any(

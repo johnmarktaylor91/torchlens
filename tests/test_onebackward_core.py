@@ -81,22 +81,21 @@ class TestAccessor:
 
     @_requires_gradient_edge
     def test_id_rejoin_after_user_backward(self) -> None:
-        """A user log_backward nulls handles; the rejoin serves bitwise-equal reads."""
+        """A user backward nulls handles; the rejoin serves bitwise-equal reads."""
 
         model = _toy_model()
         inputs = torch.randn(2, 4, requires_grad=True)
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         before = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
         )
-        trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
+        trace.backward(trace["output_1"].out.sum(), retain_graph=True)
         assert all(getattr(op, "grad_fn_handle", None) is None for op in trace.ops), (
-            "log_backward is expected to null per-op handles"
+            "backward is expected to null per-op handles"
         )
         index = ob.read_edge_index(trace)
         assert index.edges, "rejoin produced no edges"
@@ -135,11 +134,10 @@ class TestSuppression:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         assert len(trace.autograd.backward_passes) == 0
-        trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
+        trace.backward(trace["output_1"].out.sum(), retain_graph=True)
         assert len(trace.autograd.backward_passes) == 1
 
     @_requires_gradient_edge
@@ -304,8 +302,7 @@ class TestReadCore:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         first = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
@@ -315,7 +312,7 @@ class TestReadCore:
         )
         for key, row in first.items():
             assert second[key].score == row.score
-        trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
+        trace.backward(trace["output_1"].out.sum(), retain_graph=True)
         assert len(trace.autograd.backward_passes) == 1
 
     @_requires_gradient_edge
@@ -366,7 +363,7 @@ class TestActivationMethods:
         trace = tl.trace(
             model,
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save=[]),
+            save=[],
         )
         grad_table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"

@@ -183,7 +183,7 @@ SEQUENCE_LENS = register_lens(
         secondary_members=("stack_by",),
         disclosure=(
             "same rank = the licensed same execution window, not parallelism",
-            "pass_index encodes linearly (the one field uniform by construction)",
+            "pass_number encodes linearly (the one field uniform by construction)",
         ),
     )
 )

@@ -37,7 +37,8 @@ def _make_trace() -> Any:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
@@ -114,7 +115,7 @@ def test_record_trace_aliases_and_ordinal_indexes_round_trip() -> None:
 
     trace = _make_trace()
     loss = trace[trace.output_layers[0]].out.sum()
-    trace.log_backward(loss)
+    trace.backward(loss)
 
     op = trace.ops[0]
     layer = trace.layers[0]

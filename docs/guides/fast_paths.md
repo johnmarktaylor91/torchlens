@@ -12,7 +12,7 @@ For the general speed knobs and benchmark tables, see the [performance guide](..
 | You want to | Use | Cost, measured |
 | --- | --- | --- |
 | Steer or patch the model over many forwards, including generation | `tl.when(site, action).bind(model)`, and `.bind(model).generate(...)` for HF `generate()` | 1.0 to 1.2x a plain forward hook, exact |
-| Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
+| Steer and also keep a few activations as evidence, every step | `tl.record(model, x, save=..., intervene=spec)`, output in `recording.output` | about 1 ms per op (CPU decoders); 9 s per step on Qwen3.5-9B |
 | Steer and refresh a trace's saved activations on each new input, including generation | trace once with `intervene=`, then `trace.run(model, x)` per input | about 1.5 to 2x a plain forward hook per step, exact; see [Fast steered rerun](#fast-steered-rerun) |
 | Inspect the full graph, metadata and activations of one forward | `tl.trace(model, x, save=...)` | about 3 ms per op; 47 s for one Qwen3.5-9B trace |
 | Make one trace cheaper | a `tl.func(...)` save selector, `CaptureOptions(inference_only=True)`, and for Qwen3.5-class models flash-linear-attention | see [Cut the cost of a trace](#cut-the-cost-of-a-trace) |
@@ -149,8 +149,8 @@ prompt rather than every step, see [the KV-cache recipe](kv_cache.md).
 
 When each step must also keep a few activations, use `tl.record` with `intervene=`. It applies
 the same edits during a recording pass and keeps only the payloads `save=` selects, without
-building the full graph a trace builds. `return_output=True` returns the model output alongside
-the `Recording`. Call `recording.to_trace()` later only if you need graph structure.
+building the full graph a trace builds. `recording.output` is the model output, exactly as the
+model returned it. Call `recording.to_trace()` later only if you need graph structure.
 
 ```python
 import torch
@@ -164,9 +164,8 @@ x = torch.randn(2, 8)
 direction = torch.randn(8)
 spec = tl.when(tl.module("1"), tl.steer(direction, strength=4.0, dim=-1))
 
-output, recording = tl.record(
-    model, x, save=tl.func("linear"), intervene=spec, return_output=True
-)
+recording = tl.record(model, x, save=tl.func("linear"), intervene=spec)
+output = recording.output
 
 assert torch.equal(output, spec.bind(model)(x))  # the same steered output as bind
 print(recording.n_records)
@@ -235,7 +234,7 @@ assert relu.out.shape == (2, 8)
 - **Keep the wrappers installed.** `tl.trace` keeps torch wrapped between calls by default.
   `CaptureOptions(unwrap_when_done=True)` re-wraps on the next call, a fixed 2 to 5% per trace
   on the small models.
-- **Stop early.** `halt=` ends the forward once the sites you need are captured; see the
+- **Stop early.** `stop_after=` ends the forward once the sites you need are captured; see the
   [performance guide](../performance.md).
 
 ### Install flash-linear-attention for Qwen3.5-class models

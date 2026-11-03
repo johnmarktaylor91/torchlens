@@ -128,7 +128,7 @@ def test_nary_live_backward_matcher_does_not_crash() -> None:
             _conv_input().requires_grad_(True),
             capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
         )
-        armed.log_backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
+        armed.backward(armed[armed.output_layers[0]].out.sum(), retain_graph=True)
     grad_fns = {g.label: g for g in armed.autograd.grad_fns}
     # Three node-universe children: a bare forward kind joined to a node
     # selector refuses since the gradient-sites change, so the n-ary shape is
@@ -165,15 +165,13 @@ def test_flat_nary_followed_by_conjunction_capture() -> None:
             TinyConvNet(),
             _conv_input(),
             save=flat,
-            lookback=4,
-            lookback_payload_policy="detached_raw",
+            capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
         )
         binary_log = tl.trace(
             TinyConvNet(),
             _conv_input(),
             save=tl.func("conv2d") & tl.followed_by(tl.func("relu")),
-            lookback=4,
-            lookback_payload_policy="detached_raw",
+            capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
         )
 
     def _saved(log: Any) -> list[str]:
@@ -557,8 +555,9 @@ def test_followed_by_conjunction_is_association_insensitive() -> None:
                 TinyConvNet(),
                 _conv_input(),
                 save=predicate,
-                lookback=4,
-                lookback_payload_policy="detached_raw",
+                capture=tl.options.CaptureOptions(
+                    lookback=4, lookback_payload_policy="detached_raw"
+                ),
             )
         return sorted(
             str(op.layer_label)

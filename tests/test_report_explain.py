@@ -188,7 +188,7 @@ def test_explain_reports_backward_capture() -> None:
 
     x = torch.tensor([[2.0, 3.0]], requires_grad=True)
     log = tl.trace(TinyReportModel(), x, capture=tl.options.CaptureOptions(save_grads=True))
-    log.log_backward(log[log.output_layers[0]].out.sum())
+    log.backward(log[log.output_layers[0]].out.sum())
 
     text = log.explain()
 
@@ -251,7 +251,7 @@ def test_explain_surfaces_halted_capture_status() -> None:
 
     from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert trace.outcome.status.value == "stopped"
 
     assert trace.to_agent_json()["capture"]["capture_status"] == "stopped"

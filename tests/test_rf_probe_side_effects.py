@@ -25,8 +25,7 @@ def _conv_trace() -> tuple[nn.Conv2d, object, object, object]:
     trace = tl.trace(
         model,
         inputs,
-        capture=capture,
-        save_mode="reference",
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
     )
     target = next(op for op in trace._layer_list if op.func_name == "conv2d")
     input_op = next(op for op in trace._layer_list if op.is_input)
@@ -50,8 +49,8 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
     before_passes = len(trace.autograd.backward_passes)
     before_has_gradients = trace.autograd.has_grads
     before_active_index = (
-        "_active_backward_pass_index" in trace.__dict__,
-        trace.__dict__.get("_active_backward_pass_index"),
+        "_active_backward_pass_number" in trace.__dict__,
+        trace.__dict__.get("_active_backward_pass_number"),
     )
     before_param_grads = tuple(
         None if parameter.grad is None else parameter.grad.clone()
@@ -66,8 +65,8 @@ def test_probe_does_not_mutate_any_backward_or_gradient_state() -> None:
     assert _gradient_record_snapshot(trace) == before_records
     assert trace._tl_backward_triggers_disarmed is before_disarmed
     assert (
-        "_active_backward_pass_index" in trace.__dict__,
-        trace.__dict__.get("_active_backward_pass_index"),
+        "_active_backward_pass_number" in trace.__dict__,
+        trace.__dict__.get("_active_backward_pass_number"),
     ) == before_active_index
     assert "_tl_rf_probe_active" not in trace.__dict__
     for parameter, before_grad in zip(model.parameters(), before_param_grads):

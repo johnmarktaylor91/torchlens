@@ -648,9 +648,8 @@ def _assert_pytree_draw_surface(trace: Any, tmp_path: Path) -> None:
 
     dot = trace.draw(
         path=str(tmp_path / "pytree_graph"),
-        vis_save_only=True,
         file_format="dot",
-    )
+    ).dot
     assert isinstance(dot, str)
 
 
@@ -708,12 +707,12 @@ def _assert_pytree_grad_surface(trace: Any, tmp_path: Path) -> None:
         _ = trace[0].grads
 
 
-def _assert_pytree_log_backward_surface(trace: Any, tmp_path: Path) -> None:
+def _assert_pytree_backward_surface(trace: Any, tmp_path: Path) -> None:
     """Assert backward capture rejects with derived-gradient guidance."""
 
     del tmp_path
     with pytest.raises(BackendUnsupportedError, match="backward capture.*derived_grads"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
 
 
 @pytest.mark.parametrize(
@@ -728,7 +727,7 @@ def _assert_pytree_log_backward_surface(trace: Any, tmp_path: Path) -> None:
         _assert_pytree_save_load_surface,
         _assert_pytree_validate_surface,
         _assert_pytree_grad_surface,
-        _assert_pytree_log_backward_surface,
+        _assert_pytree_backward_surface,
     ),
 )
 def test_jax_equinox_pytree_public_surface_matrix(
@@ -752,7 +751,7 @@ def test_jax_equinox_pytree_public_surface_matrix(
         _assert_pytree_save_load_surface,
         _assert_pytree_validate_surface,
         _assert_pytree_grad_surface,
-        _assert_pytree_log_backward_surface,
+        _assert_pytree_backward_surface,
     ),
 )
 def test_jax_nnx_pytree_public_surface_matrix(

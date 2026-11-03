@@ -21,6 +21,10 @@ import torchlens._visualization.collapse_optimizer as collapse_optimizer
 import torchlens._visualization.source_graph as source_graph_module
 from torchlens._data_classes._trace_accessors import TraceOpAccessor
 from torchlens._visualization._render_common import format_collapsed_module_contents
+from torchlens._visualization._trace_collapse import (
+    collapse_plan as _trace_collapse_plan,
+    collapse_schedule as _trace_collapse_schedule,
+)
 from torchlens._visualization.auto_collapse import (
     _condensed_owner_for_op,
     _condensed_owner_map,
@@ -1008,12 +1012,12 @@ def test_float_collapse_level_validation_and_endpoints() -> None:
         max_result = select_collapse_plan(trace, context, mode="max")
 
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
-            trace.collapse_plan(mode=-0.1)
+            _trace_collapse_plan(trace, mode=-0.1)
         with pytest.raises(ValueError, match=r"\[0\.0, 1\.0\]"):
-            trace.draw(collapse=1.1, vis_save_only=True)
+            trace.draw(collapse=1.1)
 
-        assert trace.collapse_plan(mode=0.0) == none_plan
-        assert trace.collapse_plan(mode=1.0) == max_result.plan
+        assert _trace_collapse_plan(trace, mode=0.0) == none_plan
+        assert _trace_collapse_plan(trace, mode=1.0) == max_result.plan
     finally:
         trace.cleanup()
 
@@ -1024,8 +1028,8 @@ def test_float_collapse_level_is_deterministic() -> None:
     trace = _trace(UniformStack(depth=8), torch.randn(2, 8))
     context = RenderContext()
     try:
-        first = trace.collapse_plan(mode=0.5, context=context)
-        second = trace.collapse_plan(mode=0.5, context=context)
+        first = _trace_collapse_plan(trace, mode=0.5, context=context)
+        second = _trace_collapse_plan(trace, mode=0.5, context=context)
         assert _plan_signature(first) == _plan_signature(second)
 
         first_schedule = collapse_schedule(trace, context)
@@ -1194,7 +1198,7 @@ def test_float_collapse_schedule_monotone_and_nested(
     trace = _trace(builder(), x)
     context = RenderContext()
     try:
-        schedule = trace.collapse_schedule(context)
+        schedule = _trace_collapse_schedule(trace, context)
         none_plan = collapse_plan_for_trace(trace, None, None, context)
         max_plan = select_collapse_plan(trace, context, mode="max").plan
 
@@ -1386,11 +1390,11 @@ def test_v2_plan_parity_and_determinism(monkeypatch: pytest.MonkeyPatch) -> None
 
 
 def test_trace_collapse_plan_public_diagnostic(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Trace.collapse_plan returns the v2 plan without adding top-level API names."""
+    """Drawing.collapse_plan returns the v2 plan without adding top-level API names."""
 
     trace = _trace(UniformStack(depth=12), torch.randn(2, 8))
     try:
-        plan = trace.collapse_plan(mode="auto")
+        plan = _trace_collapse_plan(trace, mode="auto")
         summary = repr(plan)
 
         assert isinstance(plan, CollapsePlan)
@@ -1401,7 +1405,7 @@ def test_trace_collapse_plan_public_diagnostic(monkeypatch: pytest.MonkeyPatch) 
         assert "module_box=" in summary or "raw_op=" in summary
 
         with pytest.raises(ValueError, match="mode must be one of"):
-            trace.collapse_plan(mode="none")  # type: ignore[arg-type]
+            _trace_collapse_plan(trace, mode="none")  # type: ignore[arg-type]
     finally:
         trace.cleanup()
 
@@ -1519,9 +1523,8 @@ def test_max_salience_floor_fold_representative_uses_single_instance_stats(
         source = str(
             trace.draw(
                 path=str(tmp_path / "max_floor_rep_stats"),
-                vis_save_only=True,
                 file_format="svg",
-                vis_node_placement="dot",
+                layout="dot",
                 collapse="max",
             )
         )
@@ -1692,7 +1695,7 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     preflight node ceiling, time budget, or typed refusal, so one
     ``draw(collapse="auto"|"max")`` on a several-thousand-op model burned
     CPU-hours. The ceiling must (a) warn and render uncollapsed on the draw
-    path, (b) refuse typed from ``Trace.collapse_plan()``, and (c) degrade
+    path, (b) refuse typed from ``Drawing.collapse_plan()``, and (c) degrade
     the schedule to its single full-graph step -- while sub-ceiling traces
     are untouched.
     """
@@ -1708,7 +1711,7 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     trace = tl.trace(model, torch.randn(2, 4))
 
     # Sub-ceiling: the real ceiling admits this trace and produces a plan.
-    assert trace.collapse_plan(mode="max") is not None
+    assert _trace_collapse_plan(trace, mode="max") is not None
 
     # Pathological arm (F11 memo D5(i)): above 20x the constant, smart
     # collapse declines outright (constant 0 makes any trace qualify).
@@ -1717,22 +1720,21 @@ def test_collapse_optimizer_ops_ceiling_declines_disclosed(
     with pytest.warns(UserWarning, match="skipping smart collapse"):
         dot = fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot  # uncollapsed render still ships
 
     with warnings_module.catch_warnings():
         warnings_module.simplefilter("ignore", UserWarning)
         with pytest.raises(InvalidArgumentError) as exc_info:
-            fresh.collapse_plan(mode="auto")
+            _trace_collapse_plan(fresh, mode="auto")
     assert exc_info.value.fields["code"] == "collapse_plan_unavailable"
     assert "collapse_ops_ceiling" in exc_info.value.fields["reason"]
 
     with warnings_module.catch_warnings():
         warnings_module.simplefilter("ignore")
-        schedule = fresh.collapse_schedule()
+        schedule = _trace_collapse_schedule(fresh)
     assert len(schedule.steps) == 1
 
     # The budget-degrade arm (non-pathological over-budget -> the fallback
@@ -1763,7 +1765,6 @@ def test_collapse_ceiling_warning_category_and_attribution(
         warnings_module.simplefilter("always")
         fresh.draw(
             collapse="max",
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
         )
@@ -1782,8 +1783,8 @@ def test_collapse_ceiling_documented_lockstep() -> None:
     """The compute ceiling must stay documented everywhere user-facing (R19).
 
     The 0957027b ceiling changed the documented behaviour of
-    ``collapse="auto"|"max"``, ``Trace.collapse_plan()`` and
-    ``Trace.collapse_schedule()`` for large traces; per the LOCKED docs rule the
+    ``collapse="auto"|"max"``, ``Drawing.collapse_plan()`` and
+    ``Drawing.collapse_schedule()`` for large traces; per the LOCKED docs rule the
     constant (and its current value) must appear in the user-facing collapse
     docs, the limitations catalog, the glossary, and the agent guide (AGENTS.md;
     CLAUDE.md only imports it).

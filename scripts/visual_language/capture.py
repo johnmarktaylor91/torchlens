@@ -132,8 +132,8 @@ def _summary_dot(text: str) -> str:
     )
 
 
-def _log_backward(trace: Any) -> Any:
-    trace.log_backward(trace[trace.output_layers[0]].out)
+def _backward(trace: Any) -> Any:
+    trace.backward(trace[trace.output_layers[0]].out)
     return trace
 
 
@@ -156,8 +156,8 @@ def capture(panel: Panel) -> tuple[Any, Any]:
     if panel.intervene:
         kwargs["intervene"] = INTERVENTIONS[panel.intervene]()
     trace = tl.trace(model, inputs, **kwargs)
-    if panel.prep == "log_backward":
-        trace = _log_backward(trace)
+    if panel.prep == "backward":
+        trace = _backward(trace)
     elif panel.prep == "higher_order":
         trace = _higher_order(trace, inputs)
     return trace, inputs
@@ -167,12 +167,13 @@ def draw_kwargs(panel: Panel) -> dict[str, Any]:
     """The panel's draw arguments: conventions first, then the panel's own (which win)."""
 
     merged: dict[str, Any] = dict(CONVENTIONS) if panel.conventions else {}
-    if panel.call in ("draw_backward", "draw_combined"):
+    if panel.kwargs.get("graph") in ("backward", "combined"):
+        # The backward and combined pictures set their own rows and typography.
         merged.pop("direction", None)
         merged.pop("font_size", None)
         merged.pop("collapse", None)
         merged.pop("node_label_fields", None)
-        merged["vis_direction"] = "leftright"
+        merged["direction"] = "leftright"
     if panel.call == "lens":
         # A lens chooses its own rows; the deck's two-row convention would override it.
         merged.pop("node_label_fields", None)
@@ -189,10 +190,6 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
     kwargs["path"] = str(outpath)
     if panel.call == "draw":
         return str(trace.draw(**kwargs))
-    if panel.call == "draw_backward":
-        return str(trace.draw_backward(**kwargs))
-    if panel.call == "draw_combined":
-        return str(trace.draw_combined(**kwargs))
     if panel.call == "lens":
         lens = kwargs.pop("lens")
         return str(lenses.draw_with_lens(trace, lens, **kwargs))
@@ -211,9 +208,11 @@ def draw(panel: Panel, trace: Any, outpath: Path) -> str:
         diff.draw(str(outpath), vis_fileformat="svg", vis_save_only=True)
         # draw() writes only the SVG and the census; the DOT it rendered is rebuilt here.
         return str(_build_diff_dot(diff, theme="torchlens").source)
-    if panel.call == "bundle_graph":
-        return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
-    if panel.call == "bundle_diff":
+    if panel.call in ("bundle_graph", "bundle_diff"):
+        # The bundle doors keep the engine spelling of the viewer switch.
+        kwargs["vis_save_only"] = not kwargs.pop("open_viewer", False)
+        if panel.call == "bundle_graph":
+            return str(_visualization.show_bundle_graph(_bundle(trace), **kwargs))
         return str(tl.viz.bundle_diff(_bundle(trace), **kwargs))
     raise ValueError(f"unknown call {panel.call!r}")
 
@@ -236,12 +235,6 @@ def render_panel(slide: Slide, panel: Panel, out: Path) -> dict[str, Any]:
         warnings.simplefilter("always")
         if panel.call in ("quickstart_render", "summary"):
             dot_source = _facade(panel, outpath)
-        elif panel.kwargs.get("return_graph"):
-            trace, _inputs = capture(panel)
-            graph = trace.draw(**{**draw_kwargs(panel), "path": str(outpath)})
-            record["returned"] = type(graph).__name__
-            dot_source = graph.source
-            graph.render(str(outpath), format="svg", cleanup=True)
         else:
             trace, _inputs = capture(panel)
             dot_source = draw(panel, trace, outpath)
@@ -272,9 +265,9 @@ def _facade(panel: Panel, outpath: Path) -> str:
     model, inputs = ALL_FIXTURES[panel.fixture]()
     if panel.call == "summary":
         return _summary_dot(str(tl.summary(model, inputs)))
-    from torchlens._quickstart import render
+    from torchlens._quickstart import draw
 
-    result = render(model, inputs, file=str(outpath.with_suffix(".svg")), format="svg")
+    result = draw(model, inputs, path=str(outpath.with_suffix(".svg")), file_format="svg")
     return str(result.dot)
 
 
@@ -284,7 +277,7 @@ def _png_size(path: Path) -> tuple[int, int]:
 
 
 #: File stems ``probe_export`` writes into ``raw/`` (checked by ``deck.generated_names``).
-EXPORT_STEMS = ("export-png-96", "export-png-192", "export-svg", "export-graph", "export-refused")
+EXPORT_STEMS = ("export-png-96", "export-png-192", "export-svg", "export-animate", "export-refused")
 
 
 def probe_export(raw: Path) -> dict[str, str]:
@@ -299,7 +292,7 @@ def probe_export(raw: Path) -> dict[str, str]:
     model, inputs = FIXTURES["Flow"]()
     trace = tl.trace(model, inputs)
     facts: dict[str, str] = {}
-    base = {"direction": "leftright", "vis_save_only": True}
+    base = {"direction": "leftright", "open_viewer": False}
     for dpi in (96, 192):
         path = raw / f"export-png-{dpi}"
         trace.draw(path=str(path), file_format="png", dpi=dpi, **base)
@@ -307,7 +300,7 @@ def probe_export(raw: Path) -> dict[str, str]:
         width, height = _png_size(png)
         facts[f'file_format="png", dpi={dpi}'] = f"{width} x {height} pixels"
     svg_path = raw / "export-svg"
-    trace.draw(path=str(svg_path), file_format="svg", **base)
+    drawing = trace.draw(path=str(svg_path), file_format="svg", **base)
     svg_file = svg_path.with_suffix(".svg") if svg_path.with_suffix(".svg").exists() else None
     svg_file = svg_file or Path(f"{svg_path}.svg")
     view = re.search(r'viewBox="([^"]+)"', svg_file.read_text())
@@ -315,20 +308,26 @@ def probe_export(raw: Path) -> dict[str, str]:
         f"vector, viewBox {view.group(1) if view else '?'} (pt); dpi has no effect"
     )
     facts["file_format"] = f"default {defaults['file_format'].default!r}"
-    graph = trace.draw(return_graph=True, path=str(raw / "export-graph"), **base)
-    facts["return_graph=True"] = f"returns a {type(graph).__module__}.{type(graph).__name__} object"
-    facts["vis_save_only"] = (
-        f"default {defaults['vis_save_only'].default!r}; True saves without opening a viewer"
+    facts["draw() returns"] = (
+        f"a {type(drawing).__module__}.{type(drawing).__name__}: str() is the DOT source, "
+        ".save(path) writes it again, .show() opens it"
+    )
+    facts["open_viewer"] = (
+        f"default {defaults['open_viewer'].default!r}; True opens the written file in a viewer"
     )
     facts["path"] = f"default {defaults['path'].default!r} (the file stem)"
-    facts['view="none"'] = f"draws nothing and returns {trace.draw(view='none')!r}"
-    refused = 'view="sideways"'
+    site = next(iter(trace.layer_logs))
+    animation = trace.draw(path=str(raw / "export-animate"), animate=site, **base)
+    facts[f"animate={site!r}"] = (
+        f"an HTML pass animation of that site (file_format={animation.file_format!r}, "
+        f"{len(animation.data or b'')} bytes); .show() plays it"
+    )
+    refused = 'graph="sideways"'
     try:
-        trace.draw(view="sideways", path=str(raw / "export-refused"), **base)
+        trace.draw(graph="sideways", path=str(raw / "export-refused"), **base)
         facts[refused] = "accepted (unexpected)"
     except InvalidArgumentError as exc:  # the refusal is the measurement
         # The message without its remedy sentence, which repeats the allowed values.
         first = str(exc).strip().splitlines()[0].split(" Remedy:")[0][:150]
-        # view takes "none" or a vis_mode value; the error names the vis_mode it would set.
-        facts[refused] = f"refused before any render (view sets vis_mode): {first}"
+        facts[refused] = f"refused before any render: {first}"
     return facts

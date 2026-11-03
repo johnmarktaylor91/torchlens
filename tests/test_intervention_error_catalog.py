@@ -315,7 +315,11 @@ def test_axis_a_public_verbs_success_paths() -> None:
     """Public set, do (replay and set-only), rerun, fork, and append smoke paths work."""
 
     log = _capture()
-    log.set(tl.func("relu"), torch.zeros(1, 3), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.zeros(1, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     replay_result = log.do(
         tl.func("relu"),
         _zero_hook,
@@ -354,7 +358,13 @@ def test_axis_a_public_verbs_success_paths() -> None:
         # ``ValueError`` (untyped -- see the module TODO; do not weaken this test to hide it).
         (
             "set",
-            lambda log: log.set(tl.func("missing"), torch.zeros(1, 3), confirm_mutation=True),
+            lambda log: log.do(
+                tl.func("missing"),
+                torch.zeros(1, 3),
+                intervention=tl.options.InterventionOptions(
+                    engine="set_only", confirm_mutation=True
+                ),
+            ),
             terrors.SiteResolutionError,
         ),
         (

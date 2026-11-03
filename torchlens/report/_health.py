@@ -277,7 +277,7 @@ def nonfinite_verdict(trace: Any) -> str:
 #: The partial-coverage hint: ``track_nonfinite`` stays False by
 #: default (no overhead), so a NOT-CHECKED surface names the option that
 #: records every op's verdict during capture.
-TRACK_NONFINITE_HINT = "capture with CaptureOptions(track_nonfinite=True) to check every op"
+TRACK_NONFINITE_HINT = "capture with CaptureOptions(on_nonfinite='track') to check every op"
 
 
 def nonfinite_option_hint(trace: Any, verdict: str) -> str | None:

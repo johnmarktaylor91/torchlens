@@ -3,7 +3,8 @@
 The 2026-10-01 shim removal deleted the alias members outright (remove-and-
 rename, no alias), lane F12 deleted ``VisualizationTheme.legend_items``, and the
 1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names,
-and the ``do`` fold deleted ``attach_hooks`` from ``Trace``, ``Layer`` and ``Op``.
+the names rulings deleted ``set`` from ``Trace``, ``Layer`` and ``Op``, and the ``do``
+fold deleted ``attach_hooks`` from ``Trace``, ``Layer`` and ``Op``.
 A lookup of any of them must raise ``FacadeTeachingError`` (code
 ``facade_redirect``, ``AttributeError`` lineage) whose message names the
 replacement, never a bare ``AttributeError``. Every other missing name keeps
@@ -69,11 +70,18 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_elif_entry_edges", "graph.conditional_arm_entry_edges"),
     ("Trace", "conditional_else_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "animate_ops", "animate"),
+    ("Trace", "disarm_triggers", "autograd.disarm"),
+    ("Trace", "log_backward", "backward"),
+    ("Trace", "set", "do"),
+    ("Trace", "collapse_plan", "draw"),
+    ("Trace", "collapse_schedule", "draw"),
     ("Layer", "attach_hooks", "do"),
     ("Op", "attach_hooks", "do"),
+    ("Op", "set", "do"),
     ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
-    ("VisualizationOptions", "mode", "view"),
+    ("VisualizationOptions", "mode", "rolled"),
     ("VisualizationOptions", "max_module_depth", "depth"),
     ("VisualizationOptions", "layout_engine", "layout"),
     ("VisualizationOptions", "node_mode", "node_style"),
@@ -105,6 +113,8 @@ REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
     ("torchlens.observers", "record_span", "torchlens.observers.span"),
     ("torchlens.intervention", "intervening", "torchlens.without_op"),
     ("torchlens.intervention", "replay_from", "Trace.do"),
+    ("torchlens.intervention", "sites", "torchlens.experiment.sweep_sites"),
+    ("torchlens.intervention", "SiteSpec", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "ledger", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "ExperimentLedger", "torchlens.experiment.sweep_sites"),
     ("torchlens.experiment", "LedgerEntry", "torchlens.experiment.sweep_sites"),
@@ -132,8 +142,25 @@ def test_removed_module_name_raises_typed_redirect(
     # The named replacement is live (``Trace.do`` resolves from the package root).
     target: Any = importlib.import_module("torchlens")
     parts = replacement.split(".")
+    walked = "torchlens"
     for part in parts[1:] if parts[0] == "torchlens" else parts:
-        target = getattr(target, part)
+        walked = f"{walked}.{part}"
+        try:
+            target = getattr(target, part)
+        except AttributeError:  # a public subpackage not yet imported as an attribute
+            target = importlib.import_module(walked)
+
+
+def test_layer_set_raises_typed_redirect(owners: dict[str, Any]) -> None:
+    """``Layer.set`` was replaced by ``Layer.do`` with the ``set_only`` engine."""
+
+    layer = next(iter(owners["Trace"].layers))
+    with pytest.raises(FacadeTeachingError) as excinfo:
+        _ = layer.set
+    assert excinfo.value.fields["code"] == "facade_redirect"
+    assert "set_only" in str(excinfo.value)
+    assert getattr(layer, "set", "absent") == "absent"
+    assert callable(layer.do)
 
 
 @pytest.mark.parametrize(

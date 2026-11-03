@@ -59,11 +59,10 @@ def _captured(model: nn.Module, x: torch.Tensor, *, backward: bool = True) -> tl
     trace = tl.trace(
         model,
         x,
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     if backward:
-        trace.log_backward(trace.output_ops[0].out.sum())
+        trace.backward(trace.output_ops[0].out.sum())
     return trace
 
 
@@ -113,10 +112,11 @@ def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None
     trace = tl.trace(
         _OneCheckpoint(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True, aten_ops=True),
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_mode="reference", aten_ops=True
+        ),
     )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
     (record,) = witness["tokens"].values()
     # Unpack evidence inside witnessed fire brackets resolves through the
@@ -196,10 +196,9 @@ def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
         trace = tl.trace(
             _PausedCheckpoint(),
             torch.randn(3, 4),
-            save_mode="reference",
-            capture=tl.options.CaptureOptions(backward_ready=True),
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
     assert witness["token_count"] == 0
     assert "unwitnessed_checkpoint_enter" in witness["degrade_flags"]

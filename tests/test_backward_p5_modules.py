@@ -53,10 +53,11 @@ def _trace_with_backward(layers_to_save: str | list[str] = "all") -> tl.Trace:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=layers_to_save, save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save=layers_to_save,
     )
     loss = trace[trace.output_layers[0]].out.square().mean()
-    trace.log_backward(loss, retain_graph=True)
+    trace.backward(loss, retain_graph=True)
     return trace
 
 
@@ -146,9 +147,8 @@ def test_recurrent_tanh_grad_fns_pair_directly_before_output_boundary() -> None:
     trace = tl.trace(
         TanhRNN(),
         torch.randn(2, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads=True, backward_ready=True
-        ),
+        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True),
+        save="all",
     )
     try:
         trace[trace.output_layers[0]].out.sum().backward()

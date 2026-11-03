@@ -301,7 +301,7 @@ def _select_backward_pass(trace: Trace, bwd: int | None) -> tuple[Any, int]:
             code="backward_capture_required",
             remedy=(
                 "re-trace with CaptureOptions(backward_ready=True, save_grads=...) "
-                "and run trace.log_backward(loss) before bisecting"
+                "and run trace.backward(loss) before bisecting"
             ),
         )
     if bwd is None:

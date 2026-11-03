@@ -135,7 +135,11 @@ def test_audit_save_load_and_compat(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "mylog.tlspec"
 
     log.save_intervention(path, level="audit")
@@ -486,7 +490,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     log.do(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), intervention=_STAGE)
-    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -508,7 +512,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     log.do(tl.grad_fn(name="relu"), tl.scale(2.0), intervention=_STAGE)
-    log.log_backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
+    log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -522,7 +526,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     fresh._intervention_spec = spec
-    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+    fresh.backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
     assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
 
@@ -552,7 +556,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
     fresh._intervention_spec = spec
-    fresh.log_backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
+    fresh.backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
     assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
 
@@ -1065,7 +1069,11 @@ def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
 
     x = torch.randn(2, 3)
     log = _log(_ReluModel(), x)
-    log.set(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        tl.zero_ablate(),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     path = tmp_path / "target.tlspec"
     log.save_intervention(path, level="audit")
 
@@ -1116,7 +1124,11 @@ def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> Non
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 
     log = _log()
-    log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.zeros(2, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     target = tmp_path / "crash.tlspec"
 
     def crashing_writer(**kwargs: Any) -> Any:

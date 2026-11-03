@@ -50,26 +50,24 @@ def _trace_and_loss() -> tuple[tl.Trace, torch.Tensor]:
     torch.manual_seed(0)
     model = _ContextModel()
     x = torch.randn(4, 3, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads=True)
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True), save="all")
     return trace, trace[trace.output_layers[0]].out
 
 
-def test_backward_call_context_points_to_user_log_backward_call() -> None:
-    """BackwardPass stores the test frame that called trace.log_backward."""
+def test_backward_call_context_points_to_user_backward_call() -> None:
+    """BackwardPass stores the test frame that called trace.backward."""
 
     trace, loss = _trace_and_loss()
     try:
         expected_line = inspect.currentframe().f_lineno + 1
-        trace.log_backward(loss)
+        trace.backward(loss)
         backward_pass = trace.autograd.last_backward_pass
 
         assert backward_pass is not None
         location = backward_pass.backward_call_context
         assert isinstance(location, FuncCallLocation)
         assert Path(location.file).resolve() == Path(__file__).resolve()
-        assert location.func_name == "test_backward_call_context_points_to_user_log_backward_call"
+        assert location.func_name == "test_backward_call_context_points_to_user_backward_call"
         assert location.line_number == expected_line
         assert Path(location.file).parent.name == "tests"
     finally:
@@ -83,7 +81,7 @@ def test_backward_call_context_survives_tlspec_round_trip(tmp_path: Path) -> Non
     bundle_path = tmp_path / "backward_context.tlspec"
     try:
         expected_line = inspect.currentframe().f_lineno + 1
-        trace.log_backward(loss)
+        trace.backward(loss)
         trace.save(bundle_path, overwrite=True)
         loaded = tl.load(bundle_path)
 

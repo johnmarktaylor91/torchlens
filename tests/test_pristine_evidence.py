@@ -144,7 +144,11 @@ def test_staged_hook_stays_not_pristine_after_clear_and_save(tmp_path: Path) -> 
 
 def test_value_replacement_survives_a_state_reassignment(tmp_path: Path) -> None:
     trace = _ready(_model())
-    trace.set(tl.module("block"), _double, confirm_mutation=True)
+    trace.do(
+        tl.module("block"),
+        _double,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     trace.state = TraceState.PRISTINE
     assert trace.is_pristine is False
     loaded = _saved(trace, tmp_path)
@@ -178,7 +182,11 @@ def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
     fork = plain.fork("f")
     assert fork.is_pristine is True and plain.is_pristine is True
-    fork.set(tl.module("block"), _double, confirm_mutation=True)
+    fork.do(
+        tl.module("block"),
+        _double,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     assert fork.is_pristine is False
     assert plain.is_pristine is True
     assert fork.fork("g").is_pristine is False

@@ -38,7 +38,7 @@ setup cell pins `sys.path` to the repo root and asserts on `torchlens.__file__`)
   `tl.bridge` all 16 adapters enumerated + import-exercised at runtime (captum, hf,
   profiler in depth) · collapse-v2 (`collapse=` float slider, `fold_repeats=`,
   `collapse_plan`, `collapse_schedule`) 3/3 · `tl.validate` all 4 scopes ·
-  capture-time kwargs (`storage=tl.to_disk`, `streaming`, `hooks`, `layers_to_save`,
+  capture-time kwargs (`storage=tl.to_disk`, `streaming`, `hooks`, `save`,
   `chunk_size`, `activation_transform`/`grad_transform` (both verified INERT),
   `module_filter`, `seed`, `recipes`) demonstrated · vanilla dunder protocol
   (`len`/iteration/membership) on `Trace` (nb 01) and `Bundle` (nb 08).

@@ -82,7 +82,11 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
     initial_revision = log._spec_revision
     replacement = torch.zeros(2, 3)
 
-    result = log.set(tl.func("relu"), replacement)
+    result = log.do(
+        tl.func("relu"),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
 
     assert result is log
     assert log._spec_revision == initial_revision + 1
@@ -116,7 +120,11 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
         return out * 0
 
-    log.set(tl.func("relu"), replacement_fn)
+    log.do(
+        tl.func("relu"),
+        replacement_fn,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
 
     value_spec = log._intervention_spec.target_value_specs[-1]
     assert value_spec.value is replacement_fn
@@ -176,7 +184,11 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     assert log.recipe is first_snapshot
 
     replacement = torch.zeros(2, 3)
-    log.set(tl.func("relu"), replacement, confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     after_set = log.recipe
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
@@ -213,7 +225,7 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
 
     log = _capture()
     target = _first_internal_label(log)
-    log.set(target, torch.zeros_like(log[target].out), confirm_mutation=True)
+    log.do(target, torch.zeros_like(log[target].out), intervention=_STAGE)
     log.do({tl.label(target): _identity_hook}, intervention=_STAGE)
     log._intervention_spec.targets.append(TargetSpec("label", target))
     log._intervention_spec.records.append(
@@ -279,7 +291,11 @@ def test_rerun_advances_out_recipe_revision_after_set() -> None:
     x = torch.randn(2, 3)
     log = tl.trace(ReluAdd(), x, capture=CaptureOptions(replayable=True))
 
-    log.set(tl.func("relu"), torch.zeros(2, 3), confirm_mutation=True)
+    log.do(
+        tl.func("relu"),
+        torch.zeros(2, 3),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     assert log._out_recipe_revision == 0
 
     result = log.run(ReluAdd(), x)

@@ -190,7 +190,7 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     """
 
     model = _TupleOut()
-    # Gradient retention is opt-in: log_backward no longer silently widens the
+    # Gradient retention is opt-in: backward no longer silently widens the
     # trace's save_grads selection (per-pass retention scoping), so grad-input
     # payload sites only exist when the capture arms save_grads itself.
     log = tl.trace(
@@ -200,7 +200,7 @@ def test_output_at_composed_with_grad_input_resolves_nonzero_sites() -> None:
     )
     branch0 = log.find_sites(output_at(0))
     assert branch0, "expected output_at(0) to match the first tuple branch"
-    log.log_backward(branch0[0].out.sum())
+    log.backward(branch0[0].out.sum())
 
     from torchlens.intervention.errors import SelectorCompositionError
 

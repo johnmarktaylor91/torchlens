@@ -59,7 +59,7 @@ def _log_sequential(requires_grad: bool = True) -> Trace:
     torch.manual_seed(0)
     model = TinySequentialModel()
     x = torch.randn(4, 10, requires_grad=requires_grad)
-    return tl.trace(model, x, capture=CaptureOptions(layers_to_save="all", seed=0))
+    return tl.trace(model, x, capture=CaptureOptions(seed=0), save="all")
 
 
 def _non_source_ops(trace: Trace) -> list[Op]:
@@ -108,7 +108,7 @@ def test_add_op_reports_zero_autograd_memory() -> None:
     model = TinyAddModel()
     x = torch.ones(2, 3, requires_grad=True)
     y = torch.ones(2, 3, requires_grad=True)
-    trace = tl.trace(model, (x, y), capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, (x, y), save="all")
     add_pass = next(layer for layer in trace._layer_list if layer.type == "add")
 
     assert add_pass.grad_fn_object_id is not None
@@ -125,7 +125,7 @@ def test_no_grad_sets_autograd_saved_fields_to_none() -> None:
     x = torch.randn(4, 10, requires_grad=True)
 
     with torch.no_grad():
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all", seed=0))
+        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=0), save="all")
 
     assert all(layer.autograd_memory is None for layer in trace._layer_list)
     assert all(layer.num_autograd_tensors is None for layer in trace._layer_list)
@@ -144,7 +144,8 @@ def test_requires_grad_false_sets_autograd_saved_fields_to_none() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=0, backward_ready=True),
+        capture=tl.options.CaptureOptions(seed=0, backward_ready=True),
+        save="all",
     )
 
     assert all(layer.autograd_memory is None for layer in _non_source_ops(trace))

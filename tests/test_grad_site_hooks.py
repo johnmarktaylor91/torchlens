@@ -222,7 +222,7 @@ def test_hook_context_signal_state_and_run_state() -> None:
                 ctx.signal,
                 kwargs.get("grad_kind"),
                 ctx.state["fires"],
-                kwargs.get("backward_pass_index"),
+                kwargs.get("backward_pass_number"),
                 kwargs.get("tuple_index"),
             )
         )

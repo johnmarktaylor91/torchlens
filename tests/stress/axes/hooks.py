@@ -11,8 +11,8 @@ Default validation re-traces the model without the options row, so
 hook rows are judged by the capture itself, the save/load round trip of the
 intervened trace, the typed-refusal, torch-clean and memory oracles.
 
-Hooks attached after capture (a staged ``Trace.do``, ``Trace.set``,
-``fork().do`` on a buffer read, the F45 shape) and a TorchLens hook cleared
+Hooks attached after capture (a staged ``Trace.do``, including the set_only
+engine, ``fork().do`` on a buffer read, the F45 shape) and a TorchLens hook cleared
 mid-pass need a post-capture step the runner does not
 have; they are listed as remaining work, not rows. A capture-time selector
 cannot name a buffer read: ``tl.label("buffer_1:1")`` is a finalized label,

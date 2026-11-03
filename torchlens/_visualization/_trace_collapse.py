@@ -1,9 +1,10 @@
 """Trace collapse functions reached from the records through ``_data_classes._doors.visualization``.
 
-Bodies of ``Trace.module_collapse_order``, ``collapse_order``, ``collapse_plan``
-and ``collapse_schedule`` live here as ``f(trace, ...)`` functions; the record
-keeps one thin method per name with its public docstring and forwards to these
-through the door.
+Bodies of ``Trace.module_collapse_order`` and ``collapse_order`` live here as
+``f(trace, ...)`` functions; the record keeps one thin method per name with its
+public docstring and forwards to these through the door. ``collapse_plan`` and
+``collapse_schedule`` are served by ``Drawing.collapse_plan`` and
+``Drawing.collapse_schedule`` on the retained trace.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ def collapse_plan(
     mode: Literal["auto", "max"] | float = "auto",
     context: RenderContext | None = None,
 ) -> CollapsePlan:
-    """Body of ``Trace.collapse_plan``; the record keeps the thin spelling and docstring."""
+    """Body of ``Drawing.collapse_plan``; the drawing carries the public docstring."""
 
     if isinstance(mode, float):
         if not 0.0 <= mode <= 1.0:
@@ -96,7 +97,7 @@ def collapse_schedule(
     trace: Trace,
     context: RenderContext | None = None,
 ) -> CollapseSchedule:
-    """Body of ``Trace.collapse_schedule``; the record keeps the thin spelling and docstring."""
+    """Body of ``Drawing.collapse_schedule``; the drawing carries the public docstring."""
 
     resolved_context = RenderContext() if context is None else context
     return _collapse_schedule(trace, resolved_context)

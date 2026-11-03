@@ -8,7 +8,7 @@ them. A rerun therefore re-arms the trace's own retained predicate through the
 same capture door, hands the capture a copy of the staged spec without those
 entries, and then checks that the door re-staged exactly the entries the trace
 carries. The staged spec itself is never mutated. Entries a user staged on a
-final label (``Trace.set``, ``do(tl.label(...), hook)``) are translated to
+final label (``do(label, value)``, ``do(tl.label(...), hook)``) are translated to
 the raw capture labels of the ops they name (:func:`translate_staged_final_labels`),
 the same translation a mixed gradient plan's activation half uses.
 """
@@ -256,8 +256,8 @@ def raw_live_labels(trace: Any, label_value: str) -> tuple[str, ...] | None:
 def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     """Return ``capture_spec`` with its finalized exact labels readdressed for a live rerun.
 
-    Staged entries addressed by a finalized label (``Trace.set(label, ...)``,
-    ``do(tl.label(...), ...)``) are translated to the raw capture
+    Staged entries addressed by a finalized label (``do(label, ...)`` on the
+    ``set_only`` engine, ``do(tl.label(...), ...)``) are translated to the raw capture
     labels of the ops they name, the same translation a mixed gradient plan's
     activation half already uses, so the edit fires on the rerun instead of
     being refused. An exact label that names several ops, a substring or regex

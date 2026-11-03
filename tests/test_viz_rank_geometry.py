@@ -59,9 +59,8 @@ def _rank_dot_source(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
     monkeypatch.setattr(layout_mod, "_run_neato_with_fallbacks", _fake_neato)
     trace = tl.trace(_Recurrent(), torch.randn(1, 4))
     trace.draw(
-        vis_mode="unrolled",
-        vis_node_placement="rank",
-        vis_save_only=True,
+        rolled=False,
+        layout="rank",
         file_format="svg",
         path=str(tmp_path / "rank_geometry"),
         show_containers=False,
@@ -155,9 +154,8 @@ torch.manual_seed(0)
 trace = tl.trace(Recurrent(), torch.randn(1, 4))
 out = Path(sys.argv[1]) / "sweep"
 trace.draw(
-    vis_mode="unrolled",
-    vis_node_placement="rank",
-    vis_save_only=True,
+    rolled=False,
+    layout="rank",
     file_format="svg",
     path=str(out),
     show_containers=False,

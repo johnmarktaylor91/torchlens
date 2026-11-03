@@ -231,13 +231,13 @@ def test_a20_each_backward_writes_its_own_settle_row() -> None:
     assert settle["arming_event_id"] == arming["event_id"]
     assert settle["status"] == "fired"
     assert settle["fire_count"] >= 1
-    assert settle["backward_pass_index"] == 1
+    assert settle["backward_pass_number"] == 1
     snapshot = dict(settle)
     result.backward(loss)
     rows = _settle_rows(result)
     assert len(rows) == 2
     assert rows[0] == snapshot
-    assert rows[1]["backward_pass_index"] == 2
+    assert rows[1]["backward_pass_number"] == 2
     assert rows[1]["status"] == "fired"
 
 
@@ -410,7 +410,7 @@ def test_pass_qualified_gradient_edit_fires_on_its_pass() -> None:
     result.backward(loss, retain_graph=True)
     result.backward(loss)
     second = _settle_rows(result)[-1]
-    assert second["backward_pass_index"] == 2
+    assert second["backward_pass_number"] == 2
     assert second["status"] == "fired"
 
 

@@ -46,7 +46,7 @@ Every verb climbs the same three-rung **input ladder** ([full guide](docs/quicks
 ```python
 # API sketch; `model` is your model and `lm` any HuggingFace language model.
 log = tl.trace(model, x)                             # best: your real input
-log = tl.trace(model, input_size=(1, 3, 224, 224))   # your shape, random values; disclosed
+log = tl.trace(model, input_shape=(1, 3, 224, 224))   # your shape, random values; disclosed
 log = tl.trace(model)                                # inferred shape + random values; disclosed, or a teach
 log = tl.trace(lm, "The quick brown fox")            # HF models: a string is a real input
 ```
@@ -177,8 +177,8 @@ Visualize the graph as a PDF:
 
 ```python
 log.draw()                        # unrolled by default
-log.draw(vis_mode='rolled')       # rolled (compact for recurrent)
-log.draw(vis_mode='unrolled')     # every pass as a distinct node
+log.draw(rolled=True)             # rolled (compact for recurrent)
+log.draw(rolled=False)            # every pass as a distinct node
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/alexnet.png" width=30% height=30%>
@@ -200,10 +200,11 @@ log = tl.trace(model, x, save=tl.in_module('classifier'))
 # Save conv2d ops that are immediately followed by a relu, keeping a 4-op lookback window
 conv_before_relu = tl.func('conv2d') & tl.followed_by(tl.func('relu'))
 log = tl.trace(model, x, save=conv_before_relu,
-               lookback=4, lookback_payload_policy='detached_raw')
+               capture=tl.options.CaptureOptions(lookback=4,
+                                                 lookback_payload_policy='detached_raw'))
 
 # Stop capture early (can be faster than a plain forward pass)
-log = tl.trace(model, x, save=tl.in_module('features.6'), halt=tl.in_module('features.6'))
+log = tl.trace(model, x, save=tl.in_module('features.6'), stop_after=tl.in_module('features.6'))
 
 # Lightweight sparse recording for tight loops -- materialize structure later
 recording = tl.record(model, x, save=tl.func('relu'))
@@ -218,7 +219,7 @@ tl.extract_dataset(model, dataset, layers=['relu_1_2', 'conv2d_3_7'],
                    batch_size=32, path='torchlens-activations/')
 ```
 
-**Performance note:** With `halt=` and `tl.record`, capture can run *faster
+**Performance note:** With `stop_after=` and `tl.record`, capture can run *faster
 than the raw forward pass* -- measured at 0.84x raw on ResNet-18 and 0.83x on
 GPT-2 (HookedTransformer) at 25% depth. Full exhaustive capture runs at
 roughly 14x the raw forward and amortizes on large models. See
@@ -241,7 +242,7 @@ Capture per-op gradients with the same API:
 ```python
 x = torch.randn(1, 3, 224, 224, requires_grad=True)
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 
 grad = log['relu_1_2'].grad      # gradient tensor flowing through that op
 print(grad.shape)                 # torch.Size([1, 64, 55, 55])
@@ -251,7 +252,7 @@ Narrow gradient saving to specific ops with the same selector predicates:
 
 ```python
 log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads=tl.func('relu')))
-log.log_backward(log[log.output_layers[0]].out.sum())
+log.backward(log[log.output_layers[0]].out.sum())
 ```
 
 <img src="https://raw.githubusercontent.com/johnmarktaylor91/torchlens/main/images/gradients.png" width=30% height=30%>
@@ -333,8 +334,8 @@ modules_df = log.modules.to_pandas()
 
 ```python
 log.draw()                           # default: unrolled with sibling ordering
-log.draw(vis_mode='rolled')          # compact rolled layout
-log.draw(vis_mode='unrolled')        # every pass as a distinct node
+log.draw(rolled=True)                # compact rolled layout
+log.draw(rolled=False)               # every pass as a distinct node
 ```
 
 Control nesting depth to zoom in on submodules:
@@ -361,7 +362,7 @@ recurrent_model = SimpleRecurrent()
 seq = torch.randn(6, 5)
 recurrent_log = tl.trace(recurrent_model, seq)
 print(recurrent_log['linear_1:2'].out)     # second pass of the linear layer
-recurrent_log.draw(vis_mode='rolled')
+recurrent_log.draw(rolled=True)
 ```
 
 And the HTML export is already **interactive** -- one self-contained file with
@@ -395,8 +396,9 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `tl.add_noise`, `tl.project_onto`, `tl.project_out`, `tl.swap_with`, `tl.splice_module`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`intervention_ready=True` and use `log.fork()` + `log.do(site, edit)` (replays the
-saved graph) / `log.run(model, x)`. Live hooks during rerun require capture-time selectors
+`capture=tl.options.CaptureOptions(intervention_ready=True)` and use `log.fork()` +
+`log.do(site, edit)` (replays the saved graph) / `log.run(model, x)`. Live hooks during
+rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
 `log.find_sites(...)`. See [docs/intervention_api.md](docs/intervention_api.md)
 for the full reference.
@@ -472,7 +474,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Gradients | full backward graph | leaf-level + zero-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf-level + custom-VJP-tap T1 intermediate derived | leaf-level + T1 intermediate derived | leaf + exact T1 intermediate derived (eager entries, `tl.backends.tf.GradOptions`) |
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
-| Interventions | yes | -- | -- | yes (+`halt=`) | yes (+`halt=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
+| Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
 | Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory

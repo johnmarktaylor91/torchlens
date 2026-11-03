@@ -56,9 +56,7 @@ def _trace_for_plain_backward() -> tl.Trace:
     torch.manual_seed(0)
     model = _PlainBackwardModel()
     x = torch.randn(3, 4, requires_grad=True)
-    return tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
 
 
 def _backward_starts(trace: tl.Trace) -> list[BackwardPassStart]:
@@ -142,13 +140,13 @@ def test_plain_tensor_backward_triggers_capture() -> None:
     trace.cleanup()
 
 
-def test_disarm_triggers_suppresses_plain_backward_capture() -> None:
-    """``Trace.disarm_triggers`` removes registry entries and disables hooks."""
+def test_autograd_disarm_suppresses_plain_backward_capture() -> None:
+    """``trace.autograd.disarm`` removes registry entries and disables hooks."""
 
     trace = _trace_for_plain_backward()
     loss = trace[trace.output_layers[0]].out.sum()
 
-    trace.disarm_triggers()
+    trace.autograd.disarm()
     loss.backward()
 
     assert len(trace.autograd.backward_passes) == 0
@@ -181,7 +179,8 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["linear_2"], save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save=["linear_2"],
     )
     grad_fn_object_id = trace["linear_2"].grad_fn_object_id
     assert grad_fn_object_id is not None
@@ -204,7 +203,7 @@ def test_fast_pass_refreshes_grad_fn_identity_and_hook_registry() -> None:
 def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Tensor-hook opt-out leaves grad-fn registration and ``log_backward`` intact."""
+    """Tensor-hook opt-out leaves grad-fn registration and ``backward`` intact."""
 
     register_hook_calls: list[str] = []
     original_register_hook = torch.Tensor.register_hook
@@ -223,9 +222,8 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(
-            layers_to_save="all", save_grads=False, capture_tensor_grad_hooks=False
-        ),
+        capture=tl.options.CaptureOptions(save_grads=False, capture_tensor_grad_hooks=False),
+        save="all",
     )
     registered_ids = {
         grad_fn_object_id
@@ -238,7 +236,7 @@ def test_capture_tensor_grad_hooks_false_preserves_grad_fn_registration(
     assert registered_ids
     assert registered_ids <= pinned_ids
 
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
 
     assert register_hook_calls == []
     assert trace.autograd.has_backward_pass

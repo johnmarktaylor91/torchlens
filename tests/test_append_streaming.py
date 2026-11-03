@@ -49,10 +49,10 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         model,
         torch.randn(1, 3),
         capture=CaptureOptions(
-            layers_to_save="all",
             save_grads=True,
             replayable=True,
         ),
+        save="all",
         storage=tl.to_disk(tmp_path / "streaming_bundle.tl"),
     )
 
@@ -62,7 +62,7 @@ def test_append_rerun_on_streaming_trace_raises(tmp_path: Path) -> None:
         assert info.value.fields.get("code") == "trace_option_unsupported"
     finally:
         # The deferred grad stream keeps its writer thread until backward finalizes it.
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
+        trace.backward(trace[trace.output_layers[0]].out.sum())
 
 
 def test_append_rerun_on_callback_streaming_trace_raises() -> None:
@@ -87,8 +87,9 @@ def test_append_rerun_on_callback_streaming_trace_raises() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(layers_to_save="all", replayable=True),
-        streaming=StorageOptions(on_save=_sink),
+        capture=CaptureOptions(replayable=True),
+        save="all",
+        storage=StorageOptions(on_save=_sink),
     )
 
     assert received
@@ -104,7 +105,8 @@ def test_append_rerun_on_loaded_streaming_trace_works(tmp_path: Path) -> None:
     tl.trace(
         model,
         torch.randn(1, 3),
-        capture=CaptureOptions(layers_to_save="all", replayable=True),
+        capture=CaptureOptions(replayable=True),
+        save="all",
         storage=tl.to_disk(bundle_path),
     )
     loaded = tl.load(bundle_path)

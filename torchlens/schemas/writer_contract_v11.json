@@ -240,7 +240,7 @@
     "_time_finished": "keep",
     "_time_started": "keep",
     "backward_duration": "keep",
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "call_index": "keep",
     "fire_record": "keep",
     "grad_fn_label": "keep",
@@ -524,7 +524,7 @@
     "_source_ref": "weakref_strip"
    },
    "torchlens._data_classes.op.GradientRecord": {
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "dtype": "keep",
     "grad": "blob",
     "memory": "keep",
@@ -815,7 +815,7 @@
    },
    "torchlens._data_classes.trace.Trace": {
     "_activation_transform_repr": "keep",
-    "_active_backward_pass_index": "drop",
+    "_active_backward_pass_number": "drop",
     "_ambiguous_lookup_keys": "keep",
     "_annotation_blobs": "blob_recursive",
     "_append_history": "keep",
@@ -977,6 +977,7 @@
     "_out_sink": "drop",
     "_out_writer": "drop",
     "_output_container_specs_by_raw_label": "drop",
+    "_output_slot": "drop",
     "_output_tokenizer": "drop",
     "_output_transform": "drop",
     "_paddle_alias_annotations": "drop",
@@ -1814,7 +1815,7 @@
      "_time_finished": "keep",
      "_time_started": "keep",
      "backward_duration": "keep",
-     "backward_pass_index": "keep",
+     "backward_pass_number": "keep",
      "call_index": "keep",
      "fire_record": "keep",
      "grad_fn_label": "keep",
@@ -1830,7 +1831,7 @@
      "_time_finished": "fact",
      "_time_started": "fact",
      "backward_duration": "fact",
-     "backward_pass_index": "fact",
+     "backward_pass_number": "fact",
      "call_index": "fact",
      "fire_record": "fact",
      "grad_fn_label": "fact",
@@ -1846,7 +1847,7 @@
      "_time_finished",
      "_time_started",
      "backward_duration",
-     "backward_pass_index",
+     "backward_pass_number",
      "call_index",
      "fire_record",
      "grad_fn_label",
@@ -3265,7 +3266,7 @@
     "class": "torchlens._data_classes.trace.Trace",
     "field_policies": {
      "_activation_transform_repr": "keep",
-     "_active_backward_pass_index": "drop",
+     "_active_backward_pass_number": "drop",
      "_ambiguous_lookup_keys": "keep",
      "_annotation_blobs": "blob_recursive",
      "_append_history": "keep",
@@ -3427,6 +3428,7 @@
      "_out_sink": "drop",
      "_out_writer": "drop",
      "_output_container_specs_by_raw_label": "drop",
+     "_output_slot": "drop",
      "_output_tokenizer": "drop",
      "_output_transform": "drop",
      "_paddle_alias_annotations": "drop",
@@ -4008,5 +4010,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "c48cc517e89ec3ff9d299e4ad21acf13f33cad7172440993494e30e4baacd5e0"
+ "writer_contract_digest": "beeb86ceea2194a28e6cfd5cac7f1cfb35c950f60eb8c541c5bd7011819f3d1d"
 }

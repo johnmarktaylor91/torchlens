@@ -791,10 +791,10 @@ class MergedTrace:
 
         self._refuse_surface("intervene()")
 
-    def log_backward(self, *args: Any, **kwargs: Any) -> Any:
+    def backward(self, *args: Any, **kwargs: Any) -> Any:
         """Refused: backward/gradient merging is deferred (fork F1, typed)."""
 
-        self._refuse_surface("log_backward()")
+        self._refuse_surface("backward()")
 
     def receptive_fields(self, *args: Any, **kwargs: Any) -> Any:
         """Refused: merged influence geometry does not exist (typed)."""

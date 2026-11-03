@@ -1,7 +1,7 @@
 """Facet selectors at the finished-trace read doors: ``trace[...]``.
 
 ``tl.head(i, "q")`` and ``tl.facet(name).latent(k)`` already address a facet at
-the write doors (``Trace.set``, ``do``) and at the facet read
+the write doors (``do``, on any engine) and at the facet read
 door (``record.facets[...]``). On a finished trace, ``trace[selector]`` and
 ``trace.find_sites`` refuses them. ``trace[selector]`` returns the ``Facet`` the
 record's view serves, so its ``.value`` equals the read door's value and the

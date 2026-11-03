@@ -13,6 +13,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._visualization._trace_collapse import collapse_plan as _trace_collapse_plan
 from torchlens._visualization.collapse_plan import RenderContext
 from torchlens._visualization.render_ir import (
     RenderIR,
@@ -174,9 +175,8 @@ def _snapshot_case(trace: tl.Trace, tmp_path: Path, case_name: str) -> dict[str,
             source = str(
                 trace.draw(
                     path=str(tmp_path / f"{case_name}_{key}"),
-                    vis_save_only=True,
                     file_format="svg",
-                    vis_node_placement="dot",
+                    layout="dot",
                     collapse=collapse,
                     fold_repeats=fold_repeats,
                     order_siblings=False,
@@ -184,7 +184,7 @@ def _snapshot_case(trace: tl.Trace, tmp_path: Path, case_name: str) -> dict[str,
             )
             items[key] = {"dot_len": len(source), "dot_sha256": _sha256_text(source)}
             if collapse in {"auto", "max"}:
-                plan_repr = repr(trace.collapse_plan(mode=collapse))
+                plan_repr = repr(_trace_collapse_plan(trace, mode=collapse))
                 items[key]["plan_repr_len"] = len(plan_repr)
                 items[key]["plan_sha256"] = _sha256_text(plan_repr)
     return items

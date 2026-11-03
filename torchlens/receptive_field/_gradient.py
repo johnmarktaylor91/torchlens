@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 
 _RECAPTURE_RECIPE = (
     "tl.trace(model, x.requires_grad_(True), "
-    'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")'
+    'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))'
 )
 
 
@@ -200,8 +200,8 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
         num_backward_passes=int(trace._num_backward_passes),
         has_gradients=bool(trace._autograd_has_grads),
         backward_event_count=_backward_event_count(trace),
-        active_index_present="_active_backward_pass_index" in trace_dict,
-        active_index=trace_dict.get("_active_backward_pass_index"),
+        active_index_present="_active_backward_pass_number" in trace_dict,
+        active_index=trace_dict.get("_active_backward_pass_number"),
     )
 
 
@@ -481,7 +481,7 @@ def _source_recapture_recipe(source: Op, target: Op) -> str:
 
     return (
         "tl.trace(model, x.requires_grad_(True), "
-        'capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference", '
+        'capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"), '
         f"save=tl.label({source.short_layer_label!r}) | tl.label({target.short_layer_label!r}))"
     )
 

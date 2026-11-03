@@ -45,7 +45,8 @@ def _looped_trace() -> tuple[tl.Trace, list[torch.Tensor]]:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     log._tl_test_model_keepalive = model
     outputs = [log._layer_dict_all_keys[label].out for label in log.output_layers]

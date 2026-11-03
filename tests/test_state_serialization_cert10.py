@@ -83,7 +83,7 @@ def _build_backward_trace() -> tl.Trace:
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
     live_trace = tl.trace(model, x, capture=CaptureOptions(save_grads="all"))
-    live_trace.log_backward(_output_loss(live_trace))
+    live_trace.backward(_output_loss(live_trace))
     return live_trace
 
 
@@ -93,7 +93,7 @@ def _build_buffer_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _BufferModel()
     x = torch.randn(3, 4)
-    return trace_fn(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return trace_fn(model, x, save="all")
 
 
 # ---------------------------------------------------------------------------

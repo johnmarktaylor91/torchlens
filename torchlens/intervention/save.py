@@ -617,7 +617,7 @@ def _build_target_manifest(
                     max_fanout=_resolution_fanout_bound(log),
                 )
         except SiteResolutionError as exc:
-            if "Backward selectors require log_backward()" not in str(
+            if "Backward selectors require backward()" not in str(
                 exc
             ) and "predicate selectors are non-portable in strict mode" not in str(exc):
                 raise

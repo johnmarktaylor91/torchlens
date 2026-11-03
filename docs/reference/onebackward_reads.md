@@ -34,7 +34,7 @@ from the graph on every default capture, so the registry route is the only
 correct one: a naive `autograd.grad` over payloads returns `None` at every
 site.
 
-The id rejoin is a fallback: a user `log_backward` before the read nulls the
+The id rejoin is a fallback: a user `backward` before the read nulls the
 per-op handles, and the read transparently rejoins through the trace's
 pinned refs, bitwise-equal.
 
@@ -58,7 +58,7 @@ inside the context (documented boundary).
 - **Edge-seeded (primary)**: `attr.seed(site, index=...)` (one-hot from
   recorded shape metadata) or `attr.seed(site, cotangent=...)` (explicit
   projection). Needs the site's registry node only -- no payload, no
-  retention: a `layers_to_save=[]` capture serves full gradient tables.
+  retention: a `save=[]` capture serves full gradient tables.
   Wrong-shape cotangents refuse naming the site's RECORDED shape.
 - **Tensor-expression (power-user)**: a graph-connected finite real scalar
   Tensor, or a pure `Trace -> Tensor` callable (a 1-D result is a target
@@ -157,7 +157,7 @@ leg disclosed). Do NOT claim orders of magnitude from target batching; the
 orders of magnitude live on the per-site and per-capture axes.
 Gradient-only reads retain NOTHING; `activation_x_grad` retains only the
 sites you multiply. Capture itself costs ~70x a bare forward with
-`layers_to_save='all'` -- selective retention is the natural spelling.
+`save='all'` -- selective retention is the natural spelling.
 
 ## The EDGE row kind
 

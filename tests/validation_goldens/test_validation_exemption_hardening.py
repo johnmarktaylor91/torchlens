@@ -45,6 +45,12 @@ from torchlens.validation.invariants import (
 from torchlens.validation.status import ValidationStatus
 
 
+def _trace_saving_args(model: Any, inputs: Any) -> Any:
+    """Trace with every op saved and its call arguments kept (the shared setup here)."""
+
+    return tl.trace(model, inputs, capture=tl.options.CaptureOptions(save_args=True), save="all")
+
+
 def _fake_layer(**kwargs: Any) -> Any:
     """Build a minimal layer-like object for exemption unit tests.
 
@@ -195,11 +201,7 @@ class PartialSetitemDestinationModel(nn.Module):
 def test_setitem_blank_destination_partial_overwrite_is_not_exempt() -> None:
     """Blank destination values do not prove setitem perturbation insensitivity."""
 
-    trace = tl.trace(
-        PartialSetitemDestinationModel(),
-        torch.randn(4, 2),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(PartialSetitemDestinationModel(), torch.randn(4, 2))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
     destination_label = setitem_op.parent_arg_positions["args"][0]
 
@@ -220,11 +222,7 @@ class DuplicateIndexSetitemDestinationModel(nn.Module):
 def test_setitem_duplicate_advanced_index_destination_is_not_exempt() -> None:
     """Duplicate advanced indices do not prove full destination overwrite."""
 
-    trace = tl.trace(
-        DuplicateIndexSetitemDestinationModel(),
-        torch.tensor([3.0, 4.0]),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(DuplicateIndexSetitemDestinationModel(), torch.tensor([3.0, 4.0]))
     setitem_op = next(op for op in trace._layer_list if op.func_name == "__setitem__")
     destination_label = setitem_op.parent_arg_positions["args"][0]
 
@@ -1154,9 +1152,10 @@ def test_wiped_grad_fn_registry_on_detached_trace_fails_invariants() -> None:
     trace = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=CaptureOptions(save_grads="all"),
+        save="all",
     )
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     check_metadata_invariants(trace)
     assert trace._backward_pass_logs, "backward evidence precondition"
     assert len(trace.autograd.backward_passes) >= 1
@@ -1209,11 +1208,7 @@ def test_forged_placeholder_still_fails_func_call_id_after_save_load(
     from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
-    trace = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(model, torch.randn(2, 4))
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
     object.__setattr__(relu_op, "func", None)
     object.__setattr__(relu_op, "func_name", "intervention_replacement")
@@ -1247,7 +1242,8 @@ def test_genuine_intervention_replacement_survives_save_load(tmp_path: Any) -> N
         model,
         torch.randn(3, 4),
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     replaced_ops = [op for op in trace._layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -1332,11 +1328,7 @@ def test_func_name_none_string_cannot_launder_missing_func_call_id() -> None:
     from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
-    trace = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(model, torch.randn(2, 4))
     check_metadata_invariants(trace)
 
     relu_op = next(op for op in trace._layer_list if op.func_name == "relu")
@@ -1409,11 +1401,7 @@ def test_bernoulli_parent_replay_exemption_requires_snapshot_proof() -> None:
     """
 
     torch.manual_seed(0)
-    trace = tl.trace(
-        _BareBernoulliModel().eval(),
-        torch.randn(4, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(_BareBernoulliModel().eval(), torch.randn(4, 4))
     mul_op = next(op for op in trace._layer_list if op.func_name == "__mul__")
     bernoulli_parents = [
         parent for parent in mul_op.parents if trace[parent].func_name == "bernoulli_"
@@ -1694,11 +1682,7 @@ def test_backward_validation_partial_nan_grads_still_pass() -> None:
 def test_one_hot_index_perturbation_uses_valid_alternate_class() -> None:
     """One-hot index validation should perturb within ``num_classes``."""
 
-    trace = tl.trace(
-        OneHotModel(),
-        torch.tensor([1]),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(OneHotModel(), torch.tensor([1]))
 
     assert trace.validate_forward_pass([torch.tensor([[0.0, 1.0, 0.0, 0.0]])])
 
@@ -1707,11 +1691,7 @@ def test_swamped_fp32_add_uses_ulp_predicate() -> None:
     """Swamped fp32 add should pass only through the ULP spacing predicate."""
 
     x = torch.tensor([10000.0, 10001.0], dtype=torch.float32)
-    trace = tl.trace(
-        SwampedAddModel(),
-        x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(SwampedAddModel(), x)
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1725,11 +1705,7 @@ def test_similar_magnitude_influential_add_is_not_ulp_exempted() -> None:
     """A representable add perturbation must not receive the ULP exemption."""
 
     x = torch.tensor([10.0, 11.0], dtype=torch.float32)
-    trace = tl.trace(
-        SimilarMagnitudeAddModel(),
-        x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(SimilarMagnitudeAddModel(), x)
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1745,11 +1721,7 @@ def test_boundary_crossing_validates_piecewise_constant_ops() -> None:
         (QuantizedCeilSigmoidModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
     )
     for model, x in cases:
-        trace = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-        )
+        trace = _trace_saving_args(model, x)
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1764,11 +1736,7 @@ def test_boundary_crossing_validates_piecewise_constant_ops() -> None:
 def test_instance_norm_running_stats_are_training_update_targets() -> None:
     """Training InstanceNorm running stats should use the normalization proof."""
 
-    trace = tl.trace(
-        TrainingInstanceNormModel(),
-        torch.randn(2, 3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(TrainingInstanceNormModel(), torch.randn(2, 3, 4))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1781,11 +1749,7 @@ def test_instance_norm_running_stats_are_training_update_targets() -> None:
 def test_scalar_masked_fill_all_selected_input_parent_is_structural() -> None:
     """A fully selected scalar ``masked_fill_`` proves the input parent irrelevant."""
 
-    trace = tl.trace(
-        ScalarMaskedFillAllSelectedModel(),
-        torch.randn(1, 2, 10),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(ScalarMaskedFillAllSelectedModel(), torch.randn(1, 2, 10))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1804,11 +1768,7 @@ def test_corrupted_piecewise_constant_wrong_edges_still_fail() -> None:
         (InfTimesFiniteModel(), torch.tensor([1.0, 2.0], dtype=torch.float32), "__mul__"),
     )
     for model, x, func_name in cases:
-        trace = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-        )
+        trace = _trace_saving_args(model, x)
         _install_constant_replay(trace, func_name)
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -1835,11 +1795,7 @@ def test_all_inf_legitimate_ops_validate_or_exempt_with_proof() -> None:
         (BigSquareOverflowModel(), torch.tensor([1.0, 2.0], dtype=torch.float32)),
     )
     for model, x in cases:
-        trace = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-        )
+        trace = _trace_saving_args(model, x)
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1852,11 +1808,7 @@ def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
 
     x = torch.full((2,), torch.finfo(torch.float32).max, dtype=torch.float32)
     for model in (GetitemMaxModel(), UniqueMaxModel()):
-        trace = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-        )
+        trace = _trace_saving_args(model, x)
 
         result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1867,10 +1819,9 @@ def test_max_finite_selection_data_parents_perturb_distinctly() -> None:
 def test_corrupted_swamped_add_replay_fails_without_reexecuting_diagnostic_probes() -> None:
     """A constant replay callable fails without extra diagnostic executions."""
 
-    trace = tl.trace(
+    trace = _trace_saving_args(
         SwampedAddModel(),
         torch.tensor([10000.0, 10001.0], dtype=torch.float32),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
     _install_constant_replay(trace, "__add__")
 
@@ -1892,11 +1843,7 @@ def test_corrupted_swamped_add_replay_fails_without_reexecuting_diagnostic_probe
 def test_multiplicative_zero_annihilator_uses_structural_proof() -> None:
     """Multiplication by a saved zero operand should use a structural proof."""
 
-    trace = tl.trace(
-        MultiplyByZeroModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(MultiplyByZeroModel(), torch.randn(2, 3))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1917,10 +1864,9 @@ def test_multiplicative_zero_annihilator_uses_structural_proof() -> None:
 def test_generic_probe_does_not_exempt_influential_parent() -> None:
     """The generic diagnostic probe must not exempt a genuinely influential add parent."""
 
-    trace = tl.trace(
+    trace = _trace_saving_args(
         SimilarMagnitudeAddModel(),
         torch.tensor([10.0, 11.0], dtype=torch.float32),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -1935,11 +1881,7 @@ def test_generic_probe_does_not_exempt_influential_parent() -> None:
 def test_output_bookkeeping_projection_is_structural() -> None:
     """Loop outputs with NaNs should use meaningful perturbation candidates."""
 
-    trace = tl.trace(
-        LoopOutputBookkeepingModel(),
-        torch.full((2, 3), 1.5),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(LoopOutputBookkeepingModel(), torch.full((2, 3), 1.5))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -1963,7 +1905,8 @@ def test_structural_arg_exemption_covers_keyword_parent_positions() -> None:
         CrossEntropyKwargModel(),
         logits,
         input_kwargs={"target": target},
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -1996,11 +1939,7 @@ def test_skip_validation_registry_entries_have_justifications() -> None:
 def test_empty_like_is_justified_exempted_not_unverified() -> None:
     """Uninitialized-memory ops should pass as justified design exemptions."""
 
-    trace = tl.trace(
-        EmptyLikeModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(EmptyLikeModel(), torch.randn(2, 3))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -2021,11 +1960,7 @@ def test_empty_like_is_justified_exempted_not_unverified() -> None:
 def test_functionless_computational_op_fails_loudly() -> None:
     """A lost callable on a computational op must not be source-exempted."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     _first_op_with_func(trace, "__add__").func = None
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -2045,7 +1980,8 @@ def test_missing_saved_args_yields_reason_coded_unverified() -> None:
     trace = tl.trace(
         AddReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=False),
+        capture=tl.options.CaptureOptions(save_args=False),
+        save="all",
     )
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -2129,11 +2065,7 @@ def test_selective_save_checkable_mismatch_still_fails() -> None:
 def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
     """Missing parent payload should be surfaced as unverified, not an exception."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     add_op = _first_op_with_func(trace, "__add__")
     trace._layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
@@ -2147,11 +2079,7 @@ def test_missing_parent_payload_yields_reason_coded_unverified() -> None:
 def test_replay_mismatch_with_missing_nonperturbed_parent_still_fails() -> None:
     """Saved args must still let ordinary replay catch a real mismatch."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     add_op = _first_op_with_func(trace, "__add__")
     trace._layer_dict_all_keys[add_op.parents[0]]._internal_set("out", None)  # noqa: SLF001
 
@@ -2223,10 +2151,9 @@ class StepInvalidNarrowModel(nn.Module):
 def test_perturbation_exception_yields_reason_coded_unverified() -> None:
     """Invalid perturbed inputs should be unverified rather than exempted."""
 
-    trace = tl.trace(
+    trace = _trace_saving_args(
         StepInvalidNarrowModel(),
         [torch.tensor([-2.0, 0.5, 1.5, 2.5]), torch.tensor(0)],
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
     )
 
     torch.manual_seed(108)
@@ -2249,11 +2176,7 @@ def test_step_retry_soundly_validates_domain_constrained_perturbation() -> None:
     :class:`StepInvalidNarrowModel` above.
     """
 
-    trace = tl.trace(
-        CholeskyModel(),
-        torch.eye(3).unsqueeze(0) * 2,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(CholeskyModel(), torch.eye(3).unsqueeze(0) * 2)
 
     torch.manual_seed(108)
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
@@ -2267,11 +2190,7 @@ def test_step_retry_soundly_validates_domain_constrained_perturbation() -> None:
 def test_fully_saved_vanilla_model_has_zero_unverified_decisions() -> None:
     """Healthy full-save traces should not produce unverified decisions."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -2283,11 +2202,7 @@ def test_packed_sequence_structural_trace_passes() -> None:
     """Packed-sequence structural metadata should not leave validation unverified."""
 
     model = PackedSequenceStyleModel()
-    trace = tl.trace(
-        model,
-        torch.rand(5, 3, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(model, torch.rand(5, 3, 8))
 
     result = trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
@@ -2301,11 +2216,7 @@ def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:
     """Rerunning a trace should clear cached replay-validation status."""
 
     model = AddReluModel()
-    trace = tl.trace(
-        model,
-        torch.ones(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(model, torch.ones(2, 3))
     trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
     old_status = trace.validation_replay_status
 
@@ -2319,11 +2230,7 @@ def test_validation_status_cache_invalidated_after_same_shape_rerun() -> None:
 def test_validation_status_cache_invalidated_on_fork() -> None:
     """Forks should not inherit a completed validation status."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     trace.validate_forward_pass([_first_output(trace)], validate_metadata=False)
 
     fork = trace.fork("status_check")
@@ -2342,11 +2249,7 @@ def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> No
     redundant layer wins the race.
     """
 
-    trace = tl.trace(
-        BufferOwnerModel(),
-        torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(BufferOwnerModel(), torch.randn(3, 4))
     buffer_op = next(layer for layer in trace._layer_list if layer.is_buffer)
     buffer_op._internal_set("modules", ["self:1"])  # noqa: SLF001
     buffer_op._internal_set("module", "self:1")  # noqa: SLF001
@@ -2358,11 +2261,7 @@ def test_buffer_semantic_ownership_invariant_fires_on_wrong_module_stack() -> No
 def test_backend_neutral_graph_topology_invariant_fires_on_asymmetric_edge() -> None:
     """Non-torch graph topology should catch parent/child asymmetry."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     child = _first_op_with_func(trace, "relu")
     removed_parent = child.parents[0]
     child._internal_set("parents", [])  # noqa: SLF001
@@ -2376,11 +2275,7 @@ def test_backend_neutral_graph_topology_invariant_fires_on_asymmetric_edge() -> 
 def test_pass_count_consistency_invariant_fires_on_op_count_mismatch() -> None:
     """Layer aggregate pass counts must agree with contained op records."""
 
-    trace = tl.trace(
-        AddReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
-    )
+    trace = _trace_saving_args(AddReluModel(), torch.randn(2, 3))
     layer = _first_op_with_func(trace, "__add__")
     layer._internal_set("num_passes", layer.num_passes + 1)  # noqa: SLF001
 
