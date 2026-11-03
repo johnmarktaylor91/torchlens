@@ -23,7 +23,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.37.0"
+__version__ = "2.37.1"
 
 if _TYPE_CHECKING:
     from .data_classes.trace import Trace
