@@ -11,6 +11,7 @@ from .._capture.predicates import _normalize_capture_decision
 from .._capture.projections import _build_record_context
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ..recording.exceptions import RecordContextFieldError
 from ..recording.types import CaptureDecision, CaptureSpec, ModuleStackFrame, RecordContext
 from .node_spec import NodeSpec
@@ -221,8 +222,8 @@ def _append_module_event_lines(lines: list[str], layer_log: Any) -> None:
     # B3R7-R05-1: ``module_call_stack`` is the op's containment stack (the
     # calls it ran inside), not the entered-module stack the old enter-lane
     # semantics implied -- label the line accordingly.
-    active = tuple(getattr(layer_log, "module_call_stack", ()) or ())
-    exited = tuple(getattr(layer_log, "output_of_modules", ()) or ())
+    active = tuple(record_member(layer_log, "module_call_stack", ()) or ())
+    exited = tuple(record_member(layer_log, "output_of_modules", ()) or ())
     if active:
         lines.append("module_stack: " + ", ".join(str(item) for item in active))
     if exited:

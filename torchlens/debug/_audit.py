@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import torch
 
 from .._debug_report import Report, rows_of
+from .._utils._record_group_table import record_member
 from ._common import _compute_ops
 from ._gradients import grad_health
 from ._nan import _nonfinite_kind, bisect_nan, find_nan_in_trace
@@ -184,7 +185,7 @@ def _audit_partial_trace(partial: PartialTrace) -> HealthReport:
     )
     modules = tuple(
         str(module)
-        for module in (getattr(last, "module_call_stack", ()) if last is not None else ())
+        for module in (record_member(last, "module_call_stack", ()) if last is not None else ())
     )
     exception = partial.original_exception
     findings = [
@@ -221,7 +222,7 @@ def _audit_partial_trace(partial: PartialTrace) -> HealthReport:
             else "unknown"
         )
         nonfinite_modules = tuple(
-            str(module) for module in getattr(nonfinite_op, "module_call_stack", ())
+            str(module) for module in record_member(nonfinite_op, "module_call_stack", ())
         )
         findings.append(
             AuditFinding(

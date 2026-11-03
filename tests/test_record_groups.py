@@ -48,7 +48,7 @@ def trace() -> Iterator[tl.Trace]:
 def test_cost_group_is_applied() -> None:
     """The cost rows are live in the refusal tables of both records."""
 
-    assert {"cost", "control_flow", "call", "source", "autograd"} <= ACTIVE_GROUPS
+    assert {"cost", "control_flow", "call", "source", "autograd", "module_context"} <= ACTIVE_GROUPS
     assert len(_OP_COST_ROWS) == 16
     assert len(_LAYER_COST_ROWS) == 17
     assert {old for old, _, _ in _OP_COST_ROWS} <= set(OP_MOVED_MEMBERS)
@@ -70,6 +70,8 @@ def test_group_classes_are_the_public_types(trace: tl.Trace) -> None:
     assert type(layer.source) is tl.types.LayerSource
     assert type(op.autograd) is tl.types.OpAutograd
     assert type(layer.autograd) is tl.types.LayerAutograd
+    assert type(op.module_context) is tl.types.OpModuleContext
+    assert type(layer.module_context) is tl.types.LayerModuleContext
     assert "flops_forward" in dir(op.cost)
     assert "total_flops_forward" in dir(layer.cost)
     assert "OpCost" in repr(op.cost)
@@ -253,6 +255,46 @@ def test_source_and_autograd_groups_read_the_op(trace: tl.Trace) -> None:
         _ = op.code_context
     with pytest.raises(FacadeTeachingError):
         _ = layer.grad_fn_class_name
+
+
+class _Nested(nn.Module):
+    """A Linear inside a Sequential, so module-context members carry values."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.block = nn.Sequential(nn.Linear(3, 3))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.block(x))
+
+
+def test_module_context_group_reads_the_nesting() -> None:
+    """The module-context group serves the stored columns and derives addresses and depth."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(_Nested(), torch.ones(1, 3))
+    try:
+        op = captured.ops["linear_1_1"]
+        context = op.module_context
+        assert context.is_atomic_module is True
+        assert context.atomic_module_call == "block.0:1"
+        assert context.atomic_module_address == "block.0"
+        assert context.atomic_module is captured.modules["block.0"]
+        assert context.call_depth == len(context.call_stack) == len(op.modules)
+        assert context.is_module_output is True
+        source = captured.ops["input_1"].module_context
+        assert source.is_module_input is True
+        assert "block" in source.input_to_modules
+        layer = captured.layers["linear_1"]
+        assert layer.module_context.call_depth == context.call_depth
+        assert layer.module_context.is_module_input == context.is_module_input
+        assert layer.module_context.output_of_modules == layer.__dict__["output_of_modules"]
+        with pytest.raises(FacadeTeachingError):
+            _ = op.module_call_depth
+        with pytest.raises(FacadeTeachingError):
+            _ = layer.output_of_modules
+    finally:
+        captured.cleanup()
 
 
 class _Twice(nn.Module):

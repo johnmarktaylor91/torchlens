@@ -53,6 +53,7 @@ from ..._ir.events import (
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
 from ..._utils._package_frames import is_torchlens_code
+from ..._utils._record_group_table import record_member
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_current_autograd_node_fn,
@@ -895,10 +896,10 @@ def _op_module_address(
     module_address = getattr(op, "module_address", None)
     if module_address is not None:
         return cast(str, module_address)
-    atomic_module_address = getattr(op, "atomic_module_address", None)
+    atomic_module_address = record_member(op, "atomic_module_address", None)
     if atomic_module_address is not None:
         return cast(str, atomic_module_address)
-    output_module_calls = list(getattr(op, "output_of_module_calls", []) or [])
+    output_module_calls = list(record_member(op, "output_of_module_calls", []) or [])
     if output_module_calls:
         return str(output_module_calls[-1]).rsplit(":", 1)[0]
     module_calls = list(getattr(op, "modules", []) or [])

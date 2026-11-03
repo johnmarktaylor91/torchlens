@@ -191,7 +191,7 @@ def _step_members(
 def _stack_head(entry: Any) -> str | None:
     """Return the first module-call-stack entry (the stack join spelling)."""
 
-    stack = list(getattr(entry, "module_call_stack", ()) or ())
+    stack = list(record_member(entry, "module_call_stack", ()) or ())
     return str(stack[0]) if stack else None
 
 
@@ -216,7 +216,7 @@ def _assign_drivers(
         entry_position = position[id(entry)]
         if entry_position in member_positions:
             continue
-        if getattr(entry, "module_call_stack", ()) or ():
+        if record_member(entry, "module_call_stack", ()) or ():
             continue
         is_boundary = getattr(entry, "is_input", False) or getattr(entry, "is_output", False)
         if not is_boundary:

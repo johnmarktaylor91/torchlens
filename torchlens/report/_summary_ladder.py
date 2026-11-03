@@ -30,6 +30,7 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
 from ._factcore import factcore
 from ._summary_columns import (
     ATTENTION_FULL_SQUARE_FUNCS,
@@ -241,7 +242,7 @@ class _ModelIndex:
             shape = getattr(op, "shape", None)
             entry_meta[(label, occurrence)] = (
                 index,
-                tuple(getattr(op, "module_call_stack", ()) or ()),
+                tuple(record_member(op, "module_call_stack", ()) or ()),
                 None if shape is None else tuple(int(dim) for dim in shape),
                 int(getattr(op, "pass_number", occurrence + 1) or (occurrence + 1)),
                 op,

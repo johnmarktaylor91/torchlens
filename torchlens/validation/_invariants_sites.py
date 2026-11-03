@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from .._data_classes._layer_sites import layer_site_key
 from .._data_classes._site_key import ROOT_CALL_INSTANCE, SITE_KEY_PREFIX, parse_site_key
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -106,14 +107,14 @@ def _check_site_key_uniqueness(ops: list, name: str) -> None:
 
     equivalence_counts: dict[object, int] = {}
     for op in ops:
-        if not tuple(getattr(op, "module_call_stack", ()) or ()):
+        if not tuple(record_member(op, "module_call_stack", ()) or ()):
             equivalence_counts[getattr(op, "equivalence_class", None)] = (
                 equivalence_counts.get(getattr(op, "equivalence_class", None), 0) + 1
             )
 
     seen: dict[tuple[str, object], str] = {}
     for op in ops:
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         if stack:
             call_instance: object = stack[-1]
         else:

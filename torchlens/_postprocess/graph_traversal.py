@@ -368,13 +368,15 @@ def _add_output_layers(
 
         new_output_node.module = None
         new_output_node.modules = []
-        new_output_node.module_call_stack = []
-        new_output_node.input_to_module_calls = []
-        new_output_node.output_of_modules = [mod_pass[0] for mod_pass in output_node.modules]
-        new_output_node.output_of_module_calls = output_node.modules
-        new_output_node.is_module_output = False
-        new_output_node.is_atomic_module = False
-        new_output_node.atomic_module_call = None
+        new_output_node._module_context_call_stack = []
+        new_output_node._module_context_input_to_module_calls = []
+        new_output_node._module_context_output_of_modules = [
+            mod_pass[0] for mod_pass in output_node.modules
+        ]
+        new_output_node._module_context_output_of_module_calls = output_node.modules
+        new_output_node._module_context_is_module_output = False
+        new_output_node._module_context_is_atomic_module = False
+        new_output_node._module_context_atomic_module_call = None
 
         # Fix ancestry information:
 

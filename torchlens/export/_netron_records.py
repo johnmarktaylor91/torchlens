@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._common import _iter_layers, _repeated_layer_labels
 from ._netron_fields import (
     build_leaf_attrs,
@@ -168,7 +169,7 @@ def _buffer_hidden(entry: Any, policy: str) -> bool:
 def _owning_module(entry: Any) -> str:
     """Return the innermost containing module-call address, or ``""`` for root."""
 
-    stack = getattr(entry, "module_call_stack", None) or ()
+    stack = record_member(entry, "module_call_stack", None) or ()
     return str(stack[-1]) if stack else ""
 
 

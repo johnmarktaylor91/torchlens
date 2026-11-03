@@ -462,7 +462,7 @@ def _forward_op_is_module_output(op: "Layer") -> bool:
         if ops is not None:
             first_pass = next(iter(ops.values()), None)
             if first_pass is not None:
-                return bool(getattr(first_pass, "is_module_output", False))
+                return bool(record_member(first_pass, "is_module_output", False))
         return False
     return bool(get_multipass_attr(op, "is_module_output", False, multipass=False))
 
@@ -481,10 +481,10 @@ def _module_key_for_forward_op(op: "Layer") -> str | None:
         Module-call key or None for top-level ops.
     """
 
-    output_modules = list(getattr(op, "output_of_modules", []) or [])
+    output_modules = list(record_member(op, "output_of_modules", []) or [])
     if _forward_op_is_module_output(op) and output_modules:
         output_module = str(output_modules[0])
-        output_calls = list(getattr(op, "output_of_module_calls", []) or [])
+        output_calls = list(record_member(op, "output_of_module_calls", []) or [])
         for output_call in output_calls:
             if str(output_call).split(":", 1)[0] == output_module:
                 return str(output_call)
@@ -962,7 +962,7 @@ def _collapse_address_for_node(
     # account, even at the top level or when reused across split call sites. Drop
     # its innermost (own) module address so only genuinely-collapsible ancestor
     # modules remain eligible to absorb it.
-    if getattr(node, "is_atomic_module", False) and modules:
+    if record_member(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return None

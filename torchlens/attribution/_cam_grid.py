@@ -37,6 +37,8 @@ from torch.nn import Module
 from torchlens.attribution._core import _temporarily_eval
 from torchlens.attribution._result import AttributionError
 
+from .._utils._record_group_table import record_member
+
 TokenReshape = Callable[[Tensor], Tensor]
 
 _DOCS_POINTER = "See docs/reference/attribution.md, section grad_cam."
@@ -323,9 +325,9 @@ def _module_outputs(graph: _TraceGraph) -> dict[str, tuple[int, str]]:
     labels: dict[str, list[str]] = {}
     calls: dict[str, set[str]] = {}
     for label, op in graph.ops.items():
-        for address in tuple(op.output_of_modules or ()):
+        for address in tuple(op.module_context.output_of_modules or ()):
             labels.setdefault(str(address), []).append(label)
-        for call in tuple(getattr(op, "output_of_module_calls", None) or ()):
+        for call in tuple(record_member(op, "output_of_module_calls", None) or ()):
             address, _, index = str(call).rpartition(":")
             calls.setdefault(address or str(call), set()).add(index)
     return {

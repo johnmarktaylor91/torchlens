@@ -17,6 +17,7 @@ import torchlens as tl
 import torchlens._visualization._condensed_flow as condensed_flow
 import torchlens._visualization.auto_collapse as auto_collapse
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
+from torchlens._utils._record_group_table import record_member
 from torchlens._visualization._render_common import format_collapsed_module_contents
 from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
 from torchlens._visualization.auto_collapse import (
@@ -1641,7 +1642,7 @@ def _atomic_own_output_ops(trace: tl.Trace, address: str) -> tuple[Any, ...]:
         if (
             modules
             and modules[-1].rsplit(":", 1)[0] == address
-            and getattr(op, "is_atomic_module", False)
+            and record_member(op, "is_atomic_module", False)
             and not getattr(op, "is_buffer", False)
         ):
             surfaced.append(op)
@@ -3076,7 +3077,8 @@ def test_v2_max_op_segment_renders_dashed_box_and_contracts_edges(
         first_segment_members = [trace.ops[label] for label in first_segment.ops]
         assert first_segment.owner is None
         assert any(
-            op.is_atomic_module and op.modules == ("stem:1",) for op in first_segment_members
+            op.module_context.is_atomic_module and op.modules == ("stem:1",)
+            for op in first_segment_members
         )
         assert any(
             op.modules and op.modules[0].startswith("blocks:") for op in first_segment_members

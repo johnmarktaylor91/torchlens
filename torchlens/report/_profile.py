@@ -722,7 +722,7 @@ def _innermost_call_by_label(trace: Trace) -> dict[str, str | None]:
     for op in ops:
         label = str(getattr(op, "label", None) or getattr(op, "layer_label", ""))
         layer_label = str(getattr(op, "layer_label", ""))
-        stack = tuple(getattr(op, "module_call_stack", ()) or ())
+        stack = tuple(record_member(op, "module_call_stack", ()) or ())
         _register_spellings(
             owners, label, layer_label, str(stack[-1]) if stack else None, bare_counts
         )

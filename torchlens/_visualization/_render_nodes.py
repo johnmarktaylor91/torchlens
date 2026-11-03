@@ -1589,7 +1589,11 @@ def _atomic_module_sibling_counts(trace: "Trace") -> dict[str, int]:
 
     counts: dict[str, int] = {}
     for other in trace._layer_logs.values():
-        if isinstance(other, Layer) and getattr(other, "is_atomic_module", False) and other.modules:
+        if (
+            isinstance(other, Layer)
+            and record_member(other, "is_atomic_module", False)
+            and other.modules
+        ):
             other_address = other.modules[-1].rsplit(":", 1)[0]
             counts[other_address] = counts.get(other_address, 0) + 1
     return counts
@@ -1737,7 +1741,7 @@ def _get_node_address_shape_color(
     else:
         only_non_buffer_layer = False
 
-    if (node.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
+    if (node.module_context.is_atomic_module or only_non_buffer_layer) and (len(node.modules) > 0):
         if isinstance(source_node, Op):
             module_pass_exited = node.modules[-1]
             module, _ = module_pass_exited.split(":")
@@ -1794,9 +1798,9 @@ def _is_only_non_buffer_in_module(
     """
     # Check whether it leaves its module:
     if not (
-        (len(node.output_of_modules) > 0)
+        (len(node.module_context.output_of_modules) > 0)
         and (len(node.modules) > 0)
-        and (node.modules[-1].split(":")[0] in node.output_of_modules)
+        and (node.modules[-1].split(":")[0] in node.module_context.output_of_modules)
     ):
         return False
 
@@ -1997,7 +2001,7 @@ def compute_default_node_lines(
     # An atomic module rectangle carries its split call range on the ``@module``
     # marking (e.g. ``@shared:1-2,3-5``); keep the title's count clean and
     # non-redundant in that case, and fall back to a plain ``(xN)`` count.
-    atomic_marking_has_range = getattr(layer_log, "is_atomic_module", False) and (
+    atomic_marking_has_range = record_member(layer_log, "is_atomic_module", False) and (
         ":" in node_address
     )
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):

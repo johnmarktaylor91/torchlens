@@ -60,7 +60,7 @@ def _get_lowest_module_for_two_nodes(
         node1_modules = [module.split(":")[0] for module in node1_modules]
         node2_modules = [module.split(":")[0] for module in node2_modules]
 
-    if node1.is_atomic_module:
+    if node1.module_context.is_atomic_module:
         node1_nested_modules = node1_modules[:-1]
     else:
         node1_nested_modules = node1_modules[:]
@@ -73,9 +73,9 @@ def _get_lowest_module_for_two_nodes(
         return -1  # no submodule contains them both.
 
     if node1 == node2:
-        if node1.is_atomic_module and (len(node1_modules) == 1):
+        if node1.module_context.is_atomic_module and (len(node1_modules) == 1):
             return -1
-        elif node1.is_atomic_module and (len(node1_modules) > 1):
+        elif node1.module_context.is_atomic_module and (len(node1_modules) > 1):
             module = node1_modules[-2]
         else:
             module = node1_modules[-1]

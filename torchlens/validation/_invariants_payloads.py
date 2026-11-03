@@ -414,19 +414,19 @@ def _check_op_log_fields(ml: Trace) -> None:
         # entry, and ``module_call_depth`` must be its length. Membership of
         # the entries themselves is ``module_containment_logic``'s check (via
         # ``modules``); equality makes it cover this field too.
-        if tuple(lpl.module_call_stack) != tuple(lpl.modules):
+        if tuple(lpl.module_context.call_stack) != tuple(lpl.modules):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: module_call_stack={tuple(lpl.module_call_stack)!r} "
+                f"Layer {label}: module_call_stack={tuple(lpl.module_context.call_stack)!r} "
                 f"!= modules={tuple(lpl.modules)!r}; the stack must be the "
                 f"root-first ModuleCall labels active for this op (a fed-call "
                 f"or address-form value is the retired tri-fact bug)",
             )
-        if lpl.module_call_depth != len(lpl.module_call_stack):
+        if lpl.module_context.call_depth != len(lpl.module_context.call_stack):
             raise MetadataInvariantError(
                 name,
-                f"Layer {label}: module_call_depth={lpl.module_call_depth} != "
-                f"len(module_call_stack)={len(lpl.module_call_stack)}",
+                f"Layer {label}: module_call_depth={lpl.module_context.call_depth} != "
+                f"len(module_call_stack)={len(lpl.module_context.call_stack)}",
             )
 
         # Label format: pass-qualified label has ":" iff multi-pass

@@ -1194,7 +1194,7 @@ def _owner_module_key_for_node(
     if collapse_address is not None:
         return collapse_address if vis_mode == "unrolled" else collapse_address.split(":", 1)[0]
     modules = list(getattr(node, "modules", ()) or ())
-    if getattr(node, "is_atomic_module", False) and modules:
+    if record_member(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return -1

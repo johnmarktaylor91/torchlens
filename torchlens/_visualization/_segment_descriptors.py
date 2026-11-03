@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from .._utils._record_group_table import record_member
 from .collapse_plan import RenderContext, SegmentDescriptor
 
 if TYPE_CHECKING:
@@ -156,7 +157,7 @@ def _effective_render_module_stack(op: Op) -> tuple[str, ...]:
     """
 
     modules = [str(module) for module in getattr(op, "modules", ()) or ()]
-    if getattr(op, "is_atomic_module", False) and modules:
+    if record_member(op, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     return tuple(modules)
 

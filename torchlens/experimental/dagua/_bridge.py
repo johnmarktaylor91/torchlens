@@ -801,7 +801,9 @@ def trace_to_dagua_graph(
         shape_override = op_shape
         if getattr(entry, "is_buffer", False):
             shape_override = buffer_shape
-        elif getattr(entry, "is_module_output", False) or getattr(entry, "is_atomic_module", False):
+        elif record_member(entry, "is_module_output", False) or record_member(
+            entry, "is_atomic_module", False
+        ):
             shape_override = module_shape
 
         if not getattr(entry, "has_input_ancestor", True):

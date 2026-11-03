@@ -264,8 +264,8 @@ def layer_leaf_module_ops(layer: Layer) -> set[Any]:
 
     result = set()
     for pass_log in layer.ops.values():
-        if pass_log.is_atomic_module:
-            result.add(pass_log.atomic_module_call)
+        if pass_log.module_context.is_atomic_module:
+            result.add(pass_log.module_context.atomic_module_call)
     return result
 
 

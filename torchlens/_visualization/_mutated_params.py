@@ -292,7 +292,7 @@ def _owner_module_path(entry: Any, param: Any, vis_mode: str) -> tuple[str, ...]
     modules = [str(module) for module in (getattr(entry, "modules", ()) or ())]
     if vis_mode == "rolled":
         modules = [module.split(":")[0] for module in modules]
-    rendered_scope = modules[:-1] if getattr(entry, "is_atomic_module", False) else modules
+    rendered_scope = modules[:-1] if record_member(entry, "is_atomic_module", False) else modules
     for depth, module in enumerate(rendered_scope):
         if module.split(":")[0] == owner:
             return tuple(rendered_scope[: depth + 1])

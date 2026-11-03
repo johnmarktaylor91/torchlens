@@ -530,7 +530,7 @@ def test_module_boundary_injected_ops_anchor_and_round_trip(tmp_path) -> None:
     records = injected_ops(logged)
     assert records
     host = next(op for op in logged.ops if getattr(op, "is_edited", False))
-    assert "fc1:1" in host.output_of_module_calls
+    assert "fc1:1" in host.module_context.output_of_module_calls
     for record in records:
         assert record.host_label == host.label
         assert record.provenance.host_site_key == host.site_key

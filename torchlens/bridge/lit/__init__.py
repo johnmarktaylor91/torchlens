@@ -24,6 +24,7 @@ from typing import Any
 import torch
 from torch import nn
 
+from ..._utils._record_group_table import record_member
 from . import _pooling, _refusals, _runtime, _sites
 
 __all__ = ["dataset", "layout", "model"]
@@ -221,7 +222,7 @@ def _save_selection(probe: Any, specs: list[_sites.SiteSpec]) -> Any:
     for out_op in probe.output_ops:
         for parent_label in out_op.parents:
             parent = label_map.get(str(parent_label))
-            stack = tuple(getattr(parent, "module_call_stack", ())) if parent else ()
+            stack = tuple(record_member(parent, "module_call_stack", ())) if parent else ()
             if not stack:
                 return None
             addresses.add(stack[-1].rsplit(":", 1)[0])

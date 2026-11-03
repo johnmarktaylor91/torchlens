@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Any
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._event import NarrationEvent
 from ._format import compact_device, compact_dtype, render_line
 
@@ -52,7 +53,7 @@ def _op_row(op: Any, ordinal: int, depth: int) -> NarrationEvent:
 def _module_depth(op: Any) -> int:
     """Module nesting depth for indentation, tolerant of raw entries."""
 
-    stack = getattr(op, "module_call_stack", None) or getattr(op, "modules", None) or ()
+    stack = record_member(op, "module_call_stack", None) or getattr(op, "modules", None) or ()
     try:
         return len(stack)
     except TypeError:

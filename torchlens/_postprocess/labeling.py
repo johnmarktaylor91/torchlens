@@ -175,9 +175,11 @@ def _log_final_info_for_layers(self: "Trace") -> None:
 
         # Log the module hierarchy information:
         _log_module_hierarchy_info_for_layer(self, layer_entry, _shadow_sets)
-        if layer_entry.atomic_module_call is not None:
-            submodule_pass_nice_name = ":".join([str(i) for i in layer_entry.atomic_module_call])
-            layer_entry.atomic_module_call = submodule_pass_nice_name
+        if layer_entry.module_context.atomic_module_call is not None:
+            submodule_pass_nice_name = ":".join(
+                [str(i) for i in layer_entry.module_context.atomic_module_call]
+            )
+            layer_entry._module_context_atomic_module_call = submodule_pass_nice_name
 
         # Tally the tensor sizes. Output pseudo-rows ALIAS the producing op's
         # tensor (identity partition, A1): the producer owns those bytes, so
@@ -896,11 +898,13 @@ def _add_lookup_keys_for_layer_entry(
 
     # Relabel the module ops if this pass built module metadata:
     if self._options_mode in {"exhaustive", "predicate"}:
-        layer_entry.output_of_module_calls = [
-            _module_call_label(module_call) for module_call in layer_entry.output_of_module_calls
+        layer_entry._module_context_output_of_module_calls = [
+            _module_call_label(module_call)
+            for module_call in layer_entry.module_context.output_of_module_calls
         ]
-        layer_entry.input_to_module_calls = [
-            _module_call_label(module_call) for module_call in layer_entry.input_to_module_calls
+        layer_entry._module_context_input_to_module_calls = [
+            _module_call_label(module_call)
+            for module_call in layer_entry.module_context.input_to_module_calls
         ]
         if layer_entry.module is not None:
             layer_entry.module = _module_call_label(layer_entry.module)
@@ -910,8 +914,8 @@ def _add_lookup_keys_for_layer_entry(
         # B3R7-R05-1: ``module_call_stack`` carries the same containment fact
         # as ``modules`` (seeded from the modules facet at ingest), so it is
         # relabeled to canonical ``address:N`` ModuleCall labels in lockstep.
-        layer_entry.module_call_stack = [
-            _module_call_label(module_call) for module_call in layer_entry.module_call_stack
+        layer_entry._module_context_call_stack = [
+            _module_call_label(module_call) for module_call in layer_entry.module_context.call_stack
         ]
         if (layer_entry.module is None) and len(layer_entry.modules) > 0:
             layer_entry.module = layer_entry.modules[-1]
@@ -923,7 +927,7 @@ def _add_lookup_keys_for_layer_entry(
     # ``fc``) resolves to its own output op instead of turning ambiguous. The
     # alias stays reachable through its own labels and its ``output`` role key.
     is_output_alias = bool(layer_entry.is_output)
-    for module_pass in layer_entry.output_of_module_calls:
+    for module_pass in layer_entry.module_context.output_of_module_calls:
         module_name, _ = module_pass.rsplit(":", 1)
         module_keys = [module_pass]
         if self._module_capture_ws.module_build_data["module_num_calls"][module_name] == 1:

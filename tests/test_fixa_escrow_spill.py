@@ -177,7 +177,7 @@ def test_config_built_clip_visual_projection_bit_equal_through_forced_spill(forc
     projection_ops = [
         op
         for op in structure._layer_list
-        if "visual_projection" in (op.output_of_modules or ())
+        if "visual_projection" in (op.module_context.output_of_modules or ())
         and not getattr(op, "is_output", False)
     ]
     assert projection_ops, "no visual_projection op captured on the R0 CLIP fixture"
@@ -230,7 +230,7 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     capture = _detached()
     log = tl.trace(model, x, capture=capture, save=["conv2d_5_14"])
     op = log["conv2d_5_14"]
-    assert op.output_of_modules == ("layer1.1.conv2",)
+    assert op.module_context.output_of_modules == ("layer1.1.conv2",)
     assert torch.equal(op.out, _eager_module_output(model, "layer1.1.conv2", x))
 
     ordinal_capture = _detached()
@@ -238,11 +238,13 @@ def test_resnet18_batch8_deferred_spellings_complete_and_materialize_bit_exact()
     saved = [
         op
         for op in ordinal_log._layer_list
-        if getattr(op, "has_saved_activation", False) and op.output_of_modules
+        if getattr(op, "has_saved_activation", False) and op.module_context.output_of_modules
     ]
     assert saved, "positive-ordinal save retained no module-attributed payloads"
     for op in saved:
-        assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
+        assert torch.equal(
+            op.out, _eager_module_output(model, op.module_context.output_of_modules[-1], x)
+        )
 
     output_capture = _detached()
     output_log = tl.trace(model, x, capture=output_capture, save=["output"])
@@ -278,8 +280,10 @@ def test_resnet50_batch1_op_label_selective_save_completes():
     log = tl.trace(model, x, capture=capture, save=[label])
     op = log[label]
     assert op.layer_type == "conv2d"
-    assert op.output_of_modules, "the tenth conv2d op must be a module output"
-    assert torch.equal(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
+    assert op.module_context.output_of_modules, "the tenth conv2d op must be a module output"
+    assert torch.equal(
+        op.out, _eager_module_output(model, op.module_context.output_of_modules[-1], x)
+    )
 
 
 @pytest.mark.heavy
@@ -297,7 +301,7 @@ def test_vit_b_16_op_label_selective_save_completes():
         op
         for op in structure._layer_list
         if op.layer_label.startswith("linear_")
-        and op.output_of_modules
+        and op.module_context.output_of_modules
         and not getattr(op, "is_output", False)
     ]
     assert len(module_linears) > 4, "expected module-attributed linear ops on vit_b_16"
@@ -309,11 +313,13 @@ def test_vit_b_16_op_label_selective_save_completes():
     # eager forward keeps torch's MHA fast path (disabled under any
     # torch-function interception), so eager comparison gets kernel-path
     # tolerance, not bit-exactness.
-    live = tl.trace(model, x, save=tl.in_module(op.output_of_modules[-1]))
+    live = tl.trace(model, x, save=tl.in_module(op.module_context.output_of_modules[-1]))
     assert torch.equal(op.out, live[target.layer_label].out), (
         "deferred escrow door and live predicate door disagree bit-wise"
     )
-    torch.testing.assert_close(op.out, _eager_module_output(model, op.output_of_modules[-1], x))
+    torch.testing.assert_close(
+        op.out, _eager_module_output(model, op.module_context.output_of_modules[-1], x)
+    )
 
 
 @pytest.mark.heavy
@@ -352,7 +358,7 @@ def test_real_clip_linear_73_288_bit_equal_to_visual_projection():
         save=["linear_73_300"],
     )
     op = log["linear_73_300"]
-    assert op.output_of_modules == ("visual_projection",)
+    assert op.module_context.output_of_modules == ("visual_projection",)
     assert torch.equal(op.out, oracle), (
         "CLIP linear_73_300 escrow payload is not bit-equal to the projected image embedding"
     )

@@ -20,7 +20,9 @@ from collections.abc import Mapping
 from typing import Any
 
 #: Groups whose rows are applied (moved, renamed or removed).
-ACTIVE_GROUPS: frozenset[str] = frozenset({"cost", "control_flow", "call", "source", "autograd"})
+ACTIVE_GROUPS: frozenset[str] = frozenset(
+    {"cost", "control_flow", "call", "source", "autograd", "module_context"}
+)
 
 #: ``(former flat name, group | "rename" | "removed", new leaf name)``.
 OP_MEMBER_MOVES: tuple[tuple[str, str, str], ...] = (

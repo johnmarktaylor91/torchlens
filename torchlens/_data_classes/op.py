@@ -129,6 +129,7 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
 from ._record_groups import OpControlFlow, OpCost
 from ._record_groups_autograd import OpAutograd
 from ._record_groups_call import OpCall
+from ._record_groups_module_context import OpModuleContext
 from ._record_groups_source import OpSource
 from ._state_adapter import state_items, state_restore
 from .container import (
@@ -1180,7 +1181,6 @@ if TYPE_CHECKING:
     from ..receptive_field._view import ReceptiveFieldView
     from .func_call_location import FuncCallLocation
     from .layer import Layer
-    from .module import Module
     from .param import Param
     from .trace import Trace
 
@@ -1393,14 +1393,14 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         module: Any
         _address_normalized: Any
         modules: Any
-        module_call_stack: Any
-        input_to_module_calls: Any
-        module_entry_arg_keys: Any
-        output_of_modules: Any
-        output_of_module_calls: Any
-        is_module_output: Any
-        is_atomic_module: Any
-        atomic_module_call: Any
+        _module_context_call_stack: Any
+        _module_context_input_to_module_calls: Any
+        _module_context_entry_arg_keys: Any
+        _module_context_output_of_modules: Any
+        _module_context_output_of_module_calls: Any
+        _module_context_is_module_output: Any
+        _module_context_is_atomic_module: Any
+        _module_context_atomic_module_call: Any
         _call_config: Any
         _source_trace_ref: Any
         _facets_cache: Any
@@ -1984,6 +1984,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpAutograd(self)
 
     @property
+    def module_context(self) -> OpModuleContext:
+        """Module-nesting facts of this Op (``op.module_context.call_depth``)."""
+
+        return OpModuleContext(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None``."""
 
@@ -2231,17 +2237,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return containers_from_op(self)
 
     @property
-    def is_module_input(self) -> bool:
-        """Whether this Op's output feeds into at least one ModuleCall as an input.
-
-        The Op itself is OUTSIDE the module (the upstream producer). Equivalent to
-        ``bool(self.input_to_module_calls)``. Direction-of-data-flow framing:
-        inputs come FROM outside the module.
-        """
-
-        return bool(self.input_to_module_calls)
-
-    @property
     def atomic_module_call_label(self) -> str | None:
         """Stable ModuleCall label for an atomic-module output Op, else ``None``.
 
@@ -2249,26 +2244,7 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         the ModuleCall record.
         """
 
-        return cast("str | None", self.atomic_module_call)
-
-    @property
-    def atomic_module_address(self) -> str | None:
-        """Module address (no ``:N``) for an atomic-module output Op, else ``None``.
-
-        Derived from ``atomic_module_call_label`` by stripping the ``:N`` pass
-        suffix; pairs with the ``atomic_module`` resolver.
-        """
-
-        label = self.atomic_module_call_label
-        if label is None:
-            return None
-        return label.rsplit(":", 1)[0]
-
-    @property
-    def atomic_module(self) -> "Module | None":
-        """Module record resolved from ``atomic_module_address``, or ``None``."""
-
-        return _op_relations.atomic_module(self)
+        return cast("str | None", self._module_context_atomic_module_call)
 
     @property
     def has_parents(self) -> bool:
@@ -2441,22 +2417,6 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
     def in_submodule(self) -> bool:
         """Whether this operation was computed inside a submodule."""
         return self.module is not None
-
-    @property
-    def module_call_depth(self) -> int:
-        """Depth of ``module_call_stack``, the op's active ModuleCall nesting.
-
-        ``module_call_stack`` holds the same containment fact as ``modules``
-        (root-first ModuleCall labels active for this op; B3R7-R05-1 tied the
-        two by invariant), so the length of either is this depth.
-        """
-        return len(self.modules)
-
-    @property
-    def input_to_modules(self) -> list[str]:
-        """Module addresses (no ``:N``) whose input this Op's output fed."""
-
-        return _op_relations.input_to_modules(self)
 
     @property
     def gradient_transform(self) -> Callable[..., Any] | None:
@@ -3217,8 +3177,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         s += f"\n\tTensor info: shape {self.shape}, dtype {self.dtype}"
         s += f"\n\tComputed from params: {self.has_params}"
         s += f"\n\tComputed in modules: {self.modules}"
-        s += f"\n\tOutput of modules: {self.output_of_module_calls}"
-        if self.is_atomic_module:
+        s += f"\n\tOutput of modules: {self.module_context.output_of_module_calls}"
+        if self.module_context.is_atomic_module:
             s += " (bottom-level submodule output)"
         else:
             s += " (not bottom-level submodule output)"

@@ -15,6 +15,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..._utils._record_group_table import record_member
 from ._errors import ModelExplorerExportError
 from ._ids import escape_component
 
@@ -38,7 +39,7 @@ def address_call_counts(entries: list[Any]) -> dict[str, set[int]]:
 
     counts: dict[str, set[int]] = {}
     for entry in entries:
-        for stack_entry in getattr(entry, "module_call_stack", ()) or ():
+        for stack_entry in record_member(entry, "module_call_stack", ()) or ():
             address, call_index = _split_stack_entry(str(stack_entry))
             if address is not None and call_index is not None:
                 counts.setdefault(address, set()).add(call_index)
@@ -92,7 +93,7 @@ def namespace_for_entry(
     # Essential complexity (CC>10 named): one linear walk owns the whole
     # derivation -- strip seeding, continuity verification, strict refusal,
     # dot-split, and qualification share loop state a split would smear.
-    stack = [str(item) for item in (getattr(entry, "module_call_stack", ()) or ())]
+    stack = [str(item) for item in (record_member(entry, "module_call_stack", ()) or ())]
     components: list[str] = []
     levels: list[NamespaceLevel] = []
     previous_address: str | None = None

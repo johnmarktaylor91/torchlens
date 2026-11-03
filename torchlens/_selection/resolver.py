@@ -18,6 +18,7 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     walk_selector,
 )
+from .._utils._record_group_table import record_member
 from ._site_refusals import (
     check_site_query_arguments,
     refuse_excess_fanout,
@@ -240,7 +241,7 @@ class _SiteTable:
                 "func_name": getattr(site, "func_name", getattr(site, "name", None)),
                 "module": getattr(site, "module", None),
                 "modules": getattr(site, "modules", ()),
-                "output_of_module_calls": getattr(site, "output_of_module_calls", ()),
+                "output_of_module_calls": record_member(site, "output_of_module_calls", ()),
             }
             for site, signal in zip(
                 map(_site_record, self._sites), self._site_signals(), strict=True

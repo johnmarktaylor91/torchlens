@@ -49,6 +49,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 
 __all__ = [
     "InjectedOp",
@@ -509,7 +510,7 @@ def _module_boundary_host(ops: tuple[Any, ...], host_label: str) -> Any | None:
 
     fallback: Any | None = None
     for op in ops:
-        exits = getattr(op, "output_of_module_calls", None) or ()
+        exits = record_member(op, "output_of_module_calls", None) or ()
         if host_label not in exits:
             continue
         if getattr(op, "is_edited", False):

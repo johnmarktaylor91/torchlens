@@ -215,7 +215,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -244,7 +243,16 @@
     "macs_backward": null,
     "macs_total": null,
     "module": "conv:1",
-    "module_call_depth": 1,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 1,
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
+    ],
     "modules": [
      "conv:1"
     ],
@@ -538,7 +546,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": true,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -563,7 +570,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -817,7 +829,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
@@ -842,7 +853,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -1105,7 +1121,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -1129,7 +1144,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -1974,11 +1994,6 @@
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": {
-     "__ref__": "Module",
-     "label": "conv"
-    },
-    "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -2309,7 +2324,6 @@
      "torch.Size([1, 1, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -2328,7 +2342,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": true,
     "is_orphan": false,
     "is_output": false,
@@ -2365,9 +2378,31 @@
     "min_distance_from_input": 1,
     "min_distance_to_output": 2,
     "module": "conv:1",
-    "module_call_depth": 1,
     "module_call_stack": [
      "conv:1"
+    ],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": {
+     "__ref__": "Module",
+     "label": "conv"
+    },
+    "module_context.atomic_module_address": "conv",
+    "module_context.atomic_module_call": "conv:1",
+    "module_context.call_depth": 1,
+    "module_context.call_stack": [
+     "conv:1"
+    ],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": true,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
     ],
     "module_entry_arg_keys": {},
     "modules": [
@@ -2575,8 +2610,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -2769,9 +2802,6 @@
     "input_to_module_calls": [
      "conv:1"
     ],
-    "input_to_modules": [
-     "conv"
-    ],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -2790,7 +2820,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": true,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -2825,8 +2854,29 @@
     "min_distance_from_input": 0,
     "min_distance_to_output": 3,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {
+     "\"conv:1\"": [
+      0
+     ]
+    },
+    "module_context.input_to_module_calls": [
+     "conv:1"
+    ],
+    "module_context.input_to_modules": [
+     "conv"
+    ],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {
      "\"conv:1\"": [
       0
@@ -2969,8 +3019,6 @@
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -3219,7 +3267,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -3238,7 +3285,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": true,
@@ -3273,8 +3319,21 @@
     "min_distance_from_input": 3,
     "min_distance_to_output": 0,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -3433,8 +3492,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -3688,7 +3745,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -3707,7 +3763,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -3741,8 +3796,21 @@
     "min_distance_from_input": 2,
     "min_distance_to_output": 1,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -5018,7 +5086,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -5047,7 +5114,16 @@
     "macs_backward": null,
     "macs_total": null,
     "module": "conv:1",
-    "module_call_depth": 1,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 1,
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
+    ],
     "modules": [
      "conv:1"
     ],
@@ -5341,7 +5417,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": true,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -5366,7 +5441,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -5620,7 +5700,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
@@ -5645,7 +5724,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -5908,7 +5992,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -5932,7 +6015,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -6777,11 +6865,6 @@
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": {
-     "__ref__": "Module",
-     "label": "conv"
-    },
-    "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -7112,7 +7195,6 @@
      "torch.Size([1, 1, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -7131,7 +7213,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": true,
     "is_orphan": false,
     "is_output": false,
@@ -7168,9 +7249,31 @@
     "min_distance_from_input": 1,
     "min_distance_to_output": 2,
     "module": "conv:1",
-    "module_call_depth": 1,
     "module_call_stack": [
      "conv:1"
+    ],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": {
+     "__ref__": "Module",
+     "label": "conv"
+    },
+    "module_context.atomic_module_address": "conv",
+    "module_context.atomic_module_call": "conv:1",
+    "module_context.call_depth": 1,
+    "module_context.call_stack": [
+     "conv:1"
+    ],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": true,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
     ],
     "module_entry_arg_keys": {},
     "modules": [
@@ -7378,8 +7481,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -7572,9 +7673,6 @@
     "input_to_module_calls": [
      "conv:1"
     ],
-    "input_to_modules": [
-     "conv"
-    ],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -7593,7 +7691,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": true,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -7628,8 +7725,29 @@
     "min_distance_from_input": 0,
     "min_distance_to_output": 3,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {
+     "\"conv:1\"": [
+      0
+     ]
+    },
+    "module_context.input_to_module_calls": [
+     "conv:1"
+    ],
+    "module_context.input_to_modules": [
+     "conv"
+    ],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {
      "\"conv:1\"": [
       0
@@ -7772,8 +7890,6 @@
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -8022,7 +8138,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -8041,7 +8156,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": true,
@@ -8076,8 +8190,21 @@
     "min_distance_from_input": 3,
     "min_distance_to_output": 0,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -8236,8 +8363,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -8491,7 +8616,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -8510,7 +8634,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -8544,8 +8667,21 @@
     "min_distance_from_input": 2,
     "min_distance_to_output": 1,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -9823,7 +9959,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -9852,7 +9987,16 @@
     "macs_backward": null,
     "macs_total": null,
     "module": "conv:1",
-    "module_call_depth": 1,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 1,
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
+    ],
     "modules": [
      "conv:1"
     ],
@@ -10146,7 +10290,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": true,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -10171,7 +10314,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -10425,7 +10573,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
@@ -10450,7 +10597,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -10713,7 +10865,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -10737,7 +10888,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -11582,11 +11738,6 @@
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": {
-     "__ref__": "Module",
-     "label": "conv"
-    },
-    "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -11917,7 +12068,6 @@
      "torch.Size([1, 1, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -11936,7 +12086,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": true,
     "is_orphan": false,
     "is_output": false,
@@ -11973,9 +12122,31 @@
     "min_distance_from_input": 1,
     "min_distance_to_output": 2,
     "module": "conv:1",
-    "module_call_depth": 1,
     "module_call_stack": [
      "conv:1"
+    ],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": {
+     "__ref__": "Module",
+     "label": "conv"
+    },
+    "module_context.atomic_module_address": "conv",
+    "module_context.atomic_module_call": "conv:1",
+    "module_context.call_depth": 1,
+    "module_context.call_stack": [
+     "conv:1"
+    ],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": true,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
     ],
     "module_entry_arg_keys": {},
     "modules": [
@@ -12183,8 +12354,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -12377,9 +12546,6 @@
     "input_to_module_calls": [
      "conv:1"
     ],
-    "input_to_modules": [
-     "conv"
-    ],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -12398,7 +12564,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": true,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -12433,8 +12598,29 @@
     "min_distance_from_input": 0,
     "min_distance_to_output": 3,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {
+     "\"conv:1\"": [
+      0
+     ]
+    },
+    "module_context.input_to_module_calls": [
+     "conv:1"
+    ],
+    "module_context.input_to_modules": [
+     "conv"
+    ],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {
      "\"conv:1\"": [
       0
@@ -12577,8 +12763,6 @@
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -12827,7 +13011,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -12846,7 +13029,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": true,
@@ -12881,8 +13063,21 @@
     "min_distance_from_input": 3,
     "min_distance_to_output": 0,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -13041,8 +13236,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -13296,7 +13489,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -13315,7 +13507,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -13349,8 +13540,21 @@
     "min_distance_from_input": 2,
     "min_distance_to_output": 1,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -14560,7 +14764,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -14589,7 +14792,16 @@
     "macs_backward": null,
     "macs_total": null,
     "module": "conv:1",
-    "module_call_depth": 1,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 1,
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
+    ],
     "modules": [
      "conv:1"
     ],
@@ -14883,7 +15095,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": true,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -14908,7 +15119,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -15162,7 +15378,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
@@ -15187,7 +15402,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -15450,7 +15670,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -15474,7 +15693,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -16319,11 +16543,6 @@
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": {
-     "__ref__": "Module",
-     "label": "conv"
-    },
-    "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -16654,7 +16873,6 @@
      "torch.Size([1, 1, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -16673,7 +16891,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": true,
     "is_orphan": false,
     "is_output": false,
@@ -16710,9 +16927,31 @@
     "min_distance_from_input": 1,
     "min_distance_to_output": 2,
     "module": "conv:1",
-    "module_call_depth": 1,
     "module_call_stack": [
      "conv:1"
+    ],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": {
+     "__ref__": "Module",
+     "label": "conv"
+    },
+    "module_context.atomic_module_address": "conv",
+    "module_context.atomic_module_call": "conv:1",
+    "module_context.call_depth": 1,
+    "module_context.call_stack": [
+     "conv:1"
+    ],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": true,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
     ],
     "module_entry_arg_keys": {},
     "modules": [
@@ -16920,8 +17159,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -17114,9 +17351,6 @@
     "input_to_module_calls": [
      "conv:1"
     ],
-    "input_to_modules": [
-     "conv"
-    ],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -17135,7 +17369,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": true,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -17170,8 +17403,29 @@
     "min_distance_from_input": 0,
     "min_distance_to_output": 3,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {
+     "\"conv:1\"": [
+      0
+     ]
+    },
+    "module_context.input_to_module_calls": [
+     "conv:1"
+    ],
+    "module_context.input_to_modules": [
+     "conv"
+    ],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {
      "\"conv:1\"": [
       0
@@ -17314,8 +17568,6 @@
     "args_summary": "Tensor(1x2x4x4, float32)",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -17564,7 +17816,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -17583,7 +17834,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": true,
@@ -17618,8 +17868,21 @@
     "min_distance_from_input": 3,
     "min_distance_to_output": 0,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -17778,8 +18041,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -18033,7 +18294,6 @@
      "torch.Size([1, 2, 4, 4])"
     ],
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -18052,7 +18312,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -18086,8 +18345,21 @@
     "min_distance_from_input": 2,
     "min_distance_to_output": 1,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -19382,7 +19654,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -19411,7 +19682,16 @@
     "macs_backward": null,
     "macs_total": null,
     "module": "conv:1",
-    "module_call_depth": 1,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 1,
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
+    ],
     "modules": [
      "conv:1"
     ],
@@ -19705,7 +19985,6 @@
     "is_input": true,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": true,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -19730,7 +20009,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -19971,7 +20255,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": true,
     "is_scalar_bool": false,
@@ -19996,7 +20279,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -20259,7 +20547,6 @@
     "is_input": false,
     "is_internal_sink": false,
     "is_internal_source": false,
-    "is_module_input": false,
     "is_orphan": false,
     "is_output": false,
     "is_scalar_bool": false,
@@ -20283,7 +20570,12 @@
     "macs_backward": null,
     "macs_total": null,
     "module": null,
-    "module_call_depth": 0,
+    "module_context": "<torchlens._data_classes._record_groups_module_context.LayerModuleContext>",
+    "module_context.call_depth": 0,
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "modules": [],
     "multi_output_index": null,
     "multi_output_name": null,
@@ -21128,11 +21420,6 @@
     "args_summary": "(1, 1), (1, 1), (1, 1), 1",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": {
-     "__ref__": "Module",
-     "label": "conv"
-    },
-    "atomic_module_address": "conv",
     "atomic_module_call": "conv:1",
     "atomic_module_call_label": "conv:1",
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -21446,7 +21733,6 @@
     "input_ops": "<raises AttributeError>",
     "input_shapes": "<raises AttributeError>",
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -21465,7 +21751,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": true,
     "is_orphan": false,
     "is_output": false,
@@ -21499,9 +21784,31 @@
     "min_distance_from_input": 1,
     "min_distance_to_output": 2,
     "module": "conv:1",
-    "module_call_depth": 1,
     "module_call_stack": [
      "conv:1"
+    ],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": {
+     "__ref__": "Module",
+     "label": "conv"
+    },
+    "module_context.atomic_module_address": "conv",
+    "module_context.atomic_module_call": "conv:1",
+    "module_context.call_depth": 1,
+    "module_context.call_stack": [
+     "conv:1"
+    ],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": true,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": true,
+    "module_context.output_of_module_calls": [
+     "conv:1"
+    ],
+    "module_context.output_of_modules": [
+     "conv"
     ],
     "module_entry_arg_keys": {},
     "modules": [
@@ -21701,8 +22008,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -21895,9 +22200,6 @@
     "input_to_module_calls": [
      "conv:1"
     ],
-    "input_to_modules": [
-     "conv"
-    ],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -21916,7 +22218,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": true,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -21948,8 +22249,29 @@
     "min_distance_from_input": 0,
     "min_distance_to_output": 3,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {
+     "\"conv:1\"": [
+      0
+     ]
+    },
+    "module_context.input_to_module_calls": [
+     "conv:1"
+    ],
+    "module_context.input_to_modules": [
+     "conv"
+    ],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": true,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {
      "\"conv:1\"": [
       0
@@ -22092,8 +22414,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -22312,7 +22632,6 @@
     "input_ops": "<raises AttributeError>",
     "input_shapes": "<raises AttributeError>",
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -22331,7 +22650,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": true,
@@ -22363,8 +22681,21 @@
     "min_distance_from_input": 3,
     "min_distance_to_output": 0,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,
@@ -22510,8 +22841,6 @@
     "args_summary": "",
     "args_template": null,
     "aten_ops": "<raises AtenOpsUnavailableError>",
-    "atomic_module": null,
-    "atomic_module_address": null,
     "atomic_module_call": null,
     "atomic_module_call_label": null,
     "autograd": "<torchlens._data_classes._record_groups_autograd.OpAutograd>",
@@ -22748,7 +23077,6 @@
     "input_ops": "<raises AttributeError>",
     "input_shapes": "<raises AttributeError>",
     "input_to_module_calls": [],
-    "input_to_modules": [],
     "input_was_parameter": false,
     "internal_source_ancestors": {
      "__set__": []
@@ -22767,7 +23095,6 @@
     "is_internal_sink": false,
     "is_internal_source": false,
     "is_internally_initialized": false,
-    "is_module_input": false,
     "is_module_output": false,
     "is_orphan": false,
     "is_output": false,
@@ -22798,8 +23125,21 @@
     "min_distance_from_input": 2,
     "min_distance_to_output": 1,
     "module": null,
-    "module_call_depth": 0,
     "module_call_stack": [],
+    "module_context": "<torchlens._data_classes._record_groups_module_context.OpModuleContext>",
+    "module_context.atomic_module": null,
+    "module_context.atomic_module_address": null,
+    "module_context.atomic_module_call": null,
+    "module_context.call_depth": 0,
+    "module_context.call_stack": [],
+    "module_context.entry_arg_keys": {},
+    "module_context.input_to_module_calls": [],
+    "module_context.input_to_modules": [],
+    "module_context.is_atomic_module": false,
+    "module_context.is_module_input": false,
+    "module_context.is_module_output": false,
+    "module_context.output_of_module_calls": [],
+    "module_context.output_of_modules": [],
     "module_entry_arg_keys": {},
     "modules": [],
     "multi_output_index": null,

@@ -105,7 +105,7 @@ def test_hydration_identity_and_row_isolation(stack_trace: tl.Trace) -> None:
     autocast_a["cpu"]["injected"] = True
     assert "injected" not in op_b.call.autocast_state["cpu"]
 
-    entry_keys = op_a.module_entry_arg_keys
+    entry_keys = op_a.module_context.entry_arg_keys
     assert type(entry_keys) is defaultdict and entry_keys.default_factory is list
 
     module = stack_trace.modules["layers.0"]

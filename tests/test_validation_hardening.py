@@ -432,21 +432,21 @@ def test_module_call_stack_is_single_fact_containment() -> None:
 
     # Top-level ops (the model input, an op between modules) run in NO module
     # call: the stack must be empty, not the fed call's stack.
-    assert tuple(by_label["input_1"].module_call_stack) == ()
-    assert tuple(by_label["sigmoid_1_3"].module_call_stack) == ()
+    assert tuple(by_label["input_1"].module_context.call_stack) == ()
+    assert tuple(by_label["sigmoid_1_3"].module_context.call_stack) == ()
     # The fed-call fact lives on input_to_module_calls, un-conflated.
-    assert tuple(by_label["input_1"].input_to_module_calls) == ("a:1", "a.0:1")
-    assert tuple(by_label["sigmoid_1_3"].input_to_module_calls) == ("l2:1",)
+    assert tuple(by_label["input_1"].module_context.input_to_module_calls) == ("a:1", "a.0:1")
+    assert tuple(by_label["sigmoid_1_3"].module_context.input_to_module_calls) == ("l2:1",)
 
     # Interior and module-output ops carry root-first ModuleCall LABELS
     # (pass-qualified), not bare addresses.
-    assert tuple(by_label["linear_1_1"].module_call_stack) == ("a:1", "a.0:1")
-    assert tuple(by_label["relu_1_2"].module_call_stack) == ("a:1", "a.1:1")
+    assert tuple(by_label["linear_1_1"].module_context.call_stack) == ("a:1", "a.0:1")
+    assert tuple(by_label["relu_1_2"].module_context.call_stack) == ("a:1", "a.1:1")
 
     # The three facts are tied on every op: stack == modules, depth == len.
     for op in trace._layer_list:
-        assert tuple(op.module_call_stack) == tuple(op.modules)
-        assert op.module_call_depth == len(op.module_call_stack)
+        assert tuple(op.module_context.call_stack) == tuple(op.modules)
+        assert op.module_context.call_depth == len(op.module_context.call_stack)
 
 
 def test_module_call_stack_corruption_fails_invariants() -> None:
@@ -460,7 +460,7 @@ def test_module_call_stack_corruption_fails_invariants() -> None:
     trace, _ = _capture(_Nested(), torch.randn(2, 4))
     input_op = _op_by_layer_label(trace, "input_1")
     assert tuple(input_op.modules) == ()
-    input_op.module_call_stack = ("a", "a.0")  # the retired fed-call fact
+    input_op._module_context_call_stack = ("a", "a.0")  # the retired fed-call fact
 
     with pytest.raises(MetadataInvariantError) as exc_info:
         check_metadata_invariants(trace)

@@ -233,7 +233,7 @@ def _trace_fingerprint(trace: Any) -> tuple[Any, ...]:
             op.has_saved_activation,
             tuple(op.shape or ()),
             str(op.dtype),
-            tuple(op.output_of_module_calls or ()),
+            tuple(op.module_context.output_of_module_calls or ()),
             tuple(op.parents),
             tuple(op.children),
             _payload_bytes(op.out) if op.has_saved_activation else None,
@@ -421,6 +421,8 @@ def test_pass_qualified_address_saves_only_that_call(monkeypatch: pytest.MonkeyP
         assert "shared:1" not in record_calls
         assert len(recording.records) == 1
         saved = [op for op in trace._layer_list if op.has_saved_activation]
-        saved_calls = {call for op in saved for call in (op.output_of_module_calls or ())}
+        saved_calls = {
+            call for op in saved for call in (op.module_context.output_of_module_calls or ())
+        }
         assert "shared:2" in saved_calls
         assert "shared:1" not in saved_calls

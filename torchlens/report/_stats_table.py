@@ -31,6 +31,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
 
+from .._utils._record_group_table import record_member
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
     from ..stats._tensor_stats import TensorStats
@@ -313,7 +315,7 @@ def build_stats_table(
     scanned_elements = 0
     skipped_by_budget = 0
     for op in trace._layer_list or ():
-        if grain == "module" and not getattr(op, "is_module_output", False):
+        if grain == "module" and not record_member(op, "is_module_output", False):
             continue
         label = str(getattr(op, "label", getattr(op, "layer_label", "?")))
         state, reason = _row_state(op)

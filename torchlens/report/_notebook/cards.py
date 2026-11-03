@@ -200,7 +200,7 @@ def _identity_zone(op: Any, root: CopyRoot) -> tuple[CardNode, ...]:
     identity = f"{getattr(op, 'func_name', '?')}"
     if pass_index is not None and num_passes is not None and num_passes > 1:
         identity += f" (pass {pass_index}/{num_passes})"
-    module = getattr(op, "atomic_module_address", None) or getattr(op, "module", None)
+    module = record_member(op, "atomic_module_address", None) or getattr(op, "module", None)
     nodes: list[CardNode] = [CardText(identity)]
     if module:
         nodes.append(CardText(f"module: {module}"))

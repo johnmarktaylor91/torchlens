@@ -188,7 +188,7 @@ def _device_string(entry: Any) -> str | None:
 def _module_call_string(entry: Any) -> str | None:
     """Return the canonical (innermost) module call, if inside a module."""
 
-    stack = getattr(entry, "module_call_stack", ()) or ()
+    stack = record_member(entry, "module_call_stack", ()) or ()
     return str(stack[-1]) if stack else None
 
 

@@ -115,7 +115,7 @@ def node_name_for(layer: Any) -> str:
     spelling the TB Graphs dashboard collapses on and the site tokens use.
     """
 
-    stack = getattr(layer, "module_call_stack", None) or ()
+    stack = record_member(layer, "module_call_stack", None) or ()
     parts: list[str] = []
     for entry in stack:
         text = str(entry).replace(":", "_")

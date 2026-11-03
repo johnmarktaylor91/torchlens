@@ -143,10 +143,12 @@ def test_module_call_tree_counts(nest_trace) -> None:
         assert module.num_descendant_calls == sum(NEST_DESCENDANTS[c] for c in calls)
         assert module.max_descendant_depth == max(NEST_DEPTH.get(c, 0) for c in calls)
     for op in trace.ops:
-        assert op.module_call_depth == NEST_OP_DEPTH[op.label], op.label
+        assert op.module_context.call_depth == NEST_OP_DEPTH[op.label], op.label
     # Layer depth reads its first pass (b1.l1's Layer spans b1.l1:1 and b1.l1:2).
     for layer in trace.layers:
-        assert layer.module_call_depth == NEST_OP_DEPTH[f"{layer.layer_label}:1"], layer.layer_label
+        assert layer.module_context.call_depth == NEST_OP_DEPTH[f"{layer.layer_label}:1"], (
+            layer.layer_label
+        )
 
 
 def test_param_call_counts(nest_trace) -> None:

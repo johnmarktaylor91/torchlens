@@ -367,7 +367,7 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
     restored = Op.__new__(Op)
     restored.__setstate__(state)
 
-    assert isinstance(restored.input_to_module_calls, tuple)
+    assert isinstance(restored.module_context.input_to_module_calls, tuple)
     assert isinstance(restored.parents, tuple)
     assert isinstance(restored.children, tuple)
     assert isinstance(restored.equivalent_ops, frozenset)
@@ -376,8 +376,8 @@ def test_op_setstate_absent_container_fields_restore_typed() -> None:
     assert isinstance(restored.param_shapes, list)
     assert isinstance(restored.modules, tuple)
     # Consumer patterns from finalization/loop_detection/invariants must work.
-    assert "missing" not in restored.input_to_module_calls
-    assert list(restored.input_to_module_calls) == []
+    assert "missing" not in restored.module_context.input_to_module_calls
+    assert list(restored.module_context.input_to_module_calls) == []
 
 
 def test_backend_address_none_is_preserved_and_pre_floor_refuses() -> None:

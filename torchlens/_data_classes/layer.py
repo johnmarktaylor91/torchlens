@@ -93,6 +93,7 @@ from ._record_group_base import _LAYER_DELEGATED_PASS_FIELDS
 from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
 from ._record_groups_autograd import LayerAutograd
 from ._record_groups_call import LayerCall
+from ._record_groups_module_context import LayerModuleContext
 from ._record_groups_source import LayerSource
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
@@ -394,8 +395,8 @@ class Layer(_SelectionOperand):
         _control_flow_bool_value: Any
         module: Any
         modules: Any
-        output_of_modules: Any
-        output_of_module_calls: Any
+        _module_context_output_of_modules: Any
+        _module_context_output_of_module_calls: Any
         _control_flow_entry_children: Any
         _control_flow_then_children: Any
         _control_flow_elif_children: Any
@@ -403,7 +404,7 @@ class Layer(_SelectionOperand):
         has_input_ancestor: Any
         io_role: Any
         buffer_pass: Any
-        is_atomic_module: Any
+        _module_context_is_atomic_module: Any
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
@@ -610,6 +611,12 @@ class Layer(_SelectionOperand):
         return LayerAutograd(self)
 
     @property
+    def module_context(self) -> LayerModuleContext:
+        """Module-nesting facts of this Layer (``layer.module_context.call_depth``)."""
+
+        return LayerModuleContext(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None`` (estimates only)."""
 
@@ -708,11 +715,6 @@ class Layer(_SelectionOperand):
         return self if self.num_passes > 1 else self.layer_label
 
     @property
-    def module_call_depth(self) -> int:
-        """Depth of module nesting for this layer."""
-        return len(self.modules)
-
-    @property
     def op_labels(self) -> list[str]:
         """Op labels belonging to this Layer (glossary name for ``call_labels``)."""
 
@@ -736,16 +738,6 @@ class Layer(_SelectionOperand):
         """
 
         return self.buffer_pass
-
-    @property
-    def is_module_input(self) -> bool:
-        """Whether this Layer's representative Op feeds into at least one ModuleCall.
-
-        Delegates from ``Op.is_module_input`` semantics for single-Op Layers.
-        Raises ``ValueError`` for multi-Op Layers.
-        """
-
-        return cast(bool, self._single_pass_or_error("is_module_input"))
 
     @property
     def source_trace(self) -> "Trace":

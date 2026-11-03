@@ -176,7 +176,7 @@ def rolled_variance_attrs(members: list[Any], *, feedback_sources: list[str]) ->
 def module_path_of(entry: Any) -> str:
     """Return the innermost containing module-call address for the sidebar."""
 
-    stack = getattr(entry, "module_call_stack", None) or ()
+    stack = record_member(entry, "module_call_stack", None) or ()
     if not stack:
         return ""
     return _strip_single_pass(str(stack[-1]))

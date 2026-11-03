@@ -82,7 +82,7 @@ def _is_atomic_module_call(call: "ModuleCall") -> bool:
     if trace is None:
         return False
     return any(
-        getattr(op, "is_atomic_module", False)
+        record_member(op, "is_atomic_module", False)
         for op_label in call.output_ops
         for op in _resolve_call_ops(trace, op_label)
     )

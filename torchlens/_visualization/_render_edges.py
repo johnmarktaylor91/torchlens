@@ -3,6 +3,7 @@
 # ruff: noqa: F403, F405
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ._buffer_visibility import (
     _buffer_name_segment,
     _is_buffer_visible,
@@ -634,7 +635,7 @@ def _surfaced_own_output_ops(
             op = trace.ops[label]
         if getattr(op, "is_buffer", False):
             continue
-        if not getattr(op, "is_atomic_module", False):
+        if not record_member(op, "is_atomic_module", False):
             continue
         modules = list(getattr(op, "modules", ()) or ())
         if not modules:
@@ -755,7 +756,7 @@ def _raw_render_node_owner_key(node: GraphNode, vis_mode: str) -> str | None:
     """
 
     modules = [str(module) for module in getattr(node, "modules", ()) or ()]
-    if getattr(node, "is_atomic_module", False) and modules:
+    if record_member(node, "is_atomic_module", False) and modules:
         modules = modules[:-1]
     if not modules:
         return None
@@ -1056,9 +1057,9 @@ def _add_edges_for_node(
             child_modules = child_node.modules[:]
             parent_modules = parent_node.modules[:]
             # Adjust for bottom-level submodule outputs (they belong to parent scope).
-            if child_node.is_atomic_module:
+            if child_node.module_context.is_atomic_module:
                 child_modules = child_modules[:-1]
-            if parent_node.is_atomic_module:
+            if parent_node.module_context.is_atomic_module:
                 parent_modules = parent_modules[:-1]
             if child_modules[:vis_call_depth] == parent_modules[:vis_call_depth]:
                 continue

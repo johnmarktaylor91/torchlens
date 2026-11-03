@@ -109,10 +109,10 @@ def _public_label(op: Any) -> str:
 def _owner_and_stack(record: Any) -> tuple[str, tuple[str, ...]]:
     """Return (innermost exclusive owner, ordered module-call stack)."""
 
-    stack = tuple(str(frame) for frame in getattr(record, "module_call_stack", ()) or ())
+    stack = tuple(str(frame) for frame in record_member(record, "module_call_stack", ()) or ())
     if stack:
         return stack[-1], stack
-    module_address = getattr(record, "module_address", None) or getattr(
+    module_address = getattr(record, "module_address", None) or record_member(
         record, "atomic_module_address", None
     )
     if isinstance(module_address, str) and module_address:

@@ -105,6 +105,26 @@ def build_moves(groups: set[str]) -> dict[str, tuple[str, str]]:
     return moves
 
 
+#: Former names per record class, for ``Op.<name>`` / ``Layer.<name>`` text spellings.
+RECORD_NAMES: dict[str, set[str]] = {}
+
+
+def load_record_names(groups: set[str]) -> None:
+    """Fill ``RECORD_NAMES`` with each record's former names in ``groups``."""
+
+    for record, rows in load_table().items():
+        RECORD_NAMES[record] = {old for old, group, _ in rows if group in groups}
+
+
+def _rewrite_match(match: re.Match[str], moves: dict) -> str:
+    """Replace one text match unless a class-qualified spelling names the other record."""
+
+    recv, name = match.group("recv"), match.group("name")
+    if recv in RECORD_NAMES and name not in RECORD_NAMES[recv]:
+        return match.group(0)
+    return f"{recv}.{moves[name][0]}"
+
+
 def other_class_members(root: Path) -> set[str]:
     """Names any non-record TorchLens class (or other field-order list) defines."""
 
@@ -279,7 +299,7 @@ def rewrite_text(text: str, moves: dict) -> str:
         return text
     names = "|".join(sorted(map(re.escape, moves), key=len, reverse=True))
     pattern = re.compile(_TEXT_RECEIVER + r"\.(?P<name>" + names + r")\b(?!\s*=[^=])")
-    return pattern.sub(lambda m: f"{m.group('recv')}.{moves[m.group('name')][0]}", text)
+    return pattern.sub(lambda m: _rewrite_match(m, moves), text)
 
 
 def _iter_files(paths: Iterable[str]) -> Iterator[Path]:
@@ -316,6 +336,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--report", action="store_true")
     args = parser.parse_args(argv)
     moves = build_moves(set(args.groups.split(",")))
+    load_record_names(set(args.groups.split(",")))
     shared = other_class_members(REPO) & set(moves)
     pending = 0
     for path in _iter_files(args.paths):

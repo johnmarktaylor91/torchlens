@@ -302,7 +302,7 @@ def _validate_site_keys(trace: Trace) -> None:
             )
         else:
             expected = minter.mint(
-                tuple(getattr(op, "module_call_stack", ()) or ()),
+                tuple(record_member(op, "module_call_stack", ()) or ()),
                 str(getattr(op, "type", "") or ""),
                 (
                     getattr(op, "multi_output_index", None)

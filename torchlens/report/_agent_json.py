@@ -326,7 +326,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
 
     device_ref = getattr(op, "device_ref", None)
     dtype = getattr(op, "dtype", None)
-    call_stack = [str(m) for m in getattr(op, "module_call_stack", ()) or ()]
+    call_stack = [str(m) for m in record_member(op, "module_call_stack", ()) or ()]
     # FF1 (agent memo 3.5): `module_address` is the ATOMIC-module address and
     # is null on 90-91% of real-transformer rows, so every module-grain
     # rollup collapsed into one None bucket. `module_containment` is the
@@ -346,7 +346,7 @@ def _op_entry(op: Any) -> dict[str, Any]:
         "parents": [str(p) for p in getattr(op, "parents", ()) or ()],
         "children": [str(c) for c in getattr(op, "children", ()) or ()],
         "module_call_stack": call_stack,
-        "module_address": getattr(op, "atomic_module_address", None),
+        "module_address": record_member(op, "atomic_module_address", None),
         "module_containment": containment,
         "saved": bool(getattr(op, "has_saved_activation", False)),
         "site_key": _site_key_or_none(op),

@@ -395,8 +395,8 @@ def test_module_fields(small_input):
         entry = mh[label]
         if entry.in_submodule:
             assert isinstance(entry.module, str)
-            assert isinstance(entry.module_call_depth, int)
-            assert entry.module_call_depth > 0
+            assert isinstance(entry.module_context.call_depth, int)
+            assert entry.module_context.call_depth > 0
             found = True
             break
     assert found, "NestedModules should have layers inside submodules"

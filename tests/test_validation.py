@@ -6588,10 +6588,10 @@ def test_non_function_root_drop_op_module_attribution_raises() -> None:
         victim = next(layer for layer in log._layer_list if layer.module)
         victim.module = None
         victim.modules = []
-        victim.module_call_stack = []
-        victim.output_of_modules = []
-        victim.output_of_module_calls = []
-        victim.atomic_module_call = None
+        victim._module_context_call_stack = []
+        victim._module_context_output_of_modules = []
+        victim._module_context_output_of_module_calls = []
+        victim._module_context_atomic_module_call = None
 
         with pytest.raises(MetadataInvariantError, match="module_attribution"):
             check_metadata_invariants(log)

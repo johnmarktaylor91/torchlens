@@ -30,6 +30,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._record_group_table import record_member
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _boundary_bundle as _bundle
@@ -3006,7 +3007,7 @@ def _module_render_box_units(
         if node.is_buffer and not _is_buffer_visible(node, show_buffer_layers):
             continue
         modules = [str(module_call) for module_call in (getattr(node, "modules", ()) or ())]
-        if getattr(node, "is_atomic_module", False) and modules:
+        if record_member(node, "is_atomic_module", False) and modules:
             innermost_address = modules[-1].rsplit(":", 1)[0]
             remaining = modules[:-1]
             if innermost_address not in {call.rsplit(":", 1)[0] for call in remaining}:
@@ -3844,7 +3845,7 @@ def _rendered_own_unit_map(trace: Trace, context: RenderContext) -> dict[str, tu
             continue
         node = emission.node
         modules = list(getattr(node, "modules", ()) or ()) if node is not None else []
-        if getattr(node, "is_atomic_module", False) and modules:
+        if record_member(node, "is_atomic_module", False) and modules:
             modules = modules[:-1]
         owner = str(modules[-1]).rsplit(":", 1)[0] if modules else "self"
         units.setdefault(owner, []).append(emission.op_label or emission.name)

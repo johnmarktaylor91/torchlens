@@ -2572,8 +2572,8 @@ class JAXBackend:
             # invariant's claim collection) stringified them as literal
             # ``"('fc1', 1)"`` tuple reprs instead of a parseable module
             # address, so a JAX compute op's attribution never resolved.
-            module_call_stack_calls = normalize_op_module_calls(op_log.module_call_stack)
-            op_log.module_call_stack = [
+            module_call_stack_calls = normalize_op_module_calls(op_log.module_context.call_stack)
+            op_log._module_context_call_stack = [
                 f"{address}:{call_index}" for address, call_index in module_call_stack_calls
             ]
             parent_call_label: str | None = None

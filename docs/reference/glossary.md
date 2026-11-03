@@ -4629,9 +4629,9 @@ alphabetical order.
 | `Op.call.arg_names` | Names of the arguments in this Op's function call |
 | `Op.args_summary` | Human-readable summary of this Op's positional arguments |
 | `Op.call.args_template` | Structural template of this Op's positional arguments, used to rebuild the call |
-| `Op.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
-| `Op.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
-| `Op.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
+| `Op.module_context.atomic_module` | The `Module` record for the atomic module this Op is the output of, or `None` |
+| `Op.module_context.atomic_module_address` | Module address, without the pass suffix, of the atomic module this Op outputs from, or `None` |
+| `Op.module_context.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.atomic_module_call_label` | Stable `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.backend_address` | The Op's locator in the backend's own graph, such as `jaxpr:<label>` |
 | `Op.control_flow.bool_value` | The Python value of this Op's output when it is a scalar bool |
@@ -4669,6 +4669,7 @@ alphabetical order.
 | `Op.call.tl_authored_root` | Whether this Op is the root of a TorchLens-authored call rather than a model call |
 | `Op.control_flow` | Conditional-branch facts of this Op: branch membership, terminal bools and arm children (`tl.types.OpControlFlow`) |
 | `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
+| `Op.module_context` | Module-nesting facts of this Op: the module calls active around it, the module calls its output feeds and the module calls it is the output of (`tl.types.OpModuleContext`) |
 | `Op.cost.activation_memory` | Bytes of this Op's output activation |
 | `Op.cost.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
 | `Op.cost.autograd_memory` | Bytes of the tensors autograd saved for backward at this Op |
@@ -4732,12 +4733,12 @@ alphabetical order.
 | `Op.input_activations` | Saved parent activations consumed by this Op, in `parents` order |
 | `Op.input_ancestors` | Labels of the model inputs that are ancestors of this Op |
 | `Op.input_containers` | Input container views consumed by this Op |
-| `Op.input_to_module_calls` | Labels of the `ModuleCall` records whose input this Op's output fed |
-| `Op.input_to_modules` | Module addresses, without the pass suffix, whose input this Op's output fed |
+| `Op.module_context.input_to_module_calls` | Labels of the `ModuleCall` records whose input this Op's output fed |
+| `Op.module_context.input_to_modules` | Module addresses, without the pass suffix, whose input this Op's output fed |
 | `Op.input_was_parameter` | Whether this Op is an input boundary whose value was a model parameter |
 | `Op.internal_source_ancestors` | Labels of the internally initialized source Ops that are ancestors of this Op |
 | `Op.internal_source_parents` | Labels of the internally initialized source Ops that are direct parents of this Op |
-| `Op.is_atomic_module` | Whether this Op is the sole operation output of an atomic module call |
+| `Op.module_context.is_atomic_module` | Whether this Op is the sole operation output of an atomic module call |
 | `Op.is_buffer` | Stored flag marking this Op as a buffer boundary; `is_buffer_source` exposes it |
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
 | `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
@@ -4750,8 +4751,8 @@ alphabetical order.
 | `Op.is_internal_sink` | Whether this Op's result ends inside the model without reaching an output |
 | `Op.is_internal_source` | Whether this Op was created inside the model, such as by a factory call, rather than fed from an input |
 | `Op.call.is_internally_initialized` | Alias of `is_internal_source`: whether this Op was created inside the model rather than fed from an input |
-| `Op.is_module_input` | Whether this Op's output feeds at least one `ModuleCall` as an input |
-| `Op.is_module_output` | Whether this Op is the output of a `ModuleCall` |
+| `Op.module_context.is_module_input` | Whether this Op's output feeds at least one `ModuleCall` as an input |
+| `Op.module_context.is_module_output` | Whether this Op is the output of a `ModuleCall` |
 | `Op.is_orphan` | Whether this Op is disconnected from both the input and output flows |
 | `Op.is_output` | Whether this Op is a model output |
 | `Op.is_output_parent` | Whether this Op is directly returned from `forward` |
@@ -4772,8 +4773,9 @@ alphabetical order.
 | `Op.max_distance_to_output` | Longest graph distance from this Op to any model output |
 | `Op.min_distance_from_input` | Shortest graph distance from any model input to this Op |
 | `Op.min_distance_to_output` | Shortest graph distance from this Op to any model output |
-| `Op.module_call_depth` | Depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`) |
-| `Op.module_entry_arg_keys` | Mapping from `ModuleCall` label to the argument keys this Op filled at module entry |
+| `Op.module_context.call_depth` | Depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`) |
+| `Op.module_context.call_stack` | Root-first labels of the `ModuleCall`s active when this Op ran |
+| `Op.module_context.entry_arg_keys` | Mapping from `ModuleCall` label to the argument keys this Op filled at module entry |
 | `Op.multi_output_index` | 0-based position of this Op's output within its multi-output container |
 | `Op.multi_output_name` | Semantic name of this Op's output within its multi-output container, such as a dict key or namedtuple field |
 | `Op.multi_output_type` | Python class of the multi-output container this Op came from, or `None` |
@@ -4792,8 +4794,8 @@ alphabetical order.
 | `Op.out_ref` | Lazy reference to this Op's saved output blob in a saved bundle, or `None`; the tensor loads only when read |
 | `Op.output_containers` | Output container views associated with this Op |
 | `Op.output_descendants` | Labels of the model outputs that are descendants of this Op |
-| `Op.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
-| `Op.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
+| `Op.module_context.output_of_module_calls` | Labels of the `ModuleCall` records whose output this Op is |
+| `Op.module_context.output_of_modules` | Module addresses, without the pass suffix, whose output this Op is |
 | `Op.param_dtypes` | Dtypes of the parameters consumed by this Op |
 | `Op.param_shapes` | Shapes of the parameters consumed by this Op |
 | `Op.call.parent_arg_positions` | Mapping from call argument positions, positional and keyword, to the parent Op label used there |
@@ -4859,6 +4861,7 @@ alphabetical order.
 | `Layer.call.saved_args` | Positional arguments captured for this layer's function call, for single-pass layers |
 | `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
 | `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
+| `Layer.module_context` | Module-nesting facts of this layer: its nesting depth, whether it is a single-op module and the modules it is the output of (`tl.types.LayerModuleContext`) |
 | `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
 | `Layer.cost.autograd_memory` | Bytes autograd saved for backward at the representative pass |
 | `Layer.cost.duration` | Execution time of this layer's function call, for single-pass layers |
@@ -4907,7 +4910,7 @@ alphabetical order.
 | `Layer.input_to_module_calls` | Labels of the module calls that this layer's output is fed into |
 | `Layer.input_was_parameter` | Whether this model input was an `nn.Parameter` |
 | `Layer.internal_source_parents` | Labels of the parent layers whose ancestry includes an internal source, a tensor made inside the model rather than passed in |
-| `Layer.is_atomic_module` | Whether this layer's op is the only op of a module call, a single-op leaf module |
+| `Layer.module_context.is_atomic_module` | Whether this layer's op is the only op of a module call, a single-op leaf module |
 | `Layer.is_buffer` | Whether this layer is a registered-buffer version node, the flag `is_buffer_source` reports |
 | `Layer.is_buffer_source` | Whether this layer represents a buffer overwrite boundary |
 | `Layer.is_compute_layer` | Whether this layer's representative op is a compute op |
@@ -4919,7 +4922,7 @@ alphabetical order.
 | `Layer.is_input` | Whether this layer is a model input |
 | `Layer.is_internal_sink` | Whether this layer's value ends inside the model without reaching any output |
 | `Layer.is_internal_source` | Whether this layer creates a tensor inside the model instead of receiving it from a model input |
-| `Layer.is_module_input` | Whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers |
+| `Layer.module_context.is_module_input` | Whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers |
 | `Layer.is_orphan` | Whether any op in this layer is disconnected from the main graph |
 | `Layer.is_output` | Whether this layer is a model output |
 | `Layer.control_flow.is_scalar_bool` | Whether this layer's value is a scalar boolean |
@@ -4930,7 +4933,7 @@ alphabetical order.
 | `Layer.lookup_keys` | Keys that look up this layer in the trace, for single-pass layers |
 | `Layer.macs_backward` | Always `None`, because backward MACs are not derivable |
 | `Layer.macs_total` | Always `None`, because total MACs are not derivable |
-| `Layer.module_call_depth` | Depth of module nesting around this layer |
+| `Layer.module_context.call_depth` | Depth of module nesting around this layer |
 | `Layer.multi_output_index` | Position of this layer among the outputs of a multi-output function, or `None` |
 | `Layer.multi_output_name` | Name of this output within a multi-output result, derived from its container path, or `None` |
 | `Layer.call.num_args_total` | Total number of positional and keyword arguments passed to this layer's function |
@@ -4944,8 +4947,8 @@ alphabetical order.
 | `Layer.op_labels` | Labels of the ops that belong to this layer |
 | `Layer.ordinal_index` | Ordinal index of this layer, read from its first op |
 | `Layer.output_descendants` | Labels of the model-output layers reachable downstream of this layer |
-| `Layer.output_of_module_calls` | Labels of the module calls whose output this layer is |
-| `Layer.output_of_modules` | Addresses of the modules whose output this layer is |
+| `Layer.module_context.output_of_module_calls` | Labels of the module calls whose output this layer is |
+| `Layer.module_context.output_of_modules` | Addresses of the modules whose output this layer is |
 | `Layer.param_dtypes` | Dtypes of the parameters used by this layer |
 | `Layer.param_shapes` | Shapes of the parameters used by this layer |
 | `Layer.call.parent_arg_positions` | Map from argument kind and position to the parent layer label, merged across ops |
@@ -5389,6 +5392,12 @@ alphabetical order.
 
 **`tl.types.OpSource`**
 : Where one Op's function was called in user code; `op.source` is the instance an Op serves. `OpSource.arg_expressions`: source expressions of this Op's call arguments, parsed lazily from `code_context`; an empty list when unavailable; `OpSource.frames`: call-stack frames showing where this Op ran; `OpSource.func_qualname`: qualified name of the function this Op called; `OpSource.fx_call_index`: call index in the `torch.fx`-style identity of this Op, when applicable; `OpSource.fx_path`: module path in the `torch.fx`-style identity of this Op, when applicable; `OpSource.var_names`: variable names the Op's result is assigned to at its call site; empty when unresolved.
+
+**`tl.types.LayerModuleContext`**
+: Module-nesting facts of one Layer; `layer.module_context` is the instance a Layer serves. `LayerModuleContext.call_depth`: depth of module nesting around this layer; `LayerModuleContext.is_atomic_module`: whether this layer's op is the only op of a module call, a single-op leaf module; `LayerModuleContext.is_module_input`: whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers; `LayerModuleContext.output_of_module_calls`: labels of the module calls whose output this layer is; `LayerModuleContext.output_of_modules`: addresses of the modules whose output this layer is.
+
+**`tl.types.OpModuleContext`**
+: Module-nesting facts of one Op; `op.module_context` is the instance an Op serves. `OpModuleContext.atomic_module`: the `Module` record for the atomic module this Op is the output of, or `None`; `OpModuleContext.atomic_module_address`: module address, without the pass suffix, of the atomic module this Op outputs from, or `None`; `OpModuleContext.atomic_module_call`: stored `ModuleCall` label for an atomic-module output Op, or `None`; `OpModuleContext.call_depth`: depth of this Op's active `ModuleCall` nesting (the length of `module_call_stack`); `OpModuleContext.call_stack`: root-first labels of the `ModuleCall`s active when this Op ran; `OpModuleContext.entry_arg_keys`: mapping from `ModuleCall` label to the argument keys this Op filled at module entry; `OpModuleContext.input_to_module_calls`: labels of the `ModuleCall` records whose input this Op's output fed; `OpModuleContext.input_to_modules`: module addresses, without the pass suffix, whose input this Op's output fed; `OpModuleContext.is_atomic_module`: whether this Op is the sole operation output of an atomic module call; `OpModuleContext.is_module_input`: whether this Op's output feeds at least one `ModuleCall` as an input; `OpModuleContext.is_module_output`: whether this Op is the output of a `ModuleCall`; `OpModuleContext.output_of_module_calls`: labels of the `ModuleCall` records whose output this Op is; `OpModuleContext.output_of_modules`: module addresses, without the pass suffix, whose output this Op is.
 
 **`tl.types.LayerControlFlow`**
 : Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.

@@ -712,9 +712,15 @@ def _build_submodule_call_logs(
             # wrote both together; under containment semantics it would drop
             # top-level-created inputs (e.g. the model input) from the call's
             # input roster.
-            if call_label in te.input_to_module_calls and te.layer_label not in pass_input_layers:
+            if (
+                call_label in te.module_context.input_to_module_calls
+                and te.layer_label not in pass_input_layers
+            ):
                 pass_input_layers.append(te.layer_label)
-            if te.is_module_output and call_label in te.output_of_module_calls:
+            if (
+                te.module_context.is_module_output
+                and call_label in te.module_context.output_of_module_calls
+            ):
                 pass_output_layers.append(te.layer_label)
                 pass_output_ops.append(te.label)
                 pass_outputs.append(te)
@@ -923,7 +929,7 @@ def _build_module_logs(self: "Trace") -> None:
     for te in self._layer_list:
         # B3R7-R05-1: iterate the fed-call fact directly; the old
         # ``module_call_stack`` emptiness guard was an enter-lane proxy.
-        for call_label in te.input_to_module_calls:
+        for call_label in te.module_context.input_to_module_calls:
             _pass_input_layers_by_call[call_label].append(te.layer_label)
 
     # --- Build ModuleLogs for each submodule ---
@@ -1257,8 +1263,8 @@ def _build_layer_logs(self: "Trace") -> None:
                     merged = merged.rstrip("*") + "*"
                 layer_log.io_role = merged
             # Merge field 3/3: is_atomic_module (OR across ops).
-            if pass_log.is_atomic_module:
-                layer_log.is_atomic_module = True
+            if pass_log.module_context.is_atomic_module:
+                layer_log._module_context_is_atomic_module = True
 
         layer_log.ops[pass_log.pass_number] = pass_log
         layer_log.call_labels.append(pass_log.label)

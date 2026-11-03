@@ -596,7 +596,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `address` | interned | required: every level | keep | fact | `Op.address` (field) |
 | `annotations` | scalar | required: every level | keep | fact | `Op.annotations` (field) |
 | `arg_names` | interned | required: every level | keep | fact | `Op.call.arg_names` (field) |
-| `atomic_module_call` | interned | required: every level | keep | fact | `Op.atomic_module_call` (field) |
+| `atomic_module_call` | interned | required: every level | keep | fact | `Op.module_context.atomic_module_call` (field) |
 | `autograd_memory` | interned | required: every level | keep | fact | `Op.cost.autograd_memory` (field) |
 | `backend_address` | interned | required: every level | keep | fact | `Op.backend_address` (field) |
 | `bool_value` | interned | required: every level | keep | fact | `Op.control_flow.bool_value` (field) |
@@ -664,12 +664,12 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `in_multi_output` | interned | required: every level | keep | fact | `Op.in_multi_output` (field) |
 | `injection_provenance` | scalar | required: every level | keep | fact | `Op.call.injection_provenance` (field) |
 | `input_ancestors` | edge | required: every level | keep | derived | `Op.input_ancestors` (field) |
-| `input_to_module_calls` | interned | required: every level | keep | fact | `Op.input_to_module_calls` (field) |
+| `input_to_module_calls` | interned | required: every level | keep | fact | `Op.module_context.input_to_module_calls` (field) |
 | `input_was_parameter` | interned | required: every level | keep | fact | `Op.input_was_parameter` (field) |
 | `internal_source_ancestors` | bitset | required: every level | keep | derived | `Op.internal_source_ancestors` (field) |
 | `internal_source_parents` | interned | required: every level | keep | fact | `Op.internal_source_parents` (field) |
 | `io_role` | interned | required: every level | keep | fact | `Op.io_role` (field) |
-| `is_atomic_module` | interned | required: every level | keep | fact | `Op.is_atomic_module` (field) |
+| `is_atomic_module` | interned | required: every level | keep | fact | `Op.module_context.is_atomic_module` (field) |
 | `is_buffer` | interned | required: every level | keep | fact | `Op.is_buffer` (field) |
 | `is_edited` | interned | required: every level | keep | fact | `Op.is_edited` (field) |
 | `is_final_output` | interned | required: every level | keep | fact | `Op.is_final_output` (field) |
@@ -677,7 +677,7 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `is_input` | interned | required: every level | keep | fact | `Op.is_input` (field) |
 | `is_internal_sink` | interned | required: every level | keep | fact | `Op.is_internal_sink` (field) |
 | `is_internal_source` | interned | required: every level | keep | fact | `Op.is_internal_source` (field) |
-| `is_module_output` | interned | required: every level | keep | fact | `Op.is_module_output` (field) |
+| `is_module_output` | interned | required: every level | keep | fact | `Op.module_context.is_module_output` (field) |
 | `is_orphan` | interned | required: every level | keep | fact | `Op.is_orphan` (field) |
 | `is_output` | interned | required: every level | keep | fact | `Op.is_output` (field) |
 | `is_output_parent` | interned | required: every level | keep | fact | `Op.is_output_parent` (field) |
@@ -693,8 +693,8 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `min_distance_from_input` | interned | required: every level | keep | fact | `Op.min_distance_from_input` (field) |
 | `min_distance_to_output` | interned | required: every level | keep | fact | `Op.min_distance_to_output` (field) |
 | `module` | interned | required: every level | keep | fact | `Op.module` (field) |
-| `module_call_stack` | interned | required: every level | keep | fact | `Op.module_call_stack` (field) |
-| `module_entry_arg_keys` | scalar | required: every level | keep | fact | `Op.module_entry_arg_keys` (field) |
+| `module_call_stack` | interned | required: every level | keep | fact | `Op.module_context.call_stack` (field) |
+| `module_entry_arg_keys` | scalar | required: every level | keep | fact | `Op.module_context.entry_arg_keys` (field) |
 | `modules` | edge | required: every level | keep | fact | `Op.modules` (field) |
 | `multi_output_index` | interned | required: every level | keep | fact | `Op.multi_output_index` (field) |
 | `multi_output_name` | interned | required: every level | keep | fact | `Op.multi_output_name` (field) |
@@ -713,8 +713,8 @@ Session-only (`drop`): `_active_backward_pass_number`, `_autograd_escape_detecto
 | `out_versions_by_child` | payload | optional: `include_saved_args` (executable_with_callables) | blob_recursive | fact | `Op.out_versions_by_child` (field) |
 | `output_descendants` | edge | required: every level | keep | derived | `Op.output_descendants` (field) |
 | `output_device` | interned | required: every level | keep | fact | `Op.output_device` (field) |
-| `output_of_module_calls` | edge | required: every level | keep | fact | `Op.output_of_module_calls` (field) |
-| `output_of_modules` | edge | required: every level | keep | fact | `Op.output_of_modules` (field) |
+| `output_of_module_calls` | edge | required: every level | keep | fact | `Op.module_context.output_of_module_calls` (field) |
+| `output_of_modules` | edge | required: every level | keep | fact | `Op.module_context.output_of_modules` (field) |
 | `param_memory` | interned | required: every level | keep | fact | `Op.cost.param_memory` (field) |
 | `param_shapes` | scalar | required: every level | keep | fact | `Op.param_shapes` (field) |
 | `parent_arg_positions` | scalar | required: every level | keep | fact | `Op.call.parent_arg_positions` (field) |
@@ -807,7 +807,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `in_multi_output` | scalar | required: every level | keep | fact | `Layer.in_multi_output` (field) |
 | `input_was_parameter` | scalar | required: every level | keep | fact | `Layer.input_was_parameter` (field) |
 | `io_role` | scalar | required: every level | keep | fact | `Layer.io_role` (field) |
-| `is_atomic_module` | scalar | required: every level | keep | fact | `Layer.is_atomic_module` (field) |
+| `is_atomic_module` | scalar | required: every level | keep | fact | `Layer.module_context.is_atomic_module` (field) |
 | `is_buffer` | scalar | required: every level | keep | fact | `Layer.is_buffer` (field) |
 | `is_edited` | scalar | required: every level | keep | fact | `Layer.is_edited` (field) |
 | `is_final_output` | scalar | required: every level | keep | fact | `Layer.is_final_output` (field) |
@@ -835,8 +835,8 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 | `ops` | edge | required: every level | keep | fact | `Layer.ops` (field) |
 | `ordinal_index` | scalar | required: every level | keep | fact | `Layer.ordinal_index` (field) |
 | `output_device` | scalar | required: every level | keep | fact | `Layer.output_device` (field) |
-| `output_of_module_calls` | edge | required: every level | keep | fact | `Layer.output_of_module_calls` (field) |
-| `output_of_modules` | edge | required: every level | keep | fact | `Layer.output_of_modules` (field) |
+| `output_of_module_calls` | edge | required: every level | keep | fact | `Layer.module_context.output_of_module_calls` (field) |
+| `output_of_modules` | edge | required: every level | keep | fact | `Layer.module_context.output_of_modules` (field) |
 | `param_shapes` | scalar | required: every level | keep | fact | `Layer.param_shapes` (field) |
 | `raw_index` | scalar | required: every level | keep | fact | `Layer.raw_index` (field) |
 | `resolver_status` | scalar | required: every level | keep | fact | `Layer.resolver_status` (field) |
