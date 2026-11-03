@@ -47,7 +47,7 @@ def _own_axis(op: Op, ndim: int) -> int | None:
 def _same_shape_parent(trace: Trace, op: Op, shape: tuple[int, ...]) -> Op | None:
     """Return the first parent op whose output has exactly ``shape``."""
 
-    for label in getattr(op, "parents", None) or ():
+    for label in op.parents or ():
         parent = _op_from_label(trace, str(label))
         if parent is not None and tuple(getattr(parent, "shape", None) or ()) == shape:
             return parent

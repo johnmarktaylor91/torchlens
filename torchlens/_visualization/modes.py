@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, Final, cast
 
 import torch
 
+from .._data_classes.func_call_location import display_frame
 from .._literals import VisNodeModeLiteral
 from .._quantities import Duration
 from .._record_type import record_type
@@ -386,11 +387,16 @@ def _compact_size(size: float) -> str:
 
 
 def _first_call_location(layer_log: Op | Layer) -> Any | None:
-    """Return the first captured call-stack location for a layer."""
+    """Return the call-stack frame that ran a layer's op, or ``None``.
+
+    ``code_context`` is ordered outermost to innermost, so ``[0]`` is the
+    caller's entry point, not the op's line; ``display_frame`` names the
+    innermost frame outside torch, as every other source-line display does.
+    """
 
     call_stack = _get_optional_attr(layer_log, "code_context")
     if isinstance(call_stack, list) and call_stack:
-        return call_stack[0]
+        return display_frame(call_stack)
     return None
 
 
