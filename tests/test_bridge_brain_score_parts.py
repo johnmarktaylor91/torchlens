@@ -100,3 +100,20 @@ def test_aggregation_dimension_reads_center_and_error() -> None:
 def test_non_scalar_score_refuses() -> None:
     with pytest.raises(TypeError, match="single-number score"):
         score_parts(_FakeScore([0.1, 0.2]))
+
+
+def test_real_brainscore_score_object() -> None:
+    metrics = pytest.importorskip("brainscore_core.metrics")
+    raw = metrics.Score(_RAW)
+    ceiling = metrics.Score(_CEILING)
+    ceiled = metrics.Score(_NORMALISED)
+    ceiled.attrs["raw"] = raw
+    ceiled.attrs["ceiling"] = ceiling
+    ceiled.attrs["error"] = 0.01
+    parts = score_parts(ceiled)
+    assert (parts.raw, parts.ceiling_normalised, parts.ceiling, parts.error) == (
+        _RAW,
+        _NORMALISED,
+        _CEILING,
+        0.01,
+    )

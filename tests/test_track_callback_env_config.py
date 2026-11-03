@@ -39,6 +39,28 @@ def _lightning_attach(callback: trk.LightningWatchCallback) -> None:
     callback.on_train_end(trainer, model)
 
 
+def test_env_configured_lightning_callback_prints_each_source(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Acceptance U34.2: env values are used and every setting names its source."""
+
+    pytest.importorskip("lightning")
+    monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "gradients,parameters")
+    monkeypatch.setenv("TORCHLENS_WATCH_HIST_EVERY", "none")
+    printed: list[str] = []
+    sink = trk.MemorySink()
+    callback = trk.LightningWatchCallback(to=sink, select=("weight",), print_fn=printed.append)
+    _lightning_attach(callback)
+    assert len(printed) == 1
+    text = printed[0]
+    assert "signals=('gradients', 'parameters')  [env TORCHLENS_WATCH_SIGNALS]" in text
+    assert "select=('weight',)  [argument]" in text
+    assert "every=5  [derived: logging_steps=5]" in text
+    assert "hist_every=None  [env TORCHLENS_WATCH_HIST_EVERY]" in text
+    assert callback.settings.signals == ("gradients", "parameters")
+    assert any(p.tag.startswith("parameters/") for p in sink.scalars)
+
+
 def test_argument_beats_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TORCHLENS_WATCH_EVERY", "9")
     monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "parameters")

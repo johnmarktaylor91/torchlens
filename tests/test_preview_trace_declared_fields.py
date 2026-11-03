@@ -18,6 +18,7 @@ backend and check the field set plus a save and reload.
 from __future__ import annotations
 
 import ast
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -206,3 +207,29 @@ def _tf_capture() -> Trace:
         return tf.nn.relu(tf.matmul(x, x, transpose_b=True))
 
     return tl.trace(tf_root, tf.ones((2, 3)), backend="tf")
+
+
+@pytest.mark.heavy
+@pytest.mark.parametrize(
+    "capture",
+    [
+        pytest.param(_jax_capture, id="jax", marks=pytest.mark.backend_jax),
+        pytest.param(_mlx_capture, id="mlx", marks=pytest.mark.backend_mlx),
+        pytest.param(_paddle_capture, id="paddle", marks=pytest.mark.backend_paddle),
+        pytest.param(_tinygrad_capture, id="tinygrad", marks=pytest.mark.backend_tinygrad),
+        pytest.param(_tf_capture, id="tf", marks=pytest.mark.tf_backend),
+    ],
+)
+def test_preview_capture_has_every_declared_field_and_saves(
+    capture: Callable[[], Trace], tmp_path: Path
+) -> None:
+    """A real preview capture exposes every declared field, saves and reloads."""
+
+    trace = capture()
+
+    assert _missing_declared_fields(trace) == []
+    assert trace._provenance_verified is not True
+    path = tmp_path / "trace.tlspec"
+    trace.save(path)
+    loaded = tl.load(str(path))
+    assert list(loaded.layer_labels) == list(trace.layer_labels)

@@ -123,6 +123,15 @@ def graph_pair():
 class TestOpLabelReadSite:
     """A transcoder keyed by an op label reads that op's output."""
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason="the pre-registered remainder bar is relative to the remainder's own float32 "
+        "noise (mis-specified); it is kept, failing, in the record",
+    )
+    def test_remainder_meets_the_noise_relative_bar(self, graph_pair) -> None:
+        by_op, by_module, _keyed, _to_module = graph_pair
+        _close(by_op.constants["other"], by_module.constants["other"])
+
     def test_unknown_op_label_refuses(self) -> None:
         model = _model()
         trace = _trace(model)

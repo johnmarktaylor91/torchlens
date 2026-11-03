@@ -173,6 +173,17 @@ def test_unknown_format_refuses(view: tviz.AttentionView, tmp_path: Path) -> Non
     assert excinfo.value.fields["code"] == "tv_record_invalid"
 
 
+def test_pdf_text_extracts_tokens_in_order(view: tviz.AttentionView, tmp_path: Path) -> None:
+    """PDF is the paper format: selectable text, token order preserved."""
+
+    fitz = pytest.importorskip("fitz")
+    artifact = torchlens.viz.attention(view.head_view(0), tmp_path / "one.pdf")
+    with fitz.open(artifact.paths[0]) as doc:
+        text = doc[0].get_text()
+    positions = [text.find(f"tok{i}") for i in range(6)]
+    assert all(position >= 0 for position in positions), f"tokens missing from PDF text: {text!r}"
+
+
 def test_neuron_card_renders_closed_terms(tmp_path: Path) -> None:
     """The family-gated card renders only from a closed decomposition."""
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
 import torch
 from torch import nn
 
@@ -277,6 +278,29 @@ def test_trace_rerun_with_attached_tokenizer_string() -> None:
     try:
         trace.run("goodbye")
         assert model.tokenizer_calls == [("hello world", "pt"), ("goodbye", "pt")]
+    finally:
+        trace.cleanup()
+
+
+@pytest.mark.slow
+def test_trace_with_transformerlens_gpt2_string_if_available() -> None:
+    """End-to-end TransformerLens GPT-2 capture accepts raw text when locally available."""
+
+    hooked_transformer = pytest.importorskip("transformer_lens").HookedTransformer
+    try:
+        model = hooked_transformer.from_pretrained(
+            "gpt2",
+            device="cpu",
+            n_ctx=8,
+            first_n_layers=1,
+            local_files_only=True,
+        )
+    except Exception as exc:
+        pytest.skip(f"TransformerLens GPT-2 weights/tokenizer are not available locally: {exc}")
+
+    trace = tl.trace(model, "hello world", save=None)
+    try:
+        assert len(trace._layer_list) > 0
     finally:
         trace.cleanup()
 

@@ -323,6 +323,20 @@ class TestRenderers:
         assert html.startswith("<svg")
 
 
+class TestCairosvgRoundTrip:
+    def test_all_views_convert(self) -> None:
+        cairosvg = pytest.importorskip("cairosvg")
+        view = _synthetic_view()
+        for document in (
+            quantile_fan(view, "m:a"),
+            histogram_waterfall(view, "m:a"),
+            contact_sheet(view),
+            site_detail(view, "m:a"),
+        ):
+            png = cairosvg.svg2png(bytestring=document.encode("utf-8"))
+            assert png[:8] == b"\x89PNG\r\n\x1a\n"
+
+
 class TestGraphJoin:
     def test_color_by_watch_callable(self) -> None:
         from types import SimpleNamespace

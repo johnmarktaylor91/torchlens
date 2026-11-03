@@ -20,6 +20,7 @@ import ast
 import pickle
 from pathlib import Path
 
+import pytest
 import torch
 
 import torchlens as tl
@@ -104,3 +105,16 @@ def test_construction_and_identity_are_backend_free() -> None:
     # Builtin-portability members round-trip identity through pickle.
     for spec in (permute_batch(seed=1, axis=0), tl.mean_ablate(dim=None)):
         assert pickle.loads(pickle.dumps(spec)) == spec
+
+
+@pytest.mark.rare
+def test_mlx_live_leg_refuses_new_family() -> None:
+    """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
+
+    mlx = pytest.importorskip("mlx.core")
+    del mlx
+    from torchlens.backends.mlx.interventions import resolve_helper_applier
+    from torchlens.errors import BackendUnsupportedError
+
+    with pytest.raises(BackendUnsupportedError):
+        resolve_helper_applier(permute_batch(seed=1, axis=0))

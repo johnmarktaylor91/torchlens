@@ -85,6 +85,33 @@ class TestGraphIR:
 class TestTensorBoardIngestPin:
     """The pinned ingest leg (runs where the tensorboard extra is installed)."""
 
+    def test_event_file_binds_stats_to_nodes(self, conv_trace, tmp_path) -> None:  # noqa: ANN001
+        """GraphDef + StepStats land and every stats row joins a node."""
+
+        pytest.importorskip("tensorboard")
+        from tensorboard.backend.event_processing.event_accumulator import (
+            EventAccumulator,
+        )
+
+        trace, _ = conv_trace
+        ir = trk.build_graph_ir(trace)
+        logdir = str(tmp_path / "tb")
+        trk.graph_ir_to_tensorboard(ir, logdir)
+        accumulator = EventAccumulator(logdir)
+        accumulator.Reload()
+        graph = accumulator.Graph()
+        graph_names = {node.name for node in graph.node}
+        assert {node.name for node in ir.nodes} <= graph_names
+        run_metadata = accumulator.RunMetadata("step1")
+        stats_names = {
+            stat.node_name
+            for device in run_metadata.step_stats.dev_stats
+            for stat in device.node_stats
+        }
+        assert stats_names, "StepStats rows must land"
+        unmatched = ir.join_oracle(tuple(sorted(stats_names)))
+        assert unmatched == (), f"unbound stats rows: {unmatched}"
+
     @pytest.mark.skipif(
         importlib.util.find_spec("tensorboard") is not None,
         reason="tensorboard installed; the refusal leg is for bare envs",

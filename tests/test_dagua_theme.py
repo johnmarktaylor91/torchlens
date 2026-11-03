@@ -1,6 +1,14 @@
 import subprocess
 import sys
 import textwrap
+from pathlib import Path
+
+import example_models
+import pytest
+import torch
+
+from torchlens import trace as trace_fn
+from torchlens.experimental import dagua
 
 
 def test_dagua_renderer_requires_experimental_opt_in() -> None:
@@ -35,3 +43,56 @@ finally:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
+    pytest.importorskip("dagua")
+    model = example_models.AestheticFrozenMix().eval()
+    log = trace_fn(model, torch.rand(1, 8), save=None)
+    try:
+        graph = dagua.trace_to_dagua_graph(log, rolled=False, direction="leftright")
+        labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
+        assert any("trainable" in label.lower() for label in labels)
+        assert any(node_type == "frozen_params" for node_type in graph.node_types)
+        assert any(name.startswith("frozen_fc") for name in graph.clusters)
+        assert any(name.startswith("trainable_fc") for name in graph.clusters)
+    finally:
+        log.cleanup()
+
+
+def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
+    pytest.importorskip("dagua")
+    model = example_models.ResidualBlockModel().eval()
+    log = trace_fn(
+        model,
+        torch.rand(1, 16, 16, 16),
+        save=None,
+    )
+    out = tmp_path / "residual.svg"
+    try:
+        log.draw(
+            renderer="dagua",
+            theme="torchlens",
+            rolled=False,
+            direction="leftright",
+            file_format="svg",
+            path=str(out),
+        )
+        assert out.exists()
+        assert "svg" in out.read_text().lower()
+    finally:
+        log.cleanup()
+
+
+def test_render_audit_exposes_unused_fields() -> None:
+    pytest.importorskip("dagua")
+    model = example_models.SimpleFF().eval()
+    log = trace_fn(model, torch.rand(5, 5), save=None)
+    try:
+        audit = dagua.build_render_audit(log).to_dict()
+        assert "trace_unused" in audit
+        assert "entry_unused" in audit
+        assert "module_unused" in audit
+        assert "capture_duration" in audit["trace_unused"]
+    finally:
+        log.cleanup()
