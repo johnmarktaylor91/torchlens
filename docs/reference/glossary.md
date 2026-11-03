@@ -4116,6 +4116,7 @@ The sections above describe each surface in depth.
 | `GuessInputShapeReport.value_range` | Synthetic value recipe: `("uniform", 0, 1)` or `("randint", 0, vocab)` |
 | `HealthFacts.num_nonfinite_ops` | Nonfinite ops in the identity partition (alias rows excluded) |
 | `HealthFacts.num_unmapped_ops` | Ops the health partition could not map |
+| `Histogram.compute` | Return the finalized histogram counts (`HistogramResult`) |
 | `HistogramPoint.bin_edges` | Histogram bin edges for the point's counts |
 | `HistoryReader.num_chunks` | Number of committed chunks |
 | `HookContext.run_state` | Run-scoped scratch dict shared by every hook of one run |

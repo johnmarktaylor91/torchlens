@@ -125,7 +125,7 @@ class TestHistogramReference:
     def test_exact_power_bin_placement(self) -> None:
         h = Histogram()
         h.update(torch.tensor([1.0]))  # log2 = 0 -> bin (0 - lo_exp) * bpo
-        result = h.result()
+        result = h.compute()
         d = result.descriptor
         expected_bin = (0 - d.lo_exp) * d.bins_per_octave
         assert result.pos_counts[expected_bin] == 1
@@ -139,7 +139,7 @@ class TestHistogramReference:
                 [2.0**d.lo_exp, 2.0**d.hi_exp, 2.0 ** (d.lo_exp - 1), -(2.0 ** (d.hi_exp + 1))]
             )
         )
-        result = h.result()
+        result = h.compute()
         assert result.pos_counts[0] == 1  # exactly 2^lo lands in the first bin
         assert result.specials["pos_overflow"] == 1  # 2^hi is outside [lo, hi)
         assert result.specials["pos_underflow"] == 1
@@ -148,7 +148,7 @@ class TestHistogramReference:
     def test_specials_are_exact(self) -> None:
         h = Histogram()
         h.update(torch.tensor([0.0, 0.0, float("nan"), float("inf"), -float("inf"), 1.0, -1.0]))
-        result = h.result()
+        result = h.compute()
         assert result.specials["zero"] == 2
         assert result.specials["nan"] == 1
         assert result.specials["posinf"] == 1
@@ -160,7 +160,7 @@ class TestHistogramReference:
     def test_signed_sides_are_independent(self) -> None:
         h = Histogram()
         h.update(torch.tensor([0.5, -8.0]))
-        result = h.result()
+        result = h.compute()
         assert sum(result.pos_counts) == 1
         assert sum(result.neg_counts) == 1
 
@@ -169,7 +169,7 @@ class TestHistogramReference:
         data = torch.randn(50_000) * 40.0
         h = Histogram()
         h.update(data)
-        assert h.result().numel == 50_000
+        assert h.compute().numel == 50_000
 
     def test_bucket_edges_are_the_manifest_descriptor_values(self) -> None:
         d = HistogramDescriptor(bins_per_octave=1, lo_exp=-2, hi_exp=2)
@@ -192,16 +192,16 @@ class TestHistogramMerge:
         second.update(data[3000:])
         parts.merge(first)
         parts.merge(second)
-        assert parts.result() == whole.result()
+        assert parts.compute() == whole.compute()
 
     def test_result_level_merge_matches(self) -> None:
         a, b = Histogram(), Histogram()
         a.update(torch.tensor([1.0, -2.0]))
         b.update(torch.tensor([4.0, 0.0]))
-        merged = merge_histogram_results(a.result(), b.result())
+        merged = merge_histogram_results(a.compute(), b.compute())
         direct = Histogram()
         direct.update(torch.tensor([1.0, -2.0, 4.0, 0.0]))
-        assert merged == direct.result()
+        assert merged == direct.compute()
 
     def test_descriptor_mismatch_refuses_typed(self) -> None:
         a = Histogram()
@@ -210,7 +210,7 @@ class TestHistogramMerge:
             a.merge(b)
         assert excinfo.value.fields["code"] == "sketch_descriptor_mismatch"
         with pytest.raises(StatKernelError) as excinfo2:
-            merge_histogram_results(a.result(), b.result())
+            merge_histogram_results(a.compute(), b.compute())
         assert excinfo2.value.fields["code"] == "sketch_descriptor_mismatch"
 
     def test_descriptor_geometry_refusals(self) -> None:
@@ -237,7 +237,7 @@ class TestDtypes:
         # 2^-24 is subnormal in fp16 but well inside the [2^-48, 2^16) window.
         h = Histogram()
         h.update(torch.tensor([2.0**-24], dtype=torch.float16))
-        result = h.result()
+        result = h.compute()
         assert result.specials["zero"] == 0
         assert sum(result.pos_counts) == 1
 
@@ -250,7 +250,7 @@ class TestDtypes:
         assert bool_spine.compute().num_zero == 1
         h = Histogram()
         h.update(torch.tensor([4, -16], dtype=torch.int32))
-        hist = h.result()
+        hist = h.compute()
         assert sum(hist.pos_counts) == 1
         assert sum(hist.neg_counts) == 1
 
@@ -274,7 +274,7 @@ class TestCountWidth:
     def test_int32_fit_helper(self) -> None:
         h = Histogram()
         h.update(torch.ones(10))
-        result = h.result()
+        result = h.compute()
         assert result.counts_fit_int32()
         oversized = result.specials.copy()
         oversized["zero"] = INT32_COUNT_MAX + 1
@@ -298,7 +298,7 @@ class TestRngIsolation:
         h = Histogram()
         h.update(data)
         h.merge(Histogram())
-        h.result()
+        h.compute()
         spine_vector(data)
         sketch_vector(data, DEFAULT_DESCRIPTOR)
         after = torch.get_rng_state()
@@ -341,7 +341,7 @@ class TestVectorPathParity:
         )
         acc = Histogram()
         acc.update(data)
-        assert via_vector == acc.result()
+        assert via_vector == acc.compute()
 
     def test_quantile_sanity_from_grid(self) -> None:
         # The derived-quantile basis: cumulative counts over the fixed grid

@@ -14,6 +14,8 @@
   records), spelled like `FireRecord.backward_pass_number`; the v11 writer contract and the
   persisted-field table carry the new spelling. `color_by="pass_index"` is now
   `color_by="pass_number"`. Other fields named `pass_index` are unchanged.
+- **stats**: `tl.stats.Histogram.result()` is now `compute()` (round-2 walk names.2), so every
+  accumulator in `tl.stats` finalizes with the one verb `compute()`. `result()` is gone.
 - **intervention**: `tl.intervention.Rule` has no `direction` field. The site decides the pass
   (`Rule.signal`, derived): `Rule(site, edit)` edits the activation, `Rule(tl.grad(site), edit)`
   the gradient, `Rule(tl.grad(site) | site, edit)` both. `Rule(..., direction=...)` and the old
