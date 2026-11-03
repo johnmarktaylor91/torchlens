@@ -1,9 +1,9 @@
-"""Choose between ``set`` and ``attach_hooks``.
+"""Choose between a static value and a sticky hook in ``do``.
 
 What this demonstrates
 ----------------------
-``set`` records a concrete one-shot replacement. ``attach_hooks`` records a
-sticky callable/helper recipe that can be replayed or rerun repeatedly.
+``do(site, tensor)`` records a concrete one-shot replacement. ``do(site, hook)``
+attaches a sticky callable/helper recipe that can be replayed or rerun repeatedly.
 
 How to run
 ----------
@@ -46,15 +46,16 @@ def main() -> None:
     relu_shape = log.find_sites(tl.func("relu")).first().out.shape
 
     set_log = log.fork("set")
-    set_log.set(tl.func("relu"), torch.zeros(relu_shape), confirm_mutation=True).push()
+    set_log.do(tl.func("relu"), torch.zeros(relu_shape))
 
     hook_log = log.fork("hook")
-    hook_log.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    hook_log.push()
+    hook_log.do(tl.func("relu"), tl.zero_ablate())
 
     assert torch.allclose(set_log.output_ops[-1].out, hook_log.output_ops[-1].out)
-    assert set_log.state_history[-2]["op"] == "set"
-    assert hook_log.state_history[-2]["op"] == "attach_hooks"
+    set_ops = [row["op"] for row in set_log.state_history]
+    hook_ops = [row["op"] for row in hook_log.state_history]
+    assert "set" in set_ops and "attach_hooks" not in set_ops
+    assert "attach_hooks" in hook_ops
 
 
 if __name__ == "__main__":

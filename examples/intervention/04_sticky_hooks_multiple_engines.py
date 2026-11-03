@@ -2,8 +2,8 @@
 
 What this demonstrates
 ----------------------
-Attach a hook once, replay over the saved graph, then rerun the original model
-with the same active intervention spec.
+Apply one hook with ``do`` on the replay engine over the saved graph, then the
+same hook with ``do`` on the rerun engine against the original model.
 
 How to run
 ----------
@@ -45,12 +45,10 @@ def main() -> None:
     clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
     replayed = clean.fork("replay")
-    replayed.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    replayed.push()
+    replayed.do(tl.func("relu"), tl.zero_ablate())
 
     rerun = clean.fork("rerun")
-    rerun.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    rerun.run(model, x)
+    rerun.do(tl.func("relu"), tl.zero_ablate(), model=model, inputs=x)
 
     assert torch.allclose(replayed.output_ops[-1].out, rerun.output_ops[-1].out)
     assert replayed.last_run_records()[-1].engine == "replay"
