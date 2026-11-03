@@ -19,6 +19,7 @@ from collections import Counter
 from dataclasses import dataclass, replace
 from typing import Any
 
+from .._selection.target import TargetSpec
 from .errors import ControlFlowDivergenceError
 
 
@@ -277,7 +278,6 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     """
 
     from .._ir.selector_eval import looks_like_finalized_label
-    from .._selection.target import TargetSpec
 
     def lower(entry: Any) -> Any:
         target = entry.site_target
