@@ -96,7 +96,7 @@ class _CanonicalMetadataPickler(pickle._Pickler):
                     )
             return (cls, (members,))
         # An Op's gradient records persist as one columnar table (opcodes per op, not per record).
-        return reduce_with_grad_record_columns(obj, cls, self.proto)
+        return reduce_with_grad_record_columns(obj, cls, pickle.HIGHEST_PROTOCOL)
 
 
 def dump_canonical_metadata(state: Any, handle: Any) -> None:

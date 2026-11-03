@@ -24,6 +24,7 @@ form. A record list that does not fit the columns exactly keeps the per-object f
 from __future__ import annotations
 
 import struct
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,8 +60,10 @@ _FLOAT64_CODE, _FLOAT64_SIZE = "d", 8
 #: Separator of the packed blob ids (a blob id is a short ASCII token, never multi-line).
 _ID_SEPARATOR = "\n"
 
-#: Pickle identity of ``Op`` (it has no subclasses; a name check keeps the per-object cost low).
+#: Pickle identities of ``Op`` (it has no subclasses) and ``GradientRecord``. Names, not
+#: imports: this module stays a leaf of the import graph (``op.py`` imports it).
 _OP_MODULE, _OP_NAME = "torchlens._data_classes.op", "Op"
+_RECORD_TYPE = ("torchlens._data_classes.op", "GradientRecord")
 
 #: A packed run of blob references: ``(kind, int32 record positions, separator-joined ids)``.
 RefColumn = tuple[str, bytes, bytes]
@@ -129,6 +132,17 @@ def _index_column(values: list[Any]) -> tuple[bytes, tuple[Any, ...]] | None:
     return column, tuple(value for _key_type, value in table)
 
 
+def _ref_parts(value: Any, kind: str | None) -> tuple[str, str] | None:
+    """Return ``(blob_id, kind)`` of a blob reference the reference column can hold."""
+
+    if type(value) is not BlobRef:
+        return None
+    blob_id, ref_kind = value
+    if type(blob_id) is not str or type(ref_kind) is not str or _ID_SEPARATOR in blob_id:
+        return None
+    return (blob_id, ref_kind) if kind in (None, ref_kind) else None
+
+
 def _pack_payloads(values: list[Any]) -> tuple[dict[int, Any], RefColumn | None]:
     """Split one payload field into packed blob references and a sparse remainder."""
 
@@ -139,18 +153,13 @@ def _pack_payloads(values: list[Any]) -> tuple[dict[int, Any], RefColumn | None]
     for position, value in enumerate(values):
         if value is None:
             continue
-        if (
-            type(value) is BlobRef
-            and type(value.kind) is str
-            and type(value.blob_id) is str
-            and _ID_SEPARATOR not in value.blob_id
-            and (kind is None or value.kind == kind)
-        ):
-            kind = value.kind
-            positions.append(position)
-            blob_ids.append(value.blob_id)
-        else:
+        parts = _ref_parts(value, kind)
+        if parts is None:
             sparse[position] = value
+            continue
+        blob_ids.append(parts[0])
+        kind = parts[1]
+        positions.append(position)
     if kind is None:
         return sparse, None
     packed_positions = _int_column(positions, _INT32)
@@ -161,13 +170,11 @@ def _pack_payloads(values: list[Any]) -> tuple[dict[int, Any], RefColumn | None]
 def _record_states(records: Any) -> list[dict[str, Any]] | None:
     """Return each record's state when ``records`` is a list the columns hold exactly."""
 
-    from .._data_classes.op import GradientRecord
-
     if type(records) is not list or not records:
         return None
     states: list[dict[str, Any]] = []
     for record in records:
-        if type(record) is not GradientRecord:
+        if (type(record).__module__, type(record).__qualname__) != _RECORD_TYPE:
             return None
         state = vars(record)
         if state.keys() != _RECORD_FIELDS or state["owner"] is not None:
@@ -278,13 +285,17 @@ def _read_payloads(sparse: Any, refs: Any, count: int, name: str) -> list[Any]:
     return values
 
 
-def unpack_gradient_records(columns: GradientRecordColumns) -> list[Any]:
+def unpack_gradient_records(
+    columns: GradientRecordColumns, record_type: Callable[..., Any]
+) -> list[Any]:
     """Rebuild the ``GradientRecord`` list a :class:`GradientRecordColumns` table holds.
 
     Parameters
     ----------
     columns:
         Table read from bundle metadata (untrusted: every column is checked).
+    record_type:
+        ``GradientRecord`` (passed in by ``Op`` so this module never imports it).
 
     Returns
     -------
@@ -296,8 +307,6 @@ def unpack_gradient_records(columns: GradientRecordColumns) -> list[Any]:
     ArtifactError
         A column has the wrong type or length, or an index or position is out of range.
     """
-
-    from .._data_classes.op import GradientRecord
 
     count = columns.count
     if type(count) is not int or count < 0:
@@ -313,7 +322,7 @@ def unpack_gradient_records(columns: GradientRecordColumns) -> list[Any]:
         columns.transformed_grads, columns.transformed_grad_refs, count, "transformed_grads"
     )
     return [
-        GradientRecord(
+        record_type(
             owner=None,
             ordinal=ordinals[position],
             backward_pass_index=passes[position],
@@ -328,18 +337,20 @@ def unpack_gradient_records(columns: GradientRecordColumns) -> list[Any]:
     ]
 
 
-def unpack_grad_records_state(state: dict[str, Any]) -> None:
+def unpack_grad_records_state(state: dict[str, Any], record_type: Callable[..., Any]) -> None:
     """Restore a persisted ``_grad_records`` table in an ``Op`` pickle state, in place.
 
     Parameters
     ----------
     state:
         ``Op.__setstate__`` state; any other ``_grad_records`` value is left as it is.
+    record_type:
+        ``GradientRecord``.
     """
 
     columns = state.get("_grad_records")
     if type(columns) is GradientRecordColumns:
-        state["_grad_records"] = unpack_gradient_records(columns)
+        state["_grad_records"] = unpack_gradient_records(columns, record_type)
 
 
 def reduce_with_grad_record_columns(obj: Any, cls: type, proto: int) -> Any:
