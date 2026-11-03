@@ -16,9 +16,9 @@
   intervention site.
 - [Episode capture](../reference/episode_capture.md) for multi-step generation loops, and
   [the KV-cache guide](../guides/kv_cache.md).
-- Recipes: [Grad-CAM with torch-cam](../recipes/torchcam.md),
-  [network dissection](../recipes/dissection.md),
-  [feature visualisation](../recipes/feature_visualisation.md).
+- Recipes: [Grad-CAM with torch-cam](../field-guide/torchcam.md),
+  [network dissection](../field-guide/dissection.md),
+  [feature visualisation](../field-guide/feature_visualisation.md).
 - [The any-architecture strip](../gallery/any_architecture.md): the same three lines on six
   architecture families.
 

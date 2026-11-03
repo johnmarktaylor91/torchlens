@@ -65,8 +65,8 @@ ROWS = {
         Row("draw", "a rendered graph file of the whole trace", needs_graphviz=True),
         Row(
             "bundle_compare",
-            "a two-member bundle (clean and ablated traces) and its shared and divergent "
-            "operation labels",
+            "a two-member bundle (clean and ablated traces) and the supergraph that aligns "
+            "their operations",
         ),
     )
 }

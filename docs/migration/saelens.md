@@ -27,7 +27,7 @@ reconstruction = sae.decode(latents)
 
 `splice` takes any object with an `encode` and a `decode` method; no SAE package is required.
 The identity SAE below lets you check the effect by hand. For a pretrained SAE, load it with
-SAELens and pass it in, as the [pretrained-SAE recipe](../recipes/pretrained_saes.md) shows.
+SAELens and pass it in, as the [pretrained-SAE recipe](../field-guide/pretrained_saes.md) shows.
 
 ```python
 # migration-test: tool=torchlens expected=[True, True, True]
@@ -68,7 +68,7 @@ RESULT = [
 
 | SAELens operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
-| Attach an SAE to a hook point | `torchlens.bridge.sae.splice(model_or_log, inputs, site=..., sae=...)` -- the packaged splice experiment (fork + `tl.splice_module` + replay); reports reconstruction fidelity (MSE, fraction of variance explained pooled over per-dimension variance as SAELens reports it, and per dimension) plus output-level causal effect, and with `tokens=` next-token CE loss recovered and KL divergence. Pretrained SAEs: the [pretrained-SAE recipe](../recipes/pretrained_saes.md) (SAELens loads, TorchLens runs) | Ships. Duck-typed SAE (`encode`/`decode` pair); no SAE package required. Tutorial: `notebooks/sae_splice_tutorial.ipynb`. |
+| Attach an SAE to a hook point | `torchlens.bridge.sae.splice(model_or_log, inputs, site=..., sae=...)` -- the packaged splice experiment (fork + `tl.splice_module` + replay); reports reconstruction fidelity (MSE, fraction of variance explained pooled over per-dimension variance as SAELens reports it, and per dimension) plus output-level causal effect, and with `tokens=` next-token CE loss recovered and KL divergence. Pretrained SAEs: the [pretrained-SAE recipe](../field-guide/pretrained_saes.md) (SAELens loads, TorchLens runs) | Ships. Duck-typed SAE (`encode`/`decode` pair); no SAE package required. Tutorial: `notebooks/sae_splice_tutorial.ipynb`. |
 | Ablate / edit SAE features | `splice(..., latents_edit=fn)` -- the per-feature causal knob (a callable over the latent tensor) | Ships as part of the splice experiment. |
 | Manual attach at any site | `tl.splice_module(sae_like_module)` at a discovered site | Equivalent for shape-preserving PyTorch modules. |
 | Train an SAE | Bring your own optimizer over activations from `tl.extract_dataset` / `tl.trace`; the [SAE training hand-off](../sae_training_handoff.md) walks it end to end | TorchLens deliberately ships no trainers; it feeds external training machinery and then measures the trained artifact causally. |
@@ -116,7 +116,7 @@ remains SAELens's home turf, credited in `docs/acknowledgments.md`.
 ### SAELens feeds TorchLens
 
 Load the SAE with SAELens and hand it to `torchlens.bridge.sae.splice` (it needs `encode` and
-`decode`), as the [pretrained-SAE recipe](../recipes/pretrained_saes.md) walks through. A
+`decode`), as the [pretrained-SAE recipe](../field-guide/pretrained_saes.md) walks through. A
 second route, `torchlens.bridge.sae_lens`, has `encode(trace, site, sae)` and
 `reconstruct(trace, site, sae)` for reading a SAELens SAE's latents or reconstruction at a
 site of a trace.
@@ -133,7 +133,7 @@ dashboard code. There is no TorchLens-to-SAELens object conversion beyond that.
 - **Duck-typed SAE.** `splice` needs only `encode` and `decode`; SAELens's `SAE` object
   qualifies, but nothing in the splice reads SAELens-specific configuration (hook name,
   normalization settings). Match the site to the one the SAE was trained on yourself, or use
-  the [pretrained-SAE recipe](../recipes/pretrained_saes.md).
+  the [pretrained-SAE recipe](../field-guide/pretrained_saes.md).
 - **Latents are kept.** `SpliceResult.latents` and `SpliceResult.edited_latents` are kept by
   default and can be large; see the "Read feature activations" row.
 - **Stable-spelling status.** `bridge.sae.splice` and the facet spellings are

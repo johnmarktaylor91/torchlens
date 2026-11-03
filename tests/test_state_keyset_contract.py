@@ -5,7 +5,7 @@ pickle, scrub, fork) walks. This contract freezes, per record class and
 lifecycle stage, the EXACT key set it yields on the pre-columnar baseline.
 When a class moves to columnar-facade storage, its ``__tl_state_items__``
 must reproduce THIS key set — a missing key here is the silent-empty
-save/load/pickle/fork hole (docs/reference/trace_core_design.md, CRITICAL
+save/load/pickle/fork hole (docs/internal/reference/trace_core_design.md, CRITICAL
 state-adapter risk), caught before any artifact test.
 """
 

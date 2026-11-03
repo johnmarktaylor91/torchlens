@@ -30,26 +30,26 @@ REPO = Path(__file__).resolve().parents[1]
 
 #: Page or notebook (repo-relative) -> the one tool its fences need.
 PAGES: dict[str, str] = {
-    "docs/recipes/acdc_ioi.md": "transformers",
-    "docs/recipes/lrp_transformers_lxt.md": "lxt",
-    "docs/recipes/seeded_subsample.md": "torchlens",
-    "docs/recipes/training_ribbon.md": "matplotlib",
-    "docs/recipes/tcav.md": "torchlens",
-    "docs/recipes/generation_step_attribution.md": "transformers",
-    "docs/recipes/trainable_backbone.md": "torchvision",
-    "docs/recipes/tuned_lens.md": "tuned_lens",
-    "docs/recipes/jacobian_lens.md": "transformers",
-    "docs/recipes/conditional_steering.md": "transformers",
-    "docs/recipes/weightwatcher.md": "weightwatcher",
-    "docs/recipes/quantus.md": "quantus",
-    "docs/recipes/torchcam.md": "torchcam",
-    "docs/recipes/feature_visualisation.md": "torchlens",
-    "docs/recipes/dissection.md": "torchlens",
-    "docs/recipes/pretrained_saes.md": "sae_lens",
-    "docs/recipes/sae_latent_export.md": "torchlens",
-    "docs/recipes/sae_trainers.md": "sae_trainers",
-    "docs/recipes/sae_crosscoder_diff.md": "crosscoder",
-    "docs/recipes/prisma_clip_sae.md": "prisma",
+    "docs/field-guide/acdc_ioi.md": "transformers",
+    "docs/field-guide/lrp_transformers_lxt.md": "lxt",
+    "docs/field-guide/seeded_subsample.md": "torchlens",
+    "docs/field-guide/training_ribbon.md": "matplotlib",
+    "docs/field-guide/tcav.md": "torchlens",
+    "docs/field-guide/generation_step_attribution.md": "transformers",
+    "docs/field-guide/trainable_backbone.md": "torchvision",
+    "docs/field-guide/tuned_lens.md": "tuned_lens",
+    "docs/field-guide/jacobian_lens.md": "transformers",
+    "docs/field-guide/conditional_steering.md": "transformers",
+    "docs/field-guide/weightwatcher.md": "weightwatcher",
+    "docs/field-guide/quantus.md": "quantus",
+    "docs/field-guide/torchcam.md": "torchcam",
+    "docs/field-guide/feature_visualisation.md": "torchlens",
+    "docs/field-guide/dissection.md": "torchlens",
+    "docs/field-guide/pretrained_saes.md": "sae_lens",
+    "docs/field-guide/sae_latent_export.md": "torchlens",
+    "docs/field-guide/sae_trainers.md": "sae_trainers",
+    "docs/field-guide/sae_crosscoder_diff.md": "crosscoder",
+    "docs/field-guide/prisma_clip_sae.md": "prisma",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -110,15 +110,15 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: family inside its aggregate budget.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
-        "docs/recipes/jacobian_lens.md",
-        "docs/recipes/lrp_transformers_lxt.md",
+        "docs/field-guide/jacobian_lens.md",
+        "docs/field-guide/lrp_transformers_lxt.md",
         "docs/neuroai/journey.md",
-        "docs/recipes/tcav.md",
-        "docs/recipes/pretrained_saes.md",
-        "docs/recipes/sae_trainers.md",
-        "docs/recipes/feature_visualisation.md",
+        "docs/field-guide/tcav.md",
+        "docs/field-guide/pretrained_saes.md",
+        "docs/field-guide/sae_trainers.md",
+        "docs/field-guide/feature_visualisation.md",
         "examples/recipes/train_tuned_lens_recipe.ipynb",
-        "docs/recipes/prisma_clip_sae.md",
+        "docs/field-guide/prisma_clip_sae.md",
         "examples/recipes/das_causal_basis_recipe.ipynb",
         "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
         "examples/recipes/cka_rsa_two_models_recipe.ipynb",
@@ -140,7 +140,7 @@ HEAVY_PAGES: frozenset[str] = frozenset(
 #: 180 s on four cores (8,963 feature nodes).
 SLOW_PAGES: frozenset[str] = frozenset(
     {
-        "docs/recipes/acdc_ioi.md",
+        "docs/field-guide/acdc_ioi.md",
         "examples/recipes/function_vectors_recipe.ipynb",
         "examples/recipes/clip_head_attention_recipe.ipynb",
         "examples/recipes/clip_text_decomposition_recipe.ipynb",
@@ -266,7 +266,7 @@ def test_every_recipe_fence_is_headed(page: str) -> None:
 def test_lrp_page_states_the_patent_notice_and_points_to_lxt() -> None:
     """The LRP recipe warns of patents and keeps LRP a recipe, not a product feature."""
 
-    text = (REPO / "docs/recipes/lrp_epsilon_litmus.md").read_text("utf-8")
+    text = (REPO / "docs/field-guide/lrp_epsilon_litmus.md").read_text("utf-8")
     assert "LRP methods may be patent-encumbered for commercial" in text
     assert "keeps LRP a recipe, not a product feature" in text
     assert "(lrp_transformers_lxt.md)" in text

@@ -1165,8 +1165,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   operational state that an assignment can set and that a func-targeted `intervene=` capture
   keeps. Not validation's pristine-torch oracle, which means running on unwrapped torch
   functions. How the reading relates to the runnable clean-run promise (a hooked run
-  settles `unverifiable` and marks the trace non-pristine) is stated in
-  [`runnable_model.md`](runnable_model.md), "Clean run, hooked run, and disclosure".
+  settles `unverifiable` and marks the trace non-pristine) is stated in the maintainer page
+  `runnable_model.md`, "Clean run, hooked run, and disclosure".
 
 **Rescue re-run**
 : A single disclosed second forward under a `TorchFunctionMode` net that redirects detected stale
@@ -1688,7 +1688,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  3.0 format: the maintainer contract `docs/maintainers/saved_format_3.md` (not on the site).
   Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
   at load, on its manifest, metadata and blobs entries): a symlink there refuses
   (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
@@ -2128,7 +2128,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   and the decoder ops are trace nodes between the site and its consumers;
   `latents_site` names the latents node (`None` with logging off). The spliced
   outputs are the same with logging on and off. Recipe:
-  `docs/facets/pretrained_saes.md`.
+  `docs/field-guide/pretrained_saes.md`.
 
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
@@ -2167,7 +2167,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   (`SpliceResult.latents`, every activation above delphi's 1e-5) or the
   `UnitTopK` of `tl.stats.TopK(k, unit_axis=-1, encoder=sae.encode)` over a
   dataset (only the retained top entries). Recipe:
-  `docs/recipes/sae_latent_export.md`.
+  `docs/field-guide/sae_latent_export.md`.
 
 **write_sae_dashboard (`tl.bridge.sae.write_sae_dashboard(latents, tokens, *, latent_ids=None, k=20, path)`)** — *unstable — no deprecation shim owed*
 : Writes SAE latents and each latent's top examples as the JSON SAEDashboard's
@@ -2177,7 +2177,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   carry every token's activation and give `feature_stats` `max` and
   `frac_nonzero`; a dataset `UnitTopK` carries the ranked token's value only.
   `latent_ids` defaults to every latent that fired; `sae_export_dashboard_large`
-  warns once past 256 MiB. Recipe: `docs/recipes/sae_latent_export.md`.
+  warns once past 256 MiB. Recipe: `docs/field-guide/sae_latent_export.md`.
 
 **similarity_repository_id (`rdm_evolution(...).similarity_repository_id`, `tl.stats.CKA.similarity_repository_id`, the `SimilarityScore` that `tl.stats.cka` and `tl.stats.CKA.compute()` return, `ScoreInterval.similarity_repository_id`, the `neuro.rdms()` source-mode descriptor)** — *unstable — no deprecation shim owed*
 : The similarity-repository catalogue identifier of the exact measure variant a
@@ -2726,7 +2726,11 @@ default-keep); mask-application semantics documented-unstable*
 **tl.patch_from(source_trace, *, source_site=None, positions=None, position_axis=1)** — *unstable — no deprecation shim owed*
 : Edit factory patching targeted sites from another trace's recorded
   post-capture values (activation patching); with a Selection target only
-  the selected elements are patched. Source-to-target mapping (Patchscopes,
+  the selected elements are patched. With a facet or head target
+  (`tl.head(h, "v")`, `tl.facet(name)`) the donor is the same facet view of
+  the source's home-op value, so only that slice is copied (a single head of
+  GPT-2's fused `c_attn`, not the whole output); `positions=` then indexes
+  the facet slice's axes. Source-to-target mapping (Patchscopes,
   SelfIE): `source_site=` reads the donor at another site of the source trace
   (a label, pass-qualified on multi-pass layers, or a selector naming exactly
   one op; else `patch_source_site_unresolved`), and `positions=` (an int, a
@@ -4235,7 +4239,7 @@ The sections above describe each surface in depth.
 | `BisectPrecisionReport.message` | Human-readable summary |
 | `Bundle.comparability` | Return the derived relationship for a pair of members (`tl.types.Relationship`) |
 | `Bundle.comparability_table` | Return pairwise relationships for all member pairs |
-| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"` |
+| `Bundle.map` | Apply a function independently to each member; released effect-table candidates read `"unmeasured"`. `fn(member)`; the member name is passed only where `fn` takes it: positionally to a required second parameter or `*args` (`lambda log, name: ...`), by keyword to a parameter called `name`; a defaulted second parameter (`lambda log, k=3: ...`) keeps its default |
 | `Bundle.compare` | Per-site differences between two members as `(site_label, distance)` rows; `metric=` and `on=`. Row keys: a multi-pass op gives one row per pass, keyed by its pass-qualified label (`tanh_1_1:2`); a single-pass op keeps its bare layer label (JMT, Sun 1 Nov 2026) |
 | `Bundle.rank_changes` | Rank sites by their distance from a baseline member; rows keyed like `Bundle.compare` (one row per pass of a multi-pass op) |
 | `BundleComparisonError.severity` | The error's severity class |
@@ -4432,6 +4436,7 @@ The sections above describe each surface in depth.
 | `ReceptiveFieldView.axis_roles` | Axis layout of the viewed op's input grid |
 | `ReceptiveFieldView.of` | Many-unit influence region as a trace-bound `tl.Selection`, one region per `within=` site |
 | `ReceptiveFieldView.probe_grad` | Empirical gradient probe of one unit's receptive field |
+| `ReceptiveFieldView.status` | Field status of the only reachable endpoint, or a read-only mapping from each endpoint's IO role to its status when several are reachable (a projective view of a GPT-2 activation reaches the logits and every later block's cached keys and values) |
 | `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
 | `Recipe.door_pairs` | Lower the spec to `(site, action)` pairs for the hook doors |

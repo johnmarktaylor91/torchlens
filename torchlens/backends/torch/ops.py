@@ -123,6 +123,10 @@ from ..._utils._call_site import (
     CALL_SITE_CLASS_MARKER,  # noqa: F401 (re-exported to the split modules)
 )
 from ..._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+from ..._utils._mutation_names import (
+    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS as _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
+    _SETTER_MUTATION_FUNC_NAMES as _SETTER_MUTATION_FUNC_NAMES,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
     tensor_version_or_none,
@@ -336,12 +340,6 @@ setattr(
 )
 
 
-_SETTER_MUTATION_FUNC_NAMES = frozenset({"__setitem__", "__delitem__"})
-"""Setter-style in-place ops whose names do NOT end in ``_`` (used only as the no-baseline
-is_inplace fallback). They mutate their target but log a reconstructed output tensor, so the
-version-baseline signal is unavailable and the operator name is the honest mutation signature.
-"""
-
 _BULK_ALIAS_FREE_TORCH_FUNCTIONS = frozenset(
     {
         "__add__",
@@ -374,14 +372,6 @@ _BULK_ALIAS_FREE_TORCH_FUNCTIONS = frozenset(
 
 The two in-place names are accepted only when the wrapper supplied live arguments as their own
 "copies"; the wrapper has already cloned their same-object return for logging in that regime.
-"""
-
-_INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS = frozenset(
-    {"__index__", "__init__", "__init_subclass__", "__int__", "__invert__", "__iter__"}
-)
-"""Non-mutating ``__i*`` dunders excluded from augmented-assignment classification.
-
-Unary dunders such as ``__invert__`` intentionally stay out of this set.
 """
 
 

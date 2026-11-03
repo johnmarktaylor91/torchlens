@@ -8,8 +8,8 @@ Two gates live here:
   (``CLAUDE.md`` only imports AGENTS.md) top to bottom, statement by statement, in one
   shared namespace per page. The 2026-10-01 docs move ("docs: move agent reference
   material out of startup instructions") relocated those two fences out of AGENTS.md
-  into ``docs/agent-reference/common-patterns.md`` and
-  ``docs/agent-reference/architecture.md``, which this gate now reads directly;
+  into ``docs/internal/agent-reference/common-patterns.md`` and
+  ``docs/internal/agent-reference/architecture.md``, which this gate now reads directly;
   AGENTS.md itself carries no fences any more (just "Required reading" pointers).
 
 The canonical-page ambient contract is deliberately tiny: the harness injects
@@ -51,7 +51,7 @@ DOC_FILE_GROUPS: dict[str, tuple[str, ...]] = {
         # self-contained programs (spelling-only sketches on them are tagged
         # ```text).
         "native-torch.md",
-        "recipes/lrp_epsilon_litmus.md",
+        "field-guide/lrp_epsilon_litmus.md",
         "guides/grouping.md",
         # Backend protocol: the reference backend's tutorial (graduation G5).
         "backends/torch.md",
@@ -243,8 +243,8 @@ def test_doc_python_blocks_run_reference_views(
 #: docstring); these two pages carry the content "AGENTS.md" used to name here.
 CANONICAL_PAGES = (
     "README.md",
-    "docs/agent-reference/common-patterns.md",
-    "docs/agent-reference/architecture.md",
+    "docs/internal/agent-reference/common-patterns.md",
+    "docs/internal/agent-reference/architecture.md",
 )
 _SKETCH_MARKER_RE = re.compile(r"^\s*#.*\bAPI sketch\b", re.IGNORECASE)
 _OPTIONAL_AMBIENT_NAMES = frozenset({"tf_model", "tf_x"})
@@ -461,11 +461,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # instructions"): these two pages carry the fences the canonical AGENTS.md gate
     # used to execute directly; CANONICAL_PAGES now reads them by this path, so they
     # are covered there, not by the per-block DOC_FILES mechanism.
-    "agent-reference/common-patterns.md": (
+    "internal/agent-reference/common-patterns.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Common Patterns section)"
     ),
-    "agent-reference/architecture.md": (
+    "internal/agent-reference/architecture.md": (
         "executed end-to-end by test_canonical_page_python_blocks_execute "
         "(moved from AGENTS.md's Architecture section's "
         "'Common unified capture patterns' fence)"
@@ -475,11 +475,11 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     # docs/, where this lint sees it for the first time. The fences are illustrative
     # sketches over backends/inputs the canonical ambient does not provide
     # (paddle_model/paddle_x, raw_text/text_to_tensor, block1/block2 submodules).
-    "agent-reference/package/public-surface.md": (
+    "internal/agent-reference/package/public-surface.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
-    "agent-reference/package/architecture-overview.md": (
+    "internal/agent-reference/package/architecture-overview.md": (
         "illustrative surface-listing fragments (paddle/raw_text/block1-block2 "
         "ambient names undefined), not runnable programs"
     ),
@@ -553,26 +553,26 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/repe.md": _MIGRATION_PAGES_EXECUTED,
     "migration/autocircuit.md": _MIGRATION_PAGES_EXECUTED,
     "migration/baukit.md": _MIGRATION_PAGES_EXECUTED,
-    "recipes/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/torchcam.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/quantus.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
-    "recipes/dissection.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/acdc_ioi.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/lrp_transformers_lxt.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/torchcam.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/quantus.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_trainers.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/prisma_clip_sae.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_crosscoder_diff.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/sae_latent_export.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/pretrained_saes.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/feature_visualisation.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/dissection.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/netrep.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/himalaya.md": _RECIPE_PAGES_EXECUTED,
     "neuroai/byo_alignment.md": (

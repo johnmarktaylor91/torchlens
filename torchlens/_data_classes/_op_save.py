@@ -18,6 +18,10 @@ from .._errors import InvalidArgumentError, UserTransformError
 from .._io.format_errors import ArtifactError
 from .._quantities import Bytes, Duration, Flops, as_bytes
 from .._trace_core.op_store import row_clone_scope
+from .._utils._mutation_names import (
+    _SETTER_MUTATION_FUNC_NAMES,
+    _is_inplace_augmented_assignment_dunder,
+)
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.tensor_utils import (
     SaveMode,
@@ -212,12 +216,6 @@ def _warn_reference_save_mode_once() -> None:
     _WARNED_REFERENCE_SAVE_MODE = True
 
 
-def _is_inplace_func_name(func_name: str | None) -> bool:
-    """Return whether ``func_name`` is an in-place torch spelling (``add_``, not ``__add__``)."""
-
-    return func_name is not None and func_name.endswith("_") and not func_name.endswith("__")
-
-
 def _effective_activation_save_mode(
     trace: Trace | None,
     *,
@@ -237,14 +235,31 @@ def _effective_activation_save_mode(
         )
     if save_mode == "reference":
         _warn_reference_save_mode_once()
-        # In-place torch names end in one underscore (``add_``); the operator
-        # dunders (``__add__``, ``__matmul__``, ``__getitem__``) end in two and
-        # are out-of-place, so a reference-mode capture keeps their outputs by
-        # reference like any other op. The version-counter ``is_inplace`` flag
-        # still catches ``__iadd__`` and ``__setitem__``.
-        if is_inplace or _is_inplace_func_name(func_name):
+        if is_inplace or _has_mutating_func_name(func_name):
             return "copy"
     return save_mode
+
+
+def _has_mutating_func_name(func_name: str | None) -> bool:
+    """Return whether ``func_name`` names a mutating call (the reference-mode fallback).
+
+    ``"__add__".endswith("_")`` is true for EVERY dunder, so the trailing
+    underscore marks a mutation only outside dunders. Among dunders only the
+    augmented assignments (``__iadd__``...) and the item setters mutate. A
+    non-mutating dunder (``a * b``, ``a + b``) returns a fresh tensor, which
+    reference mode keeps as is: copying it would store a payload that is a
+    dead end for autograd, so gradient probes from it (receptive and
+    projective fields' ``method="gradient"``) would find no path downstream.
+    """
+
+    if func_name is None:
+        return False
+    if func_name.startswith("__") and func_name.endswith("__"):
+        return (
+            _is_inplace_augmented_assignment_dunder(func_name)
+            or func_name in _SETTER_MUTATION_FUNC_NAMES
+        )
+    return func_name.endswith("_")
 
 
 def _stamp_reference_out(

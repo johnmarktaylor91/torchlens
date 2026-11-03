@@ -21,6 +21,7 @@ from ..._ir.events import (
 )
 from ..._ir.refs import ParamRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
+from ..._utils._mutation_names import _is_inplace_augmented_assignment_dunder
 from ..._utils._torch_compat import (
     tensor_version_or_none,
 )
@@ -210,23 +211,6 @@ def _compact_ancestor_sets(trace: Trace) -> None:
             bitset = _AncestorBitset(labels, bits)
             bitset_pool[bits] = bitset
         _ANCESTOR_SLOT_DESCRIPTORS[field_name].__set__(op, bitset)
-
-
-def _is_inplace_augmented_assignment_dunder(name: str) -> bool:
-    """Return whether ``name`` denotes an in-place augmented-assignment dunder.
-
-    Parameters
-    ----------
-    name:
-        Function name recorded by the torch eager wrapper.
-
-    Returns
-    -------
-    bool
-        True for ``__i*`` mutation dunders except known non-mutating dunders.
-    """
-
-    return name.startswith("__i") and name not in _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS
 
 
 def _record_label_version_snapshot(t: Any, *, mutated_via: tuple[Any, Any] | None = None) -> None:
@@ -759,7 +743,6 @@ from .ops import (  # noqa: E402
     _ANCESTOR_SLOT_DESCRIPTORS,
     _CAPTURE_PRODUCER_POLICIES,
     _FUNCTION_REF_PER_OUTPUT_FIELDS,
-    _INPLACE_AUGMENTED_ASSIGNMENT_DUNDER_EXCLUSIONS,
     _LABEL_VERSION_SNAPSHOT,
     _VIEW_MUTATION_RELABELS,
     CaptureProducerPolicy,

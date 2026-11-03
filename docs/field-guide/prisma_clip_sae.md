@@ -7,7 +7,7 @@ trained on the residual stream after block 11 of OpenCLIP's ViT-B/32). ViT-Prism
 loads the SAE; TorchLens traces the vision model, splices the SAE's
 reconstruction in at the block it was trained on with
 `torchlens.bridge.sae.splice` and reports what changed, as the
-pretrained-SAE recipe (`docs/recipes/pretrained_saes.md`) does for language
+pretrained-SAE recipe (`docs/field-guide/pretrained_saes.md`) does for language
 models.
 
 ```text

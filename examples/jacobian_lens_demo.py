@@ -3,7 +3,7 @@
 The Jacobian lens transports a block's residual state into the final layer's
 basis with ``J_l = E[d h_final / d h_l]`` before the model's own final norm and
 unembedding; the logit lens is the special case ``J_l = I``. The recipe is the
-one in ``docs/recipes/jacobian_lens.md``: a trace with ``save_mode="view"``
+one in ``docs/field-guide/jacobian_lens.md``: a trace with ``save_mode="view"``
 keeps each block's live output, batched ``torch.autograd.grad`` gives the
 Jacobian rows, and the model's own final norm and unembedding read the fitted
 lens out beside the plain logit lens. ``--check`` compares the fit against

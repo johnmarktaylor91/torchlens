@@ -199,7 +199,7 @@ cards:
     tier: core
     doors: [mechinterp, neuroai, vision, agents]
     related: [to-disk, agent-inspect]
-    page: docs/agent-reference/package/key-concepts.md
+    page: docs/internal/agent-reference/package/key-concepts.md
     fixture: none
     prompt: 'A colleague I trust sent me run.tlspec, a saved TorchLens capture. Open it in Python and print the label and shape of every saved activation.'
     avoid_calls: []
@@ -264,7 +264,7 @@ cards:
     tier: advanced
     doors: [mechinterp]
     related: [steer-generate, record-many]
-    page: docs/agent-reference/common-patterns.md
+    page: docs/internal/agent-reference/common-patterns.md
     fixture: lm
     prompt: 'Generate 16 tokens greedily from ids and keep the output of model.layers.6 at every generation step.'
     avoid_calls: [tl.trace]
@@ -303,7 +303,7 @@ cards:
     tier: advanced
     doors: [mechinterp]
     related: [extract-dataset, probe]
-    page: docs/recipes/sae_trainers.md
+    page: docs/field-guide/sae_trainers.md
     fixture: vision
     prompt: 'I am going to train a sparse autoencoder with an external trainer on the layer4 activations of the model over all images in stimuli. Write the step that produces that training set on disk.'
     avoid_calls: [tl.trace]
@@ -382,7 +382,7 @@ cards:
     tier: kit
     doors: [agents]
     related: [validate]
-    page: docs/agent-reference/common-patterns.md
+    page: docs/internal/agent-reference/common-patterns.md
     fixture: vision
     prompt: 'TorchLens fails on this model with an error I do not understand. Before changing anything, produce TorchLens''s own diagnostic report of the environment and how it sees the model on x.'
     avoid_calls: []

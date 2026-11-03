@@ -1005,7 +1005,7 @@
    "a": "draw",
    "b": "save",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "medium",
    "note": "The pattern doc draws the same trace it captured with save=tl.func('relu')."
   },
@@ -1278,7 +1278,7 @@
    "a": "episode",
    "b": "reporting",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "low",
    "note": "Not in the episode option table; grouping values other than structural may refuse grouping_policy_unavailable."
   },
@@ -1326,7 +1326,7 @@
    "a": "export",
    "b": "extract",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "medium",
    "note": "features.as_matrix feeds the rsatoolbox and xarray adapters; file and in-memory routes agree numerically."
   },
@@ -1483,7 +1483,7 @@
    "a": "extract",
    "b": "index",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "high",
    "note": "extract resolves layer and module names through the same selector door as trace[...]."
   },
@@ -1507,7 +1507,7 @@
    "a": "extract",
    "b": "multipass",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "low",
    "note": "No extract-specific multi-pass document found."
   },
@@ -2051,7 +2051,7 @@
    "a": "index",
    "b": "save",
    "status": "composes",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "confidence": "high",
    "note": "log['relu_1_2'].out after save=tl.func('relu'); an unsaved site refuses activation_not_saved."
   },
@@ -2090,7 +2090,7 @@
    "a": "intervene",
    "b": "multipass",
    "status": "composes",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "confidence": "medium",
    "note": "Pass-qualified replay edits exactly the addressed pass; predicate selectors fan out across passes."
   },
@@ -2571,7 +2571,7 @@
     "recipes"
    ],
    "summary": "recipes= attaches facet recipes on torch and Paddle; tf (and jax, tinygrad, mlx) refuse it typed.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "close",
    "ruling": "close"
   },
@@ -2846,7 +2846,7 @@
     "storage"
    ],
    "summary": "trace(storage=tl.to_disk(...)) writes asynchronously by default and honors async_writes; tl.record streaming stays synchronous and refuses an explicit async_writes=True.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "document"
   },
@@ -2854,7 +2854,7 @@
    "id": "A35",
    "pair": [],
    "summary": "The same capture concepts (random_seed, backward_ready, save_grads, detach_saved_activations) are flat keywords on tl.record but live inside capture=CaptureOptions(...) on tl.trace, and save= takes a selector, list or SaveOptions on trace but a predicate on record.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "close"
   },
@@ -2862,7 +2862,7 @@
    "id": "A36",
    "pair": [],
    "summary": "The model input is spelled inputs on trace, record and validate, x on extract and legacy run(model, x), inputs= on the unified run, and input_size= for declared shapes.",
-   "evidence": "docs/agent-reference/common-patterns.md",
+   "evidence": "docs/internal/agent-reference/common-patterns.md",
    "recommendation": "close",
    "ruling": "close"
   },
@@ -2886,7 +2886,7 @@
    "id": "A40",
    "pair": [],
    "summary": "Disk output is spelled storage=tl.to_disk(path) on trace and record, output_dir= on extract_dataset, and path inside streaming options.",
-   "evidence": "docs/agent-reference/current-2-x-surface.md",
+   "evidence": "docs/internal/agent-reference/current-2-x-surface.md",
    "recommendation": "document",
    "ruling": "close"
   },
