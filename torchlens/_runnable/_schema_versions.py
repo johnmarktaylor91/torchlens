@@ -16,7 +16,7 @@ analysis-only (fail-closed), never "assume disabled".
 RUNNABLE_CALL_RECIPE_VERSION: Final = "non_tensor_args_tensor_slots_context_and_obligations_v3"
 """Frozen sparse call-recipe version string.
 
-v3 (r71 A) adds REQUIRED per-call obligation fields to every call record:
+v3 adds REQUIRED per-call obligation fields to every call record:
 ``control_obligations`` (owner-record scalar-bool/loop-predicate obligations) and
 ``control_dependencies`` (owner-record conditional arm-entry edges on the CHILD
 call). Absence of either field is a parse failure -- the explicit-schema-decision
@@ -48,7 +48,7 @@ WITNESS_FAMILY_REGISTRY_VERSION: Final = "witness_family_registry_v2"
 
 A parser only accepts an inventory authored against ITS OWN closed registry; any other
 discriminator refuses at parse (``context_field_invalid``), so a future registry change
-is an explicit schema decision, never a silent vocabulary drift. v2 (r71 A) extends the
+is an explicit schema decision, never a silent vocabulary drift. v2 extends the
 registry from the seven ``SHAPE_STRUCTURE_FACT`` prefixes to EVERY verdict-steering
 witness family -- the four direct control kinds included -- plus the two explicit
 claim-only families, each row a typed :class:`FamilySpec` naming its independent

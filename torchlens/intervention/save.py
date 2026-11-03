@@ -23,7 +23,7 @@ from .._io.format3.recipe import (
     RecipeHeader,
     read_recipe,
     recipe_placeholders,
-    trace_capture_rules,
+    trace_recipe_context,
 )
 from .._io.format3.writer import EnvelopeSpec, envelope_fields, write_intervention_recipe
 from .._io.format_contract import below_floor_error
@@ -148,10 +148,10 @@ def save_intervention(
         store = PayloadStore(tmp_path)
         header = RecipeHeader(
             save_level=save_level.value,
-            append_state=_append_state_for_json(trace),
-            function_registry_keys=_serialize_function_registry_keys(trace),
-            spec_derived=_spec_is_predicate_derived(spec),
-            capture_rules=trace_capture_rules(trace),
+            **{
+                **trace_recipe_context(trace),
+                "function_registry_keys": _serialize_function_registry_keys(trace),
+            },
         )
         intervention_entry, disclosures = write_intervention_recipe(
             spec, tmp_path, store=store, header=header
