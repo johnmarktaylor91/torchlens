@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1403 modules, 630715 lines, 0 modules without a docstring.
+83 packages, 1403 modules, 630733 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -40,7 +40,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 12 | 4092 |
 | `torchlens._utils` | Shared helpers used by two or more TorchLens packages. | 39 | 16117 |
 | `torchlens._utils.rng` | RNG state for reproducible capture and replay, and the host-nondeterminism monitor. | 17 | 6316 |
-| `torchlens._visualization` | Computational graph visualization via Graphviz. | 72 | 43724 |
+| `torchlens._visualization` | Computational graph visualization via Graphviz. | 72 | 43742 |
 | `torchlens._visualization._rank_layout_internal` | Internal rank layout backend for TorchLens visualization. | 2 | 1146 |
 | `torchlens._visualization._summary_internal` | Text helpers for ''Trace'' objects: the compact repr and the provenance block. | 3 | 753 |
 | `torchlens._visualization.lenses` | TorchLens semantic lenses: the themes roster and its honesty machinery. | 7 | 2286 |
@@ -848,7 +848,7 @@ RNG state for reproducible capture and replay, and the host-nondeterminism monit
 
 ### `torchlens._visualization`
 
-Computational graph visualization via Graphviz. (72 modules, 43724 lines)
+Computational graph visualization via Graphviz. (72 modules, 43742 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -906,7 +906,7 @@ Computational graph visualization via Graphviz. (72 modules, 43724 lines)
 | `code_panel` | Source-code panel helpers for Graphviz visualizations. | 696 |
 | `collapse_estimator` | Deterministic collapse work estimator and admission policy (/). | 209 |
 | `collapse_fallback` | Deterministic coarse-but-legal fallback collapse planner ((iv)). | 239 |
-| `collapse_ladder` | Typed collapse event ladder: one truth for auto, floats, and the schedule. | 686 |
+| `collapse_ladder` | Typed collapse event ladder: one truth for auto, floats, and the schedule. | 704 |
 | `collapse_optimizer` | Bounded beam-search tree-cut optimizer for v2 auto collapse. | 4093 |
 | `collapse_patterns` | Declarative user-named pattern folding, v1 (collapse / K5). | 531 |
 | `collapse_plan` | Diagnostic collapse-plan AST and renderer-faithful count helpers. | 624 |
