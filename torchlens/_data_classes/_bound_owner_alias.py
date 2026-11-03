@@ -50,7 +50,7 @@ def owner_address_for(accessor: Any, key: Any) -> Any:
     root = accessor._dict.get("self")
     ref = getattr(root, "__dict__", {}).get("_source_trace_ref") if root is not None else None
     trace = ref() if ref is not None else None
-    entry_point = getattr(trace, "_provenance_root_entry_point", None)
+    entry_point = trace.provenance.root_entry_point if trace is not None else None
     if isinstance(entry_point, str) and entry_point.startswith(_BOUND_METHOD_ENTRY):
         return candidate
     return key
