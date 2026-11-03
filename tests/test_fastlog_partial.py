@@ -17,6 +17,7 @@ from torchlens._io.streaming import PARTIAL_SENTINEL
 from torchlens.backends.torch.backend import TorchBackend
 from torchlens.errors import PredicateError, RecorderStateError, TraceCaptureError
 from torchlens.recording import RecordContext, Recorder
+from torchlens.recording.options import RecordingOptions
 
 
 class FailingAfterOps(nn.Module):
@@ -211,7 +212,7 @@ def test_manual_recorder_log_return_partial_sets_recording() -> None:
     with Recorder(
         FailingAfterOps(),
         save=_save_ops,
-        on_forward_error="return_partial",
+        recording=RecordingOptions(on_forward_error="return_partial"),
     ) as recorder:
         output = recorder(torch.tensor(1.0))
         partial = recorder.recording
@@ -428,7 +429,11 @@ def test_third_pass_failure_in_reused_recorder_returns_partial() -> None:
                 raise RuntimeError("third pass boom")
             return torch.relu(y)
 
-    with Recorder(FailsOnThird(), save=_save_ops, on_forward_error="return_partial") as recorder:
+    with Recorder(
+        FailsOnThird(),
+        save=_save_ops,
+        recording=RecordingOptions(on_forward_error="return_partial"),
+    ) as recorder:
         assert recorder(torch.tensor(1.0)) is not None
         assert recorder(torch.tensor(1.0)) is not None
         assert recorder(torch.tensor(1.0)) is None

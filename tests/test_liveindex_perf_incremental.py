@@ -21,6 +21,7 @@ from torch import nn
 from benchmarks.live_index_append_counters import counting, synthetic_stream
 from torchlens._ir.live_index import LiveIndex
 from torchlens.recording import Recorder
+from torchlens.recording.options import RecordingOptions
 
 
 @dataclass(frozen=True)
@@ -176,7 +177,11 @@ def test_recorder_folds_repeat_labels_without_rebuilding(fail_on: int | None) ->
 
     with (
         counting() as tally,
-        Recorder(_Chain(fail_on), save=_save_ops, on_forward_error="return_partial") as recorder,
+        Recorder(
+            _Chain(fail_on),
+            save=_save_ops,
+            recording=RecordingOptions(on_forward_error="return_partial"),
+        ) as recorder,
     ):
         for _ in range(3):
             recorder(torch.ones(2))

@@ -145,7 +145,7 @@ def test_disk_only_keep_grad_default_rejected_at_construction(tmp_path: Path) ->
     with pytest.raises(RecordingConfigError, match="save_grad=True"):
         tl.recording.Recorder(
             StorageModel(),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
             storage=StorageOptions(
                 path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,

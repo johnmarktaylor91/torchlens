@@ -41,14 +41,14 @@ from ._capture_door import _unfold_capture_options
 from ._halt import StopSignal
 from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
+from ._recording_door import _unfold_recording_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
-    ForwardErrorMode,
     GradPredicateFn,
     HaltPredicateFn,
-    PredicateErrorMode,
     PredicateFn,
+    RecordingOptions,
     _RecordingConfig,
     _resolve_recording_config,
 )
@@ -205,19 +205,12 @@ class Recorder:
         model: nn.Module,
         *,
         save: PredicateFn | None | MissingType = MISSING,
-        default_op: bool | CaptureSpec | MissingType = MISSING,
-        default_module: bool | CaptureSpec | MissingType = MISSING,
-        history_size: int | MissingType = MISSING,
-        include_source_events: bool | MissingType = MISSING,
         intervene: InterventionPredicate | None | MissingType = MISSING,
         stop_after: HaltPredicateFn | None | MissingType = MISSING,
-        max_predicate_failures: int | MissingType = MISSING,
-        on_predicate_error: PredicateErrorMode | MissingType = MISSING,
-        on_forward_error: ForwardErrorMode | MissingType = MISSING,
         storage: StorageOptions | None | MissingType = MISSING,
-        default_grad: bool | CaptureSpec | MissingType = MISSING,
         narrate: Any | None | MissingType = MISSING,
         capture: CaptureOptions | None = None,
+        recording: RecordingOptions | None = None,
     ) -> None:
         """Initialize a recorder and perform construction-time validation.
 
@@ -225,11 +218,15 @@ class Recorder:
         ----------
         model:
             PyTorch module to record.
-        save, default_op, default_module, history_size, include_source_events,
-        max_predicate_failures, on_predicate_error, storage:
-            Fastlog recording options.
-        on_forward_error:
-            Controls failed-forward handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
+        save, intervene, storage:
+            The save predicate, the intervention predicate and the disk sink.
+        recording:
+            ``tl.options.RecordingOptions`` with the recorder's own knobs (``default_op``,
+            ``default_module``, ``history_size``, ``include_source_events``,
+            ``max_predicate_failures``, ``on_predicate_error``, ``on_forward_error``,
+            ``default_grad``), the shape ``tl.record`` takes; ``keep_op``, ``intervene`` and
+            ``postprocess`` set on it refuse. ``on_forward_error`` controls failed-forward
+            handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
             ``"attach_partial"`` also hangs the failed partial ``Recording`` on it as
             ``exc.partial_recording`` before re-raising. ``"return_partial"`` returns ``None`` from
             the failed ``log()`` and exposes the failed partial on ``recorder.recording``.
@@ -259,6 +256,8 @@ class Recorder:
         """
 
         flat = _unfold_capture_options(capture, api_name="torchlens.recording.Recorder")
+        knobs = _unfold_recording_options(recording, api_name="torchlens.recording.Recorder")
+        default_grad = knobs.pop("default_grad")
         lookback = flat["lookback"]
         lookback_payload_policy = flat["lookback_payload_policy"]
         seed = flat["seed"]
@@ -283,12 +282,12 @@ class Recorder:
         unwrapped_model, streaming = _unwrap_ddp_for_fastlog(model, storage)
         default_op = _resolve_train_mode_default(
             field_name="default_op",
-            value=default_op,
+            value=knobs.pop("default_op"),
             backward_ready=backward_ready,
         )
         default_module = _resolve_train_mode_default(
             field_name="default_module",
-            value=default_module,
+            value=knobs.pop("default_module"),
             backward_ready=backward_ready,
         )
         self.model = unwrapped_model
@@ -311,15 +310,10 @@ class Recorder:
             keep_op=save,
             default_op=default_op,
             default_module=default_module,
-            history_size=history_size,
             lookback=lookback,
             lookback_payload_policy=lookback_payload_policy,
-            include_source_events=include_source_events,
             intervene=intervene,
             halt=stop_after,
-            max_predicate_failures=max_predicate_failures,
-            on_predicate_error=on_predicate_error,
-            on_forward_error=on_forward_error,
             streaming=streaming,
             seed=seed,
             activation_transform=activation_transform,
@@ -330,6 +324,7 @@ class Recorder:
             save_raw_grads=save_raw_grads,
             echo=echo_normalized,
             detach_saved_activations=detach_saved_activations,
+            **knobs,
         )
         validate_recording_options(self.options)
         validate_followed_by_capability(

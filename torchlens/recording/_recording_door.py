@@ -1,0 +1,74 @@
+"""The ``recording=`` door of ``torchlens.recording.Recorder``.
+
+``Recorder(recording=RecordingOptions(...))`` carries the recorder's own knobs
+(``default_op``, ``default_module``, ``history_size``, ``include_source_events``,
+``max_predicate_failures``, ``on_predicate_error``, ``on_forward_error``,
+``default_grad``), the same shape ``tl.record`` takes. ``keep_op`` and
+``intervene`` are the constructor's own ``save=`` and ``intervene=`` and
+``postprocess`` is a one-shot enrichment the recorder never runs: setting one
+of them on the bundle refuses instead of becoming a silent no-op.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .._deprecations import MISSING
+from .._errors import ArgumentTypeError
+from .options import RecordingOptions
+
+#: The ``RecordingOptions`` fields the recorder reads; an unset field stays
+#: ``MISSING`` so the recorder config resolves it.
+_RECORDING_DOOR_FIELDS: tuple[str, ...] = (
+    "default_op",
+    "default_module",
+    "history_size",
+    "include_source_events",
+    "max_predicate_failures",
+    "on_predicate_error",
+    "on_forward_error",
+    "default_grad",
+)
+
+
+def _unfold_recording_options(
+    recording: RecordingOptions | None, *, api_name: str
+) -> dict[str, Any]:
+    """Read the recorder knobs off ``recording=``.
+
+    Parameters
+    ----------
+    recording:
+        The grouped recording options, or ``None`` for every default.
+    api_name:
+        The door named in a refusal.
+
+    Returns
+    -------
+    dict[str, Any]
+        One entry per door field: the explicit value, else ``MISSING``.
+
+    Raises
+    ------
+    ArgumentTypeError
+        If a field the recorder has no door for was set explicitly
+        (``record_capture_option_unsupported``).
+    """
+
+    if recording is None:
+        return dict.fromkeys(_RECORDING_DOOR_FIELDS, MISSING)
+    unread = sorted(set(recording._specified_fields) - set(_RECORDING_DOOR_FIELDS))  # noqa: SLF001
+    if unread:
+        raise ArgumentTypeError(
+            f"{api_name} does not read recording= field(s) {', '.join(unread)}: "
+            "keep_op and intervene are the constructor's save= and intervene=, and "
+            "postprocess is a tl.record enrichment, so they would be a silent no-op",
+            code="record_capture_option_unsupported",
+            remedy=f"pass the predicate as {api_name}(save=...) and the intervention as "
+            "intervene=; run postprocess through tl.record or Recording.enrich",
+            argument="recording",
+        )
+    return {
+        name: getattr(recording, name) if recording._is_field_explicit(name) else MISSING  # noqa: SLF001
+        for name in _RECORDING_DOOR_FIELDS
+    }
