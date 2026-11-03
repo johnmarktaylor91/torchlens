@@ -51,7 +51,7 @@ PROVEN_UNSCALED = "proven_unscaled"
 def _autocast_reason(trace: Trace) -> str | None:
     """Return why autocast cannot be ruled out for the forward, or ``None``."""
 
-    ops = [op for op in trace._layer_list if int(getattr(op, "step_index", 0) or 0) > 0]
+    ops = [op for op in trace._layer_list if int(op.step_index or 0) > 0]
     if not ops:
         return "the trace has no compute ops"
     for op in ops:
@@ -94,7 +94,7 @@ def _loss_path_reason(trace: Trace, record: Any) -> str | None:
     stopping at the first node that belongs to a captured op.
     """
 
-    logs = getattr(trace, "_grad_fn_logs", None) or {}
+    logs = trace._grad_fn_logs or {}
     roots = list(getattr(record, "root_grad_fn_ids", None) or ())
     if not roots or not logs:
         return "the backward graph was not recorded"
