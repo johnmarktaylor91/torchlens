@@ -1917,21 +1917,20 @@ def test_jax_validation_reports_capture_count_drift_as_inconsistent() -> None:
 
 
 def test_jax_validation_runs_metadata_invariants_before_replay() -> None:
-    """The validation entry runs the backend-neutral invariants and reports their failure."""
+    """The validation entry runs the backend-neutral invariants before any replay.
 
-    def uses_scan(params: dict[str, Any], x: Any) -> Any:
-        """Return an over-cap scan output."""
+    A one-sided child edge is invisible to equation replay (which reads
+    parents only), so only the invariant pass can refuse this trace.
+    """
 
-        del params
-        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
-
-    trace = _trace_jax(
-        uses_scan,
-        ({}, jnp.ones((5,), dtype=jnp.float32)),
-        jax_max_control_flow_unroll=2,
-    )
-    trace.annotations.pop(REGION_REPLAY_PROVENANCE_KEY, None)
+    trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
+    tanh_op = _jax_equation_op(trace, "tanh")
+    input_op = next(op for op in trace._layer_list if op.is_input)
+    assert input_op.layer_label not in tanh_op.children
+    tanh_op.children = (*tanh_op.children, input_op.layer_label)
 
     assert trace.validate_forward_pass([]) is False
-    assert trace.validation_replay_status.state == "failed"
+    status = trace.validation_replay_status
+    assert status.state == "failed"
+    assert "MetadataInvariantError" in status.message
     assert "metadata_invariant_exception" in _failed_reasons(trace)
