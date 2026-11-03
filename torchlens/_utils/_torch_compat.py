@@ -52,11 +52,6 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
-from ._kernel_probes import (
-    probe_cpu_float8_deterministic_fill as _probe_cpu_float8_deterministic_fill,
-    probe_cpu_half_kernels as _probe_cpu_half_kernels,
-    probe_sparse_spsolve_cuda as _probe_sparse_spsolve_cuda,
-)
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
@@ -723,21 +718,45 @@ def _probe_functorch_apis() -> bool:
     )
 
 
-def _probe_cached_untyped_storage_wrapper() -> bool:
-    """Return whether a tensor retains one stable untyped-storage Python wrapper.
+def _real_op_probe_leaf() -> types.ModuleType:
+    """Return the torch-only leaf ``_kernel_probes``, imported here at probe time.
 
-    The probe lives in the torch-only leaf ``_untyped_storage_probe``, imported here,
-    at probe time, so this module's eager import closure does not grow.
+    Every probe that runs a real tensor op keeps its body in that leaf and reaches it
+    through this one import site, so this module's eager import closure does not grow.
 
     Returns
     -------
-    bool
-        ``True`` when repeated ``Tensor.untyped_storage()`` calls return one wrapper.
+    types.ModuleType
+        The ``torchlens._utils._kernel_probes`` module.
     """
 
-    from ._untyped_storage_probe import probe_cached_untyped_storage_wrapper
+    from . import _kernel_probes
 
-    return probe_cached_untyped_storage_wrapper()
+    return _kernel_probes
+
+
+def _probe_cached_untyped_storage_wrapper() -> bool:
+    """Return whether repeated ``Tensor.untyped_storage()`` calls return one wrapper."""
+
+    return bool(_real_op_probe_leaf().probe_cached_untyped_storage_wrapper())
+
+
+def _probe_cpu_half_kernels() -> bool:
+    """Return whether CPU Half kernels exist (``False`` on torch 2.1-2.2; see the leaf)."""
+
+    return bool(_real_op_probe_leaf().probe_cpu_half_kernels())
+
+
+def _probe_cpu_float8_deterministic_fill() -> bool:
+    """Return whether deterministic CPU empty-fill covers Float8 (``False`` on 2.1-2.2)."""
+
+    return bool(_real_op_probe_leaf().probe_cpu_float8_deterministic_fill())
+
+
+def _probe_sparse_spsolve_cuda() -> bool:
+    """Return whether ``torch.sparse.spsolve`` runs on CUDA (needs a cuDSS build)."""
+
+    return bool(_real_op_probe_leaf().probe_sparse_spsolve_cuda())
 
 
 def _probe_dynamo_orig_callable_marker() -> bool:

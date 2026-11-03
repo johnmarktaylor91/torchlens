@@ -1220,8 +1220,8 @@ docs-md	docs/maintainers/where.md	1562
 docs-md	docs/maintainers/where.md	1569
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	158
-docs-md	docs/maintainers/where.md	15829
 docs-md	docs/maintainers/where.md	159
+docs-md	docs/maintainers/where.md	15940
 docs-md	docs/maintainers/where.md	1597
 docs-md	docs/maintainers/where.md	16
 docs-md	docs/maintainers/where.md	160
@@ -1603,8 +1603,8 @@ docs-md	docs/maintainers/where.md	453
 docs-md	docs/maintainers/where.md	454
 docs-md	docs/maintainers/where.md	4571
 docs-md	docs/maintainers/where.md	4573
+docs-md	docs/maintainers/where.md	4588
 docs-md	docs/maintainers/where.md	459
-docs-md	docs/maintainers/where.md	4596
 docs-md	docs/maintainers/where.md	46
 docs-md	docs/maintainers/where.md	460
 docs-md	docs/maintainers/where.md	463
@@ -1745,7 +1745,7 @@ docs-md	docs/maintainers/where.md	621
 docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
-docs-md	docs/maintainers/where.md	627789
+docs-md	docs/maintainers/where.md	627900
 docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
@@ -5000,6 +5000,7 @@ package-docstrings	torchlens/_utils/_callable_safety.py	55
 package-docstrings	torchlens/_utils/_exception_notes.py	3.10
 package-docstrings	torchlens/_utils/_exception_notes.py	3.11.
 package-docstrings	torchlens/_utils/_exception_notes.py	678
+package-docstrings	torchlens/_utils/_kernel_probes.py	2.1
 package-docstrings	torchlens/_utils/_multipass_access.py	12
 package-docstrings	torchlens/_utils/_onramp.py	64
 package-docstrings	torchlens/_utils/_script_call_slot.py	11
@@ -5063,7 +5064,6 @@ package-docstrings	torchlens/_utils/_torch_symbols.py	562
 package-docstrings	torchlens/_utils/_uninit_alloc.py	43
 package-docstrings	torchlens/_utils/_uninit_alloc.py	53
 package-docstrings	torchlens/_utils/_uninit_alloc.py	55
-package-docstrings	torchlens/_utils/_untyped_storage_probe.py	2.1
 package-docstrings	torchlens/_utils/alias_footprint.py	1_1
 package-docstrings	torchlens/_utils/alias_footprint.py	2_6
 package-docstrings	torchlens/_utils/alias_footprint.py	37

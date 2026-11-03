@@ -1,9 +1,10 @@
-"""Kernel-availability probes that run one real tensor op each (a torch-only leaf).
+"""Capability probes that run one real tensor op each (a torch-only leaf).
 
 The ``HAS_*`` flags these answer, their lazy latches and their capability-snapshot
-rows stay in ``torchlens._utils._torch_compat``, which binds each probe under its
-private ``_probe_*`` name. Every probe catches only the error torch raises when the
-kernel is missing, so any other failure still surfaces.
+rows stay in ``torchlens._utils._torch_compat``, which imports this module at probe
+time through its one ``_real_op_probe_leaf`` site, so its eager import closure does
+not grow. Every probe catches only the error torch raises when the capability is
+missing, so any other failure still surfaces.
 """
 
 from __future__ import annotations
@@ -18,6 +19,35 @@ from ._cuda_probe import _is_cuda_available
 #: sparse direct solver (``_apply_sparse_csr_linear_solve`` in
 #: ``aten/src/ATen/native/sparse/cuda/SparseCsrTensorMath.cu``).
 _NO_CUDSS_MARKER = "cuDSS"
+
+
+def probe_cached_untyped_storage_wrapper() -> bool:
+    """Return whether a tensor retains one stable untyped-storage Python wrapper.
+
+    Torch 2.1 creates a fresh ``UntypedStorage`` wrapper on every
+    ``Tensor.untyped_storage()`` call. Its wrapper destructor can leave a
+    ``weakref.ref`` pointing at freed memory, so placing an ephemeral handle in a
+    ``WeakKeyDictionary`` can later segfault CPython while clearing the weakref.
+    Newer torch retains one wrapper on the tensor, which makes weak-key storage
+    registries safe for the tensor's lifetime.
+
+    The probe deliberately compares two live handles instead of constructing a
+    weakref: exercising the broken weakref destructor would itself corrupt the
+    interpreter on an unsupported runtime.
+
+    Returns
+    -------
+    bool
+        ``True`` when repeated calls return the same retained wrapper.
+    """
+
+    try:
+        tensor = torch.empty(0)
+        first = tensor.untyped_storage()
+        second = tensor.untyped_storage()
+    except (AttributeError, RuntimeError, TypeError):
+        return False
+    return first is second
 
 
 def probe_cpu_half_kernels() -> bool:
