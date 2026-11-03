@@ -35,6 +35,7 @@ from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
 from ._do_target_doors import apply_region_target_do, lift_trace_slice
 from ._edit_guards import select_do_engine, warn_if_root_mutation
+from ._facet_union import is_facet_union
 from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_selection_edits import (
     apply_selection_batch_do,
@@ -156,7 +157,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     """Stage a site out recipe without propagating it (the ``engine="set_only"`` body of ``Trace.do``)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-    if is_facet_target(site):
+    if is_facet_target(site) or is_facet_union(site):
 
         def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             """Return a static or callable facet replacement slice.
