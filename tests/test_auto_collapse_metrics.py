@@ -19,6 +19,10 @@ import torchlens._visualization.auto_collapse as auto_collapse
 import torchlens._visualization.collapse_optimizer as collapse_optimizer
 from torchlens._visualization._render_common import format_collapsed_module_contents
 from torchlens._visualization._render_edges import _collapsed_module_should_show_remainder
+from torchlens._visualization._trace_collapse import (
+    collapse_plan as _collapse_plan,
+    collapse_schedule as _collapse_schedule,
+)
 from torchlens._visualization.auto_collapse import (
     _assert_plan_count,
     _child_condensed_flow_graphs,
@@ -1233,7 +1237,7 @@ def _collapse_artifact_snapshot(trace: tl.Trace, tmp_path: Path, stem: str) -> t
     analysis = analyze_collapse(trace)
     auto_result = select_collapse_plan(trace, context, mode="auto")
     max_result = select_collapse_plan(trace, context, mode="max")
-    schedule = trace.collapse_schedule(context)
+    schedule = _collapse_schedule(trace, context)
     auto_dot = _draw_source(trace, tmp_path, f"{stem}_auto", "auto").encode()
     max_dot = _draw_source(trace, tmp_path, f"{stem}_max", "max").encode()
     return (
@@ -1271,7 +1275,7 @@ def _all_mode_collapse_snapshot(trace: tl.Trace, tmp_path: Path, stem: str) -> t
     _clear_collapse_caches(trace)
     plans = (
         collapse_plan_for_trace(trace, None, None, RenderContext()),
-        *(trace.collapse_plan(mode=mode) for mode in modes[1:]),
+        *(_collapse_plan(trace, mode=mode) for mode in modes[1:]),
     )
     dots = tuple(_draw_source(trace, tmp_path, f"{stem}_{mode}", mode).encode() for mode in modes)
     return plans, dots
@@ -1548,9 +1552,9 @@ def test_float_collapse_plan_counts_match_train_batchnorm_svg(tmp_path: Path) ->
         ]
         assert len(hidden_updates) == 2
 
-        schedule = trace.collapse_schedule()
+        schedule = _collapse_schedule(trace)
         for index, threshold in enumerate((0.0, 0.25, 0.6, 1.0)):
-            plan = trace.collapse_plan(threshold)
+            plan = _collapse_plan(trace, threshold)
             out = tmp_path / f"batchnorm_float_{index}"
             trace.draw(
                 collapse=threshold,
@@ -2202,8 +2206,9 @@ def test_auto_collapse_run_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        assert re.search(r"\d+ ops \(", source)  # the header counts drawn nodes
-        assert f"{trace.num_params} params" in source
+        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
+        assert re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{trace.num_params:,} params" in source
     finally:
         trace.cleanup()
 
@@ -2289,8 +2294,9 @@ def test_auto_collapse_parallel_fold_representative_uses_single_instance_stats(
         assert f"{representative.num_params} params (all trainable)" in rep_line
         assert format_collapsed_module_contents(fold.num_layers, 0) not in rep_line
         assert f"{fold.num_params} params (all trainable)" not in rep_line
-        assert re.search(r"\d+ ops \(", source)  # the header counts drawn nodes
-        assert f"{trace.num_params} params" in source
+        # The header counts drawn nodes; collapsed module boxes make its noun "nodes".
+        assert re.search(r"\d[\d,]* nodes \(", source)
+        assert f"{trace.num_params:,} params" in source
     finally:
         trace.cleanup()
 
@@ -2759,8 +2765,8 @@ def test_equivalent_max_plans_render_same_collapsed_box_layer_labels(
     torch.set_num_threads(4)
     trace = _trace(tvm.mobilenet_v2(weights=None), torch.randn(1, 3, 224, 224))
     try:
-        max_plan = trace.collapse_plan(mode="max")
-        level_plan = trace.collapse_plan(mode=1.0)
+        max_plan = _collapse_plan(trace, mode="max")
+        level_plan = _collapse_plan(trace, mode=1.0)
         max_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_max", "max")
         level_labels = _draw_svg_layer_labels(trace, tmp_path, "mobilenet_v2_level_1", 1.0)
 

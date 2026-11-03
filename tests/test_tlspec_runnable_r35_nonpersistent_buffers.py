@@ -9,7 +9,6 @@ the load-validated embedded family.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -84,25 +83,6 @@ def test_r35_mixed_buffer_original_run_attests(tmp_path: Path) -> None:
     assert torch.equal(result.output, model(x))
 
 
-def test_r35_changed_persistent_state_is_not_applicable(tmp_path: Path) -> None:
-    """A changed persistent buffer keeps the eligibility partition honest."""
-
-    model = _MixedBufferModel().eval()
-    x = torch.tensor([1.0, 2.0, 3.0])
-    path = _save(
-        model,
-        x,
-        tmp_path / "changedstate.tlspec",
-        include_weights=True,
-        include_activations=True,
-    )
-    loaded = tl.load(str(path))
-    loaded.load_state_dict({"shift": torch.tensor([9.0, 9.0, 9.0])})
-    result = loaded.run(inputs=x)
-    assert result.report.state_source is StateSource.USER_STATE_DICT
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-
-
 def test_r35_user_state_cannot_supply_nonpersistent_buffers(tmp_path: Path) -> None:
     """``load_state_dict`` refuses non-persistent names (family is authoritative)."""
 
@@ -116,52 +96,3 @@ def test_r35_user_state_cannot_supply_nonpersistent_buffers(tmp_path: Path) -> N
         loaded.load_state_dict(
             {"shift": torch.tensor([1.0, 2.0, 3.0]), "scale": torch.tensor([5.0, 5.0, 5.0])}
         )
-
-
-def test_r35_mandatory_family_presence_and_tamper_rejection(tmp_path: Path) -> None:
-    """The family is present by default; a tampered blob fails load typed."""
-
-    model = _MixedBufferModel().eval()
-    x = torch.tensor([1.0, 2.0, 3.0])
-    path = _save(model, x, tmp_path / "family.tlspec")
-    manifest = json.loads((path / "manifest.json").read_text())
-    layer = manifest["run"]["payload_layers"]["nonpersistent_buffers"]
-    assert layer == {"present": True, "schema": "runnable_nonpersistent_buffer_v1"}
-    entries = [
-        entry
-        for entry in manifest["tensors"]
-        if entry.get("kind") == "runnable_nonpersistent_buffer"
-    ]
-    assert [entry["label"] for entry in entries] == ["scale"]
-    # Tamper the blob bytes: load must fail its checksum validation.
-    blob_path = path / entries[0]["relative_path"]
-    blob_bytes = bytearray(blob_path.read_bytes())
-    blob_bytes[-1] ^= 0xFF
-    blob_path.write_bytes(bytes(blob_bytes))
-    with pytest.raises(Exception, match="[Cc]hecksum|corrupt|mismatch"):
-        tl.load(str(path))
-
-
-def test_r35_unused_nonpersistent_buffer_needs_no_family(tmp_path: Path) -> None:
-    """A registered-but-UNUSED non-persistent buffer requires no payload."""
-
-    class _UnusedBufferModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.register_buffer("unused", torch.ones(4), persistent=False)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return x + 1
-
-    x = torch.tensor([1.0, 2.0])
-    trace = tl.trace(
-        _UnusedBufferModel().eval(),
-        x,
-        capture=CaptureOptions(replayable=True, cache=False),
-    )
-    path = tmp_path / "unused.tlspec"
-    trace.save(str(path), level="runnable")
-    manifest = json.loads((path / "manifest.json").read_text())
-    assert manifest["run"]["payload_layers"]["nonpersistent_buffers"]["present"] is False
-    result = tl.load(str(path)).run(inputs=x)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

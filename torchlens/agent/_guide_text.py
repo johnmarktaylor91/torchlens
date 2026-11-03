@@ -22,7 +22,9 @@ tensors are the model's own, from its real forward pass, so they equal what
 a forward hook on the same module would see. In eval mode, tl.extract on
 modules that return one tensor (an MLP, a Linear, a decoder layer in
 transformers 5) costs about one plain forward pass; other requests and
-tl.trace record every op and add about 1-3 s on a small model.
+tl.trace record every op and add about 1-3 s on a small model. To write TorchLens code,
+read the agent index shipped in the package (torchlens/_docs/AGENT_INDEX.md;
+`torchlens agent init` points a project's AGENTS.md at it).
 
 A plain forward hook is fine for ONE module output you already know by
 name. TorchLens saves the most code compared with hooks for ops that have
@@ -247,6 +249,13 @@ hands back the runnable Python line instead.
 
 
 def guide() -> str:
-    """Return the agent guide text (the same text served as an MCP resource)."""
+    """Return the agent guide text (the same text served as an MCP resource).
+
+    Examples
+    --------
+    >>> text = guide()
+    >>> text.splitlines()[0]
+    '# TorchLens for AI agents'
+    """
 
     return AGENT_GUIDE

@@ -504,61 +504,12 @@ def _assert_result_runs(model: nn.Module, result: tl.debug.GuessInputShapeReport
         model(result.example_input)
 
 
-def test_infer_mlp_static_shape() -> None:
-    """Infer a no-probe MLP input shape."""
-
-    result = tl.debug.guess_input_shape(TinyMlp())
-    assert result.found
-    assert result.shape == (1, 20)
-    assert result.dtype == torch.float32
-    assert isinstance(result.example_input, torch.Tensor)
-
-
-def test_infer_conv_flatten_linear_exact_shape() -> None:
-    """Infer the LeNet-style conv-to-linear exact spatial side."""
-
-    result = tl.debug.guess_input_shape(LeNetish())
-    assert result.found
-    assert result.shape == (1, 3, 32, 32)
-
-
 def test_infer_grayscale_exact_shape_with_channel_hint() -> None:
     """Infer a grayscale exact side with an explicit channel hint."""
 
     result = tl.debug.guess_input_shape(LeNetish(channels=1, side_features=4), channels=1)
     assert result.found
     assert result.shape == (1, 1, 28, 28)
-
-
-def test_infer_adaptive_pool_marks_flexible_dims() -> None:
-    """Use a sane default and mark adaptive-pool spatial dimensions flexible."""
-
-    result = tl.debug.guess_input_shape(AdaptiveCnn())
-    assert result.found
-    assert result.shape is not None
-    assert result.shape[:2] == (1, 3)
-    assert result.flexible_dims == (2, 3)
-    assert result.strategy == "adaptive_default"
-
-
-def test_infer_vit_patch_grid_from_position_embedding() -> None:
-    """Infer a ViT-style 32x32 image side from patch stride and pos_embed length."""
-
-    result = tl.debug.guess_input_shape(MiniVit())
-    assert result.found
-    assert result.shape == (1, 3, 32, 32)
-
-
-def test_infer_transformer_lm_tokens() -> None:
-    """Infer integer token inputs within embedding range."""
-
-    result = tl.debug.guess_input_shape(TinyLm())
-    assert result.found
-    assert result.shape is not None
-    assert result.shape[0] == 1
-    assert result.shape[1] <= 64
-    assert result.dtype == torch.long
-    assert result.value_range == ("randint", 0.0, 100.0)
 
 
 def test_infer_rnn_batch_first_and_time_first() -> None:
@@ -599,23 +550,6 @@ def test_infer_conv1d_and_conv3d_adaptive_variants() -> None:
     assert video_result.flexible_dims == (2, 3, 4)
 
 
-def test_infer_functional_linear_after_functional_flatten() -> None:
-    """Handle functional flatten followed by functional linear."""
-
-    result = tl.debug.guess_input_shape(FunctionalLinearCnn())
-    assert result.found
-    assert result.shape == (1, 3, 32, 32)
-
-
-def test_non_shape_blocker_returns_diagnostic() -> None:
-    """Return instead of hanging when a missing kwarg blocks the forward."""
-
-    result = tl.debug.guess_input_shape(NeedsMask())
-    assert not result.found
-    assert result.reason == "non_shape_blocker"
-    assert "mask" in result.message
-
-
 def test_embedding_wrong_dtype_self_corrects() -> None:
     """Correct an explicitly wrong embedding dtype to integer tokens."""
 
@@ -634,19 +568,6 @@ def test_functional_only_mlp_and_matmul_models() -> None:
     assert matmul_result.shape == (1, 20)
     _assert_result_runs(FuncMlp(), mlp_result)
     _assert_result_runs(FuncMatmulMlp(), matmul_result)
-
-
-def test_functional_only_conv_linear_and_matmul_models() -> None:
-    """Infer functional-only conv exact shapes without nn.Conv/nn.Linear modules."""
-
-    linear_model = FuncConvFlattenLinear()
-    matmul_model = FunctionalOnlyRawConvMatmul()
-    linear_result = tl.debug.guess_input_shape(linear_model)
-    matmul_result = tl.debug.guess_input_shape(matmul_model)
-    assert linear_result.shape == (1, 3, 32, 32)
-    assert matmul_result.shape == (1, 3, 32, 32)
-    _assert_result_runs(linear_model, linear_result)
-    _assert_result_runs(matmul_model, matmul_result)
 
 
 def test_functional_embedding_uses_integer_tokens() -> None:
@@ -684,19 +605,6 @@ def test_decoys_do_not_determine_input_shape() -> None:
     _assert_result_runs(conv_model, conv_result)
     _assert_result_runs(order_model, order_result)
     _assert_result_runs(pool_model, pool_result)
-
-
-def test_conv_exact_side_outside_preferred_sizes() -> None:
-    """Solve exact conv sides even when defaults first hit kernel/linear shape errors."""
-
-    side_77 = ConvExactSide(77)
-    side_150 = ConvExactSide(150)
-    result_77 = tl.debug.guess_input_shape(side_77)
-    result_150 = tl.debug.guess_input_shape(side_150)
-    assert result_77.shape == (1, 3, 77, 77)
-    assert result_150.shape == (1, 3, 150, 150)
-    _assert_result_runs(side_77, result_77)
-    _assert_result_runs(side_150, result_150)
 
 
 def test_no_linear_and_groupnorm_channel_cases() -> None:

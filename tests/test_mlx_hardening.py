@@ -27,6 +27,8 @@ import torchlens.backends.mlx.capabilities as capabilities  # noqa: E402
 from torchlens.backends.mlx import GradOptions  # noqa: E402
 from torchlens.errors import BackendRuntimeCompatibilityError, BackendUnsupportedError  # noqa: E402
 
+pytestmark = [pytest.mark.rare, pytest.mark.backend_mlx]
+
 
 class TinyMLP(nn.Module):
     """Small MLX MLP used by backend hardening tests."""
@@ -338,7 +340,7 @@ def test_mlx_intermediate_derived_grads_match_direct_reference() -> None:
 def test_mlx_intermediate_derived_grads_on_module_shaped_model() -> None:
     """An nn.Module model gets intermediate gradients, not a silent empty set.
 
-    Walk U06.4: the replay observers built signatures with no module frames
+    The replay observers built signatures with no module frames
     while capture stamps ``op.modules``, so every op inside a module failed
     its 1:1 match and ``intermediate_derived_grads`` came back empty.
     """
@@ -582,7 +584,7 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
     )
 
     with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
-        trace.log_backward(trace[trace.output_layers[0]].out)
+        trace.backward(trace[trace.output_layers[0]].out)
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
     with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
@@ -763,7 +765,7 @@ def test_mlx_static_func_save_filters_public_payloads(tmp_path: Path) -> None:
 def test_mlx_static_label_contains_and_composite_save_work() -> None:
     """MLX allows label, contains, and safe boolean composites for static save."""
 
-    label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3_raw:1"))
+    label_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label("relu_1_3:1"))
     contains_trace = tl.trace(TinyMLP(), _tiny_mlp_input(), save=tl.label_contains("relu"))
     composite_trace = tl.trace(
         TinyMLP(),
@@ -774,7 +776,7 @@ def test_mlx_static_label_contains_and_composite_save_work() -> None:
     _assert_static_save_summary(label_trace, {"relu"})
     _assert_static_save_summary(contains_trace, {"relu"})
     _assert_static_save_summary(composite_trace, {"linear"})
-    assert list(composite_trace.saved_ops.keys()) == ["linear_1_2_raw:1"]
+    assert list(composite_trace.saved_ops.keys()) == ["linear_1_2:1"]
 
 
 @pytest.mark.parametrize(
@@ -804,7 +806,7 @@ def test_mlx_capability_flags_match_materialized_contract() -> None:
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.intermediate_derived_grads is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
-    assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options")
+    assert spec.capabilities.trace_options == ("module_identity_mode", "grad_options", "facets")
     assert spec.serialization_policy.payload_policy == "array_payloads"
     assert spec.serialization_policy.body_format == "safetensors"
     assert capabilities.supports_payload_materialization is True

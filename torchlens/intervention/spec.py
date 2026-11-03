@@ -2,7 +2,7 @@
 
 Surgery memo section 3.1: ``tl.when(...)`` is promoted to return the
 immutable, public :class:`InterventionSpec` -- one multi-clause noun accepted
-unchanged by ``fork.do``, ``fork.attach_hooks``, ``intervene=``, Bundle
+unchanged by ``fork.do``, ``intervene=``, Bundle
 operations, generalized ``sweep``, save/load, and (F01) ``spec.bind(model)``.
 Lane options (``strict``, ``log_injections``, fast tiers) never enter the
 spec: a spec means the same experiment in every lane.
@@ -29,7 +29,6 @@ runtime-only predicate (:func:`refuse_unreplayable_rules`).
 
 from __future__ import annotations
 
-import dataclasses
 import hashlib
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -45,6 +44,7 @@ from ._content_identity import (
     render_value,
     tensor_version,
 )
+from ._rule_match import _match_rules, _rule_decision
 from ._site_signal import (
     _selector_children,
     addresses_autograd_nodes as addresses_autograd_nodes,
@@ -283,6 +283,12 @@ class Rule:
     (``tl.grad(site)`` edits the gradient, a bare site the activation,
     ``tl.grad(site) | site`` both) and is never a field. The removed
     ``direction`` field refuses typed (``intervention_direction_invalid``).
+
+    Examples
+    --------
+    >>> rule = tl.when(tl.func("relu"), tl.zero_ablate()).rules[0]
+    >>> isinstance(rule, tl.intervention.Rule), rule.signal, rule.edit.name
+    (True, 'forward', 'zero_ablate')
     """
 
     target: Any
@@ -444,6 +450,14 @@ class Recipe:
     than one matching rule refuses typed (``spec_rules_overlap``) -- implicit
     same-site composition is exactly the silent-drop class the spec exists to
     kill; ``tl.compose`` is the explicit spelling for chained values.
+
+    Examples
+    --------
+    >>> first = tl.when(tl.func("relu"), tl.scale(0.5))
+    >>> second = tl.when(tl.module("2"), tl.scale(2.0))
+    >>> both = first & second
+    >>> len(both.rules), both.rules == first.rules + second.rules
+    (2, True)
     """
 
     rules: tuple[Rule, ...] = ()
@@ -510,17 +524,7 @@ class Recipe:
         rule = self.match(ctx)
         if rule is None:
             return None
-        # Leverage B7: thread the matched rule's provenance through the
-        # decision so the capture-door staging site persists the USER'S
-        # EXPRESSION, never only the lowered per-site label targets.
-        decision = rule.decision
-        if decision is not None and decision.rule_id is None:
-            decision = dataclasses.replace(
-                decision,
-                rule_id=rule.rule_id,
-                where_repr=rule.where_repr,
-            )
-        return decision
+        return _rule_decision(rule)
 
     def match(self, ctx: Any) -> Rule | None:
         """Return the single rule matching one op context, or ``None``.
@@ -541,28 +545,7 @@ class Recipe:
             ``spec_rules_overlap`` when more than one rule matches one op.
         """
 
-        matched: list[Rule] = []
-        for rule in self.rules:
-            # A forward predicate sees only each rule's activation half: a
-            # tl.grad(...) or autograd-node half edits the backward pass and is
-            # mounted there by the capture and bind doors.
-            forward_target = rule._forward_target
-            if forward_target is not None and forward_target(ctx):
-                matched.append(rule)
-        if not matched:
-            return None
-        if len(matched) > 1:
-            names = ", ".join(rule.rule_id for rule in matched)
-            raise InvalidArgumentError(
-                f"intervention rules [{names}] all match op "
-                f"{getattr(ctx, 'label', ctx)!r}; a spec never implicitly "
-                "chains two edits at one site",
-                code="spec_rules_overlap",
-                remedy="compose the actions explicitly with tl.compose(...), "
-                "or narrow the WHERE terms so at most one rule matches each op",
-                argument="rules",
-            )
-        return matched[0]
+        return _match_rules(self.rules, ctx)
 
     # ------------------------------------------------------------------
     # single-rule sugar compatibility with the historical when() closure
@@ -693,6 +676,13 @@ def when(condition: Callable[[Any], bool], action: Any) -> Recipe:
     -------
     InterventionSpec
         Immutable one-clause spec.
+
+    Examples
+    --------
+    >>> spec = tl.when(tl.func("relu"), tl.zero_ablate())
+    >>> edited = tl.trace(model, x, intervene=spec)
+    >>> isinstance(spec, tl.Recipe), len(spec.rules), edited["relu_1_2"].is_edited
+    (True, 1, True)
     """
 
     return Recipe(rules=(Rule(condition, action),))

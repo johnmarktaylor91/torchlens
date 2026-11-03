@@ -44,10 +44,7 @@ loads / runs VERIFIED end-to-end (behavioral zero-forward-regression proof).
 
 from __future__ import annotations
 
-import importlib
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 import torch
@@ -57,15 +54,9 @@ import torchlens as tl
 from torchlens._runnable import PathFaithfulness
 from torchlens._utils._callable_safety import (
     _ALLOWED_FORWARD_DUNDERS,
-    _is_denied_forward_dunder_name,
-    _is_side_effecting_callable_name,
-    _terminal_callable_name,
-    _unwrap_capture_wrapper,  # mechanical capture-unwrap only; NOT the gate decision
     is_pure_forward_callable,
 )
 from torchlens.backends.torch.wrappers import wrap_torch
-from torchlens.intervention._resolver_registry import resolve_import_ref
-from torchlens.intervention.errors import UntrustedCallableError
 from torchlens.options import CaptureOptions
 
 # Install the torch wrappers so resolved callables mirror the live (wrapped) state: the
@@ -73,80 +64,9 @@ from torchlens.options import CaptureOptions
 wrap_torch()
 
 
-_FIXED_ROOTS: dict[str, Any] = {
-    "torch.Tensor": torch.Tensor,
-    "torch": torch,
-    "torch._C": torch._C,
-    "torch._tensor": importlib.import_module("torch._tensor"),
-}
-
-
-def _iter_callable_dunders() -> list[tuple[str, str, Callable[..., Any]]]:
-    """Yield ``(root_label, name, obj)`` for every callable ``__x__`` on the fixed roots."""
-
-    out: list[tuple[str, str, Callable[..., Any]]] = []
-    for label, root in _FIXED_ROOTS.items():
-        for name in dir(root):
-            if not (name.startswith("__") and name.endswith("__")):
-                continue
-            try:
-                obj = getattr(root, name)
-            except Exception:  # pragma: no cover - some torch attrs raise on access.
-                continue
-            if callable(obj):
-                out.append((label, name, obj))
-    return out
-
-
-_CALLABLE_DUNDERS = _iter_callable_dunders()
-
-
 # --------------------------------------------------------------------------- #
 # WHOLE-CLASS IFF SWEEP: gate decision is TRUE iff the name is allowlisted.
 # --------------------------------------------------------------------------- #
-
-
-def test_immunizer_dunder_gate_iff_allowlist() -> None:
-    """Every callable dunder on the fixed roots: admitted IFF in ``_ALLOWED_FORWARD_DUNDERS``.
-
-    RED in BOTH directions: a gate-passer not in the allowlist (a future ``__setstate__``
-    sibling) OR an allowlisted forward dunder wrongly denied (a forward regression).
-    """
-
-    # Non-vacuous: torch.Tensor alone exposes dozens of callable dunders.
-    assert len(_CALLABLE_DUNDERS) > 40, (
-        f"suspiciously few callable dunders: {len(_CALLABLE_DUNDERS)}"
-    )
-    passer_not_allowlisted: list[str] = []
-    allowlisted_denied: list[str] = []
-    for label, name, obj in _CALLABLE_DUNDERS:
-        admitted = is_pure_forward_callable(obj)
-        allowlisted = name in _ALLOWED_FORWARD_DUNDERS
-        if admitted and not allowlisted:
-            passer_not_allowlisted.append(f"{label}:{name}")
-        if allowlisted and not admitted:
-            allowlisted_denied.append(f"{label}:{name}")
-    assert not passer_not_allowlisted, (
-        "dunder gate-passers NOT in the forward allowlist (possible dangerous sibling): "
-        f"{sorted(set(passer_not_allowlisted))}"
-    )
-    assert not allowlisted_denied, (
-        f"allowlisted forward dunders WRONGLY DENIED (forward regression): "
-        f"{sorted(set(allowlisted_denied))}"
-    )
-
-
-def test_immunizer_sweep_is_non_vacuous_on_tensor() -> None:
-    """torch.Tensor exposes BOTH allowlisted forward dunders AND denied non-forward dunders.
-
-    Guards against a vacuous sweep (e.g. an enumeration that stopped finding dunders).
-    """
-
-    tensor_dunders = {name for label, name, _ in _CALLABLE_DUNDERS if label == "torch.Tensor"}
-    forward_present = tensor_dunders & _ALLOWED_FORWARD_DUNDERS
-    nonforward_present = tensor_dunders - _ALLOWED_FORWARD_DUNDERS
-    assert len(forward_present) >= 40, sorted(forward_present)
-    assert len(nonforward_present) >= 10, sorted(nonforward_present)
 
 
 # --------------------------------------------------------------------------- #
@@ -181,60 +101,10 @@ def test_immunizer_dangerous_dunder_denied(name: str) -> None:
     assert not is_pure_forward_callable(obj), f"dangerous dunder WRONGLY ADMITTED: {name}"
 
 
-def test_immunizer_setstate_and_siblings_are_dunder_gate_load_bearing() -> None:
-    """The dangerous dunders slip the name/verb belt; ONLY the r47 dunder gate closes them.
-
-    Mirrors the finding: ``__setstate__`` "slips every belt and is admitted on overridable
-    identity". If a future refactor dropped the dunder gate expecting the storage belt to
-    cover these, this goes RED (belt does NOT catch them).
-    """
-
-    for name in _DANGEROUS_DUNDERS:
-        obj = getattr(torch.Tensor, name, None)
-        if obj is None:  # pragma: no cover - version drift.
-            continue
-        real = _unwrap_capture_wrapper(obj)
-        # The name/verb/storage belt does NOT catch these (leading ``__``, no set_/resize/
-        # share_memory token) -- so the dunder gate is the load-bearing closure.
-        assert not _is_side_effecting_callable_name(real), (
-            f"{name} unexpectedly caught by the name/verb belt -- re-audit load-bearing claim"
-        )
-        assert _is_denied_forward_dunder_name(_terminal_callable_name(real)), name
-        assert not is_pure_forward_callable(obj), name
-
-
 # --------------------------------------------------------------------------- #
 # FROZEN FIXTURE 2: the forward dunders that MUST resolve (review would have regressed the
 # ``torch._tensor`` ones). Denying ANY fails RED.
 # --------------------------------------------------------------------------- #
-
-_FORWARD_DUNDERS_ADMITTED: tuple[str, ...] = (
-    "__add__",
-    "__mul__",
-    "__matmul__",
-    "__getitem__",
-    "__pow__",
-    "__len__",  # brief-pinned; a live forward dunder on torch._tensor.
-    "__contains__",  # a live forward dunder on torch._tensor.
-    "__rmatmul__",  # reflected op on torch._tensor.
-    "__floordiv__",  # a live forward dunder on torch._tensor.
-    "__rsub__",  # reflected op on torch._tensor.
-    "__setitem__",
-    "__eq__",
-    "__neg__",
-    "__ipow__",  # in-place op on torch._tensor.
-)
-
-
-@pytest.mark.parametrize("name", _FORWARD_DUNDERS_ADMITTED)
-def test_immunizer_forward_dunder_admitted(name: str) -> None:
-    """A genuine forward-operator dunder resolves through the gate (zero forward regression)."""
-
-    obj = getattr(torch.Tensor, name, None)
-    if obj is None:  # pragma: no cover - version drift; a floor test guards vacuity.
-        pytest.skip(f"torch.Tensor.{name} absent on torch {torch.__version__}")
-    assert name in _ALLOWED_FORWARD_DUNDERS
-    assert is_pure_forward_callable(obj), f"forward dunder WRONGLY DENIED: {name}"
 
 
 # --------------------------------------------------------------------------- #
@@ -242,36 +112,9 @@ def test_immunizer_forward_dunder_admitted(name: str) -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_denied_forward_dunder_name_helper() -> None:
-    """``_is_denied_forward_dunder_name`` denies non-allowlisted dunders, spares the rest."""
-
-    assert _is_denied_forward_dunder_name("__setstate__")
-    assert _is_denied_forward_dunder_name("__reduce_ex__")
-    assert _is_denied_forward_dunder_name("__init_subclass__")
-    assert not _is_denied_forward_dunder_name("__add__")
-    assert not _is_denied_forward_dunder_name("__getitem__")
-    assert not _is_denied_forward_dunder_name("__len__")
-    # Non-dunder names are untouched -- the operator / torch-function surface is unaffected.
-    assert not _is_denied_forward_dunder_name("add")
-    assert not _is_denied_forward_dunder_name("relu_")
-    assert not _is_denied_forward_dunder_name("matmul")
-    assert not _is_denied_forward_dunder_name("_private")
-
-
 # --------------------------------------------------------------------------- #
 # Behavioral: resolver refuses __setstate__ even under trust (mirrors r43 enforcement).
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize("name", ("__setstate__", "__reduce_ex__", "__array__", "__deepcopy__"))
-def test_setstate_class_denied_at_resolver_even_under_trust(name: str) -> None:
-    """The dangerous dunders are refused through the real resolver, in BOTH trust modes."""
-
-    ref = f"torch.Tensor:{name}"
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(ref)
-    with pytest.raises(UntrustedCallableError):
-        resolve_import_ref(ref, trust_custom_callables=True)
 
 
 # --------------------------------------------------------------------------- #

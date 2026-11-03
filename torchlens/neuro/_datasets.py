@@ -93,7 +93,7 @@ def datasets(
         sites.
     """
 
-    rsatoolbox = require_rsatoolbox()
+    rsatoolbox = require_rsatoolbox(attribute="datasets")
     pool_token = check_pool(pool)
     del pool_token  # recorded per-site by base_descriptors; validated here.
     kind = _source_kind(source)
@@ -228,7 +228,7 @@ def single_dataset(source: Any, site: str | None = None) -> Any:
 
     from ._handoff import NeuroHandoffError, _shape_payload, _source_kind
 
-    rsatoolbox = require_rsatoolbox()
+    rsatoolbox = require_rsatoolbox(owner="torchlens.bridge.rsatoolbox", attribute="dataset")
     kind = _source_kind(source)
 
     if site is None:

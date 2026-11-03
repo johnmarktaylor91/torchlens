@@ -62,6 +62,7 @@ def _register(cls: type, rebuild: Any) -> None:
     )
 
 
+# Kept: sole branch coverage of _runnable/witness_contracts.py.
 def test_registered_dataclass_reports_registered(_registry: Any) -> None:
     """Runtime kind for a registered dataclass matches capture's vocabulary."""
 
@@ -72,26 +73,7 @@ def test_registered_dataclass_reports_registered(_registry: Any) -> None:
     assert spec is not None and spec.kind == "registered"
 
 
-def test_registered_namedtuple_reports_registered(_registry: Any) -> None:
-    """Runtime kind for a registered namedtuple matches capture's vocabulary."""
-
-    _register(_HybridTuple, lambda aux, children: _HybridTuple(children[0]))
-    box = _HybridTuple(torch.ones(2))
-    assert _container_kind(box) == "registered"
-    spec = _build_container_spec(box)
-    assert spec is not None and spec.kind == "registered"
-
-
-def test_registered_list_subclass_reports_registered(_registry: Any) -> None:
-    """Runtime kind for a registered list subclass matches capture's vocabulary."""
-
-    _register(_HybridList, lambda aux, children: _HybridList(children))
-    box = _HybridList([torch.ones(2)])
-    assert _container_kind(box) == "registered"
-    spec = _build_container_spec(box)
-    assert spec is not None and spec.kind == "registered"
-
-
+# Kept: sole branch coverage of _runnable/witness_contracts.py.
 def test_registered_flatten_wins_for_hybrid_leaf_paths(_registry: Any) -> None:
     """Runtime leaf paths follow the registration's OWN flatten, like capture.
 
@@ -112,6 +94,7 @@ def test_registered_flatten_wins_for_hybrid_leaf_paths(_registry: Any) -> None:
     assert spec is not None and spec.kind == "registered" and spec.length == 1
 
 
+# Kept: sole branch coverage of _runnable/witness_contracts.py.
 def test_unregistered_generic_kinds_unchanged(_registry: Any) -> None:
     """Without a registration the generic vocabulary is untouched."""
 

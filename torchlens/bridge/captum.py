@@ -58,6 +58,17 @@ def attribute(
         ``bridge_captum_inputs_unresolved`` when ``inputs`` is omitted and the
         logged inputs cannot be replayed positionally (a keyword-only or
         nested input, a missing positional tensor, or no saved input).
+
+    Examples
+    --------
+    >>> # requires: captum
+    >>> from captum.attr import Saliency
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> inp = torch.randn(1, 12)
+    >>> trace = tl.trace(clf, inp)
+    >>> attr = tl.bridge.captum.attribute(trace, Saliency(clf), target=0)
+    >>> tuple(attr.shape)
+    (1, 12)
     """
 
     try:
@@ -173,6 +184,13 @@ def layer(trace: Any, site: Any) -> nn.Module:
     InvalidArgumentError
         If the site maps to no module, to sibling modules, or to a module that
         runs more than once (see :func:`torchlens.bridge._utils.module_for_site`).
+
+    Examples
+    --------
+    >>> # requires: captum
+    >>> trace = tl.trace(model, x)
+    >>> tl.bridge.captum.layer(trace, "0") is model[0]
+    True
     """
 
     try:

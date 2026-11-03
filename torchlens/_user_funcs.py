@@ -5,7 +5,6 @@ This module contains every user-facing function:
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
-  - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Selective save strategy**:
 Predicate ``save=`` and most string/substring ``save=`` label requests are
@@ -113,6 +112,15 @@ def clear_cache(cache_dir: str | Path | None = None) -> int:
     -------
     int
         Number of payload entries removed.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     opts = tl.options.CaptureOptions(cache=True, cache_dir=tmp)
+    ...     _ = tl.trace(model, x, capture=opts)
+    ...     print(tl.clear_cache(tmp))
+    1
     """
 
     cache_root = _capture_cache_dir(cache_dir) / "capture"
@@ -170,6 +178,16 @@ def draw(*args: Any, **kwargs: Any) -> Any:
     (``Trace.draw`` keeps ``"none"``). Returns a detached
     :class:`torchlens.viz.Drawing`; never auto-opens a viewer.
     See :func:`torchlens._quickstart.draw` for the parameters.
+
+    Examples
+    --------
+    >>> # requires: graphviz
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     drawing = tl.draw(model, x, path=f"{folder}/net.svg", file_format="svg")
+    TorchLens graph written to ...net.svg
+    >>> type(drawing).__name__, drawing.file_format, drawing.path.name
+    ('Drawing', 'svg', 'net.svg')
     """
 
     from ._quickstart._render import draw as _draw_impl
@@ -341,6 +359,14 @@ def trace(
     -------
     Trace
         A ``Trace`` containing layer outs (if requested) and full metadata.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="all")
+    >>> trace.layer_labels
+    ['input_1', 'conv2d_1_1', 'relu_1_2', 'conv2d_2_3', 'output_1']
+    >>> trace["relu_1_2"].out.shape
+    torch.Size([1, 4, 8, 8])
     """
     with zero_fire_policy_scope(None if on_zero_fire is MISSING else on_zero_fire):
         _reject_extra_positional_input(extra_positional)
@@ -471,6 +497,15 @@ def release_model(model: nn.Module) -> None:
     complete model object must be serialized with :func:`torch.save` or
     :mod:`pickle`. Saving ``model.state_dict()`` is unaffected by preparation
     and does not require release.
+
+    Examples
+    --------
+    >>> import pickle
+    >>> net = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
+    >>> _ = tl.trace(net, torch.randn(1, 2))
+    >>> tl.release_model(net)
+    >>> len(pickle.dumps(net)) > 0
+    True
     """
     model = _model_door.resolve_released_model(model)
     _public_impls_module().release_model(model)
@@ -482,6 +517,12 @@ def summary(*args: Any, **kwargs: Any) -> str:
     ``tl.summary(model, x)`` is the first-class one-call front door: it runs a
     metadata-only capture and RETURNS the rendered summary text (it never
     auto-prints). ``trace.summary()`` reports an existing capture instead.
+
+    Examples
+    --------
+    >>> text = tl.summary(model, x)
+    >>> isinstance(text, str), "conv2d" in text.lower()
+    (True, True)
     """
 
     return cast(str, _public_impls_module().summary(*args, **kwargs))
@@ -491,12 +532,6 @@ def show_model_graph(*args: Any, **kwargs: Any) -> None:
     """Forward to the model-graph rendering implementation."""
 
     return cast(None, _public_impls_module().show_model_graph(*args, **kwargs))
-
-
-def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
-    """Forward to the bundle graph rendering implementation."""
-
-    return cast(str | None, _public_impls_module().show_bundle_graph(*args, **kwargs))
 
 
 def validate_forward_pass(*args: Any, **kwargs: Any) -> bool:
@@ -517,18 +552,10 @@ def validate_backward_pass(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _public_impls_module().validate_backward_pass(*args, **kwargs))
 
 
-def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
-    """Forward to the batch validation implementation."""
-
-    return _public_impls_module().validate_batch_of_models_and_inputs(*args, **kwargs)
-
-
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
-    "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
-    "validate_batch_of_models_and_inputs",
 )
 
 _public_impl_metadata_synced = False

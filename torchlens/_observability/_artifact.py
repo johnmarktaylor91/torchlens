@@ -434,7 +434,18 @@ class HistoryWriter:
 
 
 class HistoryReader:
-    """Read one artifact without loading the run or importing a model."""
+    """Read one artifact without loading the run or importing a model.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     try:
+    ...         HistoryReader(folder)
+    ...     except tl.errors.HistoryArtifactError as err:
+    ...         print(type(err).__name__)
+    HistoryArtifactError
+    """
 
     def __init__(self, path: str | os.PathLike[str]) -> None:
         self.path = Path(path)

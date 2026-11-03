@@ -161,7 +161,7 @@ Freeze is PER-PLANE, not one switch:
   bundle finalize, out-eviction, param-ref release); the whole core freezes after step
   20, exactly where `_compact_ancestor_sets` runs today — the freeze step inherits the
   compaction passes' role and the standalone passes are deleted.
-- `log_backward` appends an atomic backward **EPOCH** (generation bump), preserving the
+- `backward` appends an atomic backward **EPOCH** (generation bump), preserving the
   exact lazy watermark/revision invalidation semantics.
 - Direct writes and interventions land in the sparse versioned **overlay**.
 - Derived caches stay disposable.
@@ -621,7 +621,7 @@ Per-wave standard block (every commit; `CUDA_VISIBLE_DEVICES=""`,
 
 Entity/serialization boundaries add the field-contract battery
 (`test_field_order_contract`, `test_record_field_policy`, `test_schema_audit`,
-`test_trace_field_invariant`, `test_field_lifecycle_matrix`, `test_io_scrub_policy`,
+`test_trace_field_invariant`, `test_io_scrub_policy`,
 `test_to_pandas_field_coverage`, `test_internals`, `test_quantities_memory`,
 `test_state_adapter`, `test_io_pickle`, `test_io_plain_pickle`, `test_io_bundle`,
 `test_capture_events_parity`, torch parity gates). Wave boundaries: full `-m "not

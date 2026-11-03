@@ -21,6 +21,11 @@ TF_FRAMEWORK = FrameworkRequirement(
     extra="tf",
 )
 
+#: Test-only dependencies of the TensorFlow ecosystem roster rows: installed by
+#: the nightly preview leg only, never by a pyproject extra or the per-change
+#: leg. The pins test holds the nightly install to it.
+TF_ECOSYSTEM_TEST_REQUIREMENTS: tuple[str, ...] = ("keras-hub>=0.21,<1",)
+
 #: Refusal codes the TensorFlow preview raises today (a subset of the registry).
 TF_REFUSAL_CODES: tuple[str, ...] = (
     "trace_option_unsupported",

@@ -32,6 +32,7 @@ def _call_dispatch_callsite_from(filename: str) -> None:
     )  # noqa: S102 - test-owned source
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch_names.py; a sole mutation kill.
 def test_framework_filename_verdicts_are_bounded(monkeypatch: pytest.MonkeyPatch) -> None:
     """Distinct generated filenames beyond the cap evict FIFO, never grow."""
 
@@ -48,27 +49,6 @@ def test_framework_filename_verdicts_are_bounded(monkeypatch: pytest.MonkeyPatch
         # The newest verdicts survive; the oldest were evicted.
         assert f"<tl-verdict-bound-{cap + 199}>" in witness_module._FRAMEWORK_FILENAME_VERDICTS
         assert "<tl-verdict-bound-0>" not in witness_module._FRAMEWORK_FILENAME_VERDICTS
-    finally:
-        witness_module._FRAMEWORK_FILENAME_VERDICTS.clear()
-        witness_module._FRAMEWORK_FILENAME_VERDICTS.update(snapshot)
-
-
-def test_framework_filename_verdicts_still_memoize(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Repeated filenames re-use their verdict rather than re-resolving."""
-
-    snapshot = dict(witness_module._FRAMEWORK_FILENAME_VERDICTS)
-    witness_module._FRAMEWORK_FILENAME_VERDICTS.clear()
-    try:
-        _call_dispatch_callsite_from("<tl-verdict-memo>")
-        _call_dispatch_callsite_from("<tl-verdict-memo>")
-        assert (
-            sum(
-                1
-                for key in witness_module._FRAMEWORK_FILENAME_VERDICTS
-                if key == "<tl-verdict-memo>"
-            )
-            == 1
-        )
     finally:
         witness_module._FRAMEWORK_FILENAME_VERDICTS.clear()
         witness_module._FRAMEWORK_FILENAME_VERDICTS.update(snapshot)

@@ -45,6 +45,7 @@ def _save(model: nn.Module, args: Any, path: Path) -> Path:
     return path
 
 
+# Kept: id not measured per id (rare tier).
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires CUDA")
 def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
@@ -58,20 +59,7 @@ def test_r35_device_diverged_run_is_never_attested(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
-def test_r35_any_failed_input_contract_caps_attestation(tmp_path: Path) -> None:
-    """CPU equivalent: a failed input-literal check caps attestation."""
-
-    x = torch.tensor([1.0, 2.0, 3.0])
-    path = _save(_FlagModel().eval(), (x, 2.0), tmp_path / "flag.tlspec")
-    result = tl.load(path).run(
-        inputs=(x, 3.0),
-        on_divergence="return",
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.DIVERGED
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.is_poisoned is True
-
-
+# Kept: a sole mutation kill.
 def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
     """Positive control: the lattice does not widen not_applicable needlessly."""
 
@@ -83,6 +71,7 @@ def test_r35_eligible_original_run_stays_attested(tmp_path: Path) -> None:
     assert result.report.is_poisoned is False
 
 
+# Kept: sole branch coverage of _runnable/path_faithfulness.py; the catch of its regression fault.
 def test_r35_report_constructor_rejects_attested_nonverified() -> None:
     """The prohibited ATTESTED + non-VERIFIED combination is unrepresentable."""
 
@@ -118,18 +107,3 @@ def test_r35_report_constructor_rejects_attested_nonverified() -> None:
                 first_mismatch=None,
                 numeric_attestation=NumericAttestationStatus.ATTESTED,
             )
-
-
-def test_r35_prior_poisoned_fork_mark_caps_attestation(tmp_path: Path) -> None:
-    """An inherited monotonic non-verified mark makes attestation ineligible."""
-
-    x = torch.tensor([1.0, 2.0, 3.0])
-    path = _save(_AddOneModel().eval(), x, tmp_path / "mono.tlspec")
-    loaded = tl.load(path)
-    # Simulate an inherited monotonic poisoned mark on the source Trace: forks
-    # copy it, so the eligibility verdict must fold it in.
-    loaded._runnable.path_faithfulness = PathFaithfulness.UNVERIFIABLE
-    loaded._runnable.poisoned = True
-    result = loaded.run(inputs=x)
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE

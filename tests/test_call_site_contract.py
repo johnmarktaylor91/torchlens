@@ -50,69 +50,6 @@ class _TanhLoop(nn.Module):
         return x
 
 
-class _ScalarLoop(nn.Module):
-    """Row 49: a varying scalar in a loop is one layer; its argument hash varies."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for i in range(1, 4):
-            x = torch.tanh(x * float(i))
-        return x
-
-
-class _SharedWeightTwoLines(nn.Module):
-    """Row 25: one raw parameter on two lines is two single-pass matmul layers."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.w = nn.Parameter(torch.randn(4, 4) * 0.1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = x @ self.w
-        x = torch.tanh(x)
-        x = x @ self.w
-        return x
-
-
-class _ParameterListLoop(nn.Module):
-    """Row 51: a loop over a ParameterList is one matmul layer, one param per pass."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.ws = nn.ParameterList([nn.Parameter(torch.randn(4, 4) * 0.1) for _ in range(3)])
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for w in self.ws:
-            x = torch.tanh(x @ w)
-        return x
-
-
-class _Inner(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.sin(x) * 2.0
-
-
-class _Parent(nn.Module):
-    def __init__(self, inner: nn.Module) -> None:
-        super().__init__()
-        self.inner = inner
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.inner(x) + 1.0
-
-
-class _SharedInstance(nn.Module):
-    """Row 30: one module instance under two parents is one layer, 2 passes."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        inner = _Inner()
-        self.a = _Parent(inner)
-        self.b = _Parent(inner)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.b(self.a(x))
-
-
 def _x() -> torch.Tensor:
     return torch.randn(2, 4)
 
@@ -136,6 +73,7 @@ def _capture_must_breach(model: nn.Module, clause: str) -> None:
     assert f"({clause})" in str(error), str(error)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_call_site_contract.py.
 def test_planted_merge_of_two_call_sites_fails_step7(monkeypatch: pytest.MonkeyPatch) -> None:
     """A grouping key that fuses the two relu lines into one layer breaches (i)."""
 
@@ -151,20 +89,7 @@ def test_planted_merge_of_two_call_sites_fails_step7(monkeypatch: pytest.MonkeyP
     _capture_must_breach(_TwoReluLines(), "i")
 
 
-def test_planted_split_of_one_call_site_fails_step7(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A grouping key that splits the tanh loop line into three layers breaches (ii)."""
-
-    original = loop_detection._call_site_group_key
-
-    def _splitting_key(node, classes):
-        if classes.get(node._label_raw, "").startswith("tanh"):
-            return ("planted-split", node._label_raw)
-        return original(node, classes)
-
-    monkeypatch.setattr(loop_detection, "_call_site_group_key", _splitting_key)
-    _capture_must_breach(_TanhLoop(), "ii")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_call_site_contract.py.
 def test_planted_recurrent_group_spanning_two_sites_fails_step7(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -183,61 +108,7 @@ def test_planted_recurrent_group_spanning_two_sites_fails_step7(
     _capture_must_breach(_TwoReluLines(), "iii")
 
 
-@pytest.mark.parametrize(
-    "model_cls",
-    [
-        _TwoReluLines,
-        _TanhLoop,
-        _ScalarLoop,
-        _SharedWeightTwoLines,
-        _ParameterListLoop,
-        _SharedInstance,
-    ],
-)
-def test_contract_and_narrowed_invariants_hold_on_rule_rows(model_cls: type[nn.Module]) -> None:
-    """Rows 3, 14, 25, 30, 49 and 51 pass every metadata invariant, re-checked live."""
-
-    torch.manual_seed(0)
-    trace = tl.trace(model_cls(), _x())
-    assert trace.options.grouping_policy["detector"] == "callsite_v1"
-    assert contract.call_site_classes_for(trace) is not None
-    assert check_metadata_invariants(trace) is True
-    assert not [
-        d
-        for d in get_validation_diagnostics(trace)
-        if d.check_name == "call_site_contract_unchecked"
-    ]
-
-
-def test_row_shapes_are_what_the_replaced_invariants_refused() -> None:
-    """The narrowed components really differ on these rows (the replacement is load-bearing)."""
-
-    torch.manual_seed(0)
-    scalar = tl.trace(_ScalarLoop(), _x())
-    muls = [op for op in scalar._layer_list if op.type == "mul"]
-    assert len({op.layer_label for op in muls}) == 1
-    assert len({op.equivalence_class for op in muls}) == 3  # row 49: argument hash
-    shared = tl.trace(_SharedWeightTwoLines(), _x())
-    matmuls = [op for op in shared._layer_list if op.type == "matmul"]
-    assert len({op.layer_label for op in matmuls}) == 2  # row 25: shared W, two layers
-    assert len({op.equivalence_class for op in matmuls}) == 1
-
-
-def test_post_hoc_recheck_fires_on_a_corrupted_side_table() -> None:
-    """Metadata invariants re-check (ii) from the live side table."""
-
-    torch.manual_seed(0)
-    trace = tl.trace(_TwoReluLines(), _x())
-    classes = dict(contract.call_site_classes_for(trace) or {})
-    relu_raw = [op._label_raw for op in trace._layer_list if op.func_name == "relu"]
-    assert len(relu_raw) == 2
-    for raw in relu_raw:
-        classes[raw] = "relu@cs-planted"
-    contract.remember_call_site_classes(trace, classes)
-    with pytest.raises(MetadataInvariantError, match=r"\(ii\)"):
-        check_metadata_invariants(trace)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_invariants_equivalence.py, campaign mutant kills.
 def test_equivalence_clause_still_fires_on_a_layer_type_mismatch() -> None:
     """The narrowed equivalence clause still refuses a pass of a different layer type."""
 
@@ -250,6 +121,7 @@ def test_equivalence_clause_still_fires_on_a_layer_type_mismatch() -> None:
         check_metadata_invariants(trace)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_loaded_trace_reports_the_contract_unchecked(tmp_path: Path) -> None:
     """A loaded callsite_v1 trace has no side table: re-validation says so, never passes it."""
 

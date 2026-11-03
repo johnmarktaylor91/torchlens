@@ -8,9 +8,6 @@ work on an already-traced model (the deepcopy-after-trace ``KeyError``).
 
 from __future__ import annotations
 
-import random
-
-import pytest
 import torch
 from torch import nn
 
@@ -18,10 +15,7 @@ import torchlens as tl
 from torchlens.debug import (
     bisect_precision,
     first_divergence,
-    isolated_capture,
-    preserved_rng_state,
 )
-from torchlens.debug._graph import _compare_rows
 
 
 class _TanhThenAdd(nn.Module):
@@ -61,24 +55,7 @@ def _cleanup(*traces: object) -> None:
             cleanup()
 
 
-def test_compare_rows_follow_execution_order() -> None:
-    """Rows walk execution order even when sorted() order disagrees."""
-
-    x = torch.linspace(-1.0, 1.0, 8)
-    trace_a = tl.trace(_TanhThenAdd(0.5), x)
-    trace_b = tl.trace(_TanhThenAdd(0.75), x)
-    try:
-        rows, attrs = _compare_rows(trace_a, trace_b)
-        labels = [row["op"] for row in rows]
-        tanh_position = next(i for i, label in enumerate(labels) if label.startswith("tanh"))
-        add_position = next(i for i, label in enumerate(labels) if label.startswith("add"))
-        # Alphabetical order would put add_* first; execution order is tanh -> add.
-        assert tanh_position < add_position
-        assert attrs["value_diverged"] >= 1
-    finally:
-        _cleanup(trace_a, trace_b)
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph.py.
 def test_first_divergence_names_first_executed_divergence() -> None:
     """The first-diverging-op recipe names the op that actually diverged first.
 
@@ -99,6 +76,7 @@ def test_first_divergence_names_first_executed_divergence() -> None:
         _cleanup(trace_a, trace_b)
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_graph.py.
 def test_first_divergence_none_when_identical() -> None:
     """Identical runs return None instead of a spurious row."""
 
@@ -111,74 +89,7 @@ def test_first_divergence_none_when_identical() -> None:
         _cleanup(trace_a, trace_b)
 
 
-def test_bisect_precision_works_after_prior_trace() -> None:
-    """The double-run harness survives an already-traced source model.
-
-    ``copy.deepcopy`` of a traced model used to carry stale instance-level
-    forward wrappers into the copies and the next capture died with a bare
-    ``KeyError``; the shared harness releases each copy first.
-    """
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    x = torch.randn(2, 4)
-    prior = tl.trace(model, x)
-    try:
-        result = bisect_precision(model, x)
-        assert result.rows, "expected compared rows from an already-traced model"
-    finally:
-        _cleanup(prior)
-
-
-def test_isolated_capture_preserves_caller_rng_and_reproduces() -> None:
-    """Same-seed isolated captures agree; caller RNG streams are untouched."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.Dropout(p=0.5))
-    model.train()
-    x = torch.randn(2, 4)
-    torch.manual_seed(1234)
-    random.seed(99)
-    torch_state_before = torch.get_rng_state()
-    python_state_before = random.getstate()
-
-    run_a = isolated_capture(model, x, seed=7)
-    run_b = isolated_capture(model, x, seed=7)
-    run_c = isolated_capture(model, x, seed=8)
-    try:
-        assert torch.equal(torch.get_rng_state(), torch_state_before)
-        assert random.getstate() == python_state_before
-        out_a = run_a.output_ops[0].out
-        out_b = run_b.output_ops[0].out
-        out_c = run_c.output_ops[0].out
-        assert torch.equal(out_a, out_b)
-        assert not torch.equal(out_a, out_c)
-    finally:
-        _cleanup(run_a, run_b, run_c)
-
-
-def test_preserved_rng_state_round_trips() -> None:
-    """Draws inside the preserved scope are invisible to the caller."""
-
-    torch.manual_seed(5)
-    random.seed(5)
-    expected_torch = torch.get_rng_state()
-    expected_python = random.getstate()
-    with preserved_rng_state():
-        torch.randn(16)
-        random.random()
-    assert torch.equal(torch.get_rng_state(), expected_torch)
-    assert random.getstate() == expected_python
-
-
-def test_rerun_helpers_are_public_in_tl_debug() -> None:
-    """``clone_input_tree`` and ``preserved_rng_state`` are ``tl.debug`` exports."""
-
-    from torchlens.debug import _rerun
-
-    for name in ("clone_input_tree", "preserved_rng_state"):
-        assert name in tl.debug.__all__
-        assert getattr(tl.debug, name) is getattr(_rerun, name)
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_rerun.py.
 def test_clone_input_tree_copies_tensors_and_containers() -> None:
     """The clone shares no tensor or container with the input tree."""
 
@@ -203,28 +114,31 @@ def test_clone_input_tree_copies_tensors_and_containers() -> None:
     assert len(tree["a"]) == 2
 
 
-def test_preserved_rng_state_restores_every_stream_on_exit_and_on_error() -> None:
-    """Python, NumPy and torch streams come back after a normal or failing block."""
+# Kept: regression test for a fixed bug; the shrink-r4 regression class needs a planted fault to delete it.
+def test_bisect_precision_works_after_prior_trace() -> None:
+    """The double-run harness survives an already-traced source model.
 
-    np = pytest.importorskip("numpy")
-    torch.manual_seed(11)
-    random.seed(11)
-    np.random.seed(11)
-    expected_torch = torch.get_rng_state()
-    expected_python = random.getstate()
-    expected_numpy = np.random.get_state()[1].copy()
+    ``copy.deepcopy`` of a traced model used to carry stale instance-level
+    forward wrappers into the copies and the next capture died with a bare
+    ``KeyError``; the shared harness releases each copy first.
+    """
 
-    with tl.debug.preserved_rng_state():
-        torch.randn(8)
-        random.random()
-        np.random.rand(8)
-    assert torch.equal(torch.get_rng_state(), expected_torch)
-    assert random.getstate() == expected_python
-    assert (np.random.get_state()[1] == expected_numpy).all()
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    x = torch.randn(2, 4)
+    prior = tl.trace(model, x)
+    try:
+        result = bisect_precision(model, x)
+        assert result.rows, "expected compared rows from an already-traced model"
+    finally:
+        _cleanup(prior)
 
-    with pytest.raises(RuntimeError, match="inside"), tl.debug.preserved_rng_state():
-        torch.randn(8)
-        np.random.rand(8)
-        raise RuntimeError("inside")
-    assert torch.equal(torch.get_rng_state(), expected_torch)
-    assert (np.random.get_state()[1] == expected_numpy).all()
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_rerun_helpers_are_public_in_tl_debug() -> None:
+    """``clone_input_tree`` and ``preserved_rng_state`` are ``tl.debug`` exports."""
+
+    from torchlens.debug import _rerun
+
+    for name in ("clone_input_tree", "preserved_rng_state"):
+        assert name in tl.debug.__all__
+        assert getattr(tl.debug, name) is getattr(_rerun, name)

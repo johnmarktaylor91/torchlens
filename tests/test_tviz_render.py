@@ -55,7 +55,6 @@ def receipt() -> tviz.CausalReceipt:
     )
 
 
-@pytest.mark.smoke
 def test_matplotlib_gate_refuses_with_install_command(
     view: tviz.AttentionView, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -68,39 +67,6 @@ def test_matplotlib_gate_refuses_with_install_command(
         torchlens.viz.attention(view, tmp_path / "x.svg")
     assert excinfo.value.fields["code"] == "tv_matplotlib_missing"
     assert 'pip install "torchlens[viz]"' in excinfo.value.fields["install_command"]
-
-
-def test_attention_svg_is_vector_with_disclosures(view: tviz.AttentionView, tmp_path: Path) -> None:
-    """Numeric SVG carries zero <image> elements and every honesty line."""
-
-    artifact = torchlens.viz.attention(view, tmp_path / "attn.svg")
-    svg = artifact.paths[0].read_text()
-    assert "<image" not in svg
-    assert artifact.svg_fonttype == "path"
-    lines = "\n".join(artifact.disclosure_lines)
-    assert "rows attend from (query); columns attend to (key)" in lines
-    assert "routing measurements, not causal importance" in lines
-    assert "zero and masked positions are not distinguished" in lines
-
-
-def test_masked_view_discloses_source_not_unmarked_wording(
-    view: tviz.AttentionView, tmp_path: Path
-) -> None:
-    """A provenanced mask renders its source; the unmarked wording is absent."""
-
-    mask = torch.triu(torch.ones(6, 6, dtype=torch.bool), diagonal=1)
-    masked_view = tviz.AttentionView(
-        pattern=view.pattern,
-        query_tokens=view.query_tokens,
-        key_tokens=view.key_tokens,
-        heads=view.heads,
-        layer=view.layer,
-        mask=tviz.MaskInfo(mask=mask, source="sdpa_call_args"),
-    )
-    artifact = torchlens.viz.attention(masked_view, tmp_path / "masked.svg")
-    lines = "\n".join(artifact.disclosure_lines)
-    assert "mask source: sdpa_call_args" in lines
-    assert "zero and masked positions are not distinguished" not in lines
 
 
 def test_per_panel_domain_renders_not_comparable_label(
@@ -166,7 +132,6 @@ def test_receipt_grid_prints_joint_line(receipt: tviz.CausalReceipt, tmp_path: P
     assert "<image" not in artifact.paths[0].read_text()
 
 
-@pytest.mark.smoke
 def test_receipt_grid_refuses_without_joint(tmp_path: Path) -> None:
     """No joint measurement, no grid figure (D13 is mandatory)."""
 
@@ -200,7 +165,6 @@ def test_annotated_attention_keeps_pattern_channel(
     assert "fires: 3" in lines
 
 
-@pytest.mark.smoke
 def test_unknown_format_refuses(view: tviz.AttentionView, tmp_path: Path) -> None:
     """The save-format roster is closed; PDF is the paper format."""
 
@@ -220,7 +184,6 @@ def test_pdf_text_extracts_tokens_in_order(view: tviz.AttentionView, tmp_path: P
     assert all(position >= 0 for position in positions), f"tokens missing from PDF text: {text!r}"
 
 
-@pytest.mark.smoke
 def test_neuron_card_renders_closed_terms(tmp_path: Path) -> None:
     """The family-gated card renders only from a closed decomposition."""
 

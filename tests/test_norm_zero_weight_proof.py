@@ -16,7 +16,6 @@ import pytest
 import torch
 from _validation_capture import _quiet_validate
 from torch import nn
-from torch.nn import functional as F
 
 from torchlens.validation._norm_zero_weight_proof import norm_input_annihilated_by_zero_weight
 from torchlens.validation.exemptions import _posthoc_value_proof_decision
@@ -56,13 +55,6 @@ class _FakeNormOp:
         self.parent_arg_positions = {"args": labels, "kwargs": kwarg_labels or {}}
 
 
-def test_group_norm_zero_init_last_validates() -> None:
-    """GroupNorm with an exactly zero weight validates end to end."""
-
-    torch.manual_seed(0)
-    assert _quiet_validate(_ConvThenNorm(nn.GroupNorm(2, 8)), torch.randn(1, 3, 6, 6)) is True
-
-
 def test_layer_norm_zero_weight_validates() -> None:
     """LayerNorm over the channel dim with a zero weight validates end to end."""
 
@@ -79,15 +71,6 @@ def test_layer_norm_zero_weight_validates() -> None:
 
     torch.manual_seed(0)
     assert _quiet_validate(_LinearThenLayerNorm(), torch.randn(2, 4)) is True
-
-
-@pytest.mark.skipif(not hasattr(F, "rms_norm"), reason="F.rms_norm needs torch>=2.4")
-def test_rms_norm_zero_weight_is_proved() -> None:
-    """``rms_norm(input, normalized_shape, weight, eps)`` reads weight at args[2]."""
-
-    op = _FakeNormOp("rms_norm", torch.zeros(4), arg_labels={0: "x", 2: "weight"})
-    op.saved_args = (torch.randn(2, 4), (4,), torch.zeros(4), None)
-    assert norm_input_annihilated_by_zero_weight(op, ["x"], op.saved_args) is True
 
 
 @pytest.mark.parametrize("func_name", ["group_norm", "layer_norm"])

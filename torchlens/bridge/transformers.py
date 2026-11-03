@@ -14,6 +14,7 @@ import torch
 
 from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
+from torchlens.bridge._hf_refusals import refuse_preprocessing_unresolved
 from torchlens.bridge.hf_attention import (
     AttentionCall,
     AttentionRecording,
@@ -282,6 +283,14 @@ def trace_text(
     -------
     Trace
         TorchLens trace with ``input`` set to the original text.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_text(model, "hello world")
+    ... except (ImportError, ValueError):
+    ...     print("no tokenizer resolvable")
+    no tokenizer resolvable
     """
 
     import torchlens as tl
@@ -334,6 +343,16 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     -------
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
+
+    Examples
+    --------
+    >>> from PIL import Image
+    >>> image = Image.new("RGB", (8, 8))
+    >>> try:
+    ...     tl.bridge.transformers.trace_image(model, image)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torchlens as tl
@@ -364,6 +383,14 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     -------
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_multimodal(model, {"text": "hi"})
+    ... except (ImportError, ValueError):
+    ...     print("no processor resolvable")
+    no processor resolvable
     """
 
     from transformers import AutoProcessor
@@ -675,12 +702,12 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             record.description = f"AutoImageProcessor: {record.identifier}"
         return resolution.input_transform, record
     reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    raise InvalidArgumentError(
-        f"torchlens.trace: no preprocessing authority resolved for the PIL image "
-        f"input to {type(model).__name__} ({reason or 'nothing resolved'}). "
+    refuse_preprocessing_unresolved(
+        model,
+        f"no preprocessing authority resolved for the PIL image input to "
+        f"{type(model).__name__} ({reason or 'nothing resolved'}). "
         "TorchLens refuses to guess a recipe the model may not have been "
         "trained with.",
-        code="preprocessing_unresolved",
         remedy=(
             "record the weights the model was built with, e.g. "
             "torchlens.preprocessing.attach_authority(model, weights) (torchvision models "
@@ -693,7 +720,6 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             "input_transform=torchlens.preprocessing.imagenet_default()); "
             "or pass an already-preprocessed tensor"
         ),
-        model_type=type(model).__name__,
         resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
 

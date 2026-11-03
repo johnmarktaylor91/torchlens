@@ -30,22 +30,14 @@ from typing import Any
 
 import pytest
 import torch
-from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
 import torchlens.backends.torch._completeness_cross_thread
 import torchlens.backends.torch._completeness_patches
-import torchlens.backends.torch.wrappers as wrappers_module
 from torchlens._runnable import PathFaithfulness
-from torchlens._utils._callable_safety import (
-    _ALLOWED_FORWARD_OP_MODULES,
-    is_pure_forward_callable,
-    private_c_forward_op_module_names,
-)
 from torchlens.backends.torch._completeness_cross_thread import (
     _private_c_forward_op_modules,
-    _private_c_module_callables,
     host_escape_observer_install_failed,
 )
 from torchlens.backends.torch._completeness_escape_state import (
@@ -168,6 +160,7 @@ def _make_runner(thread_mode: str) -> Any:
 
 
 # --- behavioral ceiling matrix ----------------------------------------------------------------
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("surface", list(_CONSUMERS))
 @pytest.mark.parametrize("thread_mode", ["in_window", "preexisting"])
 def test_private_c_captured_operand_consumption_ceilings(
@@ -195,6 +188,7 @@ def test_private_c_captured_operand_consumption_ceilings(
 
 
 # --- driver non-vacuity + _sparse enumeration / gate-neutral pin ------------------------------
+# Kept: a sole mutation kill.
 def test_private_c_module_driver_is_the_six_modules() -> None:
     """The structural driver resolves EXACTLY the six patchable private-C forward-op modules
     (incl. ``_sparse``, ``_nested``) and NONE of the class-typed unpatchable holders."""
@@ -208,78 +202,7 @@ def test_private_c_module_driver_is_the_six_modules() -> None:
     assert "torch._C._TensorBase" not in resolved
 
 
-def test_private_c_module_callables_nonvacuous() -> None:
-    """Every discovered private-C module exposes >=1 module-level callable (non-vacuous scan)."""
-
-    counts: dict[str, int] = {}
-    for module, _attr, original in _private_c_module_callables():
-        assert callable(original)
-        counts[module.__name__] = counts.get(module.__name__, 0) + 1
-    for name in _EXPECTED_MODULES:
-        assert counts.get(name, 0) >= 1, f"{name} contributed no patch targets"
-
-
-def test_sparse_enumeration_completeness_is_gate_neutral() -> None:
-    """``torch._C._sparse`` is present for ENUMERATION-COMPLETENESS only: it was already prefix-
-    admitted via the ``torch._C`` entry, so its gate outcome for a sparse op is UNCHANGED by the
-    addition (pins the 'enumeration-only, gate-neutral' property)."""
-
-    assert "torch._C._sparse" in _ALLOWED_FORWARD_OP_MODULES
-    assert "torch._C._sparse" in private_c_forward_op_module_names()
-    # A sparse forward op is admitted with OR without the explicit ``_sparse`` entry, because the
-    # bare ``torch._C`` prefix already covers it -- the addition changes no admission decision.
-    sparse_op = torch._C._sparse.sparse_sampled_addmm
-    admitted_with = is_pure_forward_callable(sparse_op)
-    reduced = frozenset(m for m in _ALLOWED_FORWARD_OP_MODULES if m != "torch._C._sparse")
-    module = str(getattr(sparse_op, "__module__", "") or "")
-    admitted_without = any(module == p or module.startswith(p + ".") for p in reduced)
-    assert admitted_with is True
-    assert admitted_without is True, "sparse op should already be prefix-admitted via torch._C"
-
-
-# --- arm/disarm lifecycle ---------------------------------------------------------------------
-def test_private_c_patched_while_armed_and_restored_after() -> None:
-    """LIFECYCLE: EVERY discovered private-C callable is sentinel-wrapped during the armed window
-    and restored (original identity, no marker) after -- a leaked patch or a silent surface drop
-    fails this."""
-
-    originals = {
-        (id(module), attr): original for module, attr, original in _private_c_module_callables()
-    }
-
-    class _ProbeModel(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.during: dict[str, Any] = {}
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            targets = _private_c_module_callables()
-            self.during["count"] = len(targets)
-            self.during["all_patched"] = all(
-                getattr(getattr(module, attr, None), "__tl_nonowner_ops_observer__", False)
-                for module, attr, _original in targets
-            )
-            return self.lin(x).relu()
-
-    model = _ProbeModel()
-    log = tl.trace(model, torch.randn(2, 4), capture=CaptureOptions(seed=1, **_CAP))
-
-    assert stashed(log, "during")["count"] == len(originals)
-    assert stashed(log, "during")["all_patched"] is True, "not every private-C callable was patched"
-    for module in _private_c_forward_op_modules():
-        for attr in dir(module):
-            if attr.startswith("__"):
-                continue
-            current = getattr(module, attr, None)
-            if not callable(current):
-                continue
-            assert originals.get((id(module), attr)) is current, (
-                f"{module.__name__}.{attr} was not restored to its original identity"
-            )
-            assert not getattr(current, "__tl_nonowner_ops_observer__", False)
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_patches.py; a sole mutation kill.
 def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPatch) -> None:
     """An empty private-C scan (install-failure surrogate) fails CLOSED: the observer-install-failed
     flag is set so the descriptor is INCOMPLETE, never a silent 'no non-owner op touch'."""
@@ -315,45 +238,3 @@ class _BenignOwnTensorModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         self._runner.run(lambda: float(torch._C._nn.gelu(torch.tensor([1.0, 2.0, 3.0, 4.0])).sum()))
         return self.lin(x).relu()
-
-
-@pytest.mark.parametrize("thread_mode", ["in_window", "preexisting"])
-def test_benign_own_tensor_private_c_stays_verified(thread_mode: str, tmp_path: Path) -> None:
-    """Over-trigger pin: a worker calling a private-C op on its OWN tensor consumes no captured
-    operand and stays VERIFIED, on both an in-window and a pre-existing thread."""
-
-    runner = _make_runner(thread_mode)
-    try:
-        model = _BenignOwnTensorModel(runner)
-        x = torch.randn(2, 4)
-        trace = tl.trace(model, x, capture=CaptureOptions(seed=1, **_CAP))
-        assert not host_escape_has_cross_thread_captured_tensor(trace)
-        path = tmp_path / f"benign_{thread_mode}.tlspec"
-        shutil.rmtree(path, ignore_errors=True)
-        trace.save(path, level="runnable", include_weights=True, include_activations=True)
-        result = tl.load(path).run(inputs=x)
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    finally:
-        runner.stop()
-
-
-def test_disarmed_private_c_call_is_pure_passthrough(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Over-trigger pin: with the belt disarmed, a private-C op call runs the original and never
-    invokes the operand observer."""
-
-    from torchlens import _state
-
-    calls = {"n": 0}
-    real = torchlens.backends.torch._completeness_cross_thread.observe_nonowner_operands
-
-    def _spy(args: Any, kwargs: Any) -> None:
-        calls["n"] += 1
-        real(args, kwargs)
-
-    # The home module and every module that binds the name by import.
-    for module in (torchlens.backends.torch._completeness_cross_thread, wrappers_module):
-        monkeypatch.setattr(module, "observe_nonowner_operands", _spy)
-    assert _state._nonowner_belt_armed is False
-    out = torch._C._nn.gelu(torch.zeros(4))
-    assert isinstance(out, torch.Tensor)
-    assert calls["n"] == 0

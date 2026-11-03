@@ -56,20 +56,6 @@ def _event_rows(trace: tl.Trace) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 
-def test_do_replay_attempt_leaves_audit_evidence() -> None:
-    model = _TinyModel()
-    fork = _ready_trace(model).fork()
-    assert fork.intervention_audit == []
-    fork.do(tl.when(tl.func("relu"), tl.scale(0.0)))
-    assert fork.intervention_audit, "audit empty after a fired do() attempt"
-    events = _event_rows(fork)
-    assert events and events[-1]["status"] == "fired"
-    assert events[-1]["fire_count"] >= 1
-    assert events[-1]["lane"] == "replay"
-    # site-key-first target refs: the fired site resolves to its site_key_v1
-    assert any(key.startswith("s1|") for key in events[-1]["site_keys"])
-
-
 def test_do_set_only_attempt_leaves_audit_evidence() -> None:
     model = _TinyModel()
     fork = _ready_trace(model).fork()
@@ -84,70 +70,9 @@ def test_do_set_only_attempt_leaves_audit_evidence() -> None:
     assert events[-1].get("staged_only") is True
 
 
-def test_capture_door_attempt_leaves_audit_evidence() -> None:
-    model = _TinyModel()
-    log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(tl.func("relu"), tl.scale(0.0)))
-    assert log.intervention_audit, "audit empty after an intervened capture"
-    events = _event_rows(log)
-    assert events[-1]["lane"] == "capture"
-    assert events[-1]["status"] == "fired"
-    assert events[-1]["fire_count"] >= 1
-
-
-def test_failed_do_attempt_leaves_error_evidence() -> None:
-    """A refused attempt is still an attempt: the envelope records the error."""
-
-    model = _TinyModel()
-    fork = _ready_trace(model).fork()
-    from torchlens._errors import InvalidArgumentError
-
-    bad = tl.when(lambda ctx: True, tl.scale(0.0))  # value-dependent: refused on replay
-    with pytest.raises(InvalidArgumentError):
-        fork.do(bad)
-    events = _event_rows(fork)
-    assert events and events[-1]["status"] == "error"
-    assert events[-1]["error"]
-
-
 # ---------------------------------------------------------------------------
 # Misfire: zero fires are data, never silence
 # ---------------------------------------------------------------------------
-
-
-def test_zero_match_capture_records_no_fire() -> None:
-    model = _TinyModel()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        log = tl.trace(
-            model, torch.randn(2, 4), intervene=tl.when(tl.func("conv2d"), tl.scale(0.0))
-        )
-    events = _event_rows(log)
-    assert events, "no envelope after a zero-match intervened capture"
-    assert events[-1]["status"] == "no_fire"
-    assert events[-1]["fire_count"] == 0
-    assert log.intervention_audit, "canonical audit empty after a no-fire attempt"
-
-
-def test_two_edit_misfire_names_the_unfired_rule() -> None:
-    """The two-edit misfire test: one rule fires, the other's silence is named.
-
-    On the capture lane a rule whose WHERE never matches is a recorded
-    misfire (``zero_fire_rule_ids``), never silence.
-    """
-
-    model = _TinyModel()
-    firing = tl.when(tl.func("relu"), tl.scale(0.0))
-    misfiring = tl.when(tl.func("softmax"), tl.add_noise(std=0.5))  # no softmax in the model
-    spec = firing.merge(misfiring)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        log = tl.trace(model, torch.randn(2, 4), intervene=spec)
-    events = _event_rows(log)
-    assert events, "no envelope after a two-edit intervened capture"
-    row = events[-1]
-    assert row["fire_count"] >= 1
-    assert misfiring.rules[0].rule_id in row["zero_fire_rule_ids"]
-    assert firing.rules[0].rule_id not in row["zero_fire_rule_ids"]
 
 
 def _zero_site_warnings(caught: list[warnings.WarningMessage]) -> list[str]:
@@ -233,54 +158,9 @@ def test_noise_std_distinguishes_audit_rows() -> None:
     assert "0.9" in high_event["rules"][0]["action"]
 
 
-def test_sweep_members_carry_distinguishable_values() -> None:
-    """Swept members' envelopes differ by the typed swept value (no closures)."""
-
-    from torchlens.intervention.sweep import sweep
-
-    model = _TinyModel()
-    bundle = sweep(model, torch.randn(2, 4), site="relu", values=[0.0, 1.5])
-    digests = []
-    for member in bundle.members.values():
-        rows = _event_rows(member)
-        assert rows, "swept member missing its capture envelope"
-        digests.append(rows[-1]["event_digest"])
-        assert "sweep_replace" in rows[-1]["edit_names"][0]
-    assert digests[0] != digests[1]
-
-
 # ---------------------------------------------------------------------------
 # The envelope chain and the ONE builder's uniform stamps
 # ---------------------------------------------------------------------------
-
-
-def test_event_chain_is_lineage_ordered() -> None:
-    model = _TinyModel()
-    fork = _ready_trace(model).fork()
-    fork.do(tl.when(tl.func("relu"), tl.scale(0.5)))
-    fork.do(tl.when(tl.func("relu"), tl.scale(0.25)))
-    rows = _event_rows(fork)
-    assert len(rows) == 2
-    lineage_a, ordinal_a = rows[0]["event_id"].split(":")
-    lineage_b, ordinal_b = rows[1]["event_id"].split(":")
-    assert lineage_a == lineage_b
-    assert (int(ordinal_a), int(ordinal_b)) == (1, 2)
-    assert rows[1]["parent_event_id"] == rows[0]["event_id"]
-
-
-def test_fire_records_carry_uniform_timestamps() -> None:
-    """The ONE builder stamps every FireRecord (replay lane included)."""
-
-    model = _TinyModel()
-    fork = _ready_trace(model).fork()
-    fork.do(tl.when(tl.func("relu"), tl.scale(0.0)))
-    records = [
-        record
-        for label in fork.op_labels
-        for record in (getattr(fork.ops[label], "edits", None) or ())
-    ]
-    assert records
-    assert all(record.timestamp is not None for record in records)
 
 
 def test_envelope_rows_survive_save_load() -> None:
@@ -296,3 +176,17 @@ def test_envelope_rows_survive_save_load() -> None:
     events = _event_rows(loaded)
     assert events and events[-1]["status"] == "fired"
     assert loaded.intervention_audit
+
+
+def test_event_chain_is_lineage_ordered() -> None:
+    model = _TinyModel()
+    fork = _ready_trace(model).fork()
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.25)))
+    rows = _event_rows(fork)
+    assert len(rows) == 2
+    lineage_a, ordinal_a = rows[0]["event_id"].split(":")
+    lineage_b, ordinal_b = rows[1]["event_id"].split(":")
+    assert lineage_a == lineage_b
+    assert (int(ordinal_a), int(ordinal_b)) == (1, 2)
+    assert rows[1]["parent_event_id"] == rows[0]["event_id"]

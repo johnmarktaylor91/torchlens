@@ -172,7 +172,6 @@ if TYPE_CHECKING:
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
-    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ..intervention.types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
@@ -554,6 +553,14 @@ class Trace(TraceOutputMixin, TraceLike):
 
     Supports ``len()``, iteration, and flexible ``__getitem__`` lookup by
     integer index, layer label, module address, or substring.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace.layer_labels
+    ['input_1', 'conv2d_1_1', 'relu_1_2', 'conv2d_2_3', 'output_1']
+    >>> tuple(trace["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
     """
 
     @property
@@ -1036,7 +1043,7 @@ class Trace(TraceOutputMixin, TraceLike):
         self.track_nonfinite: bool = False
         self.track_device_memory: bool = False
         self.measure_host_peak_memory: bool = False
-        self._options_aten_ops: bool = False
+        self._options_aten_ops: bool | str = False
         self.annotations: dict[str, Any] = {}
         self._source_frames: list[FuncCallLocation] = []
         self._graph_manual_tensor_connections: list[tuple[str, str]] = []
@@ -1432,24 +1439,6 @@ class Trace(TraceOutputMixin, TraceLike):
             The cached sibling-ordering decision is discarded.
         """
         return _trace_annotations.mark_annotations_mutated(self)
-
-    def find_layers(self, selector: str, *, limit: int = 10) -> list[str]:
-        """Return layer labels matching a fuzzy query.
-
-        Parameters
-        ----------
-        selector:
-            Layer-label substring or approximate layer name.
-        limit:
-            Maximum number of labels to return.
-
-        Returns
-        -------
-        List[str]
-            Matching no-pass layer labels in execution order, followed by close
-            fuzzy matches when substring matches are insufficient.
-        """
-        return _trace_views.find_layers(self, selector=selector, limit=limit)
 
     @property
     def uncalled_modules(self) -> _CallableList:
@@ -2357,24 +2346,18 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_collapse.module_collapse_order(self)
 
-    def collapse_order(self, mode: Literal["auto", "max"] = "auto") -> list[tuple[str, float]]:
-        """Return smart-collapse ranking for a policy."""
+    def _collapse_schedule(self, context: Any = None) -> Any:
+        """Private door for ``lenses._budget``: the collapse schedule under ``context``.
 
-        return _doors.visualization()._trace_collapse.collapse_order(self, mode)
-
-    def collapse_plan(
-        self,
-        mode: Literal["auto", "max"] | float = "auto",
-        context: "RenderContext | None" = None,
-    ) -> "CollapsePlan":
-        """Return the v2 diagnostic collapse plan for this trace."""
-
-        return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
-
-    def collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
-        """Return the public monotone float collapse schedule."""
+        Reached through ``_doors.visualization()`` so the lens modules import no collapse code.
+        """
 
         return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
+
+    def _suggest_layer_labels(self, selector: str, *, limit: int = 10) -> list[str]:
+        """Did-you-mean layer labels for a failed lookup (the refusal text's candidates)."""
+
+        return _trace_views.suggest_layer_labels(self, selector, limit=limit)
 
     def modules_with_facet(self, name: str) -> Iterator[Any]:
         """Yield Modules whose semantic facet view has a facet available now."""
@@ -2743,31 +2726,15 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _trace_intervention_records.history_site_payload(site)
 
-    def set(
-        self,
-        site: Any,
-        value: Any,
-        *,
-        direction: str = "forward",
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set a site out recipe without propagating it."""
-
-        return _doors.intervention()._trace_edits.set_site(
-            self, site, value, direction=direction, strict=strict, confirm_mutation=confirm_mutation
-        )
-
-    def attach_hooks(
+    def _attach_hooks(
         self,
         hooks_or_site: Any,
         hook: Any = None,
         *extra_hooks: Any,
         strict: bool = False,
-        prepend: bool = False,
         confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to the current intervention spec."""
+    ) -> tuple[str, ...]:
+        """Stage sticky hooks on the recipe (the ``do`` attach path); returns the handle ids."""
 
         return _doors.intervention()._trace_hooks.attach_hooks(
             self,
@@ -2775,7 +2742,6 @@ class Trace(TraceOutputMixin, TraceLike):
             hook,
             *extra_hooks,
             strict=strict,
-            prepend=prepend,
             confirm_mutation=confirm_mutation,
         )
 
@@ -2813,8 +2779,8 @@ class Trace(TraceOutputMixin, TraceLike):
             self, site, handle, strict=strict, confirm_mutation=confirm_mutation
         )
 
-    def clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
-        """Clear all sticky hooks from the current intervention spec."""
+    def _clear_hooks(self, *, confirm_mutation: bool = False) -> "Trace":
+        """Clear every sticky hook from the recipe (internal; ``clear_edits`` is the public door)."""
 
         return _doors.intervention()._trace_hooks.clear_hooks(
             self, confirm_mutation=confirm_mutation
@@ -3085,7 +3051,7 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.intervention()._trace_edits.target_spec_from_site(self, site, strict=strict)
 
-    def save_new_outs(
+    def _save_new_outs(
         self,
         model: torch.nn.Module,
         inputs: torch.Tensor | list[Any],
@@ -3096,7 +3062,7 @@ class Trace(TraceOutputMixin, TraceLike):
         backward_ready: bool | None = None,
         _run_until_plan: Any | None = None,
     ) -> None:
-        """Re-run the model with new inputs, saving only outs."""
+        """Re-run the model with new inputs, saving only outs (internal refresh engine)."""
         return _doors.validation()._trace_checks.save_new_outs(
             self,
             model,
@@ -3230,22 +3196,18 @@ class Trace(TraceOutputMixin, TraceLike):
             reservation_resume=reservation_resume,
         )
 
-    def log_backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
-        """Run backward from ``loss`` while capturing first-class backward metadata."""
-        return _doors.backends_torch()._trace_backward.log_backward(self, loss, **backward_kwargs)
-
     def backward(self, loss: torch.Tensor, **backward_kwargs: Any) -> "Trace":
         """Run backward from ``loss`` and populate this Trace with backward metadata."""
 
-        return self.log_backward(loss, **backward_kwargs)
+        return _doors.backends_torch()._trace_backward.backward(self, loss, **backward_kwargs)
 
     def capture_backward(self) -> Any:
         """Return a context manager that captures user-managed backward calls."""
         return _doors.backends_torch()._trace_backward.capture_backward(self)
 
-    def disarm_triggers(self) -> None:
+    def _disarm_autograd(self) -> None:
         """Detach this Trace from global autograd backward interception."""
-        _doors.intervention()._trace_run.disarm_triggers(self)
+        _doors.intervention()._trace_run.disarm(self)
 
     def _remove_log_entry(
         self,
@@ -3383,7 +3345,7 @@ class Trace(TraceOutputMixin, TraceLike):
         show_grad_values: bool = False,
         backward_node_spec_fn: Callable[..., Any] | None = None,
         intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        file_format: str = "pdf",
+        file_format: str | None = None,
         open_viewer: bool = False,
         highlight: DrawHighlightLiteral | None = None,
     ) -> "Drawing":
@@ -3487,8 +3449,8 @@ class Trace(TraceOutputMixin, TraceLike):
 
         return _doors.visualization()._trace_draw.to_dagua_graph(
             self,
-            vis_mode="rolled" if rolled else "unrolled",
-            vis_call_depth=depth,
+            rolled=rolled,
+            depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,

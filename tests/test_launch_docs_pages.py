@@ -301,19 +301,22 @@ def test_relative_links_resolve(page: str) -> None:
             assert anchor in headings, (page, target)
 
 
-def _benchmark_data() -> dict[str, Any]:
-    """The committed capture benchmark result the page quotes."""
+def _benchmark_data() -> list[dict[str, Any]]:
+    """Every committed capture benchmark result the page quotes, one per run."""
 
-    return json.loads((DOCS / "benchmarks" / "data" / "capture_2026-11-03.json").read_text())
+    paths = sorted((DOCS / "benchmarks" / "data").glob("capture_*.json"))
+    assert paths, "no capture benchmark result file"
+    return [json.loads(path.read_text()) for path in paths]
 
 
 def test_benchmark_page_quotes_its_result_file() -> None:
-    """Both headings, the host and date, and every quoted number from the result file."""
+    """Both headings, each run's host and date, and every quoted number from its result file."""
 
     text = _text("benchmarks/capture.md")
-    data = _benchmark_data()
     assert text.index("## Live edits at hook speed") < text.index("## Where TorchLens is slower")
-    assert data["host"]["name"] in text
-    assert data["measured_on"] in text
-    for row in data["page_rows"]:
-        assert row["text"] in text, row["text"]
+    for data in _benchmark_data():
+        assert data["host"]["name"] in text
+        assert data["measured_on"] in text
+        assert data["page_rows"], data["host"]["name"]
+        for row in data["page_rows"]:
+            assert row["text"] in text, row["text"]

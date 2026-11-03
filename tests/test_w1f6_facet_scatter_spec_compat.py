@@ -113,7 +113,7 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
     assert int(torch.count_nonzero(clean_h1)) > 0
 
     zeroed = clean.fork("zero_q_head")
-    zeroed.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    zeroed._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
     zeroed.run(model, x)
 
     h0 = zeroed.modules["attn"].facets.head(0).q
@@ -124,12 +124,13 @@ def test_facet_head_ablate_zeroes_only_selected_head() -> None:
     assert torch.equal(h1, clean_h1)
 
 
+@pytest.mark.smoke
 def test_facet_helper_hook_stores_scatter_wrapper_with_helper_provenance() -> None:
     """Sticky facet entries store the scatter wrapper as the fire-time hook."""
 
     _, _, clean = _traced_attention()
     edited = clean.fork("wrapper_storage")
-    edited.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    edited._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
 
     facet_specs = [
         hook_spec
@@ -176,7 +177,7 @@ def test_save_facet_hook_refuses_at_executable_levels(tmp_path: Any, level: str)
 
     _, _, clean = _traced_attention()
     edited = clean.fork("facet_save_refusal")
-    edited.attach_hooks(tl.head(0, "q"), tl.zero_ablate())
+    edited._attach_hooks(tl.head(0, "q"), tl.zero_ablate())
 
     with pytest.raises(OpaqueCallableError, match="facet-slice hook"):
         edited.save_intervention(tmp_path / f"facet_{level}.tlspec", level=level)
@@ -209,7 +210,7 @@ def _saved_relu_scale_spec(tmp_path: Any, *, level: str = "executable_with_calla
         capture=tl.options.CaptureOptions(save_args=True),
         save="all",
     )
-    log_a.attach_hooks(tl.func("relu"), tl.scale(2.0), confirm_mutation=True)
+    log_a._attach_hooks(tl.func("relu"), tl.scale(2.0), confirm_mutation=True)
     path = tmp_path / f"scale_relu_{level}.tlspec"
     log_a.save_intervention(path, level=level)
     return load_intervention_spec(path)

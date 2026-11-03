@@ -40,6 +40,15 @@ class ScanRow:
     other name bound to the SAME tensor object (tied weights, double-
     registered buffers) -- deduped by identity, no alias lost. ``is_audited``
     is False exactly when ``skip_reason`` says why.
+
+    Examples
+    --------
+    >>> report = tl.debug.param_health(model)
+    >>> row = report.rows[0]
+    >>> (row.name, row.shape, row.is_audited)
+    ('0.weight', (4, 3, 3, 3), True)
+    >>> row.num_nonfinite
+    0
     """
 
     name: str

@@ -10,13 +10,13 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._state import pause_logging
-from .errors import HookSignatureError
+from .errors import HookSignatureError, ReplayPreconditionError
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .hooks import HookCallable, HookDirection
-    from .types import Edit
+    from .types import Edit, HookSpec
 
 #: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
 _GRAD_SELECTOR_KIND = "grad"
@@ -343,3 +343,29 @@ def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -
         raise HookSignatureError(
             "'ctx' must be a keyword-only parameter; write it as def edit(t, *, ctx): ..."
         )
+
+
+def _stored_facet_scatter_hook(hook_spec: HookSpec) -> Any:
+    """Return a sticky facet-slice hook's stored scatter wrapper, or refuse.
+
+    Facet-slice hooks fire through the scatter wrapper built at attach time
+    (``_facet_scatter_hook``), which closes over the resolved FacetSpec and
+    CANNOT be rebuilt from the raw helper: the generic normalization path
+    would silently apply the helper to the WHOLE home tensor
+    (``tl.head(0, "q")`` plus ``tl.zero_ablate()`` zeroing every head). Fail
+    closed when the wrapper is absent (for example a spec loaded from disk).
+    """
+
+    stored_hook = hook_spec.hook
+    if not getattr(stored_hook, "_tl_facet_scatter", False):
+        facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
+        home_label = hook_spec.metadata.get("facet_home_label", "<unknown>")
+        raise ReplayPreconditionError(
+            "Sticky facet-slice hook lost its scatter wrapper: the stored hook "
+            f"for facet {facet_name!r} on home {home_label!r} is not the live "
+            "facet scatter wrapper, so firing it would write the whole home "
+            "tensor instead of the selected facet slice. Facet hooks cannot be "
+            "rebuilt from a serialized helper; re-attach the facet intervention "
+            "on a live trace (e.g. trace.do(tl.head(...), helper, model=model, inputs=x))."
+        )
+    return stored_hook

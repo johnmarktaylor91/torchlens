@@ -2,7 +2,7 @@
 
 The MLX wrapper sees each concrete lazy output before the caller, and the
 derived-grad tap observer already proved mid-forward output substitution, so
-static-label ``trace(intervene=tl.when(...))`` and ``trace(halt=...)`` sites
+static-label ``trace(intervene=tl.when(...))`` and ``trace(stop_after=...)`` sites
 apply at the wrapper boundary. Value-dependent predicates stay refused typed:
 predicate-time values would need per-op ``mx.eval``, which would poison lazy
 evaluation.
@@ -127,7 +127,7 @@ def resolve_mlx_intervention_plan(
     intervene:
         Public ``trace(intervene=...)`` value.
     halt:
-        Public ``trace(halt=...)`` value.
+        Public ``trace(stop_after=...)`` value.
     mx:
         Imported ``mlx.core`` module used by the resolved appliers.
 
@@ -165,7 +165,7 @@ def resolve_mlx_intervention_plan(
     if halt is not None:
         if not isinstance(halt, BaseSelector):
             raise BackendUnsupportedError(
-                "MLX backend supports trace(halt=...) only for static-label "
+                "MLX backend supports trace(stop_after=...) only for static-label "
                 "selectors (tl.func, tl.label, tl.label_contains, tl.in_module and "
                 "boolean composites). Value-dependent halt predicates need "
                 "concrete values at predicate time; use the PyTorch backend."

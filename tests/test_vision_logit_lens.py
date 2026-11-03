@@ -1,4 +1,4 @@
-"""Vision logit lens and user-lens identity checks (batch-2 VISION: U55.2, U43.2).
+"""Vision logit lens and user-lens identity checks (vision lane).
 
 Models are built from their vendored published configs, shrunk, weights from
 a fixed seed, zero network:
@@ -202,7 +202,7 @@ def test_clip_head_lens_refuses_text_tower_layers(clip_capture: tuple[Any, Any, 
 
     _model, _inputs, trace = clip_capture
     with pytest.raises(LogitLensError) as excinfo:
-        logit_lens(trace, layers=["text_model.encoder.layers.1"])
+        logit_lens(trace, modules=["text_model.encoder.layers.1"])
     assert excinfo.value.fields["code"] == "logit_lens_layer_outside_head"
 
 
@@ -213,7 +213,7 @@ def test_vision_head_lens_refuses_a_non_sequence_hidden_state(
 
     _model, _inputs, trace = clip_capture
     with pytest.raises(LogitLensError) as excinfo:
-        logit_lens(trace, facet="normalized", layers=["vision_model.post_layernorm"])
+        logit_lens(trace, facet="normalized", modules=["vision_model.post_layernorm"])
     assert excinfo.value.fields["code"] == "logit_lens_hidden_rank_invalid"
 
 

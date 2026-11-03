@@ -96,17 +96,6 @@ def test_output_table_shape_top_n_and_batch_item_overrides() -> None:
     ]
 
 
-def test_decoded_output_uses_typed_batch_topk_representation() -> None:
-    """Classification decoded output is stored as a typed batch top-k blob."""
-
-    trace = _trace_batch_classifier()
-
-    assert trace._decoded_output["kind"] == "batch_topk"
-    assert trace.decode_output(k=1)["rows"] == [
-        row for row in trace._decoded_output["rows"] if row["rank"] == 1
-    ]
-
-
 def test_render_raw_output_single_value_paths_are_byte_identical() -> None:
     """Existing raw-output render branches remain byte-identical."""
 
@@ -197,20 +186,6 @@ def test_redecode_after_load_raises_clearly_when_logits_dropped(tmp_path: Path) 
 
     with pytest.raises(ValueError, match="re-decode unavailable"):
         restored.output_table(k=6)
-
-
-def test_false_positive_output_detection_cases_fail_closed() -> None:
-    """Segmentation, CIFAR-like, and bare 1000-wide regressors do not auto-decode."""
-
-    cases: list[tuple[nn.Module, torch.Tensor]] = [
-        (_Classifier(torch.zeros(1, 1000, 2, 2), _labels(1000)).eval(), torch.ones(1, 2)),
-        (_Classifier(torch.zeros(1, 100)).eval(), torch.ones(1, 2)),
-        (_Classifier(torch.zeros(2, 1000)).eval(), torch.ones(2, 2)),
-    ]
-
-    for model, inputs in cases:
-        trace = tl.trace(model, inputs)
-        assert trace._decoded_output is None
 
 
 def test_output_table_recomputes_when_logits_are_retained() -> None:

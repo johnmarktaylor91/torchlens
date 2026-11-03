@@ -120,6 +120,12 @@ def heatmap(
     ValueError
         If inputs have invalid shape, size, cap, or colormap, or if explicit
         ``vmin``/``vmax`` bounds are non-finite or reversed (``vmax < vmin``).
+
+    Examples
+    --------
+    >>> image = tl.viz.heatmap(torch.arange(12.0).reshape(3, 4), width=60, height=60)
+    >>> image.size, image.mode
+    ((60, 60), 'RGB')
     """
 
     _validate_size(width, height)
@@ -250,6 +256,13 @@ def lineplot(
     ------
     ValueError
         If shapes, sizes, or bounds are invalid.
+
+    Examples
+    --------
+    >>> series = torch.tensor([[0.0, 1.0, 2.0, 3.0], [3.0, 2.0, 1.0, 0.0]])
+    >>> image = tl.viz.lineplot(series, labels=["up", "down"], width=160, height=100)
+    >>> image.size, image.mode
+    ((160, 100), 'RGB')
     """
 
     _validate_size(width, height)
@@ -426,6 +439,13 @@ def image_scatter(
     ------
     ValueError
         If coordinates or sizing parameters are invalid.
+
+    Examples
+    --------
+    >>> coords = torch.tensor([[0.0, 0.0], [1.0, 1.0], [-1.0, 0.5]])
+    >>> image = tl.viz.image_scatter(coords, labels=["a", "b", "c"], canvas_size=200)
+    >>> image.size
+    (200, 200)
     """
 
     if max_items < 1:

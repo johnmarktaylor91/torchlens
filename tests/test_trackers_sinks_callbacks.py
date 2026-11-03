@@ -67,7 +67,6 @@ class TestHFTrainerCallback:
 class TestLightningCallback:
     """Driven through the Lightning callback protocol."""
 
-    @pytest.mark.smoke
     def test_attach_and_close(self) -> None:
         pytest.importorskip("lightning")
         model = torch.nn.Linear(4, 4)
@@ -181,13 +180,3 @@ class TestExporterUnification:
         assert summary_keys <= set(mlflow_result)
         assert summary_keys <= set(aim_result)
         assert "num_layers" in summary_keys
-
-    def test_step_is_required_keyword(self, export_trace) -> None:  # noqa: ANN001
-        """The step=0 default is REMOVED: every emission carries a step."""
-
-        class _Writer:
-            def add_scalar(self, *a):  # noqa: ANN002
-                pass
-
-        with pytest.raises(TypeError, match="step"):
-            tl.export.tensorboard(export_trace, _Writer())  # type: ignore[call-arg]

@@ -97,7 +97,6 @@ def test_variance_gates_the_type() -> None:
     }
 
 
-@pytest.mark.smoke
 def test_projection_drops_value_info_for_drifting_group() -> None:
     """The rolled projection emits NO valueInfo for a shape-drifting group."""
 

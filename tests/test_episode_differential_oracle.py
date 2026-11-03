@@ -152,7 +152,7 @@ def test_session_vs_floor_full_surface_differential():
     # degrades fail-closed to episode_unknown — the disclosed pre-bump truth
     # loss). Supplying the ledger re-derives the full verdict.
     assert bundle.episode_status(ledger.header.episode_id).status == "episode_unknown"
-    fold = bundle.episode_status(ledger.header.episode_id, ledger=ledger)
+    fold = bundle.episode_status(ledger.header.episode_id, episode_ledger=ledger)
     assert fold.status == "episode_complete"
     assert fold.provenance_tier == "exact"
 

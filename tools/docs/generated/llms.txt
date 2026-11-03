@@ -33,7 +33,7 @@
 - [Compare model features with brain data](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/neuro.md): Runs RSA, ridge encoding and CKA between a trace and neural recordings.
 - [Stream summary statistics over a dataset](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/stats.md): Aggregates means, norms or quantiles at chosen sites without keeping activations.
 - [Fail a test when the architecture changes](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/hash.md): Hashes the traced structure and raises when it no longer matches the pinned value.
-- [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/non_goals.md): TorchLens captures research forwards in one process; it is not a serving-time monitor.
+- [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/cross_engine.md): TorchLens captures research forwards in one process; it is not a serving-time monitor.
 
 ## Optional
 

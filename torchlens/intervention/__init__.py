@@ -65,7 +65,6 @@ from .hooks import (
 )
 from .population import Population, population
 from .regions import RegionBoundary, RegionEdge, RegionInstance, RegionTarget
-from .sites import SiteSpec as SiteSpec
 
 # The PUBLIC immutable multi-clause spec (C03 substrate; surgery memo 3.1)
 # claims the package-level ``InterventionSpec`` name. The historical mutable
@@ -142,6 +141,14 @@ _REDIRECTS: dict[str, str] = {
     "resample_ablate": _RESAMPLE_ABLATE_REDIRECT,
     "intervening": "use torchlens.without_op -- intervening was renamed",
     "replay_from": "use Trace.do -- replay_from was removed",
+    "sites": (
+        "pass selectors to torchlens.experiment.sweep_sites(...) directly "
+        "-- torchlens.intervention.sites was removed"
+    ),
+    "SiteSpec": (
+        "pass selectors to torchlens.experiment.sweep_sites(...) directly "
+        "-- torchlens.intervention.SiteSpec was removed with torchlens.intervention.sites"
+    ),
 }
 
 

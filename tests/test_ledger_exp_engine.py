@@ -288,7 +288,6 @@ def test_map_reports_released_candidates_as_unmeasured() -> None:
     assert not hasattr(bundle, "measure_members")
 
 
-@pytest.mark.smoke
 def test_effects_selection_tier_c_conversion_in_session() -> None:
     torch.manual_seed(0)
     model = _Tiny().eval()
@@ -362,7 +361,6 @@ def test_site_sweep_candidate_plan_shapes_refuse_typed() -> None:
     assert excinfo.value.fields["code"] == "site_sweep_candidates_invalid"
 
 
-@pytest.mark.smoke
 def test_site_sweep_keyless_baseline_refuses_typed() -> None:
     """A label candidate on a keyless op refuses: the engine runs in site-key
     coordinates, so a legacy (pre-site-key) baseline cannot enumerate labels."""
@@ -411,7 +409,6 @@ def test_effects_view_requires_a_stored_table() -> None:
     assert excinfo.value.fields["code"] == "effects_table_missing"
 
 
-@pytest.mark.smoke
 def test_head_ablation_underivable_geometry_refuses_typed() -> None:
     """No derivable attention geometry -> the v-facet equivalence claim refuses."""
 

@@ -127,7 +127,7 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
     """The autograd/param-restore crash: red on ANY parameterized model pre-fix.
 
     The guard's unconditional ``copy_`` bumped every parameter's autograd
-    version counter between the two baseline captures, so ``log_backward``
+    version counter between the two baseline captures, so ``backward``
     raised "modified by an inplace operation". Equality-gated restore leaves
     value-equal parameters untouched.
     """
@@ -151,7 +151,6 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
         assert param.grad is None, name
 
 
-@pytest.mark.smoke
 def test_guard_restores_preexisting_param_grads() -> None:
     """A caller's pre-existing .grad survives the helper unchanged."""
 
@@ -222,7 +221,6 @@ def test_fire_ledger_refuses_never_fired() -> None:
     assert never_fired_exc.value.fields["code"] == "patch_ineffective"
 
 
-@pytest.mark.smoke
 def test_fire_ledger_refuses_all_refused_replacements() -> None:
     """Fires whose every replacement was refused (replaced=False) must refuse.
 
@@ -308,7 +306,6 @@ def test_partially_identical_campaign_stays_silent() -> None:
         tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
 
 
-@pytest.mark.smoke
 def test_user_capture_composes_required_fields() -> None:
     """mikit F7: a user capture= no longer drops the helper's required fields.
 
