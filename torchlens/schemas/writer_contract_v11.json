@@ -935,6 +935,7 @@
     "_op_accessor_cache": "drop",
     "_optimizer": "drop",
     "_options_activation_transform": "drop",
+    "_options_aten_ops": "drop",
     "_options_backward_ready": "drop",
     "_options_chunk_size": "keep",
     "_options_detach_saved_activations": "keep",
@@ -3385,6 +3386,7 @@
      "_op_accessor_cache": "drop",
      "_optimizer": "drop",
      "_options_activation_transform": "drop",
+     "_options_aten_ops": "drop",
      "_options_backward_ready": "drop",
      "_options_chunk_size": "keep",
      "_options_detach_saved_activations": "keep",
@@ -4008,5 +4010,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "65cbdb6f9338be7c1d43cab3a050cdf8d7235a1576730efcca47ba6eeced51b4"
+ "writer_contract_digest": "c48cc517e89ec3ff9d299e4ad21acf13f33cad7172440993494e30e4baacd5e0"
 }

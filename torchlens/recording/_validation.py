@@ -11,7 +11,6 @@ from .types import CaptureSpec
 _POSTPROCESS_PRESETS: Final[set[str]] = {
     "none",
     "module_path_strings",
-    "param_addresses",
     "all-feasible",
 }
 
@@ -51,8 +50,7 @@ def validate_postprocess(postprocess: str) -> None:
 
     if postprocess not in _POSTPROCESS_PRESETS:
         raise RecordingConfigError(
-            "postprocess must be 'none', 'module_path_strings', "
-            "'param_addresses', or 'all-feasible'"
+            "postprocess must be 'none', 'module_path_strings', or 'all-feasible'"
         )
 
 

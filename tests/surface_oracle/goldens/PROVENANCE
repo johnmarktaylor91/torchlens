@@ -1622,3 +1622,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: c5378f30b2f4daf196e3214e94795ee67a04ff31 (dirty)
 recorded: 2026-11-02T09:21:44.399468+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:50.168632+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:50.416988+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:50.663991+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:50.912099+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:51.160226+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: public ATen operation recording adds Op.aten_ops, Trace.aten_ops, Trace.has_aten_ops and Trace.aten_gaps
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: bc7f5da8eff1a1bb46b269e64e2e7f19c08de980 (clean)
+recorded: 2026-11-03T01:32:51.411524+00:00

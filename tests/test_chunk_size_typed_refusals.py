@@ -103,7 +103,7 @@ def test_batch_coupled_activation_refuses_typed() -> None:
     torch.manual_seed(0)
     with pytest.raises(ChunkedForwardConfigError) as info:
         tl.trace(_Gram().eval(), torch.randn(3, 2), capture=tl.options.CaptureOptions(chunk_size=2))
-    assert _code(info.value) == "trace_option_unsupported"
+    assert _code(info.value) == "chunked_forward_batch_coupled"
     assert "chunk_size" in info.value.fields.get("remedy", "")
     assert info.value.fields.get("chunk_index") == 1
 
@@ -116,7 +116,7 @@ def test_forward_that_needs_the_whole_batch_refuses_typed() -> None:
             torch.randn(4, 5, 3),
             capture=tl.options.CaptureOptions(chunk_size=2),
         )
-    assert _code(info.value) == "trace_option_unsupported"
+    assert _code(info.value) == "chunked_forward_batch_coupled"
     assert isinstance(info.value.__cause__, RuntimeError)
     assert info.value.fields.get("chunk_index") == 0
 
@@ -131,4 +131,4 @@ def test_chunk_option_conflicts_carry_a_code() -> None:
             storage=tl.to_disk("unused.tlspec"),
             capture=tl.options.CaptureOptions(chunk_size=2),
         )
-    assert _code(info.value) == "trace_option_unsupported"
+    assert _code(info.value) == "chunked_capture_option_conflict"

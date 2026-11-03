@@ -61,10 +61,10 @@ from ._deltas import (
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
 )
-from ._descriptors import _BundleAccessorProperty, _BundleStructuralProperty
 from ._draw import bundle_draw as _bundle_draw, bundle_show as _bundle_show
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
+from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
 from ._members import coerce_member_name, parse_members
 from ._outcome_fold import _fold_member_outcomes as _fold_member_outcomes  # re-export
 from ._provenance import (
@@ -1066,7 +1066,9 @@ class Bundle:
         Returns
         -------
         list[tuple[str, float]]
-            ``(site_label, score)`` rows sorted descending.
+            ``(site_label, score)`` rows sorted descending. A multi-pass op
+            scores one row per pass, keyed by its pass-qualified label
+            (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
@@ -1105,7 +1107,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.compare_members(self, a, b, metric=metric, on=on)
@@ -1193,7 +1197,9 @@ class Bundle:
         -------
         list[tuple[str, float]]
             ``(site_label, distance)`` rows for sites both members have,
-            paired through the structural alignment (:attr:`supergraph`).
+            paired through the structural alignment (:attr:`supergraph`). A
+            multi-pass op gives one row per pass, keyed by its pass-qualified
+            label (``tanh_1_1:2``); a single-pass op keeps its bare layer label.
         """
 
         return _comparisons.diff_members(self, left_name, right_name, metric=metric, on=on)

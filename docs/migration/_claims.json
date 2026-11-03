@@ -1317,7 +1317,7 @@
       "id": "root-limitations-current",
       "competitor": "none (self-claim; the root limitations page)",
       "neutral_fact": "Three root LIMITATIONS.md claims had gone stale against the code: tl.merge_ranks exists (with tl.merge_report); Accelerate single-device dispatch, CPU/disk offload and bitsandbytes rows report pass with disclosures (only maps across several execution devices stay known_broken); and on torch 2.6 and newer a compiled callable runs under the force_eager stance, so its interior is logged.",
-      "allowed_public_wording": "State each limit as tl.compat.report states it, and scope the compiled-callable gap to torch without set_stance.",
+      "allowed_public_wording": "State each limit as tl.report.doctor states it, and scope the compiled-callable gap to torch without set_stance.",
       "narrowed_scope_wording": "Point to docs/reference/limitations.md and docs/reference/deployment_envelope.md.",
       "limitation_wording": "No compatibility statement beyond the report itself.",
       "required_credit": null,

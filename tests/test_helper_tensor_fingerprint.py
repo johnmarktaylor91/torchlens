@@ -201,18 +201,17 @@ def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) ->
         model, x, save=tl.module("fc2"), intervene=tl.when(tl.module("fc1"), _steer(direction))
     )
 
-    def rerun() -> None:
+    def rerun() -> Any:
         if door == "legacy":
-            trace.run(model, x)
-        else:
-            trace.run(inputs=x, fast=True)
+            return trace.run(model, x)
+        return trace.run(inputs=x, fast=True).trace
 
-    rerun()
-    assert trace.last_run["engine"] == "guarded_fast"
-    readout = trace.find_sites(tl.module("fc2")).first().out.clone()
+    product = rerun()
+    assert product.last_run["engine"] == "guarded_fast"
+    readout = product.find_sites(tl.module("fc2")).first().out.clone()
     torch.testing.assert_close(readout, _truth(model, x, direction))
     direction.add_(0.5)
     with pytest.raises(SpecMutationError) as excinfo:
         rerun()
     assert excinfo.value.fields["code"] == _CODE
-    assert torch.equal(trace.find_sites(tl.module("fc2")).first().out, readout)
+    assert torch.equal(product.find_sites(tl.module("fc2")).first().out, readout)

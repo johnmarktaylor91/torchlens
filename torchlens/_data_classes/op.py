@@ -40,13 +40,7 @@ import warnings
 import weakref
 from collections import defaultdict
 from collections.abc import Callable
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    ClassVar,
-    Literal,
-    cast,
-)
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
 
 import torch
 
@@ -113,6 +107,7 @@ from . import _doors, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
 from ._layer_accessors import OpAccessor
+from ._op_aten import OpAtenMixin
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
     _dedup_cached_identity_out,
     _dedup_saved_activation_out,
@@ -1179,7 +1174,7 @@ if TYPE_CHECKING:
     from .trace import Trace
 
 
-class Op(_SelectionOperand):
+class Op(OpAtenMixin, _SelectionOperand):
     """Metadata for a single tensor operation (one pass of one layer).
 
     Constructed from a dict whose keys must exactly match

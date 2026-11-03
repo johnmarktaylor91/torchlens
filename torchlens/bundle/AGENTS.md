@@ -29,7 +29,6 @@ verb; each logic body is a function `f(self: Bundle, ...)` in a sibling module:
 | `_aligned_sites.py` | aligned-site tables and the selector-site resolution behind `at` |
 | `_operations.py` | `do`, `fork`, `run`, `map`, the chronology ledger rows, the effect-table read |
 | `_draw.py` | `draw` and the `show` dispatcher (merged graph, strip, repr, html) |
-| `_descriptors.py` | the accessor and structural property descriptors `Bundle` declares |
 | `_comparisons.py` | `compare`, `rank_changes`, the comparability matrix, per-site diffs, relationship evidence; stored comparisons |
 | `_relation_carriage.py` | relation table construction, removal cascades, `relate`, episode status, upstream/downstream |
 | `_save.py` | `save` (the package's one deferred `_io` import) |
