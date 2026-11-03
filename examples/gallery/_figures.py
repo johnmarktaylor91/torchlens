@@ -193,7 +193,10 @@ def draw_causal_tracing(out: Path) -> list[Path]:
         right.set_xticks([])
         right.set_yticks(range(3))
         right.set_yticklabels(
-            [f"{name}\n{_num(value, '+.4f')}" for name, value in zip(names, column[:, 0])]
+            [
+                f"{name}\n{_num(value, '+.4f')}"
+                for name, value in zip(names, column[:, 0], strict=True)
+            ]
         )
         right.tick_params(length=0)
         right.set_xlabel(f"patched at\nlayer {layer},\n{category}", fontsize=SMALL, color=MUTED)
@@ -425,8 +428,8 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         bar.ax.tick_params(labelsize=13.5)  # single digits read small
         curve = fig.add_subplot(spec[1, :])
         curve.set_title(
-            f"{arch}; {n_stimuli} Fashion-MNIST images, so each RDM (representational "
-            f"dissimilarity matrix)\nis {n_stimuli} x {n_stimuli}; the {len(rdms)} stage RDMs "
+            f"{arch}; {n_stimuli} Fashion-MNIST images, so each RDM\n(representational "
+            f"dissimilarity matrix) is {n_stimuli} x {n_stimuli};\nthe {len(rdms)} stage RDMs "
             "above are TorchLens's",
             loc="left",
             fontsize=SMALL,
@@ -566,7 +569,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     sizes = [abs(float(edge["score"])) for edge in edges]
     low, high = min(sizes), max(sizes)
     with plt.rc_context(STYLE):
-        fig, ax = plt.subplots(figsize=(WIDTH + 0.2, 5.8), layout="constrained")
+        fig, ax = plt.subplots(figsize=(WIDTH, 5.8), layout="constrained")
         # Thicker (larger-score) edges draw last so their halos do not chop the thin ones.
         drawn = sorted(_edge_geometry(edges), key=lambda item: abs(float(item[0]["score"])))
         for edge, start, end, rad in drawn:
@@ -609,7 +612,9 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
         # Heads that receive three or more arrows get their count written beside the dot, so the
         # reader can count edges without separating the arrowheads.
         class_color = {
-            tuple(p): color for (_label, pairs), color in zip(groups.items(), colors) for p in pairs
+            tuple(p): color
+            for (_label, pairs), color in zip(groups.items(), colors, strict=False)
+            for p in pairs
         }
         for head, count in _fan_in(edges).items():
             if count >= 3:
