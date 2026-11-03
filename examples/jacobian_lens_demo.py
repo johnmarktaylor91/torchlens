@@ -10,7 +10,7 @@ reads the fitted lens out beside the plain logit lens. ``--check`` compares the
 fit against ``torch.func.jacrev`` of the whole model with the block output
 replaced, which never touches TorchLens.
 
-The eight-sentence corpus (about 120 source positions) is a demonstration fit:
+The eight-sentence corpus (about a hundred source positions) is a demonstration fit:
 the late blocks read out sensibly, the early blocks' top tokens are noise. The
 reference method averages over thousands of positions; pass more text to
 ``CORPUS`` for a usable lens.
