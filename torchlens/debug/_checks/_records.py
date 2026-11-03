@@ -88,6 +88,21 @@ class CheckFinding:
     ``param_names`` the offending parameter/site names with every alias of a tied
     tensor preserved; ``follow_up`` the call that localizes the culprit
     (memo D3: the finding names a cone, the frontier names the culprit).
+
+    Examples
+    --------
+    >>> finding = tl.debug.CheckFinding(
+    ...     check_name="demo", code="demo_code", severity="info", action="collect", message="hello"
+    ... )
+    >>> finding.severity
+    'info'
+    >>> finding.to_dict()["code"]
+    'demo_code'
+    >>> try:
+    ...     _ = tl.debug.CheckFinding("demo", "c", "fatal", "collect", "m")
+    ... except tl.errors.CheckConfigError as err:
+    ...     print(err.fields["code"])
+    check_vocab_invalid
     """
 
     check_name: str
@@ -139,6 +154,16 @@ class CheckReport:
     exit; kill -9 loses in-memory state under any design, so no atexit
     device work is owed. ``unavailable`` entries are mandatory vocabulary:
     a check that cannot run reports ``(check, reason)`` here, never silence.
+
+    Examples
+    --------
+    >>> report = tl.debug.CheckReport()
+    >>> (len(report.findings), report.finalized_reason)
+    (0, 'on_demand')
+    >>> report.to_dict()["schema_version"] == report.schema_version
+    True
+    >>> repr(report).startswith("CheckReport: 0 finding(s)")
+    True
     """
 
     findings: tuple[CheckFinding, ...] = ()

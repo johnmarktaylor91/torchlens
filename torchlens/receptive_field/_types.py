@@ -48,7 +48,15 @@ def _validate_shape(shape: tuple[int, ...], field_name: str) -> None:
 
 
 class ReceptiveFieldStatus(str, Enum):
-    """Certainty classification for geometric receptive-field descriptions."""
+    """Certainty classification for geometric receptive-field descriptions.
+
+    Examples
+    --------
+    >>> [status.value for status in ReceptiveFieldStatus][:3]
+    ['exact', 'whole_input', 'upper_bound']
+    >>> tl.trace(model, x)["conv2d_2_3"].receptive_field.status is ReceptiveFieldStatus.EXACT
+    True
+    """
 
     EXACT = "exact"
     WHOLE_INPUT = "whole_input"
@@ -59,7 +67,15 @@ class ReceptiveFieldStatus(str, Enum):
 
 
 class ReceptiveFieldAlignment(str, Enum):
-    """Alignment classification for merged receptive-field geometry."""
+    """Alignment classification for merged receptive-field geometry.
+
+    Examples
+    --------
+    >>> [alignment.value for alignment in ReceptiveFieldAlignment]
+    ['aligned', 'misaligned', 'not_applicable']
+    >>> ReceptiveFieldAlignment("aligned") is ReceptiveFieldAlignment.ALIGNED
+    True
+    """
 
     ALIGNED = "aligned"
     MISALIGNED = "misaligned"
@@ -67,7 +83,16 @@ class ReceptiveFieldAlignment(str, Enum):
 
 
 class ReceptiveFieldDirection(str, Enum):
-    """Direction of influence geometry between a source and target graph point."""
+    """Direction of influence geometry between a source and target graph point.
+
+    Examples
+    --------
+    >>> [direction.value for direction in ReceptiveFieldDirection]
+    ['receptive', 'projective']
+    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((4, 4))
+    >>> box.direction is ReceptiveFieldDirection.RECEPTIVE
+    True
+    """
 
     RECEPTIVE = "receptive"
     PROJECTIVE = "projective"
@@ -100,7 +125,17 @@ def _restore_legacy_receptive_field_state(instance: object, state: object) -> No
 
 @dataclass(frozen=True)
 class GridLayout:
-    """Derived input-axis roles and their operation-label provenance."""
+    """Derived input-axis roles and their operation-label provenance.
+
+    Examples
+    --------
+    >>> layout = tl.trace(model, x)["conv2d_2_3"].receptive_field.axis_roles
+    >>> (isinstance(layout, GridLayout), layout.windowed_axes)
+    (True, (2, 3))
+    >>> GridLayout(axis_kinds=("pointwise", "windowed"), windowed_axes=(1,),
+    ...     source="derived", provenance=("input_1", "conv1d_1_1")).windowed_axes
+    (1,)
+    """
 
     axis_kinds: tuple[AxisKind, ...]
     windowed_axes: tuple[int, ...]
@@ -132,7 +167,18 @@ class GridLayout:
 
 @dataclass(frozen=True)
 class ReceptiveFieldAxis:
-    """Geometric receptive-field description for one model-input axis."""
+    """Geometric receptive-field description for one model-input axis.
+
+    Examples
+    --------
+    >>> axes = tl.trace(model, x)["conv2d_2_3"].receptive_field.axes
+    >>> isinstance(axes[-1], ReceptiveFieldAxis)
+    True
+    >>> [axis.kind for axis in axes]
+    ['pointwise', 'full', 'windowed', 'windowed']
+    >>> (axes[-1].size, axes[-1].exact)
+    (5, True)
+    """
 
     input_axis: int
     output_axis: int | None
@@ -176,7 +222,15 @@ class ReceptiveFieldAxis:
 
 @dataclass(frozen=True)
 class ReceptiveField:
-    """Per-operation, per-input geometric receptive-field descriptor."""
+    """Per-operation, per-input geometric receptive-field descriptor.
+
+    Examples
+    --------
+    >>> view = tl.trace(model, x)["conv2d_2_3"].receptive_field
+    >>> descriptor = next(iter(view.per_input.values()))
+    >>> (isinstance(descriptor, ReceptiveField), descriptor.size)
+    (True, (5, 5))
+    """
 
     __match_args__: ClassVar[tuple[str, ...]] = (
         "op_label",
@@ -341,6 +395,15 @@ class ReceptiveFieldBoxAxis:
     tight integer hull, but positions inside it may provably not influence
     the unit (dilated kernels, strided slices). ``exact`` on the parent box
     speaks to the hull, not to interior density.
+
+    Examples
+    --------
+    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((0, 0))
+    >>> axis = box.axes[-1]
+    >>> (isinstance(axis, ReceptiveFieldBoxAxis), axis.kind)
+    (True, 'windowed')
+    >>> (axis.index_start, axis.clipped_start, axis.clipped_stop)
+    (-1, 0, 3)
     """
 
     input_axis: int
@@ -377,7 +440,18 @@ class ReceptiveFieldBoxAxis:
 
 @dataclass(frozen=True)
 class ReceptiveFieldBox(_SelectionOperand):
-    """Concrete per-unit geometric receptive-field answer."""
+    """Concrete per-unit geometric receptive-field answer.
+
+    Examples
+    --------
+    >>> box = tl.trace(model, x)["conv2d_2_3"].receptive_field.at((4, 4))
+    >>> isinstance(box, ReceptiveFieldBox)
+    True
+    >>> [(axis.index_start, axis.index_stop) for axis in box.axes[-2:]]
+    [(2, 7), (2, 7)]
+    >>> (box.exact, box.empty)
+    (True, False)
+    """
 
     __match_args__: ClassVar[tuple[str, ...]] = (
         "op_label",
@@ -508,7 +582,18 @@ class ReceptiveFieldBox(_SelectionOperand):
 
 @dataclass(frozen=True)
 class GradReceptiveField(_SelectionOperand):
-    """Empirical receptive-field influence set measured by autograd."""
+    """Empirical receptive-field influence set measured by autograd.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    >>> view = armed["conv2d_1_1"].receptive_field
+    >>> grad_rf = next(iter(view.probe_grad(view.center_unit(batch_index=0)).values()))
+    >>> (isinstance(grad_rf, GradReceptiveField), tuple(grad_rf.grad.shape))
+    (True, (1, 1, 6, 6))
+    """
 
     __match_args__: ClassVar[tuple[str, ...]] = (
         "op_label",
@@ -602,7 +687,15 @@ class GradReceptiveField(_SelectionOperand):
 
 
 class ReceptiveFieldValidationStatus(str, Enum):
-    """Tri-state result of geometric and gradient containment checking."""
+    """Tri-state result of geometric and gradient containment checking.
+
+    Examples
+    --------
+    >>> [status.value for status in ReceptiveFieldValidationStatus]
+    ['pass', 'fail', 'indeterminate']
+    >>> ReceptiveFieldValidationStatus("pass").name
+    'PASS'
+    """
 
     PASS = "pass"
     FAIL = "fail"
@@ -611,7 +704,15 @@ class ReceptiveFieldValidationStatus(str, Enum):
 
 @dataclass(frozen=True)
 class ReceptiveFieldViolation:
-    """One gradient-support coordinate outside its geometric box."""
+    """One gradient-support coordinate outside its geometric box.
+
+    Examples
+    --------
+    >>> violation = ReceptiveFieldViolation(io_role="input_1", index=(0, 0, 0, 0),
+    ...     magnitude=0.5, box=None, reason="gradient outside the geometric box")
+    >>> (violation.io_role, violation.index)
+    ('input_1', (0, 0, 0, 0))
+    """
 
     io_role: str
     index: tuple[int, ...]
@@ -622,7 +723,18 @@ class ReceptiveFieldViolation:
 
 @dataclass(frozen=True)
 class ReceptiveFieldValidation:
-    """Tri-state receptive-field geometric-versus-gradient validation result."""
+    """Tri-state receptive-field geometric-versus-gradient validation result.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    >>> view = armed["conv2d_1_1"].receptive_field
+    >>> result = view.check(view.center_unit(batch_index=0))
+    >>> (isinstance(result, ReceptiveFieldValidation), result.passed, result.violations)
+    (True, True, ())
+    """
 
     __match_args__: ClassVar[tuple[str, ...]] = (
         "status",
@@ -712,7 +824,17 @@ class ReceptiveFieldValidation:
 
 @dataclass(frozen=True)
 class ReceptiveFieldProfile:
-    """Tabular receptive-field report at one trace granularity."""
+    """Tabular receptive-field report at one trace granularity.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> profile = tl.trace(model, x).receptive_fields()
+    >>> (isinstance(profile, ReceptiveFieldProfile), profile.level)
+    (True, 'op')
+    >>> "output_op" in profile.to_pandas().columns
+    True
+    """
 
     frame: pd.DataFrame
     level: Literal["op", "layer", "call", "module"]

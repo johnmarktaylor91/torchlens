@@ -50,6 +50,13 @@ class NeuroHandoffError(_ActionableErrorMixin, ConfigurationError, ValueError):
     ``neuro_site_ambiguous``, ``neuro_source_invalid``,
     ``neuro_sites_inconsistent_rows``, ``neuro_rdms_mode_conflict``,
     ``neuro_matrix_invalid``.
+
+    Examples
+    --------
+    >>> issubclass(NeuroHandoffError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NeuroHandoffError, ValueError)
+    True
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:

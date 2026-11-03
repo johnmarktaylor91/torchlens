@@ -93,6 +93,15 @@ class ProfileReport:
     -----
     Operation wall-times are collected while TorchLens instrumentation is
     active. Use them to identify relative hotspots, not as clean benchmarks.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), level="module")
+    >>> report.level
+    'module'
+    >>> "flops" in report.to_pandas().columns
+    True
     """
 
     frame: pd.DataFrame
@@ -919,6 +928,15 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     ``flops`` (inclusive subtree, NON-additive there) and ``flops_self``
     (exclusive, additive, sums to the partition total) -- with roles and
     column additivity stamped on every export (D5).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), sort_by="flops", k=2)
+    >>> report.level
+    'op'
+    >>> "name" in report.to_pandas().columns
+    True
     """
 
     _validate_profile_args(level, sort_by, k, group_by)

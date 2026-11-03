@@ -94,6 +94,14 @@ class DeterminismReport(Report):
         Actionable next steps.
     message:
         Human-readable summary; discloses total capture count up front.
+
+    Examples
+    --------
+    >>> report = tl.debug.check_determinism(model, x)
+    >>> isinstance(report, DeterminismReport), report.verdict
+    (True, 'repeatable_under_test')
+    >>> report.runs, report.policy
+    (2, 'exact')
     """
 
     verdict: str
@@ -497,6 +505,17 @@ def check_determinism(
     ------
     InvalidArgumentError
         If ``runs < 2`` (code ``determinism_runs_invalid``).
+
+    Examples
+    --------
+    >>> report = check_determinism(model, x, runs=2, seed=0)
+    >>> report.verdict, report.divergent_ops
+    ('repeatable_under_test', ())
+    >>> try:
+    ...     check_determinism(model, x, runs=1)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(err.fields["code"])
+    determinism_runs_invalid
     """
 
     from .._errors import InvalidArgumentError

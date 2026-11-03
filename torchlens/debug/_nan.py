@@ -36,6 +36,14 @@ class BisectNanReport(FoundReport):
         ``"nan"``, ``"inf"``, ``"nan+inf"``, or ``"none"``.
     message:
         Actionable human-readable result summary.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.bisect_nan(tl.trace(bad, torch.ones(1, 3)))
+    >>> isinstance(report, BisectNanReport), report.found, report.kind
+    (True, True, 'nan')
     """
 
     found: bool
@@ -98,6 +106,16 @@ class FindNanReport(FoundReport):
         actual birth operation and therefore prevent a stronger claim.
     message:
         Human-readable diagnostic summary.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.find_nan(bad, torch.ones(1, 3))
+    >>> isinstance(report, FindNanReport), report.found, report.kind
+    (True, True, 'nan')
+    >>> report.bad_tensors
+    ('output',)
     """
 
     found: bool
@@ -420,6 +438,16 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
     -------
     FindNanReport
         First live non-finite output, or a clean result.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = find_nan(bad, torch.ones(1, 3))
+    >>> report.found, report.kind
+    (True, 'nan')
+    >>> find_nan(model, x).found
+    False
     """
 
     from .._user_funcs import trace
@@ -582,6 +610,16 @@ def bisect_nan(trace: Trace) -> BisectNanReport:
     BisectNanReport
         Clear result object instead of raising when no non-finite saved
         activation is found.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = bisect_nan(tl.trace(bad, torch.ones(1, 3)))
+    >>> report.found, report.kind
+    (True, 'nan')
+    >>> bisect_nan(tl.trace(model, x)).found
+    False
     """
 
     unsaved_compute_ops = 0
@@ -660,6 +698,16 @@ class NonfiniteReport(Report):
     INSIDE its own output -- the ``detect_anomaly`` recipe is printed
     verbatim for the cases this report does not cover (backward-born NaNs,
     custom-autograd exceptions).
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = tl.debug.nonfinite_origin(bad, torch.ones(1, 3))
+    >>> isinstance(report, NonfiniteReport), report.has_nonfinite
+    (True, True)
+    >>> report.phase
+    'forward'
     """
 
     has_nonfinite: bool
@@ -762,6 +810,16 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
     NonfiniteReport
         Structured findings, coverage disclosure, capture outcome, cost
         tier, AMP disclosure, and the deferred-authority recipe.
+
+    Examples
+    --------
+    >>> bad = nn.Sequential(nn.Linear(3, 3), nn.ReLU())
+    >>> _ = bad[0].weight.data.fill_(float("nan"))
+    >>> report = nonfinite_origin(bad, torch.ones(1, 3))
+    >>> report.has_nonfinite, report.kind
+    (True, 'nan')
+    >>> nonfinite_origin(tl.trace(model, x)).has_nonfinite
+    False
     """
 
     from .._data_classes._nonfinite import nonfinite_coverage

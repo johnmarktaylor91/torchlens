@@ -14,7 +14,16 @@ from .._ir.workspaces import RawGraphWorkspace
 
 
 class CaptureBackend(Protocol):
-    """Protocol implemented by backend-specific capture adapters."""
+    """Protocol implemented by backend-specific capture adapters.
+
+    Examples
+    --------
+    >>> adapter = tl.backends.spec("torch").capture_backend()
+    >>> (adapter.name, adapter.supports_backward_capture)
+    ('torch', True)
+    >>> all(hasattr(adapter, member) for member in ("wrap", "unwrap", "start_session"))
+    True
+    """
 
     name: str
     supports_backward_capture: bool

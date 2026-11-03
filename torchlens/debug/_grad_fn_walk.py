@@ -39,7 +39,18 @@ GRAD_FN_WALK_MAX_NODES = 20_000
 
 
 class GradFnWalkError(CaptureError):
-    """A tensor without a walkable autograd graph was passed to the walker."""
+    """A tensor without a walkable autograd graph was passed to the walker.
+
+    Examples
+    --------
+    >>> issubclass(GradFnWalkError, tl.errors.CaptureError)
+    True
+    >>> try:
+    ...     tl.debug.walk_grad_fn(torch.randn(3))
+    ... except GradFnWalkError as err:
+    ...     print(err.fields["code"])
+    grad_fn_walk_no_graph
+    """
 
 
 @dataclass(frozen=True)
@@ -66,6 +77,15 @@ class GradFnNode:
     requires_grad:
         Leaf variable ``requires_grad`` (trainable vs frozen); ``None``
         elsewhere.
+
+    Examples
+    --------
+    >>> sketch = tl.debug.walk_grad_fn(model(x).sum(), model=model)
+    >>> leaf = next(node for node in sketch.nodes if node.kind == "leaf")
+    >>> isinstance(leaf, GradFnNode), leaf.requires_grad
+    (True, True)
+    >>> "0.weight" in {node.param_name for node in sketch.nodes}
+    True
     """
 
     node_id: int
@@ -90,6 +110,14 @@ class GradFnSketch:
         direction (``next_functions`` reversed for readability).
     truncated:
         Whether the defensive node ceiling stopped the walk early.
+
+    Examples
+    --------
+    >>> sketch = tl.debug.walk_grad_fn(model(x).sum(), model=model)
+    >>> isinstance(sketch, GradFnSketch), sketch.truncated
+    (True, False)
+    >>> sorted({node.kind for node in sketch.nodes})
+    ['leaf', 'op', 'root']
     """
 
     nodes: tuple[GradFnNode, ...]
@@ -177,6 +205,15 @@ def walk_grad_fn(
     GradFnSketch
         Frozen structure-only record (nodes, forward-direction edges,
         truncation flag). No values, timing, or verification.
+
+    Examples
+    --------
+    >>> loss = model(x).sum()
+    >>> sketch = walk_grad_fn(loss, model=model)
+    >>> sketch.num_nodes > 3, sketch.truncated
+    (True, False)
+    >>> sorted({node.kind for node in sketch.nodes})
+    ['leaf', 'op', 'root']
     """
 
     walkable = _normalize_outputs(outputs)
@@ -367,6 +404,15 @@ def sketch_grad_fn(  # noqa: PLR0913 - torchviz-parity public door: each keyword
     -------
     str
         The DOT source of the sketch.
+
+    Examples
+    --------
+    >>> # requires: graphviz
+    >>> dot = sketch_grad_fn(model(x).sum(), model=model)
+    >>> "structure-only" in dot
+    True
+    >>> "digraph" in dot
+    True
     """
 
     sketch = walk_grad_fn(outputs, params=params, model=model, max_nodes=max_nodes)

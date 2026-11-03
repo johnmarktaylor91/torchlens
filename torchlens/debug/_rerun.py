@@ -55,20 +55,18 @@ def preserved_rng_state() -> Iterator[None]:
     by an exception, so the caller's RNG streams observe no consumption from
     anything executed inside it.
 
+    Yields
+    ------
+    None
+        Control returns with all captured states restored.
+
     Examples
     --------
-    >>> import torch
-    >>> import torchlens as tl
     >>> before = torch.get_rng_state()
     >>> with tl.debug.preserved_rng_state():
     ...     _ = torch.randn(4)
     >>> torch.equal(torch.get_rng_state(), before)
     True
-
-    Yields
-    ------
-    None
-        Control returns with all captured states restored.
     """
 
     python_state = random.getstate()
@@ -103,16 +101,6 @@ def clone_input_tree(value: Any) -> Any:
     the caller. Dicts, lists and tuples are rebuilt recursively as new
     containers; any other leaf passes through as the same object.
 
-    Examples
-    --------
-    >>> import torch
-    >>> import torchlens as tl
-    >>> inputs = {"x": torch.zeros(2), "scale": 2.0}
-    >>> copied = tl.debug.clone_input_tree(inputs)
-    >>> _ = copied["x"].add_(1.0)
-    >>> inputs["x"].tolist()
-    [0.0, 0.0]
-
     Parameters
     ----------
     value:
@@ -122,6 +110,14 @@ def clone_input_tree(value: Any) -> Any:
     -------
     Any
         Cloned tree safe to hand to one isolated forward.
+
+    Examples
+    --------
+    >>> inputs = {"x": torch.zeros(2), "scale": 2.0}
+    >>> copied = tl.debug.clone_input_tree(inputs)
+    >>> _ = copied["x"].add_(1.0)
+    >>> inputs["x"].tolist()
+    [0.0, 0.0]
     """
 
     if isinstance(value, torch.Tensor):
@@ -185,6 +181,16 @@ def isolated_capture(
     Exception
         Whatever the underlying ``tl.trace`` raises; the RNG restore still
         runs.
+
+    Examples
+    --------
+    >>> run = tl.debug.isolated_capture(model, x, seed=0)
+    >>> tuple(run["relu_1_2"].out.shape)
+    (1, 4, 8, 8)
+    >>> before = torch.get_rng_state()
+    >>> _ = tl.debug.isolated_capture(model, x, seed=1)
+    >>> torch.equal(torch.get_rng_state(), before)
+    True
     """
 
     from .._user_funcs import release_model, trace

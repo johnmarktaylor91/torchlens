@@ -82,6 +82,18 @@ def model_explorer(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = model_explorer(trace, pathlib.Path(tmp) / "me.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> out.name
+    'me.json'
+    >>> '"graphs"' in text
+    True
     """
 
     from ._model_explorer import model_explorer as _impl
@@ -109,6 +121,16 @@ def model_explorer_diff(members: Any, path: str | Path, **kwargs: Any) -> Path:
     -------
     Path
         Written collection path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> pair = [tl.trace(model, x), tl.trace(model, x)]
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = model_explorer_diff(pair, pathlib.Path(tmp) / "diff")
+    ...     files = sorted(p.name for p in out.iterdir())
+    >>> "left.json" in files and "right.json" in files
+    True
     """
 
     from ._model_explorer import model_explorer_diff as _impl
@@ -135,6 +157,22 @@ def model_explorer_serve(source: Any, **kwargs: Any) -> Path:
     -------
     Path
         Path of the payload handed to the viewer.
+
+    Examples
+    --------
+    >>> import sys, types, tempfile, pathlib
+    >>> calls, saved = [], sys.modules.get("model_explorer")
+    >>> sys.modules["model_explorer"] = types.SimpleNamespace(visualize=lambda model_paths, **kw: calls.append(model_paths))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     try:
+    ...         out = model_explorer_serve(tl.trace(model, x), path=pathlib.Path(tmp) / "me.json")
+    ...     finally:
+    ...         _ = sys.modules.pop("model_explorer", None)
+    ...         if saved is not None:
+    ...             sys.modules["model_explorer"] = saved
+    ...     served = [pathlib.Path(p).name for p in calls[0]]
+    >>> served
+    ['me.json']
     """
 
     from ._model_explorer import model_explorer_serve as _impl
@@ -271,6 +309,16 @@ def html(
     -------
     Path
         Written HTML path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.html(trace, pathlib.Path(tmp) / "report.html", graph="none")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> text.startswith("<!DOCTYPE html>")
+    True
     """
 
     from ._report import write_report
@@ -308,6 +356,16 @@ def chrome_trace(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.chrome_trace(trace, pathlib.Path(tmp) / "trace.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> "torchlens.chrome_trace.v1" in text
+    True
     """
     # D15 (weightsfree memo): measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
@@ -344,6 +402,17 @@ def chrome_trace_diff(bundle: Any, path: str | Path) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> capture = tl.options.CaptureOptions(replayable=True)
+    >>> bundle = tl.Bundle({"a": tl.trace(model, x, capture=capture), "b": tl.trace(model, x, capture=capture)})
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.chrome_trace_diff(bundle, pathlib.Path(tmp) / "diff.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> '"torchlens.chrome_trace_diff.v1"' in text
+    True
     """
 
     destination = Path(path)
@@ -380,6 +449,16 @@ def speedscope(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.speedscope(trace, pathlib.Path(tmp) / "profile.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> "evented" in text
+    True
     """
     # D15 (weightsfree memo): measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
@@ -438,6 +517,16 @@ def flamegraph(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written text path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.flamegraph(trace, pathlib.Path(tmp) / "profile.folded")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> ";" in text
+    True
     """
     # D15 (weightsfree memo): measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
@@ -490,6 +579,16 @@ def memory_timeline(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.memory_timeline(trace, pathlib.Path(tmp) / "memory.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> "torchlens.memory_timeline.v1" in text
+    True
     """
     # D15 (weightsfree memo): measurement-shaped output refuses on a
     # structure-only capture -- timings/allocator peaks are measurements a
@@ -551,6 +650,16 @@ def memory_timeline_v2(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.memory_timeline_v2(trace, pathlib.Path(tmp) / "memory_v2.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> "torchlens.memory_timeline.v2" in text
+    True
     """
 
     from torchlens._observe import memory_timeline_v2 as _build_v2
@@ -653,6 +762,16 @@ def xarray(trace: Any) -> Any:
     InvalidArgumentError
         ``xarray_presentation_mismatch`` when saved non-buffer outs disagree on
         the leading (presentation) size.
+
+    Examples
+    --------
+    >>> # requires: xarray
+    >>> trace = tl.trace(model, x)
+    >>> dataset = tl.export.xarray(trace)
+    >>> dataset["out"].dims
+    ('presentation', 'neuroid')
+    >>> dataset["out"].sizes["presentation"]
+    1
     """
     # D15: xarray's product IS saved tensor values -- it refuses through the
     # EXISTING value-payload capability (a marked empty array would be synthetic).
@@ -758,6 +877,17 @@ def csv(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     -------
     Path
         Written CSV path.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.csv(trace, pathlib.Path(tmp) / "model.csv")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> text.startswith("# torchlens capture honesty:")
+    True
     """
 
     destination = Path(path)
@@ -790,6 +920,17 @@ def parquet(trace: Any, path: str | Path, **kwargs: Any) -> Path:
     ------
     ImportError
         If pyarrow is unavailable.
+
+    Examples
+    --------
+    >>> # requires: pyarrow
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.parquet(trace, pathlib.Path(tmp) / "model.parquet")
+    ...     size = out.stat().st_size
+    >>> size > 0
+    True
     """
 
     try:
@@ -835,6 +976,17 @@ def json(
     -------
     Path
         Written JSON path.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.json(trace, pathlib.Path(tmp) / "model.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> "torchlens.table_export.v1" in text
+    True
     """
 
     destination = Path(path)
@@ -1091,6 +1243,17 @@ def safetensors(trace: Any, path: str | Path) -> Path:
     -------
     Path
         Written path.
+
+    Examples
+    --------
+    >>> # requires: safetensors
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.safetensors(trace, pathlib.Path(tmp) / "trace.safetensors")
+    ...     size = out.stat().st_size
+    >>> size > 0
+    True
     """
 
     from .._extraction.trace_safetensors import write_trace_safetensors
