@@ -1,30 +1,8 @@
-"""The four cards: Trace, pass-aware Layer, Op, failure-first PartialTrace.
+"""Notebook cards for traces, records and failed captures.
 
-Treescope memo decision 3 (B2, lane F16), one grammar per card: collapsed
-identity + honesty badge in the always-visible header; identity / value /
-context zones expanded; disclosure footer; and the PROOF row on every
-card -- capture outcome, replay-verification badge, nonfinite coverage
-basis, save policy -- the category treescope structurally cannot enter
-(our card asserts "this is a verified execution", not "this is an
-object").
-
-Hard card rules implemented here (each earned by a measurement):
-
-- R-NEVER-RAISE: every entry point renders behind
-  :func:`torchlens.report._notebook.cardtree.safe_card_html`.
-- Honesty states (partial, halted, poisoned, unknown coverage, unsaved,
-  truncated) are NEVER folded.
-- Per-pass fields read via ``layer.ops[k]``, never off the Layer (per-pass
-  reads RAISE on reused layers, so pass rows are the card's SHAPE).
-- Display paths never materialize disk payloads (a non-resident value
-  degrades to a one-line reason), never do unbounded device transfers
-  (grids ride the ported truncation budgets), never recompute stats
-  (the C02 kernel memoizes), and pass Flops/Duration/Bytes wrappers
-  through UNTOUCHED via ``str()`` -- renderer unit arithmetic measurably
-  produced plausible wrong numbers.
-- Escape once at the typed leaf boundary (CardTree owns HTML safety).
-
-Every spelling is DOCUMENTED-UNSTABLE pending the naming session.
+Op and Layer cards delegate to the same bounded facts as their text cards.
+Trace and PartialTrace retain their capture-proof and failure-context zones.
+Every HTML entry point uses the never-raise, escaping CardTree boundary.
 """
 
 from __future__ import annotations
@@ -63,10 +41,6 @@ __all__ = [
 BRIDGE_SENTINEL_HTML = (
     '<div class="tl-card-sentinel">card omitted: rendered by the treescope bridge above</div>'
 )
-
-#: Value-grid budget inside a card (smaller than the standalone default so
-#: an Op card stays comfortably in the KB band).
-_CARD_GRID_CELL_BUDGET = 200
 
 
 def _bridge_sentinel(obj: Any) -> str | None:

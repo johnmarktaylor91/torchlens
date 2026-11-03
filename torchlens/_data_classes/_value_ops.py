@@ -8,7 +8,7 @@ from typing import Any
 
 from .._utils._display_card import render_card
 from .._utils._display_keys import display_key
-from .._utils._display_numbers import format_duration, format_exact_count, format_iec_bytes
+from .._utils._display_numbers import format_duration, format_exact_count, format_iec_bytes, plural
 from .._utils.fail_open import fail_open
 from ._value_state import (
     METADATA_ONLY,
@@ -53,7 +53,7 @@ def _graph(op: Any) -> str:
     graph = " -> ".join(parts)
     downstream = getattr(op, "output_descendants", None)
     if downstream is not None:
-        graph += f" ({format_exact_count(len(downstream))} operations downstream)"
+        graph += f" ({plural(len(downstream), 'operation')} downstream)"
     return graph
 
 
@@ -90,7 +90,10 @@ def _module(op: Any) -> str:
     modules = getattr(op, "modules", ()) or ()
     if modules and isinstance(modules[-1], tuple):
         return str(modules[-1][0])
-    return str(getattr(op, "module", None) or "")
+    label = modules[-1] if modules else getattr(op, "module", None)
+    trace = trace_of(op)
+    call = fail_open(lambda: trace.module_calls[label], lambda _error: None)
+    return str(getattr(call, "address", None) or label or "")
 
 
 def _output(op: Any) -> str:

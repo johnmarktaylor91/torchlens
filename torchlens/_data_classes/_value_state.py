@@ -130,6 +130,8 @@ def value_line(
         value_words(stats, compact=True, moments=False),
         "values in print()",
     ):
+        if not summary:
+            return base
         line = f"{base}, {summary}"
         if len(line) <= REPR_COLS:
             return line
@@ -148,7 +150,7 @@ def payload_core(record: Any, *, identity: str | None = None, max_width: int | N
 def trace_of(record: Any) -> Any:
     """Owning trace when reachable, including detached module records."""
 
-    trace = getattr(record, "_source_trace", None)
+    trace = getattr(record, "_source_trace", None) or getattr(record, "trace", None)
     return (
         trace if trace is not None else fail_open(lambda: record.source_trace, lambda _error: None)
     )

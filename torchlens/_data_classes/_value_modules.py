@@ -31,7 +31,7 @@ def module_repr_line(module: Any) -> str:
         if count is None
         else (f"{format_count(count)} params" if count else "no params")
     )
-    facts = (
+    facts: tuple[str, ...] = (
         str(getattr(module, "class_name", "?")),
         plural(getattr(module, "num_calls", 0), "call"),
         plural(len(getattr(module, "layer_labels", ()) or ()), "op"),
@@ -55,7 +55,7 @@ def module_card(module: Any) -> str:
     children = getattr(module, "address_children", ()) or ()
     if children:
         rows.append(("children", inline_names(children)))
-    labels = getattr(module, "output_layers", ()) or ()
+    labels: Any = getattr(module, "output_layers", ()) or ()
     if len(labels) == 1:
         rows.append(("output", _output(module, labels[0])))
     elif labels:
@@ -71,7 +71,7 @@ def module_call_repr_line(call: Any) -> str:
     cls = getattr(call, "class_name", None)
     if not cls:
         cls = fail_open(lambda: call.module.class_name, lambda _error: "?")
-    facts = (
+    facts: tuple[str, ...] = (
         f"call {getattr(call, 'call_index', '?')}",
         str(cls),
         f"{format_count(len(getattr(call, 'ops', ()) or ()))} recorded operation rows",
@@ -83,7 +83,7 @@ def module_call_card(call: Any) -> str:
     """At most three output sites and child calls, plus exact remainders."""
 
     rows = []
-    labels = getattr(call, "output_layers", ()) or ()
+    labels: Any = getattr(call, "output_layers", ()) or ()
     for label in islice(labels, 3):
         rows.append(("output", _output(call, label)))
     if len(labels) > 3:

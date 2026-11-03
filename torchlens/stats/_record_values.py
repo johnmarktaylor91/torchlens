@@ -45,7 +45,7 @@ def _moment(name: str, value: Any, evidence: Any, se: Any) -> str:
     if value is None:
         return f"{name} not computed"
     if evidence.is_sampled:
-        return f"{name} ~{format_sampled(value, se)}"
+        return f"{name} ~{format_sampled(value, se).removeprefix('~')}"
     return f"{name} {format_sig(value)}"
 
 
@@ -54,6 +54,8 @@ def value_health(stats: Any) -> str:
 
     if stats is None:
         return ""
+    if stats.nonfinite_evidence.reason and stats.nonfinite_evidence.policy == "unavailable":
+        return str(stats.nonfinite_evidence.reason)
     if stats.nonfinite_evidence.policy == "verdict":
         return "nonfinite present"
     facts = [
@@ -75,6 +77,8 @@ def _summary(stats: Any, *, separator: str, moments: bool) -> str:
 
     if stats is None:
         return "not computed"
+    if stats.nonfinite_evidence.reason and stats.nonfinite_evidence.policy == "unavailable":
+        return ""
     if stats.is_empty:
         return "empty"
     if stats.has_no_finite_values:

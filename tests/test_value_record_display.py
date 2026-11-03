@@ -141,7 +141,7 @@ def test_html_and_text_cards_have_identical_rows(captured) -> None:
         for line in text.splitlines()[1:]:
             assert f'<th scope="row">{escape(line[2:11].strip())}</th>' in html
             assert f"<td>{escape(line[12:])}</td>" in html
-        assert "tl-grid-table" not in html
+        assert '<table class="tl-grid-table"' not in html
         assert len(html) < 20_000
 
 
@@ -167,3 +167,18 @@ def test_width_ladder_preserves_metadata_and_honesty() -> None:
         assert f"Op {key}: float32 [1, 5, 3072] on cpu (edited)" in line
         if "sd " in line:
             assert "min " in line and "max " in line and "mean " in line
+
+
+def test_source_row_never_reads_current_source(captured, monkeypatch) -> None:
+    """Source cards use captured frame metadata, even if files are unavailable."""
+
+    from torchlens._data_classes.func_call_location import FuncCallLocation
+
+    def no_source(*args, **kwargs):
+        pytest.fail("record rendering read source text")
+
+    monkeypatch.setattr(FuncCallLocation, "_source_text_state", no_source)
+    trace, _ = captured
+    card = str(trace["tanh_1:2"])
+    assert "source    " in card and " in " in card
+    assert "(capture not finished)" not in card

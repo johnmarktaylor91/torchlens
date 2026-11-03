@@ -6,7 +6,7 @@ from html import escape
 from typing import Any
 
 from ..._data_classes._value_repr import layer_card, op_card, param_card
-from .cardtree import Card, CardHtml
+from .cardtree import CARD_CSS_VERSION, Card, CardHtml
 
 
 def _from_text(text: str, kind: str) -> Card:
@@ -17,8 +17,15 @@ def _from_text(text: str, kind: str) -> Card:
     for line in lines:
         label, value = line[2:11].strip(), line[12:]
         rows.append(f'<tr><th scope="row">{escape(label)}</th><td>{escape(value)}</td></tr>')
+    scope = f".{CARD_CSS_VERSION} .tl-record-facts"
+    style = (
+        f"<style>{scope}{{border-collapse:collapse;width:100%;font-family:ui-monospace,monospace}}"
+        f"{scope} th, {scope} td{{text-align:left;vertical-align:top;padding:2px 0;"
+        "overflow-wrap:anywhere}"
+        f"{scope} th{{font-weight:400;padding-right:1em;white-space:nowrap}}</style>"
+    )
     table = '<table class="tl-record-facts"><tbody>' + "".join(rows) + "</tbody></table>"
-    return Card(title=title, children=(CardHtml(table),), kind=kind)
+    return Card(title=title, children=(CardHtml(style + table),), kind=kind)
 
 
 def op_value_card(op: Any, *, kind: str = "op") -> Card:

@@ -16,9 +16,7 @@ def _param_facts(param: Any) -> tuple[str, Any, str, Any]:
 
     live = fail_open(lambda: param._peek_live_param(cache=False), lambda _error: None)
     stats = _statistics(live, compute=False, identity=getattr(param, "address", None))
-    honesty = (
-        "" if live is not None else "(live tensor unavailable: source model gone or ref released)"
-    )
+    honesty = "" if live is not None else "(live unavailable)"
     return metadata_text(param, live), stats, honesty, live
 
 
@@ -42,7 +40,11 @@ def param_rows(param: Any) -> list[tuple[str, str]]:
     basis = (
         f"live, version {version}"
         if version is not None
-        else ("live" if live is not None else "not available")
+        else (
+            "live"
+            if live is not None
+            else "live tensor unavailable: source model gone or ref released"
+        )
     )
     rows = [("module", str(getattr(param, "module_address", "") or "")), ("basis", basis)]
     count = getattr(param, "num_params", None)
