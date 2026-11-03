@@ -62,10 +62,14 @@ _TRACE_TRANSPORT_COLUMNS: Final = frozenset({"_io_module_accessor_state"})
 
 
 def artifact_error(message: str, *, code: str, remedy: str, **fields: Any) -> ArtifactError:
+    """Return an ``ArtifactError`` carrying its code and remedy."""
+
     return ArtifactError(message, code=code, remedy=remedy, **fields)
 
 
 def integrity_error(path: Path, detail: str, *, code: str) -> ArtifactError:
+    """Return the integrity refusal for one artifact file."""
+
     return artifact_error(
         f"Artifact file {path} failed its integrity check: {detail}.",
         code=code,
@@ -76,14 +80,20 @@ def integrity_error(path: Path, detail: str, *, code: str) -> ArtifactError:
 
 
 def is_int(value: Any) -> bool:
+    """Return whether a value is an integer and not a boolean."""
+
     return isinstance(value, int) and not isinstance(value, bool)
 
 
 def symlink_guard(path: Path, context: str) -> None:
+    """Refuse a symlinked path with the format's symlink code."""
+
     reject_symlink_path(path, context=context, code=_CODES["symlink_path"])
 
 
 def pre3_error(root: Path, observed: str, *, code: str) -> ArtifactTooOldError:
+    """Return the below-floor refusal for a folder saved by torchlens 2.x."""
+
     return below_floor_error(observed=observed, path=str(root), code=code)
 
 
@@ -108,6 +118,8 @@ def legacy_stamp(manifest_path: Path) -> int | None:
 
 
 def check_version_window(manifest: Mapping[str, Any], root: Path) -> None:
+    """Refuse a manifest whose format or tlspec version is outside the window."""
+
     major, tlspec = manifest["format_version"], manifest[TLSPEC_KEY]
     if major < contract.FORMAT_MAJOR or tlspec < contract.RECORD_CONTRACT_FLOOR:
         raise pre3_error(
@@ -154,6 +166,8 @@ def read_json_file(path: Path, *, code: str, what: str) -> tuple[Any, bytes]:
         ) from exc
 
     def _pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+        """Build a mapping from decoded JSON object pairs (the ``object_pairs_hook``)."""
+
         mapping: dict[str, Any] = {}
         for key, value in pairs:
             if key in mapping:
@@ -180,12 +194,16 @@ def read_json_file(path: Path, *, code: str, what: str) -> tuple[Any, bytes]:
 
 
 def _relpath_is_contained(relpath: str) -> bool:
+    """Return whether a listed relative path stays inside the artifact root."""
+
     if not relpath or relpath.startswith("/") or "\\" in relpath or "\x00" in relpath:
         return False
     return all(part not in ("", ".", "..") for part in relpath.split("/"))
 
 
 def _file_entry_errors(relpath: Any, entry: Any) -> list[str]:
+    """Return the schema errors of one ``files`` entry."""
+
     if not isinstance(relpath, str) or not _relpath_is_contained(relpath):
         return [f"files key {relpath!r} is not a plain relative path"]
     if not isinstance(entry, dict):
@@ -199,6 +217,8 @@ def _file_entry_errors(relpath: Any, entry: Any) -> list[str]:
 
 
 def _files_table_errors(files: Any) -> list[str]:
+    """Return the schema errors of the manifest ``files`` table."""
+
     if not isinstance(files, dict):
         return ["files must be an object keyed by relative path"]
     errors: list[str] = []
@@ -210,6 +230,8 @@ def _files_table_errors(files: Any) -> list[str]:
 
 
 def _records_table_errors(records: Any, files: Any, kind: Any) -> list[str]:
+    """Return the schema errors of the manifest ``records`` table."""
+
     if not isinstance(records, dict):
         return ["records must be an object keyed by record kind"]
     known = {name for name, _, _ in contract.RECORD_INDEX}
@@ -345,6 +367,8 @@ def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Pat
 
 
 def record_class(kind: str) -> type:
+    """Return the record class a record kind names in the field registry."""
+
     module_name, class_name = RECORD_CONTRACT_CLASSES[kind]
     return getattr(import_module(module_name), class_name)
 
@@ -397,6 +421,8 @@ def read_record_table(root: Path, manifest: Mapping[str, Any], kind: str) -> lis
 
 
 def _unknown_columns(kind: str, names: Mapping[str, Any]) -> list[str]:
+    """Return the table columns the field bindings do not declare."""
+
     bindings = STORAGE_BINDINGS[_SCHEMA_KEY_BY_RECORD.get(kind, kind)]
     allowed_extra = _TRACE_TRANSPORT_COLUMNS if kind == "trace" else frozenset()
     unknown = []
@@ -440,6 +466,8 @@ _TRACE_CONTAINER_ROWS: Final[tuple[tuple[str, str], ...]] = (
 
 
 def _invariant_error(root: Path, detail: str, *, code: str, **fields: Any) -> ArtifactError:
+    """Return the refusal for a cross-record invariant the tables violate."""
+
     return ArtifactError(
         f"Artifact {root} fails a cross-record invariant: {detail}.",
         code=code,
@@ -451,10 +479,14 @@ def _invariant_error(root: Path, detail: str, *, code: str, **fields: Any) -> Ar
 
 
 def _rows_of(tables: Mapping[str, list[dict[str, Any]]], kind: str) -> int:
+    """Return the row count of one decoded table."""
+
     return len(tables.get(kind, ()))
 
 
 def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Path) -> None:
+    """Check the trace row's container columns against the decoded tables."""
+
     trace = tables["trace"][0]
     for field, kind in _TRACE_CONTAINER_ROWS:
         container = trace.get(field)
@@ -495,6 +527,8 @@ def _check_orphans_disjoint(tables: Mapping[str, list[dict[str, Any]]], root: Pa
 def _check_manifest_rows(
     tables: Mapping[str, list[dict[str, Any]]], manifest: Mapping[str, Any], root: Path
 ) -> None:
+    """Check the manifest's declared row counts against the decoded tables."""
+
     for kind, entry in manifest["records"].items():
         if entry["rows"] != _rows_of(tables, kind):
             raise _invariant_error(

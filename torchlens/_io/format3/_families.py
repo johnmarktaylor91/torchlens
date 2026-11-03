@@ -2,21 +2,73 @@
 
 The nodes live in ``schema.FAMILIES``. This module interprets node shapes,
 closed vocabularies and within-cell constraints without importing validators.
-Cross-record relations remain with the reader's validation pass.
+Cross-record relations remain with the reader's validation pass. The cell refusal
+(``cell_error``) and the pending ``record`` object both modules raise and inspect are
+defined here, below the decoder, so the decoder imports this module and not the reverse.
 """
 
 from __future__ import annotations
 
 import ast
+import dataclasses
 import math
 import re
 from collections.abc import Mapping, Sequence
 from functools import cache
-from typing import Any
+from typing import Any, Final
 
 from ..format_errors import ArtifactError
-from .decode import CELL_CODE, PendingRecord, cell_error
+from .contract import PHASE_TIMING_KEY_SOURCE, REFUSAL_CODES
 from .schema import FAMILIES
+
+#: Code of a record cell that fails its typed schema (format.1).
+CELL_CODE: Final = REFUSAL_CODES["record_schema_invalid"]
+
+#: Field named in a family refusal, by code.
+_FAMILY_FIELDS: Final[dict[str, str]] = {
+    "artifact_distributed_scope_invalid": "Trace.provenance.distributed_scope",
+    "artifact_grad_fn_timing_provenance_invalid": "Trace.grad_fn_timing_provenance",
+    "artifact_checkpoint_witness_invalid": "Trace.checkpoint_invocation_witness",
+    "artifact_intervention_audit_invalid": "Trace.intervention_audit",
+    "artifact_kernel_telemetry_invalid": "Trace.annotations._kernel_telemetry",
+    "artifact_sidecar_invalid": 'Trace.annotations["sidecar"]',
+    "artifact_capture_advisories_invalid": 'Trace.annotations["capture_advisories"]',
+    "artifact_source_snapshots_invalid": "Trace.source.snapshots",
+    "artifact_structure_evidence_invalid": "Trace.graph.structure_evidence",
+    "artifact_executed_flops_record_invalid": "BackwardPass._executed_flops_record",
+    "artifact_episode_step_invalid": "Op.episode_step",
+    "artifact_forward_peak_memory_invalid": "Trace.forward_peak_memory_reason",
+    "artifact_backward_peak_memory_invalid": "Trace.backward_peak_memory_reason",
+}
+
+
+@dataclasses.dataclass
+class PendingRecord:
+    """A ``record`` object whose decoded fields still hold ``ref`` cells for the reader to settle."""
+
+    cls: type
+    fields: dict[str, Any]
+    at: str
+
+
+def cell_error(at: str, detail: str, *, code: str = CELL_CODE) -> ArtifactError:
+    """The one record-cell refusal: the path, the detail, the re-save remedy."""
+
+    remedy = "re-save the trace with trace.save(); the artifact was edited or corrupted"
+    fields: dict[str, Any] = {"at": at, "detail": detail}
+    field = _FAMILY_FIELDS.get(code)
+    if code == "artifact_annotations_invalid":
+        prefix = "Op" if at.startswith("op[") else "Trace"
+        key = re.split(r"[.\[<]", at.partition(".annotations.")[2], maxsplit=1)[0]
+        field = f'{prefix}.annotations["{key}"]' if key else f"{prefix}.annotations"
+    if field is not None:
+        fields.update(field=field, reason="not_a_string" if "peak_memory" in code else "schema")
+    subject = f"{field} at record cell {at}" if field else f"Record cell {at}"
+    message = f"{subject} does not satisfy the 3.0 saved-format contract: {detail}."
+    if field is not None:
+        message += f" Remedy: {remedy}."
+    return ArtifactError(message, code=code, remedy=remedy, **fields)
+
 
 _CELL_POSITION = re.compile(r"(\w+)\[\d+\]\.(\w+)")
 
@@ -166,8 +218,6 @@ def _family_vocab(source: Any) -> tuple[Any, ...]:
 
     if source == "PIPELINE":
         from importlib import import_module
-
-        from .contract import PHASE_TIMING_KEY_SOURCE
 
         module, _, attribute = PHASE_TIMING_KEY_SOURCE.rpartition(".")
         return tuple(step.name for step in getattr(import_module(module), attribute))

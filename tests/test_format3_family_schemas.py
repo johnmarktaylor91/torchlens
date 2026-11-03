@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -274,7 +275,7 @@ def test_valid_family_cells_remain_loadable(
 
 
 @pytest.fixture(scope="module")
-def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Path:
+def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]:
     """Save a trace with a real backward-pass record.
 
     Parameters
@@ -292,9 +293,9 @@ def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Path:
     try:
         trace.log_backward(trace[trace.output_layers[0]].out.sum())
         trace.save(root)
+        yield root
     finally:
         trace.cleanup()
-    return root
 
 
 def _audit(kind: str, **changes: Any) -> dict[str, Any]:

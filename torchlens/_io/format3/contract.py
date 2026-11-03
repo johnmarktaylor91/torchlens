@@ -189,6 +189,7 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "save_level_unknown": "artifact_save_level_invalid",
     "record_file_corrupt": "bundle_metadata_integrity_refused",
     "record_key_unknown": "unknown_persisted_field",
+    "record_schema_invalid": "record_schema_invalid",
     "blob_missing": "bundle_load_failed",
     "structure_only_incoherent": "artifact_structure_only_incoherent",
     "symlink_path": "load_path_symlink_rejected",
@@ -200,11 +201,9 @@ REFUSAL_CODES: Final[dict[str, str]] = {
     "reader_not_built": "bundle_load_failed",
 }
 #: Situations whose code is provisional: a private spelling builders can use
-#: until the public code is ruled. Each is also a row of ``REFUSAL_CODES``
-#: above with the existing code the reader raises meanwhile.
-PROVISIONAL_REFUSALS: Final[dict[str, str]] = {
-    "record_schema_invalid": "manifest_schema_invalid",
-}
+#: until the public code is ruled, each mapped to the existing code raised
+#: meanwhile. Empty: every spelling the format needed has been ruled.
+PROVISIONAL_REFUSALS: Final[dict[str, str]] = {}
 
 #: Where the per-step timing keys come from: ``_phase_timings`` is keyed by the
 #: ``name`` of each step of this tuple, nothing else.

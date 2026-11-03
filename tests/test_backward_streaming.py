@@ -84,8 +84,7 @@ def _saved_grad_cells(bundle_path: Path) -> list[Any]:
     """Return the non-empty ``grad`` cells of the saved op record (3.0 layout)."""
 
     table = read_record(bundle_path, "op")
-    column = list(table["columns"]).index("grad")
-    return [row[column] for row in table["rows"] if row[column] is not None]
+    return [cell for cell in table["columns"]["grad"] if cell is not None]
 
 
 def test_log_backward_streams_grads_to_disk(tmp_path: Path) -> None:

@@ -25,9 +25,14 @@ import torch
 
 from ..._data_classes._state_adapter import state_new, state_restore
 from ..field_registry import component_spec_tables
-from ..format_errors import ArtifactError
+from ._families import (
+    CELL_CODE,
+    PendingRecord,
+    _apply_family,
+    _FamilyContext,
+    cell_error,
+)
 from .contract import (
-    PROVISIONAL_REFUSALS,
     RECORD_INDEX,
     TENSOR_REFERENCE_FIELDS,
     TYPED_VALUE_KEY,
@@ -48,8 +53,7 @@ from .values import (
 # Decoding: the closed vocabulary back to Python values
 # ---------------------------------------------------------------------------
 
-#: The one record-cell refusal code (provisional spelling, contract PROVISIONAL_REFUSALS).
-CELL_CODE: Final = PROVISIONAL_REFUSALS["record_schema_invalid"]
+#: The one record-cell refusal code: a cell that fails its typed schema.
 #: Longest decimal text an ``int`` cell may carry (CPython's own int-parse limit).
 INT_TEXT_LIMIT: Final = 4300
 #: Deepest nesting the decoder follows inside one cell.
@@ -93,25 +97,9 @@ _PLACEHOLDER_POSITION = re.compile(r"\d+(\.[\w\[\]\.]+)?")
 #: Fields a tag may carry beyond its required ones (the tensor cell's payload fields).
 _OPTIONAL_FIELDS: Final[dict[str, tuple[str, ...]]] = {"tensor": TENSOR_REFERENCE_FIELDS}
 
-_FAMILY_FIELDS = {
-    "artifact_distributed_scope_invalid": "Trace.provenance.distributed_scope",
-    "artifact_grad_fn_timing_provenance_invalid": "Trace.grad_fn_timing_provenance",
-    "artifact_checkpoint_witness_invalid": "Trace.checkpoint_invocation_witness",
-    "artifact_intervention_audit_invalid": "Trace.intervention_audit",
-    "artifact_kernel_telemetry_invalid": "Trace.annotations._kernel_telemetry",
-    "artifact_sidecar_invalid": 'Trace.annotations["sidecar"]',
-    "artifact_capture_advisories_invalid": 'Trace.annotations["capture_advisories"]',
-    "artifact_source_snapshots_invalid": "Trace.source.snapshots",
-    "artifact_structure_evidence_invalid": "Trace.graph.structure_evidence",
-    "artifact_executed_flops_record_invalid": "BackwardPass._executed_flops_record",
-    "artifact_episode_step_invalid": "Op.episode_step",
-    "artifact_forward_peak_memory_invalid": "Trace.forward_peak_memory_reason",
-    "artifact_backward_peak_memory_invalid": "Trace.backward_peak_memory_reason",
-}
-
 
 @dataclasses.dataclass(frozen=True)
-class Unencodable:
+class UnencodableValue:
     """A value the writer could not encode: its type, bounded repr and location (section 5)."""
 
     type: str
@@ -127,34 +115,6 @@ class CallablePlaceholder:
     position: int | str
     qualname: str
     repr_length: int
-
-
-@dataclasses.dataclass
-class PendingRecord:
-    """A ``record`` object whose decoded fields still hold ``ref`` cells for the reader to settle."""
-
-    cls: type
-    fields: dict[str, Any]
-    at: str
-
-
-def cell_error(at: str, detail: str, *, code: str = CELL_CODE) -> ArtifactError:
-    """The one record-cell refusal: the path, the detail, the re-save remedy."""
-
-    remedy = "re-save the trace with trace.save(); the artifact was edited or corrupted"
-    fields: dict[str, Any] = {"at": at, "detail": detail}
-    field = _FAMILY_FIELDS.get(code)
-    if code == "artifact_annotations_invalid":
-        prefix = "Op" if at.startswith("op[") else "Trace"
-        key = re.split(r"[.\[<]", at.partition(".annotations.")[2], maxsplit=1)[0]
-        field = f'{prefix}.annotations["{key}"]' if key else f"{prefix}.annotations"
-    if field is not None:
-        fields.update(field=field, reason="not_a_string" if "peak_memory" in code else "schema")
-    subject = f"{field} at record cell {at}" if field else f"Record cell {at}"
-    message = f"{subject} does not satisfy the 3.0 saved-format contract: {detail}."
-    if field is not None:
-        message += f" Remedy: {remedy}."
-    return ArtifactError(message, code=code, remedy=remedy, **fields)
 
 
 def _is_int(value: Any) -> bool:
@@ -240,8 +200,6 @@ class Decoder:
 
         value = self._decode(data, at=at, depth=depth)
         if depth == 0:
-            from ._families import _FamilyContext
-
             if self._family_context is None:
                 self._family_context = _FamilyContext()
             self._family_context.check(value, at)
@@ -641,7 +599,7 @@ class Decoder:
         return self.tensor_ref(data, at)
 
     @staticmethod
-    def _unencodable(data: Mapping[str, Any], at: str, depth: int) -> Unencodable:
+    def _unencodable(data: Mapping[str, Any], at: str, depth: int) -> UnencodableValue:
         """Decode an unencodable-value disclosure with bounded repr text.
 
         Parameters
@@ -660,7 +618,7 @@ class Decoder:
             raise cell_error(at, "unencodable disclosure fields are mistyped", code=CELL_CODE)
         if len(data["repr"]) > UNENCODABLE_REPR_LIMIT:
             raise cell_error(at, "unencodable repr is over the repr limit", code=CELL_CODE)
-        return Unencodable(data["type"], data["repr"], data["repr_length"], data["at"])
+        return UnencodableValue(data["type"], data["repr"], data["repr_length"], data["at"])
 
     @staticmethod
     def _callable_placeholder(data: Mapping[str, Any], at: str, depth: int) -> CallablePlaceholder:
@@ -731,8 +689,6 @@ def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
 
     value = Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)
     if schema is not None:
-        from ._families import _apply_family
-
         _apply_family(schema, value, at)
     return value
 

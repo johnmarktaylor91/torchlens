@@ -206,7 +206,7 @@ FOREIGN_TAGS = [
 @pytest.mark.parametrize("tag", FOREIGN_TAGS)
 def test_tag_outside_the_vocabulary_refuses(saved, tmp_path, tripwires, tag):
     cell = _tagged(tag, type="os.system", args=["id"], fields={}, items=[], name="x")
-    _refuses(_with_cell(saved, tmp_path / "tag", cell), tripwires)
+    _refuses(_with_cell(saved, tmp_path / "tag", cell), tripwires, code="record_schema_invalid")
 
 
 def test_pickle_bytes_inside_a_bytes_cell_stay_bytes(saved, tmp_path, tripwires):

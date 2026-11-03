@@ -1291,9 +1291,8 @@ def _attach_run_readiness(trace: Trace, sparse_run: Any) -> None:
 # ---------------------------------------------------------------------------
 # 3.0 saved format: the rehydration side of the reader doors
 # ---------------------------------------------------------------------------
-# ``format3/reader.py`` reads, decodes and validates below the record classes in
-# the import layering; the steps that need ``rehydrate_trace``, the accessors,
-# ``Bundle`` and the intervention types live here and are installed into the
+# ``format3/reader.py`` sits below the record classes; the steps needing ``rehydrate_trace``,
+# the accessors, ``Bundle`` and the intervention types live here and are installed into the
 # reader's doors at import (``format3_reader.install_load_hooks`` below).
 
 
@@ -1373,6 +1372,8 @@ def _bind_format3_runnable_payloads(
 def _finish_format3_bundle(
     members: list[tuple[str, Trace]], *, relations: Any, baseline: Any, root: Path
 ) -> Bundle:
+    """Assemble the loaded members, relations and baseline of a 3.0 bundle."""
+
     from ..bundle import Bundle
 
     bundle = Bundle(members, relations=relations, baseline=baseline)

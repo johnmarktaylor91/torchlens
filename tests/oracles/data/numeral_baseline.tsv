@@ -4202,10 +4202,6 @@ package-docstrings	torchlens/_io/_load_validators.py	10
 package-docstrings	torchlens/_io/_load_validators.py	102
 package-docstrings	torchlens/_io/_load_validators.py	3.0
 package-docstrings	torchlens/_io/_load_validators.py	43
-package-docstrings	torchlens/_io/_pre3_module_paths.py	17
-package-docstrings	torchlens/_io/_pre3_module_paths.py	2.16
-package-docstrings	torchlens/_io/_pre3_module_paths.py	2.16.
-package-docstrings	torchlens/_io/_pre3_module_paths.py	3.0,
 package-docstrings	torchlens/_io/_safe_unpickle.py	21
 package-docstrings	torchlens/_io/_safe_unpickle.py	49
 package-docstrings	torchlens/_io/_safe_unpickle.py	49_

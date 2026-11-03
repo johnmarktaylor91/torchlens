@@ -89,6 +89,8 @@ def _family_kind(blob_id: str) -> str | None:
 
 
 def _index_error(blob_id: str, detail: str) -> ArtifactError:
+    """Return the manifest-index refusal for a runnable blob id."""
+
     return ArtifactError(
         f"Runnable payload {blob_id!r} does not satisfy the 3.0 saved-format contract: {detail}.",
         code=_INDEX_CODE,
@@ -196,6 +198,8 @@ def runnable_payload_index(
 
 
 def _integrity_error(blob_path: Path, detail: str) -> ArtifactError:
+    """Return the integrity refusal for a runnable payload chunk."""
+
     return ArtifactError(
         f"Runnable payload chunk {blob_path} failed its integrity check: {detail}.",
         code=_INTEGRITY_CODE,

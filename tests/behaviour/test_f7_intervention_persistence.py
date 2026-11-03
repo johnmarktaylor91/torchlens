@@ -116,13 +116,21 @@ def _save(model: _Toy, inputs: torch.Tensor, spec: Any, root: Path) -> Saved:
 
 
 @pytest.fixture(scope="module")
-def builtin_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Saved:
-    return _save(model, inputs, _builtin_spec(), tmp_path_factory.mktemp("f7") / "builtin")
+def builtin_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Iterator[Saved]:
+    saved = _save(model, inputs, _builtin_spec(), tmp_path_factory.mktemp("f7") / "builtin")
+    try:
+        yield saved
+    finally:
+        saved.live.cleanup()
 
 
 @pytest.fixture(scope="module")
-def callable_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Saved:
-    return _save(model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable")
+def callable_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Iterator[Saved]:
+    saved = _save(model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable")
+    try:
+        yield saved
+    finally:
+        saved.live.cleanup()
 
 
 def _saved_outs(trace: Any) -> dict[str, torch.Tensor]:
@@ -236,7 +244,7 @@ _DOORS: dict[str, Callable[[Any, _Toy, torch.Tensor], Any]] = {
         tl.scale(2.0),
         model=model,
         inputs=inputs,
-        intervention=tl.options.InterventionOptions(engine="rerun"),
+        intervention=tl.options.InterventionOptions(engine="rerun", confirm_mutation=True),
     ),
     "fork_run": lambda trace, model, inputs: trace.fork().run(model, inputs),
     "bundle_run": lambda trace, model, inputs: tl.Bundle([trace]).run(model, inputs),

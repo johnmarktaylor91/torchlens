@@ -776,6 +776,7 @@ and class names marked DOCUMENTED-UNSTABLE by their subpackage keep that status:
 | `manifest_missing` | Bundle directory has no `manifest.json` | Pass the bundle directory produced by `trace.save()` |
 | `manifest_not_json_object` | Manifest root parses but is not a JSON object | Re-save the artifact; do not hand-edit the manifest |
 | `manifest_schema_invalid` | Manifest parses as a JSON object but violates the bundle schema (missing/mistyped field, forged entry, count mismatch) | Re-save the artifact with `trace.save()`; do not hand-edit the manifest |
+| `record_schema_invalid` | A 3.0 record cell fails its typed schema (wrong kind, unknown `$tl` tag, tag payload missing a field, a name outside its table, a row reference out of range); the message names record, row and column | Re-save the artifact with `trace.save()`; do not hand-edit record files |
 | `manifest_unreadable` | Manifest cannot be read or does not parse within bounds | Check permissions/integrity; re-save if truncated |
 | `manifest_write_failed` | `manifest.json` could not be written during save | Check disk space and directory permissions, then re-save |
 | `model_door_binding_refused` | A TorchLens model door (`tl.trace`, `tl.release_model`, ...) received a bound intervention executor under OP2 arm (a): doors never silently treat a binding as a plain model; the refusal prints the canonical spelling (spelling DOCUMENTED-UNSTABLE) | Pass `binding.model` as the model and `binding.recipe` as `intervene=`, or run the capture-free lane by calling the binding |
