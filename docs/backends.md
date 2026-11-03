@@ -6,6 +6,52 @@ preview, explicit `backend="tinygrad"` enables the tinygrad preview, and explici
 `backend="paddle"` enables the Paddle dygraph/eager preview. Explicit `backend="tf"` or
 `backend="tensorflow"` enables the TensorFlow eager preview.
 
+## What works on each framework
+
+TorchLens is built for PyTorch and has preview support for five other frameworks. This table
+says which of its main tasks work today on a small model from each framework. Every cell comes
+from running the task, not from reading the code, and `tests/test_backend_feature_table.py`
+reruns the Yes and Partial cells so the table cannot quietly go stale.
+
+| Framework | Select | Extract | Inspect | Visualize | Intervene | Compare | Debug | Save and load | Gradients |
+|---|---|---|---|---|---|---|---|---|---|
+| PyTorch | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes | Yes |
+| JAX | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (7) | No (10) | No (11) | Yes | Partial (13) |
+| TensorFlow | Partial (1) | Partial (2) | Partial (4) | No (6) | Partial (8) | No (10) | No (11) | Yes | Yes |
+| MLX | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (9) | No (10) | No (12) | Yes | Yes |
+| PaddlePaddle | Partial (1) | Partial (3) | Partial (4) | Partial (5) | Partial (9) | No (10) | No (11) | Yes | Partial (14) |
+| tinygrad | Partial (1) | Partial (2) | Partial (4) | Partial (5) | No (7) | No (10) | No (11) | Yes | Yes |
+
+1. You can select operations by function, by module, or both. Selecting by influence (which
+   later units a given unit can reach) works only on PyTorch.
+2. You can save only the operations you choose. Stopping the forward pass early and fast
+   repeated recording (`tl.record`) work only on PyTorch.
+3. You can save only the operations you choose and stop the forward pass early. Fast repeated
+   recording (`tl.record`) works only on PyTorch.
+4. Each operation's values, shape, function and module are recorded, but not the line of source
+   code that ran it.
+5. The forward graph draws, including the collapsed overview. There is no backward pass to draw.
+6. Drawing a Keras model currently fails with an internal error, and there is no backward pass
+   to draw.
+7. Edits are not available yet; asking for one raises an error.
+8. Edits work during a new run, on operations chosen by function or module before the run. You
+   cannot edit a finished trace or patch in activations from another run.
+9. Edits work during a new run, on operations chosen by function before the run. You cannot edit
+   a finished trace or patch in activations from another run, and an edit aimed at a module
+   currently changes nothing.
+10. Comparing runs does not work yet: the ranking of changes comes back empty and the difference
+    drawing shows no change, even between runs that differ.
+11. The debugging tools do not work yet. The NaN finder reports no NaN even when the model
+    produces one, so do not rely on it with this framework.
+12. The debugging tools do not work yet; the NaN finder raises an error.
+13. Gradients of a loss with respect to inputs, weights and each operation work when the model
+    is a plain function of its weights. Flax modules refuse them for now.
+14. Gradients of a loss with respect to inputs and weights work. Gradients for each operation
+    failed on the test model, a small convolutional network with a flatten layer.
+
+Checked with PyTorch 2.13, JAX 0.10.2 (Flax 0.12.8), TensorFlow 2.21 (Keras 3.15), MLX 0.26.3,
+PaddlePaddle 3.3.1 and tinygrad 0.13.0, the versions the preview test jobs pin.
+
 ## Backend protocol and maturity
 
 Every backend, torch included, fills one contract, `tl.backends.BackendProtocol`: a framework
