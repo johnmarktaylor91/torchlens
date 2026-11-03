@@ -3,7 +3,7 @@
 Split out of ``torchlens/options.py`` (2026-08-26 P03 fix cycle). The
 ``_explicit_fields`` / ``_field_is_explicit`` readers over ``_specified_fields``,
 the frozen-group construction kit (``_resolve_option_value`` /
-``_set_frozen_fields``) and :class:`NarrationOptions` (lane F28) live here;
+``_set_frozen_fields`` / ``_build_option``) and :class:`NarrationOptions` (lane F28) live here;
 ``options.py`` imports them back (one-directional -- this module never
 imports ``options``).
 """
@@ -16,6 +16,17 @@ from dataclasses import dataclass
 from typing import Any, Final, cast
 
 from ._deprecations import MISSING, MissingType
+
+
+def _build_option(
+    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
+) -> Any:
+    """Build an option object from resolved values through its (possibly private) builder."""
+
+    builder = getattr(option_factory, "_from_values", None)
+    if builder is None:
+        builder = option_factory.from_values
+    return builder(values, specified_fields)
 
 
 def _explicit_fields(instance: object) -> frozenset[str]:
