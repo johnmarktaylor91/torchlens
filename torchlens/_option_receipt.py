@@ -18,17 +18,6 @@ from typing import Any, Final, cast
 from ._deprecations import MISSING, MissingType
 
 
-def _build_option(
-    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
-) -> Any:
-    """Build an option object from resolved values through its (possibly private) builder."""
-
-    builder = getattr(option_factory, "_from_values", None)
-    if builder is None:
-        builder = option_factory.from_values
-    return builder(values, specified_fields)
-
-
 def _explicit_fields(instance: object) -> frozenset[str]:
     """Return explicitly supplied option fields from an option object.
 
