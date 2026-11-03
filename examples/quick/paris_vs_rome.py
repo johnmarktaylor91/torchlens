@@ -38,8 +38,8 @@ effects = {
 }
 print(max(effects, key=effects.get))  # (9, 8): the head that matters most
 
-# the payoff, in one line: fork the Italy run, then .do() patches heads (9, 8) and (10, 0)
-# with their France values and pushes the change through the rest of the network
+# fork a copy of the Italy run; .do() patches in heads (9, 8) and (10, 0) from France,
+# then reruns every operation after them
 both = italy.fork().do(heads[9, 8] | heads[10, 0], tl.patch_from(france))
 # (-5.25, 2.99): the model now prefers Paris over Rome
 print((paris_vs_rome(italy), paris_vs_rome(both)))
