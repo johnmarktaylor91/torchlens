@@ -88,6 +88,7 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances
+from ._closure_consts import _readable_closure_consts
 from ._site_dialect import jax_site_keys
 from ._trace_graph_helpers import (
     _control_parent_labels,
@@ -715,29 +716,11 @@ class JAXBackend:
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
-        if use_pytree_module:
-            if module_tree is None:
-                raise AssertionError("pytree_module mode requires JAX module metadata.")
-            try:
-                with _scoped_pytree_module_calls(module_tree):
-                    closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            except Exception as exc:
-                _raise_nnx_trace_context_error(module_tree, exc)
-                raise
-            reject_attributed_module_strict_control_flow(closed_jaxpr)
-            closure_consts = ()
-            module_tree.call_counts.clear()
-            module_tree.forward_args_by_call.clear()
-            try:
-                with _scoped_pytree_module_calls(module_tree):
-                    output = model(*args)
-            except Exception as exc:
-                _raise_nnx_trace_context_error(module_tree, exc)
-                raise
-        else:
-            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            closure_consts = _readable_closure_consts(closed_jaxpr)
-            output = model(*args)
+        if use_pytree_module and module_tree is None:
+            raise AssertionError("pytree_module mode requires JAX module metadata.")
+        closed_jaxpr, closure_consts, output = _derive_and_run(
+            model, args, static_argnums, module_tree if use_pytree_module else None
+        )
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
             closed_jaxpr,
@@ -3178,6 +3161,55 @@ def _raise_nnx_trace_context_error(
     ) from exc
 
 
+def _derive_and_run(
+    model: Callable[..., Any],
+    args: Sequence[Any],
+    static_argnums: tuple[int, ...],
+    module_tree: EquinoxModuleTree | NnxModuleTree | None,
+) -> tuple[Any, tuple[Any, ...], Any]:
+    """Derive the closed jaxpr and run the callable once.
+
+    Parameters
+    ----------
+    model
+        JAX-compatible callable following ``fn(params, *inputs)``.
+    args
+        Normalized positional arguments.
+    static_argnums
+        Positional indexes declared static for ``jax.make_jaxpr``.
+    module_tree
+        The attributed module tree for ``pytree_module`` capture, or ``None``
+        for a raw function root.
+
+    Returns
+    -------
+    tuple[Any, tuple[Any, ...], Any]
+        The closed jaxpr, its readable closure constants (empty under
+        ``pytree_module``) and the eager output.
+    """
+
+    if module_tree is None:
+        closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+        closure_consts = _readable_closure_consts(closed_jaxpr)
+        return closed_jaxpr, closure_consts, model(*args)
+    try:
+        with _scoped_pytree_module_calls(module_tree):
+            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+    except Exception as exc:
+        _raise_nnx_trace_context_error(module_tree, exc)
+        raise
+    reject_attributed_module_strict_control_flow(closed_jaxpr)
+    module_tree.call_counts.clear()
+    module_tree.forward_args_by_call.clear()
+    try:
+        with _scoped_pytree_module_calls(module_tree):
+            output = model(*args)
+    except Exception as exc:
+        _raise_nnx_trace_context_error(module_tree, exc)
+        raise
+    return closed_jaxpr, (), output
+
+
 def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:
     """Normalize decoded JAX module scopes for TorchLens Op containment.
 
@@ -3953,43 +3985,6 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     if argnum == 0:
         return f"params{suffix}"
     return f"inputs.{argnum - 1}{suffix}"
-
-
-def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
-    """Closure constants of a function-root jaxpr, each with a readable buffer.
-
-    Parameters
-    ----------
-    closed_jaxpr
-        The derived closed jaxpr.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        ``closed_jaxpr.consts`` in order (possibly empty).
-
-    Raises
-    ------
-    BackendUnsupportedError
-        ``constant_unrealizable`` when a constant is not a concrete array
-        (a tracer or a deleted buffer): it could not be recorded with a
-        payload, and the rule never records a parentless op without one.
-    """
-
-    import jax
-    import numpy as np
-
-    consts = tuple(getattr(closed_jaxpr, "consts", ()))
-    tracer_type = getattr(getattr(jax, "core", None), "Tracer", ())
-    for index, value in enumerate(consts):
-        if isinstance(value, tracer_type) or not isinstance(value, (jax.Array, np.ndarray)):
-            raise BackendUnsupportedError(
-                f"JAX closure constant {index} of type {type(value).__name__} has no readable "
-                "buffer, so it cannot be recorded as a constant op with a payload.",
-                code="constant_unrealizable",
-                remedy="pass the value as an explicit pytree leaf of fn(params, *inputs)",
-            )
-    return consts
 
 
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:

@@ -12,7 +12,9 @@ It fills the backend protocol (`maturity="preview"`, no `capture_backend`); its
 - Static-label `intervene=` AND `stop_after=` both ship; combining either with
   `grad_options=` refuses typed (derived-grad replay would misrepresent the
   intervened forward). Halted traces set `is_stopped` / `stop_reason` /
-  `halt_frontier`; a halt selector matching zero sites warns.
+  `halt_frontier`; a halt selector matching zero sites warns. Those
+  capture-time warnings (zero-match selectors, compiled attributes) live in
+  `_capture_disclosures.py`.
 - `mx.compile` / `mx.grad` / `mx.vmap` traced-transform entries refuse typed at
   capture entry (`_find_mlx_compiled_attributes`, `_mlx_traced_transform_type`);
   a compiled model attribute ceilings the capture (`capture_verified=False`).

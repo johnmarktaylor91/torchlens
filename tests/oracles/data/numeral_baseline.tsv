@@ -4883,9 +4883,6 @@ package-docstrings	torchlens/_semantic/logit_lens.py	2.5
 package-docstrings	torchlens/_semantic/logit_lens.py	32
 package-docstrings	torchlens/_semantic/logit_lens.py	50
 package-docstrings	torchlens/_semantic/logit_lens.py	64,
-package-docstrings	torchlens/_semantic/patching.py	300
-package-docstrings	torchlens/_semantic/patching.py	36
-package-docstrings	torchlens/_semantic/patching.py	600
 package-docstrings	torchlens/_semantic/recipes/__init__.py	6.4
 package-docstrings	torchlens/_semantic/recipes/_helpers.py	11
 package-docstrings	torchlens/_semantic/recipes/attention.py	10

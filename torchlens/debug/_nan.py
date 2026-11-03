@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
 
+from ._capture_override import _with_capture_fields
 from ._common import _ordered_ops, _source_line
 
 
@@ -427,14 +428,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
 
     capture = trace_kwargs.pop("capture", None)
     if capture is not None:
-        values = capture.as_dict()
-        values["on_nonfinite"] = "raise"
-        trace_kwargs["capture"] = CaptureOptions._from_values(
-            values,
-            capture._specified_fields | {"on_nonfinite"},
-            _layers_to_save=capture._layers_to_save,
-            _layers_to_save_explicit=capture._layers_to_save_explicit,
-        )
+        trace_kwargs["capture"] = _with_capture_fields(capture, on_nonfinite="raise")
     else:
         trace_kwargs["capture"] = CaptureOptions(on_nonfinite="raise")
     try:

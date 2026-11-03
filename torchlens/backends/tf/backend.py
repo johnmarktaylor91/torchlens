@@ -6,6 +6,7 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
@@ -388,25 +389,11 @@ class TFBackend:
                     "conditions) require object-module attribution; this capture "
                     "entry discovered no Keras/tf.Module tree."
                 )
-            active_plan = intervention_plan
-
-            def _module_exit_hook(
-                frame: Any, module_type: str, output: Any, module_stack: Any
-            ) -> Any:
-                """Substitute matched module-boundary intervention outputs."""
-
-                return apply_tf_module_intervention(
-                    active_plan,
-                    session,
-                    tf,
-                    trace,
-                    frame,
-                    module_type,
-                    output,
-                    module_stack,
-                )
-
-            session.module_exit_hook = _module_exit_hook
+            # The session calls the hook as (frame, module_type, output,
+            # module_stack): the substitution's own trailing parameters.
+            session.module_exit_hook = partial(
+                apply_tf_module_intervention, intervention_plan, session, tf, trace
+            )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
