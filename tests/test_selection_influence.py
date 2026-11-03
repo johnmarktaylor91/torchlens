@@ -20,11 +20,11 @@ import torch.nn as nn
 from torch.nn import functional
 
 import torchlens as tl
+from torchlens._selection.graph import _influence
 from torchlens._selection.provenance import SelectionProvenance
 from torchlens._selection.selection import _join_relation
 from torchlens.errors import SelectionError
 from torchlens.receptive_field import _influence as influence
-from torchlens.receptive_field._influence import _influence
 from torchlens.receptive_field._types import ReceptiveFieldStatus
 
 # ---------------------------------------------------------------------------
