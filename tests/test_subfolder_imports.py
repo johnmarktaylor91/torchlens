@@ -23,18 +23,18 @@ def _drop_module(module_name: str) -> None:
 
 
 def test_notebook_import_stays_inert() -> None:
-    """``import torchlens._notebook`` never imports its foreign extra deps.
+    """``import torchlens.report._notebook`` never imports its foreign extra deps.
 
     Package import must not touch ``IPython`` / ``jupyter_client`` as a side
     effect, regardless of whether the extra is installed -- the dependency
     check is deferred to first attribute access (see the security fix that
     closes a foreign-import-at-untrusted-bundle-load class).
     """
-    _drop_module("torchlens._notebook")
+    _drop_module("torchlens.report._notebook")
     _drop_module("IPython")
     _drop_module("jupyter_client")
 
-    module = importlib.import_module("torchlens._notebook")
+    module = importlib.import_module("torchlens.report._notebook")
 
     # F22 facade contract: __all__ advertises only dependency-present real
     # names, resolved via find_spec WITHOUT importing the foreign packages.
@@ -47,22 +47,22 @@ def test_notebook_attribute_access_reports_missing_dependency(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Unknown attribute access teaches AttributeError-lineage regardless of deps."""
-    _drop_module("torchlens._notebook")
+    _drop_module("torchlens.report._notebook")
 
-    module = importlib.import_module("torchlens._notebook")
+    module = importlib.import_module("torchlens.report._notebook")
 
     with monkeypatch.context() as patched:
         patched.setitem(sys.modules, "IPython", None)
         # F22 facade contract: unknown names never mask as ImportError --
         # dependency reporting belongs to KNOWN names only.
-        with pytest.raises(AttributeError, match=r"torchlens\._notebook"):
+        with pytest.raises(AttributeError, match=r"torchlens\.report\._notebook"):
             module.anything
 
 
 @pytest.mark.parametrize(
     ("first_dep", "second_dep", "module_name"),
     [
-        ("IPython", "jupyter_client", "torchlens._notebook"),
+        ("IPython", "jupyter_client", "torchlens.report._notebook"),
         ("rsatoolbox", "brainscore_core", "torchlens.neuro"),
     ],
     ids=[

@@ -117,7 +117,7 @@ forward, so a capture there is a fragment, not the model.
 
 Because all-pass-then-silently-wrong is worse than a clear failure, both surfaces now report it:
 
-- `tl.compat.report(model, x)` has `dtensor`, `device_mesh`, `tensor_parallel`, and
+- `tl.report.doctor(model, x)` has `dtensor`, `device_mesh`, `tensor_parallel`, and
   `pipeline_parallel` rows.
 - `tl.trace(...)` refuses at capture entry with
   `torchlens.errors.DistributedCaptureUnsupportedError`, naming the exact parameter, buffer, or
@@ -137,7 +137,7 @@ it with `parallelize_module` / `fully_shard` / pipeline stages, or materialize t
 inventing joins when ranks disagree (`docs/reference/merged_trace_contract.md`).
 
 Detection is capability-probed, never version-parsed, and every degradation point is visible as a
-named flag in `torchlens.report.doctor()` / `tl.compat.report()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
+named flag in `tl.report.doctor()`: `HAS_DTENSOR`, `HAS_DEVICE_MESH`,
 and `HAS_PIPELINING`. When one is absent, detection falls back from an exact `isinstance` check to
 structural namespace matching, and the affected report row says so.
 
@@ -162,7 +162,7 @@ a future local inspection appliance.
 
 ## Compatibility Truth Table
 
-`tl.compat.report(model, x)` reports the following rows at runtime. Rows marked
+`tl.report.doctor(model, x)` reports the following rows at runtime. Rows marked
 `known_broken` or `scope` here should be included when filing issues so maintainers can
 separate unsupported contexts from new TorchLens bugs.
 

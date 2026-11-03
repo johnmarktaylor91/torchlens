@@ -109,7 +109,6 @@ def test_no_new_l6_plus_root_names() -> None:
         "torchlens.bridge",
         "torchlens.callbacks",
         "torchlens.neuro",
-        "torchlens._notebook",
     }
     live_legacy = {row.canonical_path for row in surface_rows() if row.legacy_top_level}
     new_legacy = live_legacy - grandfathered

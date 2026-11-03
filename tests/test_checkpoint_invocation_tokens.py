@@ -24,7 +24,6 @@ import torchlens as tl
 from torchlens import _state
 from torchlens._ir.events import CheckpointInvocationObserved
 from torchlens.backends.torch import backward as backward_mod
-from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 
 
 class _OneCheckpoint(nn.Module):
@@ -111,14 +110,13 @@ def test_forward_only_capture_has_token_with_zero_unpack_evidence() -> None:
 @pytest.mark.smoke
 def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None:
     torch.manual_seed(0)
-    with _activate_aten_recording_for_tests():
-        trace = tl.trace(
-            _OneCheckpoint(),
-            torch.randn(3, 4),
-            save_mode="reference",
-            capture=tl.options.CaptureOptions(backward_ready=True),
-        )
-        trace.log_backward(trace.output_ops[0].out.sum())
+    trace = tl.trace(
+        _OneCheckpoint(),
+        torch.randn(3, 4),
+        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, aten_ops=True),
+    )
+    trace.log_backward(trace.output_ops[0].out.sum())
     witness = trace.checkpoint_invocation_witness
     (record,) = witness["tokens"].values()
     # Unpack evidence inside witnessed fire brackets resolves through the

@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from ._summary_charset import assert_no_escape_bytes
+from ._summary_charset import assert_no_escape_bytes, degrade
 from ._summary_columns import ATTENTION_FULL_SQUARE_NOTE, OptimizerStateFacts
 from ._summary_config import ColumnSpec, SummaryConfig
 from ._summary_ladder import ResolvedView, ViewRow
@@ -450,8 +450,6 @@ def render_summary_pair(
     payload is its exact glyph-table degrade, so the two charsets cannot
     drift by construction (the CI degrade-map check re-asserts it).
     """
-
-    from ._summary_charset import degrade
 
     rows = visible_rows if visible_rows is not None else view.rows
     lines: list[str] = []

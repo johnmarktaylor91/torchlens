@@ -174,7 +174,7 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 
 # Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
 # third-party dependencies at IMPORT TIME (rsatoolbox / brainscore_core for
-# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens._notebook``).
+# ``torchlens.neuro``, IPython / jupyter_client for ``torchlens.report._notebook``).
 # Mirrors ``torchlens._io._safe_unpickle._TORCHLENS_APPLIANCE_MODULES`` --
 # duplicated here rather than imported to keep this security boundary free of
 # cross-module import-order coupling. A bundle-supplied ``custom`` key naming
@@ -183,7 +183,9 @@ def function_registry_key_from_callable(func: Callable[..., Any]) -> FunctionReg
 # receive the exact same deny-by-default / trust-opt-in treatment as a
 # genuinely foreign import path: denied before import, resolved only under an
 # explicit trust opt-in, decided by NAME alone -- never imported to decide it.
-_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._notebook"})
+_TORCHLENS_APPLIANCE_MODULES: frozenset[str] = frozenset(
+    {"torchlens.neuro", "torchlens.report._notebook"}
+)
 
 
 def _is_torchlens_appliance_module(module: str) -> bool:
@@ -329,7 +331,7 @@ def resolve_function_registry_key(
             # importing it executes its top-level code.
             #
             # EXCEPTION: the extras-gated appliance packages (``torchlens.neuro`` /
-            # ``torchlens._notebook``) import FOREIGN third-party dependencies at
+            # ``torchlens.report._notebook``) import FOREIGN third-party dependencies at
             # import time, so a path naming one of them is NOT safe to import
             # unconditionally -- it must receive the same treatment as a
             # genuinely foreign import path below (denied before import, resolved

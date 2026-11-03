@@ -78,6 +78,47 @@ def test_import_contracts_skip_without_config(tmp_path: Path) -> None:
     assert layering.check_contracts(repo).status == "skip"
 
 
+_CONTRACT = """[importlinter]
+root_package = layerpkg
+
+[importlinter:contract:one]
+name = {source} does not import {forbidden}
+type = forbidden
+source_modules =
+    layerpkg.{source}
+forbidden_modules =
+    layerpkg.{forbidden}
+"""
+
+
+def _contract_repo(root: Path, source: str, forbidden: str) -> Path:
+    """Build a two-module package where ``high`` imports ``low``, plus one contract.
+
+    The package is not named ``torchlens`` so the run can never resolve the
+    installed package instead of the fixture.
+    """
+
+    package = root / "layerpkg"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "low.py").write_text("X = 1\n", encoding="utf-8")
+    (package / "high.py").write_text("from layerpkg import low\n", encoding="utf-8")
+    config = _CONTRACT.format(source=source, forbidden=forbidden)
+    (root / ".importlinter").write_text(config, encoding="utf-8")
+    return root
+
+
+def test_import_contracts_run_with_the_dev_extra(tmp_path: Path) -> None:
+    """The dev extra declares import-linter, so the contracts run and never skip."""
+
+    kept = layering.check_contracts(_contract_repo(tmp_path / "kept", "low", "high"))
+    assert kept.status == "ok", kept
+    assert "1 kept, 0 broken" in kept.message
+    broken = layering.check_contracts(_contract_repo(tmp_path / "broken", "high", "low"))
+    assert broken.failed, broken
+    assert "0 kept, 1 broken" in broken.message
+
+
 def test_file_cap_allowlist_ratchet(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     repo = _fixture(tmp_path, {"largest_scc": 2, "in_function_internal_imports": 3}, 7)
     monkeypatch.setattr(file_cap, "FILE_CAP", 4)

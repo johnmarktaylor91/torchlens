@@ -109,7 +109,7 @@ def _sparse_state_offense(name: str, tensor: torch.Tensor) -> dict[str, Any]:
 
     A registered sparse tensor has no dense storage for the state-write journal to
     snapshot: the check refuses typed at entry, naming the slot, instead of failing
-    mid-prep (stress F1).
+    mid-prep (stress case 1).
     """
 
     return _offense_entry(

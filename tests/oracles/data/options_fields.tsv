@@ -1,5 +1,6 @@
 key
 CaptureOptions._specified_fields
+CaptureOptions.aten_ops
 CaptureOptions.backward_ready
 CaptureOptions.batch_render
 CaptureOptions.cache

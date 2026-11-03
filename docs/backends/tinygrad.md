@@ -100,8 +100,8 @@ and its refusal cell has not yet passed on the pinned CI leg (not yet proven, no
 ## Scorecard
 
 `torchlens/backends/tinygrad/scorecard.json` is written by the pinned CI leg
-(`python -m torchlens.conformance.scorecard --backend tinygrad --write`) and surfaces as the
+(`python -m tests.conformance.scorecard --backend tinygrad --write`) and surfaces as the
 `backend_scorecard:tinygrad` row of `tl.report.doctor()`. The roster behind it is
-`torchlens/conformance/_rosters/tinygrad.py`: ten fixed-weight `config_built` rows, three
+`tests/conformance/_rosters/tinygrad.py`: ten fixed-weight `config_built` rows, three
 `random_init` rows (refused until realize-once), and two `ecosystem` rows that run only
 under `TORCHLENS_CONFORMANCE_ECOSYSTEM=1`.

@@ -28,8 +28,8 @@
 9a. Rehydration floor: this release reads only its own format. An artifact stamped
     `tlspec_version` < 11 was saved by torchlens 2.x and refuses to load with the one typed
     `tl.errors.ArtifactTooOldError` (code `artifact_version_below_floor`); no alias list,
-    retired-key pop or legacy spelling adapter remains on any record class. Legacy 2.16
-    intervention specs remain loadable (the floor covers Trace rehydration only). Save dry-runs `metadata.pkl`
+    retired-key pop or legacy spelling adapter remains on any record class. The 2.16
+    intervention spec format (`format_version` 1) refuses with the same error. Save dry-runs `metadata.pkl`
     through the loader's default-deny unpickler and refuses unportable values typed
     (`annotation_value_unportable` / `metadata_value_unportable`); load anchors manifest facts
     to the pickled state (`bundle_manifest_metadata_mismatch`) and validates graph structure,
@@ -89,7 +89,16 @@
     `torch.autograd.grad` called inside forward is an `autogradgrad` boundary op
     (`transform_kind="autograd.grad"`, one op per returned gradient, selected by
     `tl.func_transform("autograd.grad")`); validation re-derives its gradients by replaying
-    the recorded subgraph from its `inputs` to its `outputs`, never by exemption. A custom
+    the recorded subgraph from its `inputs` to its `outputs`, never by exemption.
+    `loss.backward()` / `torch.autograd.backward` called inside forward is an
+    `autogradbackward` boundary op (`transform_kind="autograd.backward"`, one op per leaf
+    gradient the pass writes, parented on the roots and on the leaf's previous grad when the
+    pass accumulates into one, so the second pass through a retained graph is an in-place op
+    and a later `param.grad` read has a producer; selected by
+    `tl.func_transform("autograd.backward")`); validation re-derives each written gradient by
+    replaying the recorded subgraph from the leaf to the roots and adding the previous grad.
+    The engine's interior dispatches (including the accumulation `add_`) belong to that op,
+    so the dispatch census balances without any exemption. A custom
     `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
     `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
     `as_tensor` / `asarray` op, inside its `apply`) is one
@@ -218,3 +227,8 @@
     intervals (storage-pointer equality never decides); the recorded default device enters as a
     scoped `with torch.device(...)`; CUDA state stages lazily and atomically at run preparation
     with a no-allocation readiness capability gate.
+- ATen recording is opt-in and never silent: with `CaptureOptions(aten_ops=False)` (the default)
+  no dispatch mode is installed and `trace.aten_ops` / `op.aten_ops` / `trace.aten_gaps` raise
+  `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
+  and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
+  filled with synthetic rows.

@@ -46,6 +46,13 @@ rules, not an internal refactor.
   `reconstruction_is_lossy()` gates what may round-trip.
 - `ContainerRegistry`, `walk_container()`, `ContainerRecord`/`ContainerSnapshot` record
   container occurrences by `Role`/`Phase` and site (`FuncSite`/`ModuleSite`/`ModelSite`).
+- `_container_errors.py` defines `ContainerReconstructionError` (public via `tl.errors`);
+  `container.py` re-exports it. It sits below `container.py` and `distribution_container.py`
+  so the two import it without importing each other.
+- `_output_path_assign.py`: `assign_into_container_by_path()` assigns a value at a nested
+  output path (tuples, lists, dicts, namedtuples, dataclasses, mappings and
+  `torch.distributions` fields), rebuilding immutable containers. It lives here, not in
+  `_utils`, because it uses `distribution_container.py` and `_utils` may not import `_ir`.
 
 ## Selection and predicates
 - `predicate.py`: `RecordContext` is the predicate-visible view during capture; deferred

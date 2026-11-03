@@ -349,7 +349,7 @@ def _rule_facts(recipe: Any) -> list[tuple[str, Any]]:
     if recipe is None:
         return []
     if isinstance(recipe, tl.Recipe):
-        return [("digest", recipe.digest())]
+        return [("digest", recipe.digest)]
     edit = recipe.helper.name if recipe.helper is not None else None
     targets = [repr(target) for target in recipe.targets]
     return [(target, edit) for target in targets] + [("records", len(recipe.records))]

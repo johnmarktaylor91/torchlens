@@ -1419,7 +1419,7 @@ def is_denied_operator_gadget(func: Callable[..., Any]) -> bool:
 # This is the canonical appliance-module vocabulary used by safe unpickling and
 # first-party callable classification. The intervention resolver keeps a fenced
 # import-order pin that is equality-gated in the SSOT drift suite.
-_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens._notebook"})
+_APPLIANCE_MODULES: frozenset[str] = frozenset({"torchlens.neuro", "torchlens.report._notebook"})
 
 # Attribute stamped on a callable at ``@torchlens.facets.register`` time (on the
 # recipe function AND its optional predicate). It is the DETERMINISTIC, process-
