@@ -189,7 +189,7 @@ def test_advisory_fires_once_per_session() -> None:
     assert advisory.SCRIPTED_CODE in advisory._WARNED_CODES
 
 
-# Source-line fixture: the dlpack test locates the "# dlpack call site" comment below by text.
+# Source-line fixture: the dlpack advisory test finds its call-site comment below by text.
 def _dlpack_line_fixture(x: torch.Tensor) -> object:
     capsule = torch.utils.dlpack.to_dlpack(x)  # dlpack call site
     return capsule
