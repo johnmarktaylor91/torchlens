@@ -38,7 +38,7 @@ _HELD: list[mmap.mmap] = []
 
 
 def _lag_pages() -> int | None:
-    """Exact RSS (``statm``) minus the kernel's approximate RSS (``stat`` field 24), in pages."""
+    """Exact RSS (``statm``) minus the kernel's approximate RSS (``/proc/self/stat``), in pages."""
 
     try:
         with open("/proc/self/statm") as handle:
