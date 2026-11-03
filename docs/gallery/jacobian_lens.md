@@ -54,7 +54,15 @@ token ids exactly. Model weights are a required replay input. Both architectures
 their trace and matrix files. GPT-2 replay returned, but Mamba reload raised `ArtifactError`
 with code `metadata_object_count_exceeded`: its metadata exceeded the loader's
 24,000,000-opcode allocation ceiling. No limit was raised or check bypassed. The artifact
-contract therefore did not pass, and the entry stopped at this gap.
+contract therefore did not pass, and the entry stopped at this gap. A separate load-only
+check reproduced the same refusal from the retained artifact.
+
+The saved Mamba trace contains 4,049 files totaling 460,951,899 bytes; `metadata.pkl` alone
+is 123,065,852 bytes. Its gallery sorted-path/content SHA-256 is
+`2c61f9948f7a9559915061c554813d0c5f80cd62c9184b29951eb2e158964d10`.
+The GPT-2 trace totals 58,459,126 bytes, with gallery SHA-256
+`c516467c9680d7085bc3473c1d51e1d28b25b9e555dd1e51f6dfd507fd2e0e22`.
+These hashes identify the recorded files, not a successful Mamba replay.
 
 On a completed run, the script also writes `jacobian_lens.html`, a side-by-side layer-by-position top-token
 grid for the ASCII-face prompt, and one `*_readout_grid.json` per architecture containing
