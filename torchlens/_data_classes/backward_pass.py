@@ -15,6 +15,7 @@ from .._io import (
     read_tlspec_version,
 )
 from .._quantities import Duration
+from .._utils._display_bounded import RecordTuple
 from .._utils._display_records import backward_repr, backward_str
 from ._accessor_base import Accessor
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
@@ -22,8 +23,7 @@ from .field_policy import build_record_field_policy_table, portable_state_spec_f
 if TYPE_CHECKING:
     import pandas as pd
 
-# Typed container defaults for every non-Optional container field
-# BackwardPass declares. Same defect class as
+# Typed defaults for non-Optional BackwardPass containers. Same defect class as
 # `Op._LAYER_PASS_LOG_CONTAINER_DEFAULTS`/`Trace._MODEL_LOG_CONTAINER_DEFAULTS`:
 # without this, `coerce_container_typed_state` cannot repair a
 # present-but-wrong-typed legacy value, and an absent field crashes instead of
@@ -59,7 +59,6 @@ _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS: frozenset[str] = frozenset(
 @dataclass
 class BackwardPass:
     """Projected metadata for one backward engine invocation.
-
     Parameters
     ----------
     pass_number:
@@ -257,7 +256,8 @@ class BackwardPass:
             return None
         from ..backends.torch._backward_dispatch import recorded_ops
 
-        return recorded_ops(trace, self.pass_number)
+        ops = recorded_ops(trace, self.pass_number)
+        return None if ops is None else RecordTuple(ops, "BackwardAtenOps", "calls")
 
     @property
     def flops_attribution(self) -> Any:

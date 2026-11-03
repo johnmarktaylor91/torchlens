@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from typing import Any
 
+from ._display_bounded import short_dataclass_repr
 from ._display_card import inline_names, one_line, render_card
-from ._display_numbers import format_count
+from ._display_numbers import format_count, format_duration, format_iec_bytes
+from ._display_text import tensor_text
 from .fail_open import fail_open
 
 
@@ -110,9 +112,63 @@ def group_repr(group: Any) -> str:
 def _group_identity(group: Any) -> str:
     trace = group._trace
     name = type(group).__name__
+    if name == "TraceCost":
+        return one_line(
+            f"TraceCost of {trace.name or 'unnamed'}",
+            [],
+            [
+                f"{format_duration(trace._cost_func_calls_duration)} compute",
+                f"{format_iec_bytes(trace._cost_saved_activation_memory)} saved",
+            ],
+        )
     facts = []
     for key in _GROUP_FIELDS.get(name, ()):
         value = getattr(trace, key, None)
         if isinstance(value, (str, int, float, bool)):
             facts.append(f"{key.split('_', 2)[-1]} {value}")
     return one_line(f"{name} of {trace.name or 'unnamed'}", facts)
+
+
+_EVENT_LANES = (
+    ("op_events", "ops"),
+    ("aten_events", "aten calls"),
+    ("module_enter_events", "module enters"),
+    ("module_exit_events", "module exits"),
+    ("backward_events", "backward events"),
+)
+
+
+def capture_events_repr(events: Any) -> str:
+    """Journal lane sizes only; never traverse an event or retained payload."""
+
+    return fail_open(
+        lambda: one_line(
+            "CaptureEvents",
+            [f"{format_count(len(getattr(events, field)))} {noun}" for field, noun in _EVENT_LANES],
+        ),
+        lambda _error: "CaptureEvents: metadata unavailable",
+    )
+
+
+def capture_events_str(events: Any) -> str:
+    return fail_open(
+        lambda: render_card(
+            capture_events_repr(events),
+            [(noun, str(len(getattr(events, field)))) for field, noun in _EVENT_LANES],
+            more=(".op_events", ".aten_events", ".backward_events", ".live_index"),
+        ),
+        lambda _error: capture_events_repr(events),
+    )
+
+
+def ir_record_repr(record: Any) -> str:
+    if type(record).__name__ == "CaptureEvents":
+        return capture_events_repr(record)
+    if type(record).__name__ == "_AtenTensorFact":
+        return fail_open(
+            lambda: one_line(
+                "AtenTensorFact", [], [tensor_text(record.dtype, record.shape, record.device)]
+            ),
+            lambda _error: "AtenTensorFact: metadata unavailable",
+        )
+    return short_dataclass_repr(record)

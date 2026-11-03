@@ -7,8 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
-from .._utils._display_bounded import short_dataclass_repr
-from .events import ModuleFrame
+from .events import ModuleFrame, _bounded_record_repr
 
 
 class LiveIndexWindowError(KeyError):
@@ -35,7 +34,7 @@ class LiveIndex:
     mutable ``Op`` field dictionaries.
     """
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     by_raw_label: dict[str, Any] = field(default_factory=dict)
     labels: list[str] = field(default_factory=list)

@@ -10,7 +10,6 @@ from dataclasses import dataclass, field, replace
 from types import MappingProxyType
 from typing import Any
 
-from .._utils._display_bounded import short_dataclass_repr
 from ..errors._base import TorchLensWarning
 from .events import (
     BackwardCoverageGap,
@@ -30,6 +29,8 @@ from .events import (
     ParamGradObserved,
     PreHookProvenanceEvent,
     _AtenCallEvent,
+    _bounded_record_repr,
+    _bounded_record_str,
     _ModePausedInteriorEvent,
 )
 from .live_index import LiveIndex
@@ -106,9 +107,7 @@ class SealedJournalWriteError(RuntimeError):
     ``CaptureSession.seal()`` freezes a journal into its ``CapturedRunCore``:
     the op spine is snapshotted (folded through the amendment reducer) and the
     forward sibling lanes are snapshotted onto the pre-seal projection clone.
-    A write to any of those lanes AFTER the seal silently diverges the live
-    journal from the artifact every consumer projects from, so the whole class
-    fails closed here rather than at the far end of a projection.
+    Writes after sealing diverge from the artifact; this boundary fails closed.
     """
 
 
@@ -249,7 +248,8 @@ def _clone_op_event_for_replay(event: Any) -> Any:
 class CaptureEvents:
     """Mutable event buffer allocated once per capture."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
+    __str__ = _bounded_record_str
 
     op_events: list[JournalOp] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)

@@ -11,8 +11,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field, fields as dataclass_fields, replace as dataclass_replace
 from typing import Any
 
-from .._utils._display_bounded import short_dataclass_repr
-from .events import ArgTemplateRef, FunctionCallRef, OutputRef, ParentEdge
+from .events import ArgTemplateRef, FunctionCallRef, OutputRef, ParentEdge, _bounded_record_repr
 from .refs import ParamRef
 from .semantics import BackendSemantics, CapturePolicy
 
@@ -32,7 +31,7 @@ class OpRecordAttributeError(AttributeError):
 class OpCore:
     """The 13 required fields every journal op record carries."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     seq: int
     kind: str  # "op" | "source" | "synthetic_output"
@@ -53,7 +52,7 @@ class OpCore:
 class GraphFacet:
     """Raw graph-topology metadata beyond the core parent edges."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     parent_arg_positions: dict[str, dict[Any, str]]
     edge_uses: tuple[object, ...] = ()
@@ -68,7 +67,7 @@ class GraphFacet:
 class ModulesFacet:
     """Module containment snapshots taken at op creation."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     module_stack: tuple[object, ...] = ()
     modules: tuple[tuple[str, int], ...] = ()
@@ -78,7 +77,7 @@ class ModulesFacet:
 class AncestryFacet:
     """Exhaustive-leg ancestry unions."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     input_ancestors: frozenset[str] = frozenset()
     internal_source_ancestors: frozenset[str] = frozenset()
@@ -90,7 +89,7 @@ class AncestryFacet:
 class AutogradFacet:
     """Portable autograd metadata (never the live handle)."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     grad_fn_class_qualname: str | None = None
 
@@ -105,7 +104,7 @@ class TransformFacet:
     byte-identical parity.
     """
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     is_transform: bool = False
     transform_kind: str | None = None
@@ -121,7 +120,7 @@ class TransformFacet:
 class ControlFacet:
     """Scalar-bool control-flow observations."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     is_scalar_bool: bool | None = None
     bool_value: bool | None = None
@@ -131,7 +130,7 @@ class ControlFacet:
 class ParamsFacet:
     """Parameter participation."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     params: tuple[ParamRef, ...] = ()
     parent_params: tuple[object, ...] = ()
@@ -141,7 +140,7 @@ class ParamsFacet:
 class AnnotationsFacet:
     """First-class annotation payload (absorbs both `_tl_annotations` channels)."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     annotations: dict[str, object] = field(default_factory=dict)
 
@@ -150,7 +149,7 @@ class AnnotationsFacet:
 class PolicyFacet:
     """Capture policy, backend semantics, and stream state flags."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     backend_semantics: BackendSemantics | None = None
     policy: CapturePolicy | None = None
@@ -163,7 +162,7 @@ class PolicyFacet:
 class RecordingFacet:
     """Predicate-recording context (sparse producer, boundary retention)."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     record_context: object | None = None
     capture_spec: object | None = None
@@ -177,7 +176,7 @@ class InterventionFacet:
     ``OpEvent`` only and dies with it in S15.
     """
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     intervention_fired: bool = False
     is_edited: bool = False
@@ -236,7 +235,7 @@ FACET_DEFAULTS: dict[str, Any] = {
 class IngestExtras:
     """Record-adjacent values that are joins, not record facts."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     source_trace: object | None = None
     source_trace_id: str | None = None
@@ -249,7 +248,7 @@ class IngestExtras:
 class OpRecord:
     """One decomposed journal op record: required core + optional facets."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     core: OpCore
     function: FunctionCallRef | None = None
@@ -602,7 +601,7 @@ _FACET_ATTRIBUTES: dict[str, str] = {
 class OpAmendment:
     """One typed post-commit knowledge record targeting a committed op."""
 
-    __repr__ = short_dataclass_repr
+    __repr__ = _bounded_record_repr
 
     seq: int  # writer-stamped at append into the journal's global domain
     run_nonce: int  # matches the owning stream's run nonce at append

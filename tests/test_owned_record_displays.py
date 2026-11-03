@@ -130,3 +130,20 @@ def test_aten_records_and_event_stream_are_bounded(trace):
     assert len(repr(trace.event_stream)) <= 100
     assert len(repr(trace.event_stream.live_index)) <= 100
     assert all(len(repr(event)) <= 100 for event in trace.op_events)
+
+
+def test_trace_edit_honesty_survives_default_state(trace):
+    trace._has_direct_writes = True
+    assert "(edited)" in repr(trace)
+    assert "pristine" not in repr(trace).lower()
+    assert len(repr(trace)) <= 100
+
+
+def test_explicit_health_check_is_reused_without_a_scan(trace, monkeypatch):
+    from torchlens.report import _health
+
+    _ = trace.health_facts
+    before = dict(trace.annotations)
+    monkeypatch.setattr(_health, "_derive", lambda *args: pytest.fail("display derived health"))
+    assert "no NaN/Inf (exact)" in repr(trace)
+    assert trace.annotations == before

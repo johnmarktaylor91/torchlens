@@ -1643,6 +1643,10 @@ class Trace(TraceOutputMixin, TraceLike):
         else:
             return _str_during_pass(self)
 
+    def _repr_card_rows(self) -> list[tuple[str, str]]:
+        """Stored summary facts shared with the notebook renderer."""
+        return _doors.report()._trace_summary._trace_rows(self)
+
     def __repr__(self) -> str:
         """One-line identity and stored health; never triggers an analysis."""
 

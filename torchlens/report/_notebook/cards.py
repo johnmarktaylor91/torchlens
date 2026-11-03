@@ -34,7 +34,6 @@ from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._record_type import first_op
-from .. import _trace_summary
 from ._access import CopyRoot, resolve_copy_root
 from ._card_suppression import card_render_suppressed
 from ._grid import GridBudgets, array_grid_html
@@ -372,7 +371,7 @@ def _layer_proof(layer: Any) -> tuple[CardNode, ...]:
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
     """The same title and fact rows as ``print(trace)``, without analysis or a tree."""
 
-    rows = _trace_summary._trace_rows(trace)
+    rows = trace._repr_card_rows()
     html = (
         "<table>"
         + "".join(
@@ -381,7 +380,7 @@ def trace_card(trace: Any, *, root: str | None = None) -> Card:
         + "</table>"
     )
     return Card(
-        title=_trace_summary._trace_repr(trace),
+        title=repr(trace),
         kind="trace",
         children=(
             CardHtml(html),

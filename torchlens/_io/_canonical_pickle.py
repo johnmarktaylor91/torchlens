@@ -46,7 +46,7 @@ class _CanonicalMetadataPickler(pickle._Pickler):
     slower Python walk is a save-time-only, determinism-buying cost.
     """
 
-    dispatch = {**pickle._Pickler.dispatch, RecordTuple: pickle._Pickler.save_tuple}
+    dispatch = {**pickle._Pickler.dispatch, RecordTuple: pickle._Pickler.dispatch[tuple]}
 
     def reducer_override(self, obj: Any) -> Any:
         """Return the canonical reduction for set/frozenset, Enum members and plain tensors.

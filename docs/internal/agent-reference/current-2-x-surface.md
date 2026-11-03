@@ -579,6 +579,10 @@
   (CPU: largest pass; CUDA: device high-water growth), and `total_backward_memory` counts
   retained gradient storage once. `measure_host_peak_memory` is a session-time knob
   (`FieldPolicy.DROP`) that reruns and refreshes inherit.
+- Owned ATen and event sequences are tuple subclasses with bounded displays. Equality,
+  hashing, slicing and standalone pickling retain tuple behavior; saved artifacts encode
+  these sequences as ordinary tuples. Collection reprs show counts; `str()` shows five
+  members and the exact remaining count.
 - ATen operation recording is opt-in: `tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))`
   installs a dispatch mode for the forward (and for `backward()` with `backward_ready=True`)
   and records the ATen operations each logged torch call dispatched to as value-free `AtenOp`

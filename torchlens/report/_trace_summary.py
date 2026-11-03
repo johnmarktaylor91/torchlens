@@ -13,7 +13,7 @@ from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
 from .._data_classes.func_call_location import display_frame
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
-from .._utils._display_card import TRACE_CARD_MAX_ROWS, one_line, render_card
+from .._utils._display_card import REPR_COLS, TRACE_CARD_MAX_ROWS, one_line, render_card
 from .._utils._display_numbers import (
     format_count,
     format_duration,
@@ -259,7 +259,7 @@ def _identity(trace: Any) -> str:
     counts = [f"{format_count(layers)} layers", f"{format_count(ops)} ops"]
     for optional in ([model, *counts], counts, []):
         line = one_line(identity, [*optional, *required])
-        if len(line) <= 100 or not optional:
+        if len(line) <= REPR_COLS or not optional:
             return line
     return identity
 
