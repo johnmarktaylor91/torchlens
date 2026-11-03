@@ -44,8 +44,7 @@ def _armed_trace(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(
         model,
         x.requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
 
 
@@ -83,7 +82,6 @@ def test_int_plus_slice_box_matches_gradient_truth(padding: int) -> None:
     assert (by_axis[3].index_start, by_axis[3].index_stop) == truth[3]
 
 
-@pytest.mark.smoke_cells("test_int_plus_slice_check_and_verify_pass[1]")
 @pytest.mark.parametrize("padding", [0, 1])
 def test_int_plus_slice_check_and_verify_pass(padding: int) -> None:
     """The armed tripwire agrees with the now-honest geometry."""
@@ -223,7 +221,6 @@ def test_slice_only_same_rank_path_unchanged() -> None:
     assert (by_axis[2].index_start, by_axis[2].index_stop) == truth[2] == (4, 7)
 
 
-@pytest.mark.smoke
 def test_projective_field_respects_selected_index() -> None:
     """The reverse direction prunes source units off the selected index."""
 

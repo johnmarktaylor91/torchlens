@@ -215,6 +215,7 @@ def test_entry_seed_recorded_and_sampled_episode_reproduces():
     assert tokens_first == tokens_second  # managed recipe: bit-identical episode
 
 
+@pytest.mark.smoke
 def test_teacher_forcing_is_disclosed_non_verifying():
     model = TinyLM()
     runner = GreedyRunner(model, 3)
@@ -280,7 +281,7 @@ def test_save_none_refuses_value_mode_episode():
             GreedyRunner(model, 2),
             _prompt(),
             episode=EpisodeOptions(stepped_module=model),
-            capture=tl.options.CaptureOptions(layers_to_save="none"),
+            save="none",
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -308,8 +309,8 @@ def test_chunked_episode_refuses():
         tl.trace(
             GreedyRunner(model, 2),
             _prompt(),
-            chunk_size=1,
             episode=EpisodeOptions(stepped_module=model),
+            capture=tl.options.CaptureOptions(chunk_size=1),
         )
     assert excinfo.value.fields["code"] == "episode_declaration_invalid"
 
@@ -346,7 +347,7 @@ def test_halted_episode_ledger_discloses_truncation():
     log = tl.trace(
         runner,
         _prompt(),
-        halt=halt_after_two,
+        stop_after=halt_after_two,
         episode=EpisodeOptions(stepped_module=model, num_steps=5),
     )
     assert log.outcome.status.name == "STOPPED"
@@ -409,6 +410,7 @@ def test_tampered_episode_header_refuses_typed(header_key, header_value, code):
     assert excinfo.value.fields["code"] == code
 
 
+@pytest.mark.smoke
 def test_monotone_prefix_tamper_quarantines_fail_closed():
     log = _capture_episode(n_steps=3)
     payload = dict(log.annotations["episode"])

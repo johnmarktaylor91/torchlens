@@ -339,7 +339,11 @@ def _execute(result: CellResult, cell: Cell, tmp_path: Path) -> None:
     rng_before = rng_state()
     try:
         trace = tl.trace(
-            model, trace_args, trace_kwargs, capture=capture, **dict(cell.options.trace_kwargs)
+            model,
+            trace_args,
+            input_kwargs=trace_kwargs,
+            capture=capture,
+            **dict(cell.options.trace_kwargs),
         )
     except TorchLensError as error:
         result.trace_error = error
@@ -612,4 +616,4 @@ ORACLES: tuple[tuple[str, Callable[[CellResult], Verdict]], ...] = (
     ("torch_clean_after_cell", torch_clean_after_cell),
     ("peak_memory_within_budget", peak_memory_within_budget),
 )
-"""The six oracles in report order; ``test_stress.py`` has one test per entry."""
+"""The six oracles in report order; ``test_stress.py``'s one test per cell asks each of them."""

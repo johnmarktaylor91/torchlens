@@ -213,7 +213,6 @@ def test_plain_structure_only_truncation_cell_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
 
 
-@pytest.mark.smoke
 def test_mixed_tier_episode_folds_to_minimum() -> None:
     """The wildcard row's tier rule: episode tier = MINIMUM of member tiers."""
 

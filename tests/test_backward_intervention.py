@@ -609,6 +609,7 @@ def test_grad_fn_hook_call_index_targeting() -> None:
     assert isinstance(grad_fn_handle.calls[1].fire_record, FireRecord)
 
 
+@pytest.mark.smoke
 def test_helper_requires_grad_output_at_accumulategrad_raises_helpermounterror() -> None:
     """Helpers that require grad_output cannot mount on backward prehook sites."""
 
@@ -860,6 +861,7 @@ def test_find_sites_gradient_address_filters_by_module() -> None:
     assert len(sites) == len(trace.find_sites(tl.func("linear") & tl.in_module("encoder")))
 
 
+@pytest.mark.smoke
 def test_backward_grad_kind_and_pass_selectors_resolve_real_sites() -> None:
     """grad_input, grad_output, and in_backward_pass resolve over GradFn calls."""
 
@@ -1147,9 +1149,10 @@ def _guided_backprop_via_torchlens(model: nn.Module, x: torch.Tensor, target: in
     trace = tl.trace(
         model,
         x.clone().requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads=True, save_mode="reference"
+        ),
         intervene=guided,
-        save_mode="reference",
     )
     out = trace[trace.output_layers[0]].out
     trace.backward(out[:, target].sum(), retain_graph=True)

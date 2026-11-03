@@ -44,7 +44,7 @@ def _setup() -> tuple[nn.Module, torch.Tensor, torch.Tensor, object]:
     model = _SmallCNN().eval()
     x = torch.randn(1, 3, 8, 8)
     background = torch.randn(6, 3, 8, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     return model, x, background, log
 
 

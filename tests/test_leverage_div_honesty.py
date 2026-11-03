@@ -18,7 +18,7 @@ from torchlens._errors import InvalidArgumentError
 from torchlens._save_budget import SaveBudgetExceededError
 from torchlens.errors._base import TorchLensWarning
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _traced_toy():
@@ -33,14 +33,13 @@ def _traced_toy():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_overlay_zero_match_refuses(tmp_path):
     """A mapping that paints nothing refuses typed — never a blank success."""
 
     _, _, trace = _traced_toy()
     scores = {"s1|relu|relu||1": 1.0, "some_foreign_label": 2.0}
     with pytest.raises(InvalidArgumentError) as excinfo:
-        trace.draw(node_overlay=scores, path=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"))
     assert excinfo.value.fields["code"] == "node_overlay_zero_match"
 
 
@@ -50,7 +49,7 @@ def test_overlay_partial_match_discloses(tmp_path):
     _, _, trace = _traced_toy()
     scores = {"relu_1_2": 1.0, "not_a_real_label": 2.0}
     with pytest.warns(TorchLensWarning) as warning_records:
-        trace.draw(node_overlay=scores, path=str(tmp_path / "g"), vis_save_only=True)
+        trace.draw(node_overlay=scores, path=str(tmp_path / "g"))
     codes = {getattr(record.message, "fields", {}).get("code") for record in warning_records}
     assert "node_overlay_partial_match" in codes
 
@@ -59,12 +58,11 @@ def test_overlay_full_match_renders_silently(tmp_path, recwarn):
     """A fully-realized mapping renders without overlay warnings."""
 
     _, _, trace = _traced_toy()
-    trace.draw(node_overlay={"relu_1_2": 1.0}, path=str(tmp_path / "g"), vis_save_only=True)
+    trace.draw(node_overlay={"relu_1_2": 1.0}, path=str(tmp_path / "g"))
     codes = {getattr(record.message, "fields", {}).get("code", None) for record in recwarn.list}
     assert "node_overlay_partial_match" not in codes
 
 
-@pytest.mark.smoke
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
@@ -143,7 +141,6 @@ def test_when_refuses_raw_string_at_build():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
@@ -196,7 +193,6 @@ def test_address_preflight_classifies_and_names_equivalent():
     assert not live_only.escrowing
 
 
-@pytest.mark.smoke
 def test_address_preflight_output_and_ordinal_deferred():
     report = address_preflight(["output", 5])
     assert all(v.resolution == "deferred" for v in report.verdicts)

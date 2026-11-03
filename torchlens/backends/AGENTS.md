@@ -48,7 +48,7 @@ Protocol obligations that every backend shares:
   `python -m tests.conformance.scorecard --backend <name> --write` on the
   pinned version, never hand-edited; its docs page `docs/backends/<name>.md`
   keeps a tutorial and a can and cannot table equal to the record's capability
-  summary (`tests/test_backend_docs_lockstep.py`).
+  summary (`scripts/checks/backend_docs_lockstep.py`).
 
 ## The orchestration adapter (torch-internal)
 
@@ -74,7 +74,7 @@ implementation guides:
   (`jax/AGENTS.md`).
 - `mlx/` - eager wrapper capture with live per-op replay validation
   (`mlx/AGENTS.md`).
-- `paddle/` - eager dygraph wrapper capture with live intervene=/halt=
+- `paddle/` - eager dygraph wrapper capture with live intervene=/stop_after=
   (`paddle/AGENTS.md`).
 - `tinygrad/` - UOp-snapshot capture of an eager forward (`tinygrad/AGENTS.md`).
 

@@ -84,7 +84,7 @@ def test_content_hash_cache_hit_and_miss(tmp_path: Path) -> None:
     ("kwargs", "capture_kwargs", "saved_type"),
     [
         ({"save": tl.func("relu")}, {}, "relu"),
-        ({}, {"layers_to_save": ["relu"]}, "relu"),
+        ({"save": ["relu"]}, {}, "relu"),
     ],
 )
 def test_selective_capture_cache_preserves_unsaved_payload_contract(
@@ -129,12 +129,14 @@ def test_absorbed_layers_to_save_cache_key_is_stable(tmp_path: Path) -> None:
     first = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path),
+        save=["relu"],
     )
     second = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path, layers_to_save=["relu"]),
+        capture=tl.options.CaptureOptions(cache=True, cache_dir=tmp_path),
+        save=["relu"],
     )
 
     assert first.provenance.cache_key == second.provenance.cache_key
@@ -277,7 +279,11 @@ def test_trace_reference_save_mode_raises_if_saved_out_mutates(
 
     monkeypatch.setattr(op_save_module, "_WARNED_REFERENCE_SAVE_MODE", False)
     with pytest.warns(UserWarning, match="save_mode='reference'"):
-        log = tl.trace(torch.nn.ReLU(), torch.ones(1, 2), save_mode="reference")
+        log = tl.trace(
+            torch.nn.ReLU(),
+            torch.ones(1, 2),
+            capture=tl.options.CaptureOptions(save_mode="reference"),
+        )
     op = next(layer for layer in log._layer_list if layer.func_name == "relu")
     saved_out = op._slot("out")
 
@@ -298,7 +304,9 @@ def test_trace_reference_save_mode_copies_known_inplace_ops() -> None:
 
             return x.clone().relu_()
 
-    log = tl.trace(InplaceRelu(), torch.ones(1, 2), save_mode="reference")
+    log = tl.trace(
+        InplaceRelu(), torch.ones(1, 2), capture=tl.options.CaptureOptions(save_mode="reference")
+    )
     op = next(layer for layer in log._layer_list if layer.func_name == "relu_")
     saved_out = op._slot("out")
 
@@ -330,7 +338,11 @@ def test_trace_reference_save_mode_keeps_dunder_op_outputs_by_reference() -> Non
     seen: dict[str, torch.Tensor] = {}
     handle = model.register_forward_hook(lambda m, i, out: seen.__setitem__("out", out))
     try:
-        log = tl.trace(model, torch.ones(1, 2, requires_grad=True), save_mode="reference")
+        log = tl.trace(
+            model,
+            torch.ones(1, 2, requires_grad=True),
+            capture=tl.options.CaptureOptions(save_mode="reference"),
+        )
     finally:
         handle.remove()
     add_op = next(layer for layer in log._layer_list if layer.func_name == "__add__")
@@ -355,7 +367,9 @@ def test_trace_reference_save_mode_copies_inplace_dunder_outputs() -> None:
             y += 1
             return y
 
-    log = tl.trace(AugmentedAdd(), torch.ones(1, 2), save_mode="reference")
+    log = tl.trace(
+        AugmentedAdd(), torch.ones(1, 2), capture=tl.options.CaptureOptions(save_mode="reference")
+    )
     op = next(layer for layer in log._layer_list if layer.func_name in {"__iadd__", "add_"})
 
     assert "save_mode" not in op.annotations
@@ -366,7 +380,11 @@ def test_trace_view_save_mode_keeps_saved_out_grad_connected() -> None:
     """View mode keeps saved activation payloads on the autograd graph."""
 
     model = torch.nn.Linear(2, 2)
-    log = tl.trace(model, torch.ones(1, 2, requires_grad=True), save_mode="view")
+    log = tl.trace(
+        model,
+        torch.ones(1, 2, requires_grad=True),
+        capture=tl.options.CaptureOptions(save_mode="view"),
+    )
     op = next(layer for layer in log._layer_list if layer.func_name == "linear")
 
     assert op.out.requires_grad is True

@@ -24,10 +24,9 @@ import warnings
 from collections.abc import Callable, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
-import graphviz
-
 from .._errors import InvalidArgumentError
 from .._utils.display import user_stacklevel
+from ._render_names import DEFAULT_DRAW_STEM  # noqa: F401  (spelling kept for importers)
 
 #: Live viewer child handles (r-b6 R40-1). Retained so every launch can reap
 #: previously-exited viewers; without this the discarded ``Popen`` handle left
@@ -146,7 +145,7 @@ def _open_file_quietly(filepath: str, *, announce_headless: bool = False) -> boo
 
 
 if TYPE_CHECKING:
-    pass
+    import graphviz
 
 
 # Recognised file extensions that callers may include on ``vis_outpath``.
@@ -254,10 +253,6 @@ def relativize_visualizer_image(path: str) -> str:
     if separator_index == -1:
         return path
     return path[separator_index + 1 :]
-
-
-#: Stem a bare ``Trace.draw()`` (no ``vis_outpath``) writes under.
-DEFAULT_DRAW_STEM = "modelgraph"
 
 
 def collision_safe_outpath(stem: str, fileformat: str) -> str:

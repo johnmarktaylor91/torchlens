@@ -75,11 +75,10 @@ def test_speed_resolves_per_pass_member_on_unrolled(mlp_log: Any) -> None:
     assert any(line.startswith("coverage: encoded") for line in resolution.disclosure)
 
 
-@pytest.mark.smoke
 def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
     """Rolled speed binds total_func_duration WITH the aggregation line."""
 
-    resolution = lenses.resolve_lens(mlp_log, "speed", {"vis_mode": "rolled"})
+    resolution = lenses.resolve_lens(mlp_log, "speed", {"rolled": True})
     assert resolution.source is not None
     assert resolution.source.member == "total_func_duration"
     assert any("total across passes" in line for line in resolution.disclosure)
@@ -97,7 +96,6 @@ def test_speed_resolves_summed_member_on_rolled(mlp_log: Any) -> None:
             "total_func_duration",
             "lens_source_zero_coverage",
             id="one_view_zero_coverage_names_the_zero_coverage_code",
-            marks=pytest.mark.smoke,
         ),
     ],
 )
@@ -192,7 +190,6 @@ def test_budget_search_is_deterministic_and_disclosed() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_overview_budget_rides_resolution(mlp_log: Any) -> None:
     """Overview (collapse='auto') routes through the resolver and discloses."""
 
@@ -201,7 +198,6 @@ def test_overview_budget_rides_resolution(mlp_log: Any) -> None:
     assert any("detail dial" in line for line in resolution.disclosure)
 
 
-@pytest.mark.smoke
 def test_band_missed_warns_coded_and_discloses(mlp_log: Any, monkeypatch: Any) -> None:
     """No schedule point in the band: nearest point served with the coded warning."""
 
@@ -221,16 +217,17 @@ def test_band_missed_warns_coded_and_discloses(mlp_log: Any, monkeypatch: Any) -
     assert any("band missed" in line for line in budget.disclosure)
 
 
-@pytest.mark.smoke
 def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> None:
     """Above the optimizer ceiling with no in-band depth: estimate served, coded."""
 
     import warnings as warnings_module
 
-    from torchlens._visualization import collapse_optimizer
+    from torchlens._visualization import _render_names, collapse_optimizer
 
     # A tiny trace over a lowered ceiling: no call depth reaches the 100-220
     # band, so the nearest-depth estimate is served with the coded warning.
+    # The lens budget reads the ceiling from its leaf home; lower it in both.
+    monkeypatch.setattr(_render_names, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
     monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 1)
     with warnings_module.catch_warnings(record=True) as caught:
         warnings_module.simplefilter("always")
@@ -238,7 +235,7 @@ def test_above_ceiling_fallback_warns_coded(mlp_log: Any, monkeypatch: Any) -> N
     codes = [getattr(w.message, "fields", {}).get("code") for w in caught]
     assert "lens_budget_above_ceiling_fallback" in codes
     assert not budget.in_band
-    assert "vis_call_depth" in budget.dial
+    assert "depth" in budget.dial
     assert any("estimate" in line for line in budget.disclosure)
 
 

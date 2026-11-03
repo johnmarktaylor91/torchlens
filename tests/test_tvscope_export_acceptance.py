@@ -76,7 +76,7 @@ def artifact(tmp_path):
         stimulus_ids=[f"img{i}" for i in range(4)],
         progress=False,
     )
-    trace = tl.trace(model, stimuli, capture=tl.options.CaptureOptions(layers_to_save=["conv"]))
+    trace = tl.trace(model, stimuli, save=["conv"])
     return out_dir, trace
 
 
@@ -141,9 +141,7 @@ class TestSiteMatrixRoutes:
         """A metadata-only trace teaches how to get payloads."""
 
         model = _SmallCNN().eval()
-        trace = tl.trace(
-            model, torch.rand(2, 3, 8, 8), capture=tl.options.CaptureOptions(layers_to_save="none")
-        )
+        trace = tl.trace(model, torch.rand(2, 3, 8, 8), save="none")
         with pytest.raises(torchlens.errors.FeatureShapingError) as excinfo:
             features.site_matrix(trace, "conv")
         assert excinfo.value.fields["code"] == "feature_site_payload_unavailable"
@@ -172,7 +170,6 @@ class TestSiteMatrixRoutes:
 class TestAdapters:
     """Stub-tested adapter wiring (optional libraries absent by design)."""
 
-    @pytest.mark.smoke
     def test_rsatoolbox_per_site_descriptors(self, artifact, monkeypatch) -> None:
         """The Dataset carries site, shaping, ids, and the verdict."""
 
@@ -207,7 +204,6 @@ class TestAdapters:
         ]
         assert file_side.descriptors["input_preprocessing_verdict"] == "unknown"
 
-    @pytest.mark.smoke
     def test_xarray_data_array_routes_identical(self, artifact, monkeypatch) -> None:
         """DataArray wiring: dims, coords, attrs, route equality."""
 

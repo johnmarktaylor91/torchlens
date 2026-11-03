@@ -62,6 +62,7 @@ from ._runtime_sites import (
     _site_name,
     _whole_call_site_view,
 )
+from ._zero_fire import note_capture_rule_fired
 from .audit import build_fire_record
 from .errors import HookSignatureError, HookValueError
 from .hooks import (
@@ -575,6 +576,7 @@ def _apply_live_hooks(
                 trace._tl_intervene_selector_fire_count = (
                     int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + 1
                 )
+            note_capture_rule_fired(entry_rule_id)
         current_out = result
     return current_out, tuple(fire_results)
 
@@ -670,8 +672,30 @@ def _has_matching_input_routed_intervention(
     intervene = None if options is None else getattr(options, "intervene", None)
     if intervene is None:
         return False
-    selector = getattr(intervene, "selector", None)
-    decision = getattr(intervene, "decision", None)
+    return any(
+        _rule_may_route_inputs(selector, decision, site)
+        for selector, decision in _intervene_selector_decisions(intervene)
+    )
+
+
+def _intervene_selector_decisions(intervene: Any) -> list[tuple[Any, Any]]:
+    """Return ``(selector, decision)`` for every rule of a capture ``intervene=``.
+
+    A public spec contributes every rule; its single-rule ``.selector`` /
+    ``.decision`` view is ``None`` on a multi-clause spec, and reading only
+    that view skipped the in-place input snapshot for every rule.
+    """
+
+    from .spec import Recipe
+
+    if isinstance(intervene, Recipe):
+        return [(rule.target, rule.decision) for rule in intervene.rules]
+    return [(getattr(intervene, "selector", None), getattr(intervene, "decision", None))]
+
+
+def _rule_may_route_inputs(selector: Any, decision: Any, site: Any) -> bool:
+    """Return whether one ``intervene=`` rule may route the current op's inputs."""
+
     hook = None if decision is None else getattr(decision, "hook", None)
     if selector is None or hook is None:
         return False

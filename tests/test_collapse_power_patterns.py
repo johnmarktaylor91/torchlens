@@ -98,7 +98,6 @@ def test_parse_expands_repetition_and_inlines_names() -> None:
     ]
 
 
-@pytest.mark.smoke
 def test_parse_refusals_are_typed() -> None:
     """Syntax refusals carry stable codes and remedies."""
 
@@ -136,7 +135,6 @@ def test_matches_fold_and_disclose(cbr_trace) -> None:
         assert "more" not in descriptor.label
 
 
-@pytest.mark.smoke
 def test_residual_interior_edge_refuses_and_is_counted() -> None:
     """A skip reading the interior refuses THAT instance, counted."""
 
@@ -152,7 +150,6 @@ def test_residual_interior_edge_refuses_and_is_counted() -> None:
     assert "pattern_fold_refusals" in codes
 
 
-@pytest.mark.smoke
 def test_unknown_token_near_miss_and_no_match_warn(cbr_trace) -> None:
     """Unknown atoms suggest near misses; no-match patterns warn once."""
 
@@ -166,7 +163,6 @@ def test_unknown_token_near_miss_and_no_match_warn(cbr_trace) -> None:
     assert {"pattern_token_unknown", "pattern_no_match"} <= codes
 
 
-@pytest.mark.smoke
 def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> None:
     """The pattern-only view renders chips; auto+patterns refuses typed."""
 
@@ -175,16 +171,14 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
         dot = cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     assert dot.count("PATTERN 'ConvBnRelu'") == 3
     with pytest.raises(InvalidArgumentError) as excinfo:
         cbr_trace.draw(
             collapse="auto",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
             file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_collapse_combination_unsupported"
@@ -193,13 +187,10 @@ def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> 
 def test_patterns_default_off(cbr_trace) -> None:
     """No fold_patterns argument means zero chips (memo D11: default off)."""
 
-    dot = cbr_trace.draw(
-        collapse="none", vis_save_only=True, file_format="dot", order_siblings=False
-    )
+    dot = cbr_trace.draw(collapse="none", file_format="dot", order_siblings=False).dot
     assert "PATTERN" not in dot
 
 
-@pytest.mark.smoke
 def test_idiomatic_preset_parses_and_matches(cbr_trace) -> None:
     """The curated preset is available (off by default) and matches CBR."""
 
@@ -211,6 +202,7 @@ def test_idiomatic_preset_parses_and_matches(cbr_trace) -> None:
     assert report.folded.get("ConvBnRelu")
 
 
+@pytest.mark.smoke
 def test_reserved_text_grammar_lint(cbr_trace) -> None:
     """Reserved markers mean exactly one thing graph-wide (memo D10).
 
@@ -225,10 +217,9 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
         dot = cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_save_only=True,
             file_format="dot",
             order_siblings=False,
-        )
+        ).dot
     pattern_lines = [line for line in dot.splitlines() if "PATTERN" in line]
     assert len(pattern_lines) == 3
     for line in pattern_lines:
@@ -236,7 +227,6 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
         assert "more" not in line
 
 
-@pytest.mark.smoke
 def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
     """Chips fail closed on the rank backend (pre-existing __segment__ gap)."""
 
@@ -244,8 +234,7 @@ def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
         cbr_trace.draw(
             collapse="none",
             fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            vis_node_placement="rank",
-            vis_save_only=True,
+            layout="rank",
             file_format="dot",
         )
     assert excinfo.value.fields["code"] == "pattern_rank_layout_unsupported"

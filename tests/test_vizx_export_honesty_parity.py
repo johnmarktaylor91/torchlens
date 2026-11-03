@@ -1,4 +1,4 @@
-"""Export honesty parity lockstep (R2-11, N-VZ-4).
+"""Export honesty parity lockstep.
 
 Every capture-honesty fact ``torchlens._capture_honesty.capture_honesty_facts``
 emits must reach every graph and agent surface -- draw, svg, html, Model
@@ -219,7 +219,7 @@ class _Writer:
 def _draw(trace: tl.Trace, tmp: Path) -> str:
     """The draw caption source (DOT)."""
 
-    return str(trace.draw(vis_save_only=True))
+    return str(trace.draw().dot)
 
 
 def _svg(trace: tl.Trace, tmp: Path) -> str:

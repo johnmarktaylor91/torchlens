@@ -156,7 +156,6 @@ def test_docs_state_the_moe_grouping_truth() -> None:
     assert "OCCURRENCE counters" in doc
 
 
-@pytest.mark.smoke
 def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
     """Resolving a pass window on an episode capture discloses k and n, coded."""
 
@@ -180,7 +179,6 @@ def test_disclosure_fires_with_both_counts(episode_log: tl.Trace) -> None:
     assert [entry.key for entry in entries] == [(label, 1), (label, 2)]
 
 
-@pytest.mark.smoke
 def test_disclosure_covers_stable_across_passes(episode_log: tl.Trace) -> None:
     """The sibling cross-pass producer makes the same claim and discloses too."""
 

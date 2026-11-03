@@ -114,7 +114,6 @@ def test_parameter_and_plain_tensor_annotations_round_trip(tmp_path: Path) -> No
     torch.testing.assert_close(restored, torch.ones(2))
 
 
-@pytest.mark.smoke
 def test_sanitize_rebuilds_containers_and_keeps_plain_tensors_by_identity() -> None:
     plain = torch.zeros(2)
     tagged = torch.ones(2)
@@ -141,7 +140,6 @@ def test_preflight_returns_bytes_the_loader_reads() -> None:
     assert _RenameAwareUnpickler(io.BytesIO(data)).load() == state
 
 
-@pytest.mark.smoke
 def test_preflight_names_metadata_paths_outside_annotations() -> None:
     state = {"tlspec_version": 9, "some_field": [1, {"deep": _UserObject()}]}
     with pytest.raises(ArtifactError) as excinfo:
@@ -179,6 +177,7 @@ class _HostileTensor(torch.Tensor):
         raise RuntimeError("hostile detach")
 
 
+@pytest.mark.smoke
 def test_hostile_tensor_subclass_passes_through_sanitizer_and_refuses_typed(
     tmp_path: Path,
 ) -> None:
@@ -201,7 +200,6 @@ def test_hostile_tensor_subclass_passes_through_sanitizer_and_refuses_typed(
     assert exc.fields["field"] == "Trace.annotations['user']['t']"
 
 
-@pytest.mark.smoke
 def test_locate_names_whole_state_when_every_part_is_portable_alone() -> None:
     """The culprit walk's fallback: no single part fails, so the whole state is named."""
 

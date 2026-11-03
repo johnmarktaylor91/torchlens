@@ -59,11 +59,11 @@ def _ids(rows: int, seed: int) -> torch.Tensor:
 def _trace(model: nn.Module, ids: torch.Tensor, mask: torch.Tensor | None = None) -> Any:
     """Trace with every layer saved, passing the mask as an input when given."""
 
-    capture = tl.options.CaptureOptions(layers_to_save="all")
+    capture = tl.options.CaptureOptions()
     if mask is None:
-        return tl.trace(model, ids, capture=capture)
+        return tl.trace(model, ids, capture=capture, save="all")
     kwargs = {"input_ids": ids, "attention_mask": mask}
-    return tl.trace(model, (), input_kwargs=kwargs, capture=capture)
+    return tl.trace(model, (), input_kwargs=kwargs, capture=capture, save="all")
 
 
 def _hooked_rows(
@@ -222,6 +222,7 @@ def test_padded_rows_read_the_last_real_token(stack: dict[str, Any]) -> None:
     assert torch.equal(direction.vector, (rows[0] - rows[1]).mean(dim=0))
 
 
+@pytest.mark.smoke
 def test_steer_edit_adds_the_scaled_vector(stack: dict[str, Any]) -> None:
     """``direction.steer(m)`` placed at the site adds ``m * vector`` to its output."""
 
@@ -356,7 +357,7 @@ def test_reader_refusals(stack: dict[str, Any]) -> None:
     unsaved = tl.trace(
         stack["model"],
         stack["pos_ids"],
-        capture=tl.options.CaptureOptions(layers_to_save=["head"]),
+        save=["head"],
     )
     try:
         assert _code(lambda: fit_direction(unsaved, stack["neg"], _SITE)) == (

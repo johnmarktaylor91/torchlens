@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
 from .errors import ReplayPreconditionError
 
@@ -67,8 +68,8 @@ def _no_func_message(site: Op, *, loaded: bool) -> str:
     return (
         f"{site.layer_label!r} has no func for replay: this trace was loaded from a saved "
         "file, and a save keeps no capture-time callables or argument templates, so edits "
-        "cannot be replayed on it. Edit a trace captured in this process with "
-        "CaptureOptions(replayable=True), or rerun the model with the edit staged: "
+        "cannot be replayed on it. Edit a trace captured in this process "
+        "(tl.trace(model, inputs)), or rerun the model with the edit staged: "
         "trace.run(model, inputs)"
     )
 
@@ -85,13 +86,21 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     -------
     str | None
         The refusal message for the first unmet precondition (a completed
-        capture, then ``replayable=True`` metadata), or None.
+        capture, then per-op argument templates), or None.
     """
 
     if not getattr(log, "_tracing_finished", False):
         return "replay requires a completed Trace"
-    if not getattr(log, "is_replayable", False):
-        return "replay requires replayable=True capture metadata"
+    if not (
+        getattr(log, "is_replayable", False)
+        or getattr(getattr(log, "options", None), "save_arg_templates", False)
+    ):
+        return (
+            "replay requires per-op argument templates, and this trace has none (a "
+            "tl.record recording keeps none; every tl.trace capture records them); "
+            "capture with tl.trace(model, inputs), or rerun the model with the edit staged: "
+            "trace.do(site, edit, model=model, inputs=inputs)"
+        )
     return None
 
 
@@ -389,4 +398,48 @@ def _buffer_write_corroborated(captured_site: object, captured_producer: object)
         and isinstance(captured_producer, torch.Tensor)
         and captured_site.shape == captured_producer.shape
         and bool(torch.equal(captured_site, captured_producer))
+    )
+
+
+def _parent_value(
+    parent: Op,
+    pass_log: Op,
+    overlay: dict[str, torch.Tensor],
+    differentiable_frontier: dict[str, torch.Tensor] | None,
+) -> torch.Tensor:
+    """Return the value ``pass_log`` reads from ``parent`` during replay.
+
+    In order: the replay overlay, the version of the parent this child saw at
+    capture (``out_versions_by_child``), then the parent's saved out; a
+    differentiable replay reads the latter two through frontier leaves.
+    """
+
+    parent_key = _replay_site_key(parent)
+    if parent_key in overlay:
+        return overlay[parent_key]
+    versions = getattr(parent, "out_versions_by_child", {}) or {}
+    child_spelling = next(
+        (
+            spelling
+            for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
+            if spelling in versions
+        ),
+        None,
+    )
+    if child_spelling is not None:
+        version = versions[child_spelling]
+        if isinstance(version, torch.Tensor):
+            if differentiable_frontier is not None:
+                return _frontier_leaf(
+                    differentiable_frontier,
+                    f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
+                    version,
+                )
+            return version
+    if isinstance(parent.out, torch.Tensor):
+        if differentiable_frontier is not None:
+            return _frontier_leaf(differentiable_frontier, _disclosure_label(parent), parent.out)
+        return parent.out
+    raise ReplayPreconditionError(
+        f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
     )

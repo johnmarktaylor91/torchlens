@@ -208,7 +208,6 @@ def test_deep_sweep_distilgpt2(impl, r0_capture):
     _deep_sweep("distilgpt2", impl, r0_capture)
 
 
-@pytest.mark.smoke_cells("test_deep_sweep_llama[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_llama(impl, r0_capture):
     _deep_sweep("llama", impl, r0_capture)
@@ -219,19 +218,16 @@ def test_deep_sweep_qwen2(impl, r0_capture):
     _deep_sweep("qwen2", impl, r0_capture)
 
 
-@pytest.mark.smoke_cells("test_deep_sweep_albert[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_albert(impl, r0_capture):
     _deep_sweep("albert", impl, r0_capture)
 
 
-@pytest.mark.smoke
 @BOTH_IMPLS
 def test_deep_sweep_distilbert(impl, r0_capture):
     _deep_sweep("distilbert", impl, r0_capture)
 
 
-@pytest.mark.smoke_cells("test_deep_sweep_bert[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_bert(impl, r0_capture):
     _deep_sweep("bert", impl, r0_capture)
@@ -247,19 +243,16 @@ def test_deep_sweep_vit(impl, r0_capture):
     _deep_sweep("vit", impl, r0_capture)
 
 
-@pytest.mark.smoke_cells("test_deep_sweep_clip[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_clip(impl, r0_capture):
     _deep_sweep("clip", impl, r0_capture)
 
 
-@pytest.mark.smoke_cells("test_deep_sweep_whisper[sdpa]")
 @BOTH_IMPLS
 def test_deep_sweep_whisper(impl, r0_capture):
     _deep_sweep("whisper", impl, r0_capture)
 
 
-@pytest.mark.smoke
 @EAGER_ONLY
 def test_deep_sweep_mamba(impl, r0_capture):
     _deep_sweep("mamba", impl, r0_capture)
@@ -381,6 +374,7 @@ def test_logit_lens_true_oracle_final_layer_equals_model_logits(r0_capture):
     )
 
 
+@pytest.mark.smoke_cells("test_structural_fixture_traces_faithfully[train-bn]")
 @pytest.mark.parametrize("fixture_name", STRUCTURAL_FIXTURES)
 def test_structural_fixture_traces_faithfully(fixture_name):
     import torchlens as tl
@@ -396,9 +390,9 @@ def test_structural_fixture_traces_faithfully(fixture_name):
             model.bn.reset_running_stats()
             baseline = model.bn.running_mean.clone()
         # The train-bn cell measures capture-time mutation, so it opts into
-        # forward-equivalent state (a default capture is a pure observer, U40.1).
+        # forward-equivalent state (a default capture is a pure observer).
         capture = tl.options.CaptureOptions(carry_state=fixture_name == "train-bn")
-        trace = tl.trace(model, args, kwargs, capture=capture)
+        trace = tl.trace(model, args, input_kwargs=kwargs, capture=capture)
     assert trace.outcome.status.name == "COMPLETE"
     if fixture_name == "container-output":
         leaves = [op.out for op in trace.output_ops]

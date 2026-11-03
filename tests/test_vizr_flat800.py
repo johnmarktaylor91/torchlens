@@ -1,4 +1,4 @@
-"""Execution check for the big-model render default on a flat 800-layer model (U07.4).
+"""Execution check for the big-model render default on a flat 800-layer model.
 
 The ruling asks for one execution check before launch copy claims a readable
 default on big models. The check runs the default route (the quickstart
@@ -27,7 +27,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens._quickstart import render
+from torchlens._quickstart import draw as render
 from torchlens.errors._base import TorchLensWarning
 
 #: Wall budget for the whole default render (capture included), seconds.
@@ -51,7 +51,7 @@ def test_flat_800_layer_default_render_within_budget(tmp_path: Path) -> None:
     with warnings.catch_warnings(record=True) as records:
         warnings.simplefilter("always")
         started = time.perf_counter()
-        result = render(_flat_model(), torch.randn(2, 16), file=target, format="svg")
+        result = render(_flat_model(), torch.randn(2, 16), path=target, file_format="svg")
         elapsed = time.perf_counter() - started
     assert elapsed < FLAT_800_TIME_BUDGET_S, f"default render took {elapsed:.1f} s"
     assert target.is_file() and target.stat().st_size > 0

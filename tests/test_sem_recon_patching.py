@@ -151,7 +151,6 @@ def test_attribution_patch_works_on_parameterized_model() -> None:
         assert param.grad is None, name
 
 
-@pytest.mark.smoke
 def test_guard_restores_preexisting_param_grads() -> None:
     """A caller's pre-existing .grad survives the helper unchanged."""
 
@@ -222,7 +221,6 @@ def test_fire_ledger_refuses_never_fired() -> None:
     assert never_fired_exc.value.fields["code"] == "patch_ineffective"
 
 
-@pytest.mark.smoke
 def test_fire_ledger_refuses_all_refused_replacements() -> None:
     """Fires whose every replacement was refused (replaced=False) must refuse.
 
@@ -308,7 +306,6 @@ def test_partially_identical_campaign_stays_silent() -> None:
         tl.facets.patching.activation_patch_attention_heads(model, clean, corrupted, _metric)
 
 
-@pytest.mark.smoke
 def test_user_capture_composes_required_fields() -> None:
     """mikit F7: a user capture= no longer drops the helper's required fields.
 
@@ -331,12 +328,12 @@ def test_user_capture_composes_required_fields() -> None:
 
 @pytest.mark.smoke
 def test_explicitly_conflicting_capture_refuses_typed() -> None:
-    with pytest.raises(ValueError, match="require capture options"):
+    with pytest.raises(ValueError, match="require save"):
         tl.facets.patching.activation_patch_attention_output(
             ParamToy(),
             *_inputs(),
             _metric,
-            trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save=["block"])},
+            trace_kwargs={"save": ["block"]},
         )
 
 
@@ -349,6 +346,6 @@ def test_explicit_matching_capture_passes() -> None:
         clean,
         corrupted,
         _metric,
-        trace_kwargs={"capture": tl.options.CaptureOptions(layers_to_save="all", save_args=True)},
+        trace_kwargs={"capture": tl.options.CaptureOptions(save_args=True)},
     )
     assert table.shape == (1,)

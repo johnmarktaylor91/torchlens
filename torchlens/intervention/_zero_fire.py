@@ -39,6 +39,8 @@ __all__ = (
     "NON_TENSOR_MODULE_OUTPUT_REASON",
     "ZERO_FIRE_POLICIES",
     "ZeroFirePolicy",
+    "capture_rule_fire_ledger",
+    "note_capture_rule_fired",
     "zero_fire_policy_scope",
     "check_zero_fire_policy",
     "current_zero_fire_policy",
@@ -296,6 +298,51 @@ def zero_fire_policy_scope(value: object | None) -> Iterator[None]:
         yield
     finally:
         _CAPTURE_POLICY.reset(token)
+
+
+#: Rule ids of the public-spec ``intervene=`` rules that fired during the capture
+#: in progress (``None`` outside a capture). Zero-fire settlement reads it per rule
+#: IDENTITY: action reprs collide for same-named closures and never match a fire
+#: record's rendering of a callable, so a repr comparison both hid a real zero and
+#: reported a fired rule as unfired.
+_CAPTURE_FIRED_RULES: ContextVar[set[str] | None] = ContextVar(
+    "torchlens_capture_fired_rules", default=None
+)
+
+
+@contextmanager
+def capture_rule_fire_ledger() -> Iterator[set[str]]:
+    """Open the per-capture ledger of fired ``intervene=`` rule ids.
+
+    Yields
+    ------
+    set[str]
+        The live set the capture's intervention doors add rule ids to; read it
+        after the forward to settle zero-fire per rule.
+    """
+
+    fired: set[str] = set()
+    token = _CAPTURE_FIRED_RULES.set(fired)
+    try:
+        yield fired
+    finally:
+        _CAPTURE_FIRED_RULES.reset(token)
+
+
+def note_capture_rule_fired(rule_id: object) -> None:
+    """Record that the capture-time ``intervene=`` rule ``rule_id`` fired at a site.
+
+    Parameters
+    ----------
+    rule_id:
+        The fired rule's id (``decision.rule_id`` or a lowered entry's
+        ``rule_id``); ``None`` (a non-spec request) and calls outside a capture
+        ledger record nothing.
+    """
+
+    fired = _CAPTURE_FIRED_RULES.get()
+    if fired is not None and isinstance(rule_id, str):
+        fired.add(rule_id)
 
 
 def current_zero_fire_policy() -> ZeroFirePolicy:

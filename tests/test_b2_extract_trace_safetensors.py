@@ -1,4 +1,4 @@
-"""Safetensors export of a Trace (R2-08, lane EXTRACT).
+"""Safetensors export of a Trace.
 
 ``tl.export.safetensors(trace, path)`` writes one pickle-free safetensors
 file and ``tl.io.read_safetensors(path)`` reads it back: every saved payload
@@ -48,7 +48,7 @@ def _trace() -> Any:
     """Capture the net with every activation saved."""
 
     x = torch.randn(3, 6, generator=torch.Generator().manual_seed(2))
-    return tl.trace(_Net().eval(), x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(_Net().eval(), x, save="all")
 
 
 def _same(left: Any, right: Any) -> bool:

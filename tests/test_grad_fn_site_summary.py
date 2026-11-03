@@ -37,8 +37,7 @@ def _backward_trace(model: nn.Module | None = None) -> tl.Trace:
     trace = tl.trace(
         model if model is not None else _ReusedModule(),
         torch.randn(3, 4),
-        save_mode="reference",
-        capture=tl.options.CaptureOptions(backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace.output_ops[0].out.sum())
     return trace
@@ -61,7 +60,6 @@ def test_rollup_groups_reused_module_calls_under_one_site() -> None:
         assert entry["pass_coverage"] == tuple(sorted(entry["pass_coverage"]))
 
 
-@pytest.mark.smoke
 def test_rollup_carries_live_timing_evidence() -> None:
     trace = _backward_trace()
     summary = trace.grad_fn_site_summary

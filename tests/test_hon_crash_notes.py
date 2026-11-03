@@ -1,4 +1,4 @@
-"""U30.2: every crash-note site goes through the guarded helper.
+"""Every crash-note site goes through the guarded helper.
 
 ``BaseException.add_note`` exists from Python 3.11; on 3.10 the six crash-note
 sites used a bare ``exc.add_note(...)`` inside a blanket suppress, so the note
@@ -190,7 +190,7 @@ def test_nonfinite_prefix_failure_note_appears(monkeypatch: pytest.MonkeyPatch) 
         lambda: tl.trace(
             _NaNModel(),
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(raise_on_nan=True),
+            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
         ),
         Exception,
     )

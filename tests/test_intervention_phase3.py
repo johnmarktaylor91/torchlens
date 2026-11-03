@@ -122,7 +122,6 @@ def test_phase3_helpers_import_and_return_specs() -> None:
     assert helper_specs[-2].signal == "forward"
 
 
-@pytest.mark.smoke
 def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
     """Projecting onto a vector direction computes one coefficient per sample."""
 
@@ -220,7 +219,6 @@ def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
     assert selected.labels() == ()
 
 
-@pytest.mark.smoke
 def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
     """Normalizer fails closed on ambiguous bare hooks and bad signatures."""
 
@@ -235,7 +233,6 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
         normalize_hook_plan((tl.label("x"), bad_hook))
 
 
-@pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
     """Hook execution validates return values by default; None leaves the value unchanged."""
 
@@ -278,7 +275,6 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
         _execute_hook(device_hook, out, context)
 
 
-@pytest.mark.smoke
 def test_force_shape_change_allows_metadata_changes() -> None:
     """The escape hatch byops dtype/device/shape checks."""
 
@@ -295,7 +291,6 @@ def test_force_shape_change_allows_metadata_changes() -> None:
     assert result.dtype == torch.float64
 
 
-@pytest.mark.smoke
 def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     """Stochastic helper RNG follows the Phase 3 policy."""
 
@@ -339,7 +334,6 @@ def test_splice_module_dtype_error_is_specific() -> None:
         hook(torch.ones(2, 3), ctx=_context_with_args(torch.ones(2, 3)))
 
 
-@pytest.mark.smoke
 def test_splice_module_default_replaces_with_module_on_input() -> None:
     """splice_module defaults to documented input-splice semantics."""
 
@@ -361,6 +355,7 @@ def test_splice_module_default_replaces_with_module_on_input() -> None:
     assert not torch.equal(result, 100 * original_output)
 
 
+@pytest.mark.smoke
 def test_splice_module_forwards_full_input_signature() -> None:
     """Input-splice helpers receive all positional and keyword inputs."""
 
@@ -529,8 +524,7 @@ def test_module_scoped_splice_records_replacement_parent_and_fire_record(tmp_pat
         collapse="none",
         path=str(tmp_path / "module_splice"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     assert rendered is not None
 
 

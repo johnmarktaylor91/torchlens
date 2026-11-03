@@ -56,7 +56,7 @@ def _full_trace(n_stimuli: int = 6) -> tl.Trace:
     torch.manual_seed(0)
     model = _BNModel().eval()
     x = torch.randn(n_stimuli, 3, 8, 8)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 def _matrices() -> dict[str, np.ndarray]:
@@ -183,7 +183,7 @@ class _Recurrent(nn.Module):
 
 @pytest.mark.heavy
 def test_u24_2_rdm_evolution_expands_recurrent_passes_like_rdms() -> None:
-    """U24.2: both doors expand a recurrent layer into the same per-pass RDMs."""
+    """Both doors expand a recurrent layer into the same per-pass RDMs."""
 
     torch.manual_seed(0)
     log = tl.trace(_Recurrent(), torch.randn(7, 5), save=tl.func("linear"))
@@ -200,7 +200,7 @@ def test_u24_2_rdm_evolution_expands_recurrent_passes_like_rdms() -> None:
 
 @pytest.mark.heavy
 def test_u56_3_source_mode_records_similarity_repository_id() -> None:
-    """U56.3: source mode names the RDM variant; a metric without one omits it."""
+    """Source mode names the RDM variant; a metric without one omits it."""
 
     log = _full_trace()
     with warnings.catch_warnings():
@@ -330,7 +330,7 @@ def test_source_mode_inconsistent_row_counts_refuse() -> None:
     log = tl.trace(
         TwoStream().eval(),
         (torch.randn(6, 3), torch.randn(4, 3)),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     with pytest.raises(NeuroHandoffError) as excinfo, warnings.catch_warnings():
         warnings.simplefilter("ignore")

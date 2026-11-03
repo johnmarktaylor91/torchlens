@@ -109,7 +109,6 @@ def test_switch_records_rows_and_each_op_serves_its_own() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_switch_off_refuses_typed_and_reports_no_rows() -> None:
     """The default capture records nothing and every accessor refuses typed."""
 
@@ -220,6 +219,7 @@ def test_intervention_capture_with_the_switch_passes_invariants() -> None:
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.smoke
 def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     """Backward rows append after the forward rows and keep their phase."""
 
@@ -227,8 +227,9 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     trace = tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, aten_ops=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, aten_ops=True, save_mode="reference"
+        ),
     )
     forward_count = len(trace.aten_ops)
     trace.log_backward(trace.output_ops[0].out.sum())
@@ -240,6 +241,7 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
     assert check_metadata_invariants(trace)
 
 
+@pytest.mark.rare
 def test_non_torch_backend_records_nothing_and_refuses() -> None:
     """A non-torch backend ignores the switch: no profile, typed refusal, invariants hold."""
 
@@ -273,7 +275,8 @@ def test_classics_smoke_model_records_and_validates() -> None:
         inputs,
         # save_args keeps the replay arguments; without it the per-op replay
         # reports the whole model as a region it cannot replay, switch or not.
-        capture=tl.options.CaptureOptions(aten_ops=True, layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(aten_ops=True, save_args=True),
+        save="all",
     )
     assert trace.has_aten_ops is True
     assert trace.aten_ops

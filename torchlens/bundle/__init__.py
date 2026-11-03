@@ -61,7 +61,7 @@ from ._deltas import (
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
 )
-from ._draw import bundle_draw as _bundle_draw
+from ._draw import bundle_show as _bundle_show, forward_bundle_draw as _forward_bundle_draw
 from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
 from ._lookup import _BundleAccessorProperty, _BundleStructuralProperty
@@ -92,6 +92,7 @@ if TYPE_CHECKING:
     from .._capture.outcome import CaptureOutcome
     from .._data_classes.trace import Trace
     from .._literals import VisDirectionLiteral
+    from ..viz._drawing import Drawing
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
 
@@ -694,8 +695,8 @@ class Bundle:
         floor of the comparison gate passes for every member pair (a view
         read, so different input values are allowed). ``compare()`` on the
         returned view is the member-by-member matrix at this site and first
-        runs the comparison gate (shared graph, same input values) over the
-        members it reads. To read a subset of members, build a bundle of
+        runs the comparison gate (shared graph; same input values or, for runs
+        on different inputs, graphs that line up) over the members it reads. To read a subset of members, build a bundle of
         them: ``tl.Bundle({name: bundle[name] for name in names}).at(site)``.
 
         Parameters
@@ -950,27 +951,29 @@ class Bundle:
 
         return _operations.accepts_member_name(fn)
 
-    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
-        """Render each bundle member graph as a member-keyed strip.
+    def show(self, kind: str | None = None, **kwargs: Any) -> Drawing | dict[str, Drawing | str]:
+        """Show the bundle: by default the merged graph of where its members differ.
 
         Parameters
         ----------
         kind:
-            Picture kind forwarded to each member's :meth:`Trace.show`.
+            ``None`` (default) or ``"graph"``: the merged graph, :meth:`draw`
+            with ``**kwargs``. ``"strip"``: each member's own ``Trace.draw``
+            side by side (a given ``path`` gets ``_<member>`` appended).
+            ``"repr"`` / ``"html"``: each member's ``repr`` / HTML text. Any
+            other kind refuses (``bundle_show_kind_invalid``).
         **kwargs:
-            Forwarded to each member's :meth:`Trace.show`. When an output
-            path is supplied, member names are appended to produce one artifact
-            per log. ``vis_mode='none'`` is accepted and returns without
-            rendering, matching ``Trace.show``.
+            Forwarded to :meth:`draw`, or under ``kind="strip"`` to each
+            member's ``Trace.draw``.
 
         Returns
         -------
-        dict[str, str | None]
-            Member-keyed render results. Values are DOT source strings when
-            rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
+        Drawing | dict[str, Drawing | str]
+            The merged graph's :class:`Drawing`; for the other kinds,
+            member-keyed results.
         """
 
-        return _operations.bundle_show(self, kind, **kwargs)
+        return _bundle_show(self, kind, kwargs)
 
     def draw(
         self,
@@ -990,8 +993,9 @@ class Bundle:
         members: tuple[str | Trace, str | Trace] | None = None,
         metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
         on: Literal["out", "grad"] = "out",
-    ) -> str:
-        """Draw the bundle as one picture and return its DOT source.
+        **unsupported: Any,
+    ) -> Drawing:
+        """Draw the bundle as one picture and return it as a :class:`Drawing`.
 
         ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
         ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
@@ -1001,34 +1005,18 @@ class Bundle:
         member and one edge per relation row (``graph`` must stay ``"forward"``);
         ``rolled`` draws the rolled (per-layer) graph instead of every op.
 
-        ``path`` is the output file (a recognised extension picks the format); a bare
-        call writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for
-        ``graph="diff"``) in the working directory. ``file_format`` defaults to
-        ``"pdf"`` (``"svg"`` for diff), ``theme`` to ``"torchlens"`` (``"paper"`` for
-        diff; the names ``Trace.draw`` takes) and ``direction`` to ``"bottomup"``.
-        ``show_legend=True`` draws the key under the header; ``open_viewer`` opens the
-        rendered file. ``graph_overrides``, ``node_overrides`` (keyed by op label, or
-        member name under ``nodes="members"``) and ``edge_overrides`` (keyed by
-        ``(source, target)`` labels) pass Graphviz attributes through.
+        ``path`` is the output file, as on ``Trace.draw``: its extension picks the format
+        and ``file_format`` (default ``"pdf"``, ``"svg"`` for diff) applies only to a path
+        without one; a different format than the extension refuses. A bare call
+        displays inline inside a Jupyter kernel and writes nothing; elsewhere it writes
+        a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for diff) and
+        prints its path. ``theme`` defaults to ``"torchlens"`` (``"paper"`` for diff),
+        ``direction`` to ``"bottomup"``; ``open_viewer=True`` opens the file. The
+        ``*_overrides`` pass Graphviz attributes (nodes keyed by op label, or member
+        name under ``nodes="members"``; edges by ``(source, target)``). Any other
+        keyword refuses (``bundle_draw_keyword_unsupported``, naming the supported list).
         """
-        return _bundle_draw(
-            self,
-            path,
-            graph=graph,
-            nodes=nodes,
-            rolled=rolled,
-            direction=direction,
-            theme=theme,
-            show_legend=show_legend,
-            file_format=file_format,
-            open_viewer=open_viewer,
-            graph_overrides=graph_overrides,
-            node_overrides=node_overrides,
-            edge_overrides=edge_overrides,
-            members=members,
-            metric=metric,
-            on=on,
-        )
+        return _forward_bundle_draw(locals())
 
     def rank_changes(
         self,
@@ -1355,8 +1343,8 @@ class Bundle:
         """Run the two-predicate comparison gate over the operand pairs.
 
         Thin delegation to :func:`torchlens.bundle._compare_gate.require_comparable`
-        (topology -> model-axis floor -> value-level input identity, per
-        operand pair; A-GATE, foldB D6/D18).
+        (topology -> model-axis floor -> site line-up: proven-equal input values
+        or equal graph-shape hashes, per operand pair; A-GATE, foldB D6/D18).
 
         Parameters
         ----------

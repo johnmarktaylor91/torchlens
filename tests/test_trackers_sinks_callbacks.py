@@ -67,7 +67,6 @@ class TestHFTrainerCallback:
 class TestLightningCallback:
     """Driven through the Lightning callback protocol."""
 
-    @pytest.mark.smoke
     def test_attach_and_close(self) -> None:
         pytest.importorskip("lightning")
         model = torch.nn.Linear(4, 4)

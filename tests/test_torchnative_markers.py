@@ -65,8 +65,9 @@ def test_nvtx_internal_bookkeeping_separated(nvtx_calls) -> None:
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(emit_nvtx=True, backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(
+            emit_nvtx=True, backward_ready=True, save_mode="reference"
+        ),
     )
     has_grad_fn = all(
         op.grad_fn_object_id is not None for op in log.ops if op.func_name == "linear"
@@ -133,7 +134,6 @@ def test_session_records_op_join_markers() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_native_chrome_artifact_and_sidecar(tmp_path) -> None:
     """The NATIVE chrome trace is preserved with the exact-ID mapping sidecar."""
 

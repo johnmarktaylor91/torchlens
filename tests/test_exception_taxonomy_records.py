@@ -106,9 +106,6 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
 )
 
 
-@pytest.mark.smoke_cells(
-    "test_record_refusals_carry_codes_and_remedies[annotation_not_json_serializable]",
-)
 @pytest.mark.parametrize(
     ("expected_code", "builtin", "trigger"),
     RECORD_DOOR_CASES,
@@ -188,13 +185,60 @@ def test_recorder_option_refusals_carry_codes_and_remedies(
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
     with pytest.raises(errors.TorchLensError) as exc_info:
-        tl.record(model, torch.randn(1, 4), save=tl.func("relu"), **kwargs)
+        tl.record(model, torch.randn(1, 4), save=tl.func("relu"), **_door_kwargs(kwargs))
     _assert_contract(exc_info.value, expected_code, builtin)
+
+
+_RECORDING_FIELDS = {
+    "history_size",
+    "max_predicate_failures",
+    "on_predicate_error",
+    "on_forward_error",
+    "default_op",
+    "default_module",
+    "default_grad",
+    "include_source_events",
+    "postprocess",
+}
+_CAPTURE_FIELDS = {
+    "lookback",
+    "lookback_payload_policy",
+    "activation_transform",
+    "save_raw_activations",
+    "seed",
+    "save_grads",
+    "grad_transform",
+    "save_raw_grads",
+    "backward_ready",
+    "detach_saved_activations",
+}
+
+
+def _door_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Spell former flat record keywords the way the door takes them now.
+
+    Recorder knobs ride ``recording=RecordingOptions(...)``, capture knobs ride
+    ``capture=CaptureOptions(...)`` and ``halt`` is ``stop_after=``; the typed
+    refusal still fires inside the door call (the option constructors validate).
+    """
+
+    out: dict[str, Any] = {}
+    recording = {k: v for k, v in kwargs.items() if k in _RECORDING_FIELDS}
+    capture = {k: v for k, v in kwargs.items() if k in _CAPTURE_FIELDS}
+    if recording:
+        out["recording"] = tl.options.RecordingOptions(**recording)
+    if capture:
+        out["capture"] = tl.options.CaptureOptions(**capture)
+    for key, value in kwargs.items():
+        if key in _RECORDING_FIELDS or key in _CAPTURE_FIELDS:
+            continue
+        out["stop_after" if key == "halt" else key] = value
+    return out
 
 
 TRACE_PREDICATE_DOOR_CASES: tuple[tuple[str, type[BaseException], dict[str, Any]], ...] = (
     ("intervention_predicate_type_invalid", TypeError, {"intervene": "not-callable"}),
-    ("halt_predicate_type_invalid", TypeError, {"halt": "not-callable"}),
+    ("stop_after_type_invalid", TypeError, {"stop_after": 1234}),
 )
 
 
@@ -220,7 +264,6 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
     _assert_contract(exc_info.value, expected_code, builtin)
 
 
-@pytest.mark.smoke
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
@@ -241,7 +284,6 @@ def test_intervention_doors_carry_codes_and_remedies() -> None:
     _assert_contract(exc_info.value, "spec_format_version_unsupported", ValueError)
 
 
-@pytest.mark.smoke
 def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     """Converted visualization option doors expose codes and remedies."""
 
@@ -265,7 +307,6 @@ def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     _assert_contract(exc_info.value, "collapse_mode_invalid", ValueError)
 
 
-@pytest.mark.smoke
 def test_trace_stack_shape_mismatch_is_typed(small_trace: Any) -> None:
     """Stacking differently-shaped saved outs refuses with the stack code."""
 

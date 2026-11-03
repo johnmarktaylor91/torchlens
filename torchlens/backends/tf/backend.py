@@ -6,6 +6,7 @@ import random
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from functools import partial
 from typing import Any, Literal, cast
 
 from ... import _state
@@ -15,6 +16,7 @@ from ..._data_classes.param import ParamAccessor
 from ..._data_classes.trace import Trace
 from ..._deprecations import MISSING, MissingType
 from ..._ir.capture_events import CaptureEvents
+from ..._output_slot import returned
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
     _STATIC_SELECTOR_KINDS,
@@ -113,7 +115,7 @@ class TFBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         module_identity_mode: str | None = None,
@@ -145,7 +147,7 @@ class TFBackend:
         # see the matching comment in ``backends/jax/backend.py``.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -158,10 +160,10 @@ class TFBackend:
             backward_ready=backward_ready,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
@@ -174,7 +176,7 @@ class TFBackend:
         backward_ready = capture_options.backward_ready
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         save_grads = resolve_optional_capture_field(capture, "save_grads", save_grads)
         random_seed = resolve_optional_capture_field(capture, "seed", random_seed)
@@ -193,7 +195,7 @@ class TFBackend:
         # layers_to_save/keep_orphans/output_device/detach_saved_activations/
         # save_arg_values/save_code_context/save_rng_states/
         # recurrence_detection/compute_input_output_distances/verbose/
-        # backward_ready/save_raw_input/batch_render/save_raw_output/
+        # backward_ready/save_raw_input/batch_render/save_transformed_output/
         # save_visualizations are CaptureOptions-native fields: the
         # ``capture_options.<field>`` reads above already resolved each one to
         # its concrete (non-MISSING) default via ``merge_capture_options``,
@@ -288,7 +290,7 @@ class TFBackend:
                 save_raw_input=save_raw_input,
                 batch_render=batch_render,
                 output_transform=output_transform,
-                save_transformed_output=save_raw_output,
+                save_transformed_output=save_transformed_output,
                 layer_visualizers=layer_visualizers,
                 save_visualizations=save_visualizations,
                 tf=tf,
@@ -358,7 +360,7 @@ class TFBackend:
             save_raw_input=save_raw_input,
             batch_render=batch_render,
             output_transform=output_transform,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,
             tf=tf,
@@ -388,25 +390,11 @@ class TFBackend:
                     "conditions) require object-module attribution; this capture "
                     "entry discovered no Keras/tf.Module tree."
                 )
-            active_plan = intervention_plan
-
-            def _module_exit_hook(
-                frame: Any, module_type: str, output: Any, module_stack: Any
-            ) -> Any:
-                """Substitute matched module-boundary intervention outputs."""
-
-                return apply_tf_module_intervention(
-                    active_plan,
-                    session,
-                    tf,
-                    trace,
-                    frame,
-                    module_type,
-                    output,
-                    module_stack,
-                )
-
-            session.module_exit_hook = _module_exit_hook
+            # The session calls the hook as (frame, module_type, output,
+            # module_stack): the substitution's own trailing parameters.
+            session.module_exit_hook = partial(
+                apply_tf_module_intervention, intervention_plan, session, tf, trace
+            )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
         # Admission-locked publication: a raw save/restore swap here silently
@@ -428,6 +416,8 @@ class TFBackend:
             # silently with zero payloads (R17 parity with sibling previews).
             warn_zero_match_save_predicate("tf")
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+
+        trace._output_slot = returned(result.output)
         trace.transformed_output = (
             output_transform(result.output) if callable(output_transform) else None
         )

@@ -1,4 +1,4 @@
-"""Gradient-side edits on GPT-2 over every live-backward spelling (U14.5).
+"""Gradient-side edits on GPT-2 over every live-backward spelling.
 
 Every spelling that edits a gradient during a live backward is checked against
 an independent oracle built from plain PyTorch hooks on a deep copy of the same
@@ -421,6 +421,7 @@ def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None
         )
 
 
+@pytest.mark.smoke
 def test_rerun_arms_gradient_edit_and_backward_matches_oracle(tiny: _Fixture) -> None:
     """do(tl.grad(...), engine='rerun') arms the edit; the next backward matches the oracle."""
 

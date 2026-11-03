@@ -223,8 +223,7 @@ def test_torchvision_resnet18_merge_geometry_matches_graph_derivation() -> None:
     trace = tl.trace(
         model,
         torch.randn(1, 3, 64, 64, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     merges = [op for op in trace._layer_list if op.func_name == "__iadd__"]
     expected = _resnet18_merge_goldens()
@@ -273,7 +272,11 @@ def test_geometric_hulls_equal_independent_gradient_support(model: nn.Module) ->
     _fill_positive(model)
     inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
     capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(model.eval(), inputs, capture=capture, save_mode="reference")
+    trace = tl.trace(
+        model.eval(),
+        inputs,
+        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
+    )
     input_op = next(op for op in trace._layer_list if op.is_input)
     targets = [op for op in trace._layer_list if op.func_name in {"conv2d", "__add__"}]
     assert targets
@@ -311,6 +314,7 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     assert set(merge_rows["input_role"]) == {"input.left", "input.right"}
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
     """Keep geometry backend-neutral while rejecting non-torch gradient probes."""

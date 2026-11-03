@@ -82,7 +82,6 @@ def _original_and_wrapper(name: str) -> tuple[Any, Any]:
     return original, wrapper
 
 
-@pytest.mark.smoke
 def test_belt_sweep_patches_stale_module_ref_and_restores() -> None:
     """Module-attr stale refs to belt members round-trip through the ledger."""
 
@@ -250,7 +249,6 @@ def test_probe_failure_reaches_compat_row(monkeypatch: pytest.MonkeyPatch) -> No
     assert "torch.frombuffer" in row.details
 
 
-@pytest.mark.smoke
 def test_clean_belt_reports_pass_not_false_alarm() -> None:
     """Healthy build: PASS rows that still DISCLOSE the unprobed count.
 

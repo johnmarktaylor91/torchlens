@@ -384,7 +384,7 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
         _ids(),
         episode=EpisodeOptions(stepped_module=runner.model, num_steps=4),
         intervene=tl.when(tl.func("tanh"), tl.scale(0.5)),
-        halt=stop_at_third_step,
+        stop_after=stop_at_third_step,
         capture=tl.options.CaptureOptions(seed=SEED),
     )
     assert log.outcome.status.name == "STOPPED"
@@ -403,7 +403,6 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_selective_save_couples_and_keeps_evidence():
     """save= narrows retention; the coupling evidence still settles whole."""
 
@@ -431,6 +430,7 @@ def test_selective_save_couples_and_keeps_evidence():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
     """The coupled slots persist (reserved C07X slots); the gate holds loaded."""
 

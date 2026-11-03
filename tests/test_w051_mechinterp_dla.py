@@ -54,7 +54,6 @@ def test_budget_depth_term_is_monotone_and_floored_at_two_addends() -> None:
     assert b170.item() / b2.item() == pytest.approx((1 + math.log2(172)) / 2.0)
 
 
-@pytest.mark.smoke
 def test_identity_eps_takes_the_coarsest_floating_dtype_in_the_chain() -> None:
     f32 = torch.zeros(2)
     assert _dla._identity_eps(f32, f32) == EPS32
@@ -80,7 +79,6 @@ def test_check_identity_receipt_discloses_the_budget_model() -> None:
     assert receipt["tolerance"] > 0.0
 
 
-@pytest.mark.smoke
 def test_check_identity_catches_a_small_error_on_a_low_magnitude_element() -> None:
     """The 300x tripwire class: an error far under the big element's budget
     but above its own element's budget is REFUSED, with the element named."""
@@ -116,7 +114,6 @@ def test_check_identity_worst_element_is_the_largest_budget_fraction() -> None:
     assert receipt["max_abs_residual"] == pytest.approx(reconstructed[0, 0, 2].item())
 
 
-@pytest.mark.smoke
 def test_direction_terms_and_difference_keep_the_served_value() -> None:
     w_u = torch.arange(12.0).reshape(3, 4)
     terms = _dla._direction_terms(w_u, (1,), (3,))
@@ -147,7 +144,7 @@ def gpt2_trace():
     model = build_gpt2("eager").eval()
     torch.manual_seed(1)
     x = torch.randint(0, 500, (2, 8))
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield log
     finally:

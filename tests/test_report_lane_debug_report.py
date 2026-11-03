@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped diagnostic helper returns the one ``tl.report.Report``.
+"""Every report-shaped diagnostic helper returns the one ``tl.report.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that

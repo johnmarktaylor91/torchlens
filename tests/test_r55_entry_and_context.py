@@ -42,7 +42,7 @@ def test_tensor_input_kwargs_refuses_typed_naming_the_tuple_spelling() -> None:
     model = _TinyModel()
     q, k = torch.randn(1, 4), torch.randn(1, 4)
     with pytest.raises(ArgumentTypeError, match="tuple"):
-        tl.trace(model, q, k)
+        tl.trace(model, q, input_kwargs=k)
 
 
 def test_tensor_in_layers_to_save_slot_refuses_typed() -> None:
@@ -61,7 +61,6 @@ def test_tuple_spelling_still_works() -> None:
     assert trace.outcome.status.name == "COMPLETE"
 
 
-@pytest.mark.smoke
 def test_overrides_membership_resolves_wrappers_while_wrapped() -> None:
     """The documented author checks must answer True in both epochs."""
 
@@ -85,7 +84,6 @@ def test_overrides_membership_resolves_wrappers_while_wrapped() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_out_of_order_context_unwind_never_resurrects_a_dead_plan() -> None:
     """A non-top context exit splices out; the final exit restores the true
     pre-window state instead of re-publishing a dead context."""

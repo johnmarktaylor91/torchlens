@@ -40,7 +40,6 @@ def test_every_skin_carries_the_new_records() -> None:
         assert theme.neutral_aggregate_fill.startswith("#")
 
 
-@pytest.mark.smoke
 def test_semantic_palette_default_is_the_shared_read_only_legacy_proxy() -> None:
     """The default palette is the legacy proxy itself, shared and immutable.
 
@@ -146,7 +145,6 @@ def test_okabe_ito_set_passes_all_four_cvd_gates() -> None:
     assert not failed, [finding.detail for finding in failed]
 
 
-@pytest.mark.smoke
 def test_legacy_palette_fails_deuteranopia_the_fork_evidence() -> None:
     """The measured defect: the legacy red/green input/output pair is
     confusable under deuteranopia. Pinned as FORK-2's evidence -- if this
@@ -196,12 +194,10 @@ def test_neutral_collapsed_fill_under_active_channel(tmp_path: Any) -> None:
             **resolution.draw_kwargs,
             path=str(tmp_path / "neutral"),
             file_format="svg",
-            vis_save_only=True,
-            return_graph=True,
-        )
+        ).dot
         node_lines = [
             line
-            for line in graph.source.splitlines()
+            for line in graph.splitlines()
             if "tl_legend_" not in line and "tl_encoding_legend_" not in line
         ]
         assert not any('fillcolor="#D9D9D9"' in line for line in node_lines)

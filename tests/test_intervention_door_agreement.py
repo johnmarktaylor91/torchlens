@@ -154,18 +154,16 @@ def _door_trace(model: nn.Module, spec: Any) -> torch.Tensor:
 def _door_record_callable(model: nn.Module, spec: Any) -> torch.Tensor:
     """Run the spec through ``tl.record`` with an opaque callable ``save=``."""
 
-    output, _recording = tl.record(
-        model, _X, save=lambda ctx: True, intervene=spec, return_output=True
-    )
+    _recording = tl.record(model, _X, save=lambda ctx: True, intervene=spec)
+    output = _recording.output
     return output
 
 
 def _door_record_selector(model: nn.Module, spec: Any) -> torch.Tensor:
     """Run the spec through ``tl.record`` with a module-selector ``save=``."""
 
-    output, _recording = tl.record(
-        model, _X, save=tl.module("block"), intervene=spec, return_output=True
-    )
+    _recording = tl.record(model, _X, save=tl.module("block"), intervene=spec)
+    output = _recording.output
     return output
 
 
@@ -205,6 +203,7 @@ def _outcome(door: str, model_name: str, selector_name: str) -> tuple[str, Any]:
     return "ok", value.detach().clone()
 
 
+@pytest.mark.smoke_cells("test_every_door_matches_the_eager_oracle[tail-in_module_pass_2]")
 @pytest.mark.parametrize("selector_name", sorted(_SELECTORS))
 @pytest.mark.parametrize("model_name", sorted(_MODELS))
 def test_every_door_matches_the_eager_oracle(model_name: str, selector_name: str) -> None:
@@ -242,9 +241,8 @@ def test_record_logs_the_boundary_edit_as_its_own_op(model_name: str, selector_n
 
     torch.manual_seed(0)
     model = _MODELS[model_name]().eval()
-    output, recording = tl.record(
-        model, _X, save=lambda ctx: True, intervene=_spec(selector_name), return_output=True
-    )
+    recording = tl.record(model, _X, save=lambda ctx: True, intervene=_spec(selector_name))
+    output = recording.output
     replacements = [
         record for record in recording.records if record.ctx.layer_type == "interventionreplacement"
     ]

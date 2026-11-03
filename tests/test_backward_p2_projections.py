@@ -53,9 +53,7 @@ def _captured_two_pass_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _TwoPassModel()
     x = torch.randn(3, 4, requires_grad=True)
-    trace = tl.trace(
-        model, x, capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all")
-    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_grads="all"), save="all")
     loss = trace[trace.output_layers[0]].out.sum()
     trace.log_backward(loss, retain_graph=True)
     trace.log_backward(loss, retain_graph=True)
@@ -355,18 +353,39 @@ def test_assign_grad_fn_orders_reaches_a_fixed_point_through_inferred_creators()
     }
 
 
-def test_assign_grad_fn_orders_keeps_paired_forward_nodes_at_order_one() -> None:
-    """Inference never lifts a node paired with a forward op, so its creations stay at 2."""
+def test_assign_grad_fn_orders_keeps_ordinary_paired_forward_nodes_at_order_one() -> None:
+    """A paired forward node feeding only order-1 nodes is never lifted."""
 
-    root, first, paired, creation = 1, 2, 3, 4
+    leaf, forward, root, creation = 1, 2, 3, 4
     records = {
-        root: _order_record(root),
-        first: _order_record(first, creator_object_id=root),
-        paired: _order_record(paired, next_ids=(first,), has_op=True),
-        creation: _order_record(creation, creator_object_id=paired),
+        leaf: _order_record(leaf),
+        forward: _order_record(forward, next_ids=(leaf,), has_op=True),
+        root: _order_record(root, next_ids=(forward,), has_op=True),
+        creation: _order_record(creation, creator_object_id=root),
     }
     _assign_grad_fn_orders(records)
-    assert [r.order for r in records.values()] == [1, 2, 1, 2]
+    assert [r.order for r in records.values()] == [1, 1, 1, 2]
+
+
+def test_assign_grad_fn_orders_lifts_a_paired_gradient_consumer_like_an_unpaired_one() -> None:
+    """A paired node feeding an order-2 node gets the orders an unpaired one gets.
+
+    Only an op applied to a ``create_graph`` gradient makes a node that feeds an
+    engine-created node. Taken inside forward, that op is captured and its node is
+    paired; taken after the trace, it is not. Both shapes must give the same orders,
+    so the paired node is inferred to 2 and its creation sits at 3.
+    """
+
+    for has_op in (False, True):
+        root, first, consumer, creation = 1, 2, 3, 4
+        records = {
+            root: _order_record(root),
+            first: _order_record(first, creator_object_id=root),
+            consumer: _order_record(consumer, next_ids=(first,), has_op=has_op),
+            creation: _order_record(creation, creator_object_id=consumer),
+        }
+        _assign_grad_fn_orders(records)
+        assert [r.order for r in records.values()] == [1, 2, 2, 3], has_op
 
 
 def test_forward_op_on_a_first_order_gradient_keeps_creator_orders_consistent() -> None:
@@ -501,8 +520,7 @@ def test_save_works_after_two_differentiable_backward_passes(tmp_path) -> None:
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     try:
         trace.log_backward(trace[-1].out.sum(), retain_graph=True, create_graph=True)

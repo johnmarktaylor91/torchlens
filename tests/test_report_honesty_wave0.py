@@ -57,7 +57,6 @@ def test_first_nonfinite_default_is_plain_text() -> None:
     assert answer == trace.first_nonfinite(link_format="text")
 
 
-@pytest.mark.smoke
 def test_styled_link_registers_stay_opt_in() -> None:
     """terminal/html remain available but only by explicit request."""
 
@@ -66,7 +65,6 @@ def test_styled_link_registers_stay_opt_in() -> None:
     assert "vscode://file/" in trace.first_nonfinite(link_format="html")
 
 
-@pytest.mark.smoke
 def test_explain_text_is_escape_free() -> None:
     """explain() output is publishable data: no ESC bytes on any fixture."""
 
@@ -131,7 +129,6 @@ def test_log_value_lives_in_observers_only() -> None:
     assert not hasattr(report, "log_value") and "log_value" not in report.__all__
 
 
-@pytest.mark.smoke
 def test_log_value_read_back_and_renders() -> None:
     """Logged values read back via Trace.logged_values and render in reports."""
 
@@ -254,11 +251,10 @@ def test_poisoned_trace_draw_caption_carries_banner() -> None:
     trace = _clean_trace()
     trace._runnable.poisoned = True
     trace._runnable.path_faithfulness = PathFaithfulness.DIVERGED
-    dot_source = trace.draw(vis_save_only=True)
+    dot_source = trace.draw().dot
     assert "POISONED" in dot_source
 
 
-@pytest.mark.smoke
 def test_trace_slice_summary_carries_parent_honesty_banner() -> None:
     """A slice of a poisoned capture summarizes with the banner, not clean."""
 
@@ -273,7 +269,6 @@ def test_trace_slice_summary_carries_parent_honesty_banner() -> None:
 # --- SF2: bounded reprs ------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_compat_report_repr_is_designed_and_bounded() -> None:
     """repr is bounded; str and show share the complete fixed-width table."""
 
@@ -332,7 +327,6 @@ def test_doctor_report_repr_is_bounded() -> None:
     assert isinstance(doctor_report.capability_snapshot(), dict)
 
 
-@pytest.mark.smoke
 def test_episode_facts_surface_on_report_surfaces() -> None:
     """An episode ledger (incl. forced-tokens basis) is visible in reports."""
 

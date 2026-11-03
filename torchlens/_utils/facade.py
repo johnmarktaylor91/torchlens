@@ -17,7 +17,9 @@ The five steps, in order:
 3. Refusal table -> typed teaching ``AttributeError``, no dependency check.
 4. Real active name -> per-name dependency gate: if the name declares a
    foreign dependency that is not installed, a typed ``AttributeError``
-   subclass names the exact package and install command; otherwise the
+   subclass names the exact package and install command; a present
+   dependency the gate's metadata-only ``check`` diagnoses as unusable (a
+   known version conflict) raises that check's typed refusal; otherwise the
    target resolves and is cached in the owning module's globals.
 5. Otherwise -> plain ``AttributeError``.
 
@@ -37,17 +39,19 @@ Spellings here are DOCUMENTED-UNSTABLE pending naming-session ratification.
 
 from __future__ import annotations
 
+import functools
 import importlib
 import importlib.util
-from collections.abc import Collection, Mapping, MutableMapping
+from collections.abc import Callable, Collection, Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar, cast
 
 from .._errors import FacadeTeachingError, MissingDependencyError
 
 __all__ = [
     "DependencyGate",
     "facade_dir",
+    "refuse_removed_keywords",
     "refuse_removed_member",
     "resolve_facade_attr",
 ]
@@ -66,10 +70,17 @@ class DependencyGate:
     install:
         Exact install command taught when the dependency is absent
         (``'pip install "torchlens[neuro]"'``).
+    check:
+        Optional pre-resolution check ``check(owner, name)`` run after the
+        dependency is found present. It raises a typed refusal when the
+        installed dependency is known to be unusable (a diagnosed version
+        conflict) and returns ``None`` otherwise. It must not execute
+        foreign code: read installed metadata, never import the dependency.
     """
 
     module: str
     install: str
+    check: Callable[[str, str], None] | None = None
 
 
 def _plain_missing(
@@ -135,6 +146,62 @@ def refuse_removed_member(owner: str, name: str, removed: Mapping[str, str]) -> 
             owner=owner,
             attribute=name,
         )
+
+
+_Init = TypeVar("_Init", bound=Callable[..., Any])
+
+
+def refuse_removed_keywords(owner: str, removed: Mapping[str, str]) -> Callable[[_Init], _Init]:
+    """Make an ``__init__`` refuse a removed keyword with the typed redirect.
+
+    A removed field passed to the constructor (``CaptureOptions(output_style=...)``)
+    names its replacement (``facade_redirect``) before the plain ``TypeError`` for
+    an unknown keyword; the wrapped signature is unchanged for ``inspect``.
+
+    Parameters
+    ----------
+    owner:
+        Class whose keywords are guarded, as spelled in the message.
+    removed:
+        Removed keyword -> remedy naming the replacement.
+
+    Returns
+    -------
+    Callable[[_Init], _Init]
+        Decorator for the class ``__init__``.
+    """
+
+    def decorate(init: _Init) -> _Init:
+        """Wrap ``init`` so every keyword is checked against ``removed`` first."""
+
+        @functools.wraps(init)
+        def wrapper(self: Any, *args: Any, **kwargs: Any) -> Any:
+            """Refuse a removed keyword with its remedy, then run the real ``__init__``."""
+            for name in kwargs:
+                refuse_removed_member(owner, name, removed)
+            return init(self, *args, **kwargs)
+
+        return cast(_Init, wrapper)
+
+    return decorate
+
+
+def _resolution_target(
+    owner: str,
+    name: str,
+    lazy_attrs: Mapping[str, tuple[str, str | None]] | None,
+    submodules: Collection[str] | None,
+) -> tuple[str, str | None] | None:
+    """Return the step-4 ``(module_path, attr_name)`` target, or ``None``.
+
+    ``lazy_attrs`` wins over ``submodules`` for a name present in both.
+    """
+
+    if lazy_attrs and name in lazy_attrs:
+        return lazy_attrs[name]
+    if submodules and name in submodules:
+        return (f"{owner}.{name}", None)
+    return None
 
 
 def resolve_facade_attr(
@@ -213,11 +280,7 @@ def resolve_facade_attr(
         )
 
     # Step 4: real active name -> per-name dependency gate, then resolve.
-    target: tuple[str, str | None] | None = None
-    if lazy_attrs and name in lazy_attrs:
-        target = lazy_attrs[name]
-    elif submodules and name in submodules:
-        target = (f"{owner}.{name}", None)
+    target = _resolution_target(owner, name, lazy_attrs, submodules)
     if target is not None:
         gate = dependencies.get(name) if dependencies else None
         if gate is not None and importlib.util.find_spec(gate.module) is None:
@@ -231,6 +294,8 @@ def resolve_facade_attr(
                 dependency=gate.module,
                 install=gate.install,
             )
+        if gate is not None and gate.check is not None:
+            gate.check(owner, name)
         module_path, attr_name = target
         try:
             module_obj = importlib.import_module(module_path)

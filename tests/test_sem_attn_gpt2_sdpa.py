@@ -29,8 +29,10 @@ def sdpa_captures():
     spec = FAMILY_BY_NAME["gpt2"]
     model = spec.build("sdpa")
     kwargs = spec.input_kwargs()
-    plain = tl.trace(model, (), kwargs)
-    ready = tl.trace(model, (), kwargs, reconstruction_ready=True)
+    plain = tl.trace(model, (), input_kwargs=kwargs)
+    ready = tl.trace(
+        model, (), input_kwargs=kwargs, capture=tl.options.CaptureOptions(reconstruction_ready=True)
+    )
     yield model, plain, ready
     tl.release_model(model)
 
@@ -54,7 +56,6 @@ def test_plain_sdpa_capture_declares_actionable_absences(sdpa_captures):
         assert view.has(facet), facet
 
 
-@pytest.mark.smoke
 def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
     """scores/pattern/z reconstruct, validate against the SDPA op, read-only."""
 

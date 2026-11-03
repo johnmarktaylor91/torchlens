@@ -49,22 +49,22 @@ def test_save_grads_callable_restricts_retention() -> None:
         capture=CaptureOptions(
             save_grads=lambda op: bool(op.layer_label.startswith("relu")),
             backward_ready=True,
+            save_mode="reference",
         ),
-        save_mode="reference",
     )
     _backward(log)
     assert _grad_labels(log) == ["relu_1_2"]
 
 
-@pytest.mark.smoke
 def test_save_grads_selector_restricts_retention() -> None:
     """A tl.* selector keeps gradients ONLY on matching ops."""
 
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=tl.func("relu"), backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(
+            save_grads=tl.func("relu"), backward_ready=True, save_mode="reference"
+        ),
     )
     _backward(log)
     assert _grad_labels(log) == ["relu_1_2"]
@@ -76,8 +76,7 @@ def test_save_grads_true_keeps_all_gradients() -> None:
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
     )
     _backward(log)
     assert len(_grad_labels(log)) >= 4
@@ -89,8 +88,7 @@ def test_save_grads_label_string_still_works() -> None:
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=["relu_1_2"], backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=["relu_1_2"], backward_ready=True, save_mode="reference"),
     )
     _backward(log)
     assert "relu_1_2" in _grad_labels(log)
@@ -106,8 +104,9 @@ def test_save_grads_callable_non_bool_refuses_typed() -> None:
         tl.trace(
             ThreeStep(),
             torch.randn(2, 4),
-            capture=CaptureOptions(save_grads=lambda op: 1, backward_ready=True),
-            save_mode="reference",
+            capture=CaptureOptions(
+                save_grads=lambda op: 1, backward_ready=True, save_mode="reference"
+            ),
         )
     assert excinfo.value.fields["code"] == "predicate_return_invalid"
 
@@ -125,8 +124,9 @@ def test_save_grads_selector_gpt2_narrow_retention() -> None:
     log = tl.trace(
         model,
         input_ids,
-        capture=CaptureOptions(save_grads=tl.func("layer_norm"), backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(
+            save_grads=tl.func("layer_norm"), backward_ready=True, save_mode="reference"
+        ),
     )
     logits = list(log)[-1].out
     logits.sum().backward()

@@ -13,7 +13,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 
-import pytest
 import torch
 from torch import nn
 
@@ -56,7 +55,6 @@ def _twin_calls() -> tuple[GradFnCall, GradFnCall]:
     return left, right
 
 
-@pytest.mark.smoke
 def test_eq_on_tensor_payloads_never_raises():
     """Value comparison of like-labeled calls is typed and safe."""
 
@@ -77,7 +75,6 @@ def test_grad_fn_call_is_hashable_and_eq_consistent():
     assert len({left, same}) == 1
 
 
-@pytest.mark.smoke
 def test_ordinal_index_survives_like_labeled_tensor_payload_twins():
     """The position scan never runs elementwise tensor equality.
 
@@ -103,7 +100,8 @@ def test_ordinal_index_on_live_backward_trace():
     trace = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
     calls = list(trace.autograd.grad_fn_calls.values())

@@ -14,6 +14,7 @@
 | `normalize_sdist.py` | Deterministic sdist/wheel normalization for reproducible releases (invoked by `build_command` + the nightly double-build gate) |
 | `render_collapse_reference.py` | Regenerate the collapse reference images |
 | `render_large_graph.py` | Render synthetic large graphs with layout backends |
+| `run_notebooks.py` | Execute every user notebook with nbclient (nightly `notebooks` leg; needs the `test` extra); `--write-outputs` regenerates the ten-minute tutorial's stored outputs |
 
 ## Release Safety
 The release pipeline has three defenses against accidental major bumps:

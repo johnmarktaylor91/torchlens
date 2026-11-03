@@ -1,4 +1,4 @@
-"""``run(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix (U26.3).
+"""``run(inputs=..., until=..., fast=True)`` stops the native forward and trains the prefix.
 
 The fast live tier cuts its native forward right after the ``until=`` site's
 output is collected, so nothing downstream runs, and the saved prefix comes back
@@ -100,7 +100,7 @@ def _grads(model: nn.Module, prefixes: tuple[str, ...]) -> dict[str, torch.Tenso
 
 @pytest.mark.parametrize(
     "save",
-    [None, tl.module("layer1") | tl.module("layer2"), tl.in_module("layer2")],
+    ["all", tl.module("layer1") | tl.module("layer2"), tl.in_module("layer2")],
     ids=["save_all", "module", "in_module"],
 )
 def test_resnet18_until_fast_gradients_equal_hand_truncated_eager(save: Any) -> None:

@@ -381,8 +381,7 @@ def test_rerun_matching_graph_refreshes_existing_ops_without_full_swap() -> None
     log = tl.trace(
         ReluAdd(),
         x,
-        capture=tl.options.CaptureOptions(replayable=True),
-        save=tl.options.SaveOptions(activation_transform=lambda t: t * 2),
+        capture=tl.options.CaptureOptions(replayable=True, activation_transform=lambda t: t * 2),
     )
     relu_site = next(layer for layer in log._layer_list if layer.func_name == "relu")
     original_relu_site_id = id(relu_site)
@@ -503,7 +502,8 @@ def test_rerun_fast_refresh_keeps_every_pass_of_a_multi_pass_layer_distinct() ->
     log = tl.trace(
         model,
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     assert log._layer_logs["add_1_3"].num_passes == 2
 
@@ -641,6 +641,7 @@ def test_rerun_rejects_fsdp_when_constructible(tmp_path: Path) -> None:
         dist.destroy_process_group()
 
 
+@pytest.mark.smoke
 def test_colliding_plan_identifiers_get_per_entry_occurrence_ids() -> None:
     """One entry's fires can never mask a colliding entry's total miss.
 

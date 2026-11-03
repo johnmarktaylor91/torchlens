@@ -73,7 +73,6 @@ def test_recording_repr_is_bounded_identity_card(recording) -> None:
     assert "RecordContext(" not in text
 
 
-@pytest.mark.smoke
 def test_recording_str_is_bounded_per_pass_table(recording) -> None:
     """str(Recording) stays within the collection-view line budget (bug 1)."""
 
@@ -136,7 +135,6 @@ def test_op_accessor_iteration_yields_ops(loop_trace) -> None:
     assert [member.pass_number for member in members] == [1, 2, 3]
 
 
-@pytest.mark.smoke
 def test_op_accessor_get_matches_getitem_basis(loop_trace) -> None:
     """get/[] share the 0-based positional basis (bug 27)."""
 
@@ -159,7 +157,7 @@ def test_op_accessor_repr_teaches_real_basis(loop_trace) -> None:
 
 
 def test_four_option_classes_ride_the_options_namespace() -> None:
-    """CaptureOptions/SaveOptions/ReplayOptions/InterventionOptions (bug 25).
+    """CaptureOptions/ReplayOptions/InterventionOptions (bug 25).
 
     Bug 25 wanted the four option dataclasses importable from a documented
     public spelling. That spelling is the ``tl.options`` namespace -- the
@@ -171,7 +169,7 @@ def test_four_option_classes_ride_the_options_namespace() -> None:
 
     from torchlens import options
 
-    for name in ("CaptureOptions", "SaveOptions", "ReplayOptions", "InterventionOptions"):
+    for name in ("CaptureOptions", "ReplayOptions", "InterventionOptions"):
         assert hasattr(options, name), name
         assert name not in tl.__all__, f"{name} widened the frozen root budget"
         assert name not in tl._LAZY_ATTRS, f"{name} widened the frozen root budget"
@@ -185,7 +183,6 @@ def test_edge_refusal_remedy_is_runnable_spelling(loop_trace) -> None:
     assert getattr(excinfo.value, "fields", {}).get("code") == "edge_provenance_unavailable"
 
 
-@pytest.mark.smoke
 def test_run_products_have_bounded_reprs() -> None:
     """RunResult/RunReport reprs are verdict-first descriptors (bug 9)."""
 
@@ -219,7 +216,6 @@ def test_population_state_sentinel_aware() -> None:
     assert _population_state(0) == "defaulted_zero"
 
 
-@pytest.mark.smoke
 def test_tree_surfaces_are_ascii(loop_trace) -> None:
     """Module/profile trees emit ASCII rails only (bug 10)."""
 

@@ -26,6 +26,7 @@ pytestmark = [
         _TF_BACKEND_SKIP_REASON is not None,
         reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
     ),
+    pytest.mark.rare,
 ]
 
 
@@ -127,7 +128,12 @@ def test_tf_leaf_input_and_param_grads_match_direct_reference() -> None:
     model = DenseRelu()
     x = _fixture_input()
     model(x)
-    trace = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
+    trace = tl.trace(
+        model,
+        x,
+        backend="tf",
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+    )
 
     kernel = _native_variable(model.dense.kernel)
     bias = _native_variable(model.dense.bias)
@@ -160,7 +166,12 @@ def test_tf_derived_grads_do_not_create_backward_logs() -> None:
     model = DenseRelu()
     x = _fixture_input()
     model(x)
-    trace = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
+    trace = tl.trace(
+        model,
+        x,
+        backend="tf",
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+    )
 
     assert trace.autograd.has_backward_pass is False
     assert not trace._backward_pass_logs
@@ -184,7 +195,9 @@ def test_tf_intermediate_grads_match_direct_oracle_and_skip_disconnected() -> No
         model,
         x,
         backend="tf",
-        grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=16)
+        ),
     )
 
     records = trace.autograd.intermediate_derived_grads
@@ -209,7 +222,9 @@ def test_tf_same_shape_relus_are_disambiguated_by_stream_position() -> None:
         model,
         tf.ones((2, 2), dtype="float32"),
         backend="tf",
-        grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=32),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=32)
+        ),
     )
 
     relu_ops = [op for op in trace._layer_list if op.func_name == "Relu"]
@@ -272,7 +287,9 @@ def test_tf_max_intermediate_grads_cap_raises() -> None:
             lambda x: tf.reduce_sum(tf.nn.relu(x + 1.0)),
             tf.ones((2, 2), dtype="float32"),
             backend="tf",
-            grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=1),
+            capture=tl.options.CaptureOptions(
+                grad_options=GradOptions(intermediate_grads=True, max_intermediate_grads=1)
+            ),
         )
 
 
@@ -284,7 +301,7 @@ def test_tf_non_scalar_output_without_loss_fn_raises() -> None:
             lambda x: x + 1.0,
             tf.ones((2, 2), dtype="float32"),
             backend="tf",
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 
@@ -310,7 +327,7 @@ def test_tf_replay_output_divergence_refuses_grads() -> None:
             Diverges(),
             tf.ones((2, 2), dtype="float32"),
             backend="tf",
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 
@@ -324,7 +341,7 @@ def test_tf_graph_only_capture_refuses_grad_options() -> None:
             compiled,
             tf.ones((2, 2), dtype="float32"),
             backend="tf",
-            grad_options=GradOptions(),
+            capture=tl.options.CaptureOptions(grad_options=GradOptions()),
         )
 
 
@@ -336,7 +353,7 @@ def test_tf_grad_options_type_is_validated() -> None:
             lambda x: tf.reduce_sum(x),
             tf.ones((2, 2), dtype="float32"),
             backend="tf",
-            grad_options={"loss_fn": None},
+            capture=tl.options.CaptureOptions(grad_options={"loss_fn": None}),
         )
 
 
@@ -355,7 +372,7 @@ def test_tf_validation_outcome_unchanged_by_grad_options() -> None:
         model,
         x,
         backend="tf",
-        grad_options=GradOptions(intermediate_grads=True),
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(intermediate_grads=True)),
     )
     augmented_result = TFBackend().validate_trace(augmented, validate_metadata=False)
 
@@ -373,7 +390,12 @@ def test_tf_module_tree_call_counts_restored_after_replay() -> None:
     x = _fixture_input()
     model(x)
     baseline = tl.trace(model, x, backend="tf")
-    augmented = tl.trace(model, x, backend="tf", grad_options=GradOptions(loss_fn=_loss))
+    augmented = tl.trace(
+        model,
+        x,
+        backend="tf",
+        capture=tl.options.CaptureOptions(grad_options=GradOptions(loss_fn=_loss)),
+    )
 
     baseline_calls = {call.label for call in baseline.module_calls}
     augmented_calls = {call.label for call in augmented.module_calls}

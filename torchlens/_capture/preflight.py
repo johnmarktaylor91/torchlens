@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .._trace_selector_helpers import _selector_component_is_final_only
+from .._trace_selection_shape import _selector_component_is_final_only
 
 __all__ = ["AddressPreflight", "AddressVerdict", "address_preflight", "cone_preflight"]
 
@@ -250,9 +250,9 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
     exact pass-qualified labels ``push``/``do`` would recompute for these
     origins (the preflight-equals-actual oracle is pinned by test) — beside
     the structural facts a user needs to price the run: the live lane always
-    re-executes the FULL forward regardless of cone size, replay requires an
-    ``replayable=True`` capture (a disclosed ~3x capture-time premium
-    on CPU transformers), and reachability is NEVER numeric change (movers
+    re-executes the FULL forward regardless of cone size, replay requires the
+    per-op argument templates every eager capture records (a structure-only
+    capture keeps none), and reachability is NEVER numeric change (movers
     are a subset of the cone, not equal to it). No wall-clock number is ever
     predicted — a host-specific time band is the caller's own measurement.
 
@@ -283,13 +283,16 @@ def cone_preflight(trace: Any, origins: Any) -> dict[str, Any]:
         "cone_size": len(planned),
         "total_ops": total_ops,
         "live_lane_ops": total_ops,
-        "replay_ready": bool(getattr(trace, "is_replayable", False)),
+        "replay_ready": bool(
+            getattr(trace, "is_replayable", False)
+            or getattr(getattr(trace, "options", None), "save_arg_templates", False)
+        ),
         "notes": (
             "replay recomputes exactly the planned labels; the live lane "
             "re-executes the full forward regardless of cone size",
-            "replayable=True capture costs a measured ~3x capture "
-            "wall-time premium on CPU transformers (disclose it in any "
-            "replay journey)",
+            "replay needs only the per-op argument templates a default "
+            "capture records; replayable=True adds the runnable apparatus "
+            "at a measured 5-8x capture wall-time premium on CPU",
             "reachability is never numeric change: movers are a subset of "
             "the cone, never asserted equal to it",
         ),

@@ -163,21 +163,18 @@ def branchy_trace():
         trace.cleanup()
 
 
-@pytest.mark.smoke_cells("test_parity_reused_block[auto-unrolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_reused_block(reused_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(reused_trace, vis_mode, mode)
 
 
-@pytest.mark.smoke_cells("test_parity_separate_blocks[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_separate_blocks(separate_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(separate_trace, vis_mode, mode)
 
 
-@pytest.mark.smoke_cells("test_parity_branchy_cat[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_branchy_cat(branchy_trace: tl.Trace, vis_mode: str, mode: str) -> None:
@@ -236,7 +233,6 @@ def test_near_uncollapsed_auto_plan_is_disclosed(tmp_path) -> None:
     with pytest.warns(TorchLensWarning, match="nearly the uncollapsed graph"):
         log.draw(
             path=str(tmp_path / "fan"),
-            vis_save_only=True,
             file_format="svg",
             collapse="auto",
         )
@@ -259,10 +255,9 @@ def test_floor_fallback_result_is_typed_and_visible(tmp_path, monkeypatch) -> No
     with pytest.warns(TorchLensWarning, match="floor plan"):
         source = log.draw(
             path=str(tmp_path / "cliff"),
-            vis_save_only=True,
             file_format="svg",
             collapse="auto",
-        )
+        ).dot
     # Visible notice on the render (never only a warning).
     assert "collapse fell back to the floor plan" in source
 

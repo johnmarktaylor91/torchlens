@@ -135,9 +135,9 @@ def _captured_log(*, replayable: bool = False) -> tl.Trace:
         torch.randn(2, 3),
         capture=CaptureOptions(
             replayable=replayable,
-            layers_to_save="all",
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -507,7 +507,8 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     trace = tl.trace(
         nn.Linear(3, 3),
         torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", backward_ready=True),
+        capture=tl.options.CaptureOptions(backward_ready=True),
+        save="all",
     )
     source_op = next(
         op for op in trace.ops if isinstance(op.out, torch.Tensor) and op.out.requires_grad
@@ -616,6 +617,7 @@ def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path
     assert records[0].signal == "forward"
 
 
+@pytest.mark.smoke
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
     """Trace.save preserves backward GradFnCall intervention fire refs."""
 
@@ -902,6 +904,7 @@ def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
     validate_tlspec(path)
 
 
+@pytest.mark.rare
 def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
@@ -956,6 +959,7 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     )
 
 
+@pytest.mark.rare
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""

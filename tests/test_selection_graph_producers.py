@@ -154,6 +154,7 @@ def test_neighborhood_masks_are_whole_site_exact(log) -> None:
         assert "neighborhood(hops=1" in entry.provenance.source
 
 
+@pytest.mark.smoke
 def test_neighborhood_family_semantics_ignore_element_masks(log) -> None:
     """A one-element seed still seeds its WHOLE site (touched is touched)."""
 
@@ -189,6 +190,7 @@ def test_neighborhood_composes_with_the_algebra(log) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_neighborhood_validates_hops_and_direction() -> None:
     """Bad hops / direction refuse at construction with plain ValueError."""
 
@@ -204,6 +206,7 @@ def test_neighborhood_validates_hops_and_direction() -> None:
         tl.neighborhood("")
 
 
+@pytest.mark.smoke
 def test_neighborhood_refuses_param_seed_typed() -> None:
     """PARAM operands refuse selection_kind_incompatible at construction."""
 
@@ -226,6 +229,7 @@ def test_neighborhood_unknown_seed_refuses_typed(log) -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_between_selects_exactly_the_path_region(log) -> None:
     """The region is the ops on at least one directed source-to-sink path."""
 
@@ -440,6 +444,7 @@ def test_slice_save_refuses_typed(log, tmp_path) -> None:
     assert "trace.save(path)" in str(excinfo.value)
 
 
+@pytest.mark.smoke
 def test_slice_lifts_back_into_the_algebra(log, loopy_log) -> None:
     """__selection__ + the operator mixin compose slices with selections."""
 
@@ -487,7 +492,8 @@ def test_slice_do_gallery_row(model) -> None:
     log = tl.trace(
         model,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True, layers_to_save="all"),
+        capture=tl.options.CaptureOptions(replayable=True),
+        save="all",
     )
     try:
         view = log.between("linear_1_1", "relu_1_2")

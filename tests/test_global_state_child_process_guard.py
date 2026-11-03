@@ -140,7 +140,6 @@ def test_child_process_guard_refuses_fork_inherited_group_stamp(
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
 
 
-@pytest.mark.smoke
 def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

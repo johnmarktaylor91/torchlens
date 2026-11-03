@@ -43,7 +43,6 @@ def _envelope(status: str = "ok", **data: object) -> dict:
     return {"status": status, "data": data, "truncation": None}
 
 
-@pytest.mark.smoke
 def test_fail_on_predicates_read_every_record_shape() -> None:
     """Direct records and per-side compare records both gate; None never trips unverified."""
 
@@ -105,7 +104,7 @@ def test_explain_and_diff_gates_are_live(clean: Path, nonfinite: Path) -> None:
 def test_incomplete_gate_trips_on_a_halted_capture(tmp_path: Path) -> None:
     """A HALTED capture is not complete: --fail-on incomplete exits 1."""
 
-    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), halt=tl.func("relu"))
+    log = tl.trace(RepeatedBlockNet().eval(), deterministic_input(), stop_after=tl.func("relu"))
     assert log.outcome.status.value == "stopped"
     path = tmp_path / "halted.tlspec"
     log.save(str(path))
@@ -145,7 +144,6 @@ def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     assert _sha256_of_file(target) == sha256_file(target)
 
 
-@pytest.mark.smoke
 def test_corrupted_metadata_is_never_served_from_the_cache(clean: Path, tmp_path: Path) -> None:
     """Same manifest, different metadata.pkl -> cache MISS -> the loader's integrity refusal."""
 

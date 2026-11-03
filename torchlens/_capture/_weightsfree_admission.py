@@ -275,7 +275,7 @@ class _PendingAdmission(threading.local):
 
 # Module-level mutable state: thread-local hand-off, armed by the capture
 # entry (user_funcs) around the one capture driver call and read by the
-# forward scope; inventoried by tests/test_global_state_inventory.py.
+# forward scope; inventoried by scripts/checks/global_state_inventory.py.
 _PENDING = _PendingAdmission()
 
 # Live admitted-meta captures (consumed by the W1 transparency gate on the

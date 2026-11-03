@@ -6,7 +6,7 @@ import contextlib
 import os
 import random
 import warnings
-from collections.abc import Callable, Iterable
+from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Literal, cast
 
 import torch
@@ -31,12 +31,9 @@ from ._deprecations import MISSING, MissingType
 from ._errors import CaptureNotActiveError, InvalidArgumentError
 from ._input_coerce import _coerce_input_args
 from ._literals import (
-    BufferVisibilityLiteral,
     CollapseLiteral,
     FoldRepeatsLiteral,
     OutputDeviceLiteral,
-    VisDirectionLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
@@ -120,9 +117,8 @@ def log_model_metadata(
 ) -> Trace:
     """Return model metadata without saving any outs.
 
-    Equivalent to ``trace(model, input_args, input_kwargs,
-    capture=CaptureOptions(layers_to_save=None,
-    compute_input_output_distances=True))``.
+    Equivalent to ``trace(model, input_args, input_kwargs=input_kwargs,
+    save=None, capture=CaptureOptions(compute_input_output_distances=True))``.
 
     Parameters
     ----------
@@ -142,11 +138,11 @@ def log_model_metadata(
     model_trace = _user_funcs.trace(
         model,
         input_args,
-        input_kwargs,
+        input_kwargs=input_kwargs,
         capture=CaptureOptions(
-            layers_to_save=None,
             compute_input_output_distances=True,
         ),
+        save=None,
     )
     return model_trace
 
@@ -542,7 +538,7 @@ def show_model_graph(
     model: nn.Module,
     input_args: torch.Tensor | list[Any] | tuple[Any, ...],
     input_kwargs: dict[Any, Any] | None = None,
-    view: VisModeLiteral | MissingType = MISSING,
+    rolled: bool | MissingType = MISSING,
     depth: int | MissingType = MISSING,
     renderer: VisRendererLiteral | MissingType = MISSING,
     layout: VisNodePlacementLiteral | MissingType = MISSING,
@@ -599,7 +595,7 @@ def show_model_graph(
         speed matters.
     visualization:
         Grouped visualization options. When omitted, ``show_model_graph``
-        defaults to ``VisualizationOptions(view="unrolled")``.
+        defaults to ``VisualizationOptions()`` (the unrolled graph).
 
     Returns
     -------
@@ -618,9 +614,8 @@ def show_model_graph(
         recurrence_detection = True
     recurrence_detection_enabled = bool(recurrence_detection)
     visualization_options = merge_visualization_options(
-        function_default_mode="unrolled",
         visualization=visualization,
-        view=view,
+        rolled=rolled,
         depth=depth,
         renderer=renderer,
         layout=layout,
@@ -629,9 +624,6 @@ def show_model_graph(
         fold_repeats=fold_repeats,
         order_siblings=order_siblings,
     )
-
-    if visualization_options.view not in ["none", "rolled", "unrolled"]:
-        raise ValueError("Visualization option must be either 'none', 'rolled', or 'unrolled'.")
 
     trace = _user_funcs._run_model_and_save_specified_outs(
         model=model,
@@ -659,251 +651,6 @@ def show_model_graph(
         trace.draw(**render_kwargs)
     finally:
         trace.cleanup()
-
-
-def draw_backward(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    collapsed_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    node_style: VisNodeModeLiteral | MissingType = MISSING,
-    code_panel: CodePanelOption = False,
-    vis_mode: VisModeLiteral = "rolled",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's captured backward grad_fn_handle graph.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    collapsed_node_spec_fn:
-        Accepted for forward-visualization API symmetry. Not applied because
-        backward graphs do not render collapsed module nodes.
-    node_style:
-        Node-style preset applied to grad_fn nodes.
-    code_panel:
-        Optional source-code panel mode.
-    vis_mode:
-        ``"rolled"`` renders one node per GradFn; ``"unrolled"`` renders one
-        node per GradFnCall grouped by backward pass.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, skin (``theme``), graph overrides, and edge
-        overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "backward_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "topdown"
-        graph_overrides = None
-        edge_overrides = None
-        node_mode: VisNodeModeLiteral = "default"
-        theme = "torchlens"
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-        node_mode = visualization.node_style
-        theme = visualization.theme
-
-    if node_style is not MISSING:
-        node_mode = cast(VisNodeModeLiteral, node_style)
-
-    return trace.draw_backward(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        collapsed_node_spec_fn=collapsed_node_spec_fn,
-        vis_node_mode=node_mode,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        code_panel=code_panel,
-        vis_mode=vis_mode,
-        bwd=bwd,
-        theme=theme,
-    )
-
-
-def draw_combined(
-    trace: Trace,
-    node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    backward_node_spec_fn: Callable[[Any, Any], Any] | None = None,
-    vis_mode: VisModeLiteral = "unrolled",
-    intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    show_buffers: BufferVisibilityLiteral = "meaningful",
-    bwd: int | Iterable[int] | None = None,
-    visualization: VisualizationOptions | None = None,
-) -> str:
-    """Render an existing Trace's forward ops and backward grad_fns together.
-
-    Parameters
-    ----------
-    trace:
-        Trace with backward metadata captured by ``trace.log_backward(loss)``
-        or ``trace.capture_backward()``.
-    node_spec_fn:
-        Optional callback receiving ``(layer_log, default_spec)``.
-    backward_node_spec_fn:
-        Optional callback receiving ``(grad_fn_handle, default_spec)``.
-    vis_mode:
-        Combined rendering currently supports only ``"unrolled"``.
-    intervening_cluster:
-        Placement mode for grad_fns without a corresponding forward op.
-    show_buffers:
-        Buffer visibility mode for the forward side.
-    bwd:
-        Optional one-based backward pass number or numbers to render.
-    visualization:
-        Grouped visualization options. Only output path, save behavior, file
-        format, direction, graph overrides, and edge overrides are used.
-
-    Returns
-    -------
-    str
-        Graphviz DOT source.
-    """
-
-    if visualization is None:
-        container_path = "combined_modelgraph"
-        save_only = False
-        file_format = "pdf"
-        direction: VisDirectionLiteral = "leftright"
-        graph_overrides = None
-        edge_overrides = None
-    else:
-        container_path = visualization.container_path
-        save_only = visualization.save_only
-        file_format = visualization.file_format
-        direction = visualization.direction
-        graph_overrides = visualization.graph_overrides
-        edge_overrides = visualization.edge_overrides
-
-    return trace.draw_combined(
-        path=container_path,
-        vis_graph_overrides=graph_overrides,
-        node_spec_fn=node_spec_fn,
-        backward_node_spec_fn=backward_node_spec_fn,
-        vis_edge_overrides=edge_overrides,
-        vis_save_only=save_only,
-        file_format=file_format,
-        vis_direction=direction,
-        vis_mode=vis_mode,
-        intervening_cluster=intervening_cluster,
-        show_buffers=show_buffers,
-        bwd=bwd,
-    )
-
-
-def show_bundle_graph(
-    bundle: Any,
-    path: str = "bundle_modelgraph",
-    vis_mode: VisModeLiteral = "unrolled",
-    signal: str = "forward",
-    vis_direction: VisDirectionLiteral = "bottomup",
-    vis_graph_overrides: dict[str, Any] | None = None,
-    vis_node_overrides: dict[str, Any] | None = None,
-    vis_edge_overrides: dict[tuple[str, str], Any] | None = None,
-    vis_save_only: bool = False,
-    file_format: str = "pdf",
-    nodes: Literal["ops", "members"] = "ops",
-    theme: str = "torchlens",
-    show_legend: bool | None = None,
-) -> str | None:
-    """Render a multi-trace bundle graph.
-
-    Parameters
-    ----------
-    bundle:
-        ``torchlens.Bundle`` instance.
-    path:
-        Output path for Graphviz rendering.
-    vis_mode:
-        ``"rolled"``, ``"unrolled"``, or ``"none"``.
-    signal:
-        Which pass's graph to draw: ``"forward"``, ``"backward"``, ``"both"``, or
-        ``"overlay"``.
-    vis_direction:
-        Graphviz layout direction.
-    vis_graph_overrides:
-        Graph-level Graphviz overrides.
-    vis_node_overrides:
-        Per-node Graphviz style overrides.
-    vis_edge_overrides:
-        Per-edge Graphviz style overrides keyed by ``(source, target)``.
-    vis_save_only:
-        If True, save without opening a viewer.
-    file_format:
-        Output file format.
-    nodes:
-        What the picture's nodes are (spelling documented-unstable).
-        ``"ops"`` (default): the bundle's union op graph. ``"members"``: one
-        node per member and one edge per relation row, from the earlier
-        member to the later one, labelled with the kind, the row's
-        ``label`` and, on ``fed_by``, its basis and coverage; solid edges
-        carry token spans TorchLens checked, every other row is dashed.
-        Node overrides key by member name, edge overrides by
-        ``(earlier, later)``; ``signal`` must stay ``"forward"``.
-    theme:
-        Skin preset, the names ``Trace.draw`` takes: ``"torchlens"`` (default),
-        ``"paper"``, ``"dark"``, ``"colorblind"`` or ``"high_contrast"``.
-        Op nodes take ``draw``'s shapes and fills; a node or arrow every
-        member runs carries no member list.
-    show_legend:
-        ``True`` draws the key under the header, as ``draw`` does.
-
-    Returns
-    -------
-    str | None
-        DOT source, or ``None`` when ``vis_mode='none'``.
-    """
-
-    if nodes not in {"ops", "members"}:
-        raise ValueError("nodes must be 'ops' or 'members'.")
-    if nodes == "members" and signal != "forward":
-        raise ValueError("nodes='members' draws the relation graph; leave signal='forward'.")
-    if vis_mode == "none":
-        return None
-    if vis_mode not in {"rolled", "unrolled"}:
-        raise ValueError("vis_mode must be 'rolled', 'unrolled', or 'none'.")
-    if signal not in {"forward", "backward", "both", "overlay"}:
-        raise ValueError("signal must be 'forward', 'backward', 'both', or 'overlay'.")
-
-    from ._visualization._bundle_graph import BundlePictureOptions, render_bundle_graph
-    from ._visualization._render_utils import direction_to_rankdir
-
-    options = BundlePictureOptions(
-        outpath=path,
-        vis_mode=vis_mode,
-        direction=signal,
-        rankdir=direction_to_rankdir(vis_direction),
-        graph_overrides=vis_graph_overrides,
-        node_overrides=vis_node_overrides,
-        edge_overrides=vis_edge_overrides,
-        save_only=vis_save_only,
-        fileformat=file_format,
-        nodes=nodes,
-        theme_name=theme,
-        show_legend=show_legend is True,
-    )
-    return render_bundle_graph(bundle, options)
 
 
 @restores_rng_streams
@@ -1325,7 +1072,7 @@ def _validate_forward_pass_torch(
        through the wrapper layer it is meant to check (R75-1). If they
        cannot be removed (a capture is active), validation refuses with
        ``False`` rather than blessing a wrap-state-dependent ground truth.
-    2. Run ``trace`` with ``save_args=True`` and ``layers_to_save='all'``
+    2. Run ``trace`` with ``save_args=True`` and ``save='all'``
        to capture every out and its creating function's arguments.
     3. Call ``Trace.validate_forward_pass`` which replays the forward pass
        layer-by-layer from saved outs, checking that the output matches ground

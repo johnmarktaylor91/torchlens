@@ -40,6 +40,7 @@ from ..._ir.predicate import RecordContext
 from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._ir.workspaces import _init_module_hierarchy_data
+from ..._output_slot import returned
 from ..._postprocess._grouping_stamp import build_grouping_policy_stamp
 from ..._postprocess._materialize import materialize_from_events
 from ..._postprocess._selective_save import (
@@ -87,6 +88,7 @@ from .._options import (
     resolve_optional_capture_field as _resolve_optional_capture_field,
 )
 from .._validation_shared import float_replay_tolerances
+from ._closure_consts import _readable_closure_consts
 from ._site_dialect import jax_site_keys
 from ._trace_graph_helpers import (
     _control_parent_labels,
@@ -450,7 +452,7 @@ class JAXBackend:
         save_raw_input: str | bool | MissingType = MISSING,
         batch_render: str | MissingType = MISSING,
         output_transform: object | None = None,
-        save_raw_output: str | bool | MissingType = MISSING,
+        save_transformed_output: str | bool | MissingType = MISSING,
         layer_visualizers: dict[Any, Any] | None = None,
         save_visualizations: bool | MissingType = MISSING,
         lookback: int = 0,
@@ -518,8 +520,8 @@ class JAXBackend:
             Raw-input render policy.
         output_transform
             Optional metadata transform for final output.
-        save_raw_output
-            Raw-output save policy.
+        save_transformed_output
+            Transformed-output save policy.
         layer_visualizers
             Unsupported for JAX in this preview.
         save_visualizations
@@ -577,7 +579,7 @@ class JAXBackend:
         # distinguishable from ``MISSING`` for them.
         capture_options = merge_capture_options(
             capture=capture,
-            layers_to_save=layers_to_save,
+            _layers_to_save=layers_to_save,
             keep_orphans=keep_orphans,
             output_device=output_device,
             detach_saved_activations=detach_saved_activations,
@@ -591,13 +593,13 @@ class JAXBackend:
             name=name,
             save_raw_input=save_raw_input,
             batch_render=batch_render,
-            save_transformed_output=save_raw_output,
+            save_transformed_output=save_transformed_output,
             save_visualizations=save_visualizations,
             jax_control_flow=jax_control_flow,
             jax_max_control_flow_unroll=jax_max_control_flow_unroll,
             module_identity_mode=module_identity_mode,
         )
-        layers_to_save = capture_options.layers_to_save
+        layers_to_save = capture_options._layers_to_save
         keep_orphans = capture_options.keep_orphans
         output_device = capture_options.output_device
         detach_saved_activations = capture_options.detach_saved_activations
@@ -611,7 +613,7 @@ class JAXBackend:
         name = capture_options.name
         save_raw_input = capture_options.save_raw_input
         batch_render = capture_options.batch_render
-        save_raw_output = capture_options.save_transformed_output
+        save_transformed_output = capture_options.save_transformed_output
         save_visualizations = capture_options.save_visualizations
         jax_control_flow = capture_options.jax_control_flow
         jax_max_control_flow_unroll = capture_options.jax_max_control_flow_unroll
@@ -643,7 +645,7 @@ class JAXBackend:
         name = _default_if_missing(name, None)
         save_raw_input = _default_if_missing(save_raw_input, "small")
         batch_render = _default_if_missing(batch_render, "auto")
-        save_raw_output = _default_if_missing(save_raw_output, "small")
+        save_transformed_output = _default_if_missing(save_transformed_output, "small")
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
@@ -710,33 +712,15 @@ class JAXBackend:
             save_raw_input=cast(str | bool, save_raw_input),
             batch_render=cast(str, batch_render),
             output_transform=output_transform,
-            save_transformed_output=cast(str | bool, save_raw_output),
+            save_transformed_output=cast(str | bool, save_transformed_output),
         )
         trace.capture_events = CaptureEvents()
         trace._provenance_start_time = time.time()
-        if use_pytree_module:
-            if module_tree is None:
-                raise AssertionError("pytree_module mode requires JAX module metadata.")
-            try:
-                with _scoped_pytree_module_calls(module_tree):
-                    closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            except Exception as exc:
-                _raise_nnx_trace_context_error(module_tree, exc)
-                raise
-            reject_attributed_module_strict_control_flow(closed_jaxpr)
-            closure_consts = ()
-            module_tree.call_counts.clear()
-            module_tree.forward_args_by_call.clear()
-            try:
-                with _scoped_pytree_module_calls(module_tree):
-                    output = model(*args)
-            except Exception as exc:
-                _raise_nnx_trace_context_error(module_tree, exc)
-                raise
-        else:
-            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            closure_consts = _readable_closure_consts(closed_jaxpr)
-            output = model(*args)
+        if use_pytree_module and module_tree is None:
+            raise AssertionError("pytree_module mode requires JAX module metadata.")
+        closed_jaxpr, closure_consts, output = _derive_and_run(
+            model, args, static_argnums, module_tree if use_pytree_module else None
+        )
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
             closed_jaxpr,
@@ -747,6 +731,8 @@ class JAXBackend:
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
         trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+
+        trace._output_slot = returned(output)
         trace.transformed_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
         self._emit_const_sources(trace, closure_consts)
@@ -3175,6 +3161,55 @@ def _raise_nnx_trace_context_error(
     ) from exc
 
 
+def _derive_and_run(
+    model: Callable[..., Any],
+    args: Sequence[Any],
+    static_argnums: tuple[int, ...],
+    module_tree: EquinoxModuleTree | NnxModuleTree | None,
+) -> tuple[Any, tuple[Any, ...], Any]:
+    """Derive the closed jaxpr and run the callable once.
+
+    Parameters
+    ----------
+    model
+        JAX-compatible callable following ``fn(params, *inputs)``.
+    args
+        Normalized positional arguments.
+    static_argnums
+        Positional indexes declared static for ``jax.make_jaxpr``.
+    module_tree
+        The attributed module tree for ``pytree_module`` capture, or ``None``
+        for a raw function root.
+
+    Returns
+    -------
+    tuple[Any, tuple[Any, ...], Any]
+        The closed jaxpr, its readable closure constants (empty under
+        ``pytree_module``) and the eager output.
+    """
+
+    if module_tree is None:
+        closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+        closure_consts = _readable_closure_consts(closed_jaxpr)
+        return closed_jaxpr, closure_consts, model(*args)
+    try:
+        with _scoped_pytree_module_calls(module_tree):
+            closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
+    except Exception as exc:
+        _raise_nnx_trace_context_error(module_tree, exc)
+        raise
+    reject_attributed_module_strict_control_flow(closed_jaxpr)
+    module_tree.call_counts.clear()
+    module_tree.forward_args_by_call.clear()
+    try:
+        with _scoped_pytree_module_calls(module_tree):
+            output = model(*args)
+    except Exception as exc:
+        _raise_nnx_trace_context_error(module_tree, exc)
+        raise
+    return closed_jaxpr, (), output
+
+
 def _jax_event_module_stack(module_stack: Sequence[str]) -> tuple[str, ...]:
     """Normalize decoded JAX module scopes for TorchLens Op containment.
 
@@ -3950,43 +3985,6 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     if argnum == 0:
         return f"params{suffix}"
     return f"inputs.{argnum - 1}{suffix}"
-
-
-def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
-    """Closure constants of a function-root jaxpr, each with a readable buffer.
-
-    Parameters
-    ----------
-    closed_jaxpr
-        The derived closed jaxpr.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        ``closed_jaxpr.consts`` in order (possibly empty).
-
-    Raises
-    ------
-    BackendUnsupportedError
-        ``constant_unrealizable`` when a constant is not a concrete array
-        (a tracer or a deleted buffer): it could not be recorded with a
-        payload, and the rule never records a parentless op without one.
-    """
-
-    import jax
-    import numpy as np
-
-    consts = tuple(getattr(closed_jaxpr, "consts", ()))
-    tracer_type = getattr(getattr(jax, "core", None), "Tracer", ())
-    for index, value in enumerate(consts):
-        if isinstance(value, tracer_type) or not isinstance(value, (jax.Array, np.ndarray)):
-            raise BackendUnsupportedError(
-                f"JAX closure constant {index} of type {type(value).__name__} has no readable "
-                "buffer, so it cannot be recorded as a constant op with a payload.",
-                code="constant_unrealizable",
-                remedy="pass the value as an explicit pytree leaf of fn(params, *inputs)",
-            )
-    return consts
 
 
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:

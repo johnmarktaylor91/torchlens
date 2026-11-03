@@ -97,12 +97,12 @@ def _build_live_log() -> Trace:
         model,
         x,
         capture=tl.options.CaptureOptions(
-            layers_to_save="all",
             save_args=True,
             save_rng=True,
             save_source_context=True,
             seed=0,
         ),
+        save="all",
     )
 
 
@@ -160,8 +160,8 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     trace = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=transform),
+        capture=tl.options.CaptureOptions(activation_transform=transform),
+        save="all",
     )
     spec = tmp_path / "partial.tlspec"
     trace.save(str(spec))
@@ -205,6 +205,7 @@ def test_transform_repr_redacts_heap_addresses() -> None:
     assert "0x" not in wrapped.replace("0x<scrubbed>", "")
 
 
+@pytest.mark.smoke
 def test_portable_state_specs_cover_every_live_attribute() -> None:
     """Each target class must map every live attribute to a scrub policy."""
 
@@ -271,6 +272,7 @@ def _sweep_public_accessors(record: Any) -> None:
             continue
 
 
+@pytest.mark.smoke
 def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
@@ -343,10 +345,11 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
 #: reason must name why the call is unsafe or out of scope for a read-only
 #: pre-save sweep; "we forgot" is not representable in this table.
 _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
+    "animate": "pass-animation renderer: needs a multi-pass site and writes a movie file "
+    "(options.3 ruling); its reads are draw's, swept above",
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
-    "add_node_overlay": "mutates the overlay table consumed by draw",
     "attach_hooks": "mutates the live model's hook registry",
     "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
@@ -370,7 +373,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "render_dagua_graph": "optional external dagua renderer dependency",
     "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
@@ -428,7 +430,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "output_table": lambda t: t.output_table(),
         "reconstruct_output": lambda t: t.reconstruct_output(),
         "reconstruct_container": lambda t: t.reconstruct_container(),
-        "visualization_field_audit": lambda t: t.visualization_field_audit(),
         "attention_blocks": lambda t: list(t.attention_blocks()),
         "modules_with_facet": lambda t: list(t.modules_with_facet("query")),
         "activations_by_pass": lambda t: t.activations_by_pass(1),
@@ -456,9 +457,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "check_plan": lambda t: t.check_plan(["relu"]),
         "stack": lambda t: t.stack(tl.func("relu")),
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
-        "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
-        "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t._layer_list[0].layer_label),
     }
 
 
@@ -750,7 +748,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
     """r69 E: effective DROP wins before the Trace raw-value special case.
 
     Sparse runnable saves scrub ``raw_input``/``raw_output`` to ``None`` regardless
-    of the ordinary ``save_raw_input``/``save_raw_output`` policy (``True`` or
+    of the ordinary ``save_raw_input``/``save_transformed_output`` policy (``True`` or
     ``"small"``), for nested tensor/string containers included -- no raw blob or
     tensor may enter the value-free sparse core (the payload assertion stays the
     unchanged final tripwire, pinned by the genuine-stray negatives in
@@ -801,7 +799,8 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace = trace_fn(
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
-        capture=tl.options.CaptureOptions(layers_to_save="none", save_raw_input="small"),
+        capture=tl.options.CaptureOptions(save_raw_input="small"),
+        save="none",
     )
     path = tmp_path / "analysis_raw.tlspec"
     trace.save(path)
@@ -813,6 +812,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     assert raw[1] == {"mode": "fast"}
 
 
+@pytest.mark.smoke
 def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     """PIL raw input should survive ``save_raw_input='small'`` as a bounded image."""
 
@@ -822,7 +822,7 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     trace = trace_fn(
         _TinyImageInputModel(),
         image,
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     path = tmp_path / "pil_raw_input.tlspec"
 
@@ -840,7 +840,6 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     assert loaded.input.size[1] <= 256
 
 
-@pytest.mark.smoke
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 

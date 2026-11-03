@@ -21,7 +21,6 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens import _visualization
 from torchlens.bundle import Bundle
 from torchlens.bundle._fed_by import TOKEN_BOUNDARY_FAMILY_ID, bind_member
 from torchlens.bundle._token_spans import find_token_spans
@@ -183,8 +182,8 @@ def test_auto_spans_refuse_without_the_evidence(model: _TinyLM) -> None:
 
 
 def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=[])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=[])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
@@ -195,12 +194,14 @@ def test_auto_spans_refuse_when_ids_are_not_retained(model: _TinyLM) -> None:
 
 
 def test_auto_spans_work_with_a_selection_that_names_the_input(model: _TinyLM) -> None:
-    options = tl.options.CaptureOptions(layers_to_save=["input_1", "block"])
-    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options)
+    options = tl.options.CaptureOptions()
+    draft = tl.trace(model, torch.tensor([_DRAFT_IDS]), capture=options, save=["input_1", "block"])
     attach_sidecar(
         draft, TOKEN_BOUNDARY_FAMILY_ID, {"stream": "input", "batch_row": 0, "completion": [3, 7]}
     )
-    critique = tl.trace(model, torch.tensor([_CRITIQUE_IDS]), capture=options)
+    critique = tl.trace(
+        model, torch.tensor([_CRITIQUE_IDS]), capture=options, save=["input_1", "block"]
+    )
     bundle = Bundle({"draft": draft, "critique": critique})
     bundle.relate("fed_by", "critique", "draft", token_spans="auto")
     assert bundle.relations[0].params["basis"] == "matched"
@@ -452,14 +453,8 @@ def test_members_render_draws_rows_as_labelled_edges(tmp_path: Path, model: _Tin
     bundle.add(_member(model, [4, 5]), names="revise")
     bundle.relate("fed_by", "critique", "draft", token_spans="auto", label="critique")
     bundle.relate("successor_of", "revise", "critique")
-    source = _visualization.show_bundle_graph(
-        bundle,
-        nodes="members",
-        path=str(tmp_path / "members"),
-        vis_save_only=True,
-        file_format="svg",
-    )
-    assert source is not None
+    source = bundle.draw(str(tmp_path / "members.svg"), nodes="members").dot
+    assert (tmp_path / "members.svg").is_file()
     for index, name in enumerate(("draft", "critique", "revise")):
         assert name in _statement(source, f"member_{index} [")
     fed_by_edge = _statement(source, "member_0 -> member_1")  # draft -> critique
@@ -476,11 +471,11 @@ def _statement(source: str, head: str) -> str:
     return source[start : source.index("]", start) + 1]
 
 
-def test_members_render_refuses_a_backward_signal(model: _TinyLM) -> None:
-    with pytest.raises(ValueError, match="signal"):
-        _visualization.show_bundle_graph(_harness(model), nodes="members", signal="backward")
+def test_members_render_refuses_a_backward_graph(model: _TinyLM) -> None:
+    with pytest.raises(ValueError, match="graph='forward'"):
+        _harness(model).draw(nodes="members", graph="backward")
     with pytest.raises(ValueError, match="nodes"):
-        _visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
+        _harness(model).draw(nodes="layers")  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------

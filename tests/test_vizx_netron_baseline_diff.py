@@ -1,4 +1,4 @@
-"""Per-node diff facts in the Netron baseline slot (ruling U09.5).
+"""Per-node diff facts in the Netron baseline slot.
 
 ``tl.export.netron(subject, path, baseline=reference)`` must carry, per
 exported node, exactly the facts ``torchlens.report.diff``

@@ -1,4 +1,4 @@
-"""Mistral row for the per-family facet tests (U12.2).
+"""Mistral row for the per-family facet tests.
 
 The R0 deep sweep (``r0/test_realism_randinit_sweep.py``) pins per-family
 facet floors for fourteen families; Mistral, named with them in August, had
@@ -139,7 +139,7 @@ def test_mistral_facet_floors(impl):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         model = build_mistral(impl)
-        trace = tl.trace(model, (), {"input_ids": _token_ids()})
+        trace = tl.trace(model, (), input_kwargs={"input_ids": _token_ids()})
     try:
         assert type(model.model.layers[0].self_attn).__name__ == "MistralAttention"
         assert trace.outcome.status.name == "COMPLETE"

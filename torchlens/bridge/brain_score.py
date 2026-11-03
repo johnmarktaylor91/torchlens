@@ -251,8 +251,8 @@ def per_layer(
     for layer in tensor_layers(trace, sites, verb="bridge.brain_score.per_layer"):
         out = getattr(layer, "out")
         label = str(getattr(layer, "layer_label", "layer"))
-        # TODO: connect the real Brain-Score Benchmark API once the offline
-        # vendored fixtures are available in the launch extras matrix.
+        # Scores come from the caller's offline benchmark callable, once per saved
+        # layer; this function does not call the Brain-Score Benchmark API itself.
         scores[label] = score_parts(benchmark(out, layer=label, **kwargs))
     return scores
 

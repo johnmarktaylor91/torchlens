@@ -92,11 +92,11 @@ class TestTraceTrainModeCarveOut:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
+                backward_ready=True,
                 activation_transform=summary(_histo64),
                 save_raw_activations=False,
             ),
-            capture=tl.options.CaptureOptions(backward_ready=True),
         )
         op = log["linear_1_1"]
         assert op.out is None
@@ -109,11 +109,11 @@ class TestTraceTrainModeCarveOut:
         log = tl.trace(
             model,
             x,
-            save=tl.options.SaveOptions(
+            capture=tl.options.CaptureOptions(
+                backward_ready=True,
                 activation_transform=summary(_histo64),
                 save_raw_activations=False,
             ),
-            capture=tl.options.CaptureOptions(backward_ready=True),
         )
         del log
         out = model(x)
@@ -127,23 +127,26 @@ class TestTraceTrainModeCarveOut:
             tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(activation_transform=_histo64),
-                capture=tl.options.CaptureOptions(backward_ready=True),
+                capture=tl.options.CaptureOptions(
+                    backward_ready=True, activation_transform=_histo64
+                ),
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"
         # The refusal teaches the new remedy at the point of failure.
         assert "summary(" in str(excinfo.value)
 
-    @pytest.mark.smoke
     def test_summary_grad_transform_passes(self) -> None:
         model = _model()
         x = torch.randn(2, 4, requires_grad=True)
         log = tl.trace(
             model,
             x,
-            grad_transform=summary(_histo64),
-            save=tl.options.SaveOptions(save_raw_grads=False),
-            capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+            capture=tl.options.CaptureOptions(
+                backward_ready=True,
+                save_grads=True,
+                grad_transform=summary(_histo64),
+                save_raw_grads=False,
+            ),
         )
         log.log_backward(log[log.output_layers[0]].out.sum())
         op = log["linear_1_1"]
@@ -160,9 +163,12 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=CaptureSpec(save_out=True, save_grad=True),
-            activation_transform=summary(_histo64),
-            save_raw_activations=False,
+            recording=tl.options.RecordingOptions(
+                default_op=CaptureSpec(save_out=True, save_grad=True)
+            ),
+            capture=tl.options.CaptureOptions(
+                activation_transform=summary(_histo64), save_raw_activations=False
+            ),
         )
         op_records = [r for r in rec.records if r.ctx.kind == "op"]
         assert op_records, "expected op records"
@@ -182,8 +188,10 @@ class TestFastlogCarveOut:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, save_grad=True),
-                activation_transform=_histo64,
+                recording=tl.options.RecordingOptions(
+                    default_op=CaptureSpec(save_out=True, save_grad=True)
+                ),
+                capture=tl.options.CaptureOptions(activation_transform=_histo64),
             )
         assert excinfo.value.fields["code"] == "transform_not_differentiable"
         assert "summary(" in str(excinfo.value)
@@ -195,10 +203,10 @@ class TestFastlogCarveOut:
         rec = tl.record(
             model,
             x,
-            default_op=True,
-            include_source_events=True,
-            activation_transform=summary(_histo64),
-            save_raw_activations=False,
+            recording=tl.options.RecordingOptions(default_op=True, include_source_events=True),
+            capture=tl.options.CaptureOptions(
+                activation_transform=summary(_histo64), save_raw_activations=False
+            ),
         )
         inputs = [r for r in rec.records if r.ctx.kind == "input"]
         assert inputs, "expected an input source record"
@@ -210,7 +218,6 @@ class TestFastlogCarveOut:
 class TestStreamingTripwireUnchanged:
     """The streaming serialization validator is NOT relaxed by the role."""
 
-    @pytest.mark.smoke
     def test_summary_non_tensor_output_refuses_under_streaming(self, tmp_path) -> None:
         from torchlens._io import ArtifactError
 
@@ -220,11 +227,11 @@ class TestStreamingTripwireUnchanged:
             tl.trace(
                 model,
                 x,
-                save=tl.options.SaveOptions(
+                storage=tl.to_disk(str(tmp_path / "run.tlspec")),
+                capture=tl.options.CaptureOptions(
                     activation_transform=summary(lambda t: float(t.sum())),
                     save_raw_activations=False,
                 ),
-                storage=tl.to_disk(str(tmp_path / "run.tlspec")),
             )
 
 

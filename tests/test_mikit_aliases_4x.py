@@ -1,4 +1,4 @@
-"""TransformerLens 4.x canonical hook names resolve to live sites (U12.5).
+"""TransformerLens 4.x canonical hook names resolve to live sites.
 
 Every ``4.x`` translation row, instantiated at every executed layer, must
 resolve on a real-class tiny model to a ``real`` (or validated
@@ -41,7 +41,7 @@ def _capture(builder_name: str):
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(4)
     x = torch.randint(0, 500, (1, 6))
-    return model, tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return model, tl.trace(model, x, save="all")
 
 
 @pytest.fixture(scope="module")

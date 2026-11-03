@@ -1,4 +1,4 @@
-"""Per-neuron MLP contribution rows under the D7 identity gate (R2-26, N-MI-2).
+"""Per-neuron MLP contribution rows under the D7 identity gate.
 
 The rows must sum to the captured MLP output they decompose, and each row
 must equal an independent hand computation from the model's own modules
@@ -29,7 +29,7 @@ def _capture(builder_name: str):
     model = getattr(families, builder_name)("eager")
     torch.manual_seed(5)
     x = torch.randint(0, 500, (2, 6))
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     return model, trace
 
 

@@ -15,7 +15,7 @@ import torchlens.validation.backward as backward_validation
 import torchlens.validation.consolidated as consolidated_validation
 from torchlens._data_classes.grad_fn import GradFn
 from torchlens._ir.events import BackwardPassStart, OpGradObserved
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 from torchlens.validation import last_validation_failure
 from torchlens.validation.diagnostics import CHECK_BACKWARD
 
@@ -157,7 +157,8 @@ def _logged_model(
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save=layers_to_save, save_grads=save_grads),
+        capture=CaptureOptions(save_grads=save_grads),
+        save=layers_to_save,
     )
     return model, x, trace
 
@@ -176,7 +177,7 @@ def _saved_relu(trace: tl.Trace) -> torch.Tensor:
 def test_detached_saved_activation_backward_names_backward_ready_remedy() -> None:
     """A TorchLens-detached retained activation gives targeted backward guidance.
 
-    The trace opts into detaching (U27.1: a default trace keeps selector saves
+    The trace opts into detaching (a default trace keeps selector saves
     graph-connected; ``tl.record`` and ``tl.extract`` detach by default).
     """
 
@@ -199,7 +200,7 @@ def test_detached_saved_activation_backward_names_backward_ready_remedy() -> Non
 
 
 def test_default_trace_selector_save_keeps_the_graph_for_backward() -> None:
-    """A default-trace selector save keeps the graph, so backward reaches the input (U27.1)."""
+    """A default-trace selector save keeps the graph, so backward reaches the input."""
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
@@ -826,9 +827,8 @@ def test_replay_fork_does_not_inherit_gradient_state() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            layers_to_save="all", save_grads="all", replayable=True, backward_ready=True
-        ),
+        capture=CaptureOptions(save_grads="all", replayable=True, backward_ready=True),
+        save="all",
     )
     trace.log_backward(_output_loss(trace))
     assert trace.autograd.has_grads
@@ -869,7 +869,8 @@ def test_replay_fork_cannot_resurrect_has_grad_from_derived_payload() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", replayable=True, backward_ready=True),
+        capture=CaptureOptions(replayable=True, backward_ready=True),
+        save="all",
     )
     address, param_log = next(iter(trace._param_logs.items()))
     param_log._derived_grad_payload = torch.ones(1)
@@ -1027,7 +1028,7 @@ def test_save_grads_true_captures_all_grads() -> None:
     """save_grads=True captures all gradients independent of layers_to_save."""
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
-    trace = tl.trace(model, x, capture=CaptureOptions(layers_to_save=["relu"], save_grads=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(save_grads=True), save=["relu"])
     trace.log_backward(_output_loss(trace))
     assert trace.saved_grad_ops
     assert any("relu" in label for label in trace.saved_grad_ops.keys())
@@ -1063,8 +1064,9 @@ def test_grad_transform_applied() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(save_grads="all"),
-        save=SaveOptions(grad_transform=lambda grad: torch.zeros_like(grad)),
+        capture=CaptureOptions(
+            save_grads="all", grad_transform=lambda grad: torch.zeros_like(grad)
+        ),
     )
     trace.log_backward(_output_loss(trace))
     assert all(
@@ -1084,9 +1086,12 @@ def test_flat_transform_kwargs_populate_transformed_payloads() -> None:
     trace = tl.trace(
         model,
         x,
-        grad_transform=lambda grad: grad.half(),
-        capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True),
-        save=tl.options.SaveOptions(activation_transform=lambda out: out.half()),
+        capture=tl.options.CaptureOptions(
+            save_grads=True,
+            backward_ready=True,
+            grad_transform=lambda grad: grad.half(),
+            activation_transform=lambda out: out.half(),
+        ),
     )
     relu_op = next(op for op in trace.ops if op.func_name == "relu")
 
@@ -1590,8 +1595,7 @@ def test_restored_trace_supports_backward_capture() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True, save_grads="all"),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference"),
     )
     loss = _output_loss(trace)
     restored = pickle.loads(pickle.dumps(trace))
@@ -1883,8 +1887,7 @@ def test_cleanup_disarms_backward_triggers() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     out = trace[trace.output_layers[0]].out
     trace.log_backward(out.sum(), retain_graph=True)
@@ -2148,7 +2151,8 @@ def test_aliased_label_registrations_emit_one_grad_event_per_pass() -> None:
     trace = tl.trace(
         IdentityWrapper(),
         torch.randn(2, 3),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=42),
+        capture=CaptureOptions(save_grads="all", seed=42),
+        save="all",
     )
     # Arming proof for the owner rule itself: the identity label is owned by
     # exactly one hooked tensor even though two registrations happened.
@@ -2284,7 +2288,8 @@ def test_foreach_inplace_live_member_owns_its_gradient() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=4),
+        capture=CaptureOptions(save_grads="all", seed=4),
+        save="all",
     )
     layer = next(op for op in trace._layer_list if "_foreach_add_" in str(op.func_name))
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
@@ -2330,7 +2335,8 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
     trace = tl.trace(
         model,
         torch.randn(2, 3, requires_grad=True),
-        capture=CaptureOptions(layers_to_save="all", save_grads="all", seed=0),
+        capture=CaptureOptions(save_grads="all", seed=0),
+        save="all",
     )
     trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.log_backward(trace[trace.output_layers[0]].out.sum())

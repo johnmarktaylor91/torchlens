@@ -45,6 +45,7 @@ _DOCUMENTED_UNSTABLE_ATEN_TOKENS = {
     "has_observation_gap",
     "primitive_op_invariants",
     "non_torch_primitive_op_inert",
+    "aten_values_consistent",
     "primitive_op_schema_invalid",
     "primitive_op_fk_invalid",
     "forward",
@@ -196,13 +197,15 @@ def _armed_trace(*, backward_ready: bool = False) -> tl.Trace:
         Trace with a present primitive profile.
     """
 
-    capture = tl.options.CaptureOptions(backward_ready=backward_ready, aten_ops=True)
-    kwargs = {"save_mode": "reference"} if backward_ready else {}
+    capture = tl.options.CaptureOptions(
+        backward_ready=backward_ready,
+        aten_ops=True,
+        **({"save_mode": "reference"} if backward_ready else {}),
+    )
     return tl.trace(
         _TwoOpModel(),
         torch.ones(2, requires_grad=backward_ready),
         capture=capture,
-        **kwargs,
     )
 
 
@@ -258,7 +261,6 @@ def test_recording_off_never_constructs_primitive_retention(
     assert trace._primitive_op_profile is None
 
 
-@pytest.mark.smoke
 def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> None:
     """Strict subclass construction records a typed gap, with exact parentage, per crossing.
 
@@ -290,7 +292,6 @@ def test_mode_paused_interior_is_one_lower_bound_gap_not_a_synthetic_row() -> No
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     """The shared observer attributes engine dispatches to active GradFn calls."""
 
@@ -306,9 +307,6 @@ def test_backward_rows_resolve_to_grad_fn_calls() -> None:
     assert check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke_cells(
-    "test_delayed_grad_fn_lineage_covers_required_mutation_breakers[model3-index_put_]"
-)
 @pytest.mark.parametrize(
     ("model", "expected_operator"),
     [
@@ -324,13 +322,8 @@ def test_delayed_grad_fn_lineage_covers_required_mutation_breakers(
 ) -> None:
     """Delayed links remain typed across CopySlices and in-place/view cases."""
 
-    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True)
-    trace = tl.trace(
-        model,
-        torch.ones(2, 3, requires_grad=True),
-        capture=capture,
-        save_mode="reference",
-    )
+    capture = tl.options.CaptureOptions(backward_ready=True, aten_ops=True, save_mode="reference")
+    trace = tl.trace(model, torch.ones(2, 3, requires_grad=True), capture=capture)
     trace.log_backward(trace.output_ops[0].out)
 
     rows = trace._primitive_op_profile.primitive_ops
@@ -423,7 +416,6 @@ def test_plain_v8_round_trip_persists_the_profile(tmp_path: Path) -> None:
     assert check_metadata_invariants(loaded)
 
 
-@pytest.mark.smoke_cells("test_prerelease_load_refuses_dangling_and_forged_op_fks[dangling]")
 @pytest.mark.parametrize("tamper_kind", ["dangling", "forged"])
 def test_prerelease_load_refuses_dangling_and_forged_op_fks(
     tmp_path: Path,
@@ -480,9 +472,6 @@ def test_live_fk_tamper_names_primitive_invariant() -> None:
     assert exc_info.value.check_name == "primitive_op_invariants"
 
 
-@pytest.mark.smoke_cells(
-    "test_super_aten_op_alignment_statuses[members1-member_names1-False-sparse]"
-)
 @pytest.mark.parametrize(
     ("members", "member_names", "incomplete", "expected"),
     [

@@ -196,7 +196,6 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
     assert captured._layer_dict_all_keys["buffer_1:1"].out is not None
 
 
-@pytest.mark.smoke
 def test_fast_live_divergence_poisons_the_result_trace_not_the_source() -> None:
     """A diverged fast-live run poisons the half-refreshed result Trace; the source stays clean."""
 
@@ -261,11 +260,10 @@ def test_fast_live_inherited_divergence_never_unregisters_user_trace() -> None:
     assert any(log is captured for log in _state.list_logs())
 
 
-@pytest.mark.smoke
 def test_remove_fast_live_hooks_survives_raising_remove() -> None:
     """One raising handle.remove() must not strand the remaining hooks."""
 
-    from torchlens._fast_live_plans import _remove_fast_live_hooks
+    from torchlens._fast_live_hooks import _remove_fast_live_hooks
 
     removed: list[int] = []
 
@@ -368,7 +366,6 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
         captured.run(inputs=torch.ones(2, 3), fast=True)
 
 
-@pytest.mark.smoke
 def test_fast_live_input_refresh_arity_guarded_and_poisons(monkeypatch) -> None:
     """The input-payload refresh zip guards arity like the output branch (R22-2 layer 2).
 
@@ -423,9 +420,9 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             inputs,
             capture=CaptureOptions(
                 replayable=True,
-                layers_to_save="all",
                 cache=False,
             ),
+            save="all",
         )
     captured.save(path, level="runnable", include_weights=True)
     return path

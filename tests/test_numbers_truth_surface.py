@@ -33,7 +33,7 @@ def small_log() -> Generator[tl.Trace, None, None]:
     """Metadata-only capture of a tiny model."""
 
     model = nn.Sequential(nn.Linear(8, 16, bias=True), nn.ReLU())
-    log = tl.trace(model, torch.randn(2, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = tl.trace(model, torch.randn(2, 8), save=None)
     try:
         yield log
     finally:
@@ -75,7 +75,6 @@ def test_readme_idiom_subprocess_zero_warnings() -> None:
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.smoke
 def test_summary_has_no_escape_bytes_any_level(small_log: tl.Trace) -> None:
     """No returned summary string carries ESC bytes, at any level (A11)."""
 
@@ -84,14 +83,13 @@ def test_summary_has_no_escape_bytes_any_level(small_log: tl.Trace) -> None:
         assert "\x1b" not in text, f"escape byte in summary({kwargs})"
 
 
-@pytest.mark.smoke
 def test_control_flow_summary_has_no_escape_bytes() -> None:
     """A conditional model's summary and provenance emit plain text (A11)."""
 
     log = tl.trace(
         _CondModel(),
         torch.randn(2, 3) + 1.0,
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         for text in (str(log.summary(level="op")), log.provenance._summary()):

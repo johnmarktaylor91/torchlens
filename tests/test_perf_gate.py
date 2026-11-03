@@ -360,7 +360,6 @@ def test_module_calls_cache_invalidates_on_supported_call_mutation() -> None:
     assert refreshed["shared:replacement"] is replacement
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize(
     ("dtype", "shape"),
     [
@@ -605,7 +604,7 @@ def test_emit_tensor_grad_event_populates_profile_buckets() -> None:
 
     model = nn.Linear(3, 2)
     x = torch.randn(1, 3, requires_grad=True)
-    trace = tl.trace(model, x, profile=True, capture=tl.options.CaptureOptions(backward_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
 
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 

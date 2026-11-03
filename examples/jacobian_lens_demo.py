@@ -49,7 +49,7 @@ def block_output(out):
 
 def residual_states(model, blocks, ids):
     """Run one traced forward and return each block's live (graph-attached) output, in block order."""
-    trace = tl.trace(model, ids, save_mode="view")
+    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(save_mode="view"))
     return [trace[address].out for address in blocks]
 
 

@@ -151,7 +151,6 @@ def _gradient(descriptor: ReceptiveField) -> GradReceptiveField:
     )
 
 
-@pytest.mark.smoke
 def test_show_1d_strip_and_status_styling() -> None:
     """Render 1-D boxes as strips, with dashed upper bounds distinct from exact boxes."""
 
@@ -164,7 +163,6 @@ def test_show_1d_strip_and_status_styling() -> None:
     assert exact_image.tobytes() != upper_image.tobytes()
 
 
-@pytest.mark.smoke
 def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
     """Blend a 2-D gradient heatmap and never draw an unknown geometric box."""
 
@@ -177,7 +175,6 @@ def test_show_2d_overlay_with_gradient_and_unknown_honesty() -> None:
     assert show(_View(unknown), (0, 0, 3, 3), image=base).tobytes() == base.tobytes()
 
 
-@pytest.mark.smoke
 def test_show_3d_requires_explicit_slice() -> None:
     """Require a plane selection before rendering a 3-D spatial input."""
 
@@ -198,7 +195,6 @@ def test_show_rejects_ambiguous_input() -> None:
         show(view, (0, 0, 3, 3), image=Image.new("RGB", (80, 60)))
 
 
-@pytest.mark.smoke
 def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
     """Render the selected input-to-target cone through the standard node-spec hook."""
 
@@ -218,7 +214,6 @@ def test_node_spec_draws_ancestor_cone_with_tooltips(tmp_path: Any) -> None:
         trace.draw(
             node_spec_fn=node_spec(target),
             file_format="svg",
-            vis_save_only=True,
             path=str(output_path),
         )
         svg = output_path.read_text(encoding="utf-8")
@@ -252,8 +247,7 @@ def test_show_gradient_retain_graph_supports_repeated_probes() -> None:
     armed = tl.trace(
         _Small().eval(),
         torch.randn(1, 1, 12, 12, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     op = armed["relu_1_2"]
     unit = op.receptive_field.center_unit(batch_index=0)

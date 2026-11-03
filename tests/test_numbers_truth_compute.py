@@ -25,7 +25,7 @@ from torchlens._capture.flops import (
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Metadata-only capture."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save=None))
+    return tl.trace(model, x, save=None)
 
 
 def test_biased_linear_true_macs_not_flops_over_two() -> None:
@@ -60,7 +60,6 @@ def test_relu_has_zero_macs_non_mac() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_fma_convention_honored_never_discarded() -> None:
     """A6: fma=1 renders 288 on the toy; the default convention is fma=2."""
 
@@ -75,7 +74,6 @@ def test_fma_convention_honored_never_discarded() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_fma1_refuses_typed_on_underivable_split() -> None:
     """A6: an fma=1 request over an underivable MAC split refuses typed."""
 
@@ -119,7 +117,6 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_flop_count_conventions() -> None:
     """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
@@ -132,9 +129,6 @@ def test_flop_count_conventions() -> None:
     assert flop_count(model, x, flop_convention="fma1") == 288
 
 
-@pytest.mark.smoke_cells(
-    "test_flop_count_refuses_removed_and_unknown_options[kwargs0-flop_convention='fma1']"
-)
 @pytest.mark.parametrize(
     ("kwargs", "taught"),
     [
@@ -253,7 +247,7 @@ def test_bert_base_exact_mac_decomposition() -> None:
     model.eval()
     ids = torch.randint(0, 30522, (1, 12))
     with torch.no_grad():
-        log = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save=None))
+        log = tl.trace(model, ids, save=None)
     try:
         fused = [
             op

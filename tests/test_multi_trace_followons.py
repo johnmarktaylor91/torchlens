@@ -9,7 +9,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import _visualization
 from torchlens.intervention._topology.topology import compare_topology
 
 
@@ -214,29 +213,15 @@ def test_super_buffer_views_use_public_live_values_and_param_reads_refuse() -> N
     assert excinfo.value.fields["code"] == "checkpoint_series_live_params"
 
 
-def test_show_bundle_graph_rolled_and_backward_modes(tmp_path: Path) -> None:
-    """show_bundle_graph handles rolled and backward bundle render modes."""
+def test_bundle_draw_rolled_and_backward_graphs(tmp_path: Path) -> None:
+    """Bundle.draw handles the rolled and backward bundle pictures."""
 
     bundle = _bundle()
-    rolled_source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "rolled_bundle"),
-        vis_mode="rolled",
-        vis_save_only=True,
-        file_format="svg",
-    )
-    backward_source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "backward_bundle"),
-        signal="backward",
-        vis_save_only=True,
-        file_format="svg",
-    )
+    rolled_source = bundle.draw(str(tmp_path / "rolled_bundle.svg"), rolled=True).dot
+    backward_source = bundle.draw(str(tmp_path / "backward_bundle.svg"), graph="backward").dot
 
-    assert rolled_source is not None
     assert "rolled" in rolled_source
     assert "(Linear)" in rolled_source
-    assert backward_source is not None
     assert "backward" in backward_source
 
 
@@ -244,15 +229,8 @@ def test_bundle_backward_regression_path(tmp_path: Path) -> None:
     """Bundle backward rendering emits per-member backward subgraphs."""
 
     bundle = _bundle()
-    source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "backward_bundle_regression"),
-        signal="backward",
-        vis_save_only=True,
-        file_format="svg",
-    )
+    source = bundle.draw(str(tmp_path / "backward_bundle_regression.svg"), graph="backward").dot
 
-    assert source is not None
     assert "cluster_backward_first" in source
     assert "cluster_backward_second" in source
     assert "backward" in source
@@ -262,15 +240,8 @@ def test_bundle_backward_no_unified_supergraph(tmp_path: Path) -> None:
     """Bundle backward rendering stays per-member in P6."""
 
     bundle = _bundle()
-    source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "backward_bundle_no_supergraph"),
-        signal="backward",
-        vis_save_only=True,
-        file_format="svg",
-    )
+    source = bundle.draw(str(tmp_path / "backward_bundle_no_supergraph.svg"), graph="backward").dot
 
-    assert source is not None
     assert "cluster_backward" in source
     assert "backward_supergraph" not in source
 
@@ -281,19 +252,15 @@ def test_bundle_graph_style_primitives_and_chrome_trace_diff(tmp_path: Path) -> 
     bundle = _bundle()
     first_node = bundle.supergraph.topological_order[0]
     first_edge = next(iter(bundle.supergraph.edges))
-    source = _visualization.show_bundle_graph(
-        bundle,
-        path=str(tmp_path / "styled_bundle"),
-        vis_node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
-        vis_edge_overrides={first_edge: {"color": "#0072B2"}},
-        vis_save_only=True,
-        file_format="svg",
-    )
+    source = bundle.draw(
+        str(tmp_path / "styled_bundle.svg"),
+        node_overrides={first_node: {"fillcolor": "#DDEAF7"}},
+        edge_overrides={first_edge: {"color": "#0072B2"}},
+    ).dot
 
     trace_path = tl.export.chrome_trace_diff(bundle, tmp_path / "trace_diff.json")
     payload = json.loads(trace_path.read_text(encoding="utf-8"))
 
-    assert source is not None
     assert "#DDEAF7" in source
     assert "#0072B2" in source
     assert payload["metadata"]["schema"] == "torchlens.chrome_trace_diff.v1"

@@ -210,7 +210,6 @@ class TestLazyDecoration:
         assert _state._is_decorated is True
         assert is_decorated_function(torch.cos)
 
-    @pytest.mark.smoke
     def test_stays_wrapped_after_trace(self):
         """After trace, torch stays wrapped for subsequent calls."""
         model = SimpleModel()
@@ -316,7 +315,6 @@ class TestToggleState:
         assert observed["enabled"] is True
         assert observed["trace"] is not None
 
-    @pytest.mark.smoke
     def test_toggle_off_after_logging(self):
         """After trace completes, toggle should be off."""
         model = SimpleModel()
@@ -681,7 +679,6 @@ class TestPauseLogging:
         finally:
             _state._logging_enabled = False
 
-    @pytest.mark.smoke
     def test_operations_during_pause_not_logged(self):
         """Torch ops inside pause_logging should not appear in graph."""
 
@@ -700,12 +697,13 @@ class TestPauseLogging:
         cos_layers = [lbl for lbl in result.layer_labels if "cos" in lbl.lower()]
         assert len(cos_layers) == 0, f"cos appeared in graph during pause: {cos_layers}"
 
-    @pytest.mark.smoke
     def test_activation_transform_not_logged(self):
         """activation_transform runs inside pause_logging, ops should not appear."""
         model = SimpleModel()
         result = trace_fn(
-            model, torch.randn(5), save=tl.options.SaveOptions(activation_transform=torch.sigmoid)
+            model,
+            torch.randn(5),
+            capture=tl.options.CaptureOptions(activation_transform=torch.sigmoid),
         )
         # sigmoid from transform should NOT appear in graph
         sigmoid_layers = [lbl for lbl in result.layer_labels if "sigmoid" in lbl.lower()]
@@ -1080,7 +1078,7 @@ class TestEdgeCases:
             result2 = trace_fn(
                 model,
                 torch.randn(5),
-                capture=tl.options.CaptureOptions(layers_to_save=[all_labels[1]]),
+                save=[all_labels[1]],
             )
             assert result2 is not None
 

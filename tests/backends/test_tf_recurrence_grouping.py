@@ -13,7 +13,7 @@ keras = pytest.importorskip("keras")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tf import TFBackend  # noqa: E402
 
-pytestmark = pytest.mark.tf_backend
+pytestmark = [pytest.mark.tf_backend, pytest.mark.rare]
 
 
 class _Repeated(keras.Model):
@@ -237,13 +237,14 @@ def test_tf_intermediate_derived_grads_survive_grouping() -> None:
         loss_fn=lambda output: tf.reduce_sum(output),
         intermediate_grads=True,
     )
-    grouped = tl.trace(model, inputs, backend="tf", grad_options=grad_options)
+    grouped = tl.trace(
+        model, inputs, backend="tf", capture=tl.options.CaptureOptions(grad_options=grad_options)
+    )
     ungrouped = tl.trace(
         model,
         inputs,
         backend="tf",
-        grad_options=grad_options,
-        capture=tl.options.CaptureOptions(recurrence_detection=False),
+        capture=tl.options.CaptureOptions(recurrence_detection=False, grad_options=grad_options),
     )
 
     # Accessors iterate VALUES, not keys (see _data_classes/_accessor_base.py),

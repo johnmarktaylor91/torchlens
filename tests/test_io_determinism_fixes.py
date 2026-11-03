@@ -196,8 +196,8 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
     trace = tl.trace(
         _ComplexModel(),
         torch.tensor([1 + 2j], dtype=torch.complex64),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
-        save=tl.options.SaveOptions(activation_transform=lambda value: value.conj()),
+        capture=tl.options.CaptureOptions(activation_transform=lambda value: value.conj()),
+        save="all",
     )
     expected = trace.output_ops[0].transformed_out.clone()
     path = tmp_path / "conjugate.tlspec"
@@ -313,6 +313,7 @@ def test_rehydrated_trace_retains_source_tlspec_version() -> None:
     assert restored.tlspec_version == TLSPEC_VERSION
 
 
+@pytest.mark.smoke
 def test_backup_cleanup_failure_does_not_fail_completed_save(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -366,7 +367,6 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     assert (path / "spec.json").read_bytes() == original_spec
 
 
-@pytest.mark.smoke
 def test_content_hash_is_address_and_insertion_order_independent() -> None:
     """Object fallback and tied mapping keys never ingest address or source order."""
 
@@ -381,7 +381,6 @@ def test_content_hash_is_address_and_insertion_order_independent() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
     """Set signature order is total even when distinct elements share repr."""
 
@@ -440,7 +439,6 @@ def test_resave_preserves_model_fingerprint_with_buffers(tmp_path: Path) -> None
     assert second_manifest["model_fingerprint"] == first_manifest["model_fingerprint"]
 
 
-@pytest.mark.smoke
 def test_provenance_set_values_are_canonically_ordered() -> None:
     """Set-like provenance values normalize independently of hash iteration order."""
 
@@ -465,7 +463,6 @@ def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) 
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_bounded_json_ceiling_counts_utf8_bytes() -> None:
     """Multibyte JSON text cannot exceed a byte ceiling via character counting."""
 
@@ -486,6 +483,7 @@ def test_tlspec_writer_refuses_nonstandard_nan_tokens(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+@pytest.mark.rare
 def test_jax_codec_refuses_unknown_logical_dtype() -> None:
     """JAX decode fails closed instead of silently retaining the transport dtype."""
 
@@ -498,6 +496,7 @@ def test_jax_codec_refuses_unknown_logical_dtype() -> None:
         JaxPayloadCodec().from_numpy(np.ones(1, dtype=np.float32), entry, map_location=None)
 
 
+@pytest.mark.rare
 def test_jax_codec_restores_weak_type() -> None:
     """JAX weak scalar semantics survive codec encode/decode when JAX is available."""
 

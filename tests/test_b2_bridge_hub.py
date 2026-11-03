@@ -1,4 +1,4 @@
-"""Hub push and pull through the safe ``.tlspec`` path (walk U14.2).
+"""Hub push and pull through the safe ``.tlspec`` path.
 
 ``push_to_hub`` uploads a gzipped tar of the portable bundle and never a raw
 pickle; ``from_hub`` downloads it, checks every tar member, and loads it
@@ -73,9 +73,7 @@ def trace() -> Any:
     """A fully saved trace of the tiny MLP."""
 
     torch.manual_seed(0)
-    return tl.trace(
-        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    return tl.trace(_Tiny(), torch.randn(2, 4), save="all")
 
 
 def test_from_hub_round_trips_a_trace_through_the_safe_loader(trace: Any, tmp_path: Path) -> None:

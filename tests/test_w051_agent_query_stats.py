@@ -70,7 +70,7 @@ def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: 
     log = tl.trace(
         _ScalarTail().eval(),
         torch.randn(2, 4, generator=generator),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     path = tmp_path / "scalar.tlspec"
     log.save(str(path))
@@ -96,7 +96,6 @@ def test_reduction_out_of_range_is_a_row_status_never_a_batch_failure(tmp_path: 
     assert exc.value.fields["code"] == "agent_reduction_invalid"
 
 
-@pytest.mark.smoke
 def test_to_agent_json_tags_nonfinite_logged_values() -> None:
     """The documented JSON-serializable promise holds under allow_nan=False."""
 
@@ -136,7 +135,6 @@ def test_unmatched_labels_are_disclosed(clean: Path) -> None:
     assert matched["warnings"] == []  # bare layer labels match too
 
 
-@pytest.mark.smoke
 def test_compare_refuses_negative_tolerances_typed(clean: Path) -> None:
     """rtol/atol are magnitudes: a negative one refuses typed at the boundary."""
 

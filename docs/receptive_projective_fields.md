@@ -22,7 +22,7 @@ x = torch.randn(1, 3, 224, 224, requires_grad=True)
 # save_mode="reference": the default detaching save mode frees the autograd
 # history the empirical probes consume.
 trace = tl.trace(
-    model, x, capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference"
+    model, x, capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference")
 )
 
 op = trace["layer4.1.conv2"]
@@ -80,6 +80,15 @@ extent. Transposed convolutions, masked attention, interpolation, gathers, and d
 routing are never promoted to `EXACT` without a proof. A gradient mask can preserve sparse or
 masked structure that an interval box cannot express.
 
+Channel mixing keeps spatial geometry exact. A dense layer (`linear`) reads the whole feature
+axis at each position, and a `layer_norm` reads its whole normalized slice; with parameter
+weights both are exact whole-axis dependencies, so a ConvNeXt-style block that runs its MLP on
+channels-last tensors (`permute`, `layer_norm`, `linear`, `permute` back) stays `EXACT` through
+the block. A traced (input-derived) weight or bias makes the relation a whole-extent
+`UPPER_BOUND`, as does a `layer_norm` slice of a single element. The identity node TorchLens
+records at an `nn.Identity` module, or at a module that returns its input, passes the field
+through unchanged.
+
 An empty endpoint (a model input or output with a zero extent, such as a zero-size `split`
 chunk) has no units, so its field is empty: it seeds no geometry and no descriptor names it.
 
@@ -123,6 +132,37 @@ print(incoming_table.to_pandas()[["name", "status", "size", "jump"]])
 layer, multi-call module, or multi-output module call is intentionally ambiguous rather than
 silently selecting a representative; use the trace table to enumerate boundary outputs.
 
+## From one unit to a set of units
+
+`.at()` answers for one unit. `.of(units, within=)` answers for many at once: it takes the same
+units `tl.units(site, indices)` takes, either a bool mask over the view owner's full output or
+coordinate tuples over its full shape (batch and channel included), and returns a trace-bound
+`tl.Selection` with one region per site named in `within=`.
+
+```python
+# Where does a 2x2 patch of conv1 reach in layer2 and layer3?
+patch = torch.zeros(1, 64, 112, 112, dtype=torch.bool)  # conv1's output shape
+patch[0, :, 50:52, 60:62] = True
+reach = trace["conv1"].projective_field.of(patch, within=["layer2", "layer3"])
+
+# Which conv1 units can affect these layer3 units?
+sources = trace["layer3"].receptive_field.of([(0, 0, 3, 3), (0, 0, 3, 4)], within="conv1")
+
+# The answer is a Selection: combine it, cut the graph to it, or intervene on it.
+other = trace["conv1"].projective_field.of([(0, 0, 80, 80)], within=["layer2", "layer3"])
+shared = reach & other
+sub = trace.subgraph(reach)
+```
+
+`within=` takes one region or a list: an op or layer label, a module address (its output op), an
+`Op`, `Layer`, `Module` or `ModuleCall`, or a selector. It defaults to the model outputs for the
+projective direction and the model inputs for the receptive direction. Each region's
+`provenance.relation`, `provenance.basis` and `provenance.field_status` state what kind of answer
+it is. `method="geometric"` (the default) unions the per-unit boxes and refuses a site with no
+per-unit geometry (`influence_geometry_unavailable`); `method="gradient"` measures the set with
+autograd probes on a backward-ready trace and refuses above `probe_budget=` probes
+(`influence_probe_budget`).
+
 ## Namespace reference
 
 `tl.receptive_field` is lazy and deliberately outside `tl.__all__`. Its result vocabulary is
@@ -158,8 +198,7 @@ backward-ready graph, and reference-saved payloads; anything less is reported as
 trace = tl.trace(
     model,
     x.requires_grad_(True),
-    capture=tl.options.CaptureOptions(backward_ready=True),
-    save_mode="reference",
+    capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
 )
 
 # Exhaustive/sampled trace sweep over center units (and optionally corners).
@@ -193,7 +232,6 @@ unit = op.receptive_field.center_unit(batch_index=0)
 # Highlight the ancestor cone in the graph drawing.
 trace.draw(
     node_spec_fn=tl.receptive_field.node_spec(op, unit=unit),
-    vis_save_only=True,
     file_format="svg",
 )
 
@@ -208,5 +246,5 @@ from becoming an apparently precise answer.
 ## References
 
 - Araujo, Norris, and Sim, [*Computing Receptive Fields of Convolutional Neural Networks*](https://distill.pub/2019/computing-receptive-fields/), Distill, 2019.
-- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/hash/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
+- Luo, Li, Urtasun, and Zemel, [*Understanding the Effective Receptive Field in Deep Convolutional Neural Networks*](https://papers.nips.cc/paper_files/paper/2016/file/c8067ad1937f728f51288b3eb986afaa-Paper.pdf), NeurIPS 2016.
 - Lehky and Sejnowski, [*Network model of shape-from-shading: neural function arises from both receptive and projective fields*](https://www.nature.com/articles/333452a0), Nature, 1988.

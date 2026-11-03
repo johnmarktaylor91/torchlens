@@ -79,7 +79,6 @@ def _boundary_capture(hook: Any) -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     """An attr-rejecting replacement keeps its intervention provenance.
 
@@ -113,6 +112,7 @@ def test_boundary_evidence_survives_attr_rejecting_replacement() -> None:
     assert not any(bool(getattr(op, "is_internal_source", False)) for op in log._layer_list)
 
 
+@pytest.mark.smoke
 def test_rejecting_and_plain_replacements_classify_identically() -> None:
     """Attr-rejecting and ordinary replacement tensors produce the same structure."""
 

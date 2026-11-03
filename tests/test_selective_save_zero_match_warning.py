@@ -55,7 +55,6 @@ def _stub_trace() -> Any:
     return _Stub(_layer_list=ops, module_calls=(), _provenance_backend="torch")
 
 
-@pytest.mark.smoke
 def test_zero_match_save_predicate_warns() -> None:
     """A predicate matching no op must surface a warning, not silence."""
 
@@ -78,7 +77,6 @@ def test_matching_save_predicate_does_not_warn() -> None:
     assert len(trace.saved_ops) == 1
 
 
-@pytest.mark.smoke
 def test_none_predicate_does_not_warn() -> None:
     """The full-save default (no predicate) is untouched."""
 
@@ -105,7 +103,6 @@ def test_shared_zero_match_warning_names_the_backend() -> None:
         warn_zero_match_save_predicate("tf")
 
 
-@pytest.mark.smoke
 def test_tf_eager_session_counts_save_predicate_matches() -> None:
     """The eager retention gate counts matches for the entry-level disclosure.
 

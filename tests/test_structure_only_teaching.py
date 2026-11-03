@@ -169,7 +169,6 @@ class MetaContextBranch(nn.Module):
         return h
 
 
-@pytest.mark.smoke
 def test_meta_tensor_refusal_carries_substrate_meta() -> None:
     with pytest.raises(ValueDependentBranchError) as excinfo:
         _structure_trace(MetaContextBranch(), torch.randn(2, 4))
@@ -230,7 +229,6 @@ _HELPER_LINE = next(
 )
 
 
-@pytest.mark.smoke
 def test_missing_meta_kernel_refuses_typed_at_the_helper_line() -> None:
     """sol r2 M2: the traceback walk takes the INNERMOST external frame — the
     helper's failing line, never the outer forward callsite."""
@@ -250,7 +248,6 @@ class UserRaisesNIE(nn.Module):
         raise NotImplementedError("user's own refusal")
 
 
-@pytest.mark.smoke
 def test_user_raised_notimplementederror_propagates_unchanged() -> None:
     """C-HONESTY: the user's exception is chained unchanged under the door's
     TraceCaptureError, never reclassified; the structure-only note rides the
@@ -409,7 +406,6 @@ def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
         assert getattr(torch, name, None) is original, f"torch.{name}"
 
 
-@pytest.mark.smoke
 def test_teaching_refusals_fire_identically_under_predicate_composition() -> None:
     """Memo 2.5 combination row: composing the mode with a (value-free)
     predicate surface must not soften the belts."""
@@ -419,7 +415,7 @@ def test_teaching_refusals_fire_identically_under_predicate_composition() -> Non
             IfBranch(),
             torch.randn(2, 4),
             capture=CaptureOptions(structure_only=True),
-            halt=tl.func("nonexistent_op_name"),
+            stop_after=tl.func("nonexistent_op_name"),
         )
     assert excinfo.value.fields["consumer_kind"] == "if_test"
     assert excinfo.value.fields["code"] == "value_dependent_branch_unsupported"

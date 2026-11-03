@@ -18,7 +18,7 @@ on the saved trace (the push engine ablates with it) but cannot match during
 a live forward. A rerun therefore refuses typed
 (``rerun_selector_unmatchable_live``) and leaves the trace unchanged, instead
 of completing un-ablated behind a warning, on the same inputs and on NEW
-inputs alike (U40.6: close the gap before launch). Only a predicate that
+inputs alike (close the gap before launch). Only a predicate that
 matches nothing on the rerun's own trace keeps the ``rerun_zero_fire``
 warning, since there the miss is the inputs.
 """

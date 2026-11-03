@@ -46,6 +46,7 @@
     "mutation_kind": "keep",
     "namespace": "keep",
     "operator": "keep",
+    "out": "blob_recursive",
     "outcome": "keep",
     "output_tensor_facts": "keep",
     "overload": "keep",
@@ -977,6 +978,7 @@
     "_out_sink": "drop",
     "_out_writer": "drop",
     "_output_container_specs_by_raw_label": "drop",
+    "_output_slot": "drop",
     "_output_tokenizer": "drop",
     "_output_transform": "drop",
     "_paddle_alias_annotations": "drop",
@@ -1332,6 +1334,7 @@
      "mutation_kind": "keep",
      "namespace": "keep",
      "operator": "keep",
+     "out": "blob_recursive",
      "outcome": "keep",
      "output_tensor_facts": "keep",
      "overload": "keep",
@@ -1366,6 +1369,7 @@
      "mutation_kind": "fact",
      "namespace": "fact",
      "operator": "fact",
+     "out": "fact",
      "outcome": "fact",
      "output_tensor_facts": "fact",
      "overload": "fact",
@@ -1400,6 +1404,7 @@
      "mutation_kind",
      "namespace",
      "operator",
+     "out",
      "outcome",
      "output_tensor_facts",
      "overload",
@@ -3427,6 +3432,7 @@
      "_out_sink": "drop",
      "_out_writer": "drop",
      "_output_container_specs_by_raw_label": "drop",
+     "_output_slot": "drop",
      "_output_tokenizer": "drop",
      "_output_transform": "drop",
      "_paddle_alias_annotations": "drop",
@@ -4008,5 +4014,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "c48cc517e89ec3ff9d299e4ad21acf13f33cad7172440993494e30e4baacd5e0"
+ "writer_contract_digest": "b442cbbfcf10fa2d94c0315982fc0f40ccb92f76e347e0deb6c904751973fc0c"
 }

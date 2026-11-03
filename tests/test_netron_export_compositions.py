@@ -18,7 +18,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
@@ -31,7 +30,6 @@ def _props(payload: dict[str, Any]) -> dict[str, str]:
     return {row["key"]: row["value"] for row in payload["metadataProps"]}
 
 
-@pytest.mark.smoke
 def test_c2_intervened_ops_visibly_marked(tmp_path: Path) -> None:
     """Ablated ops carry the ``intervened`` attribute and the model marker."""
 
@@ -57,7 +55,7 @@ def test_c3_halted_capture_carries_the_outcome_marker(tmp_path: Path) -> None:
     """A halted trace exports with its honest capture-outcome marker."""
 
     model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
-    log = tl.trace(model, torch.randn(2, 4), halt=tl.func("relu"))
+    log = tl.trace(model, torch.randn(2, 4), stop_after=tl.func("relu"))
     path = tl.export.netron(log, tmp_path / "halted.json", granularity="op")
     payload = json.loads(path.read_text(encoding="utf-8"))
     props = _props(payload)

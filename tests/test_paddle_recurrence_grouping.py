@@ -12,7 +12,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from torchlens.backends.paddle import GradOptions, PaddleBackend  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 def _weights() -> tuple[Any, Any]:
@@ -230,10 +230,12 @@ def test_paddle_intermediate_derived_grads_survive_grouping() -> None:
         _repeated_fn,
         (paddle.ones([2, 4], dtype="float32"), weight, bias),
         backend="paddle",
-        grad_options=GradOptions(
-            loss_fn=lambda output: paddle.sum(output),
-            intermediate_grads=True,
-            max_intermediate_grads=16,
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(
+                loss_fn=lambda output: paddle.sum(output),
+                intermediate_grads=True,
+                max_intermediate_grads=16,
+            )
         ),
     )
     relu_ops = [op for op in trace._layer_list if op.func_name == "functional.relu"]

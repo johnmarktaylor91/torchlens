@@ -60,11 +60,10 @@ def _dot(trace: tl.Trace, **kwargs: object) -> str:
 
     out = tempfile.mkdtemp()
     return trace.draw(
-        vis_save_only=True,
         file_format="dot",
         path=f"{out}/g",
         **kwargs,
-    )
+    ).dot
 
 
 @pytest.fixture(scope="module")
@@ -81,7 +80,7 @@ def split_trace() -> Iterator[tl.Trace]:
 def test_rolled_collapsed_box_excludes_surfaced_exit_layers(split_trace: tl.Trace) -> None:
     """The rolled box counts only the layers it actually hides (V4)."""
 
-    source = _dot(split_trace, vis_mode="rolled", collapse_fn=lambda m: m.address == "b")
+    source = _dot(split_trace, rolled=True, collapse_fn=lambda m: m.address == "b")
 
     visible_layers = {
         name
@@ -113,11 +112,10 @@ def test_unrolled_collapsed_boxes_exclude_surfaced_exit_layers(split_trace: tl.T
     assert ops_rows == ["1 op"] * 5, f"call boxes double-represent surfaced exits: {ops_rows}"
 
 
-@pytest.mark.smoke
 def test_rolled_multicall_box_discloses_shape_variation(split_trace: tl.Trace) -> None:
     """A shape-varying rolled box carries a shapes line, not one false shape (V5)."""
 
-    source = _dot(split_trace, vis_mode="rolled", collapse_fn=lambda m: m.address == "b")
+    source = _dot(split_trace, rolled=True, collapse_fn=lambda m: m.address == "b")
 
     # Calls 1-3 output (1, 8, 8, 8); calls 4-5 output (1, 8, 4, 4). The box
     # header shows the first call's shape, so the variation must be disclosed.

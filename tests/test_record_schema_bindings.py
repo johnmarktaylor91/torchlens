@@ -53,10 +53,6 @@ _SCHEMA = {
 }
 
 
-@pytest.mark.smoke_cells(
-    "test_field_order_view_equals_literal[buffer]",
-    "test_field_order_view_equals_literal[func_call_location]",
-)
 @pytest.mark.parametrize("schema_key", sorted(_SCHEMA))
 def test_field_order_view_equals_literal(schema_key: str) -> None:
     """Generated FIELD_ORDER view == the hand-written literal, exactly."""
@@ -125,7 +121,9 @@ def test_primitive_bindings_match_the_promoted_candidate_kinds() -> None:
     assert candidate["output_tensor_facts"] == "SCALAR"
     assert candidate["label"] == "INTERNED"
     assert candidate["execution_context"] == "INTERNED"
-    assert set(candidate.values()) == {"EDGE", "INTERNED", "SCALAR"}
+    # ``out`` (aten_ops="values") is the one payload cell a primitive row carries.
+    assert candidate["out"] == "PAYLOAD"
+    assert set(candidate.values()) == {"EDGE", "INTERNED", "SCALAR", "PAYLOAD"}
 
 
 @pytest.mark.heavy

@@ -108,7 +108,6 @@ def _torchlens_imports(tree: ast.AST) -> list[tuple[str, str | None]]:
     return imports
 
 
-@pytest.mark.smoke
 def test_every_public_python_fence_compiles_and_torchlens_imports_resolve() -> None:
     """Cover every public Python fence without swallowing misspelled TorchLens imports."""
 
@@ -124,8 +123,8 @@ def test_every_public_python_fence_compiles_and_torchlens_imports_resolve() -> N
 
 
 @pytest.mark.smoke_cells(
-    'test_performance_python_fence_runs[3-import torch\\nfrom torch import nn\\nimport torchlens as tl\\nfrom torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch\\n\\n\\nmodel = nn.ReLU()\\nx = torch.randn(4)\\nwrap_torch(escape_detector="shadow")\\ntrace = tl.trace(model, x)\\nprint(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)\\nunwrap_torch()]',
-    'test_performance_python_fence_runs[8-import torch\\nfrom torch import nn\\nimport torchlens as tl\\n\\n\\nmodel = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()\\nx = torch.randn(2, 4)\\n\\npatched = tl.trace(\\n    model,\\n    x,\\n    save=tl.func("relu"),\\n    intervene=tl.when(tl.func("relu"), tl.zero_ablate()),\\n)\\n\\nassert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0]',
+    "test_performance_python_fence_runs[5-code4]",
+    "test_performance_python_fence_runs[6-code5]",
 )
 @pytest.mark.parametrize(
     ("block_index", "code"),
@@ -170,11 +169,11 @@ def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
         model,
         inputs,
         capture=CaptureOptions(
-            layers_to_save="all",
             replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
+        save="all",
     )
     artifact = tmp_path / "architecture.tlspec"
     trace.save(artifact, level="runnable", include_weights=True)
@@ -184,7 +183,6 @@ def test_root_agent_runnable_example_runs(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     """Execute gradient and overlay calls on the documented armed Trace."""
 
@@ -195,8 +193,7 @@ def test_root_agent_receptive_gradient_and_overlay_run() -> None:
     trace = tl.trace(
         model,
         inputs,
-        capture=CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     target = trace.find_sites(tl.func("conv2d")).first()
     unit = target.receptive_field.center_unit(batch_index=0)

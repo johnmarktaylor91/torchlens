@@ -33,6 +33,7 @@ from ._backward_state import (
     _stock_param_grad_degeneracy as _stock_param_grad_degeneracy,
     _warn_if_no_module_output_evidence as _warn_if_no_module_output_evidence,
 )
+from ._carried_graph import refusing_carried_graph
 from ._live_model_state import (
     held_parameter_grads,
     load_state_dict_restore,
@@ -470,7 +471,7 @@ def _run_stock_backward(
     # distortion corrupted stock and captured gradients IDENTICALLY and
     # the comparison passed vacuously. Refuse (fail-closed) if the
     # wrappers cannot be removed because a capture is active.
-    with pristine_torch_oracle():
+    with pristine_torch_oracle(), refusing_carried_graph(model):
         if layer_grad_snapshot is not None:
             from ._stock_layer_grads import _stock_layer_grads
 
@@ -505,17 +506,16 @@ def _capture_backward_candidate(
         input_args, input_kwargs, model_device
     )
     model.zero_grad(set_to_none=True)
-    trace = trace_fn(
+    return trace_fn(
         model,
         logged_inputs,
         input_kwargs=logged_kwargs,
         capture=CaptureOptions(
-            layers_to_save="all",
             save_grads="all",
             seed=seed,
         ),
+        save="all",
     )
-    return trace
 
 
 def _unexplained_backward_gaps(trace: Any) -> list[Any]:
@@ -677,9 +677,9 @@ def validate_backward_pass(
         trace = _capture_backward_candidate(
             model, (input_args, input_kwargs), model_device, seed, trace_fn
         )
-        logged_output = _reconstruct_candidate_output_for_loss(trace)
-        logged_loss = loss_fn(logged_output)
-        trace.log_backward(logged_loss)
+        logged_loss = loss_fn(_reconstruct_candidate_output_for_loss(trace))
+        with refusing_carried_graph(model):
+            trace.log_backward(logged_loss)
         if validate_metadata:
             check_metadata_invariants(trace)
         unexplained_gaps = _unexplained_backward_gaps(trace)

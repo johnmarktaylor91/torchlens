@@ -16,7 +16,7 @@ import torchlens as tl  # noqa: E402
 from torchlens.backends.mlx import MLXBackend  # noqa: E402
 from torchlens.backends.mlx.backend import GradOptions  # noqa: E402
 
-pytestmark = pytest.mark.backend_mlx
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 
 def _weight() -> Any:
@@ -234,10 +234,14 @@ def test_mlx_intermediate_derived_grads_survive_grouping() -> None:
         repeated_loss,
         x,
         backend="mlx",
-        grad_options=grad_options,
-        capture=tl.options.CaptureOptions(recurrence_detection=False),
+        capture=tl.options.CaptureOptions(recurrence_detection=False, grad_options=grad_options),
     )
-    grouped = tl.trace(repeated_loss, x, backend="mlx", grad_options=grad_options)
+    grouped = tl.trace(
+        repeated_loss,
+        x,
+        backend="mlx",
+        capture=tl.options.CaptureOptions(grad_options=grad_options),
+    )
     grouped_add = [op for op in grouped._layer_list if op.func_name == "add"]
 
     assert {op.num_passes for op in grouped_add} == {2}

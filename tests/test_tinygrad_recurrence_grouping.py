@@ -14,7 +14,7 @@ from tinygrad import Tensor  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens.backends.tinygrad import TinygradBackend  # noqa: E402
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _weight() -> Any:
@@ -189,14 +189,18 @@ def test_tinygrad_derived_grads_survive_grouping() -> None:
         loss_fn,
         (x, _weight()),
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        capture=tl.options.CaptureOptions(
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True)
+        ),
     )
     ungrouped = tl.trace(
         loss_fn,
         (x, _weight()),
         backend="tinygrad",
-        grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
-        capture=tl.options.CaptureOptions(recurrence_detection=False),
+        capture=tl.options.CaptureOptions(
+            recurrence_detection=False,
+            grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
+        ),
     )
 
     assert set(grouped.autograd.derived_grads.keys()) == set(

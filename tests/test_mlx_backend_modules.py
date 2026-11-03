@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-pytestmark = pytest.mark.backend_mlx
+pytestmark = [pytest.mark.backend_mlx, pytest.mark.rare]
 
 mlx = pytest.importorskip("mlx")
 import mlx.core as mx  # noqa: E402
@@ -225,7 +225,7 @@ def test_mlx_list_container_and_parameterless_modules_are_discovered() -> None:
 
 @pytest.mark.optional
 def test_mlx_summary_rows_follow_execution_order() -> None:
-    """MLX summary rows read in execution order, never reversed (walk U06.1)."""
+    """MLX summary rows read in execution order, never reversed."""
 
     trace = tl.trace(MLXSimpleMLP(), _input(), backend="mlx")
     report = trace.summary()
@@ -252,9 +252,8 @@ def test_mlx_object_module_public_surface_matrix(tmp_path: Path) -> None:
     assert len(trace.module_calls["l1:1"].to_pandas()) == 1
     dot = trace.draw(
         path=str(tmp_path / "mlx_object_graph"),
-        vis_save_only=True,
         file_format="dot",
-    )
+    ).dot
     assert isinstance(dot, str)
 
     bundle_path = tmp_path / "mlx_object_portable.tlspec"

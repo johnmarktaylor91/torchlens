@@ -3,9 +3,9 @@ name: Nightly
 # Everything a pull request does not run, once a night: the supported-version
 # smoke matrix (torch floors to newest admitted, every advertised python), the
 # latest-torch canary, the not-slow tier in the shards test-tiers.json
-# declares, coverage floors, the byte oracles, the preview backends, the
-# packaging and wheel gates, the real-dependency bridge legs and the
-# dependency audit.
+# declares, the stress matrix's pre-merge subset, coverage floors, the byte oracles, the preview backends, the
+# packaging and wheel gates, the extended packaging install sets, the
+# real-dependency bridge legs and the dependency audit.
 on:
   schedule:
     - cron: "17 4 * * *"
@@ -379,6 +379,74 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  stress-subset:
+    name: Stress matrix (pre-merge subset)
+    # The cells in tests/stress/subset.json (every axis value at least once),
+    # six oracles each, on the tier's pinned environment. The oracle tests
+    # carry `slow`, so the not-slow tier above never runs them; this is the
+    # nightly leg that does. The full matrix runs weekly (weekly.yml,
+    # stress-full). `--dist loadgroup` keeps a cell's six oracle tests on one
+    # worker so the cell runs once (tests/stress/README.md); `-p no:randomly`
+    # keeps pytest-randomly's reseeding out of the RNG-restoring oracle.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch and TorchLens
+        run: |
+          cat > "${{ runner.temp }}/torch-2.13-constraints.txt" <<'EOF2'
+          torch==2.13.0+cpu
+          torchvision==0.28.0+cpu
+          EOF2
+          uv pip install --system -c "${{ runner.temp }}/torch-2.13-constraints.txt" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import torch, torchvision; assert torch.__version__ == '2.13.0+cpu', torch.__version__; print(torch.__version__, torchvision.__version__)"
+
+      - name: Run the stress subset
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          pytest tests/stress -n 4 --dist loadgroup -p no:randomly --tb=short -rfE \
+            --junitxml="${{ runner.temp }}/junit/stress-subset.xml"
+
+      - name: Declare the executed-test floor
+        # About half of the 941 tests the subset executed on the pinned
+        # environment at the push's head (1,202 collected, 261 not applicable).
+        run: echo "stress-subset.xml 470" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
   latest-canary:
     name: Latest Torch canary
     runs-on: ubuntu-24.04
@@ -590,20 +658,29 @@ jobs:
             ${{ runner.temp }}/perf-ab.json
 
   coverage:
-    name: Coverage floor (smoke tier)
+    name: Per-package coverage floors (smoke tier)
     # ubuntu-24.04, not ubuntu-latest (2026-10-20): ubuntu-latest became 26.04,
     # whose Graphviz 14.1 leaves neato (rank layout) out of the graphviz package
     # and writes different SVG bytes than the Graphviz 2.42 that the committed
     # galleries and render goldens are checked against.
     runs-on: ubuntu-24.04
     timeout-minutes: 60
-    # First measured coverage gate (grind r3, SF-19: four consecutive review
-    # passes found NO coverage job anywhere). The smoke tier under
-    # branch-coverage instrumentation measured 64% total on 2026-08-15; the
-    # floor sits at 55 so environment variance and per-version skips never
-    # trip it while a mass-hollowing regression (a subsystem's tests skipping
-    # or a package dropping out of the suite) always does. Raise the floor
-    # deliberately as coverage grows; never lower it to pass (tripwire).
+    # Two coverage gates, measured on two tiers (Lead 3 ruling, 2026-11-03):
+    # - this job: the smoke tier under branch coverage, held by the eleven
+    #   per-package floors in scripts/check_package_coverage_floors.py. The
+    #   smoke tier is chosen so every floored package stays above its floor.
+    # - coverage-mid plus coverage-aggregate: the aggregate floor of 55 over all
+    #   of torchlens, measured on the mid tier ('not rare and not slow and not
+    #   heavy') in shards whose data is combined into one report. The smoke tier
+    #   is a 250 to 400 test sample that leaves unfloored packages out, so it
+    #   never carries the aggregate floor.
+    # First measured coverage gate: grind r3, SF-19 (four consecutive review
+    # passes found NO coverage job anywhere). The aggregate floor sits at 55 so
+    # environment variance and per-version skips never trip it while a
+    # mass-hollowing regression (a subsystem's tests skipping or a package
+    # dropping out of the suite) always does. Raise either floor deliberately as
+    # coverage grows; never lower one to pass (tripwire,
+    # tests/test_coverage_floor_governance.py).
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -649,10 +726,13 @@ jobs:
             "transformers==5.18.0"
           uv pip check
 
-      - name: Run the smoke tier under coverage with a floor
+      - name: Run the smoke tier under coverage
         # No deselects: duration budgets are a repository check over
         # tests/tiers/durations.csv, so coverage tracing cannot trip them.
         # pytest-cov combines the xdist workers' data before the floors run.
+        # --cov-fail-under=0: pytest-cov would otherwise inherit pyproject's
+        # aggregate fail_under, which is measured on the mid tier (the
+        # coverage-aggregate job), never on this sample.
         env:
           OMP_NUM_THREADS: "1"
         run: |
@@ -660,7 +740,7 @@ jobs:
             --cov=torchlens --cov-branch \
             --cov-report=term --cov-report=xml:"${{ runner.temp }}/coverage.xml" \
             --cov-report=json:"${{ runner.temp }}/coverage.json" \
-            --cov-fail-under=55 \
+            --cov-fail-under=0 \
             --tb=short -q
 
       - name: Enforce per-package coverage floors
@@ -676,6 +756,166 @@ jobs:
         with:
           name: nightly-coverage
           path: ${{ runner.temp }}/coverage.xml
+
+  coverage-mid:
+    name: Mid-tier coverage data (shard ${{ matrix.shard }} of 4)
+    # The aggregate floor's measurement (see the coverage job's comment): the
+    # mid tier, 'not rare and not slow and not heavy', under branch coverage,
+    # in 4 whole-file shards (`--tier-shard`, balanced by
+    # tests/tiers/durations.csv), each at -n 4. Shard 4, the lightest (measured
+    # 2026-11-03: 545 to 1,007 s against 761 to 1,462 s for the heaviest), also
+    # runs the tier's serial tests in one process, as the CI serial step does. A shard holds a
+    # quarter of the tier, so no shard applies a floor (--cov-fail-under=0
+    # overrides pyproject's); coverage-aggregate combines all five data files
+    # and enforces the floor on the whole tier.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install canonical CPU test environment
+        run: |
+          # The coverage job's stack, so both coverage gates measure the same
+          # environment (torch 2.13.0; see the coverage job for why).
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+
+      - name: Run the mid-tier shard under coverage
+        env:
+          OMP_NUM_THREADS: "1"
+          SHARD: ${{ matrix.shard }}
+          COVERAGE_FILE: ${{ runner.temp }}/coverage-mid-data/coverage-mid.shard-${{ matrix.shard }}
+        run: |
+          mkdir -p "$(dirname "$COVERAGE_FILE")"
+          pytest tests/ -m "not rare and not slow and not heavy and not serial" -n 4 \
+            --tier-shard "$(( SHARD - 1 ))/4" \
+            --cov=torchlens --cov-branch --cov-report= --cov-fail-under=0 \
+            --tb=short -q
+
+      - name: Run the mid tier's serial tests under coverage
+        if: ${{ !cancelled() && matrix.shard == 4 }}
+        env:
+          OMP_NUM_THREADS: "1"
+          COVERAGE_FILE: ${{ runner.temp }}/coverage-mid-data/coverage-mid.serial
+        run: |
+          pytest tests/ -m "serial and not rare and not slow and not heavy" \
+            --cov=torchlens --cov-branch --cov-report= --cov-fail-under=0 \
+            --tb=short -q
+
+      - name: Upload the shard's coverage data
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-mid-data-${{ matrix.shard }}
+          path: ${{ runner.temp }}/coverage-mid-data/
+          if-no-files-found: error
+          retention-days: 7
+
+  coverage-aggregate:
+    name: Aggregate coverage floor (mid tier)
+    needs: [coverage-mid]
+    # Runs when a shard has failing tests too: the floor is judged on every
+    # shard's data. A shard whose data never arrived fails the file-count check
+    # below instead of being skipped.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install canonical CPU test environment
+        run: |
+          # The shards' install, so `coverage combine` reads their data with
+          # the same coverage version.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: coverage-mid-data-*
+          path: ${{ runner.temp }}/coverage-mid-data
+          merge-multiple: true
+
+      - name: Combine the shards' coverage data
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/coverage-mid
+        run: |
+          # Four shard files plus shard 4's serial file; fewer means a shard's
+          # data is missing and the total would cover part of the tier.
+          ls -l "${{ runner.temp }}/coverage-mid-data"
+          test "$(ls "${{ runner.temp }}/coverage-mid-data" | grep -c '^coverage-mid\.')" -eq 5
+          coverage combine "${{ runner.temp }}/coverage-mid-data"
+
+      - name: Enforce the aggregate coverage floor on the mid tier
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/coverage-mid
+        run: |
+          # --ignore-errors: a test compiles code under a forged filename inside
+          # torchlens/ (tests/test_scoped_patching_escape_detection.py), which
+          # has no source to read. pytest-cov always reports with
+          # ignore_errors=True, so this is the denominator the floor of 55 was
+          # set and measured on.
+          coverage report --ignore-errors --fail-under=55
+
+      - name: Write the combined coverage report
+        if: always()
+        env:
+          COVERAGE_FILE: ${{ runner.temp }}/coverage-mid
+        run: |
+          # coverage xml exits 2 under pyproject's fail_under, which the step
+          # above already reports; the report itself is what this step needs.
+          coverage xml --ignore-errors -o "${{ runner.temp }}/coverage-mid.xml" || test -s "${{ runner.temp }}/coverage-mid.xml"
+
+      - name: Upload the combined coverage report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: nightly-coverage-mid
+          path: ${{ runner.temp }}/coverage-mid.xml
 
   capture-byte-oracle:
     name: Capture-characterization byte oracle (torch 2.13.0, py 3.10)
@@ -765,7 +1005,9 @@ jobs:
           # per-change pr.yml backend-protocol legs test the pin;
           # tests/test_backend_framework_pins.py holds both to the shells.
           - backend: tf
-            install: '"tensorflow-cpu>=2.16"'
+            # keras-hub: test-only, for the ecosystem roster's text-model
+            # row (TF_ECOSYSTEM_TEST_REQUIREMENTS); this leg only.
+            install: '"tensorflow-cpu>=2.16" "keras-hub>=0.21,<1"'
             marker: tf_backend
             import_check: "import tensorflow, keras"
             executed_floor: 18
@@ -795,7 +1037,9 @@ jobs:
             # MLX ships manylinux CPU wheels, so its suite runs on Linux CI;
             # pinned to 0.26.3 because the 0.26.5 manylinux wheel is missing
             # libmlx.so. Metal-path coverage still needs Apple silicon.
-            install: '"mlx==0.26.3"'
+            # mlx-lm: test-only, loads the ecosystem roster's mlx-lm
+            # checkpoints (MLX_ECOSYSTEM_TEST_REQUIREMENTS); this leg only.
+            install: '"mlx==0.26.3" "mlx-lm>=0.26,<0.27"'
             marker: backend_mlx
             import_check: "import mlx.core, mlx.nn"
             executed_floor: 40
@@ -1012,7 +1256,7 @@ jobs:
                 tqdm.__version__, graphviz.__version__, torch.__version__,
                 safetensors.__version__)
           trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
-          assert trace.num_ops >= 2
+          assert len(trace.ops) >= 2
           # r7 R83-3: the floors for safetensors (tlspec blobs) and pillow
           # (drawing surfaces) resolved here but were never EXERCISED -- a
           # floor too low to carry the API TorchLens calls still passed. One
@@ -1021,8 +1265,8 @@ jobs:
               bundle = Path(tmp) / "floor.tlspec"
               tl.save(trace, str(bundle))
               loaded = tl.load(str(bundle))
-              assert loaded.num_ops == trace.num_ops
-              loaded.draw(vis_save_only=True, vis_outpath=str(Path(tmp) / "floor_graph"))
+              assert len(loaded.ops) == len(trace.ops)
+              loaded.draw(path=str(Path(tmp) / "floor_graph"))
               loaded.cleanup()
           print("floor-env capture + save/load + draw OK")
           PY
@@ -2096,12 +2340,154 @@ jobs:
             --ignore-vuln PYSEC-2026-3624
 
 
+  notebooks:
+    # Nothing executed the user notebooks, so eight of them (the
+    # README's ten-minute tutorial included) rotted unnoticed through two rename
+    # rounds. This leg executes every user notebook (notebooks/*.ipynb, the
+    # learning path notebooks/learn/*.ipynb and examples/**/*.ipynb; the
+    # developer audit notebooks are not in the set)
+    # with nbclient, one kernel per notebook, a per-cell and a whole-notebook
+    # timeout, and names the notebook and cell of every failure. Nightly only:
+    # the HF model downloads and about twelve minutes of execution do not belong
+    # on every push. It runs no pytest, so it declares no executed-test floor.
+    name: User notebooks (nbclient)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch, TorchLens and the notebook kernel
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # The [test] extra carries nbclient and ipykernel.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import nbclient, ipykernel, torch; print('nbclient', nbclient.__version__, 'ipykernel', ipykernel.__version__, 'torch', torch.__version__)"
+
+      - name: Restore the Hugging Face model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/hf-cache
+          # Keyed on the notebooks: a notebook edit that pulls a new model
+          # refreshes the cache; the restore key reuses the last one meanwhile.
+          key: notebooks-hf-${{ hashFiles('notebooks/*.ipynb', 'notebooks/learn/*.ipynb', 'examples/**/*.ipynb') }}
+          restore-keys: notebooks-hf-
+
+      - name: Execute every user notebook
+        env:
+          HF_HOME: ${{ runner.temp }}/hf-cache
+          MPLBACKEND: Agg
+          OMP_NUM_THREADS: "2"
+        run: python scripts/run_notebooks.py -j 2
+
+  packaging-extended-sets:
+    name: Packaging install sets (extended group)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # pr.yml's packaging-sets/packaging-install legs run the `pr` group of
+    # tools/packaging/matrix.toml on every pull request; the `extended` group
+    # (every other extras set) runs here once a night. Both read the same
+    # generated constraints, and the steps below mirror pr.yml's: keep the
+    # two in lockstep. A leg of its own rather than calling pr.yml, which
+    # would rerun the whole pull-request gate every night.
+    outputs:
+      include: ${{ steps.sets.outputs.include }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Check the generated constraints and list the extended sets
+        id: sets
+        run: |
+          python tools/packaging/generate_constraints.py --check
+          echo "include=$(python tools/packaging/generate_constraints.py --list-sets --group extended)" >> "$GITHUB_OUTPUT"
+
+  packaging-extended-install:
+    name: Clean install (${{ matrix.set }}, python ${{ matrix.python }})
+    needs: packaging-extended-sets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Builds the wheel and sdist, installs each into a fresh venv with the
+    # set's extras under tools/packaging/constraints/<set>.txt and probes it
+    # (tests/packaging_install/); the extended sets resolve against the live
+    # indexes only here and on manual dispatch of pr.yml.
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.packaging-extended-sets.outputs.include) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "tools/packaging/constraints/*.txt"
+
+      - name: Install the test runner
+        # The runner environment only builds and drives the venvs; torchlens
+        # and its extras install inside each fresh venv, never here.
+        run: uv pip install --system "pytest>=8,<10" "build>=1.2" "tomli>=2; python_version < '3.11'"
+
+      - name: Run the clean-install tests for this set (PASSED-count attested)
+        env:
+          TORCHLENS_PACKAGING_SETS: ${{ matrix.set }}
+        # --noconftest: tests/conftest.py imports torch and torchlens, which
+        # this runner environment deliberately lacks. One set is two install
+        # cases (wheel and sdist), so both must pass.
+        run: |
+          mkdir -p "${{ runner.temp }}/junit"
+          python -m pytest tests/packaging_install -m packaging --noconftest -p no:cacheprovider --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/packaging-${{ matrix.set }}.junit.xml"
+          echo "packaging-${{ matrix.set }}.junit.xml 0 --min-passed 2" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
   attest:
     name: Executed-test floors (every leg)
     # One check for the whole workflow: every test job above declares its
     # legs' floors in a legs.floor file beside its junit; this job checks all
     # of them, so a leg whose suite silently skipped or hollowed out is red.
-    needs: [smoke-matrix, tier, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract]
+    needs: [smoke-matrix, tier, stress-subset, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract, packaging-extended-install]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

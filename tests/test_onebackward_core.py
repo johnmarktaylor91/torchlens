@@ -88,8 +88,7 @@ class TestAccessor:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         before = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
@@ -135,8 +134,7 @@ class TestSuppression:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         assert len(trace.autograd.backward_passes) == 0
         trace.log_backward(trace["output_1"].out.sum(), retain_graph=True)
@@ -245,7 +243,6 @@ class TestReadCore:
         )
         assert table.target_ids() == ("t0", "t1")
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_callable_1d_target_is_a_batch_never_summed(self) -> None:
         """A 1-D callable result expands to per-element targets."""
@@ -304,8 +301,7 @@ class TestReadCore:
         trace = tl.trace(
             model,
             inputs,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            save_mode="reference",
+            capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         first = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
@@ -339,7 +335,6 @@ class TestReadCore:
 class TestActivationMethods:
     """Item 2 activation paths and retention honesty (D14)."""
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_activation_x_grad_equals_manual_product(self) -> None:
         """act x grad rows equal payload * gradient elementwise."""
@@ -366,7 +361,7 @@ class TestActivationMethods:
         trace = tl.trace(
             model,
             torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(layers_to_save=[]),
+            save=[],
         )
         grad_table = ob.read(
             trace, target=ob.seed("output_1", index=(0, 0)), method="grad", reduce="sum"
@@ -382,7 +377,6 @@ class TestActivationMethods:
         assert statuses == {"unavailable"}
         assert {row.status_reason for row in axg.rows()} == {"payload_unretained"}
 
-    @pytest.mark.smoke
     @_requires_gradient_edge
     def test_activation_method_reads_payloads_without_backward(self) -> None:
         """method='activation' takes no target and runs no backward."""

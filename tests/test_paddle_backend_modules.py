@@ -9,7 +9,7 @@ paddle = pytest.importorskip("paddle")
 import torchlens as tl  # noqa: E402
 from torchlens.validation.invariants import check_metadata_invariants  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 class PaddleScale(paddle.nn.Layer):
@@ -69,7 +69,7 @@ def _input() -> object:
 def test_paddle_nested_layer_addresses_and_kwargs() -> None:
     """Nested Paddle layers should populate module logs and forward kwargs."""
 
-    trace = tl.trace(PaddleNested(), _input(), {"scale": 2.0}, backend="paddle")
+    trace = tl.trace(PaddleNested(), _input(), input_kwargs={"scale": 2.0}, backend="paddle")
 
     assert trace.options.module_identity_mode == "object_module"
     addresses = {module.address for module in trace.modules}

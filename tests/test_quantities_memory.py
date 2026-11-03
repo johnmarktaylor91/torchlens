@@ -47,11 +47,11 @@ def _trace_memory_model() -> tl.Trace:
     return tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
-@pytest.mark.smoke
 def test_bytes_formatting_and_numeric_behavior() -> None:
     """Bytes formats human-readably while preserving numeric operations."""
 
@@ -72,7 +72,6 @@ def test_bytes_formatting_and_numeric_behavior() -> None:
     assert value > 1_000_000
 
 
-@pytest.mark.smoke
 def test_duration_flops_and_macs_formatting_and_numeric_behavior() -> None:
     """Duration, Flops, and Macs format directly while staying numeric."""
 

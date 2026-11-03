@@ -68,7 +68,6 @@ def test_failed_selection_do_detaches_its_hooks() -> None:
     assert torch.allclose(fork["relu_1_2"].out, log["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_failed_do_keeps_prior_healthy_hooks() -> None:
     """Cleanup removes exactly the failing call's hooks, nothing else."""
 
@@ -82,7 +81,6 @@ def test_failed_do_keeps_prior_healthy_hooks() -> None:
     assert torch.allclose(fork["relu_1_2"].out, 2.0 * log["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_explicit_attach_hooks_stays_sticky_by_contract() -> None:
     """The manual door keeps its semantics: the caller owns the handle."""
 

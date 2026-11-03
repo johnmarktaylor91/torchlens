@@ -24,7 +24,7 @@ ATTN_ADDRESS = "model.layers.0.self_attn"
 def llama_capture():
     spec = FAMILY_BY_NAME["llama"]
     model = spec.build("eager")
-    trace = tl.trace(model, (), spec.input_kwargs())
+    trace = tl.trace(model, (), input_kwargs=spec.input_kwargs())
     yield model, trace
     tl.release_model(model)
 
@@ -46,7 +46,6 @@ def test_gqa_geometry_from_config(llama_capture):
     assert view["v"].value.shape[-2:] == (n_kv, d_head)
 
 
-@pytest.mark.smoke
 def test_gqa_head_view_maps_query_heads_to_kv_groups(llama_capture):
     """head(i).k reads KV group i // (n_q / n_kv), aliasing-flagged."""
 

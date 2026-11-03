@@ -22,7 +22,7 @@ from torchlens.errors import SelectionError
 from torchlens.errors._base import TorchLensError
 from torchlens.report import diff
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _plain_pair():
@@ -50,7 +50,6 @@ def test_changed_refuses_on_insertion_with_join_verdict():
     assert excinfo.value.fields["join_verdict"] == "refused_cardinality"
 
 
-@pytest.mark.smoke
 def test_changed_completes_across_label_renumbering_live_edit():
     """G-ALIGN closed: a live edit's label churn no longer breaks changed().
 
@@ -108,7 +107,6 @@ def test_changed_machinery_op_excluded_with_disclosure():
     assert int(machinery_entries[0]._mask._dense_ro().sum()) == 0
 
 
-@pytest.mark.smoke
 def test_top_changed_completes_across_live_edit():
     model, x = _plain_pair()
     baseline = tl.trace(model, x, **_SAVE_ALL)
@@ -140,7 +138,6 @@ def test_diff_report_insertion_matrix():
     assert not report.rows_with_status("changed")
 
 
-@pytest.mark.smoke
 def test_diff_report_added_and_removed_are_declared():
     torch.manual_seed(0)
     without_tail = OptionalBranchNet(use_tail=False)

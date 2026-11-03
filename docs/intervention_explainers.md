@@ -11,7 +11,7 @@ questions, so pick by what you need back, not by habit.
 | Ask "what if this saved value had been different" on an input you already traced | `trace.fork().do(site, action)` | no: the edit is pushed down the recorded graph from saved values | the fork, with its saved values updated |
 | The same question when the edit may change control flow, randomness or module state | `trace.fork().do(site, action, model=model, inputs=x)`, or `trace.run(model, x)` | yes | the fork, re-executed under the edit |
 | Apply one edit to many forwards or to HF `generate()`, with no trace | `spec.bind(model)`, and `spec.bind(model).generate(...)` for HF `generate()` | yes, every call | the model's own outputs, plus `last_report` fire counts |
-| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec, return_output=True)` | yes, every call | the output and a sparse `Recording` |
+| Apply an edit and keep a few activations on every forward | `tl.record(model, x, save=..., intervene=spec)` | yes, every call | a sparse `Recording`; the output is `recording.output` |
 
 `do()` picks its engine from its arguments: with neither `model=` nor `inputs=` it pushes over the saved
 graph; with both it re-executes the model. Pass
@@ -39,7 +39,7 @@ live = tl.trace(model, x, save=head, intervene=spec)
 live_out = live.find_sites(head).first().out
 
 # do() with no model: edit a saved value and push it down the recorded graph.
-saved = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+saved = tl.trace(model, x)
 pushed = saved.fork("pushed")
 pushed.do(site, tl.zero_ablate())
 pushed_out = pushed.find_sites(head).first().out
@@ -94,7 +94,7 @@ import torchlens as tl
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
 x = torch.randn(2, 4)
-clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+clean = tl.trace(model, x)
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
@@ -162,9 +162,8 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(replayable=True)
-base = tl.trace(model, torch.randn(3, 4), capture=options)
-source = tl.trace(model, torch.randn(3, 4), capture=options)
+base = tl.trace(model, torch.randn(3, 4))
+source = tl.trace(model, torch.randn(3, 4))
 site = "linear_1_1"
 basis = torch.tensor([[1.0, 1.0, 0.0, 0.0]]) / 2**0.5  # one unit direction
 
@@ -236,13 +235,12 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
-options = tl.options.CaptureOptions(replayable=True)
 x, x_source = torch.randn(3, 4), torch.randn(3, 4)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 4))[0].T  # stands in for a learned rotation
-source_value = tl.trace(model, x_source, capture=options)[site].out
+source_value = tl.trace(model, x_source)[site].out
 
-fork = tl.trace(model, x, capture=options).fork()
+fork = tl.trace(model, x).fork()
 fork.do(
     tl.subspace(site, rotation[:2], origin="DAS rotation trained elsewhere", method="das"),
     tl.replace_with(source_value),
@@ -251,7 +249,7 @@ path = Path(tempfile.mkdtemp()) / "rotation.tlspec"
 tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
-fresh = tl.trace(model, x, capture=options).fork()
+fresh = tl.trace(model, x).fork()
 for hook_spec in spec.hook_specs:
     fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
 reloaded = fresh.push()
@@ -283,13 +281,12 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(replayable=True)
 x = torch.randn(3, 4, dtype=torch.float64)
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]  # R, [d, k]
 weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torch.float64)
 
-base = tl.trace(model, x, capture=options)
+base = tl.trace(model, x)
 fork = base.fork()
 fork.do(
     tl.subspace(site, rotation.T, origin="LoReFT trained elsewhere", method="loreft"),
@@ -325,7 +322,6 @@ import torchlens as tl
 
 torch.manual_seed(0)
 model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).double().eval()
-options = tl.options.CaptureOptions(replayable=True)
 tokens = torch.randn(1, 5, 4, dtype=torch.float64)  # [batch, positions, features]
 site = "linear_1_1"
 rotation = torch.linalg.qr(torch.randn(4, 2, dtype=torch.float64))[0]
@@ -333,7 +329,7 @@ weight, bias = torch.randn(2, 4, dtype=torch.float64), torch.randn(2, dtype=torc
 last = torch.zeros(1, 5, 4, dtype=torch.bool)
 last[:, -1, :] = True  # every feature of the last position
 
-base = tl.trace(model, tokens, capture=options)
+base = tl.trace(model, tokens)
 fork = base.fork()
 fork.do(
     tl.subspace(tl.units(site, last), rotation.T, origin="LoReFT trained elsewhere"),
@@ -344,7 +340,7 @@ path = Path(tempfile.mkdtemp()) / "loreft.tlspec"
 tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
-fresh = tl.trace(model, tokens, capture=options).fork()
+fresh = tl.trace(model, tokens).fork()
 for hook_spec in spec.hook_specs:
     fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
 

@@ -69,7 +69,6 @@ def _net_and_input(device: str = "cpu") -> tuple[_SmallNet, torch.Tensor]:
     return _SmallNet().to(device), torch.randn(2, 2, 6, 6, device=device)
 
 
-@pytest.mark.smoke_cells("test_output_device_cpu_on_cpu_model_validates[forward]")
 @pytest.mark.parametrize("scope", ["forward", "saved"])
 def test_output_device_cpu_on_cpu_model_validates(scope: str) -> None:
     """``output_device="cpu"`` on a CPU model is a no-op move and validates."""
@@ -273,7 +272,8 @@ def test_cuda_validator_capture_holds_activations_on_host() -> None:
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(layers_to_save="all", save_args=True, output_device="cpu"),
+        capture=CaptureOptions(save_args=True, output_device="cpu"),
+        save="all",
     )
     devices = {op.out.device.type for op in trace._layer_list if op.out is not None}
     assert devices == {"cpu"}

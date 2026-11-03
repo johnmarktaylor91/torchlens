@@ -8,7 +8,7 @@ diagnostics (`param_health`, `grad_health`, `dtype_range`, `nonfinite_origin`,
 no module outside `debug/` re-exports them, so nothing below this package imports it
 back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `tl.report`.
 
-## The report object (U42.2; DOCUMENTED-UNSTABLE)
+## The report object (DOCUMENTED-UNSTABLE)
 - Every report-shaped result is a `tl.report.Report` (defined in
   `torchlens/_debug_report.py`, at the package root so `tl.report` and every
   report subclass can import it without importing this package): `report_type`, `subject`,
@@ -35,6 +35,9 @@ back. `HealthReport` and `FlopsCrossCheck` are defined here but exported from `t
   existing trace.
 - Results are `FindNanReport` / `BisectNanReport`; unsaved ancestors become an
   explicit `uncertainty_zone`, never a silent guess.
+- `find_nan` and `_rerun.isolated_capture` force one field on the caller's
+  `capture=` through `_capture_override._with_capture_fields`, which keeps the
+  caller's explicit-field record.
 
 ## _precision.py
 - `bisect_precision(model, input_args, input_kwargs=None, *, reference_dtype=fp64,

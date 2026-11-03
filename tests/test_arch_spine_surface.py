@@ -41,8 +41,8 @@ def test_root_budget_is_frozen() -> None:
     """The root-name list is a FROZEN BUDGET (memo s5 namespace rule)."""
 
     rows = surface_rows()
-    assert len(rows) == 108, (
-        f"root surface budget moved: {len(rows)} names (frozen budget 108: "
+    assert len(rows) == 109, (
+        f"root surface budget moved: {len(rows)} names (frozen budget 109: "
         "143 at the C01 freeze, -1 private `_trace` alias retired, +6 by "
         "the A10 facade -- summary/load_extraction into __all__ plus the four "
         "pre-existing lazy namespaces bridge/callbacks/neuro/notebook -- "
@@ -59,7 +59,7 @@ def test_root_budget_is_frozen() -> None:
         "rows (172); the forks ruling names.4 replaced them with three teaching "
         "redirects (mechinterp, semantic, tviz; redirects are not surface rows), "
         "restoring 151 -- and +1 by names.5: tl.direction_from_pairs, the "
-        "U46.1 contrastive direction builder JMT ruled as a root name (in "
+        "contrastive direction builder, ruled a root name (in "
         "__all__) = 152 -- and -2 by the rename codemod: tl.save (objects "
         "save themselves) and tl.load_extraction (tl.load reads extraction "
         "manifests) left the root as teaching redirects -- and -6 by the "
@@ -75,14 +75,16 @@ def test_root_budget_is_frozen() -> None:
         "the captured_run, user_funcs and visualization namespaces to private packages "
         "(-3), and the gradient-site change took -6 +2 (the six gradient helpers "
         "scale_grad, zero_grad, clamp_grad, clip_grad, add_grad_noise, hook_grad leave "
-        "the root while tl.grad and tl.clip_norm join it), so the root holds 107 rows "
-        "-- and +1 by walk ruling late.9: tl.all_sites, the named universal selector "
-        "(L4 core, beside tl.label_matches; in __all__) = 108. "
+        "the root while tl.grad and tl.clip_norm join it), so the root held 107 rows; "
+        "the options restructure (C2, glossary row for tl.quickstart.render) adds "
+        "tl.draw, the one-call picture (108), and late.9 adds "
+        "tl.all_sites, the named universal selector (L4 core, beside "
+        "tl.label_matches; in __all__), so the root holds 109 rows. "
         "Root growth is a deliberate act: regenerate the table, justify the "
         "new name's layer, and update this pin in the same change."
     )
     in_all = [row for row in rows if row.in_all]
-    assert len(in_all) == len(torchlens.__all__) == 84, (
+    assert len(in_all) == len(torchlens.__all__) == 85, (
         "__all__ budget moved -- update U-PUBLIC-OPERATIONS and this pin in "
         "the same deliberate change"
     )

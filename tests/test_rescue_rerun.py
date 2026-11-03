@@ -816,8 +816,10 @@ def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
     tl.trace(
         Control(),
         torch.randn(3, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all", output_transform=counting_out),
-        save=tl.options.SaveOptions(activation_transform=counting_act),
+        capture=tl.options.CaptureOptions(
+            output_transform=counting_out, activation_transform=counting_act
+        ),
+        save="all",
     )
     control_act, control_out = calls["act"], calls["out"]
     assert control_out == 1
@@ -827,9 +829,12 @@ def test_transform_callables_never_double_fire_on_rescue(raw_cos: Any) -> None:
         trace = tl.trace(
             Model(),
             torch.randn(3, 4),
-            grad_transform=lambda value, **kwargs: value,
-            capture=tl.options.CaptureOptions(layers_to_save="all", output_transform=counting_out),
-            save=tl.options.SaveOptions(activation_transform=counting_act),
+            capture=tl.options.CaptureOptions(
+                output_transform=counting_out,
+                grad_transform=lambda value, **kwargs: value,
+                activation_transform=counting_act,
+            ),
+            save="all",
         )
 
     assert trace._rescue_rerun["skipped_reason"] == "rescue_ineligible", (

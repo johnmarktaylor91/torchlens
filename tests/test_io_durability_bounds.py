@@ -56,7 +56,7 @@ def _trace() -> tl.Trace:
     return tl.trace(
         _tiny().eval(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
 
 
@@ -172,7 +172,6 @@ def test_overwrite_save_keeps_old_bundle_at_target_until_swap(tmp_path: Path, mo
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_legacy_bundle_metadata_pkl_ceiling_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
     """The legacy bundle branch enforces the same pkl byte ceiling as traces.
 
@@ -322,7 +321,6 @@ def test_runnable_dead_model_fallback_refuses_non_tensor_state_typed() -> None:
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.smoke
 def test_nul_byte_relative_path_refuses_typed(tmp_path: Path) -> None:
     """A NUL byte in a manifest relative_path refuses typed, not ValueError.
 

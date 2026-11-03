@@ -56,16 +56,52 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   `Recording.to_trace()` materializes full graph structure; reading a payload that was not selected
   by `save=` fails explicitly. `tl.record` installs gradient hooks only when `backward_ready=True`,
   `save_grads=` or `default_grad=` is given; without one, `Recording.backward()` refuses with
-  code `recording_backward_not_requested`.
+  code `recording_backward_not_requested`. `tl.record` and `Recorder` build it; `Recording` has no
+  public constructor. `tl.record` always returns one object.
+
+**Trace.output / Recording.output**
+: The model's return value exactly as the model returned it (tensor, tuple, dict, Hugging Face
+  output object, distribution); for a multi-pass `Recorder`, the last pass's. With
+  `generate_kwargs=`, `GenerationRecording.output` (and its `recording.output`) is what
+  `generate()` returned. `Trace.output` is the exact return from a live `tl.trace` forward,
+  independent of `save=` and output transforms; it is neither transformed `raw_output` nor
+  the saved-payload rebuild from `reconstruct_output()`. Traces cooked from recordings,
+  forked, or merged from chunks have no live forward return. The trace or recording keeps
+  that object alive for as long as it exists (for a Hugging Face model this includes
+  `past_key_values`); the object is released when the trace or recording is dropped. Held in
+  memory only: a trace or recording loaded from disk or unpickled refuses
+  with `output_not_stored`, a failed partial recording (`on_forward_error="return_partial"`)
+  with `output_forward_failed`, and a capture that `stop_after=` ended before the model
+  returned with `output_capture_stopped` (all `PayloadUnavailableError`); it never returns
+  `None` for a missing output.
+
+**Recording.options / RecordingSettings**
+: `Recording.options` returns a `tl.types.RecordingSettings`, the read-only record of the settings
+  the recording was made with, across every door that configured it: the capture knobs from
+  `capture=CaptureOptions(...)` (`RecordingSettings.save_grads`,
+  `RecordingSettings.activation_transform`, `RecordingSettings.grad_transform`,
+  `RecordingSettings.save_raw_activations`, `RecordingSettings.save_raw_grads`,
+  `RecordingSettings.detach_saved_activations`, `RecordingSettings.lookback`,
+  `RecordingSettings.lookback_payload_policy`, `RecordingSettings.seed`), the recorder knobs from
+  `recording=RecordingOptions(...)` (`RecordingSettings.default_op`,
+  `RecordingSettings.default_module`, `RecordingSettings.default_grad`,
+  `RecordingSettings.history_size`, `RecordingSettings.include_source_events`,
+  `RecordingSettings.max_predicate_failures`, `RecordingSettings.on_predicate_error`,
+  `RecordingSettings.on_forward_error`, `RecordingSettings.postprocess`) and the door keywords
+  (`RecordingSettings.keep_op` from `save=`, `RecordingSettings.intervene` from `intervene=`,
+  `RecordingSettings.stop_after`, `RecordingSettings.storage`, `RecordingSettings.narrate`). Values are the live objects the
+  recorder used, never repr strings; there is no public constructor. A recording recovered from
+  disk keeps the plain values (bools, numbers, strings); callables and objects are not stored with
+  saved recordings and read `None` there.
 
 **Saved-activation autograd history** *(knob spellings documented-unstable)*
 : `CaptureOptions(detach_saved_activations=False)`, the `tl.trace` default, keeps every saved
   payload graph-connected on every save path: the save-all default, `tl.module` and
-  `tl.in_module` selectors, op-label `layers_to_save`, the legacy `trace.run(model, x)` rerun,
+  `tl.in_module` selectors, op-label `save=`, the legacy `trace.run(model, x)` rerun,
   `trace.run(inputs=...)` and `trace.run(inputs=..., fast=True)`; `True` detaches on every one
   of them. `tl.extract(..., detach_saved_activations=False)` and
-  `tl.record(..., detach_saved_activations=False)` (also `tl.recording.Recorder` and
-  `RecordingOptions.detach_saved_activations`) attach on request; both keep their detached
+  `tl.record(..., capture=CaptureOptions(detach_saved_activations=False))` (also
+  `tl.recording.Recorder`) attach on request; both keep their detached
   default, and `tl.record` refuses an explicit `True` with `backward_ready=True`
   (`backward_ready_conflict`). A per-site `CaptureSpec(save_grad=True)` stays attached either
   way, and disk payloads are always detached. An escrowed deferred-selector payload spilled to
@@ -82,7 +118,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   complete.
 
 **Failed partial Recording**
-: A `Recording` with `status="partial_error"` and `is_failed=True`. Use
+: A `Recording` with `status="partial_error"` and `is_failed` `True`. Use
   `on_forward_error="attach_partial"` to attach it as `exc.partial_recording`, or
   `on_forward_error="return_partial"` to return it. It carries string-only error metadata,
   `num_committed_ops`, and best-effort `last_event_*` fields. It cannot be passed to
@@ -102,7 +138,7 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   (both refuse a missing step with `record_generation_step_missing`). `seed=` seeds once
   for the whole generation. Beam search, more than one return sequence, batched prompts, assisted
   decoding, encoder-decoder models, `use_cache=False`, a generate that runs decode steps without a
-  cache, `intervene=`, `halt=` and partial forward-error modes refuse with
+  cache, `intervene=`, `stop_after=` and partial forward-error modes refuse with
   `record_generation_unsupported`, whose `reason` field names what is unsupported.
 
 **Capture outcome**
@@ -272,7 +308,9 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
 
 ### Documented-unstable ATen profile INDEX
 
-The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)` and
+The ATen execution profile is recorded by the public switch `CaptureOptions(aten_ops=True)`
+(value-free rows) or `CaptureOptions(aten_ops="values")` (rows plus each call's output tensors in
+`AtenOp.out`) and
 served by the stable accessors `Trace.aten_ops`, `Trace.has_aten_ops`, `Trace.aten_gaps` and
 `Op.aten_ops` (entries below this index); an absent profile refuses typed with
 `AtenOpsUnavailableError` (`aten_ops_unavailable`). As of the tlspec v8 coordinated bump the
@@ -287,13 +325,13 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 | --- | --- | --- |
 | Facades, record kind, disclosure, and provenance | `AtenOp`, `OpRef`, `SuperAtenOp`, `primitive_op`, `mode_paused_interior`, `exact_via_aten`, `heuristic` | unstable -- no deprecation shim owed |
 | Field-order contract | `PRIMITIVE_OP_FIELD_ORDER` | unstable -- no deprecation shim owed |
-| Primitive fields | `label`, `sequence`, `capture_phase`, `forward_pass_index`, `backward_epoch_index`, `owner_func_call_id`, `parent_op_refs`, `parent_grad_fn_call_ref`, `owner_status`, `decomposition_slot`, `namespace`, `operator`, `overload`, `schema`, `schema_fingerprint`, `module_call_stack`, `input_tensor_facts`, `output_tensor_facts`, `mutation_kind`, `view_copy_kind`, `autocast_context`, `dispatch_key_context`, `grad_fn_ref`, `grad_fn_link_status`, `grad_fn_link_provenance`, `algorithmic_flops`, `flop_status`, `flop_formula_source`, `flop_formula_version`, `outcome`, `exception_type`, `execution_context` | unstable -- no deprecation shim owed |
+| Primitive fields | `label`, `sequence`, `capture_phase`, `forward_pass_index`, `backward_epoch_index`, `owner_func_call_id`, `parent_op_refs`, `parent_grad_fn_call_ref`, `owner_status`, `decomposition_slot`, `namespace`, `operator`, `overload`, `schema`, `schema_fingerprint`, `module_call_stack`, `input_tensor_facts`, `output_tensor_facts`, `mutation_kind`, `view_copy_kind`, `autocast_context`, `dispatch_key_context`, `grad_fn_ref`, `grad_fn_link_status`, `grad_fn_link_provenance`, `algorithmic_flops`, `flop_status`, `flop_formula_source`, `flop_formula_version`, `outcome`, `exception_type`, `execution_context`, `out` | unstable -- no deprecation shim owed |
 | Observer-gap fields | `kind`, `capture_phase`, `sequence_before`, `sequence_after`, `owner_func_call_id`, `parent_op_refs`, `reason` | unstable -- no deprecation shim owed |
 | Redundant Op-reference fields | `op_row_index`, `op_label`, `func_call_id` | unstable -- no deprecation shim owed |
 | Tensor-fact fields | `container_path`, `tensor_impl_capability`, `logical_version`, `storage_alias_group`, `shape`, `stride`, `dtype`, `device`, `layout`, `requires_grad` | unstable -- no deprecation shim owed |
 | Execution-context fields | `pytorch_version`, `backend`, `device_model`, `device_capability`, `grad_mode`, `inference_mode`, `module_training_summary`, `autocast`, `deterministic_algorithms`, `tf32_matmul_policy`, `sdpa_policy`, `compile_stance`, `owner_thread_coverage`, `completeness_witness_mode` | unstable -- no deprecation shim owed |
 | Super comparison fields | `comparison_status`, `has_observation_gap` | unstable -- no deprecation shim owed |
-| Invariant contracts | `primitive_op_invariants`, `non_torch_primitive_op_inert` | unstable -- no deprecation shim owed |
+| Invariant contracts | `primitive_op_invariants`, `non_torch_primitive_op_inert`, `aten_values_consistent` | unstable -- no deprecation shim owed |
 | Switch-active load failures | `primitive_op_schema_invalid`, `primitive_op_fk_invalid` | unstable -- no deprecation shim owed |
 | Capture phases | `forward`, `backward`, `setup` | unstable -- no deprecation shim owed |
 | Mutation classes | `none`, `in_place`, `out_variant`, `metadata_only`, `unknown` | unstable -- no deprecation shim owed |
@@ -310,12 +348,15 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
 
 **aten_ops (CaptureOptions)**
 : Opt-in (default `False`): the torch capture records the ATen operations each logged torch call
-  dispatched to, as value-free `AtenOp` rows, through a dispatch mode installed for the forward
-  and, with `backward_ready=True`, for `Trace.backward()` / `log_backward()`. The default installs
+  dispatched to, as `AtenOp` rows, through a dispatch mode installed for the forward and, with
+  `backward_ready=True`, for `Trace.backward()` / `log_backward()`. `True` keeps the rows
+  value-free; `"values"` additionally keeps what each call returned in `AtenOp.out`, under the
+  capture's save policy (the `save=` selection, `save_mode`, `output_device`, `save_budget`); any
+  other value refuses typed (`InvalidArgumentError`, `aten_ops_invalid`). The default installs
   no dispatch mode and adds no per-op work. A session-time knob (not persisted; load restores
   `False`) that `run()` refreshes inherit; the recorded rows themselves persist (tlspec v8+), so a
   loaded trace keeps `has_aten_ops`. `run()` results, fast or not, inherit the recording of the
-  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026).
+  trace they refresh; non-torch backends record nothing. GPU kernel recording is out of scope. Spelling: velocity walk builds.2 (1 Nov 2026); `"values"` literal: aten-values lane (3 Nov 2026).
 
 **Trace.has_aten_ops**
 : `True` when the trace carries recorded ATen operations: after a capture with
@@ -341,6 +382,31 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   yields an empty tuple while the trace still `has_aten_ops`. Raises `AtenOpsUnavailableError`
   when the owning trace recorded none.
 
+**AtenOp.out** -- *unstable -- no deprecation shim owed*
+: What the ATen call returned, mirroring `Op.out`: a tensor for a single-tensor result, a tuple of
+  tensors (one per `output_tensor_facts` entry, in the same order) for a container result, `None`
+  when no value was kept. Recorded only under `CaptureOptions(aten_ops="values")`; otherwise every
+  row reads `None`. Each value is a snapshot copied below autograd at the moment the call returned:
+  it never carries a `grad_fn` (`detach_saved_activations=False` attaches `Op.out`, not these), an
+  in-place call's value is the mutated tensor as returned, a view's value is the view's content, and
+  aliasing between rows is not preserved (`view_copy_kind` and `storage_alias_group` describe it).
+  Which rows keep values follows the owning torch call: a forward row keeps its value when an `Op`
+  of its call saved its output (`has_saved_activation`), so `save=` restricts ATen values the way
+  it restricts `Op.out`; a dropped owner frees its values during the forward. Backward rows (with
+  `backward_ready=True`) and orphan rows keep values unconditionally. Values honour `save_mode`
+  (`"reference"` becomes a copy for in-place calls), `output_device` and the `save_budget` (each
+  value is admitted like an activation; the budget error names `aten:<operator>.<overload>`). Not
+  retained when activations stream to disk or an out sink is active (every row reads `None`; a
+  typed gap, see limitations). Persist and load with `Op.out` (`BLOB_RECURSIVE`;
+  `include_outs=False` drops them while the facts stay). The `aten_values_consistent` invariant
+  checks every kept value against its facts and, under `save_mode="copy"`, that some row beneath
+  each saved op equals the op's `out`.
+  A `run()` refresh re-records the profile against the new input, so values follow `Op.out`; the
+  fast tier (`run(inputs=..., fast=True)`, and the guarded fast rerun behind `run(model, x)` with
+  staged hooks) never re-records ATen values, so it refuses a values capture with
+  `run_capability_unavailable` at stage `fast_run_aten_values_unsupported` and the legacy door
+  falls back to the capture engine.
+
 **AtenOpsUnavailableError**
 : `torchlens.errors.AtenOpsUnavailableError` (`CaptureError`, `RuntimeError` lineage), code
   `aten_ops_unavailable` in `exc.fields["code"]`: `Trace.aten_ops`, `Trace.aten_gaps` or
@@ -348,7 +414,8 @@ without a compatibility alias. No validation or honesty tripwire may be weakened
   artifact was saved without it, or the trace is a `run(fast=True)` result). The message names the
   remedy, `CaptureOptions(aten_ops=True)`; check `Trace.has_aten_ops` first to avoid it.
 
-`AtenOp` is one value-free dispatcher call measured during a concrete capture. Its label is opaque,
+`AtenOp` is one dispatcher call measured during a concrete capture (value-free unless
+`aten_ops="values"` filled `out`). Its label is opaque,
 capture-local, and intentionally excluded from universal Trace string lookup. `OpRef` is a redundant
 dense foreign key whose row index, Op label, and function-call witness must all agree. A
 `mode_paused_interior` entry says only that TorchLens paused its owned dispatch observer around a
@@ -408,7 +475,6 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | CAM token grid and layer-choice evidence | `grid_route`, `feature_map`, `derived`, `prefix_tokens`, `grid_evidence`, `layer_source`, `caller`, `trace`, `layer_reason` | unstable -- no deprecation shim owed |
 | CAM resolution evidence | `native_map_resolution`, `rendered_map_resolution`, `upsampling`, `bilinear_display_only` | unstable -- no deprecation shim owed |
 | Graph overlay bridge and controls | `overlay`, `source`, `reduce`, `abs_sum`, `abs_mean`, `sum`, `max` | unstable -- no deprecation shim owed |
-
 | F06 wrapping contract | `noise_tunnel`, `attribute`, `method`, `method_kwargs` | unstable -- no deprecation shim owed |
 | F06 noise tunnel controls and evidence | `num_samples`, `stdevs`, `reduce`, `noise_bank`, `mean_square`, `variance`, `stdevs_resolved`, `residual_of_means` | unstable -- no deprecation shim owed |
 | F06 GradientShap controls | `gradient_shap`, `baselines`, `draw_bank`, `store_draws` | unstable -- no deprecation shim owed |
@@ -427,7 +493,7 @@ documented unstable and may be renamed or removed without a compatibility alias.
 | Causal audit | `causal_audit`, `CausalAudit`, `CausalAuditUnit`, `CausalAuditSet`, `claim`, `k`, `edit`, `zero`, `mean`, `controls`, `top`, `bottom`, `random`, `num_random_draws`, `per_unit`, `layer`, `site`, `original_score`, `units`, `sets`, `rank_agreement`, `set_of`, `unit`, `claimed_effect`, `measured_effect`, `kind`, `draw`, `intervention`, `component`, `claim_kind`, `constant_row`, `rows_not_audited`, `corrupted_input`, `metric`, `edges`, `edge_table`, `edge_patch`, `example_reduction`, `logits_site`, `sets_not_measured`, `reason`, `trace` | unstable -- no deprecation shim owed |
 | Attribution graphs | `build_graph`, `AttributionGraph`, `GraphNode`, `transcoders`, `embedding_module`, `target`, `max_num_logits`, `logit_probability_coverage`, `demeaned_logits`, `logits_at`, `frozen`, `nodes`, `adjacency_matrix`, `node_values`, `constants`, `encoder_bias`, `decoder_bias`, `other`, `active_feature_indices`, `feature_activations`, `transcoder_sites`, `error_sites`, `error_vectors`, `input_token_ids`, `logit_token_ids`, `logit_probabilities`, `capture_outcome`, `disclosures`, `node_counts`, `node_indices`, `kind`, `site`, `position`, `feature_index`, `token`, `logit`, `error` | unstable -- no deprecation shim owed |
 | Attribution graph export | `to_neuronpedia`, `slug`, `model_id`, `tokenizer`, `prompt`, `node_influence_coverage`, `edge_influence_coverage`, `path` | unstable -- no deprecation shim owed |
-| Attribution graph overlay and upload | `graph_value`, `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
+| Attribution graph overlay and upload | `influence`, `activation`, `upload_to_neuronpedia`, `api_key` | unstable -- no deprecation shim owed |
 
 <!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->
 
@@ -467,7 +533,6 @@ is documented unstable and may be renamed or removed without a compatibility ali
 | Appliance on the `trace.using` door | `trace.using("mi")`, `head_scores`, `qk_circuit`, `ov_circuit` | unstable -- no deprecation shim owed |
 | Per-query-head patching under grouped-query attention | `patch_query_heads_grid`, `site`, `heads`, `effect_site` | unstable -- no deprecation shim owed |
 | Component edge graph (heads and MLPs as nodes, q/k/v split receivers) | `component_graph`, `ComponentGraph`, `ComponentSender`, `ComponentReceiver`, `ComponentEdge`, `nodes`, `receivers`, `edges`, `layer_index`, `head`, `senders`, `contribution`, `identity_receipt`, `input_label`, `norm_address`, `module_address`, `patch_edges`, `corrupted_graph` | unstable -- no deprecation shim owed |
-
 | Edge attribution patching over the component graph | `edge_scores`, `corrupted_input`, `metric`, `method`, `eap`, `eap_ig`, `steps`, `example_reduction`, `mean`, `sum` | unstable -- no deprecation shim owed |
 | Circuit faithfulness areas | `circuit_performance_ratio`, `circuit_model_difference`, `faithfulness`, `fractions`, `log_scale` | unstable -- no deprecation shim owed |
 | Fixed-period induction score | `FixedPeriodInduction`, `head_scores(..., kind=FixedPeriodInduction(period=n))`, `period` | unstable -- no deprecation shim owed |
@@ -532,11 +597,15 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   temporal composition. `save=` is the only selective sparse-capture spelling; removed
   `keep_op=` and `keep_module=` arguments raise `TypeError`. On `tl.trace`, `save=` also takes
   the list form (layer names, pass-qualified labels, module addresses, integer indexes,
-  substrings, `'all'`, `'none'`), which selects exactly what
-  `capture=CaptureOptions(layers_to_save=[...])` selects; passing both refuses
-  `save_selection_conflict`. `save="stats"` is a third level beside `'all'` and `'none'`:
+  substrings, `'all'`, `'none'`), with final-label selection resolved after capture. `save="stats"` is a third level beside `'all'` and `'none'`:
   reduce and discard, one `tl.stats.RunningStats` per op and no payload (see Streaming
   statistics).
+
+**Capture options**
+: `CaptureOptions` configures capture mechanics. Select payloads with the `save=`
+  argument on `tl.trace` and `tl.record`; payload selection is not a public field
+  of `CaptureOptions`. Preview saving is not a capture option. `module_filter`
+  remains an additional gate on the selected payloads.
 
 **Lookback**
 : A bounded window of earlier metadata or detached payloads retained so a later temporal predicate
@@ -580,7 +649,11 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   bound executor that applies a spec to live calls. A synchronous generator or iterator returned
   by a bound call (for example `bound.generate(...)`) stays steered for every step, and its report
   settles on `last_report` when the iteration is exhausted, closed or raises; an async lazy output
-  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`.
+  (async generator or iterator, coroutine, awaitable) refuses `bind_lazy_output`. A
+  module-boundary rule (`tl.module(address)`) edits the tensor leaves of a module output that
+  is a tensor or a supported container (tuple, list, dict, namedtuple, dataclass, HF model
+  output); an output of another type (a distribution object) holds no addressable tensor
+  site, so the rule records zero fire there at both doors, bound executor and capture.
 
 **Zero-fire policy (`on_zero_fire`)** *(spelling documented-unstable)*
 : One knob on every intervention door: `spec.bind`, `tl.trace(intervene=)` and `Trace.run`. An intervention that fires at zero sites is always
@@ -633,6 +706,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
   sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
+  Removal (also through the handle's `remove()`) takes effect at once, like a torch hook handle: a
+  rerun or backward pass in progress skips the removed hooks from the next hook site it reaches,
+  while the site firing at that moment finishes its queued hooks; afterwards the recipe and the
+  handle are the same as after a removal between runs.
 
 **Region instances** *(spellings documented-unstable)*
 : A region edit's admissible region is partitioned into pass instances. `RegionTarget.labels`
@@ -915,6 +992,46 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.Bundle({name: b[name] for name in names}).at(site)`, so one foreign member does not disable
   the view for the rest.
 
+**Bundle.draw** *(`nodes=` spelling documented-unstable)*
+: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
+  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
+  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
+  the bundle as one picture and returns a `tl.viz.Drawing` (`str(drawing)` is the DOT source,
+  `drawing.path` the written file). It follows `Trace.draw`'s rules (JMT decision, Sun 1 Nov 2026,
+  3:00 PM PT): the path comes first and its extension picks the format (`b.draw("diff.svg")`
+  writes SVG); `file_format=` applies only to a path with no extension (`<path>.<file_format>`,
+  `"pdf"` by default); a `file_format` that disagrees with the extension refuses with
+  `ArgumentConflictError` (`draw_format_mismatch`). Outside a notebook a bare `b.draw()` writes a
+  collision-safe `bundle_modelgraph.<format>` and prints its path; in a Jupyter kernel a bare call
+  writes no file and returns the drawing for inline display. No viewer opens unless
+  `open_viewer=True`. `graph="forward"` (default), `"backward"` (each member's captured grad_fn
+  graph) or `"combined"` draw the bundle's union op graph for that pass, with a member list on
+  each node and arrow that not every member runs; `rolled=True` draws each repeated module once;
+  `direction=None` is `"bottomup"`; `theme` takes the `Trace.draw` skin names (`None` is
+  `"torchlens"`). `node_overrides=` (Bundle-only) keys Graphviz node attributes by op label
+  (member name under `nodes="members"`), `edge_overrides=` by `(source, target)`. `nodes="ops"`
+  (default) draws the ops; `nodes="members"` draws one node per member and one edge per relation
+  row, from the earlier member to the later one, labelled with the kind, the row's `label`, on
+  `fed_by` its basis and coverage, and on `selected_by` its `chosen` decision; solid edges carry
+  token spans TorchLens checked, every other row is dashed, and `graph` must stay `"forward"`.
+  `graph="diff"` draws two members side by side with their aligned sites coloured by `metric`
+  distance on the `on` field: `members=(left, right)` names them (default the baseline and the
+  next member); its defaults are `theme="paper"`, `"svg"` and a `bundle_diff` file, and it runs
+  the comparison gate on the rendered pair only. Any other keyword (a `Trace.draw` keyword the
+  bundle renderer does not support yet, such as `depth=` or `vis_mode=`) refuses with
+  `ArgumentTypeError` (`bundle_draw_keyword_unsupported`) naming the supported list; each is added
+  when the renderer supports it (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). Replaces the removed
+  `show_bundle_graph` and its `signal=` keyword (now `graph=`; no alias).
+
+**Bundle.show**
+: `bundle.show(kind=None, **kwargs)` is the one bundle display door. With no kind (or
+  `kind="graph"`) it is `bundle.draw(**kwargs)` and returns that `Drawing`, the merged graph of
+  where the members differ. `kind="strip"` draws each member's own graph with
+  `Trace.draw(**kwargs)` and returns a dict of member name to `Drawing` (a `path` gets
+  `_<member>` appended per member); `kind="repr"` and `kind="html"` return each member's `repr` /
+  HTML text by member name. Any other kind refuses with `InvalidArgumentError`
+  (`bundle_show_kind_invalid`).
+
 **Bundle.compare**
 : `bundle.compare(a, b, *, metric="cosine", on="out")` returns the per-site differences between
   two members as `(site_label, distance)` rows over the sites both members share, paired through
@@ -933,25 +1050,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `b.stored_comparison_names()` lists the stored names. Session-level state on the built
   supergraph, never persisted. Every (baseline, member) pair goes through the comparison gate
   first, the same predicates as `bundle.at(site).compare()`: no ordering path between them, a
-  shared graph, and proven-equal input values; otherwise the read refuses with the gate's
+  shared graph, and sites that line up (proven-equal input values, or for runs on different inputs
+  or checkpoints, equal graph-shape hashes); otherwise the read refuses with the gate's
   `bundle_gate_*` code.
-
-**Bundle.draw**
-: `b.draw(path=None, *, graph="forward", nodes="ops", rolled=False, direction=None, theme=None,
-  show_legend=None, file_format=None, open_viewer=False, graph_overrides=None,
-  node_overrides=None, edge_overrides=None, members=None, metric="relative_l2", on="out")` draws
-  the bundle as one picture beside `b.show()` (one picture per member) and returns the DOT
-  source; the public home of the former `show_bundle_graph`. `Trace.draw` spellings: path first,
-  its extension picks the format (else `file_format`, default `"pdf"`), a bare call writes a
-  collision-safe `bundle_modelgraph` file. `graph="forward"` (default), `"backward"` or
-  `"combined"` draw the bundle's union op graph for that pass; `nodes="members"` draws one node
-  per member and one edge per relation row (`graph` must stay `"forward"`); `rolled=True` draws
-  the per-layer graph; `direction=None` is `"bottomup"`. `theme` takes the `Trace.draw` skin
-  names (`None` is `"torchlens"`). `graph="diff"` draws two members side by side with their
-  aligned sites coloured by `metric` distance on the `on` field (the former `show_diff`):
-  `members=(left, right)` names them (default the baseline and the next member); its defaults
-  are `theme="paper"`, `file_format="svg"` and a `bundle_diff` file. The diff runs the comparison
-  gate on the rendered pair only.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
 : `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
@@ -1060,7 +1161,13 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Receptive field / Projective field**
 : Influence geometry through the captured DAG toward inputs / toward outputs. Entity-level
   `op.receptive_field` and `op.projective_field` pair with Trace-level
-  `Trace.receptive_fields()` and `Trace.projective_fields()` tables.
+  `Trace.receptive_fields()` and `Trace.projective_fields()` tables. A field view's
+  `.at(unit)` answers for one unit; `.of(units, within=None, method="geometric",
+  probe_budget=256)` answers for many (the units `tl.units` takes: a bool mask over the
+  owner's full output or full-shape coordinate tuples) and returns a trace-bound
+  `tl.Selection`, one region per `within=` site (default: model outputs for projective,
+  model inputs for receptive), usable in `trace.do`, `trace.subgraph` and `& | - ~`
+  *(unstable — no deprecation shim owed)*.
 
 **Encoding channel** *(unstable — no deprecation shim owed)*
 : A declarative value source (record field name, scalar builtin, or callable `node -> value`)
@@ -1503,6 +1610,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `torchlens.validation.validate_forward_pass` and `validate_backward_pass` make the same
   promise, as does `Trace.validate_forward_pass`, which replays each op under its recorded
   RNG state.
+  Under `scope="backward"`, when torch reports a backward through a graph an earlier backward
+  freed and a module attribute holds a tensor with autograd history, the model is refused with
+  `ValidationError` code `backward_validation_carried_graph`, naming those attributes; without
+  that evidence torch's own error propagates unchanged.
   Keyword-only `output_device` and `save_budget` set the validator capture's save options,
   with the same values and defaults as `CaptureOptions.output_device` (`"same"`) and
   `CaptureOptions.save_budget` (`"auto"`): `output_device="cpu"` lets a GPU model validate
@@ -1552,8 +1663,30 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   (`tl.io.JaxPayloadLoadHint` is the JAX-specific form).
 
 **Options**
-: `tl.options` groups the public option dataclasses: `CaptureOptions`, `SaveOptions`,
-  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`.
+: `tl.options` groups the public option dataclasses: `CaptureOptions`,
+  `VisualizationOptions`, `ReplayOptions`, `InterventionOptions`, `StorageOptions`,
+  `RecordingOptions`. The doors take only the model and the inputs by position;
+  every capture knob rides `capture=CaptureOptions(...)` (`activation_transform`,
+  `grad_transform`, `save_raw_activations`, `save_raw_grads`, `save_mode`,
+  `reconstruction_ready`, `lookback`, `lookback_payload_policy`, `grouping`,
+  `jax_static_argnums`, `grad_options`, `chunk_size` included), and `tl.record`'s
+  recorder knobs ride `recording=RecordingOptions(...)` (`default_op`,
+  `default_module`, `history_size`, `include_source_events`,
+  `max_predicate_failures`, `on_predicate_error`, `on_forward_error`,
+  `default_grad`, `postprocess`), matching `tl.trace`'s `capture=`. The door keywords are
+  `save=`, `intervene=`, `recording=` (on `tl.record`),
+  `stop_after=` (a site or a predicate; the former `halt=`), `storage=`,
+  `narrate=`, `episode=`, `facets=`, `chunk_paths=`, `backend=`, `input_shape=`
+  and `on_zero_fire=`.
+
+**on_nonfinite (CaptureOptions)**
+: The one NaN/Inf policy, replacing `raise_on_nan` and `track_nonfinite`:
+  `'ignore'` (the default; neither checks nor records, today's default
+  behaviour), `'track'` (per-op finiteness verdicts, served by
+  `Trace.nonfinite_ops` / `Trace.nonfinite_coverage`), `'warn'` (tracks and
+  warns `capture_nonfinite_detected` once per capture when any op produced a
+  non-finite output) and `'raise'` (stop at the first non-finite tensor and
+  raise). Any other value refuses `on_nonfinite_invalid`.
 
 **Structural hash**
 : `tl.fingerprint` is the provisional structural-hash namespace; `tl.fingerprint.assert_unchanged` asserts
@@ -1574,13 +1707,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `tl.recording` is the sparse predicate-recording namespace behind `tl.record`;
   `tl.facets` is the semantic facet namespace (canonical home `torchlens._semantic`);
   `tl.export` holds static export helpers; `tl.Bundle(...)` / `tl.Bundle` build aligned
-  Trace collections and `torchlens._visualization.show_bundle_graph` renders a bundle's graph:
-  `nodes="ops"` (default) the union op graph (`signal="forward"`, the default, or
-  `"backward"` picks which pass's graph), `nodes="members"` (spelling documented-unstable)
-  one node per member and one edge per relation row, from the earlier member to the later one,
-  labelled with the kind, the row's `label`, on `fed_by` its basis and coverage, and on
-  `selected_by` its `chosen` decision; solid edges carry token spans TorchLens checked, every other
-  row is dashed. `tl.load(path, lazy=True)` on a
+  Trace collections, and `Bundle.draw` (below) draws a bundle's merged graph. `tl.load(path, lazy=True)` on a
   saved bundle passes `lazy` (with `map_location` and `materialize_nested`) to every member.
 
 **Appliance door (`Trace.using`)** *(spelling documented-unstable)*
@@ -1903,7 +2030,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   and the suite consumed it, `unsupported` when it is `False` and its `c1_refusal_<flag>` cell
   passed (the request refuses with the contracted code), `untested` when it is `False` and the
   refusal cell failed or did not run. Each backend page's can and cannot table equals this
-  summary and renders `untested` as "not yet proven" (`tests/test_backend_docs_lockstep.py`).
+  summary and renders `untested` as "not yet proven" (`scripts/checks/backend_docs_lockstep.py`).
 
 **Conformance case ids added by the protocol**
 : Tier 0, the provider API (no model execution): `c0_protocol_complete`, `c0_framework_requirement_consistent`,
@@ -2061,6 +2188,14 @@ shims, by declared contract. Each carries the same tag at its definition.
   missing score). `table()` gives the plain-text report and
   `to_dict()` the data form.
 
+**neuro dependency conflict (refusal code `neuro_dependency_conflict`)** — *unstable — no deprecation shim owed*
+: When rsatoolbox is installed but cannot import because another installed package
+  pins scikit-learn below what it needs (the `torchlens[neuro,brainscore]` install),
+  `tl.neuro` leaves `rdms` and `datasets` out of `__all__` and `dir()`, and touching
+  them raises `MissingDependencyError` with this code. The diagnosis reads package
+  metadata only. `exc.fields` carries `dependency_version`, `conflicting`,
+  `conflicting_version` and `pinned_by` (`None` when no pinning package is found).
+
 **neuro.compare (`tl.neuro.compare`; needs no extra)** — *unstable — no deprecation shim owed*
 : One call that scores every site of one extraction against one target with
   several descriptive analyses: `tl.neuro.compare(source, target,
@@ -2143,7 +2278,7 @@ shims, by declared contract. Each carries the same tag at its definition.
   NaN or Inf. On default captures it derives from the memoized saved-payload
   scan already backing `print(trace)` — zero capture-time cost, one scan paid
   at first query. When the capture ran with
-  `CaptureOptions(track_nonfinite=True)` it serves the capture-time verdicts
+  `CaptureOptions(on_nonfinite='track')` it serves the capture-time verdicts
   instead, which also cover ops that retained no payload. An empty tuple is
   only as strong as its coverage; read `Trace.nonfinite_coverage` first.
 
@@ -2155,9 +2290,9 @@ shims, by declared contract. Each carries the same tag at its definition.
   survive postprocessing). The programmatic twin of the prose coverage-gap
   note in `first_nonfinite()`.
 
-**track_nonfinite (CaptureOptions)** — *unstable — no deprecation shim owed*
+**on_nonfinite='track' (CaptureOptions)** — *unstable — no deprecation shim owed*
 : Session-time opt-in: torch capture records a per-op finiteness verdict for
-  every committed op output. Never changes control flow (`raise_on_nan` stays
+  every committed op output. Never changes control flow (`on_nonfinite='raise'` stays
   the stop-and-throw and is independent); device flags are drained in one
   batch after the forward, never a per-op CUDA synchronization.
   `structure_only=True` refuses the combination typed. Load restores the
@@ -2658,6 +2793,22 @@ deprecation shim owed*
   conservative area-only mapping + typed refusal on rolled varying sources).
   See the "size_by" and "scale (size channel)" entries above for semantics.
 
+**highlight (draw kwarg)** — *keyword-only*
+: `Trace.draw(highlight=...)` draws a named highlight over the graph; `None` (the
+  default) draws the plain graph. The one value today is `"interventions"`: the surgery
+  lens marks every recorded intervention on its node (solid border = recorded fact, dashed
+  = heuristic attribution), the caption carries the per-lane census, and a written figure
+  gets the full census text beside it as `<path>.census.txt` (beside the collision-safe
+  file a bare draw chose). A trace with no recorded intervention refuses
+  `surgery_evidence_missing`; any other value refuses `draw_highlight_invalid`, naming the
+  allowed values.
+
+**ContactSheet (contact-sheet page)** — *documented-unstable*
+: What `tl.viz.contact_sheet(view, page=...)` returns: the page's SVG text (a `str`, so
+  every string use keeps working) carrying `page` (zero-based index) and `page_count`
+  (pages in the full sheet at this `tiles_per_page`, at least 1; the "N of M" footer
+  prints the same number).
+
 **stack_by (draw kwarg)** — *unstable — no deprecation shim owed; keyword-only*
 : The wave-1 rank encoding channel on `Trace.draw` (stacking split (a):
   explicit + licensed auto on plain traces). The `True`/`"auto"` request form
@@ -2668,33 +2819,45 @@ deprecation shim owed*
   label rows (slate 8.7). See the "show_redundant_args" entry above.
 
 **direction="rightleft" (draw value)** — *unstable — no deprecation shim owed*
-: The fourth layout direction on `Trace.draw(direction=)`, `draw_backward(vis_direction=)` and
-  `draw_combined(vis_direction=)`: edges flow right to left (Graphviz `rankdir=RL`), beside
+: The fourth layout direction on `Trace.draw(direction=)` for the forward, backward and combined graphs: edges flow right to left (Graphviz `rankdir=RL`), beside
   `"bottomup"`, `"topdown"` and `"leftright"`. An unknown value refuses
   `visualization_direction_invalid` naming all four.
 
 **path=None (draw default)** — *unstable — no deprecation shim owed*
-: A bare `Trace.draw()` writes a collision-safe file in the current directory --
+: Outside a notebook a bare `Trace.draw()` writes a collision-safe file in the current directory --
   `modelgraph.<format>`, then `modelgraph-2.<format>`, `modelgraph-3.<format>` -- and always prints
   `TorchLens graph written to <path>`, so a second bare draw never overwrites the first picture.
-  An explicit `path=` is written exactly (overwriting) and printed only on a verbose trace.
+  In a Jupyter kernel (the same detection as `tl.draw`) a bare `trace.draw()` writes no file and
+  returns the `Drawing` with its rendered bytes (SVG unless `file_format=` says otherwise), which
+  the notebook displays inline (JMT decision, Sun 1 Nov 2026, 3:00 PM PT). An explicit `path=` is
+  always written exactly (overwriting), in a notebook too, and printed only on a verbose trace.
+  `Bundle.draw` follows the same rules.
 
-**show_module_paths / show_grad_values (draw_backward kwargs)** — *unstable — no deprecation shim owed; keyword-only*
-: Opt-in label rows on `Trace.draw_backward`: `show_module_paths=True` adds `module <address>` to
+**file_format (draw kwarg)** — *unstable — no deprecation shim owed*
+: The path's extension picks the format: `trace.draw("graph.png")` writes PNG, and
+  `b.draw("graph.svg")` writes SVG. `file_format=` applies only to a path with no extension
+  (`trace.draw("graph", file_format="svg")` writes `graph.svg`) and to a bare call; its default is
+  `"pdf"` (`"svg"` for a notebook bare call and for `Bundle.draw(graph="diff")`). A `file_format`
+  that disagrees with the path's extension refuses with `ArgumentConflictError`
+  (`draw_format_mismatch`). Both draw doors share this rule (JMT decision, Sun 1 Nov 2026,
+  3:00 PM PT); `VisualizationOptions.file_format` reaches `Trace.draw` only when set explicitly.
+
+**show_module_paths / show_grad_values (draw kwargs, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
+: Opt-in label rows on `Trace.draw(graph="backward")`: `show_module_paths=True` adds `module <address>` to
   each backward node a module owns (`param <address>` on AccumulateGrad nodes); `show_grad_values=True`
   adds `grad norm <x>, absmax <y>` from the node's captured output gradient (`grad values not
   captured` when the capture kept none). Both default to `False`, leaving the default render
   unchanged.
 
-**theme (draw_backward kwarg)** — *unstable — no deprecation shim owed; keyword-only*
-: The skin preset on `Trace.draw_backward`, the same names `Trace.draw(theme=)` takes
+**theme (draw kwarg, `graph="backward"`)** — *unstable — no deprecation shim owed; keyword-only*
+: The skin preset on `Trace.draw(graph="backward")`, the same names the forward picture takes
   (`"torchlens"` default, `"paper"`, `"dark"`, `"colorblind"`, `"high_contrast"`): it sets the page
   colour, text ink, typography and the backward key's ink; backward node fills and gradient arrows
   keep their colours. The functional form with grouped options reads it from
   `VisualizationOptions.theme`.
 
-**theme / show_legend (show_bundle_graph kwargs)** — *unstable — no deprecation shim owed*
-: `torchlens._visualization.show_bundle_graph(bundle, theme="dark", show_legend=True)` draws the bundle picture like
+**theme / show_legend (Bundle.draw kwargs)** — *unstable — no deprecation shim owed*
+: `bundle.draw(path, theme="dark", show_legend=True)` draws the bundle picture like
   `Trace.draw`: the skin's page, ink and Helvetica face, `draw`'s node shapes and fills (oval for
   one function call, box for a leaf module, cylinder for a buffer; grey fill for weights), and with
   `show_legend=True` the key under the header. Member lists appear only on nodes and arrows that
@@ -2717,7 +2880,7 @@ deprecation shim owed*
 **render_vector_oversize (warning)** — *unstable — no deprecation shim owed*
 : A forward SVG or PDF page past the 14,400 pt per-side vector page ceiling is written exactly as
   requested and warned with its size and the remedies (`collapse='auto'`, `module=`,
-  `vis_call_depth`): warn and obey, never a refusal.
+  `depth=`): warn and obey, never a refusal.
 
 **"shape_summary" node_label_fields token** — *unstable — no deprecation shim owed*
 : Selector token rendering `Layer.shape_summary` (the L1 across-pass shape
@@ -2938,14 +3101,14 @@ deprecation shim owed*
   pass. Calls made inside TorchLens's own GradFn posthooks are not recorded;
   gradient-saving copies from its tensor hooks appear as zero-arithmetic calls.
 
-**BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_ops / counting_convention** — *unstable — no deprecation shim owed*
+**BackwardStatus.executed_flops / executed_flops_per_pass / uncounted_op_counts / convention** — *unstable — no deprecation shim owed*
 : `tl.report.backward_status(trace)` in the `backward_observed` state counts
   the backward that ran over each pass's `aten_ops`: `executed_flops`
   is exact for the matmul and convolution families at fma2
-  (`counting_convention`, FlopCounterMode's convention), or `None` when a
+  (`convention`, FlopCounterMode's convention), or `None` when a
   pass has no record on this object. `executed_flops_per_pass` pairs each
   pass index with its count; a `create_graph=True` gradient and the backward
-  through it are separate passes. `uncounted_ops` names every recorded op
+  through it are separate passes. `uncounted_op_counts` names every recorded op
   kind outside the counted families with its call count, never zeroed or
   estimated. `grad_disabled` still reads `0` and `grad_enabled_unobserved`
   still reads unknown; the hypothetical `backward_estimate` is unchanged.
@@ -3013,7 +3176,7 @@ deprecation shim owed*
   label), with the full `RunTruncation` disclosure on `report.truncation`
   (regime, requested sites, executed/skipped counts, skipped-site digest).
   Skipped sites are "not-run", never "passed". With `fast=True` on a live trace
-  (U26.3) the native forward is cut right after the `until=` site, which must be a
+  the native forward is cut right after the `until=` site, which must be a
   site the capture saved (a module address, `"address:call"`, or a saved op label;
   otherwise `run_capability_unavailable` at stage `fast_until_site_unsaved`): the
   prefix keeps the fast path's per-call guards and comes back graph-connected under
@@ -3172,9 +3335,13 @@ deprecation shim owed*
 : The typed refusal `tl.errors.DecodeStyleUnknownError` (an `InvalidArgumentError`
   subclass) for a `Trace.decode_output(style=...)` no built-in or registered custom output
   detector resolves, with a did-you-mean over the built-in styles (`classification`,
-  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` without a
-  usable `tokenizer=`. Output decoding is read-time only: the capture runs the automatic
-  detector pass with no option, and `CaptureOptions` has no decode field.
+  `imagenet`, `imagenet1k`, `hf_text`). The same code refuses `style="hf_text"` when no
+  rank-2 or rank-3 logits are retained. `style="hf_text"` without a `tokenizer=` is not a
+  refusal: the rows carry the argmax `token_ids` and `text` is `None` (the trace was
+  captured without a tokenizer). Output decoding is read-time only: the capture runs the
+  automatic detector pass with no option, and `CaptureOptions` has no decode field;
+  `CaptureOptions(output_style=...)`, `CaptureOptions(output_head=...)` and the same
+  keywords on `tl.trace` refuse naming `trace.decode_output(...)`.
 
 **`decode_head_unknown`** — *unstable — no deprecation shim owed*
 : `Trace.decode_output(head=...)` named a head that is not one of the trace's output heads
@@ -3223,7 +3390,7 @@ deprecation shim owed*
   `mask_kind`, `sdpa_checked`), and `.nbytes` is the retained total.
 
 **Report (`tl.report.Report`)** — *unstable — no deprecation shim owed*
-: The one typed result of every report-shaped `tl.debug` helper (U42.2):
+: The one typed result of every report-shaped `tl.debug` helper:
   `report_type`, `subject` and `status` (the lead), `to_dict()` (a plain,
   JSON-friendly payload; tensors and graph records summarized, never
   inlined), `to_pandas()` (the table), and `str(report)` (a bounded card:
@@ -3323,13 +3490,12 @@ deprecation shim owed*
   kept. Refusal codes `attribution_graph_export_argument_invalid` and
   `attribution_graph_export_unsupported`.
 
-**`tl.attribution.overlay` with an `AttributionGraph` (`graph_value`)** — *unstable — no deprecation shim owed*
-: `tl.attribution.overlay(trace, graph, *, reduce="abs_sum", graph_value=None)` paints an
+**`trace.draw(color_by=graph)` with an `AttributionGraph`** — *unstable — no deprecation shim owed*
+: `trace.draw(color_by=graph)` paints an
   attribution graph onto the trace it was built from: each site holding feature or error
-  nodes gets the `reduce` total of its nodes' values over every position. `graph_value`
-  (graph sources only) is `"influence"` (what `None` means: each node's influence on the
-  logits, circuit-tracer's rule) or `"activation"` (feature activations). Refusal codes
-  `attribution_overlay_argument_invalid` and `attribution_overlay_graph_mismatch`.
+  nodes gets the `abs_sum` total of its nodes' influence on the logits over every position
+  (circuit-tracer's rule); a site-to-value mapping paints any other quantity, feature
+  activations included. Refusal code `attribution_overlay_graph_mismatch`.
 
 **`tl.attribution.graph.upload_to_neuronpedia` (publish an exported graph)** — *unstable — no deprecation shim owed*
 : `upload_to_neuronpedia(exported, *, api_key)` publishes the dict `to_neuronpedia` returned
@@ -3352,10 +3518,11 @@ deprecation shim owed*
   in this release.
 
 **Recording keywords**
-: `tl.record(...)`, `Recorder(...)` and `tl.options.RecordingOptions` take `narrate=` (a
+: `tl.record(...)` and `Recorder(...)` take `narrate=` (a
   `tl.options.NarrationOptions`, with `NarrationOptions.as_dict()`,
-  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`) and
-  `save_raw_grads=` (`RecordingOptions.save_raw_grads`). `NarrationOptions.sites` (`sites=`)
+  `NarrationOptions.from_values()` and `NarrationOptions.is_field_explicit()`);
+  `save_raw_grads` is a `CaptureOptions` field (`capture=CaptureOptions(save_raw_grads=...)`
+  on `tl.record`). `NarrationOptions.sites` (`sites=`)
   scopes the narration (`True` for every event, `"modules"` for structure lines only, or a
   live selector); `trace.narrate(select=...)` filters post hoc. `NarrationOptions.sink` receives the
   narrated lines, `NarrationOptions.max_lines` caps them, `NarrationOptions.on_error_only`
@@ -3375,7 +3542,7 @@ deprecation shim owed*
 : `CaptureOutcome.is_partial`, `CaptureOutcome.is_derived` (`is_derived=`),
   `CaptureOutcome.is_recovered` (`is_recovered=`), `CaptureOutcome.num_committed_ops` and
   `CaptureOutcome.note`. `CaptureStatus.STOPPED` (value `"stopped"`) is the status of a capture
-  stopped by `halt=` or `tl.recording.stop()`.
+  stopped by `stop_after=` or `tl.recording.stop()`.
 
 **CaptureOutcome failure and boundary fields**
 : `CaptureOutcome.error_type` (qualified exception type name of a failed capture),
@@ -3386,9 +3553,9 @@ deprecation shim owed*
   `FailureOrigin.USER_OP`, `FailureOrigin.TORCHLENS` and `FailureOrigin.INTERRUPT`.
 
 **Recording state**
-: `Recording.is_failed` (`is_failed=`), `Recording.is_stopped` (`is_stopped=`),
-  `Recording.stop_reason` (`stop_reason=`), `Recording.stops_by_pass` (`stops_by_pass=`),
-  `Recording.records_in_pass(pass_index)`, `Recording.num_ops` (`num_ops=`),
+: `Recording.is_failed`, `Recording.is_stopped`,
+  `Recording.stop_reason`, `Recording.stops_by_pass`,
+  `Recording.records_in_pass(pass_index)`, `Recording.num_ops`,
   `Recording.num_committed_ops`, `Recording.num_passes`, `Recording.lazy_trace`,
   `Recording.is_recovered` and `Recording.backward(loss)`. `Recorder.__call__` runs one pass
   (`recorder(x)`) and `Recorder.backward(loss)` records its backward.
@@ -3477,7 +3644,7 @@ deprecation shim owed*
 **HealthReport fields** — *unstable — no deprecation shim owed*
 : `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
 **MfuReport fields** — *unstable — no deprecation shim owed*
-: `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+: `MfuReport.denominator`, `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
 **NonfiniteReport fields** — *unstable — no deprecation shim owed*
 : `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.has_nonfinite`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.num_checked_ops`, `NonfiniteReport.num_unchecked_ops`, `NonfiniteReport.num_unexamined_ops`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
 **OverheadReport fields** — *unstable — no deprecation shim owed*
@@ -3485,7 +3652,7 @@ deprecation shim owed*
 **ParamHealthReport fields** — *unstable — no deprecation shim owed*
 : `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
 **ProfileReport fields** — *unstable — no deprecation shim owed*
-: `ProfileReport.capture_status`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+: `ProfileReport.capture_status`, `ProfileReport.capture_verification_reason`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
 **RooflineReport fields** — *unstable — no deprecation shim owed*
 : `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.
 ## Visuals and kits spellings
@@ -3527,7 +3694,8 @@ describe each surface in depth.
 | `tl.stats.RunningStats` | Always-on scalar spine accumulator (StreamingStat; D8) |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
-| `tl._quickstart.Drawing` | Detached one-call render result. Always returned, never None |
+| `tl.viz.Drawing` | The picture every draw returns: DOT source (or animation HTML), format, written path; `save(path, editable=)`, `show()`, `close()` (releases a retained trace; idempotent; the `with` block exit calls it) |
+| `Trace.animate` | `trace.animate(site, path=None, *, open_viewer=False)`: the HTML animation of the repeated ops at `site` (a site label, pass-qualified label or record) as a `Drawing`; the one animation door (the former `animate_ops`), not a `draw` keyword |
 | `tl.stats.NarrationObserver` | Live stats-line echo mounted on the shipped observer surface |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.stats.narrate` | Create an echo observer (the live line density) for one site |
@@ -3556,6 +3724,7 @@ describe each surface in depth.
 ### Fields and methods
 | Spelling | Meaning |
 | --- | --- |
+| `AbsenceReason.detail` | Human-readable explanation of the absence |
 | `AbsenceReason.remedy` | Optional capture instruction for actionable missing-payload cases |
 | `Attribution.target_repr` | Compact representation of the scalarization target |
 | `AttributionGraph.capture_status` | The capture's completeness verdict, as the trace reports it |
@@ -3591,6 +3760,7 @@ describe each surface in depth.
 | `FacetFunction.target_scope` | Record scope the recipe targets |
 | `FacetRegistrySnapshot.functions` | Immutable active recipe entries |
 | `FacetRegistrySnapshot.provenance_id` | Stable digest of the recipe identities and their source tier |
+| `FacetRegistrySnapshot.version` | Monotonic global registry version at snapshot construction time |
 | `FacetSpec.apply_transforms` | Apply the transform chain to a value |
 | `FacetSpec.capability_class` | Weakest capability class of the transform chain |
 | `FacetSpec.capability_flags` | Weakest-link capability flags of the transform chain |
@@ -3716,14 +3886,20 @@ describe each surface in depth.
 | `TrajectoryStats.num_examples` | Number of examples (batch rows) folded |
 | `TrajectoryStats.num_positions` | Sequence length every batch shared |
 | `VisualizationOptions.size_scale` | UNSTABLE size-channel scale transform (``"sqrt"``/``"linear"``); see ``Trace.draw`` |
+| `VisualizationOptions.graph` | Which graph the picture draws: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
+| `VisualizationOptions.rolled` | ``True`` draws each repeated module once (the rolled graph); ``False`` (default) draws every pass |
+| `VisualizationOptions.open_viewer` | ``True`` opens the written picture in the system viewer; the default never does |
+| `VisualizationOptions.file_format` | Format for a ``container_path`` with no extension (default ``"pdf"``); an extension on the path picks the format, and a disagreeing explicit value refuses ``draw_format_mismatch`` |
+| `VisualizationOptions.animate` | A site label, pass-qualified label or record: the picture is the HTML animation of the repeated ops at that site (default ``None``) |
+
 #### `tl.Recording`
 
 | Spelling | Meaning |
 | --- | --- |
-| `Recording.activation_transform_repr` | Canonical repr of the activation transform callable captured at recording time, if any |
 | `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
+| `Recording.by_pass` | Map from pass index to indexes of the retained records captured in that pass |
 | `Recording.end_times` | Per-pass end timestamps of the recording |
 | `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
 | `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |
@@ -3734,36 +3910,37 @@ describe each surface in depth.
 | `Recording.grad_by_pass` | Map from pass index to indexes into `grad_records` |
 | `Recording.grad_records` | Retained gradient records, in capture order |
 | `Recording.history_size` | Number of earlier events kept for predicate history at recording time |
-| `Recording.keep_op_repr` | Repr of the keep-op predicate used at recording time, or `None` |
 | `Recording.last_event_func` | Function name of the last captured event on a failed recording, best effort |
 | `Recording.last_event_input_meta` | Input metadata of the last captured event on a failed recording, best effort |
 | `Recording.last_event_label` | Label of the last captured event on a failed recording, best effort |
 | `Recording.last_event_source_line` | Source line of the last captured event on a failed recording, best effort |
 | `Recording.last_successful_op_label` | Label of the last op committed before a failure, or `None` |
+| `Recording.orphan_records` | Payload-free rows (raw label, label, payload reference) of the orphan island ops kept by `keep_orphans=True` |
 | `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
 | `Recording.records` | Retained activation records, in capture order |
 | `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
-| `Recording.save_grads_repr` | Repr of the gradient-saving selector used at recording time, or `None` |
 | `Recording.start_times` | Per-pass start timestamps of the recording |
 
 #### `tl.options.RecordingOptions`
 
 | Spelling | Meaning |
 | --- | --- |
+| `RecordingOptions.default_grad` | Gradient capture decision for events the predicate does not decide; giving it installs gradient hooks for a later `Recording.backward()` |
 | `RecordingOptions.default_module` | Capture decision for module events the predicate does not decide |
 | `RecordingOptions.default_op` | Capture decision for operation events the predicate does not decide |
-| `RecordingOptions.echo` | Normalized live-narration options, or `None` |
 | `RecordingOptions.history_size` | Number of earlier events kept for predicate history; 0 to 1024 |
 | `RecordingOptions.include_source_events` | Whether source events appear in the predicate lookback of recent ops |
-| `RecordingOptions.lookback` | Number of earlier events exposed to predicates as lookback; 0 to 1024 |
-| `RecordingOptions.lookback_payload_policy` | How lookback events carry tensor payloads; default `"metadata_only"` |
 | `RecordingOptions.max_predicate_failures` | Maximum number of predicate failures stored on the recording; further ones are counted as overflow |
+| `RecordingOptions.on_forward_error` | Failed-forward handling: `"raise"` (default), `"attach_partial"` or `"return_partial"` |
 | `RecordingOptions.on_predicate_error` | Predicate error handling: `"auto"`, `"accumulate"` or `"fail-fast"` |
-| `RecordingOptions.streaming` | Storage options for streaming retained records to disk, or `None` |
+| `RecordingOptions.postprocess` | Post-capture enrichment preset applied to the recording; `"none"` by default |
 
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `ce_loss_clean=` | field and constructor keyword of `SpliceResult` |
+| `ce_loss_spliced=` | field and constructor keyword of `SpliceResult` |
+| `extra_positional=` | Var-positional catch on `tl.trace` and `tl.record`: only the model and the inputs are positional; any further positional argument refuses typed `extra_positional_input_invalid` (`input_kwargs=` is keyword-only) |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
 | `bin_edges=` | field and constructor keyword of `HistogramPoint` |
@@ -3788,6 +3965,7 @@ describe each surface in depth.
 | `is_coarsened=` | keyword of `tl.trackers.SeriesPoint` |
 | `is_compatible_with_append=` | field and constructor keyword of `Edit` |
 | `is_detached=` | keyword of `tl.attribution.ReadRow` |
+| `is_detected=` | field and constructor keyword of `DoctorCheck` |
 | `is_frozen_requested=` | keyword of `tl.attribution.ReadRow` |
 | `is_frozen_resolved=` | keyword of `tl.attribution.ReadRow` |
 | `is_included=` | keyword of `tl.neuro.PlanSite` |
@@ -3795,6 +3973,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `kl_divergence=` | field and constructor keyword of `SpliceResult` |
 | `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
@@ -3805,7 +3984,13 @@ describe each surface in depth.
 | `num_nan=` | keyword of `tl.stats.TensorStats` |
 | `num_negative=` | keyword of `RunningStatsResult` |
 | `num_neginf=` | keyword of `tl.stats.TensorStats` |
-| `num_ops=` | keyword of `tl._quickstart.Drawing` |
+| `num_ops=` | keyword of `tl.viz.Drawing` |
+| `rolled=` | keyword of `Trace.draw` and `VisualizationOptions`: ``True`` for the rolled graph, ``False`` (default) for every pass |
+| `open_viewer=` | keyword of `Trace.draw`, `tl.draw` and `VisualizationOptions`: ``True`` opens the written picture; the default never does |
+| `size_scale=` | keyword of `Trace.draw` and `VisualizationOptions`: size-channel transform ``"sqrt"`` (default) or ``"linear"``; refuses without `size_by=` |
+| `where=` | keyword of `Trace.summary`: regex string or ``row -> bool`` callable; presentation-only (whole-model totals preserved and coverage disclosed) |
+| `graph=` | keyword of `Trace.draw` and `VisualizationOptions`: ``"forward"`` (default), ``"backward"`` or ``"combined"`` |
+| `editable=` | keyword of `Drawing.save`: ``True`` writes the Graphviz source instead of a rendered picture |
 | `num_posinf=` | keyword of `tl.stats.TensorStats` |
 | `num_positions=` | keyword of `tl.mechinterp.TrajectoryStats` |
 | `num_stimuli=` | keyword of `tl.neuro.ExtractionPlan`, `tl.neuro.plan_extraction` |
@@ -4180,6 +4365,7 @@ The sections above describe each surface in depth.
 | `Layer.is_edited` | Whether a user edit replaced the output of any pass of this layer |
 | `Layer.short_label` | Short pass-qualified label of a single-pass layer |
 | `Layer.short_layer_label` | Short layer label (no pass suffix) |
+| `Layer.source_trace` | Back-reference to the owning Trace; a detached Layer refuses instead of returning `None` |
 | `LineageReport.message` | Human-readable status |
 | `LineageReport.start_label` | Resolved starting op label, or the requested label when lookup failed |
 | `MachineBalance.peak_bytes_per_s` | Peak memory bandwidth used for the roofline, in bytes per second |
@@ -4207,6 +4393,7 @@ The sections above describe each surface in depth.
 | `Op.pass_number` | 1-based pass of this op within its layer |
 | `Op.short_label` | Short pass-qualified op label |
 | `Op.short_layer_label` | Short layer label (no pass suffix) |
+| `Op.source_trace` | Back-reference to the owning Trace; a detached Op refuses instead of returning `None` |
 | `Op.type` | The op's normalized operation type token (for example `"linear"`); `Layer.layer_type` is the Layer's spelling |
 | `OptimizerFacts.is_known` | Whether the optimizer is recognised; an unknown optimizer gives `band_reason` instead of a guessed band |
 | `OptimizerFacts.decoupled_decay` | Whether the optimizer applies weight decay decoupled from the gradient step |
@@ -4219,11 +4406,13 @@ The sections above describe each surface in depth.
 | `PreprocessingComparison.unknown_fields` | Names of every uncomparable field, in field order |
 | `PreprocessingComparison.unknown_reasons` | Deduplicated reasons behind every unknown field, in field order |
 | `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
+| `ProfileReport.capture_verification_reason` | Why the capture is unverified when `is_capture_verified` is `False`, else `None` |
 | `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
 | `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
 | `ReceptiveField.axis_roles` | Axis layout of the input grid: per-axis kinds, windowed axes and their provenance |
 | `ReceptiveFieldValidation.num_violations` | Number of cross-validation violations found |
 | `ReceptiveFieldView.axis_roles` | Axis layout of the viewed op's input grid |
+| `ReceptiveFieldView.of` | Many-unit influence region as a trace-bound `tl.Selection`, one region per `within=` site |
 | `ReceptiveFieldView.probe_grad` | Empirical gradient probe of one unit's receptive field |
 | `Recipe.address_class` | Most restrictive address class over all rules (worst wins) |
 | `Recipe.decision` | The sole rule's normalized decision (`None` on multi-clause specs) |
@@ -4289,6 +4478,9 @@ The sections above describe each surface in depth.
 | `SiteRow.pass_number` | Pass number of the site |
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
+| `SpliceResult.ce_loss_clean` | Mean next-token cross-entropy of the clean run when `tokens=` is given, else `None` |
+| `SpliceResult.ce_loss_spliced` | Mean next-token cross-entropy with the SAE reconstruction spliced in, else `None` |
+| `SpliceResult.kl_divergence` | Mean KL divergence from the clean to the spliced next-token distribution, else `None` |
 | `SrpSizing.num_components` | Recommended number of projection components |
 | `SrpSizing.num_samples` | Number of samples (rows) the projection width was sized for |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |
@@ -4317,7 +4509,7 @@ The sections above describe each surface in depth.
 | `TensorSpec.from_tensor` | Build a spec from a tensor (alternate constructor) |
 | `Trace.armed_edits` | Read-only tuple of the gradient rules in the trace's recipe |
 | `Trace.input` | The original user input before `input_transform` was applied (was `raw_input`) |
-| `Trace.is_replayable` | Whether the capture kept what replay and edits need (set by `replayable=True`) |
+| `Trace.is_replayable` | Whether the capture ran with `replayable=True` (the runnable apparatus: runnable save, edge provenance). Saved-graph replay (`do()` without `model=`, `push`) needs only the per-op argument templates every `tl.trace` capture records (`trace.options.save_arg_templates`), so it does not need this flag |
 | `Trace.is_stopped` | Whether the capture stopped early (`until=`/`stop_after=`); a stopped trace is partial (was `halted`) |
 | `Trace.options.seed` | The torch seed the capture ran under (`seed=` on the capture door), or `None`; saved with the trace |
 | `Trace.transformed_output` | Human-readable model output after `output_transform` (was `raw_output`) |
@@ -4334,6 +4526,7 @@ The sections above describe each surface in depth.
 | `ValidationStatus.num_pure_unverified_ops` | Number of pure value nodes that classified cleanly but were not replayed, usually because no faithful backend raw-op replay is available |
 | `ValidationStatus.num_replayed_ops` | Number of ops or regions replay-validated for a completed result |
 | `ValidationStatus.num_unverified_ops` | Aggregate number of nodes or regions excluded from per-op replay |
+| `ValidationStatus.passed` | Whether replay validation ran and passed |
 | `ValidationStatus.payload_load_status` | Optional payload materialization status attached by `tl.load` |
 | `ValidationStatus.unavailable_loaded_runtime_stripped` | Build the loaded non-torch unavailable status |
 | `ValidationStatus.unavailable_unsupported` | Build an unavailable status for a backend without replay validation |
@@ -4359,7 +4552,7 @@ Members of classes whose public home changed, one entry per class.
 : Merge-level value verdict derived from the join ledger. `MergeValueStatus.ATTESTED_COMPLETE`: every applicable join boundary is attested; `MergeValueStatus.ATTESTED_PARTIAL`: some applicable join boundaries are attested, not all; `MergeValueStatus.DIVERGENT`: at least one join boundary mismatched across ranks; `MergeValueStatus.UNWITNESSED`: no join boundary is attested.
 
 **`tl.types.MergedFinding`**
-: One structured merge finding. `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
+: One structured merge finding. `MergedFinding.detail`: human-readable explanation (diagnostics may sharpen it but are never authority); `MergedFinding.membership_digest`: the membership the finding concerns, when it is membership-scoped.
 
 **`tl.report.MergeReport`**
 : Graph-free diagnostic summary of a merge. `MergeReport.alignment`: the effective structural verdict; `MergeReport.conflicts`: the structural conflict findings, which never join and never become gaps; `MergeReport.divergences`: the value-divergence findings: ranks disagreeing on a witnessed value; `MergeReport.expected_ranks`: the declared world, when one was given; `MergeReport.gaps`: the presence-gap findings: boundaries a rank never recorded; `MergeReport.stored_alignment`: the structural verdict derived at merge time; `MergeReport.value_status`: the merge-level value verdict.
@@ -4404,7 +4597,7 @@ Members of classes whose public home changed, one entry per class.
 : Honesty, state, resolution and contract metadata for one run. `RunReport.contract_checks`: the contract checks the run recorded; `RunReport.first_mismatch`: the first mismatch diagnostic, or `None`; `RunReport.initializer_policy_version`: version of the initializer policy used to fill slots, or `None`; `RunReport.nondeterministic_sources`: sources of nondeterminism the run met; `RunReport.numeric_attestation`: the saved-activation check result; `RunReport.path_faithfulness`: whether the run followed the recorded path; `RunReport.random_filled_slot_ids`: slots filled with random values; `RunReport.readiness`: the readiness report the run started from; `RunReport.state_source`: where the run's state came from.
 
 **`tl.types.RunnableCompatibility`**
-: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
+: Producer and runtime versions recorded for readiness diagnostics. `RunnableCompatibility.torchlens_version`: the torchlens version that produced the artifact; `RunnableCompatibility.backend_version`: backend version; `RunnableCompatibility.call_recipe_version`: call recipe version; `RunnableCompatibility.callable_ref_schema_version`: callable reference schema version; `RunnableCompatibility.descriptor_version`: descriptor version; `RunnableCompatibility.initializer_policy_version`: initializer policy version; `RunnableCompatibility.python_version`: Python version.
 
 **`tl.types.RunnableDiagnostic`**
 : Structured diagnostic shared by preflight, readiness and run reports. `RunnableDiagnostic.affected_op_labels`: labels of the ops the diagnostic concerns; `RunnableDiagnostic.current_runtime`: the runtime now in use, or `None`; `RunnableDiagnostic.details`: extra (key, value) details; `RunnableDiagnostic.detection_stage`: the stage that found the problem; `RunnableDiagnostic.recorded_runtime`: the runtime recorded at capture, or `None`; `RunnableDiagnostic.registry_id`: the registry entry involved, or `None`; `RunnableDiagnostic.resolver_provenance`: how the callable was resolved, or `None`.
@@ -4461,26 +4654,29 @@ alphabetical order.
 
 | Spelling | Meaning |
 | --- | --- |
-| `Trace.add_node_overlay` | Register external per-node overlay scores, under a name, for later rendering |
-| `Trace.animate_ops` | Return a minimal HTML animation of the repeated ops at a site |
 | `Trace.annotate` | Attach user-owned annotation data or an image to the graph nodes picked by a selector |
 | `Trace.archived_activations` | Mapping of label to inspection-only activation payloads from a runnable archive |
 | `Trace.attention_blocks` | Yield the Modules that have an available query-projection facet |
+| `Trace.backend_runtime_config` | Backend runtime configuration recorded at capture, or `None` |
 | `Trace.backend_runtime_device_summary` | Summary of the backend devices in use at trace time, or `None` |
+| `Trace.backend_runtime_version` | Version string of the backend runtime that ran the capture, or `None` |
 | `Trace.batch_render` | Policy for rendering a batch of raw input in visualizations; defaults to `"auto"` |
 | `Trace.buffer_layers` | Labels of the Layers that represent buffers as graph boundary values |
 | `Trace.buffer_read_ops` | Labels of buffer Ops that read registered-buffer values into the graph |
 | `Trace.buffer_write_ops` | Labels of buffer Ops that record writes to registered buffers |
 | `Trace.call_tree` | The root `ModuleCall` of the nested module call tree, as structured data |
+| `Trace.capture_end_time` | Wall-clock time (seconds since the epoch) when the capture ended |
 | `Trace.capture_guard_passes` | List with one dict per capture guard pass, giving its index, capture mode and owner thread id |
+| `Trace.capture_start_time` | Wall-clock time (seconds since the epoch) when the capture started |
 | `Trace.capture_tensor_grad_hooks` | Whether forward tensors receive tensor-level backward hooks for implicit backward events and per-op gradients |
 | `Trace.check_metadata_invariants` | Run the metadata invariant checks on this completed trace and return whether they pass |
 | `Trace.check_plan` | Audit a plan against this trace, resolving its selectors and checking declared shapes, without arming or running anything |
+| `Trace.chunked_forward` | Whether the trace was assembled from forward chunks |
 | `Trace.cleanup` | Delete log data, break reference cycles and free cached GPU memory |
 | `Trace.collapse_order` | Return each module's smart-collapse score as (module address, score) pairs, highest first, for the chosen policy |
 | `Trace.completeness_diagnostics` | List of reports of ATen dispatch events the completeness witness could not account for; empty when capture was complete |
 | `Trace.compute_coverage` | Counts of layer-list rows in each of four compute-coverage categories, as a dict |
-| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output`; raise if nothing was captured and no output tensor is retained |
+| `Trace.decode_output` | Return the decoded output rows captured during tracing, up to `k` ranks per batch item; with `style=`, `head=` or `tokenizer=` decode again on demand from the retained output tensors without touching `decoded_output` (`style="hf_text"` without a tokenizer returns the argmax `token_ids` with `text` `None`); raise if nothing was captured and no output tensor is retained |
 | `Trace.disarm_triggers` | Detach this Trace from global autograd backward interception so plain backward calls no longer record into it |
 | `Trace.escape_diagnostics` | List of reports of raw torch callables that ran outside their registered wrapper during capture, each with file, line and function |
 | `Trace.factcore` | The single numbers substrate for this trace: counts, identity spine, parameter totals, compute aggregation and memory figures |
@@ -4525,7 +4721,6 @@ alphabetical order.
 | `Trace.reconstruct_container` | Rebuild a captured container selected by site and role from saved Op values |
 | `Trace.reconstruct_output` | Rebuild the traced model's final Python output object from saved Op values |
 | `Trace.remove` | Detach the hook attachments made by the most recent single-hook `attach_hooks` call |
-| `Trace.render_dagua_graph` | Render this trace with the experimental Dagua backend |
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
@@ -4544,7 +4739,6 @@ alphabetical order.
 | `Trace.uncalled_modules` | Registered module addresses that were not called during the captured pass |
 | `Trace.unknown_flop_ops` | Ledger of ops with unknown FLOPs, grouped by op name, with counts and example labels |
 | `Trace.validation_replay_status` | Machine-readable status of replay validation: unavailable, unverified, or the last completed result |
-| `Trace.visualization_field_audit` | Return the audit of which fields the visualization reads for this trace |
 | `Trace.walk_calls` | Yield every `ModuleCall` in the call tree in depth-first order |
 
 #### `tl.Op`
@@ -5259,8 +5453,8 @@ alphabetical order.
 **`tl.types.TraceProvenance`**
 : How, when and from what this Trace was captured; `trace.provenance` is the instance a Trace serves. `TraceProvenance.backend`: `Literal["torch","tf","jax","mlx","paddle","tinygrad"]` capture backend tag. Portable; `TraceProvenance.backend_config`: backend runtime snapshot captured at trace time; `TraceProvenance.backend_version`: backend runtime snapshot captured at trace time; `TraceProvenance.backward_memory_backend`: backend used to measure backward memory; `TraceProvenance.cache_hit`: whether this capture was served from the capture cache; `TraceProvenance.cache_key`: key of the capture-cache entry this capture used or wrote; `TraceProvenance.cache_path`: path of the capture-cache entry, when one was used; `TraceProvenance.cleanup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.distributed_scope`: distributed scope of the capture (rank and world facts), if any; `TraceProvenance.duration`: total elapsed. `overhead_duration`: TorchLens overhead (capture minus func calls); `TraceProvenance.end_time`: epoch timestamps; `TraceProvenance.fingerprint`: hash of captured topology + shape-relevant structure; `TraceProvenance.forward_memory_backend`: memory backend that measured the forward peak; `TraceProvenance.input_annotations`: user-attached metadata (Trace-wide / inputs); `TraceProvenance.input_object_id`: python `id()` of the input at capture. Within-session only; `TraceProvenance.input_preprocessor`: descriptor of the input preprocessor applied before capture, if any; `TraceProvenance.input_signature_hash`: hash of input shapes/dtypes/devices; `TraceProvenance.input_structure`: structural descriptor of the model input (shape/dtype/pytree spec); `TraceProvenance.is_appended`: chunked-append provenance; `TraceProvenance.jax_closed_jaxpr`: closed jaxpr of the traced JAX function; `TraceProvenance.jax_inlined_call_primitives`: JAX call primitives inlined during capture; `TraceProvenance.kind`: kind of capture (live, cooked from a Recording, loaded); `TraceProvenance.model_object_id`: python `id()` of the model at capture time. Within-session only; `TraceProvenance.observer_spans`: observer spans recorded during the capture; `TraceProvenance.output_postprocessor`: output-decoding descriptors; `TraceProvenance.owner_thread_id`: thread id of the thread that owned the capture; `TraceProvenance.owner_thread_qualified`: whether the owner thread was fully qualified for the capture; `TraceProvenance.param_hash_full`: parameter-value hashes; `TraceProvenance.param_hash_quick`: parameter-value hashes; `TraceProvenance.param_source`: how params were derived — `"native-module"`, `"pytree-derived"`, `"none"`; `TraceProvenance.recording_kept`: whether the capture's Recording was kept; `TraceProvenance.root_entry_point`: persisted identity fact disclosing a bound-method capture root (`"bound_method:<owner>.<method>"`), absent on ordinary module-root captures; `TraceProvenance.setup_duration`: phase timings (`func_calls_duration` = pure model compute proxy); `TraceProvenance.start_time`: epoch timestamps; `TraceProvenance.summary()`: the capture-provenance block (the relocated summary preamble); `TraceProvenance.thread_activity_detected`: whether other threads were active during the capture; `TraceProvenance.thread_count_end`: thread count when the capture ended; `TraceProvenance.thread_count_start`: thread count when the capture started; `TraceProvenance.verification_reason`: machine-readable reason a live capture is not positively verified; `TraceProvenance.verified`: whether the live capture is positively verified (``None`` when not recorded).
 
-**`tl.types.TraceOptions`**
-: The capture options this Trace ran with (the stored snapshot); `trace.options` is the instance a Trace serves. `TraceOptions.activation_transform`: callable applied to saved forward outputs before storage; `TraceOptions.backward_ready`: backward machinery prepared at capture. `inference_only`: captured under `torch.no_grad()`; `TraceOptions.chunk_size`: chunked-append provenance; `TraceOptions.detach_saved_activations`: saved tensors detached from autograd; `TraceOptions.emit_nvtx`: capture toggles; `TraceOptions.grad_transform`: callable applied to saved gradients; `TraceOptions.grouping`: `"structural"` (default), `"strict_shapes"`/`"fold_sites"` (reserved, refuse typed pre-ratification); `TraceOptions.grouping_policy`: stamp of the layer-grouping policy that produced the layers; `TraceOptions.inference_only`: whether the capture ran under inference mode; `TraceOptions.input_transform`: portable `repr()` of the input / gradient transform callables. (`gradient_transform` ruled v12; not yet shipped -- the field itself is still `grad_transform`.); `TraceOptions.jax_static_argnums`: static argument positions passed to the JAX capture; `TraceOptions.keep_orphans`: whether orphan island Ops are retained; `TraceOptions.mark_layer_depths`: capture toggles; `TraceOptions.mode`: `"exhaustive"`, `"fast"`, or `"predicate"` (the capture-mechanism word); `TraceOptions.module_identity_mode`: how modules are identified — `"torch_module"`, `"pytree_module"`, `"function_root"`, `"object_module"`; `TraceOptions.on_nonfinite`: capture toggles; `TraceOptions.output_device`: device where saved outputs are placed. `save_mode`: tensor retention mode (`"copy"`, `"reference"`, `"view"`, `"cpu_async"`); `TraceOptions.recurrence_detection`: loop/recurrence detection on/off; `TraceOptions.save`: the save selector the capture ran with; `TraceOptions.save_arg_templates`: deep-copied Op arguments / structural arg templates; `TraceOptions.save_args`: deep-copied Op arguments / structural arg templates; `TraceOptions.save_grads`: whether operation gradients are retained after backward; `TraceOptions.save_mode`: how saved activations were retained (``copy`` or ``reference``); `TraceOptions.save_raw_activations`: whether raw untransformed tensors are saved; `TraceOptions.save_raw_grads`: whether raw untransformed tensors are saved; `TraceOptions.save_raw_input`: raw-I/O save policy + batch rendering policy for visualization; `TraceOptions.save_rng`: RNG snapshots. `save_code_context`: source-code context; `TraceOptions.save_source_context`: whether source-context frames were saved for each op; `TraceOptions.save_transformed_output`: raw-I/O save policy + batch rendering policy for visualization; `TraceOptions.seed`: RNG seed applied for capture, if any; `TraceOptions.source_context_lines`: number of source-context lines saved per op (stored as ``num_context_lines`` in v11); `TraceOptions.structure_only`: see Capture products above; `TraceOptions.verbose`: capture toggles.
+**`tl.types.TraceSettings`**
+: The capture options this Trace ran with (the stored snapshot); `trace.options` is the instance a Trace serves. `TraceSettings.activation_transform`: callable applied to saved forward outputs before storage; `TraceSettings.backward_ready`: backward machinery prepared at capture. `inference_only`: captured under `torch.no_grad()`; `TraceSettings.chunk_size`: chunked-append provenance; `TraceSettings.detach_saved_activations`: saved tensors detached from autograd; `TraceSettings.emit_nvtx`: capture toggles; `TraceSettings.grad_transform`: callable applied to saved gradients; `TraceSettings.grouping`: `"structural"` (default), `"strict_shapes"`/`"fold_sites"` (reserved, refuse typed pre-ratification); `TraceSettings.grouping_policy`: stamp of the layer-grouping policy that produced the layers; `TraceSettings.inference_only`: whether the capture ran under inference mode; `TraceSettings.input_transform`: portable `repr()` of the input / gradient transform callables. (`gradient_transform` ruled v12; not yet shipped -- the field itself is still `grad_transform`.); `TraceSettings.jax_static_argnums`: static argument positions passed to the JAX capture; `TraceSettings.keep_orphans`: whether orphan island Ops are retained; `TraceSettings.mark_layer_depths`: capture toggles; `TraceSettings.mode`: `"exhaustive"`, `"fast"`, or `"predicate"` (the capture-mechanism word); `TraceSettings.module_identity_mode`: how modules are identified — `"torch_module"`, `"pytree_module"`, `"function_root"`, `"object_module"`; `TraceSettings.on_nonfinite`: capture toggles; `TraceSettings.output_device`: device where saved outputs are placed. `save_mode`: tensor retention mode (`"copy"`, `"reference"`, `"view"`, `"cpu_async"`); `TraceSettings.recurrence_detection`: loop/recurrence detection on/off; `TraceSettings.save`: the save selector the capture ran with; `TraceSettings.save_arg_templates`: deep-copied Op arguments / structural arg templates; `TraceSettings.save_args`: deep-copied Op arguments / structural arg templates; `TraceSettings.save_grads`: whether operation gradients are retained after backward; `TraceSettings.save_mode`: how saved activations were retained (``copy`` or ``reference``); `TraceSettings.save_raw_activations`: whether raw untransformed tensors are saved; `TraceSettings.save_raw_grads`: whether raw untransformed tensors are saved; `TraceSettings.save_raw_input`: raw-I/O save policy + batch rendering policy for visualization; `TraceSettings.save_rng`: RNG snapshots. `save_code_context`: source-code context; `TraceSettings.save_source_context`: whether source-context frames were saved for each op; `TraceSettings.save_transformed_output`: raw-I/O save policy + batch rendering policy for visualization; `TraceSettings.seed`: RNG seed applied for capture, if any; `TraceSettings.source_context_lines`: number of source-context lines saved per op (stored as ``num_context_lines`` in v11); `TraceSettings.structure_only`: see Capture products above; `TraceSettings.verbose`: capture toggles.
 
 **`tl.types.TraceHealth`**
 : Honesty diagnostics of the capture: witness and escape-detector facts; `trace.health` is the instance a Trace serves. `TraceHealth.completeness_callback_ns`: time spent in the completeness-witness callback, in nanoseconds; `TraceHealth.completeness_decompositions`: completeness-witness decompositions of the captured op stream; `TraceHealth.completeness_mode`: mode the completeness witness ran in; `TraceHealth.completeness_verified`: whether the completeness witness verified the capture; `TraceHealth.escape_detector_callback_ns`: time spent in the escape-detector callback, in nanoseconds; `TraceHealth.escape_detector_mode`: mode the escape detector ran in; `TraceHealth.escape_detector_verified`: whether the escape detector verified the capture; `TraceHealth.num_accounted_witness_events`: number of witness events accounted for by captured ops; `TraceHealth.num_escape_detector_events`: number of escape-detector events observed; `TraceHealth.num_expected_opaque_witness_events`: number of witness events expected to be opaque; `TraceHealth.num_unaccounted_witness_events`: number of witness events no captured op accounts for; `TraceHealth.num_witness_events`: number of completeness-witness events observed.
@@ -5318,6 +5512,7 @@ alphabetical order.
 | `loss=` | keyword of `Trace.do` and `tl.sweep`: a callable of the returned trace whose scalar result the door runs `backward` on |
 | `max_cells=` | keyword of `tl.experiment.sweep_grid`: guard on the product of the axis lengths (`grid_too_large`) |
 | `member_name=` | field and constructor keyword of `GridCell`: the retained member's name, None when the cell holds no member |
+| `method=` | keyword of `ReceptiveFieldView.of`: `"geometric"` (union of per-unit boxes, the default) or `"gradient"` (autograd probes on a backward-ready trace) |
 | `min_stimuli=` | keyword of the `tl.repgeom` geometry functions (`classical_mds`, `effective_dimensionality`, `scree`): fewest stimuli accepted |
 | `num_audited_ops=` | field and constructor keyword of `DTypeRangeReport` |
 | `num_backward_passes=` | field and constructor keyword of `BackwardStatus`, `BackwardStyleInventory` |
@@ -5332,7 +5527,6 @@ alphabetical order.
 | `num_joins=` | field and constructor keyword of `MergeReport` |
 | `num_multiplied_ops=` | field and constructor keyword of `BackwardEstimate` |
 | `num_pages=` | field and constructor keyword of `SavedFigure` |
-| `num_predicate_failure_overflows=` | field and constructor keyword of `Recording` |
 | `num_pure_unverified_ops=` | field and constructor keyword of `ValidationStatus` |
 | `num_query_heads=` | field and constructor keyword of `GqaInfo` |
 | `num_replayed_ops=` | field and constructor keyword of `ValidationStatus` |
@@ -5347,12 +5541,14 @@ alphabetical order.
 | `param_names=` | field and constructor keyword of `CheckFinding` |
 | `peak_bytes_per_s=` | field and constructor keyword of `MachineBalance` |
 | `peak_flops_per_s=` | field and constructor keyword of `MachineBalance` |
+| `probe_budget=` | keyword of `ReceptiveFieldView.of`: the most autograd probes `method="gradient"` may run before refusing (`influence_probe_budget`) |
 | `retained_bytes=` | field and constructor keyword of `MemoryFacts`, `SummaryTotals` |
 | `retained_lazy_ops=` | field and constructor keyword of `MemoryFacts` |
 | `retained_present_ops=` | field and constructor keyword of `MemoryFacts` |
 | `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |
 | `serve=` | keyword of `tl.export.netron`: open the exported graph in a local viewer |
-| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`) and `torchlens._visualization.show_bundle_graph` (`"forward"` or `"backward"`) |
+| `signal=` | keyword of `tl.observers.span` (`"forward"`, `"backward"` or `"both"`); the removed `show_bundle_graph` keyword is `Bundle.draw(graph=...)` |
 | `source_ref=` | keyword of `tl.types.Accessor`: weak reference to the owning trace |
 | `state_dict=` | keyword of `Trace.load_state_dict`: the sparse-run state to stage |
 | `uncounted_op_counts=` | field and constructor keyword of `BackwardStatus` |
+| `within=` | keyword of `ReceptiveFieldView.of`: the region or list of regions the influence answer lands in (label, module address, `Op`, `Layer`, `Module`, `ModuleCall` or selector); `None` means the model outputs (projective) or inputs (receptive) |

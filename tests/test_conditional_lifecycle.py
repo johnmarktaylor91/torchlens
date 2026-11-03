@@ -342,7 +342,7 @@ def test_to_pandas_exports_conditional_columns() -> None:
     trace = tl.trace(
         _TinyModel(),
         torch.ones(1, 3),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     target_layer = next(
         layer for layer in trace._layer_list if layer.type not in {"input", "output"}

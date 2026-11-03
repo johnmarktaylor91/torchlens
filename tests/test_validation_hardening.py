@@ -167,7 +167,6 @@ class _Tiny(nn.Module):
         return torch.relu(self.lin(x)) + 1.0
 
 
-@pytest.mark.smoke
 def test_w32_forged_placeholder_in_plain_capture_fails() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: the 2026-06-02 lesson is armed.
 
@@ -225,7 +224,8 @@ def test_w32_genuine_intervene_capture_keeps_exemption() -> None:
         model,
         x,
         intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     replaced_ops = [op for op in trace._layer_list if getattr(op, "is_edited", False)]
     assert replaced_ops, "zero_ablate must stamp its site"
@@ -272,7 +272,8 @@ def test_raw_hook_recontainer_does_not_mint_replacement_evidence() -> None:
         trace = tl.trace(
             model,
             torch.randn(3, 4),
-            capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+            capture=tl.options.CaptureOptions(save_args=True),
+            save="all",
         )
     finally:
         handle.remove()
@@ -517,7 +518,8 @@ def test_w34_dropped_aten_op_trace_method_now_fails(monkeypatch: pytest.MonkeyPa
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(layers_to_save="all", save_args=True),
+            capture=CaptureOptions(save_args=True),
+            save="all",
         )
     assert "relu_1_1" in trace.layer_labels and len(trace.layer_labels) == 3
 
@@ -1839,7 +1841,6 @@ def test_genuine_raw_hook_replacement_mints_journal_edit_and_validates() -> None
     check_metadata_invariants(trace)
 
 
-@pytest.mark.smoke
 def test_forged_journal_edit_does_not_bless_plain_placeholder() -> None:
     """FAIL-AFTER-WHERE-PASSED-BEFORE: a forged edit record stays inert.
 

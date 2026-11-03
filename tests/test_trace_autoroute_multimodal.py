@@ -43,11 +43,14 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
     import PIL.Image  # noqa: F401
 
     model = transformers.CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    # Input detection reads the local cache only; loading the processor once
+    # caches it, as a user would before relying on the auto-route.
+    transformers.AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     log = tl.trace(
         model,
         {"text": "a cat", "images": _pil_image()},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     assert log.provenance.input_preprocessor is not None
@@ -68,7 +71,7 @@ def test_non_modality_dict_does_not_route(monkeypatch: pytest.MonkeyPatch) -> No
     log = tl.trace(
         _DictModel(),
         {"key": "value"},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
 
     assert log.provenance.input_preprocessor is None
@@ -102,8 +105,90 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
     log = tl.trace(
         _DictModel(),
         {"images": _pil_image()},
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
+
+    assert log.provenance.input_preprocessor is None
+
+
+class _FakePreTrainedModel(nn.Module):
+    """Stand-in for ``transformers.PreTrainedModel`` (no transformers import)."""
+
+
+class _UncachedHFModel(_FakePreTrainedModel):
+    """HF-shaped model whose forward must never see the raw modality dict."""
+
+    name_or_path = "fixture/uncached-multimodal"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.forward_calls = 0
+
+    def forward(self, **kwargs: Any) -> torch.Tensor:
+        """Count calls; a real model would fail on the raw strings and images."""
+
+        self.forward_calls += 1
+        return torch.ones(1)
+
+
+def _install_fake_transformers(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Install a fake ``transformers`` whose processor is never in the cache."""
+
+    import sys
+    from types import SimpleNamespace
+
+    calls: list[dict[str, Any]] = []
+
+    class _UncachedAutoProcessor:
+        @classmethod
+        def from_pretrained(cls, name_or_path: str, **kwargs: Any) -> Any:
+            calls.append({"name_or_path": name_or_path, **kwargs})
+            raise OSError("not found in the local cache")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoProcessor=_UncachedAutoProcessor, PreTrainedModel=_FakePreTrainedModel),
+    )
+    return calls
+
+
+def test_uncached_processor_on_hf_model_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An uncached processor refuses typed instead of feeding the model raw input.
+
+    The raw ``{"text": ..., "images": ...}`` dict used to reach the model's
+    forward, which failed deep inside (a CLIP vision embedding read ``.shape``
+    of a missing ``pixel_values``) with zero ops captured.
+    """
+
+    from torchlens.errors import InvalidArgumentError
+
+    calls = _install_fake_transformers(monkeypatch)
+    model = _UncachedHFModel()
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(model, {"text": "a cat", "images": _pil_image()}, save="none")
+
+    assert excinfo.value.fields["code"] == "preprocessing_unresolved"
+    assert "fixture/uncached-multimodal" in str(excinfo.value)
+    assert "AutoProcessor.from_pretrained" in str(excinfo.value)
+    assert "trace_multimodal" in str(excinfo.value)
+    assert model.forward_calls == 0
+    # Detection stayed cache-only: no download was attempted.
+    assert calls and all(call.get("local_files_only") is True for call in calls)
+
+
+def test_uncached_processor_on_non_hf_model_keeps_plain_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A model outside transformers keeps the plain path even with a name_or_path."""
+
+    _install_fake_transformers(monkeypatch)
+
+    class _NamedDictModel(_DictModel):
+        name_or_path = "fixture/not-a-transformers-model"
+
+    log = tl.trace(_NamedDictModel(), {"images": _pil_image()}, save="none")
 
     assert log.provenance.input_preprocessor is None
 
@@ -125,9 +210,8 @@ def test_dict_transform_override_skips_multimodal_autoroute(
     log = tl.trace(
         nn.Linear(1, 1),
         {"text": "hello", "images": _pil_image()},
-        capture=tl.options.CaptureOptions(
-            input_transform=lambda value: torch.ones(1), layers_to_save="none"
-        ),
+        capture=tl.options.CaptureOptions(input_transform=lambda value: torch.ones(1)),
+        save="none",
     )
 
     # The explicit transform bypasses the multimodal autoroute entirely: no

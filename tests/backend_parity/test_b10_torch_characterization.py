@@ -219,7 +219,7 @@ def test_forward_exception_restores_capture_state() -> None:
     x = torch.ones(2, 2)
 
     with pytest.raises(TraceCaptureError, match="boom during forward") as _tce_info:
-        tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+        tl.trace(model, x, save="all")
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert torchlens_state._logging_enabled is False
@@ -229,7 +229,7 @@ def test_forward_exception_restores_capture_state() -> None:
     followup = tl.trace(
         _FiveOpTraceModel(),
         torch.ones(2, 2),
-        capture=tl.options.CaptureOptions(layers_to_save="all"),
+        save="all",
     )
     assert followup._num_ops == 4
 
@@ -241,7 +241,7 @@ def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
         _FiveOpTraceModel(),
         torch.ones(2, 2),
         save=lambda ctx: ctx.kind == "op",
-        halt=lambda ctx: ctx.label.startswith("relu"),
+        stop_after=lambda ctx: ctx.label.startswith("relu"),
     )
 
     assert trace.is_stopped is True
@@ -264,7 +264,8 @@ def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
     trace = tl.trace(
         _SelectiveFastPassModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=["relu"], seed=1703),
+        capture=tl.options.CaptureOptions(seed=1703),
+        save=["relu"],
     )
 
     saved = [(layer.func_name, layer.has_saved_activation) for layer in trace._layer_list]
@@ -323,9 +324,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     """Buffer reconciliation emits the initial source before the in-place write version."""
 
     model = _BufferMutationModel()
-    trace = tl.trace(
-        model, torch.ones(2, 2), capture=tl.options.CaptureOptions(layers_to_save="all")
-    )
+    trace = tl.trace(model, torch.ones(2, 2), save="all")
     buffer_versions = [layer for layer in trace._layer_list if layer.is_buffer]
 
     assert len(buffer_versions) == 2
@@ -339,7 +338,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     assert buffer_versions[1].buffer_write_kind == "inplace"
     assert str(buffer_versions[1].buffer_source).startswith("add_2_")
     assert buffer_versions[1].parents == ("add_2_2",)
-    # A default capture is a pure observer (U40.1): the live buffer is restored.
+    # A default capture is a pure observer: the live buffer is restored.
     assert torch.equal(model.offset, torch.zeros(2, 2))
 
 
@@ -350,12 +349,14 @@ def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
     full = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", seed=1704),
+        capture=tl.options.CaptureOptions(seed=1704),
+        save="all",
     )
     selective = tl.trace(
         _DropoutTwoPassModel().train(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save=["dropout"], seed=1704),
+        capture=tl.options.CaptureOptions(seed=1704),
+        save=["dropout"],
     )
 
     assert selective.options.mode == "exhaustive"

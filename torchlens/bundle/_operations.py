@@ -1,4 +1,4 @@
-"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, ``show``, the chronology ledger and the effect table."""
+"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, the chronology ledger and the effect table."""
 
 from __future__ import annotations
 
@@ -21,7 +21,6 @@ __all__ = [
     "bundle_fork",
     "bundle_map",
     "bundle_run",
-    "bundle_show",
     "effects_table",
     "record_bundle_operation",
 ]
@@ -158,27 +157,6 @@ def accepts_member_name(fn: Callable[..., Any]) -> bool:
         if parameter.kind in positional_kinds:
             count += 1
     return count >= 2
-
-
-def bundle_show(self: Bundle, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
-    """Render each bundle member graph as a member-keyed strip."""
-
-    if kwargs.get("vis_mode") == "none":
-        return dict.fromkeys(self._members)
-
-    base_outpath = kwargs.get("path")
-    results: dict[str, str | None] = {}
-    for name, member in self._members.items():
-        member_kwargs = dict(kwargs)
-        if isinstance(base_outpath, str):
-            member_kwargs["path"] = f"{base_outpath}_{name}"
-        if kind == "repr":
-            results[name] = repr(member)
-        elif kind == "html":
-            results[name] = member._repr_html_()
-        else:
-            results[name] = member.draw(**member_kwargs)
-    return results
 
 
 def effects_table(self: Bundle, history_id: str | None = None) -> Any:

@@ -1,4 +1,4 @@
-"""U53.2: ``Trace.profile(group_by="source_line")`` over existing activation bytes.
+"""``Trace.profile(group_by="source_line")`` over existing activation bytes.
 
 The grouped view folds op rows into one row per user source line. It adds no
 measurement, so every additive column sums to the ungrouped op view.

@@ -294,8 +294,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
             m,
             x,
             save=tl.func("linear") & tl.followed_by(tl.func("tanh")),
-            lookback=4,
-            lookback_payload_policy="detached_raw",
+            capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"),
         ),
     ),
     (
@@ -425,7 +424,6 @@ def _sentinel_for(path: str, value_types: tuple[type, ...], template: Any, flip:
 _BOOL_PATTERNS = (False, True)
 
 
-@pytest.mark.smoke_cells("test_distinct_sentinel_fold_routing[decomposed]")
 @pytest.mark.parametrize("producer", _LEGS)
 def test_distinct_sentinel_fold_routing(monkeypatch: pytest.MonkeyPatch, producer: str) -> None:
     """Every registry path routes to its OWN destination on both fold legs.

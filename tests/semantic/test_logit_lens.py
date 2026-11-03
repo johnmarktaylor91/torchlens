@@ -89,7 +89,7 @@ class GemmaStyleRMSNorm(nn.Module):
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Trace a model with the exhaustive save the lens anchors need."""
 
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    return tl.trace(model, x, save="all")
 
 
 def test_lm_head_recipe_exposes_unembedding_facets() -> None:
@@ -218,7 +218,6 @@ def test_logit_lens_refuses_without_head_facets() -> None:
     assert head_exc.value.fields["code"] == "logit_lens_head_unavailable"
 
 
-@pytest.mark.smoke
 def test_logit_lens_top_tokens_and_summary_shapes() -> None:
     """Result accessors decode top tokens and format the per-layer table."""
 

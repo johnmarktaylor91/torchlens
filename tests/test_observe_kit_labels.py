@@ -82,7 +82,7 @@ def _raise_on_nan_error(model: nn.Module, x: torch.Tensor) -> CaptureError:
     """Run one raise_on_nan capture and return the CaptureError it raises."""
 
     with pytest.raises(CaptureError) as exc_info:
-        tl.trace(model, x, capture=tl.options.CaptureOptions(raise_on_nan=True))
+        tl.trace(model, x, capture=tl.options.CaptureOptions(on_nonfinite="raise"))
     return exc_info.value
 
 
@@ -92,6 +92,7 @@ def _assert_no_raw_spelling(text: str) -> None:
     assert not re.search(r"\w+_\d+_raw\b", text), text
 
 
+@pytest.mark.smoke
 def test_one_label_across_every_nan_surface() -> None:
     """find_nan, bisect_nan, error fields, message, and outcome agree on ONE name."""
 
@@ -167,7 +168,6 @@ def test_multipass_offender_gets_pass_qualified_canonical_label() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_failed_finalization_yields_none_plus_status_never_raw(monkeypatch) -> None:
     """When the prefix postprocess cannot run, labels are None + status."""
 

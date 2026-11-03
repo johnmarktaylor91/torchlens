@@ -234,7 +234,7 @@ def _after_draw(cell: Cell) -> None:
         if trace is None:
             continue
         out = cell.tmp / f"graph-{name}"
-        trace.draw(path=str(out), vis_save_only=True, file_format="svg")
+        trace.draw(path=str(out), file_format="svg")
         rendered = list(cell.tmp.glob(f"graph-{name}*"))
         cell.expect(bool(rendered), f"{name} draw wrote nothing under {out}")
 
@@ -327,7 +327,9 @@ def _after_record(cell: Cell) -> None:
     # which no capture, trace or record, can see past.
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    recording = tl.record(model, cell.fresh_inputs(), default_op=True)
+    recording = tl.record(
+        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
+    )
     cooked = recording.to_trace()
     from tests.behaviour.harness import execution_order
 
@@ -416,7 +418,7 @@ FEATURES: tuple[Feature, ...] = (
     Feature(
         "halt",
         CHEAP,
-        "Stop the forward early (halt=)",
+        "Stop the forward early (stop_after=)",
         changes=frozenset({"forward_match", "outcome"}),
         prepare=_prepare_halt,
         after=_after_halt,

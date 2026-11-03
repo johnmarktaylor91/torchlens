@@ -1,4 +1,4 @@
-"""Grad-CAM bridge ``call_kwargs=`` against real pytorch-grad-cam (walk U45.3).
+"""Grad-CAM bridge ``call_kwargs=`` against real pytorch-grad-cam.
 
 Smoothing options given in ``call_kwargs=`` reach the CAM call and match the
 package called directly; an option given twice refuses typed.
@@ -47,7 +47,7 @@ def cnn() -> Iterator[tuple[nn.Module, torch.Tensor, Any]]:
     torch.manual_seed(0)
     model = _SmallCnn().eval()
     x = torch.randn(2, 3, 16, 16)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, x, save="all")
     try:
         yield model, x, log
     finally:

@@ -26,7 +26,7 @@ if TYPE_CHECKING:
     from ..._selection.selectors import BaseSelector
     from ..._utils.tensor_utils import SaveMode
     from ...intervention.predicates import InterventionPredicate
-    from ...options import CaptureOptions, EpisodeOptions, SaveOptions, StorageOptions
+    from ...options import CaptureOptions, EpisodeOptions, StorageOptions, _SaveTransforms
     from ...recording.options import HaltPredicateFn, PredicateFn
     from ...types import _ActivationPostfunc, _GradientPostfunc
 
@@ -76,13 +76,14 @@ class _DoorArgs:
     compute_input_output_distances: bool | MissingType = MISSING
     recurrence_detection: bool | MissingType = MISSING
     capture: CaptureOptions | None = None
-    save: SaveOptions | PredicateFn | BaseSelector | str | list[Any] | tuple[Any, ...] | None = None
+    save: (
+        _SaveTransforms | PredicateFn | BaseSelector | str | list[Any] | tuple[Any, ...] | None
+    ) = None
     intervene: InterventionPredicate | None = None
     halt: HaltPredicateFn | None = None
     lookback: int = 0
     lookback_payload_policy: str = "metadata_only"
     storage: StorageOptions | None = None
-    streaming: StorageOptions | None = None
     backward_ready: bool | MissingType = MISSING
     inference_only: bool | MissingType = MISSING
     name: str | None | MissingType = MISSING
@@ -90,14 +91,11 @@ class _DoorArgs:
     cache_dir: str | Path | None | MissingType = MISSING
     module_filter: Callable[[Any], bool] | None | MissingType = MISSING
     stop_after: Any | None | MissingType = MISSING
-    raise_on_nan: bool | MissingType = MISSING
     structure_only: bool | MissingType = MISSING
-    profile: bool | MissingType = MISSING
     jax_control_flow: Literal["reject", "unroll", "region"] | MissingType = MISSING
     jax_max_control_flow_unroll: int | MissingType = MISSING
     module_identity_mode: str | None | MissingType = MISSING
     payload_policy: str | None | MissingType = MISSING
-    save_preview: bool | MissingType = MISSING
     facets: (
         list[Callable[[Any], dict[str, Any]]]
         | tuple[Callable[[Any], dict[str, Any]], ...]
@@ -128,7 +126,6 @@ class _DoorState:
     capture_options: CaptureOptions
     raw_input: Any = None
     echo_options: Any = None
-    profile_enabled: bool = False
     meta_admission: Any = None
     save_options: Any = None
     grouped_save_options: Any = None
@@ -143,7 +140,7 @@ class _DoorState:
     layers_to_save: Any = None
     requested_layers_to_save: Any = None
     save_raw_input_policy: Any = None
-    save_raw_output_policy: Any = None
+    save_transformed_output_policy: Any = None
     save_mode_value: Any = "copy"
     halt: Any = None
     stop_after_site: Any = None
@@ -212,7 +209,7 @@ def _run_plan_capture_rows(state: _DoorState) -> dict[str, Any]:
         "backward_ready": state.train_mode_value,
         "inference_only": state.inference_only_value,
         "inference_only_implied": (
-            state.inference_only_value and not opts.is_field_explicit("inference_only")
+            state.inference_only_value and not opts._is_field_explicit("inference_only")
         ),
         "name": state.log_name,
         "module_filter": opts.module_filter,
@@ -229,8 +226,10 @@ def _run_plan_policy_rows(state: _DoorState) -> dict[str, Any]:
         "measure_python_peak_memory": opts.measure_python_peak_memory,
         "distributed_witness": opts.distributed_witness,
         "save_budget": opts.save_budget,
-        "raise_on_nan": opts.raise_on_nan,
-        "track_nonfinite": opts.track_nonfinite,
+        # One closed vocabulary drives both nonfinite mechanisms: "raise" is the
+        # stop-and-throw tripwire, "track" and "warn" record per-op verdicts.
+        "raise_on_nan": opts.on_nonfinite == "raise",
+        "track_nonfinite": opts.on_nonfinite in ("track", "warn"),
         "track_device_memory": opts.track_device_memory,
         "structure_only": opts.structure_only,
         "log_injections": opts.log_injections,
@@ -241,7 +240,7 @@ def _run_plan_policy_rows(state: _DoorState) -> dict[str, Any]:
         "save_raw_input": state.save_raw_input_policy,
         "batch_render": opts.batch_render,
         "output_transform": opts.output_transform,
-        "save_transformed_output": state.save_raw_output_policy,
+        "save_transformed_output": state.save_transformed_output_policy,
         "layer_visualizers": opts.layer_visualizers,
         "save_visualizations": opts.save_visualizations,
         "recipes": state.facet_recipes,
@@ -339,7 +338,6 @@ def _build_request(
             "stop_after_site": state.stop_after_site,
             "stop_after_selector_shaped": state.stop_after_selector_shaped,
             "stop_after_ambient": state.stop_after_ambient,
-            "profile_enabled": state.profile_enabled,
             "save_grads_policy": state.save_grads_policy,
             "uses_selective_layers_to_save": state.uses_selective_layers_to_save,
         },

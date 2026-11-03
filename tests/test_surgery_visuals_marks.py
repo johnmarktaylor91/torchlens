@@ -22,7 +22,6 @@ from torchlens._visualization.surgery_visuals import (
     MARK_BASES,
     MARK_KINDS,
     make_surgery_mark_spec_fn,
-    render_surgery,
     splice_box_lines,
     surgery_census,
     surgery_facts,
@@ -188,13 +187,12 @@ def test_rendered_passes_carry_only_their_own_marks(tmp_path) -> None:
     log = tl.trace(model, x, capture=_CAPTURE)
     fork = log.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
-    source = render_surgery(
-        fork,
-        vis_mode="unrolled",
+    source = fork.draw(
+        highlight="interventions",
+        rolled=False,
         path=str(tmp_path / "surgery_passes"),
         file_format="svg",
-        vis_save_only=True,
-    )
+    ).dot
     edited = _dot_node_statement(source, "linear_1_1pass1")
     cohort = _dot_node_statement(source, "linear_1_1pass2")
     assert "edited:" in edited
@@ -358,13 +356,13 @@ def test_surgery_lens_refuses_without_audit_evidence(chain_capture) -> None:
 
 
 @pytest.mark.heavy
-def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> None:
+def test_highlight_interventions_census_travels_with_figure(chain_capture, tmp_path) -> None:
     """The census renders INTO the figure and the sidecar travels beside it."""
 
     _model, _x, log = chain_capture
     fork = _edited_fork(log)
     outpath = str(tmp_path / "surgery_fig")
-    render_surgery(fork, path=outpath, file_format="svg", vis_save_only=True)
+    fork.draw(path=outpath, highlight="interventions", file_format="svg")
     figure = tmp_path / "surgery_fig.svg"
     sidecar = tmp_path / "surgery_fig.census.txt"
     assert figure.exists()
@@ -378,6 +376,77 @@ def test_render_surgery_census_travels_with_figure(chain_capture, tmp_path) -> N
         assert credit in census_text
     assert _REPLAY_WORDING in census_text
     _assert_no_banned_verbs(census_text)
+
+
+@pytest.mark.heavy
+def test_bare_highlight_draw_writes_census_beside_written_file(
+    chain_capture, tmp_path, monkeypatch
+) -> None:
+    """A bare draw picks a collision-safe name; each census lands beside its figure."""
+
+    import inspect
+
+    from torchlens._data_classes.trace import Trace
+
+    _model, _x, log = chain_capture
+    fork = _edited_fork(log)
+    # The autouse conftest fixture gives draw() a tmp_path default path; put the
+    # shipped default (None: a bare draw picks a collision-safe name) back here.
+    draw = Trace.draw
+    positional = [
+        name
+        for name, parameter in inspect.signature(draw).parameters.items()
+        if parameter.kind is parameter.POSITIONAL_OR_KEYWORD
+    ]
+    defaults = list(draw.__defaults__ or ())
+    defaults[positional.index("path") - (len(positional) - len(defaults))] = None
+    monkeypatch.setattr(draw, "__defaults__", tuple(defaults))
+    monkeypatch.chdir(tmp_path)
+    fork.draw(highlight="interventions", file_format="svg")
+    fork.draw(highlight="interventions", file_format="svg")
+    figures = sorted(path.name for path in tmp_path.glob("*.svg"))
+    censuses = sorted(path.name for path in tmp_path.glob("*.census.txt"))
+    assert figures == ["modelgraph-2.svg", "modelgraph.svg"], figures
+    assert censuses == ["modelgraph-2.census.txt", "modelgraph.census.txt"], censuses
+    for census in censuses:
+        assert _REPLAY_WORDING in (tmp_path / census).read_text()
+
+
+def test_unknown_highlight_refuses_naming_allowed_values(chain_capture, tmp_path) -> None:
+    """An unknown highlight refuses typed before anything is drawn."""
+
+    _model, _x, log = chain_capture
+    for bad in ("intervention", "surgery", True):
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            log.draw(path=str(tmp_path / "never"), highlight=bad)
+        assert excinfo.value.fields["code"] == "draw_highlight_invalid"
+        assert excinfo.value.fields["argument"] == "highlight"
+        assert "'interventions'" in str(excinfo.value)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_highlight_interventions_refuses_without_audit_evidence(chain_capture, tmp_path) -> None:
+    """An un-edited trace has no recorded surgery to highlight."""
+
+    _model, _x, log = chain_capture
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        log.draw(path=str(tmp_path / "never"), highlight="interventions")
+    assert excinfo.value.fields["code"] == "surgery_evidence_missing"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_render_surgery_is_removed() -> None:
+    """``trace.draw(highlight="interventions")`` replaced it, with no alias."""
+
+    import torchlens._visualization as visualization
+    import torchlens._visualization.surgery_visuals as surgery_visuals
+
+    with pytest.raises(ImportError):
+        from torchlens._visualization.surgery_visuals import render_surgery  # noqa: F401
+    with pytest.raises(ImportError):
+        from torchlens._visualization import render_surgery  # noqa: F401,F811
+    assert not hasattr(surgery_visuals, "render_surgery")
+    assert "render_surgery" not in visualization.__all__
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +485,6 @@ def test_diff_positional_cohort_join_is_heuristic() -> None:
     assert joins["relu_1_2:1"].basis == "fact"
 
 
-@pytest.mark.smoke
 def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     """A one-side op is a full-strength disclosure, never execution removal."""
 
@@ -467,7 +535,7 @@ def test_diff_draw_line_styles_and_census_sidecar(tmp_path) -> None:
     fork = subject.fork()
     fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
     diff = intervention_diff(fork, reference)
-    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg", vis_save_only=True)
+    rendered = diff.draw(str(tmp_path / "diff_fig"), vis_fileformat="svg")
     figure_text = (tmp_path / "diff_fig.svg").read_text()
     assert rendered.endswith("diff_fig.svg")
     assert "stroke-dasharray" in figure_text  # the heuristic join renders dashed

@@ -47,6 +47,7 @@ def test_left_to_right_order_and_noncommutativity() -> None:
     assert not torch.equal(fork_lr["relu_1_2"].out, fork_rl["relu_1_2"].out)
 
 
+@pytest.mark.smoke
 def test_flattening_is_syntactic_and_audit_visible() -> None:
     """compose(a, compose(b, c)) and compose(a, b, c) are ONE identity."""
 

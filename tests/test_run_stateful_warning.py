@@ -25,6 +25,7 @@ def test_training_mode_stateless_model_does_not_warn() -> None:
     ]
 
 
+@pytest.mark.smoke
 def test_live_run_warns_once_and_batchnorm_stats_mutate() -> None:
     """Default live execution warns once; the restore bracket undoes BN stats.
 

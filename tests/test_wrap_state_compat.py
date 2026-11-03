@@ -241,7 +241,6 @@ class TestMetaApiSmokePostWrap:
         batched = torch.vmap(torch.dot)(torch.randn(4, 3), torch.randn(4, 3))
         assert batched.shape == (4,)
 
-    @pytest.mark.smoke
     def test_flop_counter_mode(self):
         from torch.utils.flop_counter import FlopCounterMode
 
@@ -331,7 +330,7 @@ class TestWrapperPickleLadder:
         # deliberately KEEP the honest torchlens wrappers module: stamping
         # them "torch" would make a wrapped storage-unsafe method claim torch
         # purity to string-based safety gates — the r36 smuggling defense
-        # (tests/test_r36_tensor_method_smuggling.py, LOCKED) pins that
+        # (tests/test_resolver_refusal_rows.py walk rows, LOCKED) pin that
         # surface. Security disclosure wins over introspection fidelity here.
         _ensure_wrapped()
         assert torch.cos.__module__ == "torch"

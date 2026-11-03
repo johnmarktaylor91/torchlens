@@ -11,7 +11,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
 import torch
 from torch import nn
 
@@ -54,11 +53,10 @@ def _draw(tmp_path: Path, name: str, model: nn.Module, x: torch.Tensor, **kwargs
 
     trace = tl.trace(model, x)
     return trace.draw(
-        vis_save_only=True,
         file_format="svg",
         path=str(tmp_path / name),
         **kwargs,
-    )
+    ).dot
 
 
 def test_arrowhead_oracle_known_bad(tmp_path: Path) -> None:
@@ -93,7 +91,6 @@ def test_key_in_header_adds_no_side_legend(tmp_path: Path) -> None:
     assert envelope.legend_ratio == 0.0, envelope
 
 
-@pytest.mark.smoke
 def test_legend_ratio_flags_the_historical_strip_form() -> None:
     """The six-free-node strip form (the 2.86x defect) reads as out of bound.
 

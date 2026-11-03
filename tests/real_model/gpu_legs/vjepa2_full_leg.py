@@ -1,4 +1,4 @@
-"""V-JEPA 2 full-clip capture and validation leg (GPU venue; U55.4).
+"""V-JEPA 2 full-clip capture and validation leg (GPU venue).
 
 Runs ``facebook/vjepa2-vitl-fpc64-256`` at its native 64 frames x 256 px
 through ``tl.trace`` and ``tl.validate(scope="forward")`` on one CUDA device
@@ -147,7 +147,9 @@ def stage_a(model: Any, inputs: dict[str, Any]) -> dict[str, Any]:
     with torch.no_grad():
         direct = model(**inputs).last_hidden_state.detach().cpu()
     start = time.monotonic()
-    trace = tl.trace(model, (), dict(inputs), capture=CaptureOptions(output_device="cpu"))
+    trace = tl.trace(
+        model, (), input_kwargs=dict(inputs), capture=CaptureOptions(output_device="cpu")
+    )
     seconds = time.monotonic() - start
     try:
         matches = [

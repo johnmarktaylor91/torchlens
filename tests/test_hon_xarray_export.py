@@ -1,4 +1,4 @@
-"""U28.2 + the batch-2 buffer ruling: ``tl.export.xarray`` on real-model traces.
+"""``tl.export.xarray`` on real-model traces.
 
 August found the exporter unusable on every real-model leg: (a) xarray in no
 extra, (b) a partial trace crashed reading an unsaved placeholder's ``.out``,
@@ -68,7 +68,7 @@ def test_partial_resnet_trace_exports_buffers_and_discloses_skipped_layers() -> 
     trace = tl.trace(
         model,
         images,
-        capture=tl.options.CaptureOptions(layers_to_save=["layer4", "avgpool"]),
+        save=["layer4", "avgpool"],
     )
     dataset = tl.export.xarray(trace)
     array = dataset["out"]
@@ -97,7 +97,7 @@ def test_save_all_batchnorm_trace_exports_everything() -> None:
     presentation axis; every buffer round-trips bit-exact as module state."""
 
     model, images = _resnet_and_images()
-    trace = tl.trace(model, images, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, images, save="all")
     dataset = tl.export.xarray(trace)
     array = dataset["out"]
 

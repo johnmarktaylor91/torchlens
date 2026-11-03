@@ -1,4 +1,4 @@
-"""``patch_from`` source-site to target-site mapping and a Patchscopes recipe (U43.5).
+"""``patch_from`` source-site to target-site mapping and a Patchscopes recipe.
 
 The mapping reads a hidden state at one layer and position of a SOURCE prompt and
 writes it at another layer and position of a TARGET prompt of a different length.

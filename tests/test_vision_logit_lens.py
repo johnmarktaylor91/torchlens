@@ -1,4 +1,4 @@
-"""Vision logit lens and user-lens identity checks (batch-2 VISION: U55.2, U43.2).
+"""Vision logit lens and user-lens identity checks (vision lane).
 
 Models are built from their vendored published configs, shrunk, weights from
 a fixed seed, zero network:
@@ -73,7 +73,7 @@ def vit_classifier() -> Iterator[tuple[Any, Any, Any]]:
     torch.manual_seed(SEED)
     model = ViTForImageClassification(_hf_config("vit", ViTConfig, shrink, "eager")).eval()
     pixels = torch.randn(2, 3, 32, 32, generator=torch.Generator().manual_seed(SEED))
-    trace = _quiet_trace(model, (), {"pixel_values": pixels})
+    trace = _quiet_trace(model, (), input_kwargs={"pixel_values": pixels})
     yield model, pixels, trace
     tl.release_model(model)
 
@@ -88,7 +88,7 @@ def clip_capture() -> Iterator[tuple[Any, Any, Any]]:
         "input_ids": torch.randint(2, VOCAB, (N_PROMPTS, 8), generator=generator),
         "pixel_values": torch.randn(2, 3, 32, 32, generator=generator),
     }
-    trace = _quiet_trace(model, (), inputs)
+    trace = _quiet_trace(model, (), input_kwargs=inputs)
     yield model, inputs, trace
     tl.release_model(model)
 
@@ -99,7 +99,7 @@ def llama_capture() -> Iterator[tuple[Any, Any]]:
 
     spec = FAMILY_BY_NAME["llama"]
     model = spec.build("eager")
-    trace = _quiet_trace(model, spec.input_args(), spec.input_kwargs())
+    trace = _quiet_trace(model, spec.input_args(), input_kwargs=spec.input_kwargs())
     yield model, trace
     tl.release_model(model)
 
@@ -166,7 +166,7 @@ def test_trace_with_neither_head_still_refuses_typed() -> None:
 
     spec = FAMILY_BY_NAME["vit"]
     model = spec.build("eager")
-    trace = _quiet_trace(model, spec.input_args(), spec.input_kwargs())
+    trace = _quiet_trace(model, spec.input_args(), input_kwargs=spec.input_kwargs())
     with pytest.raises(LogitLensError) as excinfo:
         logit_lens(trace)
     assert excinfo.value.fields["code"] == "logit_lens_head_unavailable"

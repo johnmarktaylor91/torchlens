@@ -46,7 +46,6 @@ def test_object_arg_hash_distinguishes_types() -> None:
     assert generator_hash != marker_hash
 
 
-@pytest.mark.smoke
 def test_set_and_frozenset_args_hash_identically() -> None:
     """Equal members must produce one fingerprint regardless of container."""
 
@@ -97,8 +96,7 @@ def test_backward_pass_root_ids_persist_as_dense_ordinals(tmp_path) -> None:
     trace = tl.trace(
         _BackwardModel(),
         torch.randn(2, 4).requires_grad_(True),
-        capture=tl.options.CaptureOptions(backward_ready=True),
-        save_mode="reference",
+        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
     )
     trace.log_backward(trace[trace.output_layers[0]].out.sum())
 

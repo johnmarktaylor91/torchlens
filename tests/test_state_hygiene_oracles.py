@@ -289,9 +289,7 @@ def test_chunked_rerun_steers_every_row_once(net) -> None:
     assert _staged(trace) == staged, "a chunked rerun changed the staged spec"
 
 
-@pytest.mark.parametrize(
-    "door", [pytest.param("attach_hooks", marks=pytest.mark.smoke), "intervene"]
-)
+@pytest.mark.parametrize("door", ["attach_hooks", "intervene"])
 def test_legacy_rerun_repeats_exactly(mlp, door: str) -> None:
     """B0: every legacy rerun on a new input equals one hooked forward, silently."""
 
@@ -328,7 +326,9 @@ def test_capture_and_record_with_one_spec_repeat_exactly(mlp) -> None:
     want = _hooked(model, {"fc2": _steer_edit(1.0)}, x)
     for _ in range(3):
         torch.testing.assert_close(tl.trace(model, x, intervene=spec).output_ops[0].out, want)
-        recorded = tl.record(model, x, default_op=True, intervene=spec).to_trace()
+        recorded = tl.record(
+            model, x, intervene=spec, recording=tl.options.RecordingOptions(default_op=True)
+        ).to_trace()
         torch.testing.assert_close(recorded.output_ops[0].out, want)
 
 
@@ -465,7 +465,10 @@ def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
     outs = {
         "trace": tl.trace(model, x, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))),
         "record": tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), tl.scale(0.5))
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), tl.scale(0.5)),
+            recording=tl.options.RecordingOptions(default_op=True),
         ).to_trace(),
         "fork_do": fork,
         "rerun": rerun,
@@ -493,9 +496,7 @@ def _failing_forward(failure: type[BaseException]) -> Callable[..., torch.Tensor
     return raising_forward
 
 
-@pytest.mark.parametrize(
-    "failure", [_InjectedFailure, pytest.param(KeyboardInterrupt, marks=pytest.mark.smoke)]
-)
+@pytest.mark.parametrize("failure", [_InjectedFailure, KeyboardInterrupt])
 def test_failed_rerun_leaves_staged_spec_unchanged(net, failure: type[BaseException]) -> None:
     """F3: a rerun that raises or is interrupted mid-forward stages nothing."""
 
@@ -722,7 +723,10 @@ def test_interrupted_capture_record_and_bind_leave_no_runtime_state(mlp) -> None
         lambda: tl.trace(model, x, intervene=tl.when(tl.module("fc2"), interrupt)),
         lambda: tl.when(tl.module("fc2"), interrupt).bind(model)(x),
         lambda: tl.record(
-            model, x, default_op=True, intervene=tl.when(tl.module("fc2"), interrupt)
+            model,
+            x,
+            intervene=tl.when(tl.module("fc2"), interrupt),
+            recording=tl.options.RecordingOptions(default_op=True),
         ),
     ):
         with pytest.raises(KeyboardInterrupt):
@@ -930,7 +934,7 @@ _LOADED_DOORS: dict[str, tuple[Callable[..., Any], tuple[type[BaseException], st
 @pytest.mark.parametrize(
     ("origin", "door"),
     [
-        pytest.param("intervene", "run", marks=pytest.mark.smoke),
+        ("intervene", "run"),
         ("attach_hooks", "run"),
         ("fork_do", "run"),
         *(("intervene", door) for door in _LOADED_DOORS if door != "run"),
