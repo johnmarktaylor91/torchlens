@@ -33,7 +33,7 @@ import torch
 
 from .._errors import PayloadUnavailableError
 from ._errors import refuse
-from ._heads import _attention_modules
+from ._heads import _attention_modules, _select_layers
 
 __all__ = ["FixedPeriodInduction", "HeadScores", "head_scores"]
 
@@ -233,8 +233,6 @@ def head_scores(
         )
     candidates = _attention_modules(trace)
     if modules is not None:
-        from ._heads import _select_layers
-
         candidates = _select_layers(candidates, modules)
     modules = candidates
     if not modules:
