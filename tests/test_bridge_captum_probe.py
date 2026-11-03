@@ -14,6 +14,17 @@ from torchlens._errors import InvalidArgumentError
 from torchlens.bridge import captum
 
 
+class _FunctionalRelu(nn.Module):
+    """A relu no module returns: the probe path, not the live-module path."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.lin(x)) + 1.0
+
+
 def _probe(site_key: str = "s1|block|add||1", ordinal: int = 1) -> captum._SiteProbe:
     return captum._SiteProbe(nn.Identity(), site_key, "add_1_4", ordinal)
 
@@ -76,7 +87,7 @@ def test_spliced_forward_calls_the_probe_once_and_refuses_a_missed_site() -> Non
     """The spliced forward returns the plain output, calls the probe on its ordinal, and refuses a miss."""
 
     torch.manual_seed(0)
-    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.Linear(3, 2)).eval()
+    model = _FunctionalRelu().eval()
     x = torch.randn(2, 4)
     log = tl.trace(model, x)
     try:

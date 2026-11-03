@@ -349,6 +349,7 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
     import torchlens as tl
 
     from ..intervention.selectors import site as site_selector
+    from ..intervention.site_keys import armed_live_minter
 
     model = probe.model()
     seen = {"count": 0}
@@ -365,14 +366,18 @@ def _spliced_forward(probe: _SiteProbe) -> Any:
         """Run one forward with the site counter reset; refuse a forward that misses the site."""
 
         seen["count"] = 0
-        output, _recording = tl.record(
-            model,
-            list(args) if args else None,
-            dict(kwargs) if kwargs else None,
-            save=_save_nothing,
-            intervene=spec,
-            return_output=True,
-        )
+        # ``tl.record`` leaves the live site-key minter unarmed by design; the
+        # probe addresses the op by site key, so arm one for this forward.
+        with armed_live_minter():
+            output, _recording = tl.record(
+                model,
+                list(args) if args else None,
+                dict(kwargs) if kwargs else None,
+                save=_save_nothing,
+                intervene=spec,
+                on_predicate_error="fail-fast",
+                return_output=True,
+            )
         if seen["count"] < probe.ordinal:
             raise InvalidArgumentError(
                 f"Captum site probe {probe.label!r} (site_key {probe.site_key!r}, call "
