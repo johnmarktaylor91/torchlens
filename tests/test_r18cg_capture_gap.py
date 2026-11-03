@@ -161,7 +161,7 @@ def test_sparse_conversion_captured_with_provenance(method: str) -> None:
     (op,) = converted
     relu = [candidate for candidate in log.ops if candidate.func_name == "relu"]
     assert len(relu) == 1
-    assert list(op.parents) == [relu[0].label]
+    assert tuple(op.parents) == (relu[0].layer_label,)
     assert op.children, f"{method} output has no recorded consumer"
 
 
