@@ -19,7 +19,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _errors | 23 | 0 |
 | _extraction | 8 | 0 |
 | _io | 17 | 0 |
-| _ir | 8 | 0 |
+| _ir | 11 | 0 |
 | _merged | 12 | 0 |
 | _mutate_warnings | 1 | 0 |
 | _observability | 24 | 0 |
@@ -37,14 +37,14 @@ and how many lack a runnable `Examples` section. Regenerate with
 | _state | 1 | 0 |
 | _trace_slice | 1 | 0 |
 | _training_validation | 1 | 0 |
-| _user_funcs | 4 | 0 |
+| _user_funcs | 5 | 0 |
 | _user_public_impls | 3 | 0 |
 | _utils | 1 | 0 |
 | _visualization | 8 | 0 |
 | _vocab | 2 | 0 |
 | agent | 11 | 0 |
 | appliances | 2 | 0 |
-| attribution | 46 | 0 |
+| attribution | 45 | 0 |
 | backends | 22 | 0 |
 | bridge | 53 | 0 |
 | bundle | 3 | 0 |
@@ -66,10 +66,10 @@ and how many lack a runnable `Examples` section. Regenerate with
 | mechinterp | 48 | 0 |
 | neuro | 6 | 0 |
 | observers | 6 | 0 |
-| options | 7 | 0 |
+| options | 6 | 0 |
 | preprocessing | 16 | 0 |
 | receptive_field | 32 | 0 |
-| recording | 21 | 0 |
+| recording | 19 | 0 |
 | repgeom | 20 | 0 |
 | report | 45 | 0 |
 | stats | 27 | 0 |
@@ -78,7 +78,7 @@ and how many lack a runnable `Examples` section. Regenerate with
 | transformer | 39 | 0 |
 | transforms | 37 | 0 |
 | validation | 12 | 0 |
-| viz | 11 | 0 |
-| **total** | **1043** | **0** |
+| viz | 12 | 0 |
+| **total** | **1044** | **0** |
 
-Public callable members of those classes (methods and properties): 1416.
+Public callable members of those classes (methods and properties): 1409.
