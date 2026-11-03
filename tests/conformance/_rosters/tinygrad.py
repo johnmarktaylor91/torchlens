@@ -11,9 +11,9 @@ Two groups (SPEC 4.4):
   against the definition; ``expected_intermediates`` is computed here with
   NumPy only (FORKS F-N) and keyed by the recorded op kind.
 - ``random_init``: ``tinygrad.nn`` Linear, Conv2d and LayerNorm with default
-  init. Until realize-once capture lands the backend refuses them typed
-  (``rng_state_in_graph``, FORKS F-K) and the scorecard shows the cells as
-  unsupported.
+  init. Realize-once capture realizes their lazy random weights in the
+  capture's single evaluation, so the rows capture and their RNG state after
+  capture equals one eager forward.
 - ``ecosystem``: two pinned pretrained families vendored from tinygrad's own
   ``examples/`` definitions (FORKS F-I, no new dependency). They run only
   under ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``: :func:`runner_rows` leaves
@@ -341,10 +341,15 @@ def _intermediates_chain() -> dict[str, Any]:
 
 
 def _intermediates_multi() -> dict[str, Any]:
-    """The multi_output row: the sum (reduced, then reshaped to a scalar) and the scaled copy."""
+    """The multi_output row: the sum (reduced, then reshaped to a scalar) and the scaled copy.
+
+    The second reshape is the constant ``2.0`` reshaped to ``(1, 1)`` before it
+    broadcasts against the input.
+    """
 
     total = np.asarray(_INPUT.sum(), dtype=np.float32)
-    return {"reduce": total.reshape(1, 1), "reshape": total, "mul": _INPUT * 2.0}
+    two = np.full((1, 1), 2.0, dtype=np.float32)
+    return {"reduce": total.reshape(1, 1), "reshape": [total, two], "mul": _INPUT * 2.0}
 
 
 def _intermediates_loop3() -> dict[str, Any]:
@@ -370,13 +375,25 @@ def _intermediates_norm_softmax() -> dict[str, Any]:
 
 
 def _intermediates_reshape_transpose() -> dict[str, Any]:
-    """The reshape_transpose row: the reshape, the transpose and the matmul with ones."""
+    """The reshape_transpose row: the reshape, the transpose and the matmul with ones.
+
+    ``Tensor.ones(4, 1)`` is the constant ``1.0`` reshaped to ``(1, 1)`` and
+    expanded; the matmul reshapes it to ``(1, 4, 1)`` and transposes it to
+    ``(1, 1, 4)`` against the ``(2, 1, 4)`` left operand.
+    """
 
     transposed = _INPUT.reshape(4, 2).T
-    output = transposed @ np.ones((4, 1), dtype=np.float32)
+    ones = np.ones((4, 1), dtype=np.float32)
+    output = transposed @ ones
     return {
-        "reshape": [_INPUT.reshape(4, 2), transposed.reshape(2, 1, 4), output],
-        "permute": transposed,
+        "reshape": [
+            _INPUT.reshape(4, 2),
+            transposed.reshape(2, 1, 4),
+            np.ones((1, 1), dtype=np.float32),
+            ones.reshape(1, 4, 1),
+            output,
+        ],
+        "permute": [transposed, ones.reshape(1, 4, 1).transpose(0, 2, 1)],
         "reduce": output.reshape(2, 1, 1),
     }
 
@@ -498,7 +515,7 @@ def config_built_rows() -> tuple[RosterModel, ...]:
 
 
 def random_init_rows() -> tuple[RosterModel, ...]:
-    """The random-init rows: default-init Linear, Conv2d and LayerNorm (refused until realize-once)."""
+    """The random-init rows: default-init Linear, Conv2d and LayerNorm (realized once at capture)."""
 
     return (
         _row("nn_linear_random_init", _build_random_linear, random_init=True),

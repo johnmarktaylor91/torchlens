@@ -1997,9 +1997,11 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   torch, tf, jax, paddle) or deferred until an evaluation (`"lazy"`: mlx, tinygrad). Lazy backends
   follow the realize-once rule: the traced forward runs once to its outputs, then
   `realize_once(values)` evaluates every recorded value in one framework evaluation before any
-  payload is read, so random-number consumption equals one eager forward. A backend that cannot do
-  this yet refuses graphs holding lazy random-number state with `rng_state_in_graph`. On eager
-  backends `realize_once` is a no-op.
+  payload is read, so random-number consumption equals one eager forward. Random state created
+  before the forward (a default-initialized weight) is realized in that same evaluation and
+  recorded as the value it produced; random numbers drawn inside the traced forward refuse with
+  `rng_state_in_graph`, because replay would draw them again. On eager backends `realize_once` is
+  a no-op.
 
 **tl.backends.FrameworkRequirement**
 : What a backend needs from its framework, stated once (frozen dataclass): `distributions`
@@ -2027,7 +2029,7 @@ backends guide (`docs/backends.md`) carries the maturity table and links one pag
   | `runtime_missing`, `runtime_version_unsupported` | the framework is not importable, or its version is outside the supported range |
   | `foreign_tensor_input` | an input leaf belongs to another framework |
   | `constant_unrealizable` | a closure or literal constant has no readable buffer; the message names the constant op |
-  | `rng_state_in_graph` | the forward graph carries lazy random-number state that a per-op evaluation would re-evaluate, on a backend without realize-once capture |
+  | `rng_state_in_graph` | the traced forward draws random numbers itself (`Tensor.rand`, dropout) on a lazy backend, so replay would draw different values; random state created before the forward is captured |
   | `unwrapped_op_in_capture` | a wrapper backend met an output or intermediate with no captured producer and the caller asked for a refusal; without that request the trace is marked `capture_verified=False` with this code as `provenance.verification_reason` and a warning |
   | `runtime_mode_unsupported` | Paddle runs outside dygraph mode, or in PIR mode |
   | `inplace_op_unsupported` | an in-place or global-state Paddle op runs inside the forward |

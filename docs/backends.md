@@ -46,8 +46,9 @@ Shared rules every backend follows:
   `constant_unrealizable`.
 - **Realize-once.** On lazy frameworks the forward runs once to its outputs and every recorded
   value is evaluated in one framework evaluation before any payload is read, so random-number
-  consumption equals one eager forward. A lazy backend that cannot do this yet refuses graphs that
-  carry lazy random-number state with `rng_state_in_graph`.
+  consumption equals one eager forward. Random state created before the forward (a
+  default-initialized weight) is realized in that evaluation; random numbers drawn inside the
+  traced forward refuse with `rng_state_in_graph`, because replay would draw them again.
 - **Validation reasons.** `validate` returns a `ValidationStatus` whose per-op decisions name a
   reason from `tl.backends.VALIDATION_REASONS`; a failure names the first offending op.
 

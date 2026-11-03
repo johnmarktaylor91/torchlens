@@ -400,32 +400,15 @@ def _assert_named_reds(
     assert "conformant" not in card.to_json().lower()
 
 
-#: tinygrad's red cells on its fifteen rows. The JAX after-load cause on the
-#: twelve rows that capture, plus the three random-init rows: a ``tinygrad.nn``
-#: layer's default init leaves lazy RNG state in the forward's graph, which the
-#: backend refuses typed (``rng_state_in_graph``) until realize-once capture
-#: lands. Their capture and round-trip cells are ``unsupported`` and every later
-#: cell is ``not_run``; those cells sit in C1, so the ladder stops at C0.
+#: tinygrad's red cells on its fifteen rows: the JAX after-load cause on every
+#: row. The three random-init rows capture too: realize-once capture draws a
+#: ``tinygrad.nn`` layer's lazy random weights in the same single realization
+#: as the forward, so they pass every C0 and C1 cell and the pack earns C1.
 _TINYGRAD_PROBE_ROWS: tuple[str, ...] = ("matmul_relu_function", "mlp_module")
 _TINYGRAD_RANDOM_INIT_ROWS: tuple[str, ...] = (
     "nn_linear_random_init",
     "nn_conv2d_random_init",
     "nn_layernorm_random_init",
-)
-_REFUSED_CAPTURE_CELLS: tuple[str, ...] = ("c1_capture_completes", "c2_roundtrip_completes")
-_UNREACHED_AFTER_REFUSAL: tuple[str, ...] = (
-    "c1_deterministic_repeat",
-    "c1_graph_integrity",
-    "c1_no_silent_gap",
-    "c1_reference_parity",
-    "c1_rng_consumed_once",
-    "c1_shape_metadata_matches_payload",
-    "c1_validation_names_reason",
-    "c1_validation_passes",
-    "c2_payload_values_equal",
-    "c2_reload_is_distinct",
-    "c2_structure_equal",
-    "c2_validation_after_load",
 )
 
 
@@ -434,14 +417,12 @@ def _tinygrad_known_red_cells() -> dict[tuple[str, str], _RedCause]:
 
     from tests.conformance._rosters import tinygrad as tinygrad_roster
 
-    captured = _TINYGRAD_PROBE_ROWS + tuple(entry[0] for entry in tinygrad_roster._CONFIG_BUILT)
-    refused: dict[tuple[str, str], _RedCause] = {}
-    for family in _TINYGRAD_RANDOM_INIT_ROWS:
-        for case_id in _REFUSED_CAPTURE_CELLS:
-            refused[(case_id, family)] = ("unsupported", "rng_state_in_graph")
-        for case_id in _UNREACHED_AFTER_REFUSAL:
-            refused[(case_id, family)] = ("not_run", "not reached")
-    return _known_red_cells({}, captured, refused)
+    captured = (
+        _TINYGRAD_PROBE_ROWS
+        + tuple(entry[0] for entry in tinygrad_roster._CONFIG_BUILT)
+        + _TINYGRAD_RANDOM_INIT_ROWS
+    )
+    return _known_red_cells({}, captured, {})
 
 
 #: JAX's red cells on its packet roster (switch off). One cause, not a JAX
@@ -559,8 +540,8 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
 @pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_tinygrad
-def test_tinygrad_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
-    """The tinygrad pack on its fifteen-row roster earns C0; every red cell is named.
+def test_tinygrad_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The tinygrad pack on its fifteen-row roster earns C1; every red cell is named.
 
     A new red or a fixed one both fail here; the fix removes its entry (and
     rewrites the shipped scorecard) in the same change.
@@ -570,7 +551,7 @@ def test_tinygrad_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None
 
     pytest.importorskip("tinygrad")
     pack = ("tinygrad", metadata.version("tinygrad"))
-    _assert_named_reds(pack, tmp_path, _tinygrad_known_red_cells(), 15, "C0")
+    _assert_named_reds(pack, tmp_path, _tinygrad_known_red_cells(), 15, "C1")
 
 
 @pytest.mark.rare

@@ -39,6 +39,14 @@ def _unique_uops(outputs: Sequence[Any]) -> tuple[Any, ...]:
 def _is_materializable_uop(uop: Any) -> bool:
     """Return whether a UOp can be saved as a tinygrad Tensor payload.
 
+    A structural test: nothing is realized here (realize-once capture takes
+    every payload from one later evaluation). The UOp must give a tinygrad
+    Tensor with a shape and a dtype that has a host format. The host-only
+    ``NPY`` device holds numpy-backed buffers and has no renderer: its buffers
+    are readable, but a view over one (a ``RESHAPE`` before the copy to the
+    compute device) has no value of its own until copied, so it is not a
+    payload.
+
     Parameters
     ----------
     uop
@@ -55,12 +63,12 @@ def _is_materializable_uop(uop: Any) -> bool:
 
         tensor = Tensor(uop)
         tuple(tensor.shape)
-        if getattr(tensor.dtype.base, "fmt", None) is None:
-            return False
-        tensor.tolist()
+        device = str(tensor.device)
     except Exception:
         return False
-    return True
+    if getattr(tensor.dtype.base, "fmt", None) is None:
+        return False
+    return not device.startswith("NPY") or _uop_name(uop) == "BUFFER"
 
 
 def _uop_name(uop: Any) -> str:
@@ -81,8 +89,39 @@ def _uop_name(uop: Any) -> str:
     return str(getattr(op, "name", op)).removeprefix("Ops.")
 
 
+def _op_func_name(observed_names: Sequence[str], op_name: str) -> str:
+    """The function name an op is recorded under.
+
+    The observer reports the callable tinygrad passed to ``Tensor._apply_uop``.
+    tinygrad routes most ops through internal helpers (``_mop`` for movement
+    ops, ``_rop`` for reductions, a ``lambda`` for elementwise math), and those
+    names do not say what the op computes. The last observed name that is not
+    such a helper is used; otherwise the UOp's op name (``add``, ``reshape``,
+    ``reduce``).
+
+    Parameters
+    ----------
+    observed_names
+        Names the observer recorded for the UOp, in call order.
+    op_name
+        The UOp's op name (:func:`_uop_name`).
+
+    Returns
+    -------
+    str
+        The recorded function name.
+    """
+
+    informative = [name for name in observed_names if not name.startswith(("_", "<"))]
+    return informative[-1] if informative else op_name.lower()
+
+
 def _data_flow_uops(
-    uops: Sequence[Any], outputs: Sequence[Any], source_ids: Collection[int]
+    uops: Sequence[Any],
+    outputs: Sequence[Any],
+    source_ids: Collection[int],
+    *,
+    boundary_ids: Collection[int] = frozenset(),
 ) -> tuple[Any, ...]:
     """Return the UOps whose values reach an output as data, in ``uops`` order.
 
@@ -103,6 +142,10 @@ def _data_flow_uops(
         tinygrad output tensors.
     source_ids
         ``id()`` of every source UOp (the capture's inputs).
+    boundary_ids
+        ``id()`` of UOps recorded whole: kept when reached, but the walk does
+        not continue into what produced them (a pre-forward random weight's
+        generator subgraph, see ``_realize_once``).
 
     Returns
     -------
@@ -123,5 +166,6 @@ def _data_flow_uops(
         if not materializable[key]:
             continue
         kept.add(key)
-        stack.extend(getattr(uop, "src", ()) or ())
+        if key not in boundary_ids:
+            stack.extend(getattr(uop, "src", ()) or ())
     return tuple(uop for uop in uops if id(uop) in kept)

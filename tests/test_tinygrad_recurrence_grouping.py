@@ -69,7 +69,7 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     # The tinygrad graph is reconstructed from the final UOp DAG: matmul
     # decomposes to mul + reduce (and relu to cmplt/where), so the repeated
     # loop body shows up as 2-pass layers on those decomposed ops.
-    mul_ops = _grouped_ops(trace, "<lambda>")
+    mul_ops = _grouped_ops(trace, "mul")
     where_ops = _grouped_ops(trace, "where")
 
     assert trace.options.recurrence_detection is True
