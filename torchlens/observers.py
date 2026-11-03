@@ -39,6 +39,19 @@ class TapRecord:
         Gradient payload kind for backward records.
     backward_call_index:
         One-based backward call index for backward records.
+
+    Examples
+    --------
+    >>> tap = tl.observers.tap(tl.func("relu"))
+    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> trace = tl.trace(model, x, capture=hooks)
+    >>> record = tap.records[0]
+    >>> type(record).__name__
+    'TapRecord'
+    >>> record.signal
+    'forward'
+    >>> tuple(record.value.shape)
+    (1, 4, 8, 8)
     """
 
     value: torch.Tensor
@@ -87,6 +100,19 @@ class TapObserver:
         Selector-like site where this tap should be registered.
     signal:
         Signal on which this tap records; ``"both"`` records every fire.
+
+    Examples
+    --------
+    >>> tap = tl.observers.tap(tl.func("relu"))
+    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> trace = tl.trace(model, x, capture=hooks)
+    >>> type(tap).__name__
+    'TapObserver'
+    >>> len(tap.values())
+    1
+    >>> tap.clear()
+    >>> len(tap.records)
+    0
     """
 
     site: Any
@@ -390,6 +416,16 @@ def tap(
     -------
     TapObserver
         Callable observer with ``records`` and ``values()`` accessors.
+
+    Examples
+    --------
+    >>> tap = tl.observers.tap(tl.func("relu"))
+    >>> hooks = tl.options.CaptureOptions(replayable=True, hooks=tap)
+    >>> trace = tl.trace(model, x, capture=hooks)
+    >>> tap.signal
+    'both'
+    >>> tuple(tap.values()[0].shape)
+    (1, 4, 8, 8)
     """
 
     if signal not in {"forward", "backward", "both"}:
@@ -417,6 +453,17 @@ def span(
     ------
     dict[str, Any]
         Mutable span metadata record.
+
+    Examples
+    --------
+    >>> with tl.observers.span("phase") as record:
+    ...     trace = tl.trace(model, x)
+    >>> record["name"]
+    'phase'
+    >>> record["end"] is not None
+    True
+    >>> trace.provenance.observer_spans[0]["name"]
+    'phase'
     """
 
     if signal not in {"forward", "backward", "both"}:
@@ -451,6 +498,17 @@ def active_span_records() -> list[dict[str, Any]]:
     -------
     list[dict[str, Any]]
         Active span records.
+
+    Examples
+    --------
+    >>> tl.observers.active_span_records()
+    []
+    >>> with tl.observers.span("phase"):
+    ...     names = [record["name"] for record in tl.observers.active_span_records()]
+    >>> names
+    ['phase']
+    >>> tl.observers.active_span_records()
+    []
     """
 
     return list(_state._active_record_spans.get())
@@ -477,6 +535,16 @@ def log_value(name: str, value: Any) -> None:
     ------
     RuntimeError
         If no TorchLens capture is active.
+
+    Examples
+    --------
+    >>> class Logging(nn.Module):
+    ...     def forward(self, x):
+    ...         tl.observers.log_value("mean_abs", 1.5)
+    ...         return torch.relu(x)
+    >>> trace = tl.trace(Logging(), x)
+    >>> trace.annotations["logged_values"]["mean_abs"] == 1.5
+    True
     """
 
     trace = _state._active_trace
