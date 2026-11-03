@@ -125,7 +125,7 @@ Two cross-backend honesty notes apply to every preview row above:
   hop distances plus ancestor/descendant sets) defaults to `True` on every backend — the same
   torch `CaptureOptions` default — and `=False` disables the flood on every backend, torch and all
   five previews alike.
-- **Preview replay validation scope.** Preview `validation_replay` replays each CAPTURED op from
+- **Preview replay validation scope.** Preview replay validation (the `has_validation_replay` capability) replays each CAPTURED op from
   its declared parents' saved payloads and perturbation-checks the dependency; unlike torch's
   validator it does not independently re-run the model against a ground-truth output, so an op the
   preview failed to wrap is outside the replay denominator entirely. Calls with no perturbable
