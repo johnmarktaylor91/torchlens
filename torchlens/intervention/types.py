@@ -109,11 +109,25 @@ class Edit:
 
         Raises
         ------
+        NonExecutableSpecError
+            If the spec is an audit-only placeholder (``opaque_audit``) with no
+            runtime factory, such as a saved user callable loaded back.
         TypeError
-            If the spec does not carry a runtime factory.
+            If any other spec does not carry a runtime factory.
         """
 
         if self.factory is None:
+            if self.portability == "opaque_audit":
+                from .errors import _refuse_non_executable
+
+                _refuse_non_executable(
+                    f"Edit {self.name!r} is an audit-only placeholder (a callable that was "
+                    "not saved, or an argument that cannot be rebuilt) and cannot be run.",
+                    remedy=(
+                        "rebuild the edit with its callable in this session and attach it "
+                        "again, for example tl.trace(model, x, intervene=...)"
+                    ),
+                )
             raise TypeError(f"Edit {self.name!r} has no hook factory")
         return self.factory()
 

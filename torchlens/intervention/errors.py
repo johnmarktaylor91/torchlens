@@ -1,6 +1,6 @@
 """Error ownership for TorchLens intervention APIs."""
 
-from typing import Literal
+from typing import Literal, NoReturn
 
 from .._errors import KeywordConflictError, SelectionError
 from .._io.format_errors import OpaqueCallableError as OpaqueCallableError
@@ -244,6 +244,29 @@ class NonExecutableSpecError(ConfigurationError, RuntimeError):
     """
 
     severity = "fatal"
+
+
+def _refuse_non_executable(message: str, *, remedy: str | None = None) -> NoReturn:
+    """Raise :class:`NonExecutableSpecError` for an audit-only edit that was fired.
+
+    The one raise site of the refusal: the opaque-argument helper factory and
+    an audit-only placeholder ``Edit`` both refuse through it.
+
+    Parameters
+    ----------
+    message:
+        Human-readable refusal message.
+    remedy:
+        Optional remedy carried as ``fields["remedy"]``.
+
+    Raises
+    ------
+    NonExecutableSpecError
+        Always.
+    """
+
+    payload = {} if remedy is None else {"remedy": remedy}
+    raise NonExecutableSpecError(message, **payload)
 
 
 class UnserializableDictKeyError(ConfigurationError, TypeError):
