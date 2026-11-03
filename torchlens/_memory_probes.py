@@ -10,6 +10,8 @@ import os
 
 import torch
 
+from ._utils._mps_memory import mps_headroom_bytes
+
 
 def _available_host_bytes() -> int | None:
     """Return available host RAM in bytes, or ``None`` when unmeasurable.
@@ -60,8 +62,6 @@ def _available_mps_bytes() -> int | None:
         host's available RAM because Apple silicon shares one unified memory.
         ``None`` on a torch without the queries or when a query raises.
     """
-
-    from ._utils._mps_memory import mps_headroom_bytes
 
     headroom = mps_headroom_bytes()
     if headroom is None:

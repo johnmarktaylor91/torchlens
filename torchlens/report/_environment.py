@@ -24,6 +24,7 @@ from .._constants import get_orig_torch_funcs
 from .._utils import _subprocess as _sp, _torch_compat as _tc
 from .._utils._torch_compat import OPTIONAL_CAPABILITY_FLAGS, get_torch_capability_snapshot
 from .._utils.introspection import nested_getattr
+from .._visualization._cairosvg import cairosvg_unavailable_reason, get_cairosvg_support
 
 
 @dataclass(frozen=True)
@@ -264,8 +265,6 @@ def _probe_cairosvg() -> _EnvironmentCheck:
         reason naming the missing package or cairo library (SVG output never
         needs it, so absence is optional, not broken).
     """
-
-    from .._visualization._cairosvg import cairosvg_unavailable_reason, get_cairosvg_support
 
     if get_cairosvg_support(force_probe=True):
         return _EnvironmentCheck("cairosvg", "PASS", "HAS_CAIROSVG=True")
