@@ -92,6 +92,9 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
 #: wave-three pages the unmarked family charged 15.8 s against its 13.6 s
 #: aggregate budget; its two largest pages, the tuned-lens training notebook
 #: (7.1 s) and the Prisma CLIP SAE page (2.0 s), are listed for that reason.
+#: The probe-by-layer notebook measured 4.2 and 4.5 s run alone on one thread
+#: (at the boundary, and past the unmarked family's aggregate budget); the
+#: two-model CKA/RSA notebook measured 12.5 and 16.9 s.
 HEAVY_PAGES: frozenset[str] = frozenset(
     {
         "docs/recipes/lrp_transformers_lxt.md",
@@ -102,6 +105,8 @@ HEAVY_PAGES: frozenset[str] = frozenset(
         "docs/recipes/feature_visualisation.md",
         "examples/recipes/train_tuned_lens_recipe.ipynb",
         "docs/recipes/prisma_clip_sae.md",
+        "examples/recipes/probe_accuracy_by_layer_recipe.ipynb",
+        "examples/recipes/cka_rsa_two_models_recipe.ipynb",
     }
 )
 
