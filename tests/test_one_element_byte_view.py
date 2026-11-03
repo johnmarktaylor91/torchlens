@@ -74,5 +74,5 @@ def test_fork_push_through_a_one_element_strided_site(tail_trace: tl.Trace) -> N
     relu = next(op.label for op in tail_trace.ops if op.func_name == "relu")
     fork = tail_trace.fork()
     fork.do(tl.label(relu), tl.scale(0.5))
-    output = next(op.label for op in tail_trace.ops if op.label.startswith("output"))
-    assert torch.equal(fork[output].out, tail_trace[output].out * 0.5)
+    tail = tail_trace.ops[-1].label
+    assert torch.equal(fork[tail].out, tail_trace[tail].out * 0.5)
