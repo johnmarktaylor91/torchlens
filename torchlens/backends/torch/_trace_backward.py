@@ -89,9 +89,9 @@ def _refuse_stats_capture(trace: Any, purpose: str) -> None:
 def _require_live_replay(trace: Any) -> None:
     """Refuse a live replay that the trace's capture cannot drive.
 
-    The gates ``Trace.push`` runs before touching the graph, for replay doors
-    that bypass it: a halted or failed capture, a structure-only capture, and
-    a ``save="stats"`` trace.
+    The gates every push runs before touching the graph, shared by ``Trace.push``
+    and the ``do()`` push that starts only from its own hooks: a halted or failed
+    capture, a structure-only capture, and a ``save="stats"`` trace.
     """
 
     require_capture_capability(trace, "live_replay")
