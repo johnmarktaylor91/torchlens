@@ -13,7 +13,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens.options import CaptureOptions
-from torchlens.validation import validate_forward_pass
+from torchlens.validation import last_validation_failure, validate_forward_pass
 
 
 def _capture(model: nn.Module, x: torch.Tensor, seed: int = 0):
@@ -37,3 +37,25 @@ def _quiet_validate(model: nn.Module, x) -> bool:
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         return bool(validate_forward_pass(model, x))
+
+
+def _assert_degenerate_forward(model: nn.Module, x: torch.Tensor) -> None:
+    """Assert validation fails as degenerate: every final output element is non-finite.
+
+    Used where the NaN or inf is intrinsic to the model: no affine input change
+    ``c + s * x`` (c in [-25, 25], s in {1, 0.1, 0.01}) makes the output finite.
+    """
+
+    assert not validate_forward_pass(model, x)
+    failure = last_validation_failure()
+    assert failure is not None and failure.check_name == "degenerate_forward", failure
+
+
+def _with_identity_weights(model, fc1_bias: float, fc2_bias: float):
+    """Pin ``fc1`` and ``fc2`` to the identity with constant biases (a finite control)."""
+
+    with torch.no_grad():
+        for layer, bias in ((model.fc1, fc1_bias), (model.fc2, fc2_bias)):
+            layer.weight.copy_(torch.eye(layer.weight.shape[0]))
+            layer.bias.fill_(bias)
+    return model

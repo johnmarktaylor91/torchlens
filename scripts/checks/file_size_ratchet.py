@@ -119,7 +119,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # 5350 -> 5200 (2026-10-05 rung-1 ratchet settle): the completeness
     # backstop census split to validation/_completeness_backstop.py; re-keyed
     # down to the next 50-line step above the measured 5188 (R43-F2).
-    "torchlens/validation/core.py": 4750,
+    "torchlens/validation/core.py": 4200,
     # 5250 -> 5100 (2026-08-27 C07 fix cycle): the user-transform apply +
     # validation helpers split to _op_transforms.py under R43 (the v9
     # injection_provenance rows nudged op.py over); re-keyed down to the
@@ -351,7 +351,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # next 50-line step above the merged measurement.
     # 3500 -> 3400 (2026-10-29 tensordict prewrap): the storage-overlap geometry
     # moved to _storage_overlap.py (measured 3389); next 50-line step above it.
-    "torchlens/backends/torch/wrappers.py": 3000,
+    "torchlens/backends/torch/wrappers.py": 2900,
     # 3300 -> 3301 (2026-08-27 C01 item 5): same relocation import re-sort (+1).
     # 3301 -> 3400 (2026-10-01 ci-fix ratchet settle): "give the preview
     # backends torch's label convention" (8e5f966d8) landed the same
