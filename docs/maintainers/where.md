@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1377 modules, 633738 lines, 0 modules without a docstring.
+84 packages, 1377 modules, 633739 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.mechinterp` | torchlens.mechinterp -- the mech-interp analysis kit (mikit memo). | 26 | 8482 |
 | `torchlens.neuro` | torchlens.neuro: the treaty desk between network and brain (neuro memo). | 6 | 3841 |
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
-| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12348 |
+| `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12349 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
 | `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 17 | 5784 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
@@ -1766,7 +1766,7 @@ Preprocessing provenance + verification (tvscope lane; NeuroAI audience). (8 mod
 
 ### `torchlens.receptive_field`
 
-Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12348 lines)
+Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12349 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1790,7 +1790,7 @@ Lazy public namespace for TorchLens receptive-field analysis. (22 modules, 12348
 | `_trace_tables` | Trace receptive-field functions reached from the records through ''_data_classes._doors.receptive_field''. | 65 |
 | `_types` | Public immutable data types for receptive-field analysis. | 746 |
 | `_validation` | Exact gradient-inside-geometric receptive-field validation. | 1400 |
-| `_view` | Entity-level receptive-field query view. | 763 |
+| `_view` | Entity-level receptive-field query view. | 764 |
 | `_viz` | PIL and graph visualization helpers for receptive-field queries. | 579 |
 
 ### `torchlens.receptive_field.rules`

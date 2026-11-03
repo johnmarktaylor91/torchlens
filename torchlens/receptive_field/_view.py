@@ -70,32 +70,35 @@ def _optional_callable(module_name: str, function_name: str, feature: str) -> An
         ) from exc
 
 
-def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
-    """Replace module addresses and module records in ``within`` by their output ops.
+def _module_regions(trace: Any, item: object) -> list[object]:
+    """Return the regions one ``within`` item stands for.
 
     A string that names no op, layer or io role but is a module address (or a
     module pass label) stands for that module's output ops, read through
-    ``trace.modules``; ``Module`` and ``ModuleCall`` records are read the same way.
-    Every other region passes through unchanged.
+    ``trace.modules``; ``Module`` and ``ModuleCall`` records are read the same
+    way. Every other region passes through unchanged.
     """
+
+    record = item
+    if isinstance(item, str):
+        if _find_act_ops(trace, item) or item not in trace.modules:
+            return [item]
+        record = trace.modules[item]
+    if hasattr(record, "__selection__"):
+        return [item]
+    if hasattr(record, "calls"):
+        return [label for call in record.calls.values() for label in call.output_ops]
+    output_ops = getattr(record, "output_ops", None)
+    return [item] if output_ops is None else list(output_ops)
+
+
+def _module_outputs(trace: Any, within: object | None) -> list[object] | None:
+    """Replace module addresses and module records in ``within`` by their output ops."""
 
     if within is None:
         return None
     items = list(within) if isinstance(within, (list, tuple, set, frozenset)) else [within]
-    regions: list[object] = []
-    for item in items:
-        record = item
-        if isinstance(item, str) and not _find_act_ops(trace, item) and item in trace.modules:
-            record = trace.modules[item]
-        if hasattr(record, "__selection__") or isinstance(record, str):
-            regions.append(item)
-        elif hasattr(record, "calls"):
-            regions.extend(label for call in record.calls.values() for label in call.output_ops)
-        elif hasattr(record, "output_ops"):
-            regions.extend(record.output_ops)
-        else:
-            regions.append(item)
-    return regions
+    return [region for item in items for region in _module_regions(trace, item)]
 
 
 class ReceptiveFieldView:
@@ -437,10 +440,9 @@ class ReceptiveFieldView:
     ) -> Selection:
         """Return the field of a SET of this operation's units as a selection.
 
-        The many-unit form beside :meth:`at`. A projective view answers "which
-        units can these units reach"; a receptive view answers "which units can
-        reach these units". The answer is the union of the units' fields at
-        every site of ``within``.
+        The many-unit form beside :meth:`at`: the union of the units' fields
+        (projective: what they reach; receptive: what reaches them) at every
+        site of ``within``.
 
         Parameters
         ----------
@@ -460,15 +462,14 @@ class ReceptiveFieldView:
             ``"gradient"`` (one autograd probe per unit and site; needs a trace
             captured with ``backward_ready=True`` and ``save_mode="reference"``).
         probe_budget:
-            Most autograd probes (units times sites) the gradient method may run.
+            Most autograd probes (units times sites) ``"gradient"`` may run.
 
         Returns
         -------
         Selection
-            A selection bound to this trace, one entry per site of ``within``,
-            usable in ``trace.do(...)``, ``trace.subgraph(...)`` and ``&``,
-            ``|``, ``-``, ``~``. Each entry's ``provenance`` states ``relation``,
-            ``basis`` and ``field_status``.
+            Bound to this trace, one entry per ``within`` site, usable in
+            ``trace.do``, ``trace.subgraph`` and ``& | - ~``; each entry's
+            ``provenance`` states ``relation``, ``basis`` and ``field_status``.
 
         Raises
         ------
