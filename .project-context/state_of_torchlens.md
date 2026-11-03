@@ -317,7 +317,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where are bridge integrations? | `torchlens/bridge/` |
 | Where is compat reporting? | `torchlens/compat/_report.py` |
 | Where are observer taps/spans? | `torchlens/observers.py` |
-| Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `pyproject.toml` |
+| Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `scripts/check_release_major.py`, `pyproject.toml` |
 
 ## Pointers To Deeper Docs
 - Root `AGENTS.md` for agent behavior and common workflows (`CLAUDE.md` beside each

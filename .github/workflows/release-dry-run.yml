@@ -18,6 +18,7 @@ on:
       - ".github/workflows/release-dry-run.yml"
       - "pyproject.toml"
       - "scripts/no_major_parser.py"
+      - "scripts/check_release_major.py"
   # Work branches named ci/** run the full workflow on push (and any branch
   # on manual dispatch) so GitHub's own runners test a branch before main.
   push:
@@ -28,6 +29,7 @@ on:
       - ".github/workflows/release-dry-run.yml"
       - "pyproject.toml"
       - "scripts/no_major_parser.py"
+      - "scripts/check_release_major.py"
   workflow_dispatch:
 
 # Default-deny token scope (grind r3, R61/b2:D1): this job only reads the
@@ -109,11 +111,5 @@ jobs:
             exit 0
           fi
 
-          current="$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml', 'rb'))['project']['version'])")"
-          current_major="${current%%.*}"
-          computed_major="${computed%%.*}"
-          echo "current version: $current ; computed next version: $computed"
-          if [ "$computed_major" != "$current_major" ]; then
-            echo "computed next version $computed is a MAJOR bump over $current -- refusing"
-            exit 1
-          fi
+          # Same check the release job runs before `semantic-release version`.
+          python scripts/check_release_major.py --next "$computed"
