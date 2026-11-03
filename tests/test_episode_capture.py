@@ -410,6 +410,7 @@ def test_tampered_episode_header_refuses_typed(header_key, header_value, code):
     assert excinfo.value.fields["code"] == code
 
 
+@pytest.mark.smoke
 def test_monotone_prefix_tamper_quarantines_fail_closed():
     log = _capture_episode(n_steps=3)
     payload = dict(log.annotations["episode"])

@@ -453,6 +453,7 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     assert _buffer_read_addresses(cooked) == _buffer_read_addresses(exhaustive)
 
 
+@pytest.mark.smoke
 def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     """A halted record().to_trace() yields a VALID halted Trace matching tl.trace().
 

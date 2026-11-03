@@ -283,7 +283,6 @@ _REFUSAL_SWEEP = [
 ]
 
 
-@pytest.mark.smoke_cells("test_numeric_literal_bomb_refused_op_agnostically[one_hot]")
 @pytest.mark.parametrize(
     "name, factory, x, kind, sentinel, replacement",
     _REFUSAL_SWEEP,

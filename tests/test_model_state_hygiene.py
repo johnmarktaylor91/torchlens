@@ -328,9 +328,6 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 }
 
 
-@pytest.mark.smoke_cells(
-    "test_entry_point_returns_the_model_unchanged[record_intervene-keyboard_interrupt]"
-)
 @pytest.mark.parametrize("failure", list(_FAILURES))
 @pytest.mark.parametrize("door", list(_DOORS))
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:

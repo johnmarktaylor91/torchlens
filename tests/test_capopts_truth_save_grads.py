@@ -111,7 +111,6 @@ def test_save_grads_callable_non_bool_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "predicate_return_invalid"
 
 
-@pytest.mark.smoke
 @pytest.mark.real_model
 def test_save_grads_selector_gpt2_narrow_retention() -> None:
     """R0 realism row: a narrowing selector on the REAL GPT-2 class."""

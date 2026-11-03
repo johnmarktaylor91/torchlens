@@ -123,7 +123,6 @@ def test_top_changed_completes_across_live_edit():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_diff_report_insertion_matrix():
     """Touched cohort -> unresolved; untouched -> zero; statuses stay distinct."""
 

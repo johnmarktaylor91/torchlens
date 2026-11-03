@@ -240,7 +240,6 @@ def test_deeply_nested_merged_manifest_refuses_typed(tmp_path: Path) -> None:
     assert caught.value.fields["code"] == MergedErrorCode.MERGED_SCHEMA_INVALID.value
 
 
-@pytest.mark.smoke
 def test_deeply_nested_merged_descriptor_refuses_typed(tmp_path: Path) -> None:
     """An over-nested descriptor refuses typed AFTER its checksum verifies."""
 

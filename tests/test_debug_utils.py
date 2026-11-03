@@ -98,7 +98,6 @@ def test_find_nan_live_reports_op_module_and_test_location() -> None:
     assert "FindNanReport(found=True" in repr(result)
 
 
-@pytest.mark.smoke
 def test_find_nan_live_reports_nearest_user_function_location() -> None:
     """Live find_nan reports the function containing the offending operation."""
 

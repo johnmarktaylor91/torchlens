@@ -92,6 +92,7 @@ def _assert_no_raw_spelling(text: str) -> None:
     assert not re.search(r"\w+_\d+_raw\b", text), text
 
 
+@pytest.mark.smoke
 def test_one_label_across_every_nan_surface() -> None:
     """find_nan, bisect_nan, error fields, message, and outcome agree on ONE name."""
 

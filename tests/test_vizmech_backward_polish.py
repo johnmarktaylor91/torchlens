@@ -18,6 +18,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 
@@ -83,6 +84,7 @@ def test_key_suppressed_with_show_legend_false(tmp_path: Path) -> None:
     assert "backward key" not in dot
 
 
+@pytest.mark.smoke
 def test_double_backprop_keeps_order_rows_and_key_row(tmp_path: Path) -> None:
     """A second-order node un-suppresses order rows and earns its key row."""
 

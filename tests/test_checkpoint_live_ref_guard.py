@@ -202,7 +202,6 @@ def test_refusal_survives_member_save_load_before_nan_empty_degradation(
     assert "nothing to compare" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_refusal_survives_bundle_save_load(ckpt_bundle: Any, tmp_path: Any) -> None:
     """A bundle.save round trip keeps the refusal armed on the loaded Bundle."""
 

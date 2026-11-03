@@ -728,7 +728,6 @@ class TestHaltedMemberArtifactRoundTrip:
 class TestModuleLevelSaveRefusesTyped:
     """The bundle save door refuses a MergedTrace typed, not with an AttributeError."""
 
-    @pytest.mark.smoke
     def test_tl_save_merged_trace_refuses_typed(self, tmp_path):
         # The module-level bundle save used to reach the runnable poison gate
         # and die as a bare AttributeError ('MergedTrace' has no '_runnable');

@@ -63,7 +63,6 @@ def test_gate_reads_settled_complete_recording_without_warning():
     assert hand_built == []
 
 
-@pytest.mark.smoke
 def test_gate_refuses_failed_recording_with_its_real_status():
     failed = tl.record(
         _Boom(),

@@ -112,7 +112,6 @@ def test_registry_unknown_key_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "surface_registry_unknown"
 
 
-@pytest.mark.smoke
 @pytest.mark.heavy  # executes every registry spelling; crossed the 7s smoke budget at T58
 def test_every_registry_spelling_executes(family_trace) -> None:
     """D22 executable-spelling CI: the hand-written map rotted; this one

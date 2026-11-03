@@ -374,6 +374,7 @@ def test_logit_lens_true_oracle_final_layer_equals_model_logits(r0_capture):
     )
 
 
+@pytest.mark.smoke_cells("test_structural_fixture_traces_faithfully[train-bn]")
 @pytest.mark.parametrize("fixture_name", STRUCTURAL_FIXTURES)
 def test_structural_fixture_traces_faithfully(fixture_name):
     import torchlens as tl

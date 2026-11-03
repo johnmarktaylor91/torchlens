@@ -409,7 +409,6 @@ def test_label_selector_on_capture_door_arms_and_matches_oracle(tiny: _Fixture) 
     )
 
 
-@pytest.mark.smoke
 def test_zero_match_forward_selector_gradient_edit_warns(tiny: _Fixture) -> None:
     """A gradient edit whose forward selector matches nothing is disclosed, not silent."""
 

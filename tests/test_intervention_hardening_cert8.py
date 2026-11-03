@@ -190,6 +190,7 @@ def test_callable_helper_arg_roundtrips_at_default_save_level() -> None:
     )
 
 
+@pytest.mark.smoke
 def test_gradient_site_callable_end_to_end_save_load_default_level(tmp_path: Path) -> None:
     """BLOCKER-2 case 1: full save->load of a gradient-site callable spec at the DEFAULT level."""
 

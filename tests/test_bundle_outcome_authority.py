@@ -227,6 +227,7 @@ def test_both_doors_save_a_halted_bundle(tmp_path) -> None:
     assert settled.status is CaptureStatus.STOPPED
 
 
+@pytest.mark.smoke
 def test_refuted_hypothesis_pin_failed_member_refuses_both_doors(tmp_path) -> None:
     """The probe-REFUTED N1-hole pin: one FAILED member -> BOTH doors refuse.
 

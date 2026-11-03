@@ -184,6 +184,7 @@ def _spec_with_flag(name: str, flag: str, *, implementation: bool) -> Any:
     )
 
 
+@pytest.mark.smoke_cells("test_extra_kwarg_gates_are_fail_closed_biconditional[tf]")
 @pytest.mark.parametrize("name", _PREVIEW_NAMES)
 def test_extra_kwarg_gates_are_fail_closed_biconditional(name: str) -> None:
     """intervene/storage/streaming: False rejects; a True flip refuses typed

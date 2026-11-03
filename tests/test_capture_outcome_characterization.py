@@ -312,6 +312,7 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
     """BaseException escapes propagate bare: no partial_trace, no banner."""
 
@@ -370,7 +371,6 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_failed_partial_pickle_loads_coreless() -> None:
     """A pickled falsy-finished partial loads coreless (staging surface)."""
 

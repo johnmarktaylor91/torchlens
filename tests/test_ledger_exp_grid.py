@@ -455,6 +455,7 @@ def test_axes_are_recorded_in_the_operation_params() -> None:
     assert grid.history_id == sweeps[0].operation_id
 
 
+@pytest.mark.smoke
 def test_grid_round_trips_through_save_and_load(tmp_path: Path) -> None:
     model, x, baseline = _tiny()
     grid = _grid(baseline, model, x, axes={"site": _SITES, "scale": [tl.scale(0.0), tl.scale(0.5)]})

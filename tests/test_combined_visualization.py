@@ -263,6 +263,7 @@ def test_draw_combined_correspondence_edge_constraint_false(tmp_path: Path) -> N
     assert "style=dashed" in dot
 
 
+@pytest.mark.smoke
 def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> None:
     """Combined rendering accepts a one-based backward pass filter."""
     trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -279,7 +280,6 @@ def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> Non
     assert "addmm_back" in dot
 
 
-@pytest.mark.smoke
 def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> None:
     """Rolled forward gradient arrows label pass ranges when not present on all passes."""
     trace = tl.trace(

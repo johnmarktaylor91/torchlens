@@ -325,6 +325,7 @@ def test_closure_equivalence_guard_refuses_cross_shape_folds() -> None:
     assert all(len(group) == 1 for group in relu_groups)
 
 
+@pytest.mark.smoke
 def test_closure_never_splits_and_stays_equivalence_uniform() -> None:
     for build in (
         lambda: tl.trace(_Tied(), torch.randn(2, 8)),
@@ -351,7 +352,6 @@ def test_closure_keyless_rows_never_fold() -> None:
     assert groups["a_2_2:1"] == frozenset({"a_2_2:1"})
 
 
-@pytest.mark.smoke
 @pytest.mark.heavy
 def test_resnet18_fold_group_census_pin() -> None:
     # Pinned census fact (I-S3' family). Grouping rule row 28: each

@@ -157,6 +157,7 @@ def test_changed_bounds_band_and_signed_direction(log, log_b):
     assert torch.equal(decreased[0].mask, delta < 0)
 
 
+@pytest.mark.smoke
 def test_changed_selects_what_the_intervention_moved(model):
     """The intervention-effect mask: fork vs original after do()."""
 

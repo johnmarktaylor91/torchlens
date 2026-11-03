@@ -53,6 +53,7 @@ def speed_render(tmp_path_factory: Any) -> Any:
     log.cleanup()
 
 
+@pytest.mark.smoke
 @pytest.mark.skipif(not DOT_AVAILABLE, reason="graphviz dot binary unavailable")
 def test_stage0_runs_green_on_a_clean_artifact(speed_render: Any) -> None:
     """The full audit passes on a small clean render (headlabel baseline

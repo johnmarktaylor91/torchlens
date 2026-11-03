@@ -459,6 +459,7 @@ _THIRD_LEG_FAMILIES = frozenset(
 )
 
 
+@pytest.mark.smoke_cells("test_r71_strip_matrix_never_verified[conditional_arm_entry]")
 @pytest.mark.parametrize("family", sorted(_VERDICT_STEERING_WITNESS_FAMILIES))
 def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
     """(a) single witness strip, (b) lockstep witness+member, (c) 3-way lockstep with

@@ -391,6 +391,7 @@ def test_transform_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
+@pytest.mark.smoke
 def test__activation_transform_repr_exposed_and_persisted(tmp_path: Path) -> None:
     """Recording exposes ``_activation_transform_repr`` and persists it on disk."""
 

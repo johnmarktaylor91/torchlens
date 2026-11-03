@@ -452,6 +452,7 @@ class TestBoundaryParseValidation:
             boundary(0, 0, roles=[{"role": "contribution", "index": 0, "shape": [2, "x"]}])
         )
 
+    @pytest.mark.smoke
     def test_string_digest_field_refuses_typed(self):
         entry = boundary(0, 0, witness_policy="digest")
         entry["witness"]["contribution_digests"] = "ccdd"
@@ -1470,6 +1471,7 @@ class TestExpectedRanksWidenOnly:
 
 
 class TestDeterminism:
+    @pytest.mark.smoke
     def test_identical_evidence_yields_byte_identical_payloads(self):
         def build():
             return {

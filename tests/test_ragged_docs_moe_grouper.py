@@ -329,7 +329,6 @@ def test_python_loop_moe_pass_counts_show_ragged_routing() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_pass_window_on_moe_episode_discloses(moe_episode: dict) -> None:
     """The pass-axis disclosure fires on the MoE episode with trace-true counts.
 

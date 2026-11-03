@@ -123,6 +123,7 @@ def test_insufficient_anchors_refuse() -> None:
     assert excinfo.value.fields["code"] == "battery_anchor_insufficient"
 
 
+@pytest.mark.smoke
 def test_debug_key_guards_not_checked_as_finite() -> None:
     """A partial-coverage debug render generates the NOT-CHECKED probe."""
 

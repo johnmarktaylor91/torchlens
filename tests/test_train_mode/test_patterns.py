@@ -401,6 +401,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_save_new_outs_train_mode_overrides() -> None:
     """Explicit save_new_outs backward_ready overrides detach flags temporarily."""
 
@@ -482,7 +483,6 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         )
 
 
-@pytest.mark.smoke
 def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     """save_new_outs restores override flags when fast-pass graph validation fails."""
 

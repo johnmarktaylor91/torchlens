@@ -338,6 +338,7 @@ _BATTERY: tuple[tuple[str, Callable[[], tuple[nn.Module, Any]], Callable[..., An
 )
 
 
+@pytest.mark.smoke
 def test_live_legacy_sites_completeness() -> None:
     """Layers 1-3: pair-wise identity, value round-trip, reached-family >= 1."""
 

@@ -138,6 +138,7 @@ def test_honesty_as_summary_and_inline_evidence(nested_trace) -> None:
     assert columns.index("time_evidence") == columns.index("time") + 1
 
 
+@pytest.mark.smoke
 def test_honesty_aggregation_preserves_weakest_evidence(sdpa_trace) -> None:
     """D2: a rollup row holding an estimated member never upgrades to exact."""
 

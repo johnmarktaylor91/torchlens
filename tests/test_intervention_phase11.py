@@ -27,6 +27,7 @@ def _interventions() -> tl.Trace:
     return log
 
 
+@pytest.mark.smoke
 def test_trace_show_accepts_intervention_options() -> None:
     """``Trace.show`` accepts Phase 11 intervention visualization kwargs."""
 

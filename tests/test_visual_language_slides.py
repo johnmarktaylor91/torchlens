@@ -37,7 +37,6 @@ def _render(slide: Slide, out: Path) -> dict[str, Path]:
     return paths
 
 
-@pytest.mark.smoke_cells("test_slide_keys_find_their_marks[containers]")
 @pytest.mark.parametrize("slide", _DRAWN, ids=[slide.id for slide in _DRAWN])
 def test_slide_keys_find_their_marks(slide: Slide, tmp_path: Path) -> None:
     """Every key and grid cell selector matches at least one mark on its panel."""
