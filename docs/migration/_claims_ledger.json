@@ -286,7 +286,7 @@
       "runtime_backend": "PyTorch eager (torch backend)",
       "models": "CI matrix",
       "evidence": [
-        ".github/workflows/tests.yml",
+        ".github/workflows/pr.yml",
         ".github/workflows/nightly.yml",
         "tests/test_ci_packaging_gates.py"
       ],
@@ -311,10 +311,10 @@
       "runtime_backend": "PyTorch eager (torch backend)",
       "models": "CI floor legs",
       "evidence": [
-        ".github/workflows/tests.yml",
+        ".github/workflows/nightly.yml",
         "pyproject.toml"
       ],
-      "evidence_note": "Floor legs pin the exact floor pair per interpreter.",
+      "evidence_note": "Floor legs in the nightly workflow pin the exact floor pair per interpreter.",
       "exclusions": "",
       "date": "2026-10-29",
       "status": "release-supported",
@@ -908,6 +908,27 @@
       ],
       "say_today": "Specific agreements on file",
       "before_strengthening": "Rerun on the release"
+    },
+    {
+      "id": "readme-learn-scale-notebook",
+      "category": "capability",
+      "wording": "Thousands of batches",
+      "locations": [
+        {
+          "file": "README.md"
+        }
+      ],
+      "release": null,
+      "runtime_backend": "PyTorch eager (torch backend)",
+      "models": "the notebook's own small model",
+      "evidence": [
+        "notebooks/learn/09_scale.ipynb"
+      ],
+      "evidence_note": "A scenario label in the README notebook table (the reader's situation), not a measured number; the notebook teaches the batch-loop pattern with tl.record and save=.",
+      "exclusions": "No throughput or memory figure is claimed.",
+      "date": "2026-11-03",
+      "status": "train-only",
+      "registry_ids": []
     }
   ]
 }

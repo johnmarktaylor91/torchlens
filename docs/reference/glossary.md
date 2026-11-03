@@ -1577,7 +1577,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Save / load**
 : `Trace.save` persists a `Trace` into a portable `.tlspec` directory bundle at a chosen
   level; `tl.load` loads a `.tlspec` object with eager tensor materialization.
-  3.0 format: see [saved_format_3.md](../maintainers/saved_format_3.md).
+  3.0 format: the maintainer contract `docs/maintainers/saved_format_3.md` (not on the site).
   Both doors check the final path component only (`path.is_symlink()` on the bundle path and,
   at load, on its manifest, metadata and blobs entries): a symlink there refuses
   (`load_path_symlink_rejected` at load), a symlinked parent directory passes on both sides,
