@@ -306,7 +306,7 @@ def test_module_focus_under_uncalled_container(tmp_path: Path, address: str, vis
     log = tl.trace(_ModuleListModel(), torch.randn(1, 4))
     assert "blocks" not in log.modules
     assert "heads" not in log.modules
-    dot = _render_dot(log, tmp_path, module=address, vis_mode=vis_mode)
+    dot = _render_dot(log, tmp_path, module=address, rolled=vis_mode == "rolled")
 
     assert f"@{address}" in dot
     assert _boundary_node_count(dot, "input") >= 1
