@@ -56,7 +56,7 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "Erf": lambda item, args: _raw(item).Erf(x=args[0]),
         "Erfc": lambda item, args: _raw(item).Erfc(x=args[0]),
         "Exp": lambda item, args: _raw(item).Exp(x=args[0]),
-        "ExpandDims": lambda item, args: _raw(item).ExpandDims(input=args[0], dim=args[1]),
+        "ExpandDims": lambda item, args: _raw(item).ExpandDims(input=args[0], axis=args[1]),
         "Fill": lambda item, args: _raw(item).Fill(dims=args[0], value=args[1]),
         "Greater": lambda item, args: _raw(item).Greater(x=args[0], y=args[1]),
         "Less": lambda item, args: _raw(item).Less(x=args[0], y=args[1]),

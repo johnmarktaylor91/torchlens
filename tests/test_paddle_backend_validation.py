@@ -95,6 +95,23 @@ def test_paddle_validation_healthy_two_layer_mlp_passes() -> None:
     assert PaddleBackend().validate_entry(_functional_mlp, _inputs()) is True
 
 
+def test_paddle_validation_integer_threshold_compare_is_perturbation_sensitive() -> None:
+    """``ids < 0`` on non-negative token ids changes under a sign-flipping perturbation.
+
+    ``ids + 1`` and zeros never cross the threshold, so the tripwire needs a
+    candidate that does; a replay that ignored the ids would still fail.
+    """
+
+    ids = paddle.to_tensor([[101, 1996, 4248, 102]], dtype="int64")
+
+    def fn(token_ids: Any) -> Any:
+        return paddle.cast(token_ids < 0, "float32")
+
+    trace = tl.trace(fn, ids, backend="paddle")
+    assert PaddleBackend().validate_trace(trace) is True, trace.validation_replay_status
+    assert trace.validation_replay_status.state == "passed"
+
+
 def test_paddle_validation_fails_unwrapped_intermediate_gap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

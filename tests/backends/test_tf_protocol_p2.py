@@ -207,6 +207,38 @@ def test_tf_broadcast_to_is_classified_and_replayed() -> None:
     assert broadcast and broadcast[0]["decision"] == "validated", broadcast
 
 
+def test_tf_expand_dims_replays_with_its_axis_input() -> None:
+    """``tf.expand_dims`` runs ``ExpandDims``, whose raw op takes ``axis``; replay validates it."""
+
+    def fn(v: Any) -> Any:
+        return tf.expand_dims(v, 1) * 2.0
+
+    trace = tl.trace(fn, _x(), backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    expand = [r for r in status.decisions if r["func_name"] == "ExpandDims"]
+    assert expand and expand[0]["decision"] == "validated", expand
+
+
+def test_tf_integer_threshold_compare_is_perturbation_sensitive() -> None:
+    """``ids < 0`` on non-negative token ids changes under a sign-flipping perturbation.
+
+    BERT builds its padding mask this way; ``ids + 1`` and zeros never cross the
+    threshold, so the tripwire needs a candidate that does.
+    """
+
+    ids = tf.constant([[101, 1996, 4248, 102]], dtype=tf.int32)
+
+    def fn(token_ids: Any) -> Any:
+        return tf.cast(token_ids < 0, tf.float32)
+
+    trace = tl.trace(fn, ids, backend="tf")
+    status = _protocol().validate(trace, None)
+    assert status.state == "passed", status.message
+    less = [r for r in status.decisions if r["func_name"] == "Less"]
+    assert less and less[0]["decision"] == "validated", less
+
+
 def test_tf_tampered_payload_fails_naming_the_op_and_reason() -> None:
     """A11: a tampered payload yields ``failed`` naming the op in message and decisions."""
 
