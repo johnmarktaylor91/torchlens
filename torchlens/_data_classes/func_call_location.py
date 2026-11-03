@@ -128,14 +128,16 @@ def cached_source_fingerprint(
     return cast(tuple[Any, ...] | None, cached[0])
 
 
-def with_source_fingerprint(location: "FuncCallLocation", trace: Any) -> "FuncCallLocation":
+def with_source_fingerprint(location: Any, trace: Any) -> "FuncCallLocation":
     """Fix a freshly captured location's source text policy; return it.
 
     With ``save_source_context`` the text is snapshotted now; otherwise the
     file's fingerprint is stamped so the text can be read lazily, with the
     trace's ``num_context_lines`` around the line. For one-off locations built
     outside ``_get_code_context`` (which caches one fingerprint per file per
-    capture).
+    capture). ``location`` is a ``FuncCallLocation``; it is typed ``Any``
+    because ``_linecache_entry`` is a runtime-only row cell with no declared
+    annotation (the record schema bindings are generated from annotations).
     """
 
     if location.source_loading_enabled:
@@ -299,8 +301,6 @@ class FuncCallLocation:
     # Reached through the class by ``_utils.introspection``, which cannot
     # import this module at module scope.
     _cached_source_fingerprint = staticmethod(cached_source_fingerprint)
-    # Runtime-only source fingerprint (never persisted, unset when absent).
-    _linecache_entry: tuple[Any, ...] | None
 
     def __init__(
         self,

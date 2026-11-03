@@ -109,9 +109,14 @@ def test_default_capture_reads_source_lazily(toy) -> None:
 def test_op_card_shows_location_and_text(toy) -> None:
     module, path = toy
     trace = tl.trace(module.Toy(), torch.randn(2, 3))
-    card = str(trace["relu_1"])
+    relu = trace["relu_1"]
+    card = str(relu)
     line = _line_of(path, "the relu line")
-    assert f"{path.name}:{line} in Toy.forward" in card
+    frame = relu.code_context[-1]
+    # ``co_qualname`` exists from Python 3.11; before it the card names the bare function.
+    function = "Toy.forward" if sys.version_info >= (3, 11) else "forward"
+    assert (frame.func_qualname or frame.func_name) == function
+    assert f"{path.name}:{line} in {function}" in card
     assert "  code   z = torch.relu(y)  # the relu line" in card
 
 
