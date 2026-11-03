@@ -12,3 +12,4 @@ downloads.
 | [`trainable_intervention_recipe.ipynb`](trainable_intervention_recipe.ipynb) | Advanced | Gradient-based learning of a trainable activation intervention parameter. |
 | [`generation_step_iterator_recipe.ipynb`](generation_step_iterator_recipe.ipynb) | Intermediate | Per-step hook planning for generation loops that mirror `model.generate()`. |
 | [`train_tuned_lens_recipe.ipynb`](train_tuned_lens_recipe.ipynb) | Intermediate | Train a tuned lens from a disk-mode `tl.extract_dataset` artifact and apply it through `logit_lens(lens=...)`, which checks the recorded model identity. |
+| [`das_causal_basis_recipe.ipynb`](das_causal_basis_recipe.ipynb) | Advanced | Distributed alignment search (Geiger et al., 2024): learn a rotation through a bound hook, then test the causal basis with `tl.subspace` and `tl.patch_from` against a random direction and whole-layer patching. |
