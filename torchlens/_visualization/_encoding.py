@@ -699,7 +699,7 @@ def resolve_color_by(color_by: Any) -> EncodingChannelSpec | None:
             )
         from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 
-        if color_by in {*LAYER_SOURCE_ROWS, *LAYER_PASS_LOG_FIELD_ORDER} - _ROW_ALIAS.values():
+        if color_by in {*LAYER_SOURCE_ROWS, *LAYER_PASS_LOG_FIELD_ORDER} - set(_ROW_ALIAS.values()):
             return EncodingChannelSpec(
                 channel="color",
                 source_kind="field",
