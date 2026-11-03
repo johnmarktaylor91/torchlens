@@ -15,11 +15,11 @@ from .._constants import LAYER_PASS_LOG_FIELD_ORDER
 from .._data_classes.param import ParamAccessor
 from .._ir.capture_events import _clone_op_event_for_replay
 from .._ir.events import OpEvent
-from .._ir.predicate import _distinct_label_index_keys
 from .._record_type import record_type
 from ._cook_facts import _cook_facts, _replay_capture_events
 from ._cooked_inventory import install_cooked_inventory, install_run_facts
 from ._multipass_cook import fold_pass_cores
+from ._record_indexes import _RecordIndexes
 from .session import CapturedRunCore
 
 if TYPE_CHECKING:
@@ -919,35 +919,35 @@ class RecordingProjection:
             set_tensor_label(tensor, label)
 
 
-class _RecordIndexes:
-    """The Recording's public lookup indexes, built core by core."""
+def _core_records(
+    core: CapturedRunCore, core_events: tuple[OpEvent, ...]
+) -> Iterable[ActivationRecord]:
+    """Return one sealed core's retained activation records, in capture order.
 
-    def __init__(self) -> None:
-        self.records: list[ActivationRecord] = []
-        self.by_pass: dict[int, list[int]] = {}
-        self.by_label: dict[str, list[tuple[int, int]]] = {}
-        self.by_address: dict[str, list[int]] = {}
+    Parameters
+    ----------
+    core
+        One sealed core of the Recording.
+    core_events
+        That core's replay clones of its events.
 
-    def add_core(self, core: CapturedRunCore, core_events: tuple[OpEvent, ...]) -> None:
-        from .projections import activation_record_from_event
+    Returns
+    -------
+    Iterable[ActivationRecord]
+        The records the core stored at seal time, else the records projected
+        from its predicate-matched events.
+    """
 
-        stored_records = core.projection_facts.get("records", ())
-        if stored_records:
-            projected_records: Iterable[ActivationRecord] = stored_records
-        else:
-            projected_records = tuple(
-                record
-                for event in core_events
-                if (record := activation_record_from_event(event)) is not None
-            )
-        for record in projected_records:
-            index = len(self.records)
-            self.records.append(record)
-            self.by_pass.setdefault(record.ctx.pass_number, []).append(index)
-            for label_key in _distinct_label_index_keys(record.ctx.label, record.ctx.raw_label):
-                self.by_label.setdefault(label_key, []).append((record.ctx.pass_number, index))
-            if record.ctx.address is not None:
-                self.by_address.setdefault(record.ctx.address, []).append(index)
+    from .projections import activation_record_from_event
+
+    stored_records = core.projection_facts.get("records", ())
+    if stored_records:
+        return stored_records
+    return tuple(
+        record
+        for event in core_events
+        if (record := activation_record_from_event(event)) is not None
+    )
 
 
 class RecordingProjector:
@@ -976,7 +976,7 @@ class RecordingProjector:
         for core in captured_cores:
             core_events = _cloned_core_events(core)
             cloned.append(core_events)
-            indexes.add_core(core, core_events)
+            indexes.add_records(_core_records(core, core_events))
         folded = fold_pass_cores(captured_cores, cloned) if len(captured_cores) > 1 else None
         all_events: list[Any] = (
             list(folded.events) if folded is not None else [e for events in cloned for e in events]

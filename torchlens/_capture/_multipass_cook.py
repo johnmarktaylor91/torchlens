@@ -123,6 +123,15 @@ class _Totals:
         self.module_calls: dict[str, int] = {}
 
     def offsets(self) -> _PassOffsets:
+        """Snapshot the running maxima as the offsets for the next pass.
+
+        Returns
+        -------
+        _PassOffsets
+            The counters placed so far; the per-type and per-module maps are
+            copied, so later ``absorb`` calls do not change the snapshot.
+        """
+
         return _PassOffsets(
             raw_index=self.raw_index,
             step_index=self.step_index,
@@ -133,6 +142,17 @@ class _Totals:
         )
 
     def absorb(self, events: Iterable[Any], core: CapturedRunCore) -> None:
+        """Raise the running maxima to cover one relabeled pass.
+
+        Parameters
+        ----------
+        events
+            The pass's records, already renumbered into the merged label space.
+        core
+            The pass's sealed core; its ``layer_counter`` projection fact is added
+            to the running layer count.
+        """
+
         self.layer_counter += int(core.projection_facts.get("layer_counter", 0) or 0)
         for event in events:
             self.raw_index = max(self.raw_index, int(event.raw_index or 0))
@@ -143,6 +163,18 @@ class _Totals:
             self._absorb_counts(event)
 
     def _absorb_counts(self, event: Any) -> None:
+        """Raise the per-type and per-module counters to cover one record.
+
+        A module boundary record contributes the call index spelled in its raw
+        label; any other record contributes its ``type_index`` for its layer type
+        and the call index of every module frame it ran inside.
+
+        Parameters
+        ----------
+        event
+            One relabeled record of the pass being absorbed.
+        """
+
         layer_type = event.layer_type
         if layer_type in _BOUNDARY_TYPES:
             address, _kind, call_index = _split_boundary_label(event.label_raw)
@@ -302,10 +334,41 @@ def _relabel_record(
 
 
 def _shifted(value: int | None, offset: int) -> int | None:
+    """Add a pass offset to an optional counter.
+
+    Parameters
+    ----------
+    value
+        The pass-local counter, or ``None`` when the record has none.
+    offset
+        What earlier passes already occupy for that counter.
+
+    Returns
+    -------
+    int or None
+        ``value + offset``, or ``None`` when ``value`` is ``None``.
+    """
+
     return None if value is None else int(value) + offset
 
 
 def _relabeled_function(function: Any, offsets: _PassOffsets) -> Any:
+    """Shift a record's function facet onto the merged call-id space.
+
+    Parameters
+    ----------
+    function
+        The record's function facet, or ``None``.
+    offsets
+        The counters earlier passes already occupy.
+
+    Returns
+    -------
+    Any
+        A copy with ``func_call_id`` raised by the pass offset, or the facet
+        unchanged when it is absent or carries no call id.
+    """
+
     if function is None or function.func_call_id is None:
         return function
     return replace(function, func_call_id=int(function.func_call_id) + offsets.func_call_id)
@@ -314,6 +377,24 @@ def _relabeled_function(function: Any, offsets: _PassOffsets) -> Any:
 def _relabeled_graph(
     graph: Any, label_map: Mapping[str, str], barcode_map: Mapping[str, str]
 ) -> Any:
+    """Rewrite a record's graph facet into the merged label space.
+
+    Parameters
+    ----------
+    graph
+        The record's graph facet, or ``None``.
+    label_map
+        Old raw label to new raw label for every record of the pass.
+    barcode_map
+        The pass's parameter barcodes to their canonical barcodes.
+
+    Returns
+    -------
+    Any
+        A copy whose parent argument positions name the renumbered parents and
+        whose equivalence class uses canonical barcodes, or ``None``.
+    """
+
     if graph is None:
         return None
     # ``parent_arg_positions`` is keyed by argument kind ("args", "kwargs");
@@ -344,6 +425,24 @@ def _canonical_class(equivalence_class: str | None, barcode_map: Mapping[str, st
 def _relabeled_modules(
     facet: Any, modules: tuple[tuple[str, int], ...], offsets: _PassOffsets
 ) -> Any:
+    """Rewrite a record's modules facet onto the merged module call indexes.
+
+    Parameters
+    ----------
+    facet
+        The record's modules facet, or ``None``.
+    modules
+        The record's renumbered ``(address, call index)`` pairs.
+    offsets
+        The counters earlier passes already occupy.
+
+    Returns
+    -------
+    Any
+        A copy whose module stack frames carry call indexes raised by each
+        module's offset and whose ``modules`` are ``modules``, or ``None``.
+    """
+
     if facet is None:
         return None
     stack = tuple(
@@ -358,6 +457,22 @@ def _relabeled_modules(
 
 
 def _relabeled_params(facet: Any, barcode_map: Mapping[str, str]) -> Any:
+    """Point a record's parameter references at the canonical barcodes.
+
+    Parameters
+    ----------
+    facet
+        The record's params facet, or ``None``.
+    barcode_map
+        The pass's parameter barcodes to their canonical barcodes.
+
+    Returns
+    -------
+    Any
+        A copy with every reference's barcode mapped, or the facet unchanged
+        when it is absent or the map is empty.
+    """
+
     if facet is None or not barcode_map:
         return facet
     params = tuple(
@@ -367,6 +482,24 @@ def _relabeled_params(facet: Any, barcode_map: Mapping[str, str]) -> Any:
 
 
 def _relabeled_recording(facet: Any, offsets: _PassOffsets, label_map: Mapping[str, str]) -> Any:
+    """Rewrite a record's recording facet into the merged label space.
+
+    Parameters
+    ----------
+    facet
+        The record's recording facet, or ``None``.
+    offsets
+        The counters earlier passes already occupy.
+    label_map
+        Old raw label to new raw label for every record of the pass.
+
+    Returns
+    -------
+    Any
+        A copy whose record context is renumbered by ``_relabeled_context``, or
+        the facet unchanged when it is absent or holds no ``RecordContext``.
+    """
+
     if facet is None or not isinstance(facet.record_context, RecordContext):
         return facet
     return replace(
@@ -429,12 +562,42 @@ def _relabeled_context_labels(
 
 
 def _shifted_type_index(ctx: RecordContext, offsets: _PassOffsets) -> int | None:
+    """Shift a record context's type index by its layer type's offset.
+
+    Parameters
+    ----------
+    ctx
+        The record context being renumbered.
+    offsets
+        The counters earlier passes already occupy.
+
+    Returns
+    -------
+    int or None
+        The shifted type index, or the context's own value when it has no
+        type index or no layer type.
+    """
+
     if ctx.type_index is None or ctx.layer_type is None:
         return ctx.type_index
     return int(ctx.type_index) + offsets.type_index.get(ctx.layer_type, 0)
 
 
 def _innermost_address(ctx: RecordContext) -> str:
+    """Return the address of the innermost module a record context ran inside.
+
+    Parameters
+    ----------
+    ctx
+        The record context being renumbered.
+
+    Returns
+    -------
+    str
+        The address of the last addressed frame of the module stack, else the
+        context's own address, else the empty string.
+    """
+
     for frame in reversed(ctx.module_stack):
         if isinstance(frame, ModuleStackFrame) and frame.address:
             return frame.address
@@ -442,6 +605,23 @@ def _innermost_address(ctx: RecordContext) -> str:
 
 
 def _relabeled_frame(frame: Any, offsets: _PassOffsets) -> Any:
+    """Shift one module stack frame onto the merged module pass numbers.
+
+    Parameters
+    ----------
+    frame
+        One frame of a record context's module stack.
+    offsets
+        The counters earlier passes already occupy; the root module's calls
+        are keyed ``root``.
+
+    Returns
+    -------
+    Any
+        A copy whose ``pass_number`` is raised by its module's offset, or the
+        frame unchanged when it is not a ``ModuleStackFrame``.
+    """
+
     if not isinstance(frame, ModuleStackFrame):
         return frame
     key = frame.address if frame.address else "root"
