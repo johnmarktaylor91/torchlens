@@ -642,8 +642,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Trace.recipe and Trace.clear_edits**
 : `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
-  sticky edits that `Trace.do` attached (a hook or helper edit, including one staged with
-  `InterventionOptions(engine="set_only")`) by site or by handle, marks the recipe stale and
+  sticky edits that `Trace.do` attached (a hook or helper edit, or a mapping of them) by site
+  or by handle, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
   It is the one way to detach an edit: `do` returns the trace, not a removable handle.
 
@@ -1439,8 +1439,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
   non-module target, `run_capability_unavailable:fast_rerun_graph_unsteered` when a staged
-  entry has never fired in the trace's recorded graph, as after a hook staged
-  with `InterventionOptions(engine="set_only")` on a plain capture, or when the graph records a fire no staged entry accounts for, as after
+  entry has never fired in the trace's recorded graph, as after a `{site: hook}`
+  mapping staged with `InterventionOptions(engine="set_only")` on a plain capture, or when the graph records a fire no staged entry accounts for, as after
   `clear_hooks()` on a steered capture, so the capture engine reruns once to record the current
   plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
