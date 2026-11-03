@@ -196,7 +196,7 @@ class TLTrace:
             capture=self.CaptureOptions(save_grads=sel, unwrap_when_done=False),
         )
         logits = _logits_from_trace(t, tl)
-        t.log_backward(metric(logits))
+        t.backward(metric(logits))
         res = {}
         for s in sites:
             ops = list(t.find_sites(tl.module(s)))
@@ -220,7 +220,7 @@ def _logits_from_trace(t: Any, tl: Any) -> torch.Tensor:
 
 
 class TLRecord:
-    """tl.record: the sparse event recorder; the Recording's output holds the logits."""
+    """tl.record: the sparse event recorder; the model output is ``recording.output``."""
 
     name = "tl_record"
 
@@ -233,8 +233,8 @@ class TLRecord:
     def _rec(self, ids: torch.Tensor, sites: list[str], **kw: Any) -> Any:
         tl = self.tl
         with torch.no_grad():
-            recording = tl.record(self.model, ids, save=_union(tl, sites), **kw)
-        return recording.output, recording
+            rec = tl.record(self.model, ids, save=_union(tl, sites), **kw)
+        return rec.output, rec
 
     def _get(self, rec: Any, site: str) -> torch.Tensor:
         r = rec[1] if isinstance(rec, tuple) else rec
@@ -265,7 +265,7 @@ class TLRecord:
 
     def grads(self, ids, sites, metric):
         raise Skip(
-            "tl.record has no backward capture in this comparison (Recording.log_backward needs a cooked trace)"
+            "tl.record has no backward capture in this comparison (backward capture needs a cooked trace)"
         )
 
     def generate(self, ids, site, delta, n_new, sample):

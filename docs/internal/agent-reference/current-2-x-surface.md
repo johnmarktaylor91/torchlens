@@ -1404,6 +1404,14 @@
   torchlens.bridge.mcp`): read-only tools over saved `.tlspec` artifacts + environment
   (doctor / api_map / load_overview / agent_dump / explain), wrapping the same public
   surface -- no user-code execution, no mutation.
+- AGENT KIT (CLI spelling DOCUMENTED-UNSTABLE): `torchlens agent init` (tier 0, torch-free)
+  writes a marked block into `AGENTS.md` (or each repeatable `--file`) naming the installed
+  agent index `torchlens/_docs/AGENT_INDEX.md`; `--remove` deletes it; text outside the markers
+  is never touched and damaged markers are refused (exit 4). The index, `skills/torchlens/`
+  (`SKILL.md` + `ROUTER.md`), `docs/reference/agent_capabilities.md` and
+  `tools/docs/generated/llms.txt` are generated from `docs/field-guide/task_cards.yaml` by
+  `tools/docs/build_agent_index.py` (`--check` in tests); `tools/agent_evals/first_call.py`
+  grades whether a fresh agent's first TorchLens call is each card's canonical call.
 - DATASET EXTRACTION (D7/V5; `resume=`, `stimulus_ids=`, and the loader
   DOCUMENTED-UNSTABLE): disk-mode `tl.extract_dataset(..., path=)` writes atomic
   shards plus a self-describing `manifest.json` (run signature, per-site identity with

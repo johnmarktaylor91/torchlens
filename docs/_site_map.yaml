@@ -38,6 +38,9 @@ sections:
 pages:
   - path: LIMITATIONS.md
     section: project
+  - path: README.md
+    section: internal
+    note: the docs folder's GitHub landing; the site's home is index.md
   - path: _perf_numbers.md
     section: internal
     note: included fragment; replaced by generated benchmark tables
@@ -118,6 +121,8 @@ pages:
     group: Backends
   - path: backward.md
     section: concepts
+  - path: benchmarks/capture.md
+    section: benchmarks
   - path: benchmarks/summary_performance.md
     section: benchmarks
   - path: buffers.md
@@ -126,6 +131,14 @@ pages:
     section: concepts
   - path: containers.md
     section: concepts
+  - path: doors/agents.md
+    section: doors
+  - path: doors/mechinterp.md
+    section: doors
+  - path: doors/neuroai.md
+    section: doors
+  - path: doors/vision.md
+    section: doors
   - path: facets.md
     section: concepts
   - path: field-guide/acdc_ioi.md
@@ -137,12 +150,16 @@ pages:
   - path: field-guide/dissection.md
     section: field-guide
     moved_from: [recipes/dissection.md]
+  - path: field-guide/extract_features.md
+    section: field-guide
   - path: field-guide/feature_visualisation.md
     section: field-guide
     moved_from: [recipes/feature_visualisation.md]
   - path: field-guide/generation_step_attribution.md
     section: field-guide
     moved_from: [recipes/generation_step_attribution.md]
+  - path: field-guide/intervene.md
+    section: field-guide
   - path: field-guide/lrp_epsilon_litmus.md
     section: field-guide
     moved_from: [recipes/lrp_epsilon_litmus.md]
@@ -158,6 +175,8 @@ pages:
   - path: field-guide/quantus.md
     section: field-guide
     moved_from: [recipes/quantus.md]
+  - path: field-guide/running_examples.md
+    section: field-guide
   - path: field-guide/sae_crosscoder_diff.md
     section: field-guide
     moved_from: [recipes/sae_crosscoder_diff.md]
@@ -167,6 +186,8 @@ pages:
   - path: field-guide/sae_trainers.md
     section: field-guide
     moved_from: [recipes/sae_trainers.md]
+  - path: field-guide/see_and_inspect.md
+    section: field-guide
   - path: field-guide/seeded_subsample.md
     section: field-guide
     publish: true
@@ -192,6 +213,10 @@ pages:
   - path: for-ai-agents.md
     section: field-guide
     group: Use with an agent
+  - path: gallery/any_architecture.md
+    section: gallery
+  - path: gallery/basis_grid.md
+    section: gallery
   - path: gradient_contract.md
     section: concepts
   - path: guides/fast_paths.md
@@ -242,14 +267,15 @@ pages:
     section: relation
   - path: migration/baukit.md
     section: relation
-  - path: migration/captum.md
-    section: relation
   - path: migration/coming_from_torchsnooper.md
+    section: relation
+  - path: migration/comparison.md
     section: relation
   - path: migration/from_bertviz_ecco.md
     section: relation
   - path: migration/from_captum.md
     section: relation
+    moved_from: [migration/captum.md]
   - path: migration/from_fx.md
     section: relation
   - path: migration/from_hf_kwargs.md
@@ -262,8 +288,10 @@ pages:
     section: relation
   - path: migration/from_nnsight.md
     section: relation
+    moved_from: [migration/nnsight.md]
   - path: migration/from_pyvene.md
     section: relation
+    moved_from: [migration/pyvene.md]
   - path: migration/from_surgeon_pytorch.md
     section: relation
   - path: migration/from_thingsvision.md
@@ -282,21 +310,24 @@ pages:
     section: relation
   - path: migration/from_transformerlens.md
     section: relation
+    moved_from: [migration/transformerlens.md]
   - path: migration/from_transformers_interpret.md
     section: relation
+  - path: migration/index.md
+    section: relation
   - path: migration/inseq.md
+    section: relation
+  - path: migration/interop.md
+    section: relation
+  - path: migration/landscape.md
     section: relation
   - path: migration/lovely_stats_line.md
     section: project
   - path: migration/multi_gpu_extraction.md
     section: relation
-  - path: migration/nnsight.md
-    section: relation
   - path: migration/penzai.md
     section: relation
   - path: migration/profilers_alongside.md
-    section: relation
-  - path: migration/pyvene.md
     section: relation
   - path: migration/repe.md
     section: relation
@@ -304,10 +335,10 @@ pages:
     section: relation
   - path: migration/scoped_detached_patching.md
     section: relation
-  - path: migration/transformerlens.md
-    section: relation
   - path: migration/v2.0_api_changes.md
     section: project
+  - path: migration/where_to_go_instead.md
+    section: relation
   - path: monitor_training.md
     section: field-guide
     group: Debug numerics and training
@@ -343,6 +374,8 @@ pages:
     section: concepts
   - path: receptive_projective_fields.md
     section: concepts
+  - path: reference/agent_capabilities.md
+    section: reference
   - path: reference/api/dataset_extraction.md
     section: reference
     publish: true
@@ -364,6 +397,8 @@ pages:
   - path: reference/checks_kit.md
     section: reference
   - path: reference/collapse.md
+    section: reference
+  - path: reference/composition_matrix.md
     section: reference
   - path: reference/debug.md
     section: reference

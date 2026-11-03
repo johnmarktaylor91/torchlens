@@ -191,5 +191,7 @@ device-specific claims as attested by local testing only.
 
 - [Detached-reference handling](../migration/scoped_detached_patching.md)
 - [Multi-GPU extraction](../migration/multi_gpu_extraction.md)
+- [Composition matrix](composition_matrix.md)
+- [Artifact compatibility and the migration policy](../../MIGRATIONS.md)
 - [Capture outcomes](capture_outcomes.md)
 - [Performance and memory controls](../performance.md)

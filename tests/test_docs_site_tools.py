@@ -68,19 +68,33 @@ def _write_cards(folder: Path) -> Path:
     return folder
 
 
+def _card_set(folder: Path) -> Any:
+    """Load the carded pages in ``folder`` with an empty cards file beside them."""
+    cards_file = folder.parent / "task_cards.yaml"
+    cards_file.write_text("cards: []\n")
+    return index_tool.load_card_set(cards_file, folder, folder.parent)
+
+
 def test_generator_renders_cards_in_tier_order(tmp_path: Path) -> None:
-    cards = index_tool.load_cards(_write_cards(tmp_path / "cards"))
-    assert [card.slug for card in cards] == ["see", "pick", "edit"]
-    outputs = index_tool.render_all(cards, "https://example.org/docs/", "9.x")
-    index = outputs["AGENT_INDEX.md"]
+    card_set = _card_set(_write_cards(tmp_path / "cards"))
+    assert [card.slug for card in card_set.cards] == ["see", "pick", "edit"]
+    assert card_set.by_slug()["pick"].tier == "kit"
+    base = "https://example.org/docs/9.x/"
+    outputs = index_tool.render_all(card_set, base)
+    index = outputs[index_tool.INDEX_PATH]
     core_block = index.split("```python\n", 1)[1].split("```", 1)[0]
-    assert core_block == "tl.trace(model, x)\n"
-    assert "| Pick \\| sites | `tl.select(x)` | Calling tl.select(x) in a loop. | kit |" in index
-    assert "https://example.org/docs/9.x/field-guide/edit/" in index
-    assert "- [See a model](https://example.org/docs/9.x/field-guide/see/): " in outputs["llms.txt"]
-    full = outputs["llms-full.txt"]
+    assert core_block == "import torchlens as tl\ntl.trace(model, x)\n"
+    pick_row = (
+        "| Pick \\| sites | `tl.select(x)` | Calling tl.select(x) in a loop. | cards/pick.md |"
+    )
+    assert pick_row in index
+    assert f"Page paths below are relative to {base}" in index
+    assert "| cards/edit.md |" in index
+    llms = outputs[index_tool.LLMS_PATH]
+    assert "- [See a model](https://example.org/docs/9.x/cards/see.md): " in llms
+    full = index_tool.render_llms_full(card_set, base, "Summary", tmp_path)
     assert "Body of Edit a run." in full and "tier:" not in full
-    assert outputs == index_tool.render_all(cards, "https://example.org/docs/", "9.x")
+    assert outputs == index_tool.render_all(card_set, base)
 
 
 #: Messages are matched loosely: cards are validated through the shared schema
@@ -91,7 +105,7 @@ def test_generator_renders_cards_in_tier_order(tmp_path: Path) -> None:
         ("tier", "core\nextra: 1", "unknown"),
         ("tier", "basic", "tier"),
         ("doors", "[mechinterp, astronomy]", "unknown"),
-        ("related", "[nowhere]", "related names no carded page"),
+        ("related", "[nowhere]", "related names no card"),
         ("canonical", '""', "non-empty string"),
     ],
 )
@@ -106,7 +120,7 @@ def test_generator_refuses_malformed_cards(
     ]
     page.write_text("\n".join(lines) + "\n")
     with pytest.raises(index_tool.CardError, match=message):
-        index_tool.load_cards(folder)
+        _card_set(folder)
 
 
 def test_generator_validates_through_the_shared_schema_when_present(
@@ -122,7 +136,7 @@ def test_generator_validates_through_the_shared_schema_when_present(
 
     monkeypatch.setattr(index_tool, "_schema_module", lambda: FakeSchema)
     with pytest.raises(index_tool.CardError, match="rejected by the shared schema"):
-        index_tool.load_cards(_write_cards(tmp_path / "cards"))
+        _card_set(_write_cards(tmp_path / "cards"))
     assert "Edit a run" in {meta["task"] for meta in seen}
 
 
@@ -145,23 +159,26 @@ def test_generator_enforces_the_index_size_limit(tmp_path: Path) -> None:
             )
         )
     with pytest.raises(index_tool.CardError, match="limit is 8192"):
-        index_tool.render_all(index_tool.load_cards(folder), "https://e.org/", "2.x")
+        index_tool.render_all(_card_set(folder), "https://e.org/")
 
 
-def test_generator_check_mode_detects_drift(tmp_path: Path) -> None:
-    folder = _write_cards(tmp_path / "cards")
+def test_generator_check_mode_detects_drift(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    card_set = _card_set(_write_cards(tmp_path / "cards"))
     out = tmp_path / "out"
-    argv = ["--cards", str(folder), "--out", str(out)]
-    assert index_tool.main([*argv, "--check"]) == 1
-    assert index_tool.main(argv) == 0
-    assert index_tool.main([*argv, "--check"]) == 0
-    (out / "llms.txt").write_text("edited by hand\n")
-    assert index_tool.main([*argv, "--check"]) == 1
+    monkeypatch.setattr(index_tool, "load_card_set", lambda: card_set)
+    monkeypatch.setattr(index_tool, "REPO", out)
+    assert index_tool.main(["--check"]) == 1
+    assert index_tool.main([]) == 0
+    assert index_tool.main(["--check"]) == 0
+    (out / index_tool.LLMS_PATH).write_text("edited by hand\n")
+    assert index_tool.main(["--check"]) == 1
 
 
 def test_committed_agent_index_matches_a_fresh_run() -> None:
     assert index_tool.main(["--check"]) == 0, (
-        "tools/docs/generated is stale: run python tools/docs/build_agent_index.py"
+        "the agent index outputs are stale: run python tools/docs/build_agent_index.py"
     )
 
 

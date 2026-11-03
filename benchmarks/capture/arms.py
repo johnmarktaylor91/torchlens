@@ -359,7 +359,7 @@ class TLTraceSparseArm(_TorchLensBase):
                 capture=self.CaptureOptions(save_grads=tl.module(s.site), unwrap_when_done=False),
             )
             out = first_tensor(trace.find_sites(tl.module(s.final_site)).first().out)
-            trace.log_backward(out.sum())
+            trace.backward(out.sum())
             s.model.zero_grad(set_to_none=True)
             ops = list(trace.find_sites(tl.module(s.site)))
             act = _pick([op.out for op in ops], s.site_shape)
@@ -391,8 +391,8 @@ class TLRecordArm(_TorchLensBase):
 
     def _record(self, x: Any, sites: list[str], **kw: Any) -> Any:
         with torch.no_grad():
-            recording = self.tl.record(self.s.model, x, save=_sel(self.tl, sites), **kw)
-        return recording.output, recording
+            rec = self.tl.record(self.s.model, x, save=_sel(self.tl, sites), **kw)
+        return rec.output, rec
 
     def _edited(self, edit: Any) -> torch.Tensor:
         tl, s = self.tl, self.s

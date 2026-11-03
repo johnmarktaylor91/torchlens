@@ -60,7 +60,7 @@ ROWS = {
         Row("save_load", "a portable trace file on disk, and the trace loaded back from it"),
         Row(
             "backward_capture",
-            "the forward graph plus gradients at one declared module after log_backward",
+            "the forward graph plus gradients at one declared module after trace.backward",
         ),
         Row("draw", "a rendered graph file of the whole trace", needs_graphviz=True),
         Row(
@@ -159,7 +159,7 @@ def build_row(
         return _backward(tl, subject), facts
     if name == "draw":
         out = str(workdir / "graph")
-        return (lambda: probe.draw(path=out, file_format="svg", open_viewer=False)), facts
+        return (lambda: probe.draw(out, file_format="svg", open_viewer=False)), facts
     if name == "bundle_compare":
         return _bundle(tl, subject), facts
     raise ValueError(name)
@@ -172,8 +172,8 @@ def _no_grad(model: Any, x: Any) -> Any:
 
 def _no_grad_record(tl: Any, model: Any, x: Any, site: str) -> Any:
     with torch.no_grad():
-        recording = tl.record(model, x, save=tl.module(site))
-        return recording.output, recording
+        rec = tl.record(model, x, save=tl.module(site))
+        return rec.output, rec
 
 
 def _backward(tl: Any, subject: Subject) -> Callable[[], Any]:
@@ -187,7 +187,7 @@ def _backward(tl: Any, subject: Subject) -> Callable[[], Any]:
             capture=_options(save_grads=tl.module(site)),
         )
         out = first_tensor(trace.find_sites(tl.module(final)).first().out)
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
         subject.model.zero_grad(set_to_none=True)
         return trace
 

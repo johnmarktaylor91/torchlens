@@ -69,6 +69,7 @@ exclude_docs: |
   /_site_map.yaml
   /internal/
   /LIMITATIONS.md
+  /README.md
   /_perf_numbers.md
   /_perf_numbers_provisional.md
   /_watch_perf_numbers.md
@@ -97,24 +98,33 @@ exclude_docs: |
   /backends/tinygrad.md
   /backends/torch.md
   /backward.md
+  /benchmarks/capture.md
   /benchmarks/summary_performance.md
   /buffers.md
   /conditional_attribution.md
   /containers.md
+  /doors/agents.md
+  /doors/mechinterp.md
+  /doors/neuroai.md
+  /doors/vision.md
   /facets.md
   /field-guide/acdc_ioi.md
   /field-guide/conditional_steering.md
   /field-guide/dissection.md
+  /field-guide/extract_features.md
   /field-guide/feature_visualisation.md
   /field-guide/generation_step_attribution.md
+  /field-guide/intervene.md
   /field-guide/lrp_epsilon_litmus.md
   /field-guide/lrp_transformers_lxt.md
   /field-guide/pretrained_saes.md
   /field-guide/prisma_clip_sae.md
   /field-guide/quantus.md
+  /field-guide/running_examples.md
   /field-guide/sae_crosscoder_diff.md
   /field-guide/sae_latent_export.md
   /field-guide/sae_trainers.md
+  /field-guide/see_and_inspect.md
   /field-guide/tcav.md
   /field-guide/torchcam.md
   /field-guide/trainable_backbone.md
@@ -122,6 +132,8 @@ exclude_docs: |
   /field-guide/tuned_lens.md
   /field-guide/weightwatcher.md
   /for-ai-agents.md
+  /gallery/any_architecture.md
+  /gallery/basis_grid.md
   /gradient_contract.md
   /guides/fast_paths.md
   /maintainers/architecture.md
@@ -140,8 +152,8 @@ exclude_docs: |
   /method_x_model_compatibility.md
   /migration/autocircuit.md
   /migration/baukit.md
-  /migration/captum.md
   /migration/coming_from_torchsnooper.md
+  /migration/comparison.md
   /migration/from_bertviz_ecco.md
   /migration/from_captum.md
   /migration/from_fx.md
@@ -161,18 +173,19 @@ exclude_docs: |
   /migration/from_torchviz_hiddenlayer.md
   /migration/from_transformerlens.md
   /migration/from_transformers_interpret.md
+  /migration/index.md
   /migration/inseq.md
+  /migration/interop.md
+  /migration/landscape.md
   /migration/lovely_stats_line.md
   /migration/multi_gpu_extraction.md
-  /migration/nnsight.md
   /migration/penzai.md
   /migration/profilers_alongside.md
-  /migration/pyvene.md
   /migration/repe.md
   /migration/saelens.md
   /migration/scoped_detached_patching.md
-  /migration/transformerlens.md
   /migration/v2.0_api_changes.md
+  /migration/where_to_go_instead.md
   /monitor_training.md
   /native-torch.md
   /neuroai/byo_alignment.md
@@ -186,6 +199,7 @@ exclude_docs: |
   /quickstart.md
   /rank_layout.md
   /receptive_projective_fields.md
+  /reference/agent_capabilities.md
   /reference/attribution.md
   /reference/brain_benchmarking_seam.md
   /reference/capture_outcomes.md
@@ -193,6 +207,7 @@ exclude_docs: |
   /reference/capture_state_contract.md
   /reference/checks_kit.md
   /reference/collapse.md
+  /reference/composition_matrix.md
   /reference/debug.md
   /reference/deployment_envelope.md
   /reference/deprecations.md
