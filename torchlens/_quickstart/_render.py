@@ -113,8 +113,7 @@ def draw(  # noqa: PLR0913 -- curated public facade (memo D2/D14): the input lad
         scripts write collision-safe ``<ModelClass>-graph.pdf`` plus one printed line when
         ``BARE_RENDER_WRITES_FILE_IN_SCRIPTS`` is True (fork F1 branch A).
     file_format:
-        Format for a path with no extension (an extension picks the format):
-        ``"svg"`` inline, ``"pdf"`` otherwise.
+        Format for a path with no extension (an extension picks it): ``"svg"`` inline, else ``"pdf"``.
     open_viewer:
         Explicit opt-in to open the written file with the system viewer. Never the default (memo D14).
     **draw_kwargs:

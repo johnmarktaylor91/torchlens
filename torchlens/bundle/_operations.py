@@ -1,4 +1,4 @@
-"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, ``show``, the chronology ledger and the effect table."""
+"""Bundle member operations: ``do``, ``fork``, ``run``, ``map``, the chronology ledger and the effect table."""
 
 from __future__ import annotations
 
