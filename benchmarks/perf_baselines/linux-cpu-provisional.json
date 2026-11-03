@@ -5515,7 +5515,7 @@
     },
     {
       "device": "cpu",
-      "label": "tl.save fresh tlspec path",
+      "label": "Trace.save fresh tlspec bundle",
       "metadata": {
         "serialized_file_size_bytes": 2156074
       },
