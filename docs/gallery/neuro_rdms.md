@@ -1,7 +1,7 @@
 # Neuro extraction with an order-error control
 
 This entry compares layer and residual-add activations against independent PyTorch extraction
-and rsatoolbox 0.3.2 correlation RDMs. The recorded verdict is pending. It checks extraction
+and rsatoolbox 0.3.2 correlation RDMs. The 24-stimulus ResNet-18 run passed all 13 sites. It checks extraction
 correctness; the target used to compare layer rankings is synthetic.
 
 | Item | Recorded setup |
@@ -10,8 +10,8 @@ correctness; the target used to compare layer rankings is synthetic.
 | Script and run line | `python examples/gallery/neuro_rdms.py --out outputs/neuro_rdms` |
 | Pinned inputs | ResNet-18 `IMAGENET1K_V1`, eval, float32; first 24 Fashion-MNIST test images in split order; RGB, antialiased bilinear 224x224, ImageNet normalization; seed 17. |
 | Data hash | SHA256 `346e55b948d973a97e58d2351dde16a484bd415d4595297633bb08f03db6a073` of the compressed image file. |
-| Verdict | Pending the recorded worker run. |
-| Cost | Pending measurement; two CPU threads. |
+| Verdict | Passed on ResNet-18; Linux x86_64 CPU, 3 November 2026 at 6:57 AM PT; TorchLens 2.36.3, commit `30390061a`. |
+| Cost | 32.2 s analysis; 45.98 s process wall, two CPU threads; 1,129,956 KiB peak RSS. |
 
 The [Fashion-MNIST source](https://github.com/zalandoresearch/fashion-mnist) supplies the test
 images under its MIT license. The input hash is independently listed by
@@ -25,7 +25,7 @@ Every stage and residual-add RDM must correlate at Pearson >= 0.999 with the ind
 extraction. Correlation distances from TorchLens must agree with rsatoolbox's own pipeline
 to maximum absolute error <= 1e-6. Both pipelines must select the same best layer against
 the final selected stage's independent RDM. This target is a software check, not a neural
-recording. Measurements are pending.
+recording. Across five stages and eight residual adds, minimum Pearson was `0.9999999999999988`, maximum absolute RDM error was `4.973799150320701e-13`, and both paths selected `avgpool`: all pass.
 
 The independent path uses forward hooks on module outputs and explicitly recomputes each
 pre-ReLU residual sum from the main branch and identity/projection branch. ViT's independent
@@ -35,26 +35,45 @@ path recomputes the positional sum and both residual sums per encoder block.
 
 Shuffle one side with NumPy's generator at seed 123. Every per-layer RDM correlation must
 fall below 0.5, and comparing stored stimulus identifiers must flag the order mismatch. The
-JSON stamp records `stimulus_order_mismatch`. Measurements are pending.
+JSON stamp records `stimulus_order_mismatch=true`. Shuffled correlations ranged from `-0.0679072257` to `-0.0271927852`, all below 0.5: pass.
 
 ## Artifact and replay
 
 The portable `neuro_rdms.tlspec` stores selected activations, layer addresses, stimulus identifiers,
 preprocessing, order-error identifiers and the RDMs. After `tl.load`, the script recomputes one
 RDM through `tl.neuro.rdms` and checks maximum absolute difference <= 1e-6. The activations can
-also be handed to `tl.neuro.datasets` for rsatoolbox. Artifact measurements are pending.
+also be handed to `tl.neuro.datasets` for rsatoolbox. The saved directory has 109,342,780 bytes and sorted-path/content SHA256 `1fc37e4de867ffc4f05fed509e1c671d10b629e3801a4554a23b3de11f1f6f36`. Reloaded RDM max error was 0.0: pass; the stored order mismatch remained flagged.
 
 ## Basis-grid row
 
-Verbs: capture, select, read, compare, save. The TorchLens count includes CLI setup, loading, reporting,
+Verbs: capture, select, read, compare, save. Measured source lines: TorchLens 245; plain PyTorch 56;
+original reference not measured. The TorchLens count includes CLI setup, loading, reporting,
 plotting and helpers. The plain count covers the independent hook extraction, functional
 residual recomputation and rsatoolbox calculation functions. Original thingsvision source lines are not measured.
-Architecture claims are restricted to executed runs.
+The recorded passing architecture here is ResNet-18; the second-architecture run is reported separately when complete.
 
 ## The stamp
 
 ```text
-Pending measurement. Run the script to produce the software, commit and hardware stamp.
+{
+  "commit": "30390061a0c9d81dd9cf347666c50f8c21bd6bfd",
+  "date_utc": "2026-11-03T14:57:35Z",
+  "device": "cpu",
+  "libraries": {
+    "numpy": "2.2.6",
+    "rsatoolbox": "0.3.2",
+    "torchvision": "0.28.0+cpu",
+    "transformers": "5.18.0"
+  },
+  "machine": "x86_64",
+  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+  "python": "3.10.19",
+  "stimulus_order_mismatch": true,
+  "torch": "2.13.0+cpu",
+  "torch_threads": 2,
+  "torchlens": "2.36.3",
+  "wall_seconds": 32.2
+}
 ```
 
 ## Vary it
