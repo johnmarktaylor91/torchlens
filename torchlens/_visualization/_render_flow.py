@@ -1273,6 +1273,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="input",
+                inner_modules=node.modules,
                 child_label=node.layer_label,
             )
             if node.layer_label not in boundary.children:
@@ -1294,6 +1295,7 @@ def _build_module_focus_entries(
                 target_module,
                 vis_mode=vis_mode,
                 boundary_kind="output",
+                inner_modules=node.modules,
                 parent_label=node.layer_label,
             )
             if node.layer_label not in boundary.parents:
@@ -1340,6 +1342,7 @@ def _get_or_create_boundary_node(
     *,
     vis_mode: str,
     boundary_kind: str,
+    inner_modules: Iterable[str] = (),
     child_label: str | None = None,
     parent_label: str | None = None,
 ) -> BoundaryNode:
@@ -1351,7 +1354,7 @@ def _get_or_create_boundary_node(
     if boundary is not None:
         return boundary
 
-    module_path = _boundary_module_path(target_module, vis_mode)
+    module_path = _boundary_module_path(target_module, vis_mode, inner_modules)
     boundary = BoundaryNode(
         layer_label=boundary_label,
         display_label=f"ext: {external_node.layer_label}",
@@ -1364,15 +1367,44 @@ def _get_or_create_boundary_node(
     return boundary
 
 
-def _boundary_module_path(target_module: "Module", vis_mode: str) -> list[str]:
-    """Return a module path for focus boundary node cluster placement."""
+def _boundary_module_path(
+    target_module: "Module",
+    vis_mode: str,
+    inner_modules: Iterable[str] = (),
+) -> list[str]:
+    """Return a module path for focus boundary node cluster placement.
 
-    module_path = []
-    parts = target_module.address.split(".") if target_module.address != "self" else ["self"]
-    for idx in range(len(parts)):
-        address = ".".join(parts[: idx + 1])
-        module_path.append(address if vis_mode == "rolled" else f"{address}:1")
-    return module_path
+    The path is the call stack of the focused op that the boundary edge
+    touches, cut just after the target module's call. It names only modules
+    that were called, so an uncalled container on the address path (an
+    ``nn.ModuleList`` or ``nn.ModuleDict`` holding the target) never appears,
+    matching the region paths of the focused ops themselves.
+
+    Parameters
+    ----------
+    target_module:
+        Module being focused.
+    vis_mode:
+        ``"unrolled"`` or ``"rolled"``; rolled paths drop the call index.
+    inner_modules:
+        Pass-qualified module stack of the focused op the boundary attaches to.
+
+    Returns
+    -------
+    list[str]
+        Region path for the boundary node.
+    """
+
+    call_path: list[str] = []
+    for module_call in inner_modules:
+        call_path.append(str(module_call))
+        if str(module_call).split(":", 1)[0] == target_module.address:
+            break
+    else:
+        call_path = [f"{target_module.address}:1"]
+    if vis_mode == "rolled":
+        return [module_call.split(":", 1)[0] for module_call in call_path]
+    return call_path
 
 
 def _simplify_boundary_labels(
