@@ -74,7 +74,7 @@ def test_bundle_diff_draws_one_node_per_pass(tmp_path: Path) -> None:
     num_passes = clean.layers[relu].num_passes
     assert num_passes == 2
 
-    source = bundle.draw(graph="diff", path=str(tmp_path / "shared_relu"))
+    source = bundle.draw(graph="diff", path=str(tmp_path / "shared_relu")).dot
 
     assert (tmp_path / "shared_relu.svg").exists()
     for side in ("clean", "intervention"):
