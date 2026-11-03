@@ -2403,8 +2403,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         """Ignore cleanup deletion for derived input dtypes."""
 
     @property
-    def input_memory(self) -> Bytes:
-        """Sum of activation bytes across saved graph-parent Ops."""
+    def _cost_input_memory(self) -> Bytes:
+        """Sum of activation bytes across saved graph-parent Ops (``op.cost.input_memory``)."""
 
         return Bytes(
             sum(
@@ -2414,8 +2414,8 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
             )
         )
 
-    @input_memory.deleter
-    def input_memory(self) -> None:
+    @_cost_input_memory.deleter
+    def _cost_input_memory(self) -> None:
         """Ignore cleanup deletion for derived input memory."""
 
     @property
