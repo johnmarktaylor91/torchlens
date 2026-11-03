@@ -19,34 +19,45 @@ from tests.behaviour.features import feature
 from tests.behaviour.harness import OracleFailure
 
 
-def test_one_fire_per_selected_op_in_every_pass_is_clean() -> None:
+def _armed(*states: Any) -> HookPass:
+    return HookPass(True, states)
+
+
+def test_one_fire_per_selected_op_in_every_armed_pass_is_clean() -> None:
     first, second = {}, {}
-    passes = [HookPass(first, 2), HookPass(second, 2)]
-    assert hook_pass_problems(passes, [first, first, second, second]) == []
+    passes = [_armed(first, first), HookPass(False, ()), _armed(second, second)]
+    assert hook_pass_problems(passes, 2) == []
 
 
 def test_a_hook_firing_twice_in_one_pass_fails() -> None:
     first, second = {}, {}
-    passes = [HookPass(first, 2), HookPass(second, 2)]
-    problems = hook_pass_problems(passes, [first, first, first, first, second, second])
-    assert problems == ["pass 0 fired 4 times for 2 selected ops"]
+    passes = [_armed(first, first, first, first), _armed(second, second)]
+    assert hook_pass_problems(passes, 2) == ["armed pass 0 fired 4 times for 2 selected ops"]
 
 
 def test_an_armed_pass_with_zero_fires_fails() -> None:
-    first, second = {}, None
-    passes = [HookPass(first, 2), HookPass(second, 2)]
-    problems = hook_pass_problems(passes, [first, first])
-    assert problems == ["pass 1 fired 0 times for 2 selected ops"]
+    first = {}
+    passes = [_armed(first, first), _armed()]
+    assert hook_pass_problems(passes, 2) == ["armed pass 1 fired 0 times for 2 selected ops"]
 
 
-def test_fires_outside_every_counted_pass_fail() -> None:
-    first, uncounted = {}, {}
-    problems = hook_pass_problems([HookPass(first, 1)], [first, uncounted])
-    assert problems == ["1 fires in no counted pass"]
+def test_one_pass_split_over_two_run_states_fails() -> None:
+    assert hook_pass_problems([_armed({}, {})], 2) == [
+        "armed pass 0 fired under more than one ctx.run_state"
+    ]
 
 
-def test_no_counted_pass_fails() -> None:
-    assert hook_pass_problems([], []) == ["no armed pass was counted"]
+def test_fires_in_unarmed_passes_or_outside_every_pass_fail() -> None:
+    first = {}
+    passes = [_armed(first), HookPass(False, ({},))]
+    assert hook_pass_problems(passes, 1, fires_outside=2) == [
+        "1 fires in passes that did not arm the hook",
+        "2 fires outside every capture pass",
+    ]
+
+
+def test_no_armed_pass_fails() -> None:
+    assert hook_pass_problems([HookPass(False, ())], 0) == ["no armed pass was counted"]
 
 
 class _Cell(SimpleNamespace):

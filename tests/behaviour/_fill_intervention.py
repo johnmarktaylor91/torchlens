@@ -47,7 +47,6 @@ import torch
 
 import torchlens as tl
 from tests.behaviour._hook_passes import (
-    HookPass,
     hook_pass_problems,
     start_recording,
     stop_recording,
@@ -596,7 +595,7 @@ def _prepare_hooks(cell: Cell) -> None:
 
     # Every pass the cell runs with this hook armed is counted at the capture door
     # (tests/behaviour/_hook_passes.py), never inferred from the fires.
-    log["passes"] = start_recording(hook)
+    log["passes"] = start_recording(hook, log["run_states"])
     # The cell is the only object both hooks share; capture_fields would reach CaptureOptions.
     vars(cell)[_HOOKS_KEY] = (log, target)
     _merge_intervene(cell, tl.when(tl.func(target), hook))
@@ -627,18 +626,14 @@ def _after_hooks(cell: Cell) -> None:
     stop_recording(recorder)
     selected = [op for op in trace.ops if op.func_name == target]
     fires = log["fires"]
-    passes = [
-        HookPass(
-            getattr(armed, "last_run", None),
-            sum(1 for op in armed.ops if op.func_name == target),
-        )
-        for armed in recorder.traces
-    ]
-    problems = hook_pass_problems(passes, log["run_states"])
+    problems = hook_pass_problems(
+        recorder.passes, len(selected), fires_outside=recorder.fires_outside_passes()
+    )
+    armed = [one for one in recorder.passes if one.armed]
     cell.expect(
         not problems,
         f"hook fired {len(fires)} times for {len(selected)} selected ops over "
-        f"{len(passes)} armed passes: {'; '.join(problems[:4])}",
+        f"{len(armed)} armed passes: {'; '.join(problems[:4])}",
     )
     cell.expect(
         all(signal == "forward" for signal, _, _ in fires), "a forward hook saw another signal"
@@ -648,7 +643,10 @@ def _after_hooks(cell: Cell) -> None:
         "ctx.state scratch did not survive the pass with its fire counts",
     )
     cell.expect(
-        all((armed.run_state or {}).get("fires", 0) == armed.selected for armed in passes),
+        all(
+            state.get("fires") == sum(1 for seen in log["run_states"] if seen is state)
+            for state in log["run_states"]
+        ),
         "ctx.run_state did not survive the run",
     )
     marked = {op.label for op in trace.ops if op.is_edited}
