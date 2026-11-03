@@ -15,7 +15,7 @@ from _format3_envelope import read_record, write_record
 from torch import nn
 
 import torchlens as tl
-from torchlens._io import TLSPEC_VERSION, ArtifactError
+from torchlens._io import TLSPEC_VERSION, ArtifactError, ArtifactTooOldError
 from torchlens._io._tlspec_identity import _backend_runtime
 from torchlens.errors import EngineDispatchError
 from torchlens.intervention.errors import OpaqueCallableError
@@ -391,11 +391,13 @@ def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> No
         item for item in manifest["body_index"] if item["intended_use"] == "pre_hook_input"
     )
     entry["intended_use"] = "unknown_provenance_payload"
+    manifest.update(format_version=2, tlspec_version=11)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="intended_use"):
+    with pytest.raises(ArtifactTooOldError) as caught:
         validate_tlspec(path)
-    with pytest.raises(ArtifactError, match="intended_use"):
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
+    with pytest.raises(ArtifactTooOldError):
         tl.load(path)
 
 
@@ -813,30 +815,21 @@ def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-def test_validate_tlspec_enforces_shipped_schema_properties_pattern(tmp_path: Path) -> None:
-    """The shipped JSON schema's ``properties`` block must be load-bearing, not decorative.
-
-    Regression test for a MAJOR finding: ``_validate_manifest_against_schema``
-    used to read only ``schema["required"]`` from the shipped
-    ``schemas/tlspec_manifest_v1.json`` file; ``schema["properties"]``
-    (types, enums, minimums, patterns) was never consulted, so editing only
-    the JSON schema could silently no-op. ``python_version`` is a clean
-    probe for this: the hand-written Python validator only checks it is a
-    non-empty string (``_require_str``), while the shipped schema also
-    declares ``"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"``. Before the fix,
-    a non-empty string that violates that pattern passed validation
-    entirely; after the fix, the schema's own ``properties`` entry is what
-    catches it.
-    """
+@pytest.mark.parametrize("invalid_identity", ["", None, 7])
+def test_validate_tlspec_enforces_shipped_schema_properties_pattern(
+    tmp_path: Path, invalid_identity: Any
+) -> None:
+    """The code-owned format 3 identity grammar rejects empty or non-string values."""
 
     path = tmp_path / "bad_python_version.tlspec"
     _captured_log().save(path)
+    validate_tlspec(path)
     manifest = _read_manifest(path)
-    manifest["python_version"] = "not-a-version"
+    manifest["python_version"] = invalid_identity
     _write_manifest(path, manifest)
-
-    with pytest.raises(ValueError, match="python_version"):
+    with pytest.raises(ArtifactError, match="python_version") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 @pytest.mark.parametrize("field_name", ("model_fingerprint", "backward_summary"))
@@ -871,28 +864,22 @@ def test_shipped_tlspec_schema_keywords_are_all_walker_supported() -> None:
     assert observed <= _SUPPORTED_JSON_SCHEMA_KEYWORDS
 
 
-def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Path) -> None:
-    """Schema v2 (every non-torch backend) must reject malformed ``python_version`` too.
-
-    Regression test for a MAJOR finding: the round that made
-    ``schemas/tlspec_manifest_v1.json``'s ``properties`` block load-bearing
-    (see ``test_validate_tlspec_enforces_shipped_schema_properties_pattern``)
-    only exercised schema v1 (the torch-backend default). Schema v2 --
-    written for every non-torch backend (mlx/tf/paddle/tinygrad/jax/...) --
-    declared ``python_version`` in its ``required`` list but never in its
-    ``properties`` block, so the pattern constraint was decorative there: a
-    malformed ``python_version`` silently passed ``validate_tlspec()`` for
-    any schema-v2 bundle.
-    """
+@pytest.mark.parametrize("invalid_identity", ["", None, 7])
+def test_validate_tlspec_enforces_schema_v2_python_version_pattern(
+    tmp_path: Path, invalid_identity: Any
+) -> None:
+    """The same code-owned identity grammar applies to array codec artifacts."""
 
     path = tmp_path / "bad_python_version_v2.tlspec"
     _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["python_version"] = "not-a-version"
+    manifest = _mlx_materialized_schema_v2_manifest(path)
     _write_manifest(path, manifest)
-
-    with pytest.raises(ValueError, match="python_version"):
+    validate_tlspec(path)
+    manifest["python_version"] = invalid_identity
+    _write_manifest(path, manifest)
+    with pytest.raises(ArtifactError, match="python_version") as caught:
         validate_tlspec(path)
+    assert caught.value.fields["code"] == "manifest_schema_invalid"
 
 
 def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
@@ -1021,21 +1008,30 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unexpected codec-registry failures surface as ``ArtifactError``."""
+    """An active raw-value codec lookup wraps registry failures as typed IO refusals."""
 
-    import torchlens._io.bundle as bundle_module
+    import numpy as np
 
-    path = tmp_path / "mlx_registry_error.tlspec"
-    _captured_log().save(path)
-    _write_manifest(path, _mlx_materialized_schema_v2_manifest(path))
+    import torchlens._io.payload_codec as payload_module
 
-    def _exploding_codec_lookup(backend_name: str) -> Any:
+    raw = {"array": np.arange(6, dtype=np.float32), "x": torch.randn(2, 3)}
+    trace = tl.trace(
+        UnifiedTinyModel(),
+        raw,
+        capture=CaptureOptions(input_transform=lambda value: value["x"], save_raw_input=True),
+    )
+    path = tmp_path / "array_registry_error.tlspec"
+    trace.save(path)
+    assert isinstance(tl.load(path).input["array"], np.ndarray)
+
+    def exploding_lookup(backend_name: str) -> Any:
         raise RuntimeError("registry exploded")
 
-    monkeypatch.setattr(bundle_module, "get_payload_codec", _exploding_codec_lookup)
-
-    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec"):
+    monkeypatch.setattr(payload_module, "get_payload_codec", exploding_lookup)
+    with pytest.raises(ArtifactError, match="Failed to resolve the payload codec") as caught:
         tl.load(path)
+    assert caught.value.fields["code"] == "bundle_load_failed"
+    assert isinstance(caught.value.__cause__, RuntimeError)
 
 
 @pytest.mark.parametrize(
@@ -1083,10 +1079,13 @@ def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
             "intended_use": "audit_record",
         }
     ]
+    manifest.update(format_version=2, tlspec_version=11)
     _write_manifest(path, manifest)
 
-    with pytest.raises(ValueError, match="intended_use"):
+    with pytest.raises(ArtifactTooOldError) as caught:
         validate_tlspec(path)
+
+    assert caught.value.fields["code"] == "artifact_version_below_floor"
 
 
 @pytest.mark.parametrize(

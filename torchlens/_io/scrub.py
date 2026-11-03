@@ -1694,7 +1694,7 @@ def _scrub_raw_value_for_save(
     policy = getattr(owner, _RAW_SAVE_POLICY_ATTR.get(field_name, policy_name), "small")
     if policy is False:
         return None
-    if policy not in (True, "small"):
+    if policy is not True and policy != "small":
         raise ArtifactError(f"{policy_name} must be 'small', True, or False.")
     selected = value if policy is True else _small_raw_value(value, field_name=field_name)
     raw_walk = _ScrubWalk(

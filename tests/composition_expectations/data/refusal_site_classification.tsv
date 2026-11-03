@@ -1932,3 +1932,4 @@ torchlens._kernel_telemetry:_require_aten_trace:AtenOpsUnavailableError::1	CONTR
 torchlens.intervention._rerun_predicate:_capture_rule_from_recipe:ArtifactError::1	CONTRACTED	manifest_schema_invalid	malformed original capture selector or built-in edit is refused at load
 torchlens._io.bundle:save:ArtifactError::2	CONTRACTED	metadata_value_unportable	unsupported tensor payload refuses at every strictness setting
 torchlens._io.bundle:save:BackendPayloadUnsupportedError::2	CONTRACTED	metadata_value_unportable	unsupported array transport refuses at every strictness setting
+torchlens._io.payload_codec:_resolve_materialization_codec:ArtifactError::1	CONTRACTED	bundle_load_failed	Registry failure refuses through the typed bundle-load boundary; tests/test_tlspec_unified.py preserves the original chained cause.

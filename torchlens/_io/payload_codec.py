@@ -21,6 +21,7 @@ from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
 from ._numpy_payload_codec import NumpyPayloadCodec
 from ._payload_codec_paddle import _resolve_paddle_place
+from .format_errors import ArtifactError
 from .manifest import _json_ready_codec_metadata_value
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
 
@@ -991,6 +992,19 @@ def numpy_to_transport_tensor(array: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(np.array(array, copy=True, order="C"))
 
 
+def _resolve_materialization_codec(backend_name: str) -> PayloadCodec:
+    """Keep registry failures inside the typed bundle-load boundary."""
+
+    try:
+        return get_payload_codec(backend_name)
+    except Exception as exc:
+        raise ArtifactError(
+            f"Failed to resolve the payload codec for backend {backend_name!r} during load.",
+            code="bundle_load_failed",
+            remedy="restore the payload runtime or re-save the artifact in a compatible environment",
+        ) from exc
+
+
 def materialize_transport_tensor(
     tensor: torch.Tensor,
     entry: Any,
@@ -1036,7 +1050,7 @@ def materialize_transport_tensor(
             return tensor
         return tensor.to(map_location)
 
-    codec = get_payload_codec(logical_backend)
+    codec = _resolve_materialization_codec(logical_backend)
     if codec.codec_name == "none" or codec_name != codec.codec_name:
         raise BackendPayloadUnsupportedError(
             f"Manifest declares unsupported payload codec {codec_name!r} for "
