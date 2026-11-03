@@ -1619,9 +1619,6 @@ class Op(OpAtenMixin, _SelectionOperand):
             grad = slot("grad")
             if grad is None and slot("grad_ref") is not None:
                 return object.__getattribute__(self, "materialize_grad")()
-            ref = slot("_source_trace_ref")
-            if grad is None and ref is not None and ref() is None and slot("has_grad", False):
-                _getattribute(self, "source_trace")  # collected Trace: grad evicted, refuse typed
             return grad
         if name == "out":
             slot = _object_getattribute(self, "_slot")

@@ -124,21 +124,3 @@ def test_op_out_after_trace_collection_refuses_typed(save) -> None:
         _ = op.out
     assert exc_info.value.fields["code"] == "trace_reference_collected"
     assert op.func_name == "relu"  # metadata stays readable
-
-
-def test_op_grad_after_trace_collection_refuses_typed() -> None:
-    """A held Op's saved gradient refuses typed after its Trace is collected."""
-
-    trace = tl.trace(
-        _ConvReluNet(),
-        torch.randn(1, 1, 6, 6),
-        capture=tl.options.CaptureOptions(save_grads=True),
-    )
-    trace[trace.output_layers[0]].out.sum().backward()
-    op = _relu_op(trace)
-    assert isinstance(op.grad, torch.Tensor)
-    del trace
-    gc.collect()
-    with pytest.raises(RecordBindingError) as exc_info:
-        _ = op.grad
-    assert exc_info.value.fields["code"] == "trace_reference_collected"
