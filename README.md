@@ -397,7 +397,7 @@ Available helpers: `tl.zero_ablate`, `tl.mean_ablate`,
 `torchlens.intervention.helpers.swap_with`.
 
 For post-hoc DAG replay and isolated experiments, capture with
-`capture=tl.options.CaptureOptions(replayable=True)` and use `log.fork()` +
+`tl.trace(model, x)` and use `log.fork()` +
 `log.do(site, edit)` (replays the saved graph) / `log.run(model, x)`. Live hooks during
 rerun require capture-time selectors
 (e.g. `tl.func(...)`, `tl.module(...)`); finalized labels resolve via
