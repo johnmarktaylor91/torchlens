@@ -48,6 +48,35 @@ WRITER_IDENTITY_FIELDS: Final[tuple[str, ...]] = (
     "platform",
     "created_at",
 )
+#: Identity grammar, code-owned: the pattern each writer identity string must fully match
+#: (``re.fullmatch``). The contract states no stricter version-string pattern than
+#: "non-empty"; tightening one starts here, in the prose contract, never in a shipped schema
+#: file. Ruled 2 Nov 2026.
+IDENTITY_FIELD_PATTERNS: Final[dict[str, str]] = dict.fromkeys(WRITER_IDENTITY_FIELDS, r"(?s).+")
+#: Optional manifest summaries (the 2.x unified manifest carried them; a 3.0 writer may).
+#: When present each must match its closed shape below; the reader refuses
+#: ``manifest_schema_invalid`` otherwise. Ruled 2 Nov 2026.
+MANIFEST_SUMMARY_FIELDS: Final[tuple[str, ...]] = ("model_fingerprint", "backward_summary")
+#: ``model_fingerprint`` model shape: two SHA-256 hex digests, a class name, an object.
+MODEL_FINGERPRINT_HASH_FIELDS: Final[tuple[str, ...]] = ("parameter_meta_hash", "buffer_meta_hash")
+#: ``model_fingerprint`` backend shape: ``{"backend_fingerprint": {<these keys>}}``.
+BACKEND_FINGERPRINT_FIELDS: Final[tuple[str, ...]] = (
+    "backend",
+    "model_signature",
+    "graph_digest",
+    "module_identity_mode",
+    "param_source",
+)
+#: ``backward_summary`` non-negative integer counters.
+BACKWARD_SUMMARY_COUNT_FIELDS: Final[tuple[str, ...]] = (
+    "num_backward_passes",
+    "num_grad_fns",
+    "num_grad_fn_calls",
+    "num_saved_grad_records",
+    "gradient_blob_count",
+)
+#: Gradient blob kinds ``backward_summary.gradient_blob_kinds`` may name, each at most once.
+GRADIENT_BLOB_KINDS: Final[tuple[str, ...]] = ("grad", "grad_fn_grad", "transformed_grad")
 #: Manifest keys the reader requires before it opens any other file.
 MANIFEST_REQUIRED_FIELDS: Final[tuple[str, ...]] = (
     "format",

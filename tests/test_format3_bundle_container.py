@@ -224,13 +224,11 @@ def test_edited_relations_file_refuses(tmp_path: Path) -> None:
     assert info.value.fields["code"] == "bundle_metadata_integrity_refused"
 
 
-def test_unlisted_relations_file_refuses(tmp_path: Path) -> None:
-    """A relations file the manifest does not list refuses."""
+def test_unlisted_relations_file_is_never_read(tmp_path: Path) -> None:
+    """A relations file the manifest does not list is ignored: the bundle lists no relations."""
 
     container.write_relations(_forked_bundle(), tmp_path)
-    with pytest.raises(ArtifactError) as info:
-        container.read_relations(tmp_path, {})
-    assert info.value.fields["code"] == "manifest_schema_invalid"
+    assert container.read_relations(tmp_path, {}) is None
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")

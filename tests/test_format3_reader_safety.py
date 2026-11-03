@@ -416,11 +416,18 @@ def test_wrong_file_digest_refuses(saved, tmp_path, tripwires):
 @pytest.mark.parametrize(
     "relpath", ["extra.bin", "blobs/planted.safetensors", "records/extra.json"]
 )
-def test_unlisted_file_in_the_artifact_refuses(saved, tmp_path, tripwires, relpath):
+def test_unlisted_file_in_the_artifact_is_named_and_never_read(saved, tmp_path, relpath):
+    """Contract section 1: an unlisted file is never opened; the load succeeds with a warning."""
+
+    import torchlens as tl
+
     copy = copy_artifact(saved, tmp_path / ("unlisted-" + relpath.replace("/", "_")))
     (copy / relpath).parent.mkdir(parents=True, exist_ok=True)
     (copy / relpath).write_bytes(b"\x00")
-    _refuses(copy, tripwires, code="bundle_metadata_integrity_refused")
+    with pytest.warns(UserWarning, match="unreferenced extra files") as caught:
+        trace = tl.load(copy)
+    assert relpath in str(caught[0].message)
+    assert trace is not None
 
 
 def test_wrong_record_digest_refuses(saved, tmp_path, tripwires):

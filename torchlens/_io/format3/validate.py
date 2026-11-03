@@ -16,6 +16,7 @@ import hashlib
 import json
 import os
 import re
+import warnings
 from collections.abc import Mapping, Sequence
 from importlib import import_module
 from pathlib import Path
@@ -23,17 +24,21 @@ from typing import Any, Final
 
 from ..._data_classes._schema_bindings import STORAGE_BINDINGS
 from ..._data_classes.field_policy import StorageKind
+from ...errors._base import TorchLensWarning
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._json import loads_bounded, read_bytes_bounded
+from .._runtime_identity import check_runtime_identity
 from ..field_registry import RECORD_CONTRACT_CLASSES
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
 from ..format_errors import ArtifactError, ArtifactTooOldError, UnknownPersistedFieldError
 from ..paths import reject_symlink_path
 from ..state_contract import _unknown_field_remedy
 from . import contract
+from .summaries import summary_schema_errors
 
 __all__ = [
     "check_record_anchors",
+    "check_runtime_policy",
     "check_version_window",
     "legacy_stamp",
     "pre3_error",
@@ -279,9 +284,11 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     for key in ("format_version", TLSPEC_KEY):
         if not is_int(manifest[key]) or manifest[key] < 0:
             errors.append(f"{key} must be a non-negative integer")
-    for key in (*contract.WRITER_IDENTITY_FIELDS, "contract_digest"):
-        if not isinstance(manifest[key], str) or not manifest[key]:
-            errors.append(f"{key} must be a non-empty string")
+    if not isinstance(manifest["contract_digest"], str) or not manifest["contract_digest"]:
+        errors.append("contract_digest must be a non-empty string")
+    for key, pattern in contract.IDENTITY_FIELD_PATTERNS.items():
+        if not isinstance(manifest[key], str) or re.fullmatch(pattern, manifest[key]) is None:
+            errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
     policy = manifest["payload_policy"]
@@ -311,31 +318,52 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
         and all(isinstance(item, str) for item in disclosures["first"])
     ):
         errors.append("disclosures must be {count: positive int, first: [<=16 strings]}")
+    errors.extend(summary_schema_errors(manifest))
     return errors
 
 
-def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:
-    """Check every listed file, then refuse any file under the root the manifest omits.
+def check_runtime_policy(manifest: Mapping[str, Any]) -> None:
+    """The shared runtime identity policy (torch major refusal, torch minor, newer TorchLens
+    and Python major warnings) on the manifest's writer stamps; the floor ran before this."""
 
-    The manifest is the whole artifact: a file it does not list is never read, and its
-    presence (a stray blob, a planted record, a leftover of an edit) refuses
-    ``bundle_metadata_integrity_refused`` so an artifact is exactly what its manifest says.
-    Symlinked entries refuse before anything follows them.
+    check_runtime_identity(
+        torch_version=manifest["torch_version"],
+        torchlens_version=manifest["torchlens_version"],
+        python_version=manifest["python_version"],
+        subject="Artifact",
+    )
+
+
+def verify_listed_files(root: Path, manifest: Mapping[str, Any]) -> None:
+    """Check every listed file; name, and never open, any file the manifest omits.
+
+    The manifest is the whole artifact: a file it does not list is never opened or read
+    (a ``README.txt`` beside the records is allowed), and the load succeeds. The unlisted
+    names are reported in one advisory ``TorchLensWarning`` so an edit, a stray blob or a
+    planted file is visible without being trusted. Symlinked listed entries refuse before
+    anything follows them; an unlisted symlink is never followed.
     """
 
     files = manifest["files"]
     for relpath, entry in files.items():
         verify_file_bytes(root, relpath, entry)
     listed = set(files) | {contract.MANIFEST_FILE}
-    for parent, dirnames, filenames in os.walk(root, followlinks=False):
-        for name in sorted(dirnames + filenames):
-            path = Path(parent) / name
-            relpath = path.relative_to(root).as_posix()
-            symlink_guard(path, f"artifact entry {relpath}")
-            if name in filenames and relpath not in listed:
-                raise integrity_error(
-                    path, "present in the artifact but not listed in the manifest", code=_CORRUPT
-                )
+    unlisted: list[str] = []
+    for parent, _dirnames, filenames in os.walk(root, followlinks=False):
+        for name in sorted(filenames):
+            relpath = (Path(parent) / name).relative_to(root).as_posix()
+            if relpath not in listed:
+                unlisted.append(relpath)
+    if unlisted:
+        shown = ", ".join(unlisted[:8]) + (
+            f" (+{len(unlisted) - 8} more)" if len(unlisted) > 8 else ""
+        )
+        warnings.warn(
+            f"Artifact {root} contains unreferenced extra files the manifest does not list; "
+            f"they were not read: {shown}.",
+            TorchLensWarning,
+            stacklevel=4,
+        )
 
 
 def verify_file_bytes(root: Path, relpath: str, entry: Mapping[str, Any]) -> Path:
@@ -501,7 +529,7 @@ def _check_trace_containers(
                 root, f"trace.{field} is not a container", field=field, code=_CODE
             )
         if kind == "op":
-            _check_op_coverage(objects, trace, field, root)
+            _check_op_coverage(tables, objects, trace, field, root)
         elif len(container) != _rows_of(tables, kind):
             raise _invariant_error(
                 root,
@@ -518,20 +546,37 @@ def _entries(container: Any) -> list[Any]:
     return list(container.values()) if isinstance(container, Mapping) else list(container)
 
 
+def _injected_op_ids(
+    tables: Mapping[str, list[dict[str, Any]]], objects: Mapping[str, Sequence[Any]]
+) -> set[int]:
+    """Op rows a ``log_injections=True`` hook recorded: they carry ``injection_provenance``,
+    sit in ``_layer_list`` beside the model's ops, and are not main keys."""
+
+    pairs = zip(objects.get("op", ()), tables.get("op", ()), strict=True)
+    return {id(obj) for obj, row in pairs if row.get("injection_provenance") is not None}
+
+
 def _check_op_coverage(
-    objects: Mapping[str, Sequence[Any]], trace: Mapping[str, Any], field: str, root: Path
+    tables: Mapping[str, list[dict[str, Any]]],
+    objects: Mapping[str, Sequence[Any]],
+    trace: Mapping[str, Any],
+    field: str,
+    root: Path,
 ) -> None:
     """The op table is exactly the retained refs plus the orphan refs (keep_orphans saves).
 
     Reference cells are settled to the op record objects before this runs (a dangling ref
     refuses at settle time), so coverage is by identity: every op row must be reached once by
     ``_layer_list`` or ``_orphan_logs``; a row neither references (a forged extra) or a repeated
-    entry refuses. The ``_layer_dict_main_keys`` values are the retained ops themselves.
+    entry refuses. The ``_layer_dict_main_keys`` values are the retained model ops: the
+    ``_layer_list`` entries without injection provenance (an injected row among the main keys,
+    or a main key outside the list, is foreign).
     """
 
     entries = _entries(trace[field])
     if field == "_layer_dict_main_keys":
-        rows = {id(op) for op in _entries(trace.get("_layer_list") or ())}
+        injected = _injected_op_ids(tables, objects)
+        rows = {id(op) for op in _entries(trace.get("_layer_list") or ()) if id(op) not in injected}
     else:
         rows = {id(op) for op in objects.get("op", ())}
         orphans = trace.get("_orphan_logs")

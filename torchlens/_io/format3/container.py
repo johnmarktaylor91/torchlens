@@ -20,7 +20,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from pathlib import Path
 from typing import Any, Literal
 
@@ -30,6 +30,7 @@ from ..bundle_metadata import _load_gated_member_relations
 from ..paths import reject_symlink_path
 from .contract import MANIFEST_FILE, REFUSAL_CODES
 from .runnable_families import refuse as _refuse
+from .validate import integrity_error, read_json_file, symlink_guard
 
 #: Index file of a bundle artifact, at its root.
 BUNDLE_INDEX_FILE = "relations.json"
@@ -255,12 +256,7 @@ def read_relations(
     row = files.get(RELATIONS_FILE)
     target = bundle_root / RELATIONS_FILE
     if row is None:
-        if target.exists() or target.is_symlink():
-            _refuse(
-                "manifest_invalid",
-                f"The bundle holds {RELATIONS_FILE} but its manifest does not list it.",
-                "save the bundle again; its manifest was altered",
-            )
+        # Contract section 1: a file the manifest does not list is never opened or read.
         return None
     _verify_relations_file(target, row)
     try:
@@ -276,3 +272,55 @@ def read_relations(
         unknown_relations=unknown_relations,
         tlspec_version=tlspec_version,
     )
+
+
+_MEMBER_DIR = re.compile(r"^members/(\d+)-([A-Za-z0-9_.-]+)$")
+_CORRUPT_CODE = REFUSAL_CODES["record_file_corrupt"]
+
+
+def read_member_index(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
+    """Read ``relations.json``: an object whose ``members`` list names each member's path."""
+
+    target = root / "relations.json"
+    if "relations.json" not in manifest["files"]:
+        raise integrity_error(target, "a bundle must list relations.json", code=_CORRUPT_CODE)
+    data, _ = read_json_file(target, code=_CORRUPT_CODE, what="relations")
+    members = data.get("members") if isinstance(data, dict) else None
+    if not isinstance(members, list) or not all(
+        isinstance(member, dict)
+        and isinstance(member.get("name"), str)
+        and isinstance(member.get("path"), str)
+        for member in members
+    ):
+        raise integrity_error(
+            target, "relations.json must be {members: [{name, path}, ...], ...}", code=_CORRUPT_CODE
+        )
+    return data
+
+
+def iter_members(
+    root: Path, manifest: Mapping[str, Any], metadata: Mapping[str, Any]
+) -> Iterator[tuple[str, Path]]:
+    """Members in ``relations.json`` order; every ``members/`` file must belong to one."""
+
+    declared: dict[str, str] = {}
+    for member in metadata["members"]:
+        path, name = member["path"], member["name"]
+        if _MEMBER_DIR.match(path) is None or path in declared or name in declared.values():
+            raise integrity_error(
+                root / path,
+                "bundle members must be distinct members/<index>-<name>/ directories",
+                code=_CORRUPT_CODE,
+            )
+        declared[path] = name
+    for relpath in manifest["files"]:
+        parts = relpath.split("/")
+        if parts[0] == "members" and "/".join(parts[:2]) not in declared:
+            raise integrity_error(
+                root / relpath, "member files must belong to a declared member", code=_CORRUPT_CODE
+            )
+    for member in metadata["members"]:
+        member_root = root / member["path"]
+        symlink_guard(member_root, "bundle member")
+        verify_member_reference(member_root, member, required=True)
+        yield member["name"], member_root

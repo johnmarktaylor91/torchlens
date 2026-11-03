@@ -98,6 +98,7 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
+from .format3.restore import true_up_record
 from .format3.route import Format3LoadRequest, is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
@@ -1021,13 +1022,20 @@ def _finish_format3_trace(
         resolved_blobs_dir=blobs_dir,
         trace=artifact.objects["trace"][0],
     )
+    # The rehydrate path re-runs the trace state hook; put back what its fill changed.
+    true_up_record(trace, artifact.tables["trace"][0], "trace")
     reanchor_loaded_episode_evidence(trace)
     _reanchor_visualizer_paths(trace, root)
     trace._loaded_from_bundle = True
     trace._source_bundle_manifest_sha256 = sha256_file(root / format3_contract.MANIFEST_FILE)
     trace._source_bundle_path = root
     trace._source_bundle_created_at = manifest["created_at"]
-    trace._source_bundle_provenance = manifest.get("provenance")
+    # The certificate rides as a ``Provenance`` so a plain resave carries the capture-time
+    # facts (default dtype, RNG digests) forward instead of re-deriving them weaker.
+    raw_provenance = manifest.get("provenance")
+    trace._source_bundle_provenance = (
+        Provenance.from_dict(raw_provenance) if isinstance(raw_provenance, dict) else None
+    )
     # Contract section 7: the runnable component (descriptor and families under ``runnable/``,
     # listed in ``manifest["runnable"]``); an analysis artifact attaches analysis-only readiness.
     runnable_bind.attach_runnable(

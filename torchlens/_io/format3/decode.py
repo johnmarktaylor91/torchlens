@@ -682,6 +682,14 @@ def build_component(cls: type, fields: Mapping[str, Any], *, at: str = "value") 
     return state_restore(obj, state)
 
 
+class TensorCellFields(dict[str, Any]):
+    """The reference fields of a ``tensor`` cell :func:`decode_value` meets, hashed by identity
+    like the tensor it stands for, so a set or frozenset member decodes without a payload."""
+
+    __slots__ = ()
+    __hash__ = object.__hash__  # type: ignore[assignment]
+
+
 def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
     """Decode one tagged JSON value through the closed vocabulary (the encoder's inverse).
 
@@ -690,7 +698,7 @@ def decode_value(data: Any, *, schema: Any = None, at: str = "value") -> Any:
     ``schema`` optionally applies one family node after decoding.
     """
 
-    value = Decoder(lambda fields, _at: dict(fields)).decode(data, at=at)
+    value = Decoder(lambda fields, _at: TensorCellFields(fields)).decode(data, at=at)
     if schema is not None:
         _apply_family(schema, value, at)
     return value
