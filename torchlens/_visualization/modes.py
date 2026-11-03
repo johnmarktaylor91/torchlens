@@ -223,6 +223,13 @@ def vision_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     -------
     NodeSpec
         Node spec with an IO-shape row for spatial layers.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> spec = vision_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec.lines[0], spec.lines[-1].startswith("in=")
+    ('conv', True)
     """
 
     if _normalized_layer_type(layer_log) not in VISION_LAYER_TYPES:
@@ -252,6 +259,13 @@ def attention_node_mode(layer_log: Op | Layer, spec: NodeSpec) -> NodeSpec:
     -------
     NodeSpec
         Node spec with attention details when heuristics match.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> spec = attention_node_mode(trace["0"], tl.viz.NodeSpec(lines=["conv"]))
+    >>> spec.lines
+    ['conv']
     """
 
     lines = list(spec.lines)
