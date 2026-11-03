@@ -5,14 +5,14 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1401 modules, 630102 lines, 0 modules without a docstring.
+83 packages, 1402 modules, 630115 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
 | `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 71 | 31980 |
-| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1240 |
+| `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1242 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25071 |
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8488 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3945 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 108 | 53697 |
-| `torchlens.bridge` | External-tool bridge namespace. | 25 | 7906 |
+| `torchlens.bridge` | External-tool bridge namespace. | 26 | 7917 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8369 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -177,12 +177,12 @@ TorchLens - extract outs and metadata from PyTorch models. (71 modules, 31980 li
 
 ### `torchlens._autoroute`
 
-TorchLens auto-routing registries. (6 modules, 1240 lines)
+TorchLens auto-routing registries. (6 modules, 1242 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | TorchLens auto-routing registries. | 7 |
-| `_builtin_input` | Built-in input auto-route detectors. | 55 |
+| `_builtin_input` | Built-in input auto-route detectors. | 57 |
 | `_builtin_output` | Built-in output auto-route detectors and decoders. | 743 |
 | `_decode_heads` | Torch-only helpers of the output decoders. | 189 |
 | `_decode_spellings` | Public spellings of the read-time output decode, declared once. | 30 |
@@ -1339,11 +1339,12 @@ Torch backend implementation package for TorchLens capture. (108 modules, 53697 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (25 modules, 7906 lines)
+External-tool bridge namespace. (26 modules, 7917 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | External-tool bridge namespace. | 114 |
+| `_hf_refusals` | Typed preprocessing refusals shared by the Hugging Face auto-routes. | 105 |
 | `_sae_export` | Write SAE latents and top examples in the formats SAEDashboard and delphi read. | 459 |
 | `_sae_latents` | SAE latents as a facet family, and the logged splice that puts them in a trace. | 565 |
 | `_sae_metrics` | Reconstruction and next-token metrics for the SAE splice experiment. | 204 |
@@ -1365,7 +1366,7 @@ External-tool bridge namespace. (25 modules, 7906 lines)
 | `sae_lens` | SAE Lens bridge helpers. | 99 |
 | `shap` | SHAP bridge helpers. | 81 |
 | `steering_vectors` | steering-vectors converter. | 52 |
-| `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 898 |
+| `transformers` | Hugging Face auto-route bridge helpers and the TorchLens attention backend. | 804 |
 | `treescope` | The treescope bridge: external registration, probe, sniff, door (B4). | 636 |
 | `xarray` | xarray / NeuroidAssembly adapters over TorchLens sites (tvscope B8). | 154 |
 
