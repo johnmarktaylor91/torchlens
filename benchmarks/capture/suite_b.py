@@ -60,7 +60,7 @@ ROWS = {
         Row("save_load", "a portable trace file on disk, and the trace loaded back from it"),
         Row(
             "backward_capture",
-            "the forward graph plus gradients at one declared module after log_backward",
+            "the forward graph plus gradients at one declared module after trace.backward",
         ),
         Row("draw", "a rendered graph file of the whole trace", needs_graphviz=True),
         Row(
@@ -188,7 +188,7 @@ def _backward(tl: Any, subject: Subject) -> Callable[[], Any]:
             capture=_options(save_grads=tl.module(site)),
         )
         out = first_tensor(trace.find_sites(tl.module(final)).first().out)
-        trace.log_backward(out.sum())
+        trace.backward(out.sum())
         subject.model.zero_grad(set_to_none=True)
         return trace
 

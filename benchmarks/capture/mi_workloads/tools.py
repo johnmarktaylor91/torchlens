@@ -196,7 +196,7 @@ class TLTrace:
             capture=self.CaptureOptions(save_grads=sel, unwrap_when_done=False),
         )
         logits = _logits_from_trace(t, tl)
-        t.log_backward(metric(logits))
+        t.backward(metric(logits))
         res = {}
         for s in sites:
             ops = list(t.find_sites(tl.module(s)))
@@ -266,7 +266,7 @@ class TLRecord:
 
     def grads(self, ids, sites, metric):
         raise Skip(
-            "tl.record has no backward capture in this comparison (Recording.log_backward needs a cooked trace)"
+            "tl.record has no backward capture in this comparison (backward capture needs a cooked trace)"
         )
 
     def generate(self, ids, site, delta, n_new, sample):
