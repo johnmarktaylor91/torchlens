@@ -40,7 +40,8 @@ from ..._errors import UserTransformError
 from ..._ir.events import (
     FunctionCallRef,
 )
-from ..._ir.predicate import RetroactiveCaptureDecision
+from ..._ir.predicate import RecordContext, RetroactiveCaptureDecision
+from ..._ir.refs import ParamRef
 from ..._state import pause_logging
 from ..._training_validation import TrainingModeConfigError
 from ..._utils.display import _timed_phase
@@ -60,8 +61,11 @@ from ._tl import (
     set_tensor_label,
 )
 from .tensor_tracking import (
+    _append_module_suffix_to_equivalence_class,
     _get_ancestors_from_parents,
+    _get_equivalence_class,
     _locate_parent_tensors_in_args,
+    _make_raw_param_group_barcode,
     _process_parent_param_ops,
 )
 
@@ -96,8 +100,9 @@ def _emit_predicate_operation_events(
     del exec_ctx
     state = get_active_recording_state()
     layer_type = _normalize_func_name(func_name)
-    arg_tensors, _ = _extract_arg_tensors_and_params(layer_type, args, kwargs)
+    arg_tensors, arg_parameters = _extract_arg_tensors_and_params(layer_type, args, kwargs)
     parent_labels = tuple(get_label_list(arg_tensors))
+    param_refs = _prepared_param_refs(state, arg_parameters)
     out_iter = list(_iter_loggable_live_outputs(out_orig, is_bottom_level_func))
     expected_output_count = len(out_iter)
     function_ref: FunctionCallRef | None = None
@@ -206,6 +211,18 @@ def _emit_predicate_operation_events(
                 backend_semantics=backend_semantics,
                 function=function_ref,
                 container_path=container_path,
+                equivalence_class=_predicate_equivalence_class(
+                    state,
+                    ctx,
+                    args,
+                    kwargs,
+                    param_refs,
+                    func_name=func_name,
+                    layer_type=layer_type,
+                    output_index=output_index,
+                    in_multi_output=expected_output_count > 1,
+                ),
+                params=param_refs,
             )
             evaluate_halt_stop(self, ctx, state.options, frontier_output=out)
         except StopSignal:
@@ -355,6 +372,102 @@ def _build_graph_relationship_fields(
 
     in_multi_output = any(issubclass(type(out_orig), cls) for cls in [list, tuple, dict, set])
     fields_dict["in_multi_output"] = in_multi_output
+
+
+def _prepared_param_refs(
+    state: Any,
+    arg_parameters: list[torch.nn.Parameter],
+) -> tuple[ParamRef, ...]:
+    """Resolve the Parameters an op read to their prep-time identities.
+
+    Parameters
+    ----------
+    state
+        Active recording state holding ``prepared_param_refs``.
+    arg_parameters
+        Parameters found among the call's arguments.
+
+    Returns
+    -------
+    tuple[ParamRef, ...]
+        One ref per prepared parameter occurrence, in argument order. A
+        Parameter the prep never saw (created inside the forward) has no
+        identity and is skipped, as exhaustive capture skips unstamped ones.
+    """
+
+    if not arg_parameters:
+        return ()
+    registry = state.prepared_param_refs
+    if not registry:
+        return ()
+    return tuple(ref for param in arg_parameters if (ref := registry.get(id(param))) is not None)
+
+
+def _predicate_equivalence_class(
+    state: Any,
+    ctx: RecordContext,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    param_refs: tuple[ParamRef, ...],
+    *,
+    func_name: str,
+    layer_type: str,
+    output_index: int,
+    in_multi_output: bool,
+) -> str:
+    """Build the loop-grouping fingerprint of one predicate-mode op output.
+
+    The same two fingerprints exhaustive capture mints (``_ops_activations``):
+    parameterized ops key on ``layer_type`` plus the sorted parameter barcodes,
+    parameter-free ops on ``layer_type`` plus a hash of the non-tensor
+    arguments, both suffixed with the output slot of a multi-output call and
+    the module stack. Cooked recordings therefore group recurrent layers the
+    way ``tl.trace`` does.
+
+    Parameters
+    ----------
+    state
+        Active recording state (module stack projections).
+    ctx
+        Record context of this output.
+    args, kwargs
+        The call's arguments.
+    param_refs
+        Prepared parameters the call read.
+    func_name
+        Logged function name (in-place spellings end in ``_``).
+    layer_type
+        Normalized function name.
+    output_index
+        Position of this output in a multi-output call.
+    in_multi_output
+        Whether the call produced several loggable outputs.
+
+    Returns
+    -------
+    str
+        Capture-time equivalence class.
+    """
+
+    _frames, modules = state.module_fields_for(ctx)
+    if param_refs:
+        barcodes = [ref.barcode for ref in param_refs]
+        base = _make_raw_param_group_barcode(
+            barcodes, layer_type, output_index=output_index if in_multi_output else None
+        )
+        return _append_module_suffix_to_equivalence_class(base, modules)
+    is_inplace_output = _is_inplace_augmented_assignment_dunder(func_name) or (
+        func_name.endswith("_") and not func_name.startswith("__")
+    )
+    equivalence_layer_type = f"{layer_type}_inplace" if is_inplace_output else layer_type
+    base = _get_equivalence_class(
+        args,
+        kwargs,
+        output_index,
+        equivalence_layer_type,
+        {"in_multi_output": in_multi_output, "module": modules[-1] if modules else None},
+    )
+    return _append_module_suffix_to_equivalence_class(base, modules)
 
 
 def _extract_arg_tensors_and_params(
@@ -508,6 +621,7 @@ def _build_module_context_fields(
 # Late imports: the split modules of this package import one another (cycles), so each
 # imports its siblings once every definition above exists.
 from ._ops_capture_records import (  # noqa: E402
+    _is_inplace_augmented_assignment_dunder,
     _snapshot_exhaustive_module_stack,
 )
 from ._ops_interventions import (  # noqa: E402

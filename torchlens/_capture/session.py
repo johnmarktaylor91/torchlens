@@ -847,6 +847,7 @@ class CaptureSession:
         capture_events = getattr(trace, "capture_events", None)
         recording = getattr(trace, "_fastlog_recording", None)
         records: tuple[Any, ...] = ()
+        param_logs: dict[str, Any] = {}
         if recording is not None:
             records = tuple(object.__getattribute__(recording, "records"))
             # A Recorder shares one Recording across its passes, so its record
@@ -854,6 +855,7 @@ class CaptureSession:
             # pass added, or the projector's per-core concatenation would
             # repeat every earlier pass's records once per later pass.
             recording_state = object.__getattribute__(recording, "_recording_state")
+            param_logs = dict(getattr(recording_state, "prepared_param_logs", None) or {})
             pass_index = getattr(recording_state, "pass_index", None)
             if pass_index is not None:
                 records = tuple(
@@ -865,6 +867,9 @@ class CaptureSession:
                     None if capture_events is None else capture_events._copy_for_replay()
                 ),
                 "records": records,
+                # The model's parameter inventory at prep (no tensor refs): a
+                # cooked Trace resolves recorded ``ParamRef``s against it.
+                "param_logs": param_logs,
                 "output_tensors": tuple(output_tensors or ()),
                 "output_tensor_addresses": tuple(output_tensor_addresses or ()),
                 "output_labels": tuple(

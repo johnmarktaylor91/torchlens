@@ -23,7 +23,7 @@ from .._ir.events import (
     ParentEdge,
 )
 from .._ir.predicate import EventKind, coerce_deferred_value
-from .._ir.refs import DeviceRef, DtypeRef, TensorRef
+from .._ir.refs import DeviceRef, DtypeRef, ParamRef, TensorRef
 from .._ir.semantics import BackendSemantics, CapturePolicy
 from .._record_type import record_type
 from .._utils._torch_compat import tensor_version_or_none
@@ -151,6 +151,14 @@ class RecordingState:
     prepared_params: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = field(
         default_factory=dict
     )
+    # Capture-time parameter identity for predicate records, ``id -> ParamRef``,
+    # plus the ``Param`` logs a cooked Trace resolves those refs against. Both
+    # are built once at prep from the model's own Parameters and hold no
+    # tensor references, so recorded ops can carry the same parameter
+    # equivalence class exhaustive capture gives them and
+    # ``Recording.to_trace()`` groups recurrent layers the way ``tl.trace`` does.
+    prepared_param_refs: dict[int, ParamRef] = field(default_factory=dict)
+    prepared_param_logs: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Initialize derived storage policy."""
@@ -697,6 +705,8 @@ def _record_from_record_context(
     ]
     | None = None,
     detach_unkept: bool = True,
+    equivalence_class: str | None = None,
+    params: tuple[ParamRef, ...] = (),
 ) -> OpRecord:
     """Sparse-pipeline decomposed freeze: ``OpCore`` + facets, no ``OpEvent``.
 
@@ -714,6 +724,7 @@ def _record_from_record_context(
         ModulesFacet,
         OpCore,
         OpRecord,
+        ParamsFacet,
         PolicyFacet,
         RecordingFacet,
     )
@@ -763,12 +774,14 @@ def _record_from_record_context(
         graph=GraphFacet(
             parent_arg_positions={"args": {}, "kwargs": {}},
             is_output_parent=ctx.is_output_parent,
+            equivalence_class=equivalence_class,
         ),
         modules_facet=(
             ModulesFacet(module_stack=values.module_stack, modules=values.modules)
             if values.module_stack or values.modules
             else None
         ),
+        params_facet=ParamsFacet(params=tuple(params)) if params else None,
         control=control,
         annotations_facet=(
             AnnotationsFacet(annotations=dict(annotations_payload)) if annotations_payload else None
@@ -855,6 +868,11 @@ class SparseOpDraft:
     )
     #: The session's ``detach_saved_activations`` choice at draft time.
     detach_unkept: bool = True
+    #: Capture-time equivalence class (the loop-grouping fingerprint) and the
+    #: parameters this op read, both ``None``/empty when the emitter had no
+    #: prepared-parameter registry to resolve against.
+    equivalence_class: str | None = None
+    params: tuple[ParamRef, ...] = ()
 
     pipeline: str = field(default="sparse", init=False)
 
@@ -873,6 +891,8 @@ class SparseOpDraft:
             container_path=self.container_path,
             module_fields=self.module_fields,
             detach_unkept=self.detach_unkept,
+            equivalence_class=self.equivalence_class,
+            params=self.params,
         )
 
 
@@ -909,6 +929,8 @@ def append_projected_event(
     backend_semantics: BackendSemantics | None = None,
     function: FunctionCallRef | None = None,
     container_path: tuple[Any, ...] = (),
+    equivalence_class: str | None = None,
+    params: tuple[ParamRef, ...] = (),
 ) -> None:
     """Append one lightweight predicate record to ``trace.capture_events``."""
 
@@ -944,6 +966,8 @@ def append_projected_event(
             container_path=container_path,
             module_fields=module_fields,
             detach_unkept=detach_unkept,
+            equivalence_class=equivalence_class,
+            params=params,
         ),
     )
 

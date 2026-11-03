@@ -34,6 +34,7 @@ from ..._ir.op_record import (
     amend_module_exit_intervention,
     amend_raw_hook_intervention,
 )
+from ..._ir.refs import ParamRef
 from ..._quantities import Bytes
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
@@ -740,11 +741,103 @@ def _register_predicate_session_params(model: nn.Module) -> None:
     if state is None:
         return
     registry: dict[int, tuple[weakref.ref[torch.nn.Parameter], bool]] = {}
+    param_refs: dict[int, ParamRef] = {}
+    param_logs: dict[str, Param] = {}
     for module in model.modules():
-        for param in module._parameters.values():
-            if param is not None and id(param) not in registry:
-                registry[id(param)] = (weakref.ref(param), _is_uninitialized_param(param))
+        module_address = _module_address(module)
+        for param_name, param in module._parameters.items():
+            if param is None:
+                continue
+            pid = id(param)
+            if pid in registry:
+                _alias_prepared_param(param_logs, param_refs[pid], module_address, param_name)
+                continue
+            param_is_lazy = _is_uninitialized_param(param)
+            registry[pid] = (weakref.ref(param), param_is_lazy)
+            ref, param_log = _prepared_param_identity(
+                param, module_address, param_name, lazy=param_is_lazy
+            )
+            param_refs[pid] = ref
+            param_logs[ref.address] = param_log
     state.prepared_params = registry
+    state.prepared_param_refs = param_refs
+    state.prepared_param_logs = param_logs
+
+
+def _prepared_param_identity(
+    param: nn.Parameter,
+    module_address: str,
+    param_name: str,
+    *,
+    lazy: bool,
+) -> tuple[ParamRef, Param]:
+    """Return the capture-time identity of one prepared parameter.
+
+    Predicate capture stamps nothing on the parameter: the barcode lives only
+    in the recording state's registry, keyed by object identity, and the
+    ``Param`` log carries no tensor reference (a Recording never extends a
+    parameter's lifetime).
+
+    Parameters
+    ----------
+    param
+        The model's own Parameter.
+    module_address
+        Address of the owning module (``""`` for the root).
+    param_name
+        The parameter's name inside its module.
+    lazy
+        Whether the parameter is still uninitialized at prep.
+
+    Returns
+    -------
+    tuple[ParamRef, Param]
+        The op-record reference and the Trace-side log it resolves to.
+    """
+
+    address = f"{module_address}.{param_name}" if module_address else param_name
+    barcode = make_random_barcode()
+    shape: tuple[int, ...] = () if lazy else tuple(param.shape)
+    ref = ParamRef(
+        barcode=barcode,
+        address=address,
+        shape=shape,
+        dtype=str(param.dtype),
+        trainable=bool(param.requires_grad),
+        module_address=None,
+    )
+    param_log = Param(
+        module_address=module_address or "self",
+        name=param_name,
+        shape=shape,
+        dtype=param.dtype,
+        num_params=0 if lazy else param.numel(),
+        param_memory=Bytes(0) if lazy else get_memory_amount(param),
+        trainable=bool(param.requires_grad),
+        address=address,
+        barcode=barcode,
+        has_optimizer=None,
+    )
+    if lazy:
+        param_log._lazy_at_prep = True  # type: ignore[attr-defined]
+    return ref, param_log
+
+
+def _alias_prepared_param(
+    param_logs: dict[str, Param],
+    ref: ParamRef,
+    module_address: str,
+    param_name: str,
+) -> None:
+    """Record a shared parameter's second address on its one ``Param`` log."""
+
+    param_log = param_logs[ref.address]
+    alias_address = f"{module_address}.{param_name}" if module_address else param_name
+    if alias_address not in param_log.all_addresses:
+        param_log.all_addresses.append(alias_address)
+    alias_module_address = module_address or "self"
+    if alias_module_address not in param_log.all_module_addresses:
+        param_log.all_module_addresses.append(alias_module_address)
 
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import warnings
 import weakref
 from collections.abc import Iterable, Iterator
@@ -902,6 +903,15 @@ class RecordingProjection:
         trace._source_model_ref = self.trace_facts["source_model_ref"]
         trace._options_seed = self.trace_facts["random_seed"]
         trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
+        param_logs = self.trace_facts.get("param_logs")
+        if param_logs:
+            from .._data_classes.param import ParamAccessor
+
+            # Each cook gets its own Param objects: postprocess annotates them
+            # (ops, pass counts) and a Recording may be cooked more than once.
+            trace._param_logs = ParamAccessor(
+                {address: copy.copy(param_log) for address, param_log in param_logs.items()}
+            )
 
         from ..backends.torch._tl import get_tensor_label, set_tensor_label
 
