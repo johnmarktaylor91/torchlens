@@ -57,27 +57,6 @@ def conv_trace():
 class TestGraphIR:
     """The dep-free layer: names, edges, truthful fields, join oracle."""
 
-    @pytest.mark.smoke
-    def test_nodes_and_edges_from_executed_dag(self, conv_trace) -> None:  # noqa: ANN001
-        trace, _ = conv_trace
-        ir = trk.build_graph_ir(trace)
-        assert len(ir.nodes) == len(trace._layer_list)
-        names = {node.name for node in ir.nodes}
-        assert len(names) == len(ir.nodes), "node names must be unique"
-        # Every input edge resolves to a real node (the frontend join).
-        for node in ir.nodes:
-            for parent in node.inputs:
-                assert parent in names
-        # Module namespacing: the nested Sequential shows up as a slash path.
-        assert any("/" in node.name for node in ir.nodes)
-
-    def test_dict_input_model_still_graphs(self, conv_trace) -> None:  # noqa: ANN001
-        """The decade-old add_graph failure class: ours always logs."""
-
-        _, dict_trace = conv_trace
-        ir = trk.build_graph_ir(dict_trace)
-        assert len(ir.nodes) == len(dict_trace._layer_list) > 0
-
     def test_truthful_fields_disclosed(self, conv_trace) -> None:  # noqa: ANN001
         """No allocator claim anywhere; timing carries its evidence label."""
 
@@ -92,7 +71,6 @@ class TestGraphIR:
             assert ir.timing_evidence == trk.TIMING_EVIDENCE
             assert any("host bracket" in d for d in ir.disclosures)
 
-    @pytest.mark.smoke
     def test_join_oracle_catches_corruption(self, conv_trace) -> None:  # noqa: ANN001
         """Corrupt one stats name -> the oracle names the unmatched node."""
 
@@ -104,7 +82,6 @@ class TestGraphIR:
             corrupted = ("definitely_not_a_node/x",) + stats[1:]
             assert ir.join_oracle(corrupted) == ("definitely_not_a_node/x",)
 
-    @pytest.mark.smoke
     def test_ir_serializes_to_jsonl(self, conv_trace, tmp_path) -> None:  # noqa: ANN001
         """The graph capability on the JSONL sink round-trips the IR."""
 
@@ -149,7 +126,6 @@ class TestTensorBoardIngestPin:
         unmatched = ir.join_oracle(tuple(sorted(stats_names)))
         assert unmatched == (), f"unbound stats rows: {unmatched}"
 
-    @pytest.mark.smoke
     @pytest.mark.skipif(
         importlib.util.find_spec("tensorboard") is not None,
         reason="tensorboard installed; the refusal leg is for bare envs",

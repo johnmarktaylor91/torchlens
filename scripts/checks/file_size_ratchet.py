@@ -38,6 +38,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+from _common import example_section_lines
 from _harness import PACKAGE_ROOT, REPO_ROOT, run_checks
 
 _PROJECT_ROOT = REPO_ROOT
@@ -140,7 +141,11 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # verbatim to _op_save.py, _op_relations.py, _op_cost.py, _labels.py,
     # intervention/_op_edits.py and receptive_field/_op_fields.py; re-keyed
     # down to the next 50-line step above the measurement (3635).
-    "torchlens/_data_classes/op.py": 3650,
+    # 3650 -> 3550 (2026-11-03 C-077 merge, kept by the C-123 replay-templates
+    # merge): the C-063 stack and C-076 brought op.py to 3549, re-keyed down to
+    # the next 50-line step; replay-templates' template gating lands on the
+    # same tree (merged measurement 3497) and the row stays at 3550.
+    "torchlens/_data_classes/op.py": 3550,
     "torchlens/_io/runnable.py": 5000,
     # 4950 -> 5100 (2026-10-01 L8 floor2 fix): two find_spec-detected
     # structural-extras rows (the vendored torch.distributed.pipeline
@@ -188,7 +193,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # are unchanged. Harness bundles phase 2 moved the bundle-container
     # loaders to _io/bundle_container.py and re-keyed the row back down to
     # the 4450 baseline (4700 -> 4450).
-    "torchlens/_io/bundle.py": 4350,
+    "torchlens/_io/bundle.py": 4250,
     "torchlens/_io/runnable_load.py": 3850,
     # 4450 -> 4500 (2026-10-01 ci-fix ratchet settle): "preserve checkpoint
     # hook identity across token swap" (8397d1469) plus the round-1 feature
@@ -197,7 +202,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # post-features debloat pass keeps it as the target.
     # 4500 -> 4300: the GradFn order-resolution helpers moved to
     # _grad_fn_orders.py (4297 measured); the ceiling follows the file down.
-    "torchlens/backends/torch/backward.py": 4300,
+    # 4300 -> 4200: the GradFn pairing helpers moved to _grad_fn_pairing.py
+    # (4191 measured).
+    "torchlens/backends/torch/backward.py": 4200,
     # 3800 -> 3850: L1 adds the grouping knob mirror + grouping_policy stamp
     # settlement (~25 lines) on top of the re-stepped feature-sprint baseline.
     # 3850 -> 3900: L9 adds the two DROP-gated backward-residuals fields
@@ -364,7 +371,9 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # conditional relabel epilogue and intermediate-grad dual-spelling
     # resolution fixes here as on jax; merged tree measures 3375. Next
     # 50-line step above it; conscious raise, not drift.
-    "torchlens/backends/tinygrad/backend.py": 3250,
+    # 3250 -> 3150 (2026-11-03 tinygrad realize-once): capture planning and the
+    # single realization moved to _realize_once.py (measured 3149 after the train merge).
+    "torchlens/backends/tinygrad/backend.py": 3150,
     # 3250 -> 2600 (2026-11-01 preview-protocol union): the intermediate-tap
     # observers moved to _tap_observers.py and the derived-gradient oracle
     # helpers to _grad_oracle.py (measured 2573); next 50-line step above it.
@@ -502,15 +511,19 @@ _MAX_LEDGER_SLACK = 100
 #: call, so the growth is mechanical spelling verbosity, not new test content.
 #: Next 50-line step above the post-codemod measure; the debloat pass owns
 #: shrinking these back via helper extraction.
+#: 2026-11-03 docstring standard: Examples sections leave the count; _io/bundle.py
+#: re-keyed down 4350->4250 (measured 4235 without its examples).
 #: 2026-10-02 L17 integration: test_validation 8700->8750 (ci-fix b6a5d958d
 #: warms the float8-fill probe before the teardown fence test, measured 8715),
 #: test_real_world_models 5150->5200 (ci-fix's pyg-lib skip, deberta jit gap
 #: and documented-limitation acknowledgements, measured 5193). Next 50-line
 #: step above each measurement.
+#: 2026-11-03 test shrink: test_real_world_models 5100->3250 (measured 3247
+#: after per-id deletions). Next 50-line step above the measurement.
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5100,
+    "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
@@ -522,18 +535,6 @@ _TEST_FILE_CEILINGS: dict[str, int] = {
     # exactly this kind of targeted regression addition, so the growth is
     # the campaign's reviewed product, not drift.
     "tests/validation_goldens/test_validation_exemption_hardening.py": 2550,
-    "tests/test_conditional_branches.py": 2150,
-    # 2050 -> 2100 (2026-09-01 W051-FLAKE): the held-ref recipe registry gained the
-    # Python / legacy-NumPy GLOBAL-engine state rows (getstate/setstate/seed, W051
-    # 2.17) plus the numpy>=2 profile-silent skip -- the c_call receiver half of the
-    # lane's foreign-thread join coverage, whose thread-routing pins live in
-    # tests/test_w051_nondeterminism_foreign_join.py. The rows are entries in the ONE
-    # registry table the parametrized held-ref test consumes, so a split would sever
-    # the table from its recipe type; next 50-line step above the measured 2088.
-    # T105: +16 lines splitting the held-ref sweep into two alternating-half
-    # families for the smoke duration budget (2s isolated, boundary-flaky
-    # in-session at 76 cells); next 50-line step above the measured 2104.
-    "tests/test_tlspec_runnable_r41_crossthread_witness.py": 2150,
 }
 
 
@@ -557,8 +558,10 @@ def _line_counts(root: Path = _PACKAGE_ROOT) -> dict[str, int]:
         if _is_generated_module(path):
             continue
         relative = path.relative_to(_PROJECT_ROOT).as_posix()
-        with path.open(encoding="utf-8") as handle:
-            counts[relative] = sum(1 for _ in handle)
+        text = path.read_text(encoding="utf-8")
+        # Docstring ``Examples`` sections are not counted (the docstring standard asks
+        # for one on every public function and class); every other line is.
+        counts[relative] = len(text.splitlines()) - len(example_section_lines(text))
     return counts
 
 

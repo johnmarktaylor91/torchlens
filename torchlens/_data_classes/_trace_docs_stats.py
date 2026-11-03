@@ -301,23 +301,6 @@ DOCS: dict[str, str] = {
             ``(module_address, priority)`` sorted by ``(-priority, address)``.
         """
     ),
-    "collapse_order": (
-        """Return smart-collapse ranking for a policy.
-        
-        The documented-inert ``weights=`` parameter is REMOVED (collapse
-        memo D9; clean-v2 hard-rename posture, no warn shim; MIGRATIONS.md).
-        
-        Parameters
-        ----------
-        mode:
-            ``"auto"`` or ``"max"`` landmark policy.
-        
-        Returns
-        -------
-        list[tuple[str, float]]
-            ``(module_address, rounded_score)`` sorted by ``(-score, address)``.
-        """
-    ),
     "modules_with_facet": (
         """Yield Modules whose semantic facet view has a facet available now.
         

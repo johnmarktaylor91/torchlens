@@ -10,6 +10,7 @@ cache root twice now.
 """
 
 import gc
+import os
 import tracemalloc
 import weakref
 
@@ -35,6 +36,21 @@ from torchlens.errors import TraceCaptureError
 # ---------------------------------------------------------------------------
 # Test models
 # ---------------------------------------------------------------------------
+
+
+_TORCHLENS_DIR = os.path.dirname(os.path.abspath(tl.__file__)) + os.sep
+
+
+def _torchlens_growth(stats: list[tracemalloc.StatisticDiff]) -> int:
+    """Net bytes of blocks allocated in the torchlens package's own source files.
+
+    A frame belongs to torchlens when its file lies under the installed package
+    directory. A substring test on the path would also count every allocation of a
+    checkout whose path names torchlens (the virtualenv's torch, pytest), which is
+    other code's growth and depends on what ran earlier in the process.
+    """
+
+    return sum(s.size_diff for s in stats if s.traceback[0].filename.startswith(_TORCHLENS_DIR))
 
 
 class _SimpleLinear(nn.Module):
@@ -149,7 +165,7 @@ class TestTraceGC:
 
         # Compare: filter to torchlens allocations
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         # Allow up to 256KB of noise (caches, interned strings, etc.)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 sessions"
 
@@ -162,21 +178,21 @@ class TestTraceGC:
         trace = tl.trace(model, x, save=None)
 
         # Warm up
-        trace.save_new_outs(model, torch.randn(1, 5), save="all")
+        trace._save_new_outs(model, torch.randn(1, 5), save="all")
         gc.collect()
 
         tracemalloc.start()
         baseline = tracemalloc.take_snapshot()
 
         for _ in range(5):
-            trace.save_new_outs(model, torch.randn(1, 5), save="all")
+            trace._save_new_outs(model, torch.randn(1, 5), save="all")
             gc.collect()
 
         after = tracemalloc.take_snapshot()
         tracemalloc.stop()
 
         stats = after.compare_to(baseline, "lineno")
-        tl_growth = sum(s.size_diff for s in stats if "torchlens" in str(s.traceback))
+        tl_growth = _torchlens_growth(stats)
         assert tl_growth < 256 * 1024, f"Memory grew by {tl_growth} bytes across 5 save_new_outs"
         trace.cleanup()
 
@@ -436,7 +452,6 @@ class TestTraceGC:
             "(eviction still waits for an unrelated later backward)"
         )
 
-    @pytest.mark.smoke
     def test_live_run_after_model_collection_refuses_typed_and_names_the_weak_ref(self):
         """A collected source model refuses run() typed AND discloses why (R37).
 
@@ -669,7 +684,6 @@ def test_delattr_capture_events_releases_the_working_projection():
     assert not stream.module_prep_events
 
 
-@pytest.mark.smoke
 def test_cleaned_trace_refuses_typed_and_settles_unknown():
     """A husked Trace refuses public reads TYPED and settles outcome UNKNOWN.
 

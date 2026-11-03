@@ -104,7 +104,7 @@ import torchlens as tl
 
 recipe = tl.when(tl.site(module_path="lm_head"), tl.scale(0.5))
 original_log = tl.trace(model, input_ids)
-original_log.attach_hooks(recipe)
+original_log.do(recipe, intervention=tl.options.InterventionOptions(engine="set_only"))
 tl.io.save_intervention(original_log, "recipe.tlspec")
 ```
 
@@ -114,14 +114,14 @@ Two authoring choices matter for later alignment:
   structural address, valid on any capture of any model that has that site.
   A label selector like `"linear_1_121"` is a recorded address -- it names
   this capture's numbering and cannot survive renumbering.
-- **Attach through the spec door.** `attach_hooks(recipe)` records your WHERE
-  expression in the saved artifact, so a later capture can re-resolve it. The
+- **Stage through the spec door.** `do(recipe, intervention=InterventionOptions(engine="set_only"))`
+  records your WHERE expression in the saved artifact, so a later capture can re-resolve it. The
   capture-time predicate door (`tl.trace(..., intervene=...)`) instead lowers
   the fired selector into per-site *label* targets before saving -- the saved
   spec discloses this as `spec_derived` -- and a label-lowered recipe cannot
   re-align after a skeleton edit, because the drifted labels no longer
   resolve. If you plan to carry a recipe across model edits, author it
-  through `attach_hooks`.
+  as a recipe and stage it through `do`.
 
 During tracing you may see a `ScalarEscapeWarning` pointing into
 `transformers` masking code; it is a capture-honesty disclosure from the
@@ -191,7 +191,7 @@ inner_rule = tl.when(
     tl.site(module_path="transformer.h.1.mlp.c_proj", func="addmm"),
     tl.zero_ablate(),
 )
-original_log.attach_hooks(inner_rule)
+original_log.do(inner_rule, intervention=tl.options.InterventionOptions(engine="set_only"))
 tl.io.save_intervention(original_log, "recipe.tlspec", overwrite=True)
 spec = tl.io.load_intervention_spec("recipe.tlspec")
 
@@ -269,7 +269,7 @@ recipe_v2 = tl.when(
     ),
     tl.zero_ablate(),
 )
-edited_log.attach_hooks(recipe_v2)
+edited_log.do(recipe_v2, intervention=tl.options.InterventionOptions(engine="set_only"))
 tl.io.save_intervention(edited_log, "recipe_v2.tlspec")
 spec_v2 = tl.io.load_intervention_spec("recipe_v2.tlspec")
 compat_v2 = tl.intervention.check_spec_compat(spec_v2, edited_log)

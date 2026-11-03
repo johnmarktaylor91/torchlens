@@ -228,7 +228,11 @@ def run_benchmarks() -> str:
     )
 
     rerun_log = _capture(model, x, replayable=True)
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook)
+    rerun_log.do(
+        tl.func("relu"),
+        _zero_hook,
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
     rerun_label, rerun_s = _time_repeated(
         "run(model, x)",
         lambda: rerun_log.run(model, x),

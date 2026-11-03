@@ -56,6 +56,21 @@ def validate_model_explorer_payload(
     -------
     ValidationReport
         Verdict, failure rows, and disclosure counters.
+
+    Examples
+    --------
+    >>> payload = tl.export.to_model_explorer_dict(tl.trace(model, x))
+    >>> validate_model_explorer_payload(payload).ok
+    True
+    >>> broken = {"graphs": [{"id": "g"}, {"id": "g"}]}
+    >>> validate_model_explorer_payload(broken).failures[0]["code"]
+    'model_explorer_duplicate_graph_id'
+    >>> try:
+    ...     validate_model_explorer_payload(broken, strict=True)
+    ... except tl.errors.ModelExplorerExportError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'ModelExplorerExportError'
     """
 
     report = ValidationReport()

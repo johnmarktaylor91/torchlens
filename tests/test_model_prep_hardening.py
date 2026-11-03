@@ -21,7 +21,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils._torch_compat import TorchCapabilityWarning
 
 
 class _Holder:
@@ -32,6 +31,7 @@ class _Holder:
 class TestNamespaceWalkSkipsDeprecationShim:
     """SF-45: the cleanup walks never touch the reduce_op deprecation singleton."""
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_object_walk_is_silent_under_error_promotion(self) -> None:
         """Fail-before: the isinstance chain warned at the walk's type checks."""
 
@@ -43,6 +43,7 @@ class TestNamespaceWalkSkipsDeprecationShim:
             warnings.simplefilter("error", FutureWarning)
             _clear_session_tensor_metadata(holder, set())
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     def test_module_namespace_walk_is_silent_under_error_promotion(self) -> None:
         """The ModuleType slot scan skips the singleton before isinstance."""
 
@@ -54,6 +55,7 @@ class TestNamespaceWalkSkipsDeprecationShim:
             warnings.simplefilter("error", FutureWarning)
             _clear_session_tensor_metadata(holder, set())
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_session_cleanup.py, campaign mutant kills.
     def test_container_walk_is_silent_under_error_promotion(self) -> None:
         """The pure container-tree descent skips the singleton too."""
 
@@ -67,29 +69,11 @@ class TestNamespaceWalkSkipsDeprecationShim:
                 [torch.distributed.reduce_op, torch.ones(2)], set(), 0
             )
 
-    def test_capture_with_distributed_module_reference_stays_clean(self) -> None:
-        """End-to-end: a model holding a torch.distributed reference captures
-        and tears down without touching the deprecation shim."""
-
-        class WithDistRef(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.fc = nn.Linear(4, 4)
-                self.helper = _Holder()
-                self.helper.dist = torch.distributed  # type: ignore[attr-defined]
-
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return self.fc(x).relu()
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", FutureWarning)
-            log = tl.trace(WithDistRef(), torch.randn(2, 4))
-        log.cleanup()
-
 
 class TestBufferStampFailureIsDisclosed:
     """B1-13a: a failed buffer-provenance stamp warns instead of vanishing."""
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/model_prep.py, campaign mutant kills.
     def test_unstampable_buffer_warns_with_address(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Fail-before: ``except Exception: pass`` hid the evidence loss."""
 
@@ -118,27 +102,5 @@ class TestBufferStampFailureIsDisclosed:
                 return self.fc(x * self.mask)
 
         with pytest.warns(UserWarning, match="buffer provenance.*mask"):
-            log = tl.trace(WithBuffer(), torch.randn(2, 4))
-        log.cleanup()
-
-    def test_normal_capture_emits_no_stamp_warning(self) -> None:
-        """The healthy path stays silent (no new warning noise)."""
-
-        class WithBuffer(nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.register_buffer("mask", torch.ones(4))
-                self.fc = nn.Linear(4, 4)
-
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return self.fc(x * self.mask)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("error", UserWarning)
-            # A floor-torch install may fire a one-time TorchCapabilityWarning
-            # (itself a UserWarning) from an unrelated capability probe
-            # tripped by this capture; tolerate that category specifically
-            # without loosening the "no stamp-failure warning" guarantee.
-            warnings.simplefilter("ignore", TorchCapabilityWarning)
             log = tl.trace(WithBuffer(), torch.randn(2, 4))
         log.cleanup()

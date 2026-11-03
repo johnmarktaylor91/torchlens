@@ -94,29 +94,6 @@ def test_dot_id_backslash_then_quote_order_does_not_double_escape() -> None:
     assert result == '"a\\\\\\"b"'
 
 
-def test_dot_quote_escapes_embedded_double_quote() -> None:
-    """``_dot_quote`` (used for attribute values) also escapes embedded quotes."""
-    result = rank_layout._dot_quote('a"b')
-    assert result == '"a\\"b"'
-
-
-def test_dot_id_keyword_guard_is_case_insensitive() -> None:
-    """DOT keywords are case-insensitive in real Graphviz; the guard must match.
-
-    ``_dot_id`` previously compared ``name not in _KW`` against a
-    lowercase-only keyword set, so ``"Graph"``/``"NODE"``/etc. were treated
-    as safe bare identifiers even though Graphviz itself treats DOT keywords
-    case-insensitively. Currently unreachable in practice (no caller passes
-    a bare keyword-cased name), but latent and worth locking down.
-    """
-    for kw in ("graph", "Graph", "GRAPH", "Node", "EDGE", "Digraph", "Strict"):
-        result = rank_layout._dot_id(kw)
-        assert result == f'"{kw}"', f"expected quoted keyword for {kw!r}, got {result!r}"
-
-    # A genuinely safe identifier must still pass through unquoted.
-    assert rank_layout._dot_id("my_node_1") == "my_node_1"
-
-
 @pytest.mark.skipif(not _NEATO_AVAILABLE, reason="neato binary not available")
 def test_rank_engine_renders_moduledict_double_quote_key(tmp_path: Path) -> None:
     """Rendering with the rank engine must not crash on a literal ``"`` in a module key.

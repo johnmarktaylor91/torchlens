@@ -25,7 +25,7 @@ import pytest
 import torch
 from support.r1_venue import IN_OFFLINE_VENUE
 
-from tests.real_model.registry import Registry
+from tests.real_model.registry import ArtifactRow, Registry
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
@@ -49,9 +49,28 @@ _HEAD_CLASS_BY_ARTIFACT = {
     "r1-switch-base-8": "AutoModelForSeq2SeqLM",
     "r1-videomae-small-kinetics": "VideoMAEForVideoClassification",
     "r1-pythia-70m": "AutoModelForCausalLM",
+    "r2-tiny-random-llama": "AutoModelForCausalLM",
 }
-#: Rows with no tokenizer (pixel or video inputs); the loader returns ``None``.
-_NO_TOKENIZER = frozenset({"r1-videomae-small-kinetics"})
+#: Rows with no tokenizer (pixel or video inputs, or a row pinned without its
+#: tokenizer files); the loader returns ``None``.
+_NO_TOKENIZER = frozenset({"r1-videomae-small-kinetics", "r2-tiny-random-llama"})
+
+
+def load_hub_model(row: ArtifactRow, head: str, **load_kwargs: Any) -> Any:
+    """Load a registry hub row's model at its pinned revision, in eval mode.
+
+    The one pretrained-model load site: :func:`r1_loader` calls it, and so does
+    a process the test spawns (a tensor-parallel rank), which passes its
+    sharding arguments (``distributed_config``, ``device_mesh``) through
+    ``load_kwargs``. The caller holds the row from
+    :meth:`Registry.checkpoint_evidence`; a spawned rank runs offline and reads
+    the snapshot the parent resolved.
+    """
+
+    import transformers
+
+    loader = getattr(transformers, head)
+    return loader.from_pretrained(row.model_id, revision=row.revision, **load_kwargs).eval()
 
 
 @pytest.fixture(scope="session")
@@ -69,21 +88,20 @@ def r1_loader(artifact_registry: Registry):
             return cache[artifact_id]
         row = artifact_registry.checkpoint_evidence(artifact_id)
         if row.kind == "hf_hub":
-            import transformers
-            from transformers import AutoModel, AutoModelForCausalLM, AutoTokenizer
+            from transformers import AutoTokenizer
 
-            loader = (
-                getattr(transformers, _HEAD_CLASS_BY_ARTIFACT[artifact_id])
+            head = (
+                _HEAD_CLASS_BY_ARTIFACT[artifact_id]
                 if artifact_id in _HEAD_CLASS_BY_ARTIFACT
-                else AutoModelForCausalLM
+                else "AutoModelForCausalLM"
                 if any("lm" in g.lower() or g in ("RG04", "RG05") for g in row.gallery_ids)
                 or "gpt" in row.model_id
-                else AutoModel
+                else "AutoModel"
             )
             # The forks.3 / video rows are pinned and measured in float32; Switch's
             # config says bfloat16, which transformers 5 would load by default.
             dtype = {"dtype": torch.float32} if artifact_id in _HEAD_CLASS_BY_ARTIFACT else {}
-            model = loader.from_pretrained(row.model_id, revision=row.revision, **dtype).eval()
+            model = load_hub_model(row, head, **dtype)
             tokenizer = (
                 None
                 if artifact_id in _NO_TOKENIZER

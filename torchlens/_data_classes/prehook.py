@@ -36,6 +36,15 @@ class TensorInputObservation:
         Snapshot-local identity shared by aliased input paths.
     payload_origin:
         Description of how the retained payload was obtained.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> _ = net[0].register_forward_pre_hook(lambda module, args: (args[0] * 2,))
+    >>> call = tl.trace(net, torch.randn(1, 4)).modules["0"].calls[0]
+    >>> seen = call.inputs_before_pre_hooks.tensor_observations[0]
+    >>> type(seen).__name__, seen.shape, seen.dtype
+    ('TensorInputObservation', (1, 4), 'torch.float32')
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
@@ -81,7 +90,7 @@ class ModuleInputSnapshot:
     ----------
     _args, _kwargs:
         Reconstructed detached input values.
-    structure:
+    input_structure:
         Immutable compact description of the input container topology.
     tensor_observations:
         Ordered tensor observations keyed by typed input paths.
@@ -91,12 +100,21 @@ class ModuleInputSnapshot:
         Stable reasons explaining incomplete evidence.
     summary:
         Bounded summary that does not materialize lazy payloads.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> _ = net[0].register_forward_pre_hook(lambda module, args: (args[0] * 2,))
+    >>> call = tl.trace(net, torch.randn(1, 4)).modules["0"].calls[0]
+    >>> snapshot = call.inputs_before_pre_hooks
+    >>> type(snapshot).__name__, tuple(snapshot.args[0].shape)
+    ('ModuleInputSnapshot', (1, 4))
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "_args": FieldPolicy.BLOB_RECURSIVE,
         "_kwargs": FieldPolicy.BLOB_RECURSIVE,
-        "structure": FieldPolicy.KEEP,
+        "input_structure": FieldPolicy.KEEP,
         "tensor_observations": FieldPolicy.KEEP,
         "is_capture_complete": FieldPolicy.KEEP,
         "incomplete_reasons": FieldPolicy.KEEP,
@@ -105,7 +123,7 @@ class ModuleInputSnapshot:
 
     _args: tuple[Any, ...]
     _kwargs: dict[str, Any]
-    structure: tuple[Any, ...]
+    input_structure: tuple[Any, ...]
     tensor_observations: tuple[TensorInputObservation, ...]
     is_capture_complete: bool
     incomplete_reasons: tuple[str, ...]
@@ -154,6 +172,15 @@ class PreHookEffect:
         Stable reasons for a tri-state or attribution downgrade.
     exception_type, exception_message:
         String-only failure metadata for interrupted captures.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 2))
+    >>> _ = net[0].register_forward_pre_hook(lambda module, args: (args[0] * 2,))
+    >>> call = tl.trace(net, torch.randn(1, 4)).modules["0"].calls[0]
+    >>> effect = call.forward_pre_hook_effects[0]
+    >>> type(effect).__name__, effect.scope, effect.has_changes
+    ('PreHookEffect', 'module', True)
     """
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {

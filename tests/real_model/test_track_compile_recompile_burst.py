@@ -1,4 +1,4 @@
-"""U32.3: the post-capture recompile burst of a compiled real model is bounded, then steady.
+"""The post-capture recompile burst of a compiled real model is bounded, then steady.
 
 The coexistence contract for ``torch.compile`` (torch >= 2.6) is not "at most one
 recompile". Measured on real architectures (torch 2.13.0 CPU, ``aot_eager``):

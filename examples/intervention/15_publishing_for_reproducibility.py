@@ -45,15 +45,17 @@ def main() -> None:
     torch.manual_seed(15)
     model = TinyMLP().eval()
     x = torch.randn(2, 8)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    edited = log.fork("zero_relu")  # edit a fork; a root trace warns once when edited in place
-    edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log = tl.trace(model, x)
+    log.do(
+        tl.when(tl.func("relu"), tl.zero_ablate()),
+        intervention=tl.options.InterventionOptions(engine="set_only"),
+    )
 
     with tempfile.TemporaryDirectory() as tmpdir:
         path = Path(tmpdir) / "zero_relu.tlspec"
-        edited.save_intervention(path, level="portable")
+        log.save_intervention(path, level="portable")
         spec = tl.io.load_intervention_spec(path)
-        fresh = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+        fresh = tl.trace(model, x)
         compat = tl.intervention.check_spec_compat(spec, fresh)
 
     assert spec.metadata["save_level"] == "portable"

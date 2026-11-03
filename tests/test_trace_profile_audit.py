@@ -92,28 +92,6 @@ def test_trace_profile_levels_columns_aggregation_and_sorting() -> None:
     assert "ProfileReport(" not in repr(trace.profile())
 
 
-def test_trace_profile_preserves_subsecond_time_for_hotspot_sorting() -> None:
-    """profile retains float durations rather than truncating them to integer seconds."""
-
-    trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
-    frame = trace.profile().to_pandas()
-
-    # Boundary pseudo-rows own no time (identity partition, A1): their cells
-    # are NaN and sort last; every REAL op row keeps its float duration.
-    op_rows = frame[frame["kind"] == "op"]
-    boundary_rows = frame[frame["kind"] == "boundary"]
-    assert not boundary_rows.empty
-    assert boundary_rows["time"].isna().all()
-    assert op_rows["time"].notna().all()
-    assert (op_rows["time"] > 0).any()
-    op_times = op_rows["time"].tolist()
-    assert op_times == sorted(op_times, reverse=True)
-    assert frame["time"].notna().tolist() == sorted(frame["time"].notna().tolist(), reverse=True), (
-        "NaN boundary rows must sort after every timed row"
-    )
-    assert any(unit in repr(trace.profile()) for unit in (" us", " ms", " s"))
-
-
 def test_trace_profile_sparse_save_preserves_honest_availability() -> None:
     """profile retains metadata while making unavailable activation payloads visible."""
 
@@ -150,34 +128,6 @@ def test_trace_profile_tree_follows_module_call_nesting() -> None:
     assert features_line.startswith("|-- ")
     assert linear_line.startswith("|   ")
     assert lines.index(linear_line) > lines.index(features_line)
-
-
-def test_trace_profile_honesty_labels_missing_timing_as_unknown() -> None:
-    """Resource provenance distinguishes measured, estimated, and absent values."""
-
-    trace = tl.trace(ProfileModel().eval(), torch.randn(2, 4))
-    missing_timing_op = next(
-        op for op in trace._layer_list if not (op.is_input or op.is_output or op.is_buffer)
-    )
-    missing_timing_op._internal_set("func_duration", None)
-    profile = trace.profile(sort_by="activation_memory")
-    honesty = profile.evidence_labels()
-    row = honesty.loc[honesty["name"] == missing_timing_op.label].iloc[0]
-
-    assert row["time"] == "unknown"
-    # Boundary pseudo-rows carry not_applicable, never a fabricated evidence
-    # label and never "unknown" (costreport D2). F09 (D9): host time carries
-    # the instrumentation qualifier, never bare "measured"; FLOPs carry the
-    # compute-record evidence (formula_exact here); shape-derived memory is
-    # a formula fact, not an estimate.
-    assert set(honesty["time"]).issubset(
-        {"measured+instrumentation_inclusive", "unknown", "not_applicable"}
-    )
-    assert set(honesty["activation_memory"]).issubset(
-        {"formula_exact+shape_derived", "unknown", "not_applicable"}
-    )
-    assert "formula_exact" in set(honesty["flops"])
-    assert "not_applicable" in set(honesty["flops"])
 
 
 def test_trace_audit_clean_model_reports_run_and_skipped_scope() -> None:

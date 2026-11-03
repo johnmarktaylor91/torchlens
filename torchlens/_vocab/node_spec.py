@@ -83,6 +83,14 @@ class NodeSpec:
         Optional Graphviz ``fixedsize`` value emitted with the size fields.
     extra_attrs:
         Additional Graphviz node attributes.
+
+    Examples
+    --------
+    >>> spec = NodeSpec(lines=["relu_1_2", "1x4x8x8"])
+    >>> spec.shape
+    'box'
+    >>> spec.replace(fillcolor="lightblue").fillcolor
+    'lightblue'
     """
 
     lines: list[str]

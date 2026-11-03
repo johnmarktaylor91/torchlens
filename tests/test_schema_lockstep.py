@@ -215,10 +215,6 @@ _RECORD_NAMES = (
 )
 
 
-@pytest.mark.smoke_cells(
-    "test_live_record_attributes_are_all_declared[Layer]",
-    "test_live_record_attributes_are_all_declared[Param]",
-)
 @pytest.mark.parametrize("record_name", _RECORD_NAMES)
 def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_name: str) -> None:
     """Every attribute a captured record carries is declared in _FIELD_POLICY.
@@ -263,8 +259,7 @@ def _postprocess_axis_names() -> list[str]:
 
 
 @pytest.mark.smoke_cells(
-    "test_live_record_attributes_are_declared_on_every_capture_axis[cooked_recording_halted]",
-    "test_live_record_attributes_are_declared_on_every_capture_axis[transform]",
+    "test_live_record_attributes_are_declared_on_every_capture_axis[deferred_retention]"
 )
 @pytest.mark.parametrize("axis_name", _postprocess_axis_names())
 def test_live_record_attributes_are_declared_on_every_capture_axis(axis_name: str) -> None:
@@ -382,7 +377,6 @@ class TestMechanismIsRedCapable:
         assert undeclared_runtime_attributes({"_tl_rows"}, {}) == {"_tl_rows"}
 
 
-@pytest.mark.smoke
 def test_schema_generator_renders_unions_identically_on_every_python() -> None:
     """Evaluated union annotations render the same text on 3.10 and 3.11+.
 

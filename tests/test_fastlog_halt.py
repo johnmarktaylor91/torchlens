@@ -192,8 +192,7 @@ def test_halt_from_inside_module_predicate(halt_kind: str, reason: str, halted_l
             ChildModuleModel(),
             torch.ones(1, 3),
             stop_after=halt_on_module_event,
-            default_module=True,
-            default_op=False,
+            recording=tl.options.RecordingOptions(default_module=True, default_op=False),
         )
     )
 
@@ -222,7 +221,7 @@ def test_halt_source_predicate() -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             save=keep_op,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
         )
     )
 
@@ -244,7 +243,7 @@ def test_record_halt_predicate_can_stop_on_source_event() -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             stop_after=lambda ctx: ctx.kind == "input",
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
         )
     )
 
@@ -270,6 +269,7 @@ def test_record_halt_predicate_module_exit_boundary() -> None:
     assert [record.ctx.layer_type for record in recording.records] == ["linear"]
 
 
+@pytest.mark.smoke
 def test_record_halt_predicate_rejects_non_bool_return() -> None:
     """halt= must return a bool, not a capture decision."""
 
@@ -284,7 +284,7 @@ def test_record_halt_predicate_rejects_non_bool_return() -> None:
             FiveOpModel(),
             torch.tensor(1.0),
             stop_after=invalid_halt,
-            on_predicate_error="accumulate",
+            recording=tl.options.RecordingOptions(on_predicate_error="accumulate"),
         )
 
     assert len(exc_info.value.failures) == 8

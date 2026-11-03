@@ -83,9 +83,10 @@ AUDITED_COMPLETENESS_BOUNDARIES: tuple[AuditedCompletenessBoundary, ...] = (
         wrapper_name="autograd_function:foreign",
         operator=None,
         reason=(
-            "an autograd.Function whose forward left torch (numpy / dlpack round trip) is "
-            "recorded as one autogradfunction boundary op that replays through apply; every "
-            "dispatch inside it belongs to that op"
+            "an autograd.Function whose forward left torch (a numpy / dlpack round trip, or a "
+            "known foreign kernel such as FlashAttention 4's CuTe kernels reached through TVM "
+            "FFI) is recorded as one autogradfunction boundary op that replays through apply; "
+            "every dispatch inside it belongs to that op"
         ),
     ),
     AuditedCompletenessBoundary(

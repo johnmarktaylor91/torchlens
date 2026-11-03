@@ -305,7 +305,9 @@ def _after_record(cell: Cell) -> None:
     _no_stochastic(cell)
     model, _ = cell.case.build()
     torch.manual_seed(SEED)
-    cooked = tl.record(model, cell.fresh_inputs(), default_op=True).to_trace()
+    cooked = tl.record(
+        model, cell.fresh_inputs(), recording=tl.options.RecordingOptions(default_op=True)
+    ).to_trace()
     cell.expect(
         cooked.outcome.status is CaptureStatus.COMPLETE, f"record outcome {cooked.outcome.status!r}"
     )

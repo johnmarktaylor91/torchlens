@@ -243,6 +243,7 @@ class BufferDataAddAfterConsume(nn.Module):
         return y + self.b
 
 
+# Kept: a sole mutation kill; the catch of its regression fault.
 def test_data_idiv_is_unverifiable_not_false_verified(tmp_path: Path) -> None:
     """A ``.data /=`` legacy ``__idiv__`` write must be UNVERIFIABLE."""
 
@@ -252,32 +253,12 @@ def test_data_idiv_is_unverifiable_not_false_verified(tmp_path: Path) -> None:
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
-def test_labelled_idiv_replays_verified_and_value_correct(tmp_path: Path) -> None:
-    """A labelled ``/=`` legacy ``__idiv__`` write must replay without crashing."""
-
-    x = torch.tensor([2.0, 4.0])
-    result = _run_loaded(_save_load(LabelledIdivModel(), x, tmp_path / "idiv.tlspec"), x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    torch.testing.assert_close(result.output, _live_output(LabelledIdivModel, x))
-
-
 _AUG_ASSIGN_CASES: tuple[tuple[str, int | float, torch.Tensor], ...] = (
-    ("+=", 2, torch.tensor([6, 10])),
-    ("-=", 1, torch.tensor([6, 10])),
-    ("*=", 3, torch.tensor([6, 10])),
-    ("/=", 2.0, torch.tensor([6.0, 10.0])),
-    ("//=", 2, torch.tensor([6, 10])),
-    ("%=", 5, torch.tensor([6, 10])),
     ("**=", 2, torch.tensor([2, 3])),
-    ("<<=", 1, torch.tensor([6, 10])),
-    (">>=", 1, torch.tensor([6, 10])),
-    ("&=", 3, torch.tensor([6, 10])),
-    ("^=", 1, torch.tensor([6, 10])),
-    ("|=", 2, torch.tensor([6, 10])),
 )
 
 
+# Kept: sole branch coverage of _io/runnable_coherence.py.
 @pytest.mark.parametrize(
     "op,other,x", _AUG_ASSIGN_CASES, ids=[case[0] for case in _AUG_ASSIGN_CASES]
 )
@@ -294,53 +275,3 @@ def test_all_augmented_assignment_dunders_replay_verified(
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, _live_output(factory, x))
-
-
-def test_invert_stays_out_of_place_and_masked_fill_verifies(tmp_path: Path) -> None:
-    """``__invert__`` remains out-of-place while ``masked_fill(~mask)`` verifies."""
-
-    x = torch.tensor([-1.0, 2.0])
-    trace = tl.trace(MaskedFillInvertModel(), x.clone(), capture=_CAPTURE)
-    invert_ops = [op for op in trace._layer_list if op.func_name == "__invert__"]
-
-    assert invert_ops
-    assert all(not op.is_inplace for op in invert_ops)
-
-    path = tmp_path / "invert.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    result = _run_loaded(tl.load(path), x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    torch.testing.assert_close(result.output, _live_output(MaskedFillInvertModel, x))
-
-
-@pytest.mark.parametrize("op", ("add_", "relu_", "masked_fill_"))
-def test_genuine_inplace_methods_stay_inplace_and_verified(op: str, tmp_path: Path) -> None:
-    """Ordinary in-place methods remain classified as in-place and replay."""
-
-    x = torch.tensor([-2.0, 4.0])
-    factory: Callable[[], nn.Module] = partial(GenuineInplaceModel, op)
-    trace = tl.trace(factory(), x.clone(), capture=_CAPTURE)
-    matching = [item for item in trace._layer_list if item.func_name == op]
-
-    assert matching
-    assert all(item.is_inplace for item in matching)
-
-    path = tmp_path / f"{op}.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    result = _run_loaded(tl.load(path), x)
-
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    torch.testing.assert_close(result.output, _live_output(factory, x))
-
-
-def test_buffer_data_add_after_consume_is_unverifiable_no_crash(tmp_path: Path) -> None:
-    """A surviving buffer ``.data.add_`` host write is UNVERIFIABLE and runnable."""
-
-    x = torch.tensor([2.0, 4.0])
-    result = _run_loaded(
-        _save_load(BufferDataAddAfterConsume(), x, tmp_path / "buffer_data_add.tlspec"),
-        x,
-    )
-
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE

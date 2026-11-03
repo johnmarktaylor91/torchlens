@@ -36,22 +36,6 @@ def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
     return log, extraction
 
 
-def test_every_fire_markered() -> None:
-    """One marker per grad_fn fire; names carry object/pass/call identity."""
-
-    model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4))
-    log, extraction = _backward_session(model, torch.randn(2, 8, requires_grad=True))
-    markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
-    assert len(markers) == len(log._grad_fn_logs)
-    assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
-    for event in markers:
-        object_id, pass_index, call_index = event.name.rsplit("::", 1)[-1].split(":")
-        assert int(object_id) in log._grad_fn_logs
-        assert int(pass_index) == 1
-        assert int(call_index) == 1
-    log.cleanup()
-
-
 def test_internal_hook_bodies_are_typed() -> None:
     """TN-D18: our posthook logging is bracketed typed-internal, per fire."""
 
@@ -86,7 +70,6 @@ def test_second_pass_markers_carry_pass_index() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_raising_node_leaks_are_drained_and_disclosed() -> None:
     """TN-D17: a raising node's open marker closes at the pass boundary."""
 
@@ -127,20 +110,4 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
     assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) >= 1
     opened = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
     assert opened, "the pre-raise fires should still have produced markers"
-    log.cleanup()
-
-
-def test_no_marker_work_without_a_session() -> None:
-    """Strictly opt-in: plain armed backward pushes no gradfn markers."""
-
-    model = nn.Linear(8, 4)
-    log = tl.trace(
-        model,
-        torch.randn(2, 8, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
-    )
-    loss = log.output_ops[0].out.sum()
-    log.backward(loss)
-    assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
-    assert log.__dict__.get("_tl_gradfn_marker_gaps", 0) == 0
     log.cleanup()

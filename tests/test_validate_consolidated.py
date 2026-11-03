@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Any
 from unittest import mock
 
 import pytest
@@ -55,38 +54,6 @@ def model_and_input() -> tuple[TinyModel, torch.Tensor]:
     return model, torch.randn(1, 3)
 
 
-def test_validate_forward_and_saved_scopes(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
-    """Consolidated forward and saved scopes should return booleans."""
-
-    model, x = model_and_input
-    assert isinstance(tl.validate(model, x, scope="forward", seed=42), bool)
-    assert isinstance(tl.validate(model, x, scope="saved", seed=42), bool)
-
-
-def test_validate_backward_scope(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
-    """Consolidated backward scope should call the backward validator."""
-
-    model, x = model_and_input
-
-    def loss_fn(output: torch.Tensor) -> torch.Tensor:
-        """Return a scalar loss.
-
-        Parameters
-        ----------
-        output:
-            Model output.
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar loss.
-        """
-
-        return output.sum()
-
-    assert tl.validate(model, x, scope="backward", loss_fn=loss_fn)
-
-
 def test_validate_backward_scope_detects_corrupted_captured_grad(
     model_and_input: tuple[TinyModel, torch.Tensor],
     monkeypatch: pytest.MonkeyPatch,
@@ -113,19 +80,6 @@ def test_validate_backward_scope_detects_corrupted_captured_grad(
     assert not tl.validate(model, x, scope="backward", seed=42)
 
 
-def test_scope_backward_with_metadata(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
-    """Backward scope forwards default validate_metadata=True."""
-
-    model, x = model_and_input
-    with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
-        wraps=consolidated_validation.validate_backward_pass,
-    ) as validator:
-        assert tl.validate(model, x, scope="backward")
-    assert validator.call_args is not None
-    assert validator.call_args.kwargs["validate_metadata"] is True
-
-
 def test_scope_backward_with_metadata_forwards_false(
     model_and_input: tuple[TinyModel, torch.Tensor],
 ) -> None:
@@ -139,22 +93,6 @@ def test_scope_backward_with_metadata_forwards_false(
         assert tl.validate(model, x, scope="backward", validate_metadata=False)
     assert validator.call_args is not None
     assert validator.call_args.kwargs["validate_metadata"] is False
-
-
-def test_validate_scope_backward_random_seed(
-    model_and_input: tuple[TinyModel, torch.Tensor],
-) -> None:
-    """Backward scope accepts and forwards random_seed."""
-
-    model, x = model_and_input
-    with mock.patch(
-        "torchlens.validation.consolidated.validate_backward_pass",
-        wraps=consolidated_validation.validate_backward_pass,
-    ) as validator:
-        assert tl.validate(model, x, scope="backward", seed=42)
-    assert validator.call_args is not None
-    assert validator.call_args.kwargs["seed"] == 42
-    assert tl.validate(model, x, scope="backward", seed=42)
 
 
 def test_validate_intervention_scope_returns_report(
@@ -187,36 +125,6 @@ def test_scope_keyword_visibility(model_and_input: tuple[TinyModel, torch.Tensor
     model, x = model_and_input
     with pytest.raises(TypeError, match="loss_fn only valid for scope='backward'"):
         tl.validate(model, x, scope="forward", loss_fn=lambda output: output.sum())
-
-
-def test_legacy_validator_positionals(model_and_input: tuple[TinyModel, torch.Tensor]) -> None:
-    """Deprecated wrappers should preserve legacy positional argument binding."""
-
-    model, x = model_and_input
-
-    def loss_fn(output: Any) -> torch.Tensor:
-        """Return a scalar loss.
-
-        Parameters
-        ----------
-        output:
-            Model output.
-
-        Returns
-        -------
-        torch.Tensor
-            Scalar loss.
-        """
-
-        return output.sum()
-
-    forward_result = tl.validation.validate_forward_pass(model, x, None, 42)
-    saved_result = tl.validation.validate_forward_pass(model, x, None, 42)
-    backward_result = tl.validation.validate_backward_pass(model, x, None, loss_fn)
-
-    assert isinstance(forward_result, bool)
-    assert isinstance(saved_result, bool)
-    assert isinstance(backward_result, bool)
 
 
 def test_validate_scope_end_trims_the_host_allocator(

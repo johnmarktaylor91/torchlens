@@ -68,7 +68,7 @@ def test_gate_refuses_failed_recording_with_its_real_status():
         _Boom(),
         torch.randn(2, 4),
         save=tl.func("relu"),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
@@ -102,14 +102,13 @@ def aborted_bundle(tmp_path):
         torch.randn(2, 4),
         save=tl.func("relu"),
         storage=tl.to_disk(str(tmp_path / "bundle")),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert rec.is_failed and rec.path is not None
     assert (rec.path / "PARTIAL").exists()
     return rec.path
 
 
-@pytest.mark.smoke
 def test_recover_carries_abort_failure_evidence(aborted_bundle):
     recovered = tl.recording.recover(aborted_bundle)
     assert recovered.is_recovered is True
@@ -120,7 +119,6 @@ def test_recover_carries_abort_failure_evidence(aborted_bundle):
     assert any("aborted mid-write" in w for w in recovered.recovery_warnings)
 
 
-@pytest.mark.smoke
 def test_recover_still_salvages_clean_crash_debris_as_unknown(tmp_path):
     """Corruption salvage unchanged: index debris WITHOUT abort evidence stays
     a non-failed recovered recording with a conservative UNKNOWN outcome."""

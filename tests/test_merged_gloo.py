@@ -21,7 +21,6 @@ import torch
 from torch import nn
 
 import torchlens as tl  # noqa: E402
-from torchlens._io import ArtifactError  # noqa: E402
 from torchlens.distributed import (  # noqa: E402
     _lifecycle as lifecycle,
     is_vetted_build,
@@ -174,55 +173,6 @@ class TestLiveMerge:
 
 
 class TestArtifact:
-    def test_round_trip_rederives_and_exposes_ranks(self, gloo_world, tmp_path):
-        merged = tl.merge_ranks([_capture()])
-        art = tmp_path / "merged.tlspec"
-        merged.save(art)
-        loaded = tl.load(art)
-        assert loaded.alignment.value == "aligned"
-        assert loaded.value_status.value == "attested_complete"
-        assert len(loaded.joins) == 1
-        assert loaded.degradations == ()
-        # Rank cores are ordinary bundles inside members/, fully loadable.
-        assert loaded.ranks[0]["linear_1_1"] is not None
-
-    def test_descriptor_is_deterministic_over_identical_members(self, gloo_world, tmp_path):
-        merged = tl.merge_ranks([_capture()])
-        art = tmp_path / "merged.tlspec"
-        merged.save(art)
-        member = art / "members" / "rank_0000.tlspec"
-        left = tl.merge_ranks([str(member)])
-        right = tl.merge_ranks([str(member)])
-        assert canonical_json_bytes(left._derivation.to_payload()) == canonical_json_bytes(
-            right._derivation.to_payload()
-        )
-
-    def test_loaded_vs_live_parity(self, gloo_world, tmp_path):
-        merged = tl.merge_ranks([_capture()])
-        art = tmp_path / "merged.tlspec"
-        merged.save(art)
-        member = art / "members" / "rank_0000.tlspec"
-        from_path = tl.merge_ranks([str(member)])
-        from_loaded = tl.merge_ranks([tl.load(member)])
-        assert canonical_json_bytes(from_path._derivation.to_payload()) == canonical_json_bytes(
-            from_loaded._derivation.to_payload()
-        )
-        # The live derivation equals the loaded one too (P1: rank cores are
-        # single truth; save/load changes nothing the merge reads).
-        assert canonical_json_bytes(merged._derivation.to_payload()) == canonical_json_bytes(
-            from_path._derivation.to_payload()
-        )
-
-    def test_resave_of_loaded_artifact_copies_members(self, gloo_world, tmp_path):
-        merged = tl.merge_ranks([_capture()])
-        first = tmp_path / "first.tlspec"
-        merged.save(first)
-        loaded = tl.load(first)
-        second = tmp_path / "second.tlspec"
-        loaded.save(second)
-        reloaded = tl.load(second)
-        assert reloaded.alignment.value == "aligned"
-
     def test_mutated_inputs_refuse_at_save_not_at_every_future_load(self, gloo_world, tmp_path):
         """Deep-hunt F12: save re-verifies derivation-vs-members first.
 
@@ -241,6 +191,7 @@ class TestArtifact:
         assert excinfo.value.fields["code"] == "merge_input_invalid"
         assert not (tmp_path / "merged.tlspec").exists()
 
+    @pytest.mark.smoke
     def test_failed_overwrite_preserves_previous_artifact(
         self,
         gloo_world: Any,
@@ -276,16 +227,6 @@ class TestTamperMatrix:
         merged.save(art)
         return art
 
-    def test_descriptor_edit_without_manifest_is_checksum_tamper(self, gloo_world, tmp_path):
-        art = self._saved(tmp_path)
-        descriptor = art / "merge" / "descriptor.json"
-        data = json.loads(descriptor.read_text())
-        data["derivation"]["joins"] = []
-        descriptor.write_text(json.dumps(data))
-        with pytest.raises(MergedArtifactError) as excinfo:
-            tl.load(art)
-        assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
-
     def test_coherent_descriptor_rewrite_fails_rederivation(self, gloo_world, tmp_path):
         # Delete the join from the descriptor AND fix the root checksum: the
         # rank cores still contain the boundary records, so the independent
@@ -319,19 +260,6 @@ class TestTamperMatrix:
         with pytest.raises(MergedArtifactError) as excinfo:
             tl.load(art)
         assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
-
-    def test_foreign_bundle_format_refuses_closed_vocabulary(self, gloo_world, tmp_path):
-        art = self._saved(tmp_path)
-        manifest_path = art / "manifest.json"
-        manifest = json.loads(manifest_path.read_text())
-        manifest["bundle_format"] = "merged-directory-v2"
-        manifest_path.write_text(json.dumps(manifest))
-        # Narrowed from a blind `Exception` (B017): the closed-vocabulary claim in
-        # this test's NAME is only actually tested when the refusal type is pinned.
-        # A foreign bundle_format never enters the merged branch, so the trace-bundle
-        # loader refuses it as an unrecognized directory artifact.
-        with pytest.raises(ArtifactError):
-            tl.load(art)
 
 
 def _append_unparseable_member(art: Path) -> Path:
@@ -383,6 +311,7 @@ class TestDegradedLoadCoherence:
         manifest["descriptor_sha256"] = hashlib.sha256(payload).hexdigest()
         manifest_path.write_text(json.dumps(manifest))
 
+    @pytest.mark.smoke
     def test_unparseable_member_caps_value_status(self, gloo_world, tmp_path):
         """Fail-before: value_status presented ATTESTED_COMPLETE under degradation."""
 
@@ -474,14 +403,6 @@ class TestDegradedLoadCoherence:
         assert excinfo.value.fields["code"] == "merged_descriptor_invalid"
 
     @pytest.mark.smoke
-    def test_honest_unwitnessed_degraded_load_still_loads(self, gloo_world, tmp_path):
-        """The coherence checks refuse forgery, never the honest degraded load."""
-
-        loaded = tl.load(self._degraded_unwitnessed(tmp_path))
-        assert loaded.degradations
-        assert loaded.stored_value_status.value == "unwitnessed"
-        assert loaded.alignment.value == "partial"
-
     def test_forged_alignment_verdict_refuses(self, gloo_world, tmp_path):
         """A stored_alignment contradicting the cached findings ledger refuses."""
 
@@ -545,20 +466,7 @@ class TestDegradedLoadCoherence:
 class TestArtifactHardening:
     """b4-P slice items: platform coarsening and double-fault disclosure."""
 
-    def test_manifest_platform_is_coarse(self, gloo_world, tmp_path):
-        """Fail-before (B8-22): full platform.platform() leaked the kernel
-        build, libc, and cloud image tag into a shareable artifact."""
-
-        import platform as platform_module
-
-        merged = tl.merge_ranks([_capture()])
-        art = tmp_path / "merged.tlspec"
-        merged.save(art)
-        manifest = json.loads((art / "manifest.json").read_text())
-        assert manifest["platform"] == (
-            f"{platform_module.system().lower()}-{platform_module.machine().lower()}"
-        )
-
+    @pytest.mark.smoke
     def test_double_fault_restore_discloses_stranded_backup(
         self, gloo_world, tmp_path, monkeypatch
     ):

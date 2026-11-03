@@ -10,8 +10,8 @@ from example_models import TinyReluAdd as ReluAdd
 
 import torchlens as tl
 from torchlens._data_classes.cleanup import _scrub_intervention_fields_after_removal
+from torchlens.intervention._trace_edits import set_site
 from torchlens.intervention.errors import SpecMutationError
-from torchlens.intervention.handles import HookHandle
 from torchlens.intervention.types import FireRecord, TargetSpec
 from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
@@ -75,32 +75,12 @@ def _first_internal_label(log: Any) -> str:
     raise AssertionError("expected at least one internal layer")
 
 
-def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
-    """``set(site, tensor)`` updates recipe state without propagation."""
-
-    log = _capture()
-    initial_revision = log._spec_revision
-    replacement = torch.zeros(2, 3)
-
-    result = log.do(
-        tl.func("relu"),
-        replacement,
-        intervention=tl.options.InterventionOptions(engine="set_only"),
-    )
-
-    assert result is log
-    assert log._spec_revision == initial_revision + 1
-    assert log.state is TraceState.SPEC_STALE
-    assert log._out_recipe_revision == initial_revision
-    assert len(log._intervention_spec.target_value_specs) == 1
-    value_spec = log._intervention_spec.target_value_specs[0]
-    assert value_spec.value is replacement
-    assert value_spec.metadata == {}
-    assert not log._recipe_is_clean()
-
-
 def test_set_callable_tags_one_shot_metadata() -> None:
-    """``set(site, fn)`` tags the spec entry as a one-shot callable set."""
+    """The set body tags a callable value as a one-shot callable set.
+
+    ``do(site, fn, engine="set_only")`` stages ``fn`` as a sticky hook, so the
+    callable set is reached only through the private ``set_site`` body.
+    """
 
     log = _capture()
 
@@ -120,60 +100,30 @@ def test_set_callable_tags_one_shot_metadata() -> None:
 
         return out * 0
 
-    log.do(
-        tl.func("relu"),
-        replacement_fn,
-        intervention=tl.options.InterventionOptions(engine="set_only"),
-    )
+    set_site(log, tl.func("relu"), replacement_fn)
 
     value_spec = log._intervention_spec.target_value_specs[-1]
     assert value_spec.value is replacement_fn
     assert value_spec.metadata["created_by"] == "set_callable_one_shot"
 
 
-def test_attach_clear_and_detach_hooks_are_sticky_mutators() -> None:
-    """Sticky hook mutators return handles, increment revisions, and mark stale."""
-
-    log = _capture()
-    initial_revision = log._spec_revision
-
-    handle = log.attach_hooks({tl.func("relu"): _identity_hook})
-    assert isinstance(handle, HookHandle)
-    assert log._spec_revision == initial_revision + 1
-    assert log.state is TraceState.SPEC_STALE
-    assert len(log._intervention_spec.hook_specs) == 1
-
-    assert log.clear_hooks() is log
-    assert log._spec_revision == initial_revision + 2
-    assert log._intervention_spec.hook_specs == []
-
-    log.attach_hooks({tl.func("relu"): _identity_hook})
-    assert log._spec_revision == initial_revision + 3
-    assert len(log._intervention_spec.hook_specs) == 1
-
-    assert log.clear_edits(tl.func("relu")) is log
-    assert log._spec_revision == initial_revision + 4
-    assert log._intervention_spec.hook_specs == []
-
-
 def test_attach_hooks_handle_removes_only_its_own_specs() -> None:
-    """Each attach handle removes only the hook specs it created."""
+    """clear_edits(handle=) removes only the hook specs that attach call created."""
 
     log = _capture()
 
-    first = log.attach_hooks(tl.func("relu"), _identity_hook)
-    second = log.attach_hooks(tl.func("__add__"), _identity_hook)
+    first = log._attach_hooks(tl.func("relu"), _identity_hook)
+    second = log._attach_hooks(tl.func("__add__"), _identity_hook)
 
-    assert isinstance(first, HookHandle)
-    assert isinstance(second, HookHandle)
-    assert first is not second
+    assert isinstance(first, tuple) and isinstance(second, tuple)
+    assert first != second
     assert len(log._intervention_spec.hook_specs) == 2
 
-    first.remove()
+    log.clear_edits(handle=first)
 
     assert len(log._intervention_spec.hook_specs) == 1
     remaining = log._intervention_spec.hook_specs[0]
-    assert remaining.handle in second.handle_ids
+    assert remaining.handle in second
 
 
 def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
@@ -193,7 +143,7 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     assert after_set is not first_snapshot
     assert len(after_set.target_value_specs) == 1
 
-    log.attach_hooks(tl.func("relu"), _identity_hook)
+    log._attach_hooks(tl.func("relu"), _identity_hook)
     after_attach = log.recipe
     assert after_attach is not after_set
     assert len(after_attach.hook_specs) == 1
@@ -203,9 +153,9 @@ def test_intervention_spec_cached_property_invalidates_after_mutators() -> None:
     assert after_detach is not after_attach
     assert after_detach.hook_specs == ()
 
-    log.attach_hooks(tl.func("relu"), _identity_hook)
+    log._attach_hooks(tl.func("relu"), _identity_hook)
     after_second_attach = log.recipe
-    log.clear_hooks()
+    log._clear_hooks()
     after_clear = log.recipe
     assert after_clear is not after_second_attach
     assert after_clear.hook_specs == ()
@@ -230,7 +180,7 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
         torch.zeros_like(log[target].out),
         intervention=tl.options.InterventionOptions(engine="set_only"),
     )
-    log.attach_hooks(tl.label(target), _identity_hook)
+    log._attach_hooks(tl.label(target), _identity_hook)
     log._intervention_spec.targets.append(TargetSpec("label", target))
     log._intervention_spec.records.append(
         FireRecord(target_label=target, site_label=target, call_label=log[target].label)
@@ -250,30 +200,6 @@ def test_cleanup_scrubs_all_label_bearing_intervention_spec_fields() -> None:
     assert all(
         record.get("site") != target for record in log.state_history if isinstance(record, dict)
     )
-
-
-def test_cleanup_invalidates_cached_intervention_spec_snapshot() -> None:
-    """Cleanup refreshes the cached frozen intervention-spec view after spec mutation."""
-
-    log = _capture()
-    target = _first_internal_label(log)
-    log._intervention_spec.records.append(
-        FireRecord(target_label=target, site_label=target, call_label=log[target].label)
-    )
-
-    frozen_before = log.recipe
-    assert len(frozen_before.records) == 1
-
-    _scrub_intervention_fields_after_removal(
-        log,
-        {target},
-        [layer for layer in log._layer_list if layer.layer_label != target],
-    )
-
-    frozen_after = log.recipe
-    assert frozen_after is not frozen_before
-    assert len(log._intervention_spec.records) == 0
-    assert frozen_after.records == ()
 
 
 def test_clear_edits_no_site_is_noop_unless_strict() -> None:

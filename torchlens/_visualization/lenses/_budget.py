@@ -75,6 +75,12 @@ class BudgetResolution:
     disclosure: tuple[str, ...]
 
 
+def _collapse_schedule(trace: Trace, context: Any) -> Any:
+    """Return the trace's collapse schedule through the private ``Trace._collapse_schedule`` door."""
+
+    return trace._collapse_schedule(context)
+
+
 def _coverage_for_step(
     values: dict[str, float],
     op_modules: dict[str, tuple[str, ...]],
@@ -173,7 +179,7 @@ def resolve_budget(
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
         return _resolve_above_ceiling(trace, op_count, channel_active)
 
-    schedule = trace._collapse_schedule(context)
+    schedule = _collapse_schedule(trace, context)
     full_visible = schedule.steps[0].visible_count
     if full_visible <= BAND_CEILING:
         coverage = (

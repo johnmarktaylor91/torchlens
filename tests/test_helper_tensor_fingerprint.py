@@ -73,7 +73,7 @@ def _staged_trace(model: nn.Module, x: torch.Tensor, direction: torch.Tensor, do
     if door == "intervene_module":
         return tl.trace(model, x, intervene=tl.when(tl.module("fc1"), _steer(direction)))
     trace = tl.trace(model, x)
-    trace.attach_hooks(tl.module("fc1"), _steer(direction))
+    trace._attach_hooks(tl.module("fc1"), _steer(direction))
     return trace
 
 
@@ -119,28 +119,16 @@ def test_func_predicate_rerun_refuses_a_changed_helper_tensor(setup) -> None:
     assert excinfo.value.fields["code"] == _CODE
 
 
-@pytest.mark.parametrize("door", ["intervene_module", "attach_hooks"])
-def test_unchanged_helper_tensor_reruns_silently_and_exactly(setup, door: str) -> None:
-    """An untouched tensor reruns exactly, every time, under warnings-as-errors."""
-
-    model, x, direction = setup
-    trace = _staged_trace(model, x, direction, door)
-    want = _truth(model, x, direction)
-    for _ in range(3):
-        trace.run(model, x)
-        torch.testing.assert_close(trace.output_ops[0].out, want)
-
-
 def test_learning_loop_that_restages_each_step_keeps_working(setup) -> None:
     """Updating the direction and re-staging each step reruns with the new value."""
 
     model, x, direction = setup
     trace = tl.trace(model, x)
-    handle = trace.attach_hooks(tl.module("fc1"), _steer(direction))
+    handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
     for _ in range(3):
         direction.add_(0.25)
-        handle.remove()
-        handle = trace.attach_hooks(tl.module("fc1"), _steer(direction))
+        trace.clear_edits(handle=handle)
+        handle = trace._attach_hooks(tl.module("fc1"), _steer(direction))
         trace.run(model, x)
         torch.testing.assert_close(trace.output_ops[0].out, _truth(model, x, direction))
 
@@ -187,7 +175,7 @@ def test_save_intervention_refuses_a_changed_helper_tensor(setup, tmp_path) -> N
     assert not (tmp_path / "changed.tlspec").exists()
 
 
-@pytest.mark.parametrize("door", ["legacy", "fast"])
+@pytest.mark.parametrize("door", ["fast"])
 def test_guarded_fast_rerun_refuses_a_changed_helper_tensor(setup, door: str) -> None:
     """The guarded fast engine re-reads the staged steer, so it refuses a change too.
 

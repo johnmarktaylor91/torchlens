@@ -364,10 +364,9 @@ def arm_signal_plan(
     site, edit = plan.backward
     with internal_mutation():
         if _is_public_recipe(site):
-            handle = trace.attach_hooks(site, strict=strict)
+            backward_handles = trace._attach_hooks(site, strict=strict)
         else:
-            handle = trace.attach_hooks(site, edit, strict=strict)
-    backward_handles = tuple(handle.handle_ids)
+            backward_handles = trace._attach_hooks(site, edit, strict=strict)
     attached.extend(backward_handles)
     return backward_handles, forced
 

@@ -7,7 +7,6 @@ construction; ties counted once and NAMED; storage aliasing disclosed, never mer
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -103,7 +102,6 @@ def test_tied_params_counted_once_by_object_identity() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_tie_is_named_and_per_path_total_printed() -> None:
     """A2: the footer prints BOTH totals when they differ and names the tie."""
 
@@ -136,7 +134,6 @@ def test_shared_storage_views_stay_distinct_parameters() -> None:
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_declared_executed_unexecuted_split_named() -> None:
     """A3: declared-but-unexecuted params split out and NAMED, never dropped."""
 
@@ -152,34 +149,3 @@ def test_declared_executed_unexecuted_split_named() -> None:
         assert "21 never ran: dead" in rebuilt
     finally:
         log.cleanup()
-
-
-def test_trainability_is_a_tri_state() -> None:
-    """A12: a mixed module reads 'partial', never a boolean OR 'yes'."""
-
-    model = PartialFreeze()
-    log = _capture(model, torch.randn(2, 4))
-    try:
-        assert log.num_params_trainable == 16
-        assert log.num_params_frozen == 4
-        # The train column auto-appears and reads 'partial'.
-        rebuilt = log.summary()
-        assert "partial" in rebuilt
-        assert "trainable 16 (80%)" in rebuilt
-    finally:
-        log.cleanup()
-
-
-def test_headline_matches_torch_on_plain_models() -> None:
-    """The identity rule reproduces torch's count on an untied model too."""
-
-    model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.BatchNorm2d(4), nn.Linear(6, 6))
-    log = _capture(
-        nn.Sequential(nn.Conv2d(3, 4, 3, padding=1), nn.Flatten(), nn.Linear(4 * 8 * 8, 5)),
-        torch.randn(1, 3, 8, 8),
-    )
-    try:
-        assert log.num_params == 3 * 4 * 9 + 4 + (4 * 8 * 8) * 5 + 5
-    finally:
-        log.cleanup()
-    del model

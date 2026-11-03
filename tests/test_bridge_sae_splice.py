@@ -54,55 +54,6 @@ def splice_setup():
     return model, x, sae
 
 
-def test_splice_replaces_site_and_recomputes_downstream(splice_setup) -> None:
-    """The fork carries the reconstruction at the site and re-derived outputs."""
-
-    model, x, sae = splice_setup
-    result = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-
-    assert result.site == "relu_1_2:1"
-    # The spliced fork's site payload IS the reconstruction, not the clean out.
-    assert torch.allclose(result.spliced[result.site].out, result.reconstruction, atol=1e-6)
-    assert torch.allclose(result.clean[result.site].out, result.clean_site_out)
-    # Downstream really recomputed: outputs equal a manual forward from the splice.
-    with torch.no_grad():
-        expected = model.out_proj(sae.decode(sae.encode(result.clean_site_out)))
-    assert torch.allclose(result.spliced_outputs[0], expected, atol=1e-5)
-    assert result.output_delta_l2 > 0.0
-    assert result.output_delta_max > 0.0
-
-
-def test_splice_metrics_are_exact(splice_setup) -> None:
-    """MSE and fraction-of-variance-explained match a hand computation."""
-
-    model, x, sae = splice_setup
-    result = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-
-    residual = result.reconstruction - result.clean_site_out
-    expected_mse = float(residual.pow(2).mean())
-    centered = result.clean_site_out - result.clean_site_out.mean()
-    expected_fve = 1.0 - float(residual.pow(2).sum()) / float(centered.pow(2).sum())
-    assert result.reconstruction_mse == pytest.approx(expected_mse, rel=1e-6)
-    assert result.fraction_variance_explained == pytest.approx(expected_fve, rel=1e-6)
-
-
-def test_splice_latents_edit_is_causal(splice_setup) -> None:
-    """Editing latents changes the reconstruction the fork actually consumed."""
-
-    model, x, sae = splice_setup
-    full = sae_bridge.splice(model, x, site="relu_1_2", sae=sae)
-    ablated = sae_bridge.splice(
-        model, x, site="relu_1_2", sae=sae, latents_edit=lambda z: torch.zeros_like(z)
-    )
-
-    with torch.no_grad():
-        zero_recon = sae.decode(torch.zeros_like(sae.encode(full.clean_site_out)))
-    assert torch.allclose(ablated.reconstruction, zero_recon, atol=1e-6)
-    assert torch.allclose(ablated.spliced[ablated.site].out, zero_recon, atol=1e-6)
-    assert not torch.allclose(ablated.spliced_outputs[0], full.spliced_outputs[0])
-
-
-@pytest.mark.smoke
 def test_splice_accepts_existing_trace_and_refuses_double_inputs(splice_setup) -> None:
     """A ready trace works directly; passing inputs alongside it refuses."""
 

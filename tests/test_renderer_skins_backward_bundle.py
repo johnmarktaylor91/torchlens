@@ -5,7 +5,7 @@ Pins here:
 - ``Trace.draw(graph="backward", theme=...)`` and the functional
   ``torchlens._visualization.draw(graph="backward", visualization=VisualizationOptions(theme=...))``
   paint the skin's page, text ink and typography; an unknown skin refuses;
-- ``_visualization.show_bundle_graph(theme=..., show_legend=True)`` uses the skin's page and
+- ``Bundle.draw(theme=..., show_legend=True)`` uses the skin's page and
   Helvetica face, ``draw``'s node shapes and fills, the key under the header,
   and member lists only on nodes and arrows not every member runs;
 - the dark bundle diff caption takes the page's text ink.
@@ -20,10 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens import _visualization
-from torchlens._visualization.bundle_diff import bundle_diff
 from torchlens._visualization.themes import THEME_PRESETS
-from torchlens.options import VisualizationOptions, visualization_to_render_kwargs
 
 
 class _Block(nn.Module):
@@ -57,60 +54,15 @@ def _bundle() -> tl.Bundle:
     return tl.Bundle({"clean": clean, "intervened": edited}, baseline="clean")
 
 
-def test_draw_backward_takes_the_skin(tmp_path: Path) -> None:
-    """The dark skin's page and ink reach the gradient picture."""
-
-    dark = THEME_PRESETS["dark"]
-    dot = (
-        _backward_trace()
-        .draw(
-            graph="backward",
-            path=str(tmp_path / "bwd_dark"),
-            file_format="svg",
-            theme="dark",
-        )
-        .dot
-    )
-    assert f'bgcolor="{dark.graph["bgcolor"]}"' in dot
-    assert f"<FONT COLOR='{dark.default_font}'>" in dot
-    assert (tmp_path / "bwd_dark.svg").exists()
-
-
-def test_draw_backward_default_skin_is_unchanged_in_kind(tmp_path: Path) -> None:
-    """The default skin keeps a white page and the pinned face."""
-
-    dot = (
-        _backward_trace().draw(graph="backward", path=str(tmp_path / "bwd"), file_format="svg").dot
-    )
-    assert "bgcolor=white" in dot
-    assert "fontname=Helvetica" in dot
-
-
 def test_draw_backward_refuses_an_unknown_skin(tmp_path: Path) -> None:
     with pytest.raises(ValueError):
         _backward_trace().draw(graph="backward", path=str(tmp_path / "bwd_bad"), theme="sparkly")
 
 
-def test_functional_draw_backward_reads_the_grouped_theme(tmp_path: Path) -> None:
-    options = VisualizationOptions(
-        container_path=str(tmp_path / "bwd_fn"), file_format="svg", theme="dark"
-    )
-    draw_kwargs = {**visualization_to_render_kwargs(options), "graph": "backward"}
-    dot = _backward_trace().draw(**draw_kwargs).dot
-    assert f'bgcolor="{THEME_PRESETS["dark"].graph["bgcolor"]}"' in dot
-
-
 def test_bundle_picture_follows_draw(tmp_path: Path) -> None:
     """Skin page and face, draw's shapes and fills, the key, member lists only where they differ."""
 
-    dot = _visualization.show_bundle_graph(
-        _bundle(),
-        path=str(tmp_path / "bundle_dark"),
-        file_format="svg",
-        theme="dark",
-        show_legend=True,
-    )
-    assert dot is not None
+    dot = _bundle().draw(str(tmp_path / "bundle_dark.svg"), theme="dark", show_legend=True).dot
     assert f'bgcolor="{THEME_PRESETS["dark"].graph["bgcolor"]}"' in dot
     assert "fontname=Helvetica" in dot
     assert "Times" not in dot
@@ -129,22 +81,6 @@ def test_bundle_member_lists_appear_where_members_differ(tmp_path: Path) -> None
     torch.manual_seed(0)
     small = tl.trace(nn.Sequential(nn.Linear(3, 3)), torch.randn(1, 3))
     large = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), torch.randn(1, 3))
-    dot = _visualization.show_bundle_graph(
-        tl.Bundle({"small": small, "large": large}, baseline="small"),
-        path=str(tmp_path / "bundle_diff_members"),
-        file_format="svg",
-    )
-    assert dot is not None
+    bundle = tl.Bundle({"small": small, "large": large}, baseline="small")
+    dot = bundle.draw(str(tmp_path / "bundle_diff_members.svg")).dot
     assert "[large]" in dot
-
-
-def test_dark_bundle_diff_caption_uses_page_ink(tmp_path: Path) -> None:
-    dot = bundle_diff(
-        _bundle(),
-        left="clean",
-        right="intervened",
-        path=str(tmp_path / "diff_dark"),
-        file_format="svg",
-        theme="dark",
-    )
-    assert f'fontcolor="{THEME_PRESETS["dark"].default_font}"' in str(dot)

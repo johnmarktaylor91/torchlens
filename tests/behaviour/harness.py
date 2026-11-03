@@ -166,6 +166,26 @@ class CellResult:
 
         return self.outcomes.get(name, Outcome("not_run", "the cell did not reach this oracle"))
 
+    def oracle_names(self) -> tuple[str, ...]:
+        """Return every oracle the cell answers to: the base oracles, then ``feature:<name>``."""
+
+        features = tuple(name for name in self.outcomes if name.startswith("feature:"))
+        return (*BASE_ORACLES, *features)
+
+    def failures(self) -> list[str]:
+        """Return one line per unsatisfied oracle, ``<oracle>: <status>: <detail>``.
+
+        Every oracle is judged; the list is empty when each one passed, was a
+        typed refusal or is not applicable by design.
+        """
+
+        lines = []
+        for name in self.oracle_names():
+            outcome = self.oracle(name)
+            if not outcome.ok:
+                lines.append(f"{name}: {outcome.status}: {outcome.detail}")
+        return lines
+
 
 # --- public-surface helpers --------------------------------------------------
 

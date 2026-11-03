@@ -33,6 +33,13 @@ class FamilyEvidence:
     ``verdict``. A nonfinite ``verdict`` proves presence without counts; the
     ``~`` display mark belongs to the sampled family ONLY, and
     ``unavailable`` always carries a reason -- never a silent absence.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.tensor([1.0, -2.0, float("nan")]))
+    >>> evidence = stats.nonfinite_evidence
+    >>> isinstance(evidence, FamilyEvidence), evidence.policy, evidence.is_sampled
+    (True, 'exact', False)
     """
 
     policy: str
@@ -53,6 +60,14 @@ class TensorStats:
 
     Every numeric field is a plain int/float/None (the raw-numbers pin);
     formatters never touch tensors and this record never holds one.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.tensor([1.0, -2.0, float("nan")]))
+    >>> isinstance(stats, TensorStats)
+    True
+    >>> stats.shape, stats.numel, stats.num_nan, stats.finite_min
+    ((3,), 3, 1, -2.0)
     """
 
     schema_version: int
@@ -319,7 +334,7 @@ def _tensor_version(tensor: torch.Tensor) -> int | None:
 def tensor_stats(
     tensor: torch.Tensor,
     *,
-    identity: str | None = None,
+    _identity: str | None = None,
     role: str | None = None,
 ) -> TensorStats:
     """Compute (or serve cached) TensorStats for one dense torch tensor.
@@ -328,8 +343,8 @@ def tensor_stats(
     ----------
     tensor:
         Payload to summarize. Never mutated; autograd state untouched.
-    identity:
-        Stable record identity (op label / site key) seeding the gathered
+    _identity:
+        Internal: stable record identity (op label / site key) seeding the gathered
         sampler (D21) so sampled families are deterministic per record.
     role:
         Graph-proven semantic role passthrough (``embedding_index`` etc.);
@@ -339,6 +354,12 @@ def tensor_stats(
     -------
     TensorStats
         Frozen record; cached per tensor keyed on geometry + ``_version``.
+
+    Examples
+    --------
+    >>> stats = tl.stats.tensor_stats(torch.zeros(2, 5))
+    >>> stats.shape, stats.num_zero, stats.num_nan
+    ((2, 5), 10, 0)
     """
 
     version = _tensor_version(tensor)
@@ -347,7 +368,7 @@ def tensor_stats(
     cached = _STATS_CACHE.get(cache_id)
     if cached is not None and cached[0]() is tensor and cached[1] == key and cached[2].role == role:
         return cached[2]
-    record = _record_from_kernel(tensor, run_kernel(tensor, identity=identity), version)
+    record = _record_from_kernel(tensor, run_kernel(tensor, identity=_identity), version)
     if role is not None:
         record = _with_role(record, role)
 

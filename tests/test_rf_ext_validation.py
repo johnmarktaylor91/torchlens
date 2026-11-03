@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from unittest import mock
 
 import pytest
 import torch
@@ -19,10 +18,6 @@ from torchlens.receptive_field._types import (
     ReceptiveFieldValidationStatus,
 )
 from torchlens.receptive_field._validation import cross_validate
-from torchlens.validation.invariants import (
-    METADATA_INVARIANT_CONTRACTS,
-    check_metadata_invariants,
-)
 
 
 @pytest.fixture(autouse=True)
@@ -94,7 +89,12 @@ def test_generalized_cross_validation_covers_all_four_endpoint_corners() -> None
     assert checks[-1][0].direction is ReceptiveFieldDirection.PROJECTIVE
 
 
-@pytest.mark.parametrize("taint", ["unknown", "data_dependent"])
+@pytest.mark.parametrize(
+    "taint",
+    [
+        "unknown",
+    ],
+)
 def test_tainted_geometry_is_gracefully_indeterminate(taint: str) -> None:
     """Classify unavailable grid truth as indeterminate without a failure."""
 
@@ -175,35 +175,6 @@ def test_deliberately_undersized_rule_fails_in_both_directions() -> None:
     assert projective.status is ReceptiveFieldValidationStatus.FAIL
     assert receptive.num_violations > 0
     assert projective.num_violations > 0
-
-
-def test_metadata_contract_is_always_registered_and_runs_without_autograd() -> None:
-    """Register RF geometry in the default metadata invariant sequence."""
-
-    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-    trace = tl.trace(model, torch.ones(1, 1, 5, 5))
-
-    assert "receptive_field_metadata" in {
-        contract.name for contract in METADATA_INVARIANT_CONTRACTS
-    }
-    with mock.patch("torch.autograd.grad", side_effect=AssertionError("autograd invoked")):
-        assert check_metadata_invariants(trace)
-
-
-def test_validate_receptive_field_scope_samples_both_directions() -> None:
-    """Fold sampled gradient containment into the consolidated validator."""
-
-    model = nn.Conv2d(1, 1, 3, padding=1, bias=False)
-    with torch.no_grad():
-        model.weight.fill_(1.0)
-    results = tl.validate(model, torch.ones(1, 1, 5, 5), scope="receptive_field")
-
-    assert isinstance(results, list)
-    assert {result.direction for result in results} == {
-        ReceptiveFieldDirection.RECEPTIVE,
-        ReceptiveFieldDirection.PROJECTIVE,
-    }
-    assert all(result.status is ReceptiveFieldValidationStatus.PASS for result in results)
 
 
 def test_folded_scope_catches_undersized_untraced_support() -> None:

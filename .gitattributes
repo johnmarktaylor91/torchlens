@@ -1,5 +1,22 @@
+# Notebooks are committed without outputs (nbstripout, once a contributor runs
+# `nbstripout --install`). The exceptions keep their outputs because GitHub renders them as
+# the first impression: the ten-minute tutorial and the learning path. Regenerate them with
+# `python scripts/run_notebooks.py --write-outputs [paths]`. tests/test_notebook_output_policy.py
+# keeps this list equal to scripts/run_notebooks.py STORED_OUTPUT_NOTEBOOKS.
 *.ipynb filter=nbstripout
 *.ipynb diff=ipynb
+notebooks/torchlens_in_10_minutes.ipynb -filter
+notebooks/learn/00_quickstart.ipynb -filter
+notebooks/learn/01_capture_and_look.ipynb -filter
+notebooks/learn/02_address_and_read.ipynb -filter
+notebooks/learn/03_see_it.ipynb -filter
+notebooks/learn/04_keep_what_you_need.ipynb -filter
+notebooks/learn/05_change_and_rerun.ipynb -filter
+notebooks/learn/06_gradients.ipynb -filter
+notebooks/learn/07_compare_runs.ipynb -filter
+notebooks/learn/08_semantic_shortcuts.ipynb -filter
+notebooks/learn/09_scale.ipynb -filter
+notebooks/learn/10_beyond_one_forward.ipynb -filter
 
 # Append-only multi-writer ledgers: union merge keeps both branches' appended rows.
 # Union also keeps both rows when two branches change one row or neighbouring rows,

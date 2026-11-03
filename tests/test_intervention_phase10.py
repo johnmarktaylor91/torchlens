@@ -23,7 +23,6 @@ from torchlens.intervention._resolver_registry import function_registry_key_from
 from torchlens.intervention.errors import (
     MultiMatchWarning,
     OpaqueCallableError,
-    ReplayPreconditionError,
     UntrustedCallableError,
 )
 from torchlens.intervention.save import (
@@ -129,57 +128,6 @@ def _log(model: nn.Module | None = None, x: torch.Tensor | None = None) -> tl.Tr
     return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
-@pytest.mark.smoke
-def test_audit_save_load_and_compat(tmp_path: Path) -> None:
-    """Audit save writes the tlspec directory and loaded specs compare cleanly."""
-
-    x = torch.randn(2, 3)
-    log = _log(_ReluModel(), x)
-    log.do(
-        tl.func("relu"),
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(engine="set_only"),
-    )
-    path = tmp_path / "mylog.tlspec"
-
-    log.save_intervention(path, level="audit")
-
-    assert path.is_dir()
-    assert (path / "spec.json").exists()
-    assert (path / "manifest.json").exists()
-    assert (path / "README.md").exists()
-    assert (path / "tensors").is_dir()
-    spec = load_intervention_spec(path, trust_custom_callables=True)
-    assert tl.load(path) == spec
-    compat = check_spec_compat(spec, _log(_ReluModel(), x))
-    assert compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
-    assert compat.has_identical_target_resolution is True
-
-
-def test_live_forward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
-    """Live forward hook records survive intervention spec save/load."""
-
-    log = tl.trace(
-        _ReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(
-            replayable=True,
-            hooks={tl.func("relu"): tl.zero_ablate()},
-        ),
-    )
-    path = tmp_path / "forward_records.tlspec"
-
-    assert log._intervention_spec.records
-
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path, trust_custom_callables=True)
-
-    assert spec.records
-    assert all(isinstance(record, FireRecord) for record in spec.records)
-    assert any(record.signal == "forward" for record in spec.records)
-    assert any(record.replaced is True for record in spec.records)
-
-
 def test_predicate_intervention_spec_round_trip_preserves_targets_and_hooks(
     tmp_path: Path,
 ) -> None:
@@ -230,7 +178,7 @@ def test_where_hook_save_manifest_tolerates_nonportable_predicate(tmp_path: Path
     """Live ``tl.where`` hook specs are audit-only when the predicate is opaque."""
 
     log = _log(_ReluModel(), torch.randn(2, 3))
-    log.attach_hooks(
+    log._attach_hooks(
         tl.where(lambda ctx: ctx.func_name == "relu", name_hint="relu predicate"),
         tl.zero_ablate(),
         strict=False,
@@ -274,23 +222,6 @@ def test_target_spec_selector_rehydration_covers_path_and_pattern_selectors() ->
     assert repr(selector_from_spec("input_at", (0,), {})) == "tl.model_input((0,))"
 
 
-def test_loaded_forward_hook_spec_executes_on_fresh_trace(tmp_path: Path) -> None:
-    """A loaded forward hook spec re-executes the intended hook."""
-
-    x = torch.ones(1, 3)
-    log = _log(_ReluModel(), x)
-    log.attach_hooks(tl.func("relu"), tl.scale(0.0))
-    path = tmp_path / "forward_execute.tlspec"
-
-    log.save_intervention(path, level="portable")
-    spec = load_intervention_spec(path)
-    fresh = _log(_ReluModel(), x)
-    fresh._intervention_spec = spec
-    rerun = fresh.run(_ReluModel(), x)
-
-    assert torch.equal(rerun[rerun.output_layers[0]].out, torch.ones_like(x))
-
-
 def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     tmp_path: Path,
 ) -> None:
@@ -299,7 +230,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     x = torch.ones(1, 4)
     output_log = _log(_ChunkModel(), x)
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
-        output_log.attach_hooks(output_at(1), tl.zero_ablate())
+        output_log._attach_hooks(output_at(1), tl.zero_ablate())
     output_path = tmp_path / "loaded_output_at.tlspec"
     output_log.save_intervention(output_path, level="portable")
     output_spec = load_intervention_spec(output_path)
@@ -311,7 +242,7 @@ def test_loaded_output_at_and_regex_hook_specs_execute_on_fresh_trace(
     assert torch.count_nonzero(output_tensor) == 0
 
     regex_log = _log(_ReluModel(), torch.ones(1, 3))
-    regex_log.attach_hooks(tl.label_matches("relu"), tl.scale(0.0))
+    regex_log._attach_hooks(tl.label_matches("relu"), tl.scale(0.0))
     regex_path = tmp_path / "loaded_regex.tlspec"
     regex_log.save_intervention(regex_path, level="portable")
     regex_spec = load_intervention_spec(regex_path)
@@ -382,7 +313,7 @@ def test_loaded_import_ref_has_no_load_side_effect_until_execution(tmp_path: Pat
         import side_effect_mod
 
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log.attach_hooks(tl.func("relu"), side_effect_mod.hook)
+        log._attach_hooks(tl.func("relu"), side_effect_mod.hook)
         path = tmp_path / "lazy_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -441,7 +372,7 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             factory=side_effect_helper_mod.make_hook,
         )
         log = _log(_ReluModel(), torch.ones(1, 3))
-        log.attach_hooks(tl.func("relu"), helper)
+        log._attach_hooks(tl.func("relu"), helper)
         path = tmp_path / "lazy_helper_import.tlspec"
         log.save_intervention(path, level="executable_with_callables")
         sentinel.unlink()
@@ -476,7 +407,6 @@ def test_loaded_helper_import_ref_preserves_identity_and_executes_lazily(
             sys.path.remove(str(tmp_path))
 
 
-@pytest.mark.smoke
 def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path) -> None:
     """Live backward hook records survive intervention spec save/load."""
 
@@ -486,7 +416,7 @@ def test_live_backward_records_persist_in_saved_intervention_spec(tmp_path: Path
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_records.tlspec"
 
@@ -508,7 +438,7 @@ def test_loaded_backward_grad_fn_spec_executes_after_round_trip(tmp_path: Path) 
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "backward_execute.tlspec"
 
@@ -539,7 +469,7 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
         x,
         capture=tl.options.CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.scale(2.0))
     path = tmp_path / "backward_before_pass.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -556,48 +486,6 @@ def test_backward_hook_spec_saves_before_first_backward_and_executes(
     fresh.backward(fresh[fresh.output_layers[0]].out.sum(), retain_graph=True)
 
     assert torch.equal(fresh[fresh.input_layers[0]].grad, torch.full_like(x_fresh, 2.0))
-
-
-def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> None:
-    """New intervention specs write v2 while the loader still accepts v1 specs."""
-
-    log = tl.trace(
-        _ReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(
-            replayable=True,
-            hooks={tl.func("relu"): tl.zero_ablate()},
-        ),
-    )
-    path = tmp_path / "versioned_records.tlspec"
-
-    log.save_intervention(path, level="portable")
-    spec_path = path / "spec.json"
-    manifest_path = path / "manifest.json"
-    spec_json = json.loads(spec_path.read_text(encoding="utf-8"))
-    manifest_json = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-    assert spec_json["format_version"] == "2"
-    assert manifest_json["format_version"] == "2"
-
-    spec_json["format_version"] = "1"
-    manifest_json["format_version"] = "1"
-    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
-    manifest_path.write_text(json.dumps(manifest_json), encoding="utf-8")
-
-    # format_version 1 is the spec format torchlens 2.x wrote: it refuses with the one
-    # 2.x error, never loads.
-    from torchlens.errors import ArtifactTooOldError
-
-    with pytest.raises(ArtifactTooOldError) as excinfo:
-        load_intervention_spec(path)
-    assert excinfo.value.fields["code"] == "artifact_version_below_floor"
-    assert excinfo.value.fields["observed"] == "intervention format_version=1"
-
-    spec_json["format_version"] = "3"
-    spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
-    with pytest.raises(ValueError, match="Unsupported intervention .tlspec format_version"):
-        load_intervention_spec(path)
 
 
 def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
@@ -658,7 +546,6 @@ def test_fire_record_ledger_deduplicates_by_structure_not_timestamp() -> None:
     assert spec.records == [first, distinct_tuple]
 
 
-@pytest.mark.smoke
 def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
     """Portable saves fail closed for opaque local callables."""
 
@@ -683,54 +570,9 @@ def test_portable_rejects_opaque_hook(tmp_path: Path) -> None:
         del ctx
         return out
 
-    log.attach_hooks({tl.func("relu"): opaque_hook})
+    log._attach_hooks({tl.func("relu"): opaque_hook})
     with pytest.raises(OpaqueCallableError):
         log.save_intervention(tmp_path / "opaque.tlspec", level="portable")
-
-
-@pytest.mark.smoke
-def test_function_resolution_failure_raises() -> None:
-    """Unresolvable function registry keys raise replay precondition errors."""
-
-    key = FunctionRegistryKey(
-        namespace="torch",
-        qualname="definitely_missing_torch_function",
-        dispatch_kind="function",
-    )
-    with pytest.raises(ReplayPreconditionError):
-        resolve_function_registry_key(key)
-
-
-def test_custom_function_key_is_refused_without_import(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default resolution refuses bundle custom keys before importing modules."""
-
-    key = FunctionRegistryKey(
-        namespace="custom",
-        qualname="neg",
-        dispatch_kind="function",
-        import_path="operator:neg",
-    )
-
-    def fail_import(module_name: str) -> object:
-        """Fail if an untrusted custom module import is attempted.
-
-        Parameters
-        ----------
-        module_name:
-            Module name passed to the import system.
-
-        Returns
-        -------
-        object
-            This function always raises.
-        """
-
-        raise AssertionError(f"unexpected import of {module_name}")
-
-    monkeypatch.setattr(_INTERVENTION_RESOLVER.importlib, "import_module", fail_import)
-
-    with pytest.raises(UntrustedCallableError, match="arbitrary code"):
-        resolve_function_registry_key(key)
 
 
 def test_loaded_spec_tolerates_custom_key_without_import(
@@ -778,99 +620,6 @@ def test_loaded_spec_tolerates_custom_key_without_import(
     assert load_intervention_spec(path, allowed_custom_callable_modules={"operator"})
 
 
-def test_loaded_custom_key_is_denied_at_execution_until_trusted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Loaded foreign callables remain gated until execution explicitly trusts them."""
-
-    module_name = "torchlens_loaded_execution_gate"
-    marker = tmp_path / "imported_at_execution"
-    (tmp_path / f"{module_name}.py").write_text(
-        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
-        "def payload(value):\n    return -value\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
-    # The temp module has a fixed name and an import-time side effect (writes the
-    # marker). Ensure it is NOT already cached so this run imports it fresh, and let
-    # monkeypatch drop it at teardown (restoring the absent state) so the test is
-    # order-independent -- otherwise a cached module makes the trusted import a no-op.
-    monkeypatch.delitem(sys.modules, module_name, raising=False)
-
-    path = tmp_path / "execution_gate.tlspec"
-    _log().save_intervention(path, level="audit")
-    spec_path = path / "spec.json"
-    payload = json.loads(spec_path.read_text(encoding="utf-8"))
-    payload["function_registry_keys"] = [
-        {
-            "layer_label": "foreign_1_1",
-            "key": {
-                "namespace": "custom",
-                "qualname": "payload",
-                "dispatch_kind": "function",
-                "import_path": f"{module_name}:payload",
-            },
-        }
-    ]
-    spec_path.write_text(json.dumps(payload), encoding="utf-8")
-
-    loaded = load_intervention_spec(path)
-    loaded_key = FunctionRegistryKey(**loaded.metadata["function_registry_keys"][0]["key"])
-    assert not marker.exists()
-
-    with pytest.raises(UntrustedCallableError):
-        resolve_function_registry_key(loaded_key)
-    assert not marker.exists()
-
-    resolved = resolve_function_registry_key(loaded_key, trust_custom_callables=True)
-    assert marker.read_text(encoding="utf-8") == "executed"
-    assert resolved(3) == -3
-
-
-@pytest.mark.smoke
-def test_custom_function_key_trust_gate_and_allowlist() -> None:
-    """Trusted custom keys resolve, while a supplied allowlist stays restrictive."""
-
-    key = FunctionRegistryKey(
-        namespace="custom",
-        qualname="neg",
-        dispatch_kind="function",
-        import_path="operator:neg",
-    )
-
-    assert (
-        resolve_function_registry_key(key, trust_custom_callables=True)
-        is __import__("operator").neg
-    )
-    assert (
-        resolve_function_registry_key(key, allowed_custom_callable_modules={"operator"})
-        is __import__("operator").neg
-    )
-    with pytest.raises(UntrustedCallableError, match="not in allowed_custom_callable_modules"):
-        resolve_function_registry_key(
-            key,
-            trust_custom_callables=True,
-            allowed_custom_callable_modules={"torch"},
-        )
-
-
-@pytest.mark.parametrize(
-    ("namespace", "qualname"),
-    [
-        ("torch", "relu"),
-        ("torch.Tensor", "relu"),
-        ("torch.nn.functional", "relu"),
-        ("operator", "neg"),
-    ],
-)
-def test_trusted_function_namespaces_resolve_unchanged(namespace: str, qualname: str) -> None:
-    """Fixed trusted registry roots remain available without a trust opt-in."""
-
-    key = FunctionRegistryKey(namespace=namespace, qualname=qualname, dispatch_kind="function")
-
-    assert callable(resolve_function_registry_key(key))
-
-
 @pytest.mark.smoke
 def test_internal_torch_builtin_key_preserves_replay_identity() -> None:
     """Internal torch builtins resolve without collapsing to public wrappers."""
@@ -881,32 +630,6 @@ def test_internal_torch_builtin_key_preserves_replay_identity() -> None:
     assert key.namespace == "custom"
     assert key.import_path == "torch._C._VariableFunctionsClass:tensordot"
     assert resolve_function_registry_key(key) is builtin
-
-
-def test_red_team_custom_module_side_effect_is_not_imported(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """A malicious custom import path cannot execute its module side effect by default."""
-
-    module_name = "torchlens_custom_import_side_effect"
-    marker = tmp_path / "imported"
-    (tmp_path / f"{module_name}.py").write_text(
-        f"from pathlib import Path\nPath({str(marker)!r}).write_text('executed')\n"
-        "def payload():\n    return None\n",
-        encoding="utf-8",
-    )
-    monkeypatch.syspath_prepend(str(tmp_path))
-    key = FunctionRegistryKey(
-        namespace="custom",
-        qualname="payload",
-        dispatch_kind="function",
-        import_path=f"{module_name}:payload",
-    )
-
-    with pytest.raises(UntrustedCallableError):
-        resolve_function_registry_key(key)
-
-    assert not marker.exists()
 
 
 # --- Round-2 RCE regression: torchlens.* auto-trust bypass -------------------
@@ -941,46 +664,6 @@ def test_r2_torchlens_prefixed_foreign_callable_denied_by_default(
         resolve_function_registry_key(key)
 
 
-@pytest.mark.parametrize(("import_path", "qualname"), _R2_TORCHLENS_PATH_TO_FOREIGN_CALLABLE)
-def test_r2_torchlens_prefixed_foreign_callable_denied_under_strict_allowlist(
-    import_path: str, qualname: str
-) -> None:
-    """The torchlens fast-path cannot bypass an explicit allowlist that omits os."""
-
-    key = FunctionRegistryKey(
-        namespace="custom",
-        qualname=qualname,
-        dispatch_kind="function",
-        import_path=import_path,
-    )
-
-    # An allowlist that does NOT name os/importlib/builtins/subprocess must still
-    # deny, even though the import path is torchlens-prefixed.
-    with pytest.raises(UntrustedCallableError):
-        resolve_function_registry_key(key, allowed_custom_callable_modules={"operator"})
-
-
-def test_r2_os_system_not_reachable_and_not_executed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The concrete os.system RCE key resolves to nothing and never executes."""
-
-    import os
-
-    calls: list[str] = []
-    monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd) or 0)
-    key = FunctionRegistryKey(
-        namespace="custom",
-        qualname="system",
-        dispatch_kind="function",
-        import_path="torchlens._io.tlspec:os.system",
-    )
-
-    with pytest.raises(UntrustedCallableError):
-        resolved = resolve_function_registry_key(key)
-        resolved("touch /tmp/pwned")
-
-    assert calls == []
-
-
 def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
     """A real torchlens-owned custom callable stays auto-trusted after the fix."""
 
@@ -994,66 +677,6 @@ def test_r2_genuine_torchlens_custom_callable_still_resolves() -> None:
     resolved = resolve_function_registry_key(key)
     assert callable(resolved)
     assert str(getattr(resolved, "__module__", "")).startswith("torchlens")
-
-
-def test_r2_load_tolerates_torchlens_prefixed_foreign_key_no_foreign_import(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Analysis-only load tolerates the malicious key, importing no foreign module.
-
-    The foreign-deny split is preserved: load tolerates the well-formed key (does
-    not fail closed), never imports a NON-torchlens module, and never executes
-    os.system. Inspecting the resolved identity only touches the already-installed
-    torchlens module the path names.
-    """
-
-    import importlib as _importlib
-    import os
-
-    path = tmp_path / "r2_foreign.tlspec"
-    _log().save_intervention(path, level="audit")
-    spec_path = path / "spec.json"
-    payload = json.loads(spec_path.read_text(encoding="utf-8"))
-    payload["function_registry_keys"] = [
-        {
-            "layer_label": "malicious_1_1",
-            "key": {
-                "namespace": "custom",
-                "qualname": "system",
-                "dispatch_kind": "function",
-                "import_path": "torchlens._io.tlspec:os.system",
-            },
-        }
-    ]
-    spec_path.write_text(json.dumps(payload), encoding="utf-8")
-
-    calls: list[str] = []
-    monkeypatch.setattr(os, "system", lambda cmd: calls.append(cmd) or 0)
-
-    real_import_module = _importlib.import_module
-
-    def guarded_import(module_name: str) -> object:
-        """Allow torchlens imports; fail on any foreign (non-torchlens) import.
-
-        Parameters
-        ----------
-        module_name:
-            Module name passed to the import system.
-
-        Returns
-        -------
-        object
-            The imported torchlens module.
-        """
-
-        assert module_name == "torchlens" or module_name.startswith("torchlens."), (
-            f"unexpected foreign import of {module_name}"
-        )
-        return real_import_module(module_name)
-
-    monkeypatch.setattr(_INTERVENTION_RESOLVER.importlib, "import_module", guarded_import)
-    assert load_intervention_spec(path)
-    assert calls == []
 
 
 def test_target_manifest_mismatch_returns_fail(tmp_path: Path) -> None:
@@ -1082,7 +705,7 @@ def test_save_intervention_allows_more_than_eight_matching_sites(tmp_path: Path)
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "deep_relu.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -1100,7 +723,7 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     x = torch.randn(2, 3)
     log = _log(_DeepReluStack(), x)
     with pytest.warns(MultiMatchWarning, match="fan out"):
-        log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+        log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     path = tmp_path / "deep_relu_compat.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -1111,7 +734,6 @@ def test_check_spec_compat_allows_saved_selectors_with_more_than_eight_sites(
     assert compat.outcome == "EXACT"
 
 
-@pytest.mark.smoke
 def test_atomic_save_cleans_up_after_tensor_write_failure(tmp_path: Path) -> None:
     """A tensor-sidecar write exception leaves no final partial tlspec dir."""
 

@@ -336,7 +336,7 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     trace.track_nonfinite = r.track_nonfinite
     trace.track_device_memory = r.track_device_memory
     trace.measure_host_peak_memory = r.measure_host_peak_memory
-    trace._options_aten_ops = bool(r.aten_ops)
+    trace._options_aten_ops = "values" if r.aten_ops == "values" else bool(r.aten_ops)
     _injection.arm_injection_logging(trace, armed=r.log_injections)
     # L7a mode-marker prep (S2 SEAM, labeled): the flag DECLARES the mode
     # (memo sec 1.5) and stamps the mirror field here at entry. At S2
@@ -344,6 +344,11 @@ def _stamp_identity_and_sinks(trace: Trace, r: SimpleNamespace) -> None:
     # _capture/outcome.py witness machinery in the S2 author's PR; this
     # entry write stays as the declared-mode source of truth.
     trace._options_structure_only = r.structure_only
+    # Per-op argument templates are all saved-graph replay needs (trace.do(site, edit)
+    # without model=), and they cost about a tenth of capture time with no retained
+    # tensor bytes, so every eager capture records them. replayable=True still adds
+    # the runnable apparatus on top. A structure-only capture has no values to replay.
+    trace._options_save_arg_templates = not r.structure_only
     trace._stop_directive = StopDirective(
         halt_options=getattr(trace, "_predicate_save_options", None),
         raise_on_nan=r.raise_on_nan,

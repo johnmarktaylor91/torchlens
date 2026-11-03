@@ -61,14 +61,6 @@ def test_unknown_view_refuses_typed(toy_trace) -> None:
     assert "overview" in str(excinfo.value)  # the did-you-mean
 
 
-def test_unknown_level_keeps_the_historical_code(toy_trace) -> None:
-    """level= refusals keep the pinned summary_level_invalid code."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        toy_trace.summary(level="bogus")
-    assert excinfo.value.fields["code"] == "summary_level_invalid"
-
-
 def test_op_level_conflicts_with_depth(toy_trace) -> None:
     """level='op' + depth= contradict; the refusal teaches the fix."""
 
@@ -86,7 +78,6 @@ def test_buffer_rows_refuse_until_qualified_names(toy_trace) -> None:
     assert "qualified" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     """columns= accepts a bundle name, an exact list, or +/- deltas."""
 
@@ -101,7 +92,6 @@ def test_columns_bundle_exact_and_deltas(toy_trace) -> None:
     assert excinfo.value.fields["code"] == "summary_option_invalid"
 
 
-@pytest.mark.smoke
 def test_filter_discloses_coverage_and_preserves_totals(toy_trace) -> None:
     """Filters are presentation-only: coverage named, totals whole-model."""
 
@@ -165,22 +155,3 @@ def test_input_size_synthesizes_and_discloses() -> None:
     assert "synthetic input" in str(report)
     assert "input_shape=(2, 8)" in str(report)
     assert report.total_params == (8 * 16 + 16) + (16 * 8 + 8)
-
-
-def test_one_call_and_trace_summary_agree(toy_trace) -> None:
-    """Composition row 1: identical report given identical capture + args."""
-
-    one_call = tl.summary(_Toy(), torch.randn(2, 8))
-    trace_side = toy_trace.summary()
-    assert one_call.total_params == trace_side.total_params
-    assert one_call.total_flops_forward == trace_side.total_flops_forward
-    assert [row.row_id for row in one_call._rebuilt.view.rows] == [
-        row.row_id for row in trace_side._rebuilt.view.rows
-    ]
-
-
-def test_max_rows_none_means_unbounded(toy_trace) -> None:
-    """max_rows=None disables the budget instead of crashing."""
-
-    report = toy_trace.summary(max_rows=None)
-    assert "view:" in report

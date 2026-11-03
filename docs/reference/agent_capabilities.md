@@ -20,14 +20,14 @@ Each row is a capability name from Goodfire Silico's capabilities page (https://
 | Post-training debugging | Not built in. |  |
 | Architecture diagrams | [Draw the computational graph](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/quickstart.md); [Open an interactive viewer of a trace](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/export.md); [Print a summary of the model](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/reference/summary.md) | `tl.draw(model, x)`; `tl.export.html(tl.trace(model, x), "trace.html")`; `print(tl.summary(model, x))` |
 | Feature explorers | Not built in. |  |
-| Guardrail monitor | [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/non_goals.md); Outside TorchLens: it is not a serving-time monitor. |  |
+| Guardrail monitor | [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/cross_engine.md); Outside TorchLens: it is not a serving-time monitor. |  |
 | Interactive data viewer | Outside TorchLens. |  |
 | Dataset inspection | Outside TorchLens. |  |
 | Data attribution | Training-data attribution is outside TorchLens; input attribution is the attribution card. |  |
 | Synthetic data generation | Outside TorchLens. |  |
 | Training pipeline | Outside TorchLens. |  |
 | Interpretability in training | Not built in. |  |
-| Serving | [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/non_goals.md); Outside TorchLens. |  |
+| Serving | [Monitor activations on a production inference server](https://github.com/johnmarktaylor91/torchlens/blob/main/docs/migration/cross_engine.md); Outside TorchLens. |  |
 | Evaluations | Outside TorchLens. |  |
 | Biological foundation models | Not built in; capture works on any PyTorch model. |  |
 | Bioinformatics | Outside TorchLens. |  |

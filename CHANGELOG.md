@@ -5,6 +5,10 @@
 
 ### Behavior changes
 
+- **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
+  written; the default never does) in place of `vis_save_only=`. `Trace.to_dagua_graph` and
+  `tl.experimental.dagua.trace_to_dagua_graph` take `rolled=` (a bool) and `depth=` in place of
+  `vis_mode=` and `vis_call_depth=`, the same spellings as `trace.draw`.
 - **api**: `inputs=` replaces `input_args=` on the capture, validation, debug and report entry
   points, and `x=` on `Bundle.run`, `tl.debug.find_nan` and `tl.debug.nonfinite_origin`.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
@@ -207,6 +211,24 @@
   steady-state model.
 
 ### Features
+
+- **capture**: FlashAttention 4 calls (`attn_implementation="flash_attention_4"`, the
+  `flash_attn.cute` package) are captured as one `autogradfunction` boundary op per attention
+  call (`transform_kind="autograd.Function"`, exit `flash_attn.cute`) whose parents are q, k
+  and v and which replays through the Function's `apply`, so the armed completeness witness
+  verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
+  before, the trace recorded the output allocation in place of the attention and validation
+  failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
+  as a second output of the same call, which depends on q and k only, and forward validation
+  still reports that output's v edge as insensitive (a pinned, strict expected failure).
+  `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
+- **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
+  `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
+  classmethod; before, the hook silently stayed uninstalled there and a forward that left
+  torch (NumPy, DLPack, FlashAttention 4) was not collapsed into a boundary op, so the
+  completeness census reported its interior dispatches as unaccounted. The slot shape is the
+  capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
+  `TorchCapabilityWarning` instead of degrading silently.
 
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
@@ -527,6 +549,16 @@
   assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
   created by differentiating an inferred-order node sit one order above it. The invariant is
   unchanged.
+- **backward**: a backward pass or `torch.autograd.grad` run inside forward now pairs the GradFn
+  of every captured op it walked with that op (`GradFn.has_op` is True).
+  The walk runs before any layer exists, so every GradFn was left unpaired; the projection rebuild
+  now pairs these discoveries once the final layers are known. Order inference applies to paired
+  nodes as it does to unpaired ones, so the GradFn orders of a second-order gradient inside forward
+  match those of the same math run after the trace.
+- **runnable**: bind checks a direct version alias's recorded shape and dtype against the value it
+  binds, as it already did for the producer slot. A crafted `.tlspec` whose alias recorded a
+  different shape or dtype bound the producer's value unchecked; it now raises
+  `PathDivergenceError` with `OUTPUT_SHAPE_MISMATCH` or `OUTPUT_DTYPE_MISMATCH` naming the alias.
 - **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
   gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
   op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start

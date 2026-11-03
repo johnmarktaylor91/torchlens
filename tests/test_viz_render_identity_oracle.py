@@ -808,6 +808,54 @@ def _normalize_version_dependent_fn(dot: str) -> str:
     return re.sub(r"fn=([^<\s]+)", lambda m: f"fn={m.group(1).rsplit('.', 1)[-1]}", dot)
 
 
+#: ``<IMG SRC="<directory>/<file>">`` as the key emits it; group 2 is the directory.
+_SWATCH_IMAGE_SRC = re.compile(r'(<IMG SRC=")([^"]*[/\\])?([^"/\\]+)(")')
+
+
+def _normalize_swatch_image_paths(dot: str) -> str:
+    """Reduce every key swatch ``<IMG SRC>`` to the swatch file's name.
+
+    The key draws each swatch once as a content-addressed PNG (shape and
+    colours name the file) in a directory under the system temp folder, and
+    the DOT ``<IMG SRC>`` carries that absolute path so Graphviz resolves the
+    image from any working directory.  The directory is a property of the host
+    and process that ran the test (``/tmp/torchlens-key`` on CI, a job folder
+    on a worker, a per-user fallback elsewhere), not of the render: the file
+    name alone identifies the swatch.  Like the ``fn=`` and timing
+    normalizations, this canonicalizes the record before the byte-identity
+    comparison so one committed golden holds on every host.
+
+    Parameters
+    ----------
+    dot:
+        DOT source returned by the draw invocation under test.
+
+    Returns
+    -------
+    str
+        DOT source whose ``<IMG SRC>`` values keep only the final path component.
+    """
+
+    return _SWATCH_IMAGE_SRC.sub(r"\1\3\4", dot)
+
+
+def _canonical_dot(dot: str) -> str:
+    """Apply every environment normalization to one DOT source.
+
+    Parameters
+    ----------
+    dot:
+        DOT source returned by the draw invocation under test.
+
+    Returns
+    -------
+    str
+        DOT source with interpreter- and host-dependent tokens canonicalized.
+    """
+
+    return _normalize_swatch_image_paths(_normalize_version_dependent_fn(dot))
+
+
 def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
     """Capture all oracle layers for one deterministic matrix case.
 
@@ -823,6 +871,12 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
     dict[str, Any]
         Bytes, structural, plan, schedule, and callback records.
     """
+    # Imported here, below the oracle models: a module-level import would shift
+    # their source lines, which the profiling node labels freeze.
+    from torchlens._visualization._trace_collapse import (
+        collapse_plan as _collapse_plan,
+        collapse_schedule as _collapse_schedule,
+    )
 
     torch.manual_seed(271828)
     model = case.model()
@@ -861,13 +915,13 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             warnings.filterwarnings("ignore", category=DeprecationWarning, message="node_style=.*")
             source = trace.draw(**kwargs).dot
         assert isinstance(source, str)
-        source = _normalize_version_dependent_fn(source)
+        source = _canonical_dot(source)
         if node_calls is not None:
             _assert_exactly_once(node_calls, "node_spec_fn")
         if collapsed_calls is not None:
             _assert_exactly_once(collapsed_calls, "collapsed_node_spec_fn")
         plans = {
-            str(mode): _stable_repr(trace._collapse_plan(mode=mode))
+            str(mode): _stable_repr(_collapse_plan(trace, mode=mode))
             for mode in ("auto", "max", 0.25, 0.75)
         }
         return {
@@ -875,7 +929,7 @@ def _capture_case(case: OracleCase, tmp_path: Path) -> dict[str, Any]:
             "dot": source,
             "structural": _structural_digest(source),
             "plans": plans,
-            "schedule": _stable_repr(trace._collapse_schedule()),
+            "schedule": _stable_repr(_collapse_schedule(trace)),
             "callbacks": {
                 "node_spec_fn": sorted((node_calls or {}).values()),
                 "collapsed_node_spec_fn": sorted((collapsed_calls or {}).values()),
@@ -918,8 +972,8 @@ def _capture_backward_combined(tmp_path: Path) -> dict[str, Any]:
         return {
             name: {"dot": dot, "structural": _structural_digest(dot)}
             for name, dot in {
-                "backward": _normalize_version_dependent_fn(backward),
-                "combined": _normalize_version_dependent_fn(combined),
+                "backward": _canonical_dot(backward),
+                "combined": _canonical_dot(combined),
             }.items()
         }
     finally:

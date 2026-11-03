@@ -201,9 +201,12 @@ True __sub__
 
 ## `compare`
 
-`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved dense
-floating activations with matching operation labels and returns a tabular `Report`
-whose `.to_pandas()` DataFrame carries aggregate counts in `attrs`.
+`tl.debug.compare(trace_a, trace_b, *, rtol=1e-5, atol=1e-8)` compares saved
+activations with matching operation labels and returns a tabular `Report` whose
+`.to_pandas()` DataFrame carries aggregate counts in `attrs`. Runs on different devices
+are compared on the CPU and different dtypes in the wider dtype; each row's `reason`
+and the card's coverage line name the alignment. Integer and boolean activations
+(indices, masks) must match exactly.
 
 ```python
 import torch
@@ -220,7 +223,7 @@ print(comparison.shape, comparison.attrs["value_diverged"])
 Output:
 
 ```text
-(2, 8) 2
+(2, 9) 2
 ```
 
 ## `compare_params`
@@ -305,10 +308,19 @@ Output:
 
 ## `dead_neurons`
 
-`tl.debug.dead_neurons(trace, *, dim=1, threshold=0.0)` reports units whose maximum
-activation is at most `threshold` or whose value has zero variance in this trace. One
-trace is only one sample; aggregate runs before making a dataset-level claim. Related:
-[`grad_health`](#grad_health).
+`tl.debug.dead_neurons(trace, *, dim=None, max_activation=0.0)` reports, for every layer, the
+units whose output is identically zero at every position in the batch: every element of
+the unit's slice has a magnitude at or below `max_activation` (absolute, on the layer's output;
+`0.0` means exactly zero). The units are a layer's output units, so there is one row per
+op a module call returned or the model's `forward` returned; the ops inside a composite
+activation (the `tanh` of a tanh-approximated GELU, the `sigmoid` of SiLU) get no row,
+because a saturated intermediate is not a dead output unit. One trace is only one sample;
+aggregate runs before making a dataset-level claim. With `dim=None` the unit axis is
+picked per op: the last axis of a 2-D or 3-D activation (a linear layer's
+`(batch, features)`, a transformer block's `(batch, tokens, features)`), the channel axis
+of a convolution, pooling or per-channel norm and of the same-shaped ops it feeds, and
+axis 1 for 4-D and wider. An int `dim` forces one axis on every op.
+Related: [`grad_health`](#grad_health).
 
 ```python
 import torch
@@ -323,7 +335,7 @@ print(report.columns.tolist())
 Output:
 
 ```text
-['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason']
+['op', 'total_units', 'dead_count', 'dead_frac', 'sample_dead_idx', 'reason', 'source_line']
 ```
 
 ## `dtype_range`
@@ -472,7 +484,7 @@ Output:
 `tl.debug.guess_input_shape(model, *, batch_size=1, input_dtype=None, channels=None,
 spatial_rank="auto", seq_len=None, square=True, min_size=1, max_size=512,
 preferred_sizes=(224, 256, 384, 299, 128, 96, 64, 32, 28), max_probes=64, device=None,
-seed=0, return_trace=False, on_failure="return", input_specs=None)` probes a module and
+seed=0, on_failure="return", input_specs=None)` probes a module and
 returns an `GuessInputShapeReport` with a verified synthetic shape or a diagnostic failure.
 
 ```python

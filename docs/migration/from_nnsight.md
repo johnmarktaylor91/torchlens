@@ -54,7 +54,7 @@ def edit(activation, *, ctx):
     return activation
 
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 edited = trace.fork("edited")
 edited.do(tl.module("transformer.h.0"), edit)
 block0 = edited["transformer.h.0"].out
@@ -69,7 +69,7 @@ RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_chan
 | nnsight operation (0.8.0rc1, transformers 5.18.0) | TorchLens (transformers 5.18.0) | Notes |
 | --- | --- | --- |
 | `with model.trace(ids): h = model.transformer.h[0].output.save()` | `tl.extract(model, ids, ["transformer.h.0"])["transformer.h.0"]` | TorchLens runs the forward first and you read the result afterwards. |
-| `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `capture=tl.options.CaptureOptions(replayable=True)`, then `trace.fork().do(tl.module("transformer.h.0"), edit)` | `edit` is a tensor or a function of the original output; `do` replays the recorded graph downstream. |
+| `model.transformer.h[0].output[:, :, :2] = 2.5` inside the trace | Capture with `tl.trace(model, x)`, then `trace.fork().do(tl.module("transformer.h.0"), edit)` | `edit` is a tensor or a function of the original output; `do` replays the recorded graph downstream. |
 | Save every op, including ones no module owns (`.source`) | Nothing to ask for: `tl.trace` records every executed op (`trace.layers`) | |
 | `model.trace(...)` on the wrapped model | `tl.trace(model._model, ids)` on the model nnsight wraps | See Using both. |
 | Trace a model invocation | `tl.trace(model, x, save=tl.func("relu"))` | TorchLens stores a completed `Trace` after execution. |
@@ -77,7 +77,7 @@ RESULT = (list(block0.shape), bool((block0[:, :, :2] == 2.5).all()), logits_chan
 | Assign into a traced value | `log.fork().do(site, value)` (replay the recorded graph) or `.run(model, x)` (run the model again) | TorchLens recipes are explicit and auditable. |
 | Invoke with intervention in one block | `tl.trace(model, x, intervene=tl.when(site, helper_or_value), save=site)` | Capture-time intervention is the direct one-forward path. |
 | Scan modules by path | `tl.in_module("path")`, `tl.module("path")`, `log.find_sites(...)` | Similar workflow; labels differ. |
-| Cross-prompt patching | Capture separate traces and patch with `tl.patch_from(source_trace)` or `attach_hooks` | Equivalent for local PyTorch models. |
+| Cross-prompt patching | Capture separate traces and patch with `tl.patch_from(source_trace)` or `do` | Equivalent for local PyTorch models. |
 | Repeated interventions from one base | `fork()` first, then edit each branch | TorchLens uses fork-first branch isolation. |
 | Save an intervention for sharing | `log.save_intervention(path, level="portable")` | TorchLens has `.tlspec/` recipes. |
 | Intervene inside fused attention internals | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.patch_head` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
@@ -104,7 +104,8 @@ PyTorch model (see [landscape.md](landscape.md)).
   local eager forward; for serving-scale capture see
   [where to go instead](where_to_go_instead.md#capture-at-serving-scale-on-remote-gpus-or-across-devices)
   and [landscape.md](landscape.md), which lists
-  Neuronpedia's interp-engine and vllm-lens beside nnsight.
+  Neuronpedia's interp-engine and vllm-lens beside nnsight. To check those hooks against
+  TorchLens on a small model, see [cross-engine checks](cross_engine.md).
 - Source-local tracing syntax: edits are written inline inside a `with model.trace(...)` block and
   read as ordinary indexing. TorchLens separates capture from edit, so the same task is two steps.
 
@@ -131,4 +132,4 @@ prompt.
   call `model.forward`; with both it re-executes (see
   [intervention_explainers.md](../intervention_explainers.md)). Pushing is exact only for
   graph-stable edits.
-- The edit in the example must have a stored graph to replay: capture with `replayable=True`.
+- The edit in the example replays the stored graph; every `tl.trace` capture records what that needs.

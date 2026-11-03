@@ -30,6 +30,13 @@ def montage(images: Sequence[Image.Image], max_items: int, max_size: int = 600) 
     ------
     ValueError
         If ``max_items`` is less than one or ``images`` is empty.
+
+    Examples
+    --------
+    >>> from PIL import Image
+    >>> images = [Image.new("RGB", (8, 8), "red") for _ in range(4)]
+    >>> tl.viz.montage(images, max_items=4, max_size=64).size
+    (64, 64)
     """
 
     if max_items < 1:
@@ -70,6 +77,12 @@ def text_table(strings: Sequence[str], max_items: int) -> str:
     ------
     ValueError
         If ``max_items`` is less than one.
+
+    Examples
+    --------
+    >>> label = tl.viz.nodes.text_table(["first", "second", "third"], max_items=2)
+    >>> label.startswith("<<TABLE"), "+1 more" in label
+    (True, True)
     """
 
     if max_items < 1:

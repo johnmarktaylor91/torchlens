@@ -486,7 +486,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 "the legacy intervened rerun trace.run(model, x) or capture "
                 "fresh with tl.trace(model, x, intervene=...); to run "
                 "WITHOUT it, detach the staged spec first "
-                "(trace.clear_hooks() or detach_hooks(site=/handle=)).",
+                "(trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
                 code="run_staged_spec_unapplied",
                 remedy="apply the spec via run(model, x) / tl.trace(..., "
                 "intervene=...), or detach the staged hooks before "

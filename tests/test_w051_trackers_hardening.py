@@ -46,7 +46,6 @@ def _step(session, model, opt, step: int) -> None:  # noqa: ANN001
 
 
 class TestJSONLTornTail:
-    @pytest.mark.smoke
     def test_partial_write_failure_leaves_only_whole_rows(self, tmp_path) -> None:  # noqa: ANN001
         path = tmp_path / "run.jsonl"
         sink = trk.JSONLSink(path)
@@ -96,7 +95,6 @@ class TestJSONLTornTail:
 
 
 class TestCloseSpine:
-    @pytest.mark.smoke
     def test_flush_raise_still_closes_the_sink(self) -> None:
         class _FlushFails(trk.MemorySink):
             def flush(self) -> None:
@@ -133,7 +131,6 @@ class TestCloseSpine:
             session.close()
         assert info.value.fields["code"] == "watch_close_empty"
 
-    @pytest.mark.smoke
     @_requires_gradscaler
     def test_all_steps_explained_by_named_skips_does_not_raise(self) -> None:
         """A run whose every step is AMP-skipped is explained, not empty."""
@@ -163,7 +160,6 @@ class TestAttachPreflights:
         assert info.value.fields["code"] == "tracker_tag_unsafe"
         assert sink.scalars == [] and sink.texts == []
 
-    @pytest.mark.smoke
     def test_second_session_same_grammar_refuses_distinct_name_allowed(self) -> None:
         model, opt = _mlp()
         sink = trk.MemorySink()
@@ -178,7 +174,6 @@ class TestAttachPreflights:
         again = trk.watch(model, to=sink, signals=("gradients",), optimizer=opt, every=1)
         again.close(unwinding=True)
 
-    @pytest.mark.smoke
     def test_sparse_gradient_modules_refuse_at_attach(self) -> None:
         class _Emb(torch.nn.Module):
             def __init__(self) -> None:
@@ -203,7 +198,6 @@ class TestAttachPreflights:
         params_only = trk.watch(model, to=trk.MemorySink(), signals=("parameters",), optimizer=opt)
         params_only.close(unwinding=True)
 
-    @pytest.mark.smoke
     def test_wandb_bucket_cap_refuses_at_attach_before_any_emission(self) -> None:
         """An EXPLICIT over-cap grid still refuses at attach, before any row."""
 
@@ -287,7 +281,6 @@ class TestAttachPreflights:
         finally:
             session.close(unwinding=True)
 
-    @pytest.mark.smoke
     def test_tensorboard_relay_refuses_histograms_at_attach(self, monkeypatch) -> None:  # noqa: ANN001
         fake_wandb = types.ModuleType("wandb")
         fake_wandb.patched = {"tensorboard": [("torch.utils.tensorboard", "SummaryWriter")]}  # type: ignore[attr-defined]
@@ -343,7 +336,6 @@ class TestAttachRows:
 
 
 class TestHFStepAxis:
-    @pytest.mark.smoke
     def test_rows_land_on_the_trainer_log_axis(self) -> None:
         pytest.importorskip("transformers")
         model = torch.nn.Linear(4, 4)

@@ -175,19 +175,6 @@ def test_reconstructed_sdpa_gqa_and_causal_mask_validate() -> None:
     assert torch.allclose(view.z, op.out, atol=1e-5, rtol=1e-4)
 
 
-def test_reconstructed_sdpa_missing_prerequisite_names_arg_capture() -> None:
-    """Default capture names the missing arg-capture prerequisite."""
-
-    model = _AttentionWrapper(LlamaSdpaAttention())
-    log = tl.trace(model, torch.randn(2, 3, 8), save="all")
-    facets = log.modules["attn"].facets
-
-    assert "pattern" not in facets.keys()
-    assert facets.declared()["pattern"].status == "needs_capture"
-    with pytest.raises(MissingFacetError, match="save_args=True"):
-        facets.pattern
-
-
 def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     """Read-only reconstructed pattern facets cannot be scatter-back edited."""
 
@@ -200,87 +187,7 @@ def test_fused_pattern_intervention_requires_real_eager_facet() -> None:
     )
 
     with pytest.raises(SiteResolutionError, match="read-only"):
-        log.attach_hooks(tl.facet("pattern"), tl.zero_ablate())
-
-
-def test_residual_facets_read_and_grad() -> None:
-    """Transformer block residual facets are op-anchored and grad-capable."""
-
-    model = TransformerBlock()
-    x = torch.randn(2, 4, requires_grad=True)
-    log = tl.trace(
-        model,
-        x,
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads="all"),
-        save="all",
-    )
-    log.backward(log[log.output_layers[0]].out.sum())
-    facets = log.modules["self"].facets
-
-    assert facets.resid_pre.shape == x.shape
-    assert facets.resid_mid.shape == x.shape
-    assert facets.resid_post.shape == x.shape
-    assert torch.is_tensor(facets.resid_pre.grad)
-    assert torch.is_tensor(facets.resid_mid.grad)
-    assert torch.is_tensor(facets.resid_post.grad)
-
-
-def test_module_path_fallback_on_unreciped_model() -> None:
-    """A module with no semantic recipe still exposes structural output facets."""
-
-    class CustomLeaf(nn.Module):
-        """Unrecipe'd module."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return a simple output."""
-
-            return x.sin()
-
-    class Model(nn.Module):
-        """Wrapper with an addressable custom leaf."""
-
-        def __init__(self) -> None:
-            """Initialize child."""
-
-            super().__init__()
-            self.custom = CustomLeaf()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run child."""
-
-            return self.custom(x)
-
-    x = torch.randn(2, 3)
-    log = tl.trace(Model(), x, save="all")
-    assert torch.equal(log.modules["custom"].facets["out"], x.sin())
-
-
-def test_transformerlens_aliases_are_opt_in() -> None:
-    """TransformerLens hook-name aliases resolve only after the enable call."""
-
-    model = _AttentionWrapper(LlamaSdpaAttention())
-    x = torch.randn(2, 3, 8)
-    log = tl.trace(
-        model,
-        x,
-        capture=tl.options.CaptureOptions(reconstruction_ready=True),
-        save="all",
-    )
-    assert "hook_pattern" not in log.modules["attn"].facets.keys()
-
-    facets_mod.enable_transformer_lens_aliases(True)
-    try:
-        aliased = tl.trace(
-            model,
-            x,
-            capture=tl.options.CaptureOptions(reconstruction_ready=True),
-            save="all",
-        )
-        view = aliased.modules["attn"].facets
-        assert "hook_pattern" in view.keys()
-        assert torch.allclose(view["hook_pattern"], view.pattern)
-    finally:
-        facets_mod.enable_transformer_lens_aliases(False)
+        log._attach_hooks(tl.facet("pattern"), tl.zero_ablate())
 
 
 def test_transformerlens_alias_menu_mirrors_missing_native_facet() -> None:
