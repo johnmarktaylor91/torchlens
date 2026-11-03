@@ -240,7 +240,7 @@
     "_time_finished": "keep",
     "_time_started": "keep",
     "backward_duration": "keep",
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "call_index": "keep",
     "fire_record": "keep",
     "grad_fn_label": "keep",
@@ -524,7 +524,7 @@
     "_source_ref": "weakref_strip"
    },
    "torchlens._data_classes.op.GradientRecord": {
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "dtype": "keep",
     "grad": "blob",
     "memory": "keep",
@@ -815,7 +815,7 @@
    },
    "torchlens._data_classes.trace.Trace": {
     "_activation_transform_repr": "keep",
-    "_active_backward_pass_index": "drop",
+    "_active_backward_pass_number": "drop",
     "_ambiguous_lookup_keys": "keep",
     "_annotation_blobs": "blob_recursive",
     "_append_history": "keep",
@@ -1297,8 +1297,8 @@
   },
   "contract_schema": "torchlens.writer_contract.v1",
   "manifest_schema_ids": {
-   "tlspec_manifest_v1.json": "be0266e58ed12debf1e1964dc56838a48576c214fe32fdbc192e04ec66d19948",
-   "tlspec_manifest_v2.json": "b7b6604e74132fa580c708bf8dd63677cb14bab98a69806405af75ec93bc1286"
+   "tlspec_manifest_v1.json": "583398ee8527538be31bdca51861f5438c45ead7a99953529cf62283a0fc3f3f",
+   "tlspec_manifest_v2.json": "54f461249c41fb8ff64367b7dff0b6e2af66e2e2b833b9d9b8575adae7eebe59"
   },
   "min_tlspec_version": 11,
   "min_torchlens_version": "3.0.0",
@@ -1814,7 +1814,7 @@
      "_time_finished": "keep",
      "_time_started": "keep",
      "backward_duration": "keep",
-     "backward_pass_index": "keep",
+     "backward_pass_number": "keep",
      "call_index": "keep",
      "fire_record": "keep",
      "grad_fn_label": "keep",
@@ -1830,7 +1830,7 @@
      "_time_finished": "fact",
      "_time_started": "fact",
      "backward_duration": "fact",
-     "backward_pass_index": "fact",
+     "backward_pass_number": "fact",
      "call_index": "fact",
      "fire_record": "fact",
      "grad_fn_label": "fact",
@@ -1846,7 +1846,7 @@
      "_time_finished",
      "_time_started",
      "backward_duration",
-     "backward_pass_index",
+     "backward_pass_number",
      "call_index",
      "fire_record",
      "grad_fn_label",
@@ -3265,7 +3265,7 @@
     "class": "torchlens._data_classes.trace.Trace",
     "field_policies": {
      "_activation_transform_repr": "keep",
-     "_active_backward_pass_index": "drop",
+     "_active_backward_pass_number": "drop",
      "_ambiguous_lookup_keys": "keep",
      "_annotation_blobs": "blob_recursive",
      "_append_history": "keep",
@@ -4008,5 +4008,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8e07954c99363d0e7bda8aa3f1f5a6b982695f73a3ff12f70b855f8cd6afbd38"
+ "writer_contract_digest": "3c28de07aecb752da240466d7a5137f42f649a2ee62687eb387e11ad65b8d217"
 }
