@@ -1,11 +1,14 @@
-"""Capture takes the fused attention fast path exactly when eager does.
+"""Fused attention modules: the captured output equals eager's on the same program.
 
-Capture forces ``requires_grad=True`` on prepared Parameters; the fused fast
-paths of ``nn.MultiheadAttention`` and ``nn.TransformerEncoderLayer`` are gated
-on that flag, so a frozen eval module used to run decomposed under capture and
-its captured output differed from eager at rounding level (the forward
-validation ground-truth check caught it). ``backends/torch/fastpath_flags.py``
-restores the user's flags for that module call.
+Capture holds torch's public fused-attention switch off (``torch.backends.mha``)
+and never forces ``requires_grad`` on frozen weights, so a captured
+``nn.MultiheadAttention`` or ``nn.TransformerEncoderLayer`` always records the
+unfused attention internals, and the validation ground truth runs under the same
+hold. ``tests/test_fused_attention_fastpath_capture.py`` pins that contract on a
+frozen ``nn.MultiheadAttention``. This file covers the neighbouring rows of the
+stress cluster that motivated it: the fused encoder layer, and the cases where
+eager itself takes the unfused path (trainable weights, a grad-requiring input,
+training mode), where the captured output must equal plain eager bit for bit.
 """
 
 from __future__ import annotations
@@ -15,12 +18,15 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils._torch_compat import get_mha_fastpath_enabled, set_mha_fastpath_enabled
-from torchlens.options import CaptureOptions
+from torchlens._utils._torch_compat import (
+    get_mha_fastpath_enabled,
+    get_mha_fastpath_switch_support,
+    set_mha_fastpath_enabled,
+)
+from torchlens.validation import last_validation_failure
 
 WIDTH = 8
-FUSED_MHA_OP = "_native_multi_head_attention"
-FUSED_LAYER_OP = "_transformer_encoder_layer_fwd"
+FUSED_OPS = frozenset({"_native_multi_head_attention", "_transformer_encoder_layer_fwd"})
 
 
 class FrozenAttention(nn.Module):
@@ -48,102 +54,90 @@ class FrozenEncoderLayer(nn.Module):
         return self.layer(x)
 
 
-def _eager_outputs(model: nn.Module, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-    """Return eager outputs with the public fast-path switch on and off."""
-
-    prior = get_mha_fastpath_enabled()
-    try:
-        set_mha_fastpath_enabled(True)
-        fast = model(x.clone()).detach().clone()
-        set_mha_fastpath_enabled(False)
-        slow = model(x.clone()).detach().clone()
-    finally:
-        if prior is not None:
-            set_mha_fastpath_enabled(prior)
-    return fast, slow
+def _needs_switch() -> None:
+    if not get_mha_fastpath_switch_support():
+        pytest.skip("torch build without the public torch.backends.mha fast-path switch")
 
 
 def _build(cls: type[nn.Module]) -> tuple[nn.Module, torch.Tensor]:
     torch.manual_seed(0)
-    model = cls().eval()
-    x = torch.randn(3, 5, WIDTH)
-    return model, x
+    return cls().eval(), torch.randn(3, 5, WIDTH)
 
 
-@pytest.mark.smoke
-@pytest.mark.parametrize(
-    ("cls", "fused_op"), [(FrozenAttention, FUSED_MHA_OP), (FrozenEncoderLayer, FUSED_LAYER_OP)]
-)
-def test_frozen_eval_capture_takes_the_fused_path_eager_takes(
-    cls: type[nn.Module], fused_op: str
-) -> None:
-    """Grad on, every tensor frozen: eager fuses, so capture fuses and matches bit for bit."""
+def _eager_unfused(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
+    """Return eager's output with the public fast-path switch held off."""
 
-    model, x = _build(cls)
-    eager_fast, eager_slow = _eager_outputs(model, x)
+    prior = get_mha_fastpath_enabled()
+    set_mha_fastpath_enabled(False)
+    try:
+        return model(x.clone()).detach().clone()
+    finally:
+        if prior is not None:
+            set_mha_fastpath_enabled(prior)
+
+
+def _captured(trace: tl.Trace) -> torch.Tensor:
+    return trace[trace.output_layers[0]].out
+
+
+def _op_names(trace: tl.Trace) -> list[str]:
+    return [op.func_name for op in trace.ops]
+
+
+def test_frozen_encoder_layer_records_the_unfused_program_eager_runs_unfused() -> None:
+    """Grad on, every tensor frozen: capture equals eager's unfused program bit for bit."""
+
+    _needs_switch()
+    model, x = _build(FrozenEncoderLayer)
     assert torch.is_grad_enabled()
-    trace = tl.trace(model, x.clone(), capture=CaptureOptions(seed=0))
-    func_names = [op.func_name for op in trace.ops]
-    assert fused_op in func_names, func_names
-    captured = trace[trace.output_layers[0]].out
-    assert torch.equal(captured, eager_fast)
-    if not torch.equal(eager_fast, eager_slow):
-        assert not torch.equal(captured, eager_slow)
-    # The user's own flags are back after the capture.
+    expected = _eager_unfused(model, x)
+    trace = tl.trace(model, [x.clone()])
+    assert not FUSED_OPS.intersection(_op_names(trace)), _op_names(trace)
+    assert torch.equal(_captured(trace), expected)
     assert not any(p.requires_grad for p in model.parameters())
 
 
-@pytest.mark.smoke
-def test_frozen_eval_forward_validation_passes_with_grad_on() -> None:
-    """The S6 stress repro in small: validate's ground truth and capture take the same path."""
+@pytest.mark.parametrize("dtype", [torch.float32, torch.float64])
+def test_frozen_encoder_layer_forward_validation_passes_with_grad_on(dtype: torch.dtype) -> None:
+    """The stress repro on the encoder layer: ground truth and capture run one program."""
 
-    model, x = _build(FrozenAttention)
+    _needs_switch()
+    model, x = _build(FrozenEncoderLayer)
+    model, x = model.to(dtype), x.to(dtype)
     assert torch.is_grad_enabled()
-    assert tl.validate(model, x, scope="forward", seed=0)
+    assert tl.validate(model, [x], scope="forward"), last_validation_failure()
 
 
-def test_trainable_attention_keeps_the_decomposed_path() -> None:
-    """A trainable module decomposes in eager, so capture decomposes too and still matches."""
+def test_trainable_attention_matches_plain_eager() -> None:
+    """Trainable weights fail eager's fast-path gate: both sides run unfused and agree."""
 
     model, x = _build(FrozenAttention)
     model.attention.requires_grad_(True)
     eager = model(x.clone()).detach().clone()
-    trace = tl.trace(model, x.clone(), capture=CaptureOptions(seed=0))
-    func_names = [op.func_name for op in trace.ops]
-    assert FUSED_MHA_OP not in func_names, func_names
-    assert torch.equal(trace[trace.output_layers[0]].out, eager)
+    trace = tl.trace(model, [x.clone()])
+    assert not FUSED_OPS.intersection(_op_names(trace)), _op_names(trace)
+    assert torch.equal(_captured(trace), eager)
     assert all(p.requires_grad for p in model.parameters())
 
 
-def test_grad_requiring_input_keeps_the_decomposed_path() -> None:
-    """A grad-requiring query fails eager's gate: both sides decompose."""
+def test_grad_requiring_input_matches_plain_eager() -> None:
+    """A grad-requiring query fails eager's gate: both sides run unfused and agree."""
 
     model, x = _build(FrozenAttention)
     x = x.requires_grad_(True)
     eager = model(x).detach().clone()
-    trace = tl.trace(model, x, capture=CaptureOptions(seed=0))
-    func_names = [op.func_name for op in trace.ops]
-    assert FUSED_MHA_OP not in func_names, func_names
-    assert torch.equal(trace[trace.output_layers[0]].out, eager)
+    trace = tl.trace(model, [x])
+    assert not FUSED_OPS.intersection(_op_names(trace)), _op_names(trace)
+    assert torch.equal(_captured(trace), eager)
+    assert not any(p.requires_grad for p in model.parameters())
 
 
-def test_no_grad_capture_is_unchanged() -> None:
-    """Under no_grad the gate never consults the flags; the fused path was already taken."""
-
-    model, x = _build(FrozenAttention)
-    with torch.no_grad():
-        eager = model(x.clone()).detach().clone()
-        trace = tl.trace(model, x.clone(), capture=CaptureOptions(seed=0))
-    assert [op.func_name for op in trace.ops] == [FUSED_MHA_OP]
-    assert torch.equal(trace[trace.output_layers[0]].out, eager)
-
-
-def test_training_mode_module_is_left_alone() -> None:
+def test_training_mode_attention_matches_plain_eager() -> None:
     """A training-mode module fails eager's gate before the flags matter."""
 
     model, x = _build(FrozenAttention)
     model.train()
     eager = model(x.clone()).detach().clone()
-    trace = tl.trace(model, x.clone(), capture=CaptureOptions(seed=0))
-    assert FUSED_MHA_OP not in [op.func_name for op in trace.ops]
-    assert torch.equal(trace[trace.output_layers[0]].out, eager)
+    trace = tl.trace(model, [x.clone()])
+    assert not FUSED_OPS.intersection(_op_names(trace)), _op_names(trace)
+    assert torch.equal(_captured(trace), eager)

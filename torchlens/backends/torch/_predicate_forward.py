@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
-from contextlib import AbstractContextManager, nullcontext
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
@@ -28,7 +27,6 @@ from . import module_stack as _mstack
 from ._predicate_boundary_replacements import log_predicate_boundary_replacements
 from ._tl import get_tensor_label
 from .escape_detection import expected_original_call
-from .fastpath_flags import fused_fastpath_flag_context
 from .prehook_provenance import bind_invocation
 
 if TYPE_CHECKING:
@@ -344,16 +342,13 @@ def _predicate_module_forward(
     skipped_spec = _predicate_module_enter(trace, state, frame, halt_only)
     out = None
     try:
-        # The shadow token binds THIS frame (the one that calls the original).
-        shadow_call: AbstractContextManager[Any] = (
-            expected_original_call(orig_forward, "module_forward:predicate")
-            if (
-                _state._escape_detector_mode == "shadow"
-                or _state._completeness_witness_mode == "shadow"
-            )
-            else nullcontext()
-        )
-        with fused_fastpath_flag_context(trace, module, args, kwargs), shadow_call:
+        if (
+            _state._escape_detector_mode == "shadow"
+            or _state._completeness_witness_mode == "shadow"
+        ):
+            with expected_original_call(orig_forward, "module_forward:predicate"):
+                out = orig_forward(*args, **kwargs)
+        else:
             out = orig_forward(*args, **kwargs)
         from ...intervention.runtime import _apply_module_boundary_live_hooks
 

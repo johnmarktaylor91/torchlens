@@ -15,12 +15,12 @@ import warnings
 
 import pytest
 import torch
-import torchvision
 from torch import nn
 
 from torchlens.checks import ChecksSession
 
 pytestmark = [pytest.mark.real_model, pytest.mark.real_class]
+torchvision = pytest.importorskip("torchvision")
 
 _STEPS = 3
 _SCHEDULER_WARNINGS = ("overridden", "lr_scheduler.step()", "optimizer.step()")

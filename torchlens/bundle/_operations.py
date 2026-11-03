@@ -8,7 +8,6 @@ from collections.abc import Callable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any
 
 from ._lineage import BundleOperation, mint_bundle_id
-from ._measure import released_candidates as _released_candidates
 
 if TYPE_CHECKING:
     from torch import nn
@@ -112,9 +111,33 @@ def bundle_map(self: Bundle, fn: Callable[..., Any]) -> dict[str, Any]:
         name: (fn(member, name) if pass_name else fn(member))
         for name, member in self._members.items()
     }
-    for candidate in _released_candidates(self):
+    for candidate in released_candidates(self):
         results.setdefault(candidate, "unmeasured")
     return results
+
+
+def released_candidates(bundle: Bundle) -> list[str]:
+    """Effect-table candidates with no retained member, sorted, each once.
+
+    Parameters
+    ----------
+    bundle:
+        Bundle whose effect tables are read.
+
+    Returns
+    -------
+    list[str]
+        Candidate ids a table records whose member was released, refused or
+        failed; the ``__baseline__`` row is never listed.
+    """
+    released: set[str] = set()
+    for table in bundle._effect_tables.values():
+        for row in table.rows:
+            if row.candidate_id == "__baseline__":
+                continue
+            if row.member_name is None or row.member_name not in bundle._members:
+                released.add(row.candidate_id)
+    return sorted(released)
 
 
 def accepts_member_name(fn: Callable[..., Any]) -> bool:
