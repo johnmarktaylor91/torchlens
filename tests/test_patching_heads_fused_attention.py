@@ -116,7 +116,9 @@ def _c_proj_head_oracle(model: Any, clean: torch.Tensor, corrupt: torch.Tensor) 
         c_proj = model.transformer.h[layer].attn.c_proj
         captured: dict[str, torch.Tensor] = {}
         grab = c_proj.register_forward_pre_hook(
-            lambda _m, args: captured.setdefault("clean", args[0].detach().clone())
+            lambda _m, args, captured=captured: captured.setdefault(
+                "clean", args[0].detach().clone()
+            )
         )
         with torch.no_grad():
             model(clean)
@@ -124,7 +126,12 @@ def _c_proj_head_oracle(model: Any, clean: torch.Tensor, corrupt: torch.Tensor) 
         for head in range(n_head):
             cols = slice(head * d_head, (head + 1) * d_head)
 
-            def _swap(_m: Any, args: tuple[Any, ...], cols: slice = cols) -> tuple[Any, ...]:
+            def _swap(
+                _m: Any,
+                args: tuple[Any, ...],
+                cols: slice = cols,
+                captured: dict[str, torch.Tensor] = captured,
+            ) -> tuple[Any, ...]:
                 patched = args[0].clone()
                 patched[..., cols] = captured["clean"][..., cols]
                 return (patched, *args[1:])
