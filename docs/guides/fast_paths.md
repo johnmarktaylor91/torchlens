@@ -261,11 +261,12 @@ processes one token, so the package matters much less for `bind` with `generate(
 Capturing one trace and re-running it for each new input is cheap for steered generation when
 the staged intervention targets plain module selectors (`tl.module(...)`): both `run` doors
 below then take the [guarded fast steered rerun](#fast-steered-rerun). The other reuse paths
-refuse a staged intervention, refuse a change in input, or replay over the captured graph.
+apply a staged intervention through a full capture, refuse a change in input, or replay over
+the captured graph.
 
 | Reuse path | What it does | What it refuses or costs |
 | --- | --- | --- |
-| `trace.run(inputs=x)` | A fresh verified execution of the recorded program | Refuses `run_staged_spec_unapplied` when the trace carries a staged intervention, because it would not apply it |
+| `trace.run(inputs=x)` | A fresh verified execution of the recorded program; with a staged intervention, a refresh capture that applies it (`last_run["engine"] == "live"`, fire receipts on `last_run`) | A full capture, not a native forward, and the verdict is `unverifiable` when staged edits applied; refuses `run_staged_spec_unapplied` only on a loaded artifact |
 | `trace.run(inputs=x, fast=True)` | A guarded static-loop refresh: the model's native forward with targeted hooks | Applies a staged module-selector intervention through the guarded fast engine and admits a growing input while the model's call structure is unchanged; any refusal raises (`PathDivergenceError` for a structural change) instead of falling back. Needs a selective `save=` on the capture (`tl.module(...)` or `tl.func(...)`); a save-everything capture refuses. Unsteered and at a fixed shape: 0.41 s on Qwen3.5-9B against 47 s for a trace |
 | `trace.run(model, x)` on an intervened trace | The guarded fast steered rerun: the native forward with the staged hooks, refreshing the saved sites | About 1.5 to 2x a plain hook per step, exact, and exact on every repeat. When a guard refuses it falls back to recapturing the whole forward with the stored intervention: still exact, at the cost of a trace, with the reason in `last_run["fast_refused"]` |
 | `trace.fork().do(site, action)` | Replays an edit over the captured graph | Same input only, by design. Needs a `CaptureOptions(replayable=True)` capture (about 5 to 6x a default trace), and refuses typed (`ReplayPreconditionError`) on some decoder architectures |

@@ -5,8 +5,8 @@ live engine applies a staged ``tl.module(address)`` intervention at the real
 module boundary, so ``run(inputs=..., fast=True)`` equals the same edit made
 with a plain eager forward hook. A ``tl.func(...)`` target has no module
 boundary to hook and refuses with ``fast_rerun_target_unsupported``. The
-transactional ``run(inputs=...)`` never applies a staged spec and refuses with
-``run_staged_spec_unapplied``. A fork whose hooks were attached after capture
+transactional ``run(inputs=...)`` applies the staged spec too, inside its refresh
+capture (``last_run["engine"] == "live"``), and equals the eager edit. A fork whose hooks were attached after capture
 refuses the fast door with ``fast_rerun_graph_unsteered`` until one legacy
 rerun has recorded the edit in its graph.
 """

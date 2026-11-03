@@ -1434,7 +1434,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   trace with a staged intervention tries it first (a trace with nothing staged keeps the capture
   rerun) and falls back to the capture engine on any typed refusal, and
   `trace.run(inputs=..., fast=True)` on a live or loaded-activation trace applies the staged
-  spec through it (so the `run_staged_spec_unapplied` gate does not fire there). `last_run`
+  spec through it. The plain `trace.run(inputs=...)` on a live trace applies the staged spec
+  too, inside its refresh capture (`engine` `live`, the fork adopts the captured graph and
+  `last_run["unfired_plan_ids"]` names the staged plans that fired nowhere); only a loaded
+  artifact refuses with `run_staged_spec_unapplied`. `last_run`
   discloses the outcome: `engine` is `guarded_fast` when it ran and `rerun` after a fallback,
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
@@ -1445,7 +1448,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
-  `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
+  `run(inputs=...)`, fast or not, a run that applies staged edits reports `unverifiable`, never
   `verified` (diagnostic `user_intervention_unsupported`, stage `hooked_run_unverified`):
   it is an edited forward, and no hook-aware check exists yet. On a live trace the
   `fast=True` door returns a new result Trace carrying that `last_run` and leaves the source
