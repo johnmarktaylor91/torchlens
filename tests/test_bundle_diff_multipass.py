@@ -71,7 +71,7 @@ def test_bundle_diff_draws_one_node_per_pass(tmp_path: Path) -> None:
     bundle = _zero_relu_bundle()
     clean = bundle["clean"]
     relu = _relu_label(clean)
-    num_passes = clean[relu].num_passes
+    num_passes = clean.layers[relu].num_passes
     assert num_passes == 2
 
     source = bundle.draw(graph="diff", path=str(tmp_path / "shared_relu"))
@@ -140,8 +140,8 @@ def test_store_comparison_joins_passes_in_pass_order() -> None:
     name = bundle.store_comparison(metric="relative_l2")
     stored = bundle.stored_comparison(name)[relu]["patched"]
 
-    clean_passes = [clean[relu].ops[k].out for k in range(2)]
-    patched_passes = [patched[relu].ops[k].out for k in range(2)]
+    clean_passes = [clean.layers[relu].ops[k].out for k in range(2)]
+    patched_passes = [patched.layers[relu].ops[k].out for k in range(2)]
     joined = relative_l2(
         torch.cat([t.reshape(-1) for t in clean_passes]),
         torch.cat([t.reshape(-1) for t in patched_passes]),
