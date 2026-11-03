@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any
 from .._capture_honesty import honesty_banner_lines
 from .._errors import InvalidArgumentError
 from .._observe._peaks import pass_peak_facts
+from .._selection.selector_base import BaseSelector
 from ._compute_truth import unknown_op_ledger
 from ._factcore import factcore
 from ._health import health_facts, nonfinite_option_hint
@@ -135,36 +136,73 @@ def collect_summary_facts(
     )
 
 
-def _apply_filter(
-    view: ResolvedView, facts: SummaryFacts, config: SummaryConfig
-) -> tuple[tuple[ViewRow, ...], str | None]:
-    """Presentation-only filtering with the mandatory coverage disclosure."""
+def _selector_labels(trace: Trace, selector: BaseSelector) -> frozenset[str]:
+    """Pass-qualified labels of every op a TorchLens selector matches."""
 
-    if config.where is None:
-        return view.rows, None
-    predicate = config.where
+    sites = trace.find_sites(selector, max_fanout=len(trace._layer_list) + 1)
+    labels: set[str] = set()
+    for site in sites:
+        labels.add(str(getattr(site, "label", "")))
+        layer_label = getattr(site, "layer_label", None)
+        pass_number = getattr(site, "pass_number", None)
+        if layer_label is not None and pass_number is not None:
+            labels.add(f"{layer_label}:{pass_number}")
+    return frozenset(labels)
+
+
+def _row_matcher(trace: Trace, predicate: Any) -> Any:
+    """Turn a ``where=`` value into a row predicate.
+
+    A regex string searches the row name, its module address and, for an op
+    row, the module that ran it; a TorchLens selector (``tl.in_module(...)``,
+    ``tl.func(...)``, combinations) keeps the rows owning an op it matches;
+    any other callable receives the typed row.
+    """
+
     if isinstance(predicate, str):
         pattern = re.compile(predicate)
 
         def match(row: ViewRow) -> bool:
-            """Regex filter over the row name and address."""
+            """Regex filter over the row name, address and owning module."""
 
-            return bool(pattern.search(row.name) or (row.address and pattern.search(row.address)))
+            places = (row.name, row.address, row.parent_address if row.kind == "op" else None)
+            return any(place and pattern.search(place) for place in places)
 
-    elif callable(predicate):
+        return match
+    if isinstance(predicate, BaseSelector):
+        labels = _selector_labels(trace, predicate)
+
+        def match(row: ViewRow) -> bool:
+            """Selector filter: the row owns at least one matched op."""
+
+            return any(label in labels for label in row.owned_ops)
+
+        return match
+    if callable(predicate):
 
         def match(row: ViewRow) -> bool:
             """User-callable filter over the typed row."""
 
             return bool(predicate(row))
 
-    else:
-        raise InvalidArgumentError(
-            f"where= accepts a regex string or a callable over rows; got "
-            f"{type(predicate).__name__}.",
-            code="summary_option_invalid",
-            remedy="pass a regex string, e.g. where='conv', or a callable row -> bool",
-        )
+        return match
+    raise InvalidArgumentError(
+        f"where= accepts a regex string, a TorchLens selector or a callable over rows; "
+        f"got {type(predicate).__name__}.",
+        code="summary_option_invalid",
+        remedy="pass a regex string, e.g. where='conv', a selector such as "
+        "where=tl.in_module('encoder'), or a callable row -> bool",
+    )
+
+
+def _apply_filter(
+    view: ResolvedView, facts: SummaryFacts, config: SummaryConfig, trace: Trace
+) -> tuple[tuple[ViewRow, ...], str | None]:
+    """Presentation-only filtering with the mandatory coverage disclosure."""
+
+    if config.where is None:
+        return view.rows, None
+    match = _row_matcher(trace, config.where)
     visible = tuple(row for row in view.rows if match(row))
     params_total = facts.params_total or 0
     flops_total = facts.flops_forward_fma2 or 0
@@ -211,7 +249,7 @@ def build_rebuilt_summary(
     facts = collect_summary_facts(
         trace, execution_note=execution_note, input_synthesis=input_synthesis
     )
-    visible_rows, filter_note = _apply_filter(view, facts, config)
+    visible_rows, filter_note = _apply_filter(view, facts, config, trace)
     ascii_text, unicode_text = render_summary_pair(
         view, facts, config, visible_rows=visible_rows, filter_note=filter_note
     )

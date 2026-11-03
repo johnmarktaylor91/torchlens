@@ -170,7 +170,6 @@ class TestSiteMatrixRoutes:
 class TestAdapters:
     """Stub-tested adapter wiring (optional libraries absent by design)."""
 
-    @pytest.mark.smoke
     def test_rsatoolbox_per_site_descriptors(self, artifact, monkeypatch) -> None:
         """The Dataset carries site, shaping, ids, and the verdict."""
 
@@ -205,7 +204,6 @@ class TestAdapters:
         ]
         assert file_side.descriptors["input_preprocessing_verdict"] == "unknown"
 
-    @pytest.mark.smoke
     def test_xarray_data_array_routes_identical(self, artifact, monkeypatch) -> None:
         """DataArray wiring: dims, coords, attrs, route equality."""
 
@@ -228,6 +226,45 @@ class TestAdapters:
         assert (file_side.data == memory_side.data).all()
         assert file_side.attrs["shaping"]["op"] == features.SHAPING_OP
         assert file_side.coords["stimulus_id"][0] == "presentation"
+
+    @pytest.mark.parametrize(
+        "home",
+        ["brainscore_core.supported_data_standards.brainio.assemblies", "brainio.assemblies"],
+    )
+    def test_neuroid_assembly_finds_either_brainio_home(self, artifact, monkeypatch, home) -> None:
+        """NeuroidAssembly resolves from brainscore_core's bundled brainio or standalone brainio.
+
+        Current brainscore_vision installs ship no top-level ``brainio``; the
+        assembly classes live under ``brainscore_core``. Both homes must work.
+        """
+
+        import sys
+
+        homes = (
+            "brainscore_core.supported_data_standards.brainio.assemblies",
+            "brainio.assemblies",
+        )
+        for other in homes:
+            monkeypatch.setitem(sys.modules, other, None)
+        parts = home.split(".")
+        for depth in range(1, len(parts) + 1):
+            module = _stub_module(monkeypatch, ".".join(parts[:depth]))
+
+        class _NeuroidAssembly:
+            """Capture the constructor payload."""
+
+            def __init__(self, data, dims=None, coords=None):
+                self.data, self.dims, self.coords, self.attrs = data, dims, coords, {}
+
+        module.NeuroidAssembly = _NeuroidAssembly
+        out_dir, trace = artifact
+        from torchlens.bridge import xarray as tl_xr
+
+        assembly = tl_xr.neuroid_assembly(trace, "conv")
+        assert isinstance(assembly, _NeuroidAssembly)
+        assert assembly.dims == ("presentation", "neuroid")
+        assert assembly.attrs["shaping"]["op"] == features.SHAPING_OP
+        assert (assembly.data == tl_xr.neuroid_assembly(out_dir, "conv").data).all()
 
     def test_missing_optional_dependency_teaches(self, artifact, monkeypatch) -> None:
         """Absent adapters raise ImportError naming the install path."""

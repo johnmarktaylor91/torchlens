@@ -33,7 +33,6 @@ def _bundle(tmp_path) -> Path:
     return bundle
 
 
-@pytest.mark.smoke
 def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
     depth = 20000
     bomb = "[" * depth + "]" * depth
@@ -45,7 +44,6 @@ def test_depth_bomb_line_is_a_warning_not_a_recursionerror(tmp_path) -> None:
     assert recording.recovery_warnings
 
 
-@pytest.mark.smoke
 def test_missing_ctx_is_a_warning_not_a_keyerror(tmp_path) -> None:
     bundle = _bundle(tmp_path)
     (bundle / "fastlog_index.jsonl").write_text(json.dumps({"spec": {}}) + "\n", encoding="utf-8")

@@ -106,7 +106,6 @@ def test_permute_batch_axis_law() -> None:
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
 
 
-@pytest.mark.smoke
 def test_permute_batch_gradients_route_to_permuted_sources() -> None:
     """A2 gradient leg: graph-connected index_select, never a detach."""
 
@@ -242,6 +241,7 @@ def test_mask_equivariance_law() -> None:
         assert excinfo.value.fields["code"] == "mask_not_row_equivariant"
 
 
+@pytest.mark.smoke
 def test_resample_rows_from_per_row_coherent_draws() -> None:
     """Whole-row coherent donor sampling with replacement, agreement-aware."""
 
@@ -357,7 +357,6 @@ def test_mean_ablate_population_evidence_set_fill() -> None:
     assert record.base_seed is None, "a mean never invents a seed"
 
 
-@pytest.mark.smoke
 def test_set_direction_mean_projects_and_recenters() -> None:
     """out - proj_v(out) + mean(coef(ref)) * v_hat, gradients orthogonal-only."""
 

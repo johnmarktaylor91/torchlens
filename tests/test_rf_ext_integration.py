@@ -50,10 +50,10 @@ def _ops(trace: object, name: str, *, field: str = "func_name") -> list[object]:
     """Return captured operations matching one raw function or layer-type name.
 
     ``func_name`` is the backend's raw captured call name, which is NOT
-    always the canonical op name: tinygrad elementwise ops are reconstructed
-    from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
-    as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``type`` instead. Pass ``field="type"`` for those.
+    always the canonical op name: tinygrad ops are reconstructed from the UOp
+    DAG and carry the tinygrad API name observed for them (else the lowercase
+    UOp op name) as ``func_name``, while the semantic op name (``"add"``,
+    ``"mul"``, ...) is on ``type``. Pass ``field="type"`` for those.
     """
 
     return [op for op in trace._layer_list if getattr(op, field) == name]  # type: ignore[union-attr]
@@ -413,6 +413,7 @@ def test_source_target_caches_reuse_and_drop_across_portable_round_trip(
         loaded_source.projective_field.probe_grad((0, 0, 3, 3), target=loaded_target)
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_backend_keeps_geometry_and_gates_both_gradients() -> None:
     """Keep rule-backed geometry backend-neutral and empirical methods torch-only."""

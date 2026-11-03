@@ -190,6 +190,7 @@ def test_a3_union_magnitudes_reported_and_cardinality_theorem(gallery):
     assert resolved_inter.is_empty is False
 
 
+@pytest.mark.smoke
 def test_a4_control_is_size_matched_by_construction(gallery):
     """A4 [CONSTRUCTION]: |ctrl| == |inter|, sampled inside ~union."""
 

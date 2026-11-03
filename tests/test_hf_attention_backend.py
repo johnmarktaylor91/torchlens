@@ -1,4 +1,4 @@
-"""TorchLens as a registered Hugging Face attention backend (U36.2).
+"""TorchLens as a registered Hugging Face attention backend.
 
 Per-head probabilities recorded by the backend are checked against an
 INDEPENDENT eager reference: float64 QK-softmax built in this file from the

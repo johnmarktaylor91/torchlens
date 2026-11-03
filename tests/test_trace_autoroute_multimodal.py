@@ -26,7 +26,11 @@ _received: list[tuple[Any, Any]] = []
 """Inputs the CLIP-like forward saw; kept off the model, which capture rolls back."""
 
 
-class _ClipLikeModel(nn.Module):
+class _FakePreTrainedModel(nn.Module):
+    """Stand-in for ``transformers.PreTrainedModel`` (no transformers import)."""
+
+
+class _ClipLikeModel(_FakePreTrainedModel):
     """HF-shaped two-tower model: a ``name_or_path`` and a keyword-only forward.
 
     The forward reads ``pixel_values.shape`` first, the way ``CLIPModel`` does,
@@ -169,6 +173,84 @@ def test_model_without_auto_processor_gate_fails(monkeypatch: pytest.MonkeyPatch
     assert log.provenance.input_preprocessor is None
 
 
+class _UncachedHFModel(_FakePreTrainedModel):
+    """HF-shaped model whose forward must never see the raw modality dict."""
+
+    name_or_path = "fixture/uncached-multimodal"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.forward_calls = 0
+
+    def forward(self, **kwargs: Any) -> torch.Tensor:
+        """Count calls; a real model would fail on the raw strings and images."""
+
+        self.forward_calls += 1
+        return torch.ones(1)
+
+
+def _install_fake_transformers(monkeypatch: pytest.MonkeyPatch) -> list[dict[str, Any]]:
+    """Install a fake ``transformers`` whose processor is never in the cache."""
+
+    import sys
+    from types import SimpleNamespace
+
+    calls: list[dict[str, Any]] = []
+
+    class _UncachedAutoProcessor:
+        @classmethod
+        def from_pretrained(cls, name_or_path: str, **kwargs: Any) -> Any:
+            calls.append({"name_or_path": name_or_path, **kwargs})
+            raise OSError("not found in the local cache")
+
+    monkeypatch.setitem(
+        sys.modules,
+        "transformers",
+        SimpleNamespace(AutoProcessor=_UncachedAutoProcessor, PreTrainedModel=_FakePreTrainedModel),
+    )
+    return calls
+
+
+def test_uncached_processor_on_hf_model_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An uncached processor refuses typed instead of feeding the model raw input.
+
+    The raw ``{"text": ..., "images": ...}`` dict used to reach the model's
+    forward, which failed deep inside (a CLIP vision embedding read ``.shape``
+    of a missing ``pixel_values``) with zero ops captured.
+    """
+
+    from torchlens.errors import InvalidArgumentError
+
+    calls = _install_fake_transformers(monkeypatch)
+    model = _UncachedHFModel()
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(model, {"text": "a cat", "images": _pil_image()}, save="none")
+
+    assert excinfo.value.fields["code"] == "preprocessing_unresolved"
+    assert "fixture/uncached-multimodal" in str(excinfo.value)
+    assert "AutoProcessor.from_pretrained" in str(excinfo.value)
+    assert model.forward_calls == 0
+    # Detection did no I/O; the one resolution attempt was the bridge's
+    # cache-then-Hub load (the cold-cache case), which failed here.
+    assert calls == [{"name_or_path": "fixture/uncached-multimodal"}]
+
+
+def test_uncached_processor_on_non_hf_model_keeps_plain_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A model outside transformers keeps the plain path even with a name_or_path."""
+
+    _install_fake_transformers(monkeypatch)
+
+    class _NamedDictModel(_DictModel):
+        name_or_path = "fixture/not-a-transformers-model"
+
+    log = tl.trace(_NamedDictModel(), {"images": _pil_image()}, save="none")
+
+    assert log.provenance.input_preprocessor is None
+
+
 def test_dict_transform_override_skips_multimodal_autoroute(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -209,7 +291,7 @@ def test_clip_style_dict_routes_without_a_cached_processor(
     ``input_ids`` (``'NoneType' object has no attribute 'shape'``).
     """
 
-    pytest.importorskip("transformers")
+    _install_fake_transformers(monkeypatch)
     processor = _FakeAutoProcessor()
     monkeypatch.setattr(hf_processor, "_load_hf_processor", lambda name_or_path: processor)
     model = _ClipLikeModel()
@@ -234,7 +316,7 @@ def test_modality_dict_with_unresolvable_processor_refuses_typed(
 ) -> None:
     """An HF model whose processor cannot load refuses before the forward runs."""
 
-    pytest.importorskip("transformers")
+    _install_fake_transformers(monkeypatch)
     from torchlens.errors import InvalidArgumentError
 
     def fail_load(name_or_path: str) -> object:
@@ -258,7 +340,7 @@ def test_modality_dict_with_unresolvable_processor_refuses_typed(
 def test_multimodal_gate_claims_on_model_shape_without_io(monkeypatch: pytest.MonkeyPatch) -> None:
     """Detection needs a ``name_or_path`` and ``transformers``; it never touches the Hub."""
 
-    pytest.importorskip("transformers")
+    _install_fake_transformers(monkeypatch)
 
     def fail_load(name_or_path: str) -> object:
         """Fail if detection resolves the processor."""

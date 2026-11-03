@@ -528,7 +528,6 @@ class TwoVmapBoundaryModel(nn.Module):
         return first + second
 
 
-@pytest.mark.smoke
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -726,6 +725,7 @@ def test_transform_selector_intervention_no_crash() -> None:
     assert [op.transform_kind for op in log.transforms] == ["vmap"]
 
 
+@pytest.mark.smoke
 def test_transform_selector_sanitized_spelling_matches_live_hooks() -> None:
     """Live transform hooks accept the documented sanitized spelling."""
 
@@ -750,7 +750,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
             x,
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
 
     log.save_intervention(path, level="portable")

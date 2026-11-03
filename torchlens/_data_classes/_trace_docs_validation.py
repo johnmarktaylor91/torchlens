@@ -10,16 +10,6 @@ from __future__ import annotations
 __all__ = ["DOCS"]
 
 DOCS: dict[str, str] = {
-    "save_new_outs": (
-        """Re-run the model with new inputs, saving only outs.
-        
-        Parameters
-        ----------
-        model, input_args, input_kwargs, save, save_grads, seed, backward_ready:
-            Forwarded unchanged to
-            :func:`torchlens._capture.trace.save_new_outs`.
-        """
-    ),
     "validate_forward_pass": (
         """Validate saved outs against ground-truth model outputs.
         

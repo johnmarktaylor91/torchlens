@@ -17,6 +17,7 @@ from torchlens._data_classes.trace import ResolvedPreprocessing, Trace
 from torchlens._errors import InvalidArgumentError
 from torchlens._input_coerce import _is_modality_input
 from torchlens.bridge._hf_processor import _make_multimodal_transform, _resolve_hf_processor
+from torchlens.bridge._hf_refusals import _is_hf_pretrained_model, refuse_preprocessing_unresolved
 from torchlens.bridge.hf_attention import (
     AttentionCall,
     AttentionRecording,
@@ -164,12 +165,15 @@ def _transformers_importable() -> bool:
 def _can_resolve_hf_processor(model: Any) -> bool:
     """Return whether the multimodal auto-route can claim ``model``.
 
-    Detection does no Hub or cache I/O: a Hugging Face model (one carrying a
-    ``name_or_path``) with ``transformers`` installed is claimed on shape
-    alone, like the text route. :func:`trace_multimodal` then resolves the
-    ``AutoProcessor`` (cache first, then the Hub unless offline) and refuses
-    typed when it cannot; a modality dict never reaches an HF forward as a
-    positional ``input_ids``.
+    A ``transformers`` ``PreTrainedModel`` with a ``name_or_path`` is claimed
+    on shape alone, with no Hub or cache I/O, like the text route:
+    :func:`trace_multimodal` then resolves the ``AutoProcessor`` (cache first,
+    then the Hub unless offline) and refuses typed ``preprocessing_unresolved``
+    when it cannot, so a modality dict never reaches an HF forward as a
+    positional ``input_ids``. Any other model with a ``name_or_path`` is
+    claimed only when its processor is already in the local cache (never a
+    download); otherwise it keeps the plain path, since its own forward may
+    accept such a dict.
 
     Parameters
     ----------
@@ -179,12 +183,21 @@ def _can_resolve_hf_processor(model: Any) -> bool:
     Returns
     -------
     bool
-        True when the model exposes a name/path and ``transformers`` imports.
+        True when the route should claim the model.
     """
 
-    if _model_name_or_path(model) is None:
+    name_or_path = _model_name_or_path(model)
+    if name_or_path is None or not _transformers_importable():
         return False
-    return _transformers_importable()
+    if _is_hf_pretrained_model(model):
+        return True
+    try:
+        from transformers import AutoProcessor
+
+        AutoProcessor.from_pretrained(name_or_path, local_files_only=True)
+    except Exception:  # a cache miss of any kind declines the route
+        return False
+    return True
 
 
 def _has_attached_image_processor(model: Any) -> bool:
@@ -241,6 +254,14 @@ def trace_text(
     -------
     Trace
         TorchLens trace with ``input`` set to the original text.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_text(model, "hello world")
+    ... except (ImportError, ValueError):
+    ...     print("no tokenizer resolvable")
+    no tokenizer resolvable
     """
 
     import torchlens as tl
@@ -293,6 +314,16 @@ def trace_image(model: Any, image: Any, **kwargs: Any) -> Trace:
     -------
     Trace
         TorchLens trace with ``input_preprocessor`` populated.
+
+    Examples
+    --------
+    >>> from PIL import Image
+    >>> image = Image.new("RGB", (8, 8))
+    >>> try:
+    ...     tl.bridge.transformers.trace_image(model, image)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     import torchlens as tl
@@ -329,6 +360,14 @@ def trace_multimodal(model: Any, input_dict: dict[str, Any], **kwargs: Any) -> T
     InvalidArgumentError
         ``preprocessing_unresolved`` when no ``AutoProcessor`` loads for the
         model (uncached offline, no processor config).
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.bridge.transformers.trace_multimodal(model, {"text": "hi"})
+    ... except (ImportError, ValueError):
+    ...     print("no processor resolvable")
+    no processor resolvable
     """
 
     import torchlens as tl
@@ -621,12 +660,12 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             record.description = f"AutoImageProcessor: {record.identifier}"
         return resolution.input_transform, record
     reason = record.config.get("reason") if isinstance(record.config, dict) else None
-    raise InvalidArgumentError(
-        f"torchlens.trace: no preprocessing authority resolved for the PIL image "
-        f"input to {type(model).__name__} ({reason or 'nothing resolved'}). "
+    refuse_preprocessing_unresolved(
+        model,
+        f"no preprocessing authority resolved for the PIL image input to "
+        f"{type(model).__name__} ({reason or 'nothing resolved'}). "
         "TorchLens refuses to guess a recipe the model may not have been "
         "trained with.",
-        code="preprocessing_unresolved",
         remedy=(
             "record the weights the model was built with, e.g. "
             "torchlens.preprocessing.attach_authority(model, weights) (torchvision models "
@@ -639,7 +678,6 @@ def _resolve_image_preprocessing(model: Any) -> tuple[Callable[[Any], Any], Reso
             "input_transform=torchlens.preprocessing.imagenet_default()); "
             "or pass an already-preprocessed tensor"
         ),
-        model_type=type(model).__name__,
         resolution_attempt=dict(record.config) if isinstance(record.config, dict) else {},
     )
 

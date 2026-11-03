@@ -267,7 +267,7 @@ def log_function_output_tensors(
     """Dispatch to exhaustive or fast logging based on current logging mode.
 
     Called by every decorated torch function wrapper after executing the
-    original function.  The mode was set in ``save_new_outs`` (fast)
+    original function.  The mode was set in ``_save_new_outs`` (fast)
     or ``trace`` (exhaustive).
 
     Returns

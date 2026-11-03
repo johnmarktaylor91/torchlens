@@ -73,7 +73,6 @@ _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
 }
 
 
-@pytest.mark.smoke_cells("test_helper_flag_reaches_entry_metadata[grad_scale]")
 @pytest.mark.parametrize("helper_name", sorted(_FLAG_HELPERS))
 def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
@@ -173,7 +172,6 @@ def test_push_replay_options_shape_change_applies() -> None:
     assert float(_output_out(pushed)) == pytest.approx(8.0)
 
 
-@pytest.mark.smoke
 def test_splice_module_dtype_change_applies() -> None:
     """splice_module(force_shape_change=True) may change dtype through intervene=."""
 

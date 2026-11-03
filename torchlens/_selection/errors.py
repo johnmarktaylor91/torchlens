@@ -53,11 +53,29 @@ class BindingPreflightError(ConfigurationError, ValueError):
     8): unresolved static anchors, rule classes the capture-free lane cannot
     execute, and invalid spec/model operands. Branch on
     ``exc.fields["code"]``, never message text.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    >>> try:
+    ...     tl.when(tl.label("relu_1_2"), tl.zero_ablate()).bind(net)
+    ... except tl.errors.BindingPreflightError as e:
+    ...     print(e.fields["code"])
+    bind_rule_unsupported
     """
 
 
 class SiteResolutionError(ConfigurationError, ValueError):
-    """Raised when future selector resolution cannot identify requested sites."""
+    """Raised when future selector resolution cannot identify requested sites.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     trace.find_sites("relu_1_2", strict=True)
+    ... except tl.errors.SiteResolutionError as e:
+    ...     print(e.fields["code"])
+    bare_string_selector_strict"""
 
 
 class LiveModeLabelError(SiteResolutionError):
@@ -69,6 +87,16 @@ class LiveModeLabelError(SiteResolutionError):
     edit) named a finalized postprocess label, which live selectors evaluated
     during the forward can never match. Rerun refusals pass their own codes
     (``rerun_staged_label_unmatchable``, ``rerun_selector_unmatchable_live``).
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.trace(model, x, intervene=tl.when(tl.label("relu_1_2"), tl.zero_ablate()))
+    ... except tl.errors.LiveModeLabelError as e:
+    ...     print(e.fields["code"])
+    label_selector_not_live
+    >>> issubclass(LiveModeLabelError, tl.errors.TorchLensError)
+    True
     """
 
     def __init__(
@@ -101,6 +129,16 @@ class SelectorCompositionError(SiteResolutionError):
     activation, gradient and node universes carry a stable ``code`` and a
     ``remedy`` in ``fields`` (the same fields ``InvalidArgumentError``
     carries); the message ends with the remedy.
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.grad(tl.grad("relu_1_2"))
+    ... except tl.errors.SelectorCompositionError as e:
+    ...     print(e.fields["code"])
+    grad_selector_nested
+    >>> issubclass(SelectorCompositionError, tl.errors.TorchLensError)
+    True
     """
 
     def __init__(
@@ -141,19 +179,49 @@ class SelectorCapabilityError(SiteResolutionError):
     example ``tl.followed_by(...)`` in post-hoc ``find_sites`` (no retroactive
     window exists on a finished trace) or ``tl.model_input(...)`` as a live hook
     application site.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     trace.find_sites(tl.followed_by(tl.func("relu")))
+    ... except tl.errors.SelectorCapabilityError as e:
+    ...     print(e.fields["code"])
+    followed_by_selector_unsupported
     """
 
 
 class UnclassifiedSelectorError(SiteResolutionError):
-    """Raised when a selector is missing an explicit direction taxonomy bucket."""
+    """Raised when a selector is missing an explicit direction taxonomy bucket.
+
+    Examples
+    --------
+    >>> error = tl.errors.UnclassifiedSelectorError("selector has no direction bucket")
+    >>> isinstance(error, tl.errors.SiteResolutionError), str(error)
+    (True, 'selector has no direction bucket')"""
 
 
 class AmbiguousSiteError(SiteResolutionError):
-    """Raised when a site query resolves too many sites for the surface."""
+    """Raised when a site query resolves too many sites for the surface.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> try:
+    ...     trace.find_sites(tl.all_sites(), max_fanout=1)
+    ... except tl.errors.AmbiguousSiteError as e:
+    ...     print(e.fields["code"])
+    site_selector_excess_fanout"""
 
 
 class InterventionWarning(TorchLensWarning):
-    """Base class for TorchLens intervention warnings."""
+    """Base class for TorchLens intervention warnings.
+
+    Examples
+    --------
+    >>> warning = tl.errors.InterventionWarning("edit applied to a copy")
+    >>> str(warning), isinstance(warning, Warning)
+    ('edit applied to a copy', True)"""
 
     severity: Severity = "informational"
 
@@ -186,4 +254,12 @@ class InterventionWarning(TorchLensWarning):
 
 
 class MultiMatchWarning(InterventionWarning):
-    """Informational warning for selector queries that resolve multiple sites."""
+    """Informational warning for selector queries that resolve multiple sites.
+
+    Examples
+    --------
+    >>> warning = tl.errors.MultiMatchWarning(query="relu", matched=3)
+    >>> str(warning)
+    "MultiMatchWarning: query='relu', matched=3."
+    >>> issubclass(tl.errors.MultiMatchWarning, tl.errors.InterventionWarning)
+    True"""

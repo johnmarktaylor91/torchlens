@@ -150,6 +150,8 @@ def test_preview_stamp_reads_the_structural_halt_fields() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_mlx_halted_capture_settles_halted() -> None:
     pytest.importorskip("mlx.core")
     import mlx.core as mx
@@ -174,6 +176,8 @@ def test_mlx_halted_capture_settles_halted() -> None:
     assert trace.outcome.status is CaptureStatus.STOPPED
 
 
+@pytest.mark.rare
+@pytest.mark.backend_paddle
 def test_paddle_halted_capture_settles_halted() -> None:
     pytest.importorskip("paddle")
     import paddle
@@ -191,7 +195,8 @@ def test_paddle_halted_capture_settles_halted() -> None:
         Tiny(),
         paddle.ones([1, 3]),
         backend="paddle",
-        stop_after=tl.func("relu"),
+        # Paddle records functional ops by their module path.
+        stop_after=tl.func("functional.relu"),
     )
     assert trace.is_stopped is True
     assert trace.outcome is not None

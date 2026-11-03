@@ -48,6 +48,16 @@ def join(trace: Any, kineto_trace: str | Path | dict[str, Any]) -> dict[str, Any
     -------
     dict[str, Any]
         Merged per-operation timing view.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> events = [{"ph": "X", "name": "aten::unrelated", "ts": 0, "dur": 5}]
+    >>> joined = tl.bridge.profiler.join(trace, {"traceEvents": events})
+    >>> joined["schema"]
+    'torchlens.profiler_join.v2'
+    >>> joined["unmatched_event_counts"]
+    {'aten::unrelated': 1}
     """
 
     # D22 (F09): host-side event times fill labeled diagnostic columns only and

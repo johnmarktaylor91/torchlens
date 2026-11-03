@@ -212,7 +212,7 @@ def test_append_batch_dependent_helper_rejected_after_clean_rerun() -> None:
     model.eval()
     x = torch.randn(2, 3)
     log = _capture(model, x)
-    log.attach_hooks(
+    log._attach_hooks(
         tl.func("relu"), tl.intervention.scramble_elements(source=torch.zeros(2, 3), seed=1)
     )
     log.run(model, x)
@@ -238,7 +238,7 @@ def test_append_recipe_stale_rejected_before_capture() -> None:
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
 
     with pytest.raises(AppendMismatchError, match="recipe is stale"):
         log.run(model, torch.randn(2, 3), replay=tl.options.ReplayOptions(append=True))
@@ -250,7 +250,7 @@ def test_append_state_round_trips_bundle_and_tlspec(tmp_path: Path) -> None:
     model = _LinearRelu()
     model.eval()
     log = _capture(model, torch.randn(2, 3))
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate())
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate())
     log.run(model, torch.randn(2, 3))
     log.run(model, torch.randn(1, 3), replay=tl.options.ReplayOptions(append=True))
 

@@ -1,4 +1,4 @@
-"""The ``model-explorer`` extra exists and matches its teaching refusal (U10.4).
+"""The ``model-explorer`` extra exists and matches its teaching refusal.
 
 The serve refusal names ``torchlens[model-explorer]``; this pins that the
 extra exists, installs the vendor app package, and is floored at the

@@ -24,6 +24,7 @@ from torchlens.agent import (
     list_tools,
     tool_specs,
 )
+from torchlens.agent._init_block import index_path
 
 # Per-test marks, not a module pytestmark: the every-envelope contract test is
 # heavy (measured ~7s cold -- it exercises every registry tool over the live
@@ -96,7 +97,6 @@ def test_no_absolute_path_in_machine_payloads(artifact: Path) -> None:
     assert envelope["artifact"]["basename"] == artifact.name
 
 
-@pytest.mark.smoke
 def test_error_envelope_exposes_typed_fields() -> None:
     """The error envelope carries class/code/remedy/severity, no traceback."""
 
@@ -200,10 +200,12 @@ def test_registry_annotations_and_verbs_are_complete() -> None:
     assert {declaration["name"] for declaration in list_tools()} == {spec.name for spec in specs}
 
 
-@pytest.mark.smoke
 def test_python_facade_reaches_the_agent_surface() -> None:
     """tl.agent resolves on a cold facade and serves the same call_tool."""
 
     assert tl.agent.call_tool is call_tool
     assert callable(tl.agent.guide)
     assert "TorchLens for AI agents" in tl.agent.guide()
+    # The guide points code-writing agents at the in-wheel agent index, which must exist.
+    assert "torchlens/_docs/AGENT_INDEX.md" in tl.agent.guide()
+    assert index_path().is_file()

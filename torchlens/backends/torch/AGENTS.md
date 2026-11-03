@@ -37,6 +37,9 @@ Core capture path:
 - `_grad_fn_source.py` — best-effort grad-fn source metadata for `GradFn` records
   (custom-autograd detection; class and method source file, line, signature,
   docstring), split out of `backward.py` under its size ratchet.
+- `_grad_fn_pairing.py` — pairs `GradFn` nodes with the forward ops that record
+  their identity; the projection rebuild re-pairs discoveries from a backward walk
+  that ran inside the forward, before any layer existed.
 
 Safety net and honesty:
 - `belt.py` — the mechanical BELT: protocol-invisible stale-reference coverage

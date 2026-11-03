@@ -29,7 +29,14 @@ from ..options import suppress_mutate_warnings
 
 
 def list_traces() -> tuple[Any, ...]:
-    """Return a snapshot of currently live TorchLens traces."""
+    """Return a snapshot of currently live TorchLens traces.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> any(live is trace for live in list_traces())
+    True
+    """
 
     from .. import _user_funcs as user_funcs
 
@@ -37,7 +44,15 @@ def list_traces() -> tuple[Any, ...]:
 
 
 def reset_naming_counter(class_name: str | None = None) -> None:
-    """Reset automatic TorchLens trace naming counters."""
+    """Reset automatic TorchLens trace naming counters.
+
+    Examples
+    --------
+    >>> reset_naming_counter("sequential")
+    >>> tl.trace(model, x).name
+    'sequential_1'
+    >>> reset_naming_counter()
+    """
 
     from .. import _user_funcs as user_funcs
 
@@ -61,6 +76,15 @@ def detect_tlspec_format(path: str | Path) -> str:
         One of ``"v2.0_unified"``, ``"v2.16_intervention_with_kind"``,
         ``"v2.16_intervention"``, ``"v2.16_modellog_portable"``, or
         ``"unknown"``.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "trace.tlspec"
+    ...     _ = tl.trace(model, x).save(path)
+    ...     print(detect_tlspec_format(path))
+    v2.0_unified
     """
 
     tlspec_path = Path(path)
@@ -194,6 +218,16 @@ def inspect_tlspec(path: str | Path) -> dict[str, Any]:
         If no inspectable ``.tlspec`` metadata file exists.
     ValueError
         If the metadata file is not a JSON object.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "trace.tlspec"
+    ...     _ = tl.trace(model, x).save(path)
+    ...     manifest = inspect_tlspec(path)
+    >>> manifest["kind"]
+    'trace'
     """
 
     tlspec_path = Path(path)
@@ -232,6 +266,16 @@ def read_safetensors(path: str | Path) -> Any:
     -------
     Any
         The read-only export record.
+
+    Examples
+    --------
+    >>> # requires: safetensors
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = tl.export.safetensors(tl.trace(model, x), pathlib.Path(tmp) / "t.safetensors")
+    ...     record = read_safetensors(path)
+    >>> record.header["schema"]
+    'tl_trace_safetensors_v1'
     """
 
     from .._extraction.trace_safetensors import read_trace_safetensors
@@ -267,6 +311,18 @@ def load_intervention_spec(
     ------
     TypeError
         If ``path`` does not load as an intervention spec.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
+    >>> _ = fork.do(tl.func("relu"), tl.zero_ablate())
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "edit.tlspec"
+    ...     _ = fork.save_intervention(path, level="portable")
+    ...     spec = load_intervention_spec(path)
+    >>> type(spec).__name__
+    'InterventionSpec'
     """
 
     loaded = _load(
@@ -330,10 +386,14 @@ def materialize_nested(
 
     Examples
     --------
-    >>> import torchlens as tl
-    >>> log = tl.load("demo_bundle", lazy=True, materialize_nested=False)
-    >>> tl.io.materialize_nested(log)
-    >>> log.save("demo_bundle_copy")
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "trace.tlspec"
+    ...     _ = tl.trace(model, x).save(path)
+    ...     loaded = tl.load(path, lazy=True, materialize_nested=False)
+    ...     materialize_nested(loaded)
+    >>> isinstance(loaded, tl.Trace)
+    True
     """
 
     from .._io.rehydrate import rehydrate_nested

@@ -90,6 +90,7 @@ def test_extract_unknown_layer_message_still_suggests_candidates(
     assert info.value.fields.get("key") == "linear_1_1_typo"
 
 
+@pytest.mark.smoke
 def test_pluck_unknown_layer_refuses_op_lookup_not_found(
     tiny: tuple[nn.Module, torch.Tensor],
 ) -> None:

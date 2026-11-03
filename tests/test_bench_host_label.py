@@ -37,7 +37,6 @@ def _real_names() -> set[str]:
     return {name for name in names | {n.split(".", 1)[0] for n in names} if name}
 
 
-@pytest.mark.smoke
 def test_default_label_is_neutral(monkeypatch: pytest.MonkeyPatch) -> None:
     """With no override the label is the neutral default."""
 
@@ -45,7 +44,6 @@ def test_default_label_is_neutral(monkeypatch: pytest.MonkeyPatch) -> None:
     assert benchmark_host_label() == DEFAULT_HOST_LABEL
 
 
-@pytest.mark.smoke
 def test_env_override_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
     """A neutral override from the environment is recorded as given."""
 
@@ -53,7 +51,6 @@ def test_env_override_is_used(monkeypatch: pytest.MonkeyPatch) -> None:
     assert benchmark_host_label() == "ci-linux-4core"
 
 
-@pytest.mark.smoke
 def test_override_equal_to_hostname_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     """An override that spells the real hostname never reaches the record."""
 
@@ -62,7 +59,6 @@ def test_override_equal_to_hostname_falls_back(monkeypatch: pytest.MonkeyPatch) 
         assert benchmark_host_label() == DEFAULT_HOST_LABEL
 
 
-@pytest.mark.smoke
 def test_runner_environment_record_omits_hostname(monkeypatch: pytest.MonkeyPatch) -> None:
     """The runner's environment record names the machine only by the neutral label."""
 
@@ -77,7 +73,6 @@ def test_runner_environment_record_omits_hostname(monkeypatch: pytest.MonkeyPatc
         assert not re.search(rf"\b{re.escape(name)}\b", text), "hostname leaked into the record"
 
 
-@pytest.mark.smoke
 def test_local_paths_are_redacted() -> None:
     """Absolute checkout and home paths become ``<repo>`` and ``~``."""
 
@@ -88,7 +83,6 @@ def test_local_paths_are_redacted() -> None:
     assert "~/cache/y" in redacted
 
 
-@pytest.mark.smoke
 def test_only_the_label_helper_reads_the_hostname() -> None:
     """No benchmark writer calls a hostname API directly."""
 

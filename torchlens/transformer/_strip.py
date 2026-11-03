@@ -90,6 +90,14 @@ def token_strip_html(record: TokenScores) -> str:
     str
         Escaped, network-free HTML: one table row per score row plus every
         footer disclosure line. N/A cells render "n/a", never zero-colored.
+
+    Examples
+    --------
+    >>> row = tl.transformer.TokenScoreRow(label="saliency", scores=(0.5, None, -0.25))
+    >>> record = tl.transformer.TokenScores(tokens=("the", "cat", "sat"), rows=(row,))
+    >>> html = tl.transformer.token_strip_html(record)
+    >>> html.startswith("<table"), "n/a" in html
+    (True, True)
     """
 
     parts = ['<table role="presentation" style="border-collapse:collapse">']
@@ -195,6 +203,17 @@ def render_token_strip(
     -------
     Artifact
         The written file plus rendered disclosure lines.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> row = tl.transformer.TokenScoreRow(label="saliency", scores=(0.5, -0.25, 0.1))
+    >>> record = tl.transformer.TokenScores(tokens=("the", "cat", "sat"), rows=(row,))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.token_strip(record, pathlib.Path(tmp) / "strip.png")
+    ...     written = saved.paths[0].exists()
+    >>> written, saved.file_format
+    (True, 'png')
     """
 
     n_lines = math.ceil(len(record.tokens) / TOKENS_PER_LINE)

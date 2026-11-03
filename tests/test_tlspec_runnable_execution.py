@@ -430,7 +430,6 @@ def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
     assert first.trace.name != second.trace.name
 
 
-@pytest.mark.smoke
 def test_loaded_sparse_fast_run_verifies_once_then_reuses_compiled_result_trace(
     runnable_execution_artifact: tuple[Path, RunnableExecutionModel, tl.Trace],
 ) -> None:
@@ -1078,7 +1077,7 @@ def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
     _, model, trace = runnable_execution_artifact
     inputs = torch.tensor([[0.25, 0.5, -1.0], [3.0, -2.0, 1.0]])
     expected = trace.fork(name="expected-save-new-outs")
-    expected.save_new_outs(model, inputs, seed=37)
+    expected._save_new_outs(model, inputs, seed=37)
     source_outs = _clone_outs(trace)
 
     result = trace.run(inputs=inputs, seed=37)

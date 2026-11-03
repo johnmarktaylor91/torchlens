@@ -59,7 +59,6 @@ def test_shim_unlocks_disabled_autocast_on_admitted_meta() -> None:
     assert "linear" in funcs and "relu" in funcs
 
 
-@pytest.mark.smoke
 def test_enabled_autocast_on_meta_still_refuses() -> None:
     """``enabled=True`` on meta is NOT nullified: torch's own refusal stands,
     classified into the substrate family by W1-CLS (torch/amp provenance)."""

@@ -774,7 +774,7 @@ def test_refresh_inherits_the_configured_save_budget() -> None:
     trace = tl.trace(model, x)
     trace.save_budget = 64
     with pytest.raises(SaveBudgetExceededError):
-        trace.save_new_outs(model, x)
+        trace._save_new_outs(model, x)
     trace.cleanup()
 
 

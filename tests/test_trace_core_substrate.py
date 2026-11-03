@@ -114,6 +114,7 @@ def test_payload_arena_identity_contract() -> None:
     assert arena.value(handle) is tensor  # original alias undisturbed
 
 
+@pytest.mark.smoke
 def test_overlay_and_transaction_rollback() -> None:
     """Overlay reads shadow the base; rollback restores atomically."""
 
@@ -145,6 +146,7 @@ def test_core_write_routing_and_freeze() -> None:
     assert table.get(row, "func_name") == "relu"  # base untouched
 
 
+@pytest.mark.smoke
 def test_core_fork_isolation_prototype() -> None:
     """COW fork: shared frozen base, isolated overlays both directions."""
 
@@ -165,7 +167,6 @@ def test_core_fork_isolation_prototype() -> None:
     assert fork.tables is core.tables  # base is shared, not copied
 
 
-@pytest.mark.smoke
 def test_facade_identity_cache_prototype() -> None:
     """Repeated facade lookups return the SAME object (strong cache)."""
 
@@ -180,6 +181,7 @@ def test_facade_identity_cache_prototype() -> None:
     assert fork_facade is not first  # fork has its own facade cache
 
 
+@pytest.mark.smoke
 def test_core_collectable_after_drop() -> None:
     """A dropped core (with facades and payloads) is garbage-collected."""
 
@@ -205,6 +207,7 @@ def test_partial_core_prototype() -> None:
     assert not core.table("op").frozen
 
 
+@pytest.mark.smoke
 def test_op_store_view_cow_isolation() -> None:
     """M11 store view: bidirectional write isolation + container copy-on-read."""
 
@@ -304,6 +307,7 @@ def test_core_transaction_rolls_back_stores_and_epochs() -> None:
     assert core.backward_epochs == []
 
 
+@pytest.mark.smoke
 def test_facade_cache_weak_valued_with_strong_fallback() -> None:
     """The facade cache never pins unreferenced weak-able facades (M11 flip)."""
 

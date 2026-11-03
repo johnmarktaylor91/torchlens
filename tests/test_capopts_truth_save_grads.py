@@ -56,7 +56,6 @@ def test_save_grads_callable_restricts_retention() -> None:
     assert _grad_labels(log) == ["relu_1_2"]
 
 
-@pytest.mark.smoke
 def test_save_grads_selector_restricts_retention() -> None:
     """A tl.* selector keeps gradients ONLY on matching ops."""
 

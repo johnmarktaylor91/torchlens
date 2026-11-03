@@ -140,6 +140,16 @@ _FORBIDDEN: dict[str, re.Pattern[str]] = {
     # of the old root modules name nothing. ``torchlens._runnable`` itself is
     # unchanged, so the pattern needs the underscore after the package name.
     "runnable_package": re.compile(r"\btorchlens[./]_runnable_[a-z]"),
+    # Root doors docs kept teaching after they left (remove-and-rename, no
+    # shim): ``tl.save(trace, path)`` is ``trace.save(path)``; ``swap_with``
+    # lives at ``torchlens.intervention.helpers.swap_with`` (the interventions
+    # rename took it off the root); ``CaptureOptions(intervention_ready=...)``
+    # is ``replayable=``.
+    "root_doors": re.compile(
+        r"(?<![\w.])(?:tl|torchlens)\.save\("
+        r"|(?<![\w.])(?:tl|torchlens)\.swap_with\b"
+        r"|\bintervention_ready\s*="
+    ),
 }
 
 #: Lines spelling a grouped-option bundle are exempt from ``trace_flat``.
@@ -244,6 +254,7 @@ _NEEDLES: dict[str, tuple[str, ...]] = {
         "for_target",
     ),
     "runnable_package": ("torchlens._runnable_", "torchlens/_runnable_"),
+    "root_doors": ("tl.save", "torchlens.save", "swap_with", "intervention_ready"),
 }
 
 #: The audited-legitimate ledger: path -> (groups | {"ALL"}, reason).
@@ -276,6 +287,14 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     "docs/migration/v2.0_api_changes.md": (
         frozenset({"ALL"}),
         "migration ledger; maps old spellings to canonical ones",
+    ),
+    "tools/codemods/r2_ambiguous.py": (
+        frozenset({"root_doors"}),
+        "codemod decision keys quote contract lines verbatim as they stood at the rename",
+    ),
+    "tests/test_swap_with_string_cert10.py": (
+        frozenset({"root_doors"}),
+        "history docstring: records that tl.swap_with(<string>) was once documented",
     ),
     "docs/migration/scoped_detached_patching.md": (
         frozenset({"patch", "tl_moved"}),
@@ -316,10 +335,6 @@ _ALLOWED: dict[str, tuple[frozenset[str], str]] = {
     "tests/test_node_modes.py": (
         frozenset({"node_style_domain"}),
         "pytest.raises absence pin: 'vision'/'attention' presets refuse typed",
-    ),
-    "tests/test_trace_autoroute_kwarg_forwarding.py": (
-        frozenset({"trace_flat"}),
-        "docstring records the 2026-08-19 incident in its then-live spelling",
     ),
     "notebooks/audit/09_fastlog_record.ipynb": (
         frozenset({"keep_op"}),
@@ -489,6 +504,7 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "batch2_report": 'payload = trace.explain(format="json")\n',
         "r1_renames": "from torchlens import Bytes, Duration, Flops, Macs, Quantity\n",
         "runnable_package": "from torchlens._runnable_state import prepare_runnable_state\n",
+        "root_doors": "tl.save(trace, path)\n",
     }
     assert set(planted) == set(_FORBIDDEN)
     assert set(_NEEDLES) == set(_FORBIDDEN), "every group needs a needle row"
@@ -537,6 +553,22 @@ def _check_lint_is_red_capable(tmp_path: Path) -> None:
         "trace._runnable_path_faithfulness\n",
     ):
         assert not _scan_file(tmp_path / "canonical_runnable_package.py", canonical), canonical
+
+    for resurrected in (
+        "edited = tl.swap_with(donor)\n",
+        "cap = tl.options.CaptureOptions(intervention_ready=True)\n",
+        "torchlens.save(trace, str(path))\n",
+    ):
+        hits = _scan_file(tmp_path / "planted_root_doors.py", resurrected)
+        assert any(group == "root_doors" for group, _, _ in hits), resurrected
+    for canonical in (
+        "trace.save(str(path))\n",
+        "from torchlens.intervention.helpers import swap_with\n",
+        "trace.save_intervention(path)\n",
+        "code = 'trace_not_intervention_ready'\n",
+        "cap = tl.options.CaptureOptions(replayable=True)\n",
+    ):
+        assert not _scan_file(tmp_path / "canonical_root_doors.py", canonical), canonical
 
     clean = 'log = tl.trace(model, x, save="all")\n'
     assert not _scan_file(tmp_path / "clean.py", clean), (

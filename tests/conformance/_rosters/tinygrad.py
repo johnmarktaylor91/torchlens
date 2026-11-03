@@ -11,9 +11,9 @@ Two groups (SPEC 4.4):
   against the definition; ``expected_intermediates`` is computed here with
   NumPy only (FORKS F-N) and keyed by the recorded op kind.
 - ``random_init``: ``tinygrad.nn`` Linear, Conv2d and LayerNorm with default
-  init. Until realize-once capture lands the backend refuses them typed
-  (``rng_state_in_graph``, FORKS F-K) and the scorecard shows the cells as
-  unsupported.
+  init. Realize-once capture realizes their lazy random weights in the
+  capture's single evaluation, so the rows capture and their RNG state after
+  capture equals one eager forward.
 - ``ecosystem``: two pinned pretrained families vendored from tinygrad's own
   ``examples/`` definitions (FORKS F-I, no new dependency). They run only
   under ``TORCHLENS_CONFORMANCE_ECOSYSTEM=1``: :func:`runner_rows` leaves
@@ -325,58 +325,99 @@ def _build_random_layernorm() -> tuple[Any, Any]:
 
 
 # ------------------------------------------------------- NumPy intermediates
+#
+# Keyed by the op kind tinygrad records (a list covers every op of that kind in
+# capture order). tinygrad decomposes a matmul into reshape/expand/mul/reduce,
+# relu into cmplt/where and a bias into add, so each oracle names the kinds that
+# carry a definition-level value: the pre-activation ``add``, the relu ``where``.
 
 
 def _intermediates_chain() -> dict[str, Any]:
-    """Expected output of the chain_branch row."""
+    """The chain_branch row: the add, the product and the relu."""
 
     added = _INPUT + 1.0
-    return {"output": _np_relu(added * _INPUT)}
+    product = added * _INPUT
+    return {"add": added, "mul": product, "where": _np_relu(product)}
 
 
 def _intermediates_multi() -> dict[str, Any]:
-    """Expected outputs of the multi_output row."""
+    """The multi_output row: the sum (reduced, then reshaped to a scalar) and the scaled copy.
 
-    return {"output": [np.asarray(_INPUT.sum(), dtype=np.float32), _INPUT * 2.0]}
+    The second reshape is the constant ``2.0`` reshaped to ``(1, 1)`` before it
+    broadcasts against the input.
+    """
+
+    total = np.asarray(_INPUT.sum(), dtype=np.float32)
+    two = np.full((1, 1), 2.0, dtype=np.float32)
+    return {"reduce": total.reshape(1, 1), "reshape": [total, two], "mul": _INPUT * 2.0}
 
 
 def _intermediates_loop3() -> dict[str, Any]:
-    """Expected output of the loop3 row."""
+    """The loop3 row: each step's pre-activation add and relu."""
 
-    value = _INPUT
+    value, adds, relus = _INPUT, [], []
     for _ in range(3):
-        value = _np_relu(value @ _W44 + _B4)
-    return {"output": value}
+        adds.append(value @ _W44 + _B4)
+        value = _np_relu(adds[-1])
+        relus.append(value)
+    return {"add": adds, "where": relus}
 
 
 def _intermediates_norm_softmax() -> dict[str, Any]:
-    """Expected output of the norm_softmax row."""
+    """The norm_softmax row: squared deviation, standard deviation, softmax row max and exp."""
 
     mean = _INPUT.mean(axis=-1, keepdims=True)
-    var = ((_INPUT - mean) ** 2).mean(axis=-1, keepdims=True)
-    return {"output": _np_softmax((_INPUT - mean) / np.sqrt(var + 1e-5))}
+    deviation = (_INPUT - mean) ** 2
+    std = np.sqrt(deviation.mean(axis=-1, keepdims=True) + 1e-5)
+    normed = (_INPUT - mean) / std
+    row_max = normed.max(axis=-1, keepdims=True)
+    return {"pow": deviation, "sqrt": std, "detach": row_max, "exp2": np.exp(normed - row_max)}
 
 
 def _intermediates_reshape_transpose() -> dict[str, Any]:
-    """Expected output of the reshape_transpose row."""
+    """The reshape_transpose row: the reshape, the transpose and the matmul with ones.
 
-    return {"output": _INPUT.reshape(4, 2).T @ np.ones((4, 1), dtype=np.float32)}
+    ``Tensor.ones(4, 1)`` is the constant ``1.0`` reshaped to ``(1, 1)`` and
+    expanded; the matmul reshapes it to ``(1, 4, 1)`` and transposes it to
+    ``(1, 1, 4)`` against the ``(2, 1, 4)`` left operand.
+    """
+
+    transposed = _INPUT.reshape(4, 2).T
+    ones = np.ones((4, 1), dtype=np.float32)
+    output = transposed @ ones
+    return {
+        "reshape": [
+            _INPUT.reshape(4, 2),
+            transposed.reshape(2, 1, 4),
+            np.ones((1, 1), dtype=np.float32),
+            ones.reshape(1, 4, 1),
+            output,
+        ],
+        "permute": [transposed, ones.reshape(1, 4, 1).transpose(0, 2, 1)],
+        "reduce": output.reshape(2, 1, 1),
+    }
 
 
 def _intermediates_mlp() -> dict[str, Any]:
-    """Expected output of the mlp_linear row."""
+    """The mlp_linear row: both layers' outputs and the relu between them."""
 
-    return {"output": _np_relu(_INPUT @ _W43 + _B3) @ _W32 + _B2}
+    hidden = _INPUT @ _W43 + _B3
+    return {"add": [hidden, _np_relu(hidden) @ _W32 + _B2], "where": _np_relu(hidden)}
 
 
 def _intermediates_shared() -> dict[str, Any]:
-    """Expected output of the shared_twice row."""
+    """The shared_twice row: both applications of the shared layer and the relu."""
 
-    return {"output": _np_relu(_INPUT @ _W44 + _B4) @ _W44 + _B4}
+    hidden = _INPUT @ _W44 + _B4
+    return {"add": [hidden, _np_relu(hidden) @ _W44 + _B4], "where": _np_relu(hidden)}
 
 
 def _intermediates_cnn() -> dict[str, Any]:
-    """Expected output of the cnn row, convolved by hand in NumPy."""
+    """The cnn row, convolved by hand in NumPy: conv plus bias, relu, pool, linear head.
+
+    Two ``where`` ops carry the relu: the relu itself and the max-pool's padding
+    select, which keeps every value because the 6x6 map tiles exactly.
+    """
 
     padded = np.pad(_IMG, ((0, 0), (0, 0), (1, 1), (1, 1)))
     conv = np.zeros((1, 2, 6, 6), dtype=np.float32)
@@ -388,24 +429,40 @@ def _intermediates_cnn() -> dict[str, Any]:
         conv[0, out_channel] += _CONV_B[out_channel]
     relu = _np_relu(conv)
     pooled = relu.reshape(1, 2, 3, 2, 3, 2).max(axis=(3, 5))
-    return {"output": pooled.reshape(1, -1) @ _FC_W.T + _FC_B}
+    return {"add": [conv, pooled.reshape(1, -1) @ _FC_W.T + _FC_B], "where": [relu, relu]}
 
 
 def _intermediates_nested() -> dict[str, Any]:
-    """Expected output of the nested_residual row (tanh-approximate gelu)."""
+    """The nested_residual row: the gelu cube and exponential, then the norm's spread.
 
-    hidden = _INPUT @ _W44 + _B4
-    gelu = 0.5 * hidden * (1.0 + np.tanh(np.sqrt(2.0 / np.pi) * (hidden + 0.044715 * hidden**3)))
-    residual = _INPUT + gelu
+    tinygrad's tanh-approximate gelu is ``x * sigmoid(2 * inner)``: ``pow`` is the
+    cube and ``exp2`` is ``exp(-2 * inner)``. The three ``reduce`` ops are the
+    matmul, the residual's row sum and the row sum of squared deviations.
+    """
+
+    product = _INPUT @ _W44
+    hidden = product + _B4
+    inner = np.sqrt(2.0 / np.pi) * (hidden + 0.044715 * hidden**3)
+    residual = _INPUT + 0.5 * hidden * (1.0 + np.tanh(inner))
     mean = residual.mean(axis=-1, keepdims=True)
-    var = residual.var(axis=-1, keepdims=True)
-    return {"output": (residual - mean) / np.sqrt(var + 1e-5)}
+    squares = ((residual - mean) ** 2).sum(axis=-1, keepdims=True)
+    return {
+        "pow": hidden**3,
+        "exp2": np.exp(-2.0 * inner),
+        "reduce": [
+            product.reshape(2, 4, 1),
+            residual.sum(axis=-1, keepdims=True),
+            squares,
+        ],
+        "sqrt": np.sqrt(squares / 4.0 + 1e-5),
+    }
 
 
 def _intermediates_constants() -> dict[str, Any]:
-    """Expected output of the constants_plant row."""
+    """The constants_plant row: the matmul and the literal ``ones`` added to it."""
 
-    return {"output": _INPUT @ _W44 + np.ones((1, 4), dtype=np.float32)}
+    product = _INPUT @ _W44
+    return {"reduce": product.reshape(2, 4, 1), "add": product + 1.0}
 
 
 def _default_device() -> str | None:
@@ -458,7 +515,7 @@ def config_built_rows() -> tuple[RosterModel, ...]:
 
 
 def random_init_rows() -> tuple[RosterModel, ...]:
-    """The random-init rows: default-init Linear, Conv2d and LayerNorm (refused until realize-once)."""
+    """The random-init rows: default-init Linear, Conv2d and LayerNorm (realized once at capture)."""
 
     return (
         _row("nn_linear_random_init", _build_random_linear, random_init=True),

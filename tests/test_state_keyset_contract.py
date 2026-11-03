@@ -70,7 +70,6 @@ def _capture_stage_records() -> dict[str, dict[str, list[str]]]:
     return result
 
 
-@pytest.mark.smoke
 def test_state_keysets_match_golden() -> None:
     """state_items key sets are frozen per class and lifecycle stage."""
 
@@ -132,7 +131,6 @@ def test_state_keysets_match_golden() -> None:
         raise AssertionError(f"state key sets diverged:\n{diff}")
 
 
-@pytest.mark.smoke
 def test_declared_fields_dominate_op_state() -> None:
     """Every state key on a live Op is a declared _FIELD_POLICY field.
 
@@ -148,7 +146,6 @@ def test_declared_fields_dominate_op_state() -> None:
         assert not undeclared, f"live Op carries undeclared state: {sorted(undeclared)}"
 
 
-@pytest.mark.smoke
 def test_op_slot_universe_is_declared() -> None:
     """Every Op slot is covered by _FIELD_POLICY (no shadow storage)."""
 

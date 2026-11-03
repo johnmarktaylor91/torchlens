@@ -80,7 +80,7 @@ RECORD_INDEX: Final[tuple[tuple[str, str, int], ...]] = (
     ("trace", "torchlens._data_classes.trace.Trace", 183),
     ("op", "torchlens._data_classes.op.Op", 174),
     ("layer", "torchlens._data_classes.layer.Layer", 92),
-    ("aten_op", "torchlens._data_classes.aten_op.AtenOp", 32),
+    ("aten_op", "torchlens._data_classes.aten_op.AtenOp", 33),
     ("backward_pass", "torchlens._data_classes.backward_pass.BackwardPass", 20),
     ("buffer", "torchlens._data_classes.buffer.Buffer", 21),
     ("func_call_location", "torchlens._data_classes.func_call_location.FuncCallLocation", 23),

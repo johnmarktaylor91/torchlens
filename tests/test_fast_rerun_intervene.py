@@ -414,7 +414,6 @@ def _assert_matches_hook(trace: Any, reference: dict[str, Any], *, fast: bool) -
     assert _max_abs_diff(_site_op(trace, _HEAD).out, reference["head"]) == 0.0
 
 
-@pytest.mark.smoke
 def test_five_legacy_reruns_are_exact_against_hook_and_fresh_trace() -> None:
     """Five consecutive same-length steered reruns match the hook and a fresh capture."""
 
@@ -445,7 +444,6 @@ def test_five_legacy_reruns_are_exact_against_hook_and_fresh_trace() -> None:
         assert _max_abs_diff(_site_op(trace, _HEAD).out, _site_op(fresh, _HEAD).out) == 0.0
 
 
-@pytest.mark.smoke
 def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
     """Eight greedy steps of growing length rerun fast, exactly, with honest shapes."""
 
@@ -482,7 +480,6 @@ def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
     assert torch.equal(ids, reference_ids)
 
 
-@pytest.mark.smoke
 def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
     """A different branch at the new length is refused fast and reruns through capture."""
 
@@ -666,8 +663,8 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert _max_abs_diff(first.output, _hooked(model, direction, ids)["output"]) == 0.0
 
     other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
-    trace.clear_hooks(confirm_mutation=True)
-    trace.attach_hooks(
+    trace._clear_hooks(confirm_mutation=True)
+    trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(other, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
@@ -676,7 +673,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert restaged.trace.last_run["engine"] == "guarded_fast"
     assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
 
-    trace.clear_hooks(confirm_mutation=True)
+    trace._clear_hooks(confirm_mutation=True)
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run(inputs=ids, fast=True)
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
@@ -707,7 +704,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     ids = _ids(_CAPTURE_LEN, seed=3)
     baseline = _module_hook_count(model)
     trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(direction, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,

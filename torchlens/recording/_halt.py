@@ -12,6 +12,13 @@ class StopSignal(BaseException):
     ----------
     reason:
         Optional user-facing reason stored on the resulting recording.
+
+    Examples
+    --------
+    >>> issubclass(StopSignal, BaseException), issubclass(StopSignal, Exception)
+    (True, False)
+    >>> StopSignal("enough").reason
+    'enough'
     """
 
     def __init__(
@@ -29,7 +36,7 @@ class StopSignal(BaseException):
         reason:
             User-facing halt reason.
         frontier_output:
-            Optional live output object used by ``trace(halt=...)`` to finalize
+            Optional live output object used by ``trace(stop_after=...)`` to finalize
             a partial graph at the halt boundary.
         boundary_kind:
             Event kind at the halt boundary (settlement metadata); ``None``
@@ -58,6 +65,16 @@ def stop(reason: str = "") -> NoReturn:
     ------
     HaltSignal
         Always raised to unwind to the recorder boundary.
+
+    Examples
+    --------
+    >>> def keep(ctx):
+    ...     if ctx.kind == "op":
+    ...         tl.recording.stop("enough")
+    ...     return True
+    >>> recording = tl.record(model, x, save=keep)
+    >>> recording.is_stopped, recording.stop_reason
+    (True, 'enough')
     """
 
     # F6 stop-request latch: the direct-raise public spelling must be as
