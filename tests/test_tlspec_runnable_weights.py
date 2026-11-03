@@ -9,11 +9,13 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import read_record, read_runnable, tensor_references, write_runnable
 from safetensors.torch import load_file
 from torch import nn
 
 import torchlens as tl
 from torchlens._io import ArtifactError
+from torchlens._io.format3.decode import decode_value
 from torchlens._io.runnable import (
     assert_sparse_core_has_no_tensor_payload,
     build_sparse_run_descriptor,
@@ -29,7 +31,7 @@ from torchlens.options import CaptureOptions
 
 
 def _fresh_warning() -> bool:
-    import torchlens._io.bundle as bundle
+    import torchlens._io._save_gates as bundle
 
     return not bundle._NONPERSISTENT_DISCLOSURE_WARNED
 
@@ -101,12 +103,9 @@ def _manifest(path: Path) -> dict[str, Any]:
 
 
 def _metadata(path: Path) -> dict[str, Any]:
-    """Read trusted test-produced sparse metadata for invariant checks."""
+    """Inspect the authoritative JSON record cells without invoking pickle."""
 
-    with (path / "metadata.pkl").open("rb") as handle:
-        value = pickle.load(handle)  # noqa: S301 - created in this test process
-    assert isinstance(value, dict)
-    return value
+    return {kind: read_record(path, kind) for kind in _manifest(path)["records"]}
 
 
 @pytest.mark.parametrize("field_name", ("annotations", "edits"))
@@ -186,18 +185,15 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     trace.save(weighted_path, level="runnable", include_weights=True)
 
     sparse_manifest = _manifest(sparse_path)
-    payload = sparse_manifest["run"]["payload_layers"]["nonpersistent_buffers"]
+    payload = read_runnable(sparse_path)["payload_layers"]["nonpersistent_buffers"]
     assert payload == {
         "present": True,
         "schema": "runnable_nonpersistent_buffer_v1",
     }
-    nonpersistent_entries = [
-        entry
-        for entry in sparse_manifest["tensors"]
-        if entry["kind"] == "runnable_nonpersistent_buffer"
-    ]
-    assert [entry["label"] for entry in nonpersistent_entries] == ["offset"]
-    stored_offset = load_file(str(sparse_path / nonpersistent_entries[0]["relative_path"]))["data"]
+    nonpersistent_entries = sparse_manifest["runnable"]["buffers_tensors"]
+    assert list(nonpersistent_entries) == ["offset"]
+    reference = nonpersistent_entries["offset"]
+    stored_offset = load_file(str(sparse_path / reference["blob"]))[reference["key"]]
     assert torch.equal(stored_offset, model.offset)
 
     loaded = tl.load(sparse_path)
@@ -213,10 +209,8 @@ def test_used_nonpersistent_buffer_is_embedded_without_becoming_canonical_state(
     assert staged_result.report.state_source is StateSource.USER_STATE_DICT
 
     weighted_manifest = _manifest(weighted_path)
-    weight_entries = [
-        entry for entry in weighted_manifest["tensors"] if entry["kind"] == "runnable_weight"
-    ]
-    assert [entry["label"] for entry in weight_entries] == ["persistent_guard"]
+    weight_entries = weighted_manifest["runnable"]["state_dict_tensors"]
+    assert list(weight_entries) == ["persistent_guard"]
     weighted = tl.load(weighted_path)
     weighted_result = weighted.run(inputs=inputs, seed=1)
     assert torch.equal(weighted_result.output, model(inputs))
@@ -251,34 +245,37 @@ def test_include_weights_writes_full_state_dict_as_separate_blob_family(
 
     sparse_manifest = _manifest(sparse_path)
     weighted_manifest = _manifest(weighted_path)
-    assert sparse_manifest["run"]["payload_layers"]["weights"] == {
+    assert read_runnable(sparse_path)["payload_layers"]["weights"] == {
         "present": False,
         "schema": "state_dict_v1",
     }
-    assert sparse_manifest["body_index"] == []
-    assert list((sparse_path / "blobs").iterdir()) == []
+    assert tensor_references(sparse_path) == {}
+    assert not any(name.startswith("blobs/") for name in sparse_manifest["files"])
 
-    assert weighted_manifest["run"]["payload_layers"]["weights"] == {
+    assert read_runnable(weighted_path)["payload_layers"]["weights"] == {
         "present": True,
         "schema": "state_dict_v1",
     }
-    weight_entries = [
-        entry for entry in weighted_manifest["tensors"] if entry["kind"] == "runnable_weight"
-    ]
-    assert {entry["kind"] for entry in weighted_manifest["tensors"]} == {"runnable_weight"}
+    weight_entries = weighted_manifest["runnable"]["state_dict_tensors"]
+    assert "buffers_tensors" not in weighted_manifest["runnable"]
     expected_state = model.state_dict()
-    assert {entry["label"] for entry in weight_entries} == set(expected_state)
-    assert "scratch" not in {entry["label"] for entry in weight_entries}
-    assert "unused" in {entry["label"] for entry in weight_entries}
-    for entry in weight_entries:
-        stored = load_file(str(weighted_path / entry["relative_path"]))["data"]
-        assert torch.equal(stored, expected_state[entry["label"]])
+    assert set(weight_entries) == set(expected_state)
+    assert "scratch" not in set(weight_entries)
+    assert "unused" in set(weight_entries)
+    for name, reference in weight_entries.items():
+        stored = load_file(str(weighted_path / reference["blob"]))[reference["key"]]
+        assert torch.equal(stored, expected_state[name])
 
     metadata = _metadata(weighted_path)
-    assert_sparse_core_has_no_tensor_payload(weighted_manifest["run"])
+    assert_sparse_core_has_no_tensor_payload(read_runnable(weighted_path))
     assert_sparse_core_has_no_tensor_payload(metadata)
-    assert metadata["_buffer_initial_values"] == {}
-    assert all(op.func is None for op in metadata["_layer_list"])
+    assert (
+        decode_value(
+            metadata["trace"]["fields"]["_buffer_initial_values"], at="trace._buffer_initial_values"
+        )
+        == {}
+    )
+    assert "func" not in metadata["op"]["columns"]
     tl.validation.validate_tlspec(weighted_path)
 
 
@@ -361,18 +358,16 @@ def test_mismatched_embedded_state_raises_shared_strict_binding_error(
     trace = _capture(model)
     path = tmp_path / "weighted.tlspec"
     trace.save(path, level="runnable", include_weights=True)
-    manifest = _manifest(path)
+    descriptor = read_runnable(path)
     weight_slot = next(
         slot
-        for slot in manifest["run"]["tensor_slots"]
+        for slot in descriptor["tensor_slots"]
         if slot["state_binding"] is not None
         and slot["state_binding"]["state_dict_name"] == "linear.weight"
     )
     weight_slot["shape"] = [1]
     weight_slot["rank"] = 1
-    with (path / "manifest.json").open("w", encoding="utf-8") as handle:
-        json.dump(manifest, handle, indent=2)
-        handle.write("\n")
+    write_runnable(path, descriptor)
 
     with pytest.raises(StateBindingError) as caught:
         tl.load(path)

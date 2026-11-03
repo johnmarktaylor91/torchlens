@@ -60,6 +60,8 @@ _SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 def artifact_error(message: str, *, code: str, remedy: str, **fields: Any) -> ArtifactError:
     """Return an ``ArtifactError`` carrying its code and remedy."""
 
+    if not message.rstrip(".").endswith(remedy.rstrip(".")):
+        message = f"{message.rstrip('.')}. Remedy: {remedy.rstrip('.')}."
     return ArtifactError(message, code=code, remedy=remedy, **fields)
 
 

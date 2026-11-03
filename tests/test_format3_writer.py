@@ -336,7 +336,7 @@ def test_streamed_save_writes_the_live_cells(tmp_path: Path) -> None:
 
     streamed_root, saved_root = tmp_path / "streamed", tmp_path / "saved"
     storage = tl.options.StorageOptions(path=streamed_root, async_writes=False)
-    trace = tl.trace(_TinyCNN().eval(), _input(), streaming=storage)
+    trace = tl.trace(_TinyCNN().eval(), _input(), storage=storage)
     try:
         trace.save(saved_root)
         streamed, saved = _records(streamed_root), _records(saved_root)
