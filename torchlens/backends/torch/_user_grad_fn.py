@@ -14,13 +14,6 @@ from typing import Any
 
 import torch
 
-__all__ = [
-    "NO_USER_GRAD_FN",
-    "pop_user_grad_fn",
-    "recorded_op_grad_fn",
-    "stamp_user_grad_fn",
-]
-
 _USER_GRAD_FN_ATTR = "tl_user_grad_fn"
 
 NO_USER_GRAD_FN: object = object()
