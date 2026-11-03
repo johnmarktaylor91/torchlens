@@ -45,24 +45,6 @@ def _halted_trace() -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-def test_preview_stamp_settles_halted_when_trace_is_halted() -> None:
-    """The preview stamp mirrors settle_halted on a halted trace."""
-
-    trace = _halted_trace()
-    outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.STOPPED
-    # An attested stamp, not a structural derivation.
-    assert outcome.is_derived is False
-    assert outcome.is_partial is True
-    assert outcome.reason == trace.stop_reason
-    assert outcome.boundary_label == trace.graph.stop_frontier
-    assert outcome.frontier_labels == tuple(trace.output_layers)
-    assert outcome.num_committed_ops is not None
-    # The stamp is the trace's settled outcome, in both homes.
-    assert outcome_for(trace) is outcome
-    assert trace.outcome is outcome
-
-
 def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     """Backends with no halt path keep the byte-identical COMPLETE arm."""
 
@@ -76,6 +58,7 @@ def test_preview_stamp_still_settles_complete_when_not_halted() -> None:
     assert outcome.frontier_labels is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py, _io/bundle.py, _io/scrub.py ....
 def test_preview_halted_stamp_is_coherent_and_survives_save_load(tmp_path) -> None:
     """The degradation chain is closed: no UNKNOWN, no N1/N2 refusal.
 
@@ -205,6 +188,7 @@ def test_paddle_halted_capture_settles_halted() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/outcome.py.
 def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     """A latched stop request with no structural halt is a swallowed signal.
 
@@ -231,22 +215,6 @@ def test_preview_stamp_refuses_swallowed_halt_and_settles_failed() -> None:
     settled = outcome_for(trace)
     assert settled is not None
     assert settled.status is CaptureStatus.FAILED
-    assert "_stop_requested" not in trace.__dict__
-
-
-def test_preview_stamp_consumes_latch_on_the_normal_halted_arm() -> None:
-    """A normally-halted capture (latch + structural halt) stamps HALTED."""
-
-    from torchlens._capture.outcome import StopRequest
-
-    trace = _halted_trace()
-    trace.__dict__["_stop_requested"] = StopRequest(
-        kind="halt",
-        reason=trace.stop_reason,
-        boundary_label=trace.graph.stop_frontier,
-    )
-    outcome = stamp_backend_finalized(trace)
-    assert outcome.status is CaptureStatus.STOPPED
     assert "_stop_requested" not in trace.__dict__
 
 

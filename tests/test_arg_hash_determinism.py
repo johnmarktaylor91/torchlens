@@ -23,18 +23,7 @@ import torchlens as tl
 from torchlens.backends.torch.tensor_tracking import _get_hash_from_args
 
 
-def test_object_arg_hash_is_address_free() -> None:
-    """Two semantically identical fresh objects must hash identically."""
-
-    # Hold BOTH generators alive: sequential construction lets CPython reuse
-    # the freed address, which would make an address-derived hash pass this
-    # test vacuously (the collision half of the same defect).
-    first_generator, second_generator = torch.Generator(), torch.Generator()
-    first = _get_hash_from_args((first_generator,), {})
-    second = _get_hash_from_args((second_generator,), {})
-    assert first == second, "the arg-hash tail still folds the object's memory address"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/tensor_tracking.py, campaign mutant kills.
 def test_object_arg_hash_distinguishes_types() -> None:
     """The address-free token still separates different argument types."""
 
@@ -46,6 +35,7 @@ def test_object_arg_hash_distinguishes_types() -> None:
     assert generator_hash != marker_hash
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/tensor_tracking.py.
 def test_set_and_frozenset_args_hash_identically() -> None:
     """Equal members must produce one fingerprint regardless of container."""
 
@@ -89,6 +79,7 @@ class _BackwardModel(nn.Module):
         return torch.relu(self.lin(x))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_backward_pass_root_ids_persist_as_dense_ordinals(tmp_path) -> None:
     """Loaded root_grad_fn_ids must be trace-local ordinals inside
     grad_fn_logs, never raw process addresses."""

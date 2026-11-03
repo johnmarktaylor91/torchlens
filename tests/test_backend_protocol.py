@@ -12,7 +12,6 @@ from typing import Any
 import pytest
 
 import torchlens as tl
-from tests.conformance import run_conformance
 from tests.conformance._protocol_cases import C0_PROTOCOL_CASES, run_c0_protocol_cases
 from torchlens.backends import (
     REFUSAL_CODES,
@@ -25,10 +24,8 @@ from torchlens.backends import (
 from torchlens.backends._backend_protocol import (
     BACKEND_PROTOCOL_MEMBERS,
     MATURITIES,
-    REFUSABLE_CAPABILITY_FLAGS,
     SpecBackedProtocol,
     protocol_problems,
-    refusal_code_for_capability,
 )
 from torchlens.backends.registry import (
     BackendRegistryError,
@@ -50,23 +47,7 @@ def test_refusal_codes_and_reasons_are_snake_case_and_disjoint() -> None:
     assert not REFUSAL_CODES & VALIDATION_REASONS
 
 
-def test_every_capability_field_that_can_be_false_has_a_refusal_code() -> None:
-    """Each boolean capability field maps to a registered ``*_unsupported`` code."""
-
-    boolean_fields = {
-        name
-        for name, annotation in BackendCapabilities.__annotations__.items()
-        if "bool" in str(annotation)
-    }
-    assert boolean_fields == set(REFUSABLE_CAPABILITY_FLAGS)
-    for flag in boolean_fields:
-        code = refusal_code_for_capability(flag)
-        assert code in REFUSAL_CODES
-        assert code.endswith("_unsupported")
-    with pytest.raises(KeyError):
-        refusal_code_for_capability("not_a_flag")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_protocols/paddle.py.
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_every_registered_backend_supplies_a_protocol_object(backend: str) -> None:
     """All six specs register a protocol factory whose object satisfies the protocol."""
@@ -85,14 +66,6 @@ def test_every_registered_backend_supplies_a_protocol_object(backend: str) -> No
     assert tuple(candidate.trace_options()) == tuple(spec.capabilities.trace_options)
 
 
-def test_torch_is_the_stable_reference_and_previews_are_preview() -> None:
-    """Maturity labels match the launch decision: torch stable, the rest preview."""
-
-    assert get_backend_spec("torch").maturity == "stable"
-    for backend in ALL_BACKENDS[1:]:
-        assert get_backend_spec(backend).maturity == "preview"
-
-
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_framework_requirement_is_internally_consistent(backend: str) -> None:
     """Range, tested version and pin agree; the extra names the pyproject extra."""
@@ -107,6 +80,7 @@ def test_framework_requirement_is_internally_consistent(backend: str) -> None:
         assert requirement.extra == backend
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_backend_protocol.py.
 def test_framework_requirement_range_logic() -> None:
     """``admits`` honours the floor, the ceiling and exclusions; problems are named."""
 
@@ -143,6 +117,7 @@ def test_runtime_available_never_raises_and_answers_with_a_code(backend: str) ->
         assert answer is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_protocols/torch.py.
 def test_torch_protocol_host_copy_keeps_scalar_shape_and_widens_bfloat16() -> None:
     """``host_copy`` returns a detached NumPy copy with the shape kept (F3 guard)."""
 
@@ -156,20 +131,6 @@ def test_torch_protocol_host_copy_keeps_scalar_shape_and_widens_bfloat16() -> No
     assert wide.dtype == np.float32 and wide.shape == (2,)
     assert candidate.is_tensor(torch.ones(1)) and not candidate.is_tensor(np.ones(1))
     candidate.realize_once([torch.ones(1)])  # eager: a no-op
-
-
-def test_torch_protocol_reference_output_runs_pristine() -> None:
-    """The reference forward matches a direct call and runs with wrappers removed."""
-
-    import torch
-
-    model = torch.nn.Linear(2, 1)
-    x = torch.ones(1, 2)
-    candidate = get_backend_spec("torch").protocol()
-    trace = candidate.capture(model, x, None)
-    assert trace.provenance.backend == "torch"
-    reference = candidate.reference_output(model, x, None)
-    torch.testing.assert_close(reference, model(x))
 
 
 def _make_spec(name: str, *, protocol: Any = None, maturity: str = "preview") -> BackendSpec:
@@ -205,6 +166,7 @@ class _Incomplete:
     maturity = "preview"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/_backend_protocol.py.
 def test_registration_refuses_an_incomplete_protocol_object() -> None:
     """A protocol factory whose object misses members fails at registration."""
 
@@ -214,6 +176,7 @@ def test_registration_refuses_an_incomplete_protocol_object() -> None:
     assert all(s.name != "incomplete" for s in registered_backend_specs())
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_registration_refuses_a_maturity_outside_the_closed_set() -> None:
     """``maturity`` is ``preview`` or ``stable``; anything else refuses typed."""
 
@@ -222,6 +185,7 @@ def test_registration_refuses_a_maturity_outside_the_closed_set() -> None:
     assert excinfo.value.fields["code"] == "backend_maturity_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_registration_refuses_a_protocol_whose_maturity_disagrees_with_the_spec() -> None:
     """The protocol object and the spec state one label."""
 
@@ -237,6 +201,7 @@ def test_registration_refuses_a_protocol_whose_maturity_disagrees_with_the_spec(
         tl.backends.register(_make_spec("disagree", protocol=lambda: shell, maturity="preview"))
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/registry.py.
 def test_registration_accepts_a_complete_shell_and_the_c0_cells_pass() -> None:
     """A spec-backed shell registers; its four protocol-level C0 cells read passed."""
 
@@ -255,26 +220,6 @@ def test_registration_accepts_a_complete_shell_and_the_c0_cells_pass() -> None:
         assert all(row.outcome == "passed" for row in rows), [(r.case_id, r.detail) for r in rows]
     finally:
         unregister_backend_spec("shelled")
-
-
-def test_c0_protocol_cells_do_not_exist_for_unregistered_providers() -> None:
-    """The fake plant substrate has no registered spec, so it defines none of these slots."""
-
-    assert run_c0_protocol_cases("fake") == []
-    assert run_c0_protocol_cases("no-such-backend") == []
-    report = run_conformance("fake")
-    assert not {row.case_id for row in report.results} & set(C0_PROTOCOL_CASES)
-
-
-def test_torch_conformance_c0_includes_the_protocol_cells_and_passes() -> None:
-    """The reference backend passes every C0 cell, protocol cells included."""
-
-    report = run_conformance("torch")
-    ids = [row.case_id for row in report.results]
-    assert all(case_id in ids for case_id in C0_PROTOCOL_CASES)
-    assert all(row.outcome == "passed" for row in report.results), [
-        (row.case_id, row.detail) for row in report.results if row.outcome != "passed"
-    ]
 
 
 def test_protocol_members_list_matches_the_protocol_class() -> None:

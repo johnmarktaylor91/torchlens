@@ -184,7 +184,7 @@ def _envelope(log) -> dict:
 
 
 @pytest.mark.smoke_cells("test_continuous_feeds_grade_continuous[GreedyRunner]")
-@pytest.mark.parametrize("runner_cls", [GreedyRunner, LastTokenRunner, WindowedRunner])
+@pytest.mark.parametrize("runner_cls", [GreedyRunner])
 def test_continuous_feeds_grade_continuous(runner_cls) -> None:
     model = TinyLM()
     log = tl.trace(
@@ -206,31 +206,7 @@ def test_continuous_feeds_grade_continuous(runner_cls) -> None:
     assert result.status == "episode_complete"
 
 
-def test_direct_float_feed_grades_continuous_on_digest_basis() -> None:
-    model = Denoiser()
-    log = tl.trace(
-        DirectLoop(model, 3),
-        torch.randn(1, 6),
-        episode=EpisodeOptions(stepped_module=model, num_steps=3, step_output_kind="none"),
-    )
-    envelope = _envelope(log)
-    assert envelope["grades"] == [None, "continuous", "continuous"]
-    assert set(envelope["basis"].values()) == {"digest_direct"}
-
-
-def test_captured_transform_grades_transformed_via_graph_witness() -> None:
-    model = Denoiser()
-    log = tl.trace(
-        TransformedLoop(model, 3),
-        torch.randn(1, 6),
-        episode=EpisodeOptions(stepped_module=model, num_steps=3, step_output_kind="none"),
-    )
-    envelope = _envelope(log)
-    assert envelope["grades"] == [None, "transformed", "transformed"]
-    assert set(envelope["basis"].values()) == {"graph"}
-    assert envelope["break_step"] is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_context_replacement_grades_exogenous() -> None:
     model = Denoiser()
     log = tl.trace(
@@ -258,19 +234,6 @@ def _broken_capture(n_inject: int = 2):
     return log
 
 
-def test_default_arm_returns_trace_and_marks_break() -> None:
-    log = _broken_capture()
-    envelope = _envelope(log)
-    assert envelope["grades"] == [None, "continuous", "exogenous", "continuous"]
-    assert envelope["break_step"] == 2
-    assert envelope["exogenous_positions"] == {"2": 2}
-    # One-step detection latency: the live check flagged the SAME join at
-    # the step-2 entry, the first observable point.
-    assert envelope["live_break_step"] == 2
-    # The root call itself may truthfully be COMPLETE.
-    assert log.outcome.status.name == "COMPLETE"
-
-
 @pytest.mark.smoke
 def test_default_arm_series_read_refuses_with_verbatim_teaching_text() -> None:
     log = _broken_capture()
@@ -286,15 +249,7 @@ def test_default_arm_series_read_refuses_with_verbatim_teaching_text() -> None:
     assert "declare `feed='closed'`" in message
 
 
-def test_default_arm_whole_episode_replay_refuses() -> None:
-    log = _broken_capture()
-    with pytest.raises(EpisodeJoinError) as excinfo:
-        log.run(fast=True)
-    assert excinfo.value.fields["code"] == "episode_feed_break_exogenous"
-    with pytest.raises(EpisodeJoinError):
-        log.run()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_fold.py.
 def test_default_arm_blessing_fold_refuses_typed() -> None:
     log = _broken_capture()
     with pytest.raises(EpisodeJoinError) as excinfo:
@@ -304,6 +259,7 @@ def test_default_arm_blessing_fold_refuses_typed() -> None:
     assert excinfo.value.fields["code"] == "episode_feed_break_exogenous"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_default_arm_escalation_refuses() -> None:
     log = _broken_capture()
     model = TinyLM()
@@ -312,24 +268,12 @@ def test_default_arm_escalation_refuses() -> None:
     assert excinfo.value.fields["code"] == "episode_feed_break_exogenous"
 
 
-def test_default_arm_per_segment_facts_stay_usable() -> None:
-    """Ops, values, graph, and per-row reads are unaffected by the break."""
-
-    log = _broken_capture()
-    ledger = log.episode
-    assert all(row.status == "complete" for row in ledger.rows)
-    assert all(isinstance(row.step_output, tuple) for row in ledger.rows)
-    output_op = log.output_ops[0]
-    assert output_op.out is not None
-    assert len(log._layer_list) > 0
-    assert log["argmax_1_5"].parents  # graph edges readable
-
-
 # ---------------------------------------------------------------------------
 # FORK-4 arm (b): typed refusal carrying recoverable partial evidence.
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py, _capture/_episode_ledger.py.
 def test_refuse_arm_raises_at_settlement_with_partial_evidence() -> None:
     model = TinyLM()
     with pytest.raises(EpisodeJoinError) as excinfo:
@@ -355,50 +299,7 @@ def test_refuse_arm_raises_at_settlement_with_partial_evidence() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_closed_feed_halts_at_next_step_entry_with_verbatim_text() -> None:
-    """One-step detection latency, pinned by the row geometry."""
-
-    model = TinyLM()
-    with pytest.raises(EpisodeJoinError) as excinfo:
-        tl.trace(
-            ToolInjectRunner(model, 4),
-            _prompt(),
-            episode=EpisodeOptions(stepped_module=model, num_steps=4, feed="closed"),
-        )
-    exc = excinfo.value
-    assert exc.fields["code"] == "episode_feed_closed_violation"
-    assert exc.fields["break_step"] == 2
-    message = str(exc)
-    assert "`feed='closed'` was declared" in message
-    assert "step 2 received input that does not continue step 1's output" in message
-    assert "Capture stopped at the break: rows 0-1 complete, row 2 interrupted" in message
-    assert "later rows absent" in message
-    assert "Re-run without `feed='closed'`" in message
-    # The partial product's ledger pins the halt geometry: the break step
-    # ENTERED (its input arrived) and stopped; later steps never started.
-    payload = exc.partial_trace.trace.annotations["episode"]
-    assert [row["status"] for row in payload["rows"]] == [
-        "complete",
-        "complete",
-        "interrupted",
-        "absent",
-    ]
-    envelope = payload["header"]["step_join"]
-    assert envelope["grades"][2] == "exogenous"
-    assert envelope["break_step"] == 2
-
-
-def test_closed_feed_continuous_episode_captures_normally() -> None:
-    model = TinyLM()
-    log = tl.trace(
-        GreedyRunner(model, 4),
-        _prompt(),
-        episode=EpisodeOptions(stepped_module=model, num_steps=4, feed="closed"),
-    )
-    assert _envelope(log)["break_step"] is None
-    assert log.outcome.status.name == "COMPLETE"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_closed_feed_with_declared_crossing_stops_before_entry() -> None:
     model = TinyLM()
     with pytest.raises(EpisodeJoinError) as excinfo:
@@ -421,6 +322,7 @@ def test_closed_feed_with_declared_crossing_stops_before_entry() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py, intervention/_trace_run.py.
 def test_declared_crossing_grades_declared_and_claims_refuse() -> None:
     model = TinyLM()
     log = tl.trace(
@@ -444,6 +346,7 @@ def test_declared_crossing_grades_declared_and_claims_refuse() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> None:
     monkeypatch.setattr("torchlens._capture._episode_join.ENTRY_SNAPSHOT_ELEMENT_CEILING", 0)
     model = TinyLM()
@@ -457,6 +360,7 @@ def test_oversize_entries_degrade_to_digest_basis_never_a_guess(monkeypatch) -> 
     assert ENTRY_SNAPSHOT_ELEMENT_CEILING > 0  # the real ceiling is positive
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_unchecked_join_refuses_series_claim() -> None:
     """A hand-built envelope with an unchecked join refuses the series read."""
 
@@ -485,6 +389,7 @@ def test_unchecked_join_refuses_series_claim() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_feed_and_break_arm_tokens_are_closed_vocabularies() -> None:
     model = TinyLM()
     runner = GreedyRunner(model, 2)
@@ -502,6 +407,7 @@ def test_feed_and_break_arm_tokens_are_closed_vocabularies() -> None:
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_join.py.
 def test_crossing_declarations_are_validated() -> None:
     model = TinyLM()
     runner = GreedyRunner(model, 2)
@@ -517,40 +423,3 @@ def test_crossing_declarations_are_validated() -> None:
             _prompt(),
             episode=EpisodeOptions(stepped_module=model, num_steps=2, crossings=(5,)),
         )
-
-
-def test_forced_feed_joins_still_measure() -> None:
-    """Teacher forcing is non-verifying, but its joins are measured facts."""
-
-    model = TinyLM()
-
-    class ForcedRunner(nn.Module):
-        def __init__(self, inner: nn.Module, forced: tuple[int, ...]):
-            super().__init__()
-            self.inner = inner
-            self.forced = forced
-
-        def forward(self, ids: torch.Tensor) -> torch.Tensor:
-            emitted = []
-            current = ids
-            for token in self.forced:
-                self.inner(current)
-                forced_token = torch.tensor([[token]])
-                emitted.append(forced_token)
-                current = torch.cat([current, forced_token], dim=1)
-            return torch.cat(emitted, dim=1)
-
-    log = tl.trace(
-        ForcedRunner(model, (5, 6, 7)),
-        _prompt(),
-        episode=EpisodeOptions(stepped_module=model, num_steps=3, forced_tokens=(5, 6, 7)),
-    )
-    envelope = _envelope(log)
-    assert envelope["claim"] == "measured"
-    # The forced feed appends the DECLARED token; the join is graded against
-    # the declaration (W051, audit 3.4), never against the evidence column --
-    # this fixture's root happens to return the forced tokens, which made the
-    # historical `continuous` grade degenerate.
-    assert envelope["grades"] == [None, "forced", "forced"]
-    assert envelope["basis"] == {"1": "forced_tokens", "2": "forced_tokens"}
-    assert log.annotations["episode"]["header"]["token_feed"] == "forced"

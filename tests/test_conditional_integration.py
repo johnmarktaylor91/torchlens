@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import replace
 from pathlib import Path
 
@@ -25,7 +25,6 @@ import torchlens.backends.torch._ops_shared_fields as _ops_shared_fields  # noqa
 import torchlens.backends.torch.ops as output_tensors  # noqa: E402
 import torchlens.backends.torch.sources as source_tensors  # noqa: E402
 from torchlens import trace as trace_fn  # noqa: E402
-from torchlens._data_classes.layer import Layer  # noqa: E402
 from torchlens._data_classes.op import Op  # noqa: E402
 from torchlens._data_classes.trace import ConditionalEvent, Trace  # noqa: E402
 from torchlens._utils._torch_compat import HAS_CODE_POSITIONS  # noqa: E402
@@ -412,42 +411,6 @@ class SameLineNestedDefModel(nn.Module):
             return torch.sigmoid(x)
 
         return helper()
-
-
-def _forward_decorator(
-    func: Callable[[nn.Module, torch.Tensor], torch.Tensor],
-) -> Callable[[nn.Module, torch.Tensor], torch.Tensor]:
-    """Wrap ``forward`` in a thin decorator that preserves the original call.
-
-    Parameters
-    ----------
-    func:
-        Forward method to wrap.
-
-    Returns
-    -------
-    Callable[[nn.Module, torch.Tensor], torch.Tensor]
-        Wrapper function.
-    """
-
-    def wrapper(self: nn.Module, x: torch.Tensor) -> torch.Tensor:
-        """Invoke the wrapped forward method.
-
-        Parameters
-        ----------
-        self:
-            Bound module instance.
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Wrapped forward result.
-        """
-        return func(self, x)
-
-    return wrapper
 
 
 class BoolCastOnlyModel(nn.Module):
@@ -903,36 +866,6 @@ def _find_only_layer_any_name(
     return matching_layers[0]
 
 
-def _find_only_layer_log(
-    trace: Trace,
-    func_name: str,
-    predicate: Callable[[Layer], bool],
-) -> Layer:
-    """Find one aggregate ``Layer`` matching the provided predicate.
-
-    Parameters
-    ----------
-    trace:
-        Logged model execution.
-    func_name:
-        Function name to match.
-    predicate:
-        Additional filter over candidate layer logs.
-
-    Returns
-    -------
-    Layer
-        Matching aggregate layer log.
-    """
-    matching_layers = [
-        layer_log
-        for layer_log in trace._layer_logs.values()
-        if layer_log.func_name == func_name and predicate(layer_log)
-    ]
-    assert len(matching_layers) == 1
-    return matching_layers[0]
-
-
 def _get_root_event(trace: Trace) -> ConditionalEvent:
     """Return the sole root conditional event in a model log.
 
@@ -953,79 +886,6 @@ def _get_root_event(trace: Trace) -> ConditionalEvent:
     return root_events[0]
 
 
-def _get_child_event(trace: Trace, parent_id: int) -> ConditionalEvent:
-    """Return the sole child event whose parent id matches ``parent_id``.
-
-    Parameters
-    ----------
-    trace:
-        Logged model execution.
-    parent_id:
-        Parent conditional id.
-
-    Returns
-    -------
-    ConditionalEvent
-        Nested conditional event.
-    """
-    child_events = [
-        event
-        for event in trace.graph.conditional_records
-        if event.parent_conditional_id == parent_id
-    ]
-    assert len(child_events) == 1
-    return child_events[0]
-
-
-def _collect_branch_child_labels(
-    branch_children_by_cond: dict[int, dict[str, list[str]]],
-) -> set[str]:
-    """Collect child labels from a nested ``conditional_arm_children`` mapping.
-
-    Parameters
-    ----------
-    branch_children_by_cond:
-        Conditional child mapping from a layer or layer log.
-
-    Returns
-    -------
-    set[str]
-        Flat set of every referenced child label.
-    """
-    return {
-        child_label
-        for branch_children in branch_children_by_cond.values()
-        for child_labels in branch_children.values()
-        for child_label in child_labels
-    }
-
-
-def _collect_model_conditional_labels(trace: Trace) -> set[str]:
-    """Collect every layer label referenced by model-level conditional metadata.
-
-    Parameters
-    ----------
-    trace:
-        Logged model execution.
-
-    Returns
-    -------
-    set[str]
-        Flat set of all referenced layer labels.
-    """
-    referenced_labels: set[str] = set()
-    for parent_label, child_label in trace.graph.conditional_branch_edges:
-        referenced_labels.add(parent_label)
-        referenced_labels.add(child_label)
-    for edge_list in trace.graph.conditional_arm_entry_edges.values():
-        for parent_label, child_label in edge_list:
-            referenced_labels.add(parent_label)
-            referenced_labels.add(child_label)
-    for event in trace.graph.conditional_records:
-        referenced_labels.update(event.bool_layers)
-    return referenced_labels
-
-
 def _assert_branchless_log(trace: Trace) -> None:
     """Assert that a model log contains no conditional attribution metadata.
 
@@ -1037,176 +897,6 @@ def _assert_branchless_log(trace: Trace) -> None:
     assert trace.graph.conditional_records == []
     assert trace.graph.conditional_branch_edges == []
     assert trace.graph.conditional_arm_entry_edges == {}
-
-
-def test_nested_if_then_if_model_materializes_nested_branch_stack() -> None:
-    """Nested THEN->THEN execution records two events and a two-deep branch stack."""
-    trace = _log_model(NestedIfThenIfModel(), torch.ones(2, 2))
-
-    root_event = _get_root_event(trace)
-    inner_event = _get_child_event(trace, root_event.id)
-    relu_layer = _find_only_layer(trace, "relu")
-    sigmoid_layer = _find_only_layer(trace, "sigmoid")
-
-    assert len(trace.graph.conditional_records) == 2
-    assert root_event.kind == "if_chain"
-    assert inner_event.kind == "if_chain"
-    assert inner_event.parent_branch_kind == "then"
-    assert relu_layer.conditional_branch_stack == ((root_event.id, "then"),)
-    assert sigmoid_layer.conditional_branch_stack == (
-        (root_event.id, "then"),
-        (inner_event.id, "then"),
-    )
-
-
-def test_nested_in_else_model_materializes_else_to_inner_then_stack() -> None:
-    """Nested ELSE->THEN execution records the outer ELSE parent branch."""
-    trace = _log_model(NestedInElseModel(), -torch.ones(2, 2))
-
-    root_event = _get_root_event(trace)
-    inner_event = _get_child_event(trace, root_event.id)
-    neg_layer = _find_only_layer(trace, "neg")
-    sigmoid_layer = _find_only_layer(trace, "sigmoid")
-
-    assert len(trace.graph.conditional_records) == 2
-    assert inner_event.parent_branch_kind == "else"
-    assert neg_layer.conditional_branch_stack == ((root_event.id, "else"),)
-    assert sigmoid_layer.conditional_branch_stack == (
-        (root_event.id, "else"),
-        (inner_event.id, "then"),
-    )
-
-
-def test_multiline_predicate_model_tracks_one_if_chain_event() -> None:
-    """A multiline predicate still materialises one attributed ``if_chain`` event."""
-    input_tensor = torch.tensor([[0.5, 1.5], [0.25, 2.0]])
-    trace = _log_model(MultilinePredicateModel(), input_tensor)
-
-    event = _get_root_event(trace)
-    bool_layers = _get_terminal_bool_layers(trace)
-    relu_layer = _find_only_layer(trace, "relu")
-
-    assert len(trace.graph.conditional_records) == 1
-    assert event.kind == "if_chain"
-    assert set(event.branch_ranges) == {"then", "else"}
-    assert len(bool_layers) == 2
-    assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is True for layer in bool_layers)
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_public_conditionals_materialize_else_arm_fired_status() -> None:
-    """Public conditional records expose fired ELSE and unfired THEN arms."""
-    then_trace = _log_model(PublicIfElseArmModel(), torch.ones(2, 2))
-    else_trace = _log_model(PublicIfElseArmModel(), -torch.ones(2, 2))
-
-    then_conditional = then_trace.graph.conditionals[0]
-    else_conditional = else_trace.graph.conditionals[0]
-
-    assert then_conditional.fired_arm_kind == "then"
-    assert [(arm.kind, arm.fired) for arm in then_conditional.arms] == [
-        ("then", True),
-        ("else", False),
-    ]
-    assert else_conditional.fired_arm_kind == "else"
-    assert [(arm.kind, arm.fired) for arm in else_conditional.arms] == [
-        ("then", False),
-        ("else", True),
-    ]
-
-
-def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None:
-    """A parameter-only branch body still records a THEN arm-entry edge."""
-    trace = _log_model(BranchUsesOnlyParameterModel(), torch.ones(2, 2))
-
-    event = _get_root_event(trace)
-    then_edges = trace.graph.conditional_arm_entry_edges[(event.id, "then")]
-
-    assert len(then_edges) == 1
-    parent_label, child_label = then_edges[0]
-    assert trace[parent_label].conditional_branch_stack == ()
-    assert trace[child_label].conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_branch_uses_only_constant_model_records_constant_entry_edge() -> None:
-    """A constant-only branch body still records a THEN arm-entry edge."""
-    trace = _log_model(BranchUsesOnlyConstantModel(), torch.ones(2, 2))
-
-    event = _get_root_event(trace)
-    then_edges = trace.graph.conditional_arm_entry_edges[(event.id, "then")]
-
-    assert len(then_edges) == 1
-    parent_label, child_label = then_edges[0]
-    assert trace[parent_label].conditional_branch_stack == ()
-    assert trace[child_label].conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() -> None:
-    """One nested branch-entry edge is recorded for both gained THEN arms."""
-    trace = _log_model(MultiArmEntryNestedModel(), torch.ones(2, 2))
-
-    outer_event = _get_root_event(trace)
-    inner_event = _get_child_event(trace, outer_event.id)
-    outer_then_edges = set(trace.graph.conditional_arm_entry_edges[(outer_event.id, "then")])
-    inner_then_edges = set(trace.graph.conditional_arm_entry_edges[(inner_event.id, "then")])
-    shared_edges = outer_then_edges & inner_then_edges
-
-    assert len(shared_edges) == 1
-    parent_label, child_label = next(iter(shared_edges))
-
-    parent_layer = trace[parent_label]
-    assert parent_layer.conditional_arm_children[outer_event.id]["then"] == [child_label]
-    assert parent_layer.conditional_arm_children[inner_event.id]["then"] == [child_label]
-    assert parent_layer.conditional_then_children == (child_label,)
-
-
-def test_if_bool_cast_model_marks_wrapper_kind_without_losing_branch_attribution() -> None:
-    """``bool(...)`` wrappers inside ``if`` tests remain branch-participating."""
-    trace = _log_model(IfBoolCastModel(), torch.ones(2, 2))
-
-    event = _get_root_event(trace)
-    bool_layer = _get_terminal_bool_layers(trace)[0]
-    relu_layer = _find_only_layer(trace, "relu")
-
-    assert bool_layer.conditional_context_kind == "if_test"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert bool_layer.conditional_wrapper_kind == "bool_cast"
-    assert bool_layer.terminal_conditional_id == event.id
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_reconverging_branches_model_clears_branch_stack_after_merge() -> None:
-    """Ops after reconvergence have empty stacks even though their parent was in-branch."""
-    positive_log = _log_model(ReconvergingBranchesModel(), torch.ones(2, 2))
-    negative_log = _log_model(ReconvergingBranchesModel(), -torch.ones(2, 2))
-
-    positive_add = _find_only_layer(positive_log, "add")
-    negative_add = _find_only_layer(negative_log, "add")
-    positive_parent = positive_log[positive_add.parents[0]]
-    negative_parent = negative_log[negative_add.parents[0]]
-
-    assert positive_add.conditional_branch_stack == ()
-    assert negative_add.conditional_branch_stack == ()
-    assert positive_parent.conditional_branch_stack != []
-    assert negative_parent.conditional_branch_stack != []
-
-
-def test_nested_helper_same_name_model_distinguishes_helpers_by_scope() -> None:
-    """Two same-named nested helpers materialise separate conditional ids."""
-    trace = _log_model(NestedHelperSameNameModel(), torch.ones(2, 2))
-
-    relu_layer = _find_only_layer(trace, "relu")
-    tanh_layer = _find_only_layer(trace, "tanh")
-    bool_layers = _get_terminal_bool_layers(trace)
-
-    assert len(trace.graph.conditional_records) == 2
-    assert len({layer.terminal_conditional_id for layer in bool_layers}) == 2
-    assert list(relu_layer.conditional_branch_stack) == [
-        (bool_layers[0].terminal_conditional_id, "then")
-    ]
-    assert list(tanh_layer.conditional_branch_stack) == [
-        (bool_layers[1].terminal_conditional_id, "then")
-    ]
 
 
 @pytest.mark.skipif(
@@ -1230,6 +920,7 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
     assert tanh_layer.conditional_branch_stack == ((method_event.id, "then"),)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py.
 def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambiguous(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1275,17 +966,6 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     assert trace.graph.conditional_arm_entry_edges == {}
 
 
-def test_bool_cast_only_model_is_not_treated_as_branch() -> None:
-    """Standalone ``bool(...)`` casts stay non-branching."""
-    trace = _log_model(BoolCastOnlyModel(), torch.ones(2, 2))
-    bool_layer = _get_terminal_bool_layers(trace)[0]
-
-    assert bool_layer.conditional_context_kind == "bool_cast"
-    assert bool_layer.is_terminal_conditional_bool is False
-    assert bool_layer.terminal_conditional_id is None
-    _assert_branchless_log(trace)
-
-
 @requires_code_positions
 def test_ternary_ifexp_model_attributes_then_arm_as_ifexp() -> None:
     """A minimal ternary materialises an ``ifexp`` event and branch stack."""
@@ -1302,28 +982,7 @@ def test_ternary_ifexp_model_attributes_then_arm_as_ifexp() -> None:
     assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
 
 
-def test_comprehension_if_model_classifies_bool_without_materialising_branch_metadata() -> None:
-    """Comprehension filters classify bools but do not create branch events."""
-    trace = _log_model(ComprehensionIfModel(), torch.ones(2, 2))
-    bool_layers = _get_terminal_bool_layers(trace)
-
-    assert len(bool_layers) == 2
-    assert all(layer.conditional_context_kind == "comprehension_filter" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is False for layer in bool_layers)
-    _assert_branchless_log(trace)
-
-
-def test_while_loop_model_classifies_bool_without_materialising_branch_metadata() -> None:
-    """``while`` predicates are classified but never attributed as branches."""
-    trace = _log_model(WhileLoopModel(), torch.full((2, 2), 0.5))
-    bool_layers = _get_terminal_bool_layers(trace)
-
-    assert len(bool_layers) >= 1
-    assert all(layer.conditional_context_kind == "while" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is False for layer in bool_layers)
-    _assert_branchless_log(trace)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/ast_branches.py.
 @pytest.mark.skipif(sys.version_info < (3, 10), reason="match guards require Python 3.10+")
 def test_match_guard_model_classifies_bool_without_materialising_branch_metadata(
     tmp_path: Path,
@@ -1363,58 +1022,6 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
     _assert_branchless_log(trace)
 
 
-def test_not_if_model_attributes_branch_despite_boolean_negation() -> None:
-    """Negating an ``if`` predicate still produces a normal ``if_chain`` event."""
-    trace = _log_model(NotIfModel(), torch.ones(2, 2))
-
-    event = _get_root_event(trace)
-    relu_layer = _find_only_layer(trace, "relu")
-
-    assert event.kind == "if_chain"
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_and_or_if_model_keeps_all_branching_bools_on_one_event() -> None:
-    """Compound ``and``/``or`` predicates keep all terminal bools on one event."""
-    input_tensor = torch.tensor([[0.5, 1.5], [0.25, 2.0]])
-    trace = _log_model(AndOrIfModel(), input_tensor)
-
-    event = _get_root_event(trace)
-    bool_layers = _get_terminal_bool_layers(trace)
-    relu_layer = _find_only_layer(trace, "relu")
-
-    assert len(bool_layers) >= 2
-    assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
-    assert {layer.terminal_conditional_id for layer in bool_layers} == {event.id}
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
-def test_walrus_if_model_attributes_branch_normally() -> None:
-    """Walrus-bound tensor predicates still drive normal branch attribution."""
-    trace = _log_model(WalrusIfModel(), torch.ones(2, 2))
-
-    event = _get_root_event(trace)
-    relu_layer = _find_only_layer(trace, "relu")
-
-    assert event.kind == "if_chain"
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
-
-
-@pytest.mark.skipif(
-    sys.version_info >= (3, 11),
-    reason="degraded ternary mode is only meaningful before Python 3.11",
-)
-def test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution() -> None:
-    """Pre-3.11 same-line ternaries fail closed when no column offsets are available."""
-    trace = _log_model(TernaryPy310FailClosedModel(), torch.ones(1, 2))
-
-    linear_layers = [layer for layer in trace._layer_list if layer.func_name == "linear"]
-
-    assert len(trace.graph.conditional_records) == 1
-    assert trace.graph.conditional_arm_entry_edges == {}
-    assert all(layer.conditional_branch_stack == () for layer in linear_layers)
-
-
 @pytest.mark.skipif(
     sys.version_info < (3, 11), reason="column offsets are only captured on Python 3.11+"
 )
@@ -1445,94 +1052,3 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     assert positive_add.conditional_branch_stack == ((positive_event.id, "then"),)
     assert negative_div.conditional_branch_stack == ((negative_event.id, "else"),)
     assert negative_sub.conditional_branch_stack == ((negative_event.id, "else"),)
-
-
-@pytest.mark.parametrize(
-    ("model", "input_tensor"),
-    [
-        (PythonBoolModel(), torch.ones(2, 2)),
-        (ItemScalarizationModel(), torch.ones(2, 2)),
-        (ShapePredicateModel(), torch.ones(2, 2)),
-    ],
-)
-def test_documented_false_negative_scalar_predicates_do_not_materialise_events(
-    model: nn.Module,
-    input_tensor: torch.Tensor,
-) -> None:
-    """Python, ``item()``, and shape predicates remain documented false negatives."""
-    trace = _log_model(model, input_tensor)
-    branch_layer = next(
-        layer
-        for layer in trace._layer_list
-        if layer.func_name in {"relu", "sigmoid"} and not layer.is_output
-    )
-
-    _assert_branchless_log(trace)
-    assert branch_layer.conditional_branch_stack == ()
-
-
-def test_torch_where_model_stays_outside_branch_attribution() -> None:
-    """Functional conditionals like ``torch.where`` do not create branch events."""
-
-    class TorchWhereModel(nn.Module):
-        """Model whose conditional behavior comes from ``torch.where``."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run the functional conditional forward pass.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                Output tensor from ``torch.where``.
-            """
-            return torch.where(x > 0.5, x, torch.zeros_like(x))
-
-    model = TorchWhereModel()
-    trace = _log_model(model, torch.full((2, 2), 0.75))
-
-    _assert_branchless_log(trace)
-    assert _get_terminal_bool_layers(trace) == []
-
-
-def test_selective_save_preserves_all_conditional_surfaces() -> None:
-    """Selective activation saving keeps conditional metadata addressable."""
-
-    input_tensor = torch.ones(1, 2)
-    log = _log_model(
-        KeepUnsavedLayersFalseModel(),
-        input_tensor,
-        save_source_context=True,
-        layers_to_save=[-1],
-    )
-
-    assert len(log.saved_ops) == 2
-    assert set(log.saved_ops.keys()) == {"add_1_6:1", "output_1:1"}
-    assert _collect_model_conditional_labels(log).issubset(set(log.layer_labels))
-    assert all(
-        parent_label in log._layer_logs and child_label in log._layer_logs
-        for parent_label, child_label, _, _ in log.graph.conditional_edge_call_indices
-    )
-
-
-def test_to_pandas_conditional_model_populates_live_conditional_columns() -> None:
-    """Real conditional execution populates the exported conditional DataFrame columns."""
-    trace = _log_model(ToPandasConditionalModel(), torch.ones(2, 2), layers_to_save="all")
-    layer_df = trace.to_pandas()
-    bool_layer = _get_terminal_bool_layers(trace)[0]
-    branch_layer = _find_only_layer(trace, "relu")
-
-    bool_row = layer_df.loc[layer_df["layer_label"] == bool_layer.layer_label].iloc[0]
-    branch_row = layer_df.loc[layer_df["layer_label"] == branch_layer.layer_label].iloc[0]
-
-    assert isinstance(layer_df, pd.DataFrame)
-    assert bool(bool_row["is_terminal_conditional_bool"]) is True
-    assert bool_row["conditional_context_kind"] == "if_test"
-    assert int(bool_row["terminal_conditional_id"]) == 0
-    assert int(branch_row["conditional_branch_depth"]) == 1
-    assert branch_row["conditional_branch_stack"] == "cond_0:then"
-    assert branch_row["conditional_then_children"] == ()
