@@ -80,3 +80,39 @@ class _StorageBackend(Protocol):
 
     def abort(self, reason: str) -> None:
         """Abort storage."""
+
+
+class _PassIndex:
+    """Per-pass lookups for the module-boundary retention path.
+
+    ``_record_predicate_module_boundary_outputs`` runs at every module exit and
+    needs this pass's op contexts by raw label plus the raw labels this pass has
+    already retained. ``RecordingState.all_contexts`` and ``Recording.records``
+    accumulate across a ``Recorder``'s passes, so rebuilding the lookups from
+    them made every module exit cost O(every op recorded so far) and a
+    generation's per-token time grow with the step count.
+    """
+
+    __slots__ = ("contexts_by_raw_label", "record_raw_labels")
+
+    def __init__(self) -> None:
+        self.contexts_by_raw_label: dict[str, RecordContext] = {}
+        self.record_raw_labels: set[str] = set()
+
+    def note_context(self, ctx: RecordContext) -> None:
+        """Index an op context of the current pass by raw label."""
+
+        if ctx.kind == "op" and ctx.raw_label is not None:
+            self.contexts_by_raw_label[ctx.raw_label] = ctx
+
+    def note_record(self, record: ActivationRecord) -> None:
+        """Remember that the current pass retained ``record``'s raw label."""
+
+        if record.ctx.raw_label is not None:
+            self.record_raw_labels.add(record.ctx.raw_label)
+
+    def clear(self) -> None:
+        """Forget the current pass before a ``Recorder`` starts its next one."""
+
+        self.contexts_by_raw_label.clear()
+        self.record_raw_labels.clear()

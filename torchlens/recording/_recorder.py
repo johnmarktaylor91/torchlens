@@ -815,6 +815,7 @@ class Recorder:
         self._state.history.clear()
         self._state.op_counts.clear()
         self._state.module_stack.clear()
+        self._state.pass_lookup.clear()
         self._state.sample_id = sample_id
         self._state.pass_index = self._next_pass_index
         self._state.event_index = 0
