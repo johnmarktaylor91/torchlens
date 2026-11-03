@@ -40,6 +40,7 @@ from .decode import (
     cell_error,
 )
 from .restore import restore_record
+from .runnable import _checked_descriptor
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
@@ -672,6 +673,8 @@ def decode_checked(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
     check_record_anchors(manifest, artifact.tables["trace"][0], root)
     validate_payload_headers(root, artifact.sink.entries)
+    if manifest.get("runnable") is not None:
+        _checked_descriptor(root, manifest["runnable"], manifest["files"])
     return artifact
 
 
