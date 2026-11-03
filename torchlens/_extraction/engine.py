@@ -5,8 +5,7 @@ One manifested order per batch::
     collate -> position/mask validation -> model call -> selected output
             -> pool (captured dtype, raw axes, mask) -> postprocess(output, ctx)
             -> row + logical-shape validation -> per-key save-dtype cast
-            -> contiguous snapshot (host copy in disk mode, capture device
-               in memory mode) -> writer
+            -> contiguous snapshot (host copy in disk mode) -> writer
 
 Every selected output must retain the INPUT batch's row count after
 postprocessing or refuse typed (D13); the batch context carries identity
@@ -46,7 +45,7 @@ from ..transforms import (
     TransformContext,
     TransformPipeline,
 )
-from ._engine_batching import _iter_item_batches, _move_envelope_to_device
+from ._engine_batching import _iter_item_batches, _move_envelope_to_device, _snapshot
 from .context import BatchContext, _run_post_store_hooks, validate_row_counts
 from .dtype_policy import cast_for_store
 from .envelope import (
@@ -105,6 +104,8 @@ class _RunPlan:
         Number of stimuli per forward pass.
     device:
         Optional device for stimuli movement.
+    host_copy:
+        Host-copy stored batches (disk mode) or keep them on the capture device (memory mode).
     pipelines:
         One coerced transform chain (or ``None``) per output key.
     transform_record:
@@ -180,6 +181,7 @@ class _RunPlan:
     input_opaque: bool = False
     intervention: InterventionPlan | None = None
     store_input_ids: bool = False
+    host_copy: bool = True
 
     @property
     def resume_verifiable(self) -> bool:
@@ -913,47 +915,17 @@ def _apply_ragged_gate(
     return False  # unreachable: the refusal always raises
 
 
-def _snapshot(tensor: torch.Tensor, *, host_copy: bool) -> torch.Tensor:
-    """Detach one stored payload into its contiguous snapshot.
-
-    Disk mode (``host_copy=True``) takes the CPU copy the shard writer
-    consumes; memory mode (``host_copy=False``) keeps the payload on the
-    device the model produced it on, so in-memory results follow the model's
-    device like :func:`torchlens.extract` results do.
-
-    Parameters
-    ----------
-    tensor:
-        The stored payload after pool/postprocess/cast.
-    host_copy:
-        Whether the snapshot moves to the host.
-
-    Returns
-    -------
-    torch.Tensor
-        The detached, contiguous snapshot.
-    """
-
-    detached = tensor.detach()
-    if host_copy:
-        detached = detached.cpu()
-    return detached.contiguous()
-
-
 def _store_batch(
     plan: _RunPlan,
     batch_outputs: dict[str, torch.Tensor],
     context: BatchContext,
     run_state: dict[str, Any],
-    *,
-    host_copy: bool = True,
 ) -> tuple[dict[str, torch.Tensor | RaggedBatch], dict[str, dict[str, Any]]]:
     """Run the store pipeline on one batch (D13 order after the model call).
 
-    pool (captured dtype, raw axes, mask) -> postprocess -> row validation
-    -> ragged trim -> save-dtype cast -> contiguous snapshot (a host copy
-    in disk mode, the capture device in memory mode), with the D7 value
-    reduction computed ON the tensor's device BEFORE any host copy.
+    pool (captured dtype, raw axes, mask) -> postprocess -> row validation -> ragged trim
+    -> save-dtype cast -> snapshot (a host copy in disk mode); the D7 value reduction runs
+    ON the tensor's device BEFORE any host copy, so a later corruption stays catchable.
 
     Parameters
     ----------
@@ -965,9 +937,6 @@ def _store_batch(
         This batch's context.
     run_state:
         Mutable per-run state (trimmed-key set, dtype disclosures).
-    host_copy:
-        Whether snapshots move to the host (disk mode) or stay on the
-        capture device (memory mode).
 
     Returns
     -------
@@ -1002,7 +971,7 @@ def _store_batch(
             if plan.checksums != "none":
                 facts["value_reduction"] = value_reduction(key, values)
             processed[key] = RaggedBatch(
-                values=_snapshot(values, host_copy=host_copy),
+                values=_snapshot(values, host_copy=plan.host_copy),
                 offsets=carrier.offsets,
                 row_shapes=carrier.row_shapes,
             )
@@ -1013,11 +982,8 @@ def _store_batch(
             "dtype": str(stored.dtype),
         }
         if plan.checksums != "none":
-            # D7: the order-sensitive value reduction runs ON the tensor's
-            # device BEFORE the host copy, so a corruption between here and
-            # the written file is catchable later.
             facts["value_reduction"] = value_reduction(key, stored)
-        processed[key] = _snapshot(stored, host_copy=host_copy)
+        processed[key] = _snapshot(stored, host_copy=plan.host_copy)
         key_facts[key] = facts
     validate_row_counts(context, processed)
     return processed, key_facts
@@ -1487,8 +1453,6 @@ def _process_one_batch(
     batch_index: int,
     row_start: int,
     run_state: dict[str, Any],
-    *,
-    host_copy: bool = True,
 ) -> tuple[
     BatchEnvelope,
     BatchContext,
@@ -1512,9 +1476,6 @@ def _process_one_batch(
         Global row index of this batch's first stimulus.
     run_state:
         Mutable per-run state.
-    host_copy:
-        Whether stored snapshots move to the host (disk mode) or stay on
-        the capture device (memory mode).
 
     Returns
     -------
@@ -1557,15 +1518,13 @@ def _process_one_batch(
         device=str(plan.device) if plan.device is not None else None,
         collate_disclosure=envelope.disclosure,
     )
-    processed, key_facts = _store_batch(
-        plan, batch_outputs, context, run_state, host_copy=host_copy
-    )
+    processed, key_facts = _store_batch(plan, batch_outputs, context, run_state)
     if plan.store_input_ids:
         refuse_input_ids_collision(batch_outputs)
         ids = envelope_input_ids(envelope, batch_index)
         batch_outputs = {**batch_outputs, INPUT_IDS_KEY: ids}
         processed[INPUT_IDS_KEY], key_facts[INPUT_IDS_KEY] = _store_input_ids(
-            plan, ids, context, run_state, host_copy=host_copy
+            plan, ids, context, run_state
         )
     return envelope, context, batch_outputs, layer_views, processed, key_facts, input_digest
 
@@ -1575,8 +1534,6 @@ def _store_input_ids(
     ids: torch.Tensor,
     context: BatchContext,
     run_state: dict[str, Any],
-    *,
-    host_copy: bool = True,
 ) -> tuple[torch.Tensor | RaggedBatch, dict[str, Any]]:
     """Store one batch's token ids as the ordinary ``input_ids`` key.
 
@@ -1596,9 +1553,6 @@ def _store_input_ids(
         This batch's context.
     run_state:
         Mutable per-run state (frozen shapes, trimmed-key set).
-    host_copy:
-        Whether the snapshot moves to the host (disk mode) or stays on
-        the capture device (memory mode).
 
     Returns
     -------
@@ -1610,7 +1564,7 @@ def _store_input_ids(
     geometry = run_state.get("current_geometry")
     if trimmed and geometry is not None:
         carrier = trim_batch(INPUT_IDS_KEY, ids, cast("dict[str, Any]", geometry))
-        values = _snapshot(carrier.values, host_copy=host_copy)
+        values = _snapshot(carrier.values, host_copy=plan.host_copy)
         facts: dict[str, Any] = {
             "layout": "trimmed",
             "per_stimulus_shape": [None],
@@ -1626,7 +1580,7 @@ def _store_input_ids(
         facts = {"per_stimulus_shape": list(ids.shape[1:]), "dtype": str(ids.dtype)}
         if plan.checksums != "none":
             facts["value_reduction"] = value_reduction(INPUT_IDS_KEY, ids)
-        stored = _snapshot(ids, host_copy=host_copy)
+        stored = _snapshot(ids, host_copy=plan.host_copy)
     validate_row_counts(context, {INPUT_IDS_KEY: stored})
     return stored, facts
 
@@ -1642,11 +1596,10 @@ def run_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
     Returns
     -------
     dict[str, torch.Tensor]
-        Concatenated outputs keyed as disk mode keys them, on the device
-        the model produced them on (no host copy: a CUDA model with CUDA
-        stimuli returns CUDA tensors, as :func:`torchlens.extract` does).
+        Concatenated outputs keyed as disk mode keys them, on the model's device (no host copy).
     """
 
+    plan = dataclasses.replace(plan, host_copy=False)
     if plan.device is not None:
         plan.model.to(plan.device)
     accumulator: dict[str, list[torch.Tensor]] = {}
@@ -1655,7 +1608,7 @@ def run_in_memory(plan: _RunPlan) -> dict[str, torch.Tensor]:
     with _inference_guard(plan.model), _warning_dedup(run_state):
         for batch_index, raw in enumerate(_batch_iterable(plan, plan.stimuli)):
             (_env, _ctx, _outs, _views, processed, _facts, _digest) = _process_one_batch(
-                plan, raw, batch_index, row_start, run_state, host_copy=False
+                plan, raw, batch_index, row_start, run_state
             )
             for key, stored in processed.items():
                 if isinstance(stored, RaggedBatch):

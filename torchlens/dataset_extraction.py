@@ -428,8 +428,7 @@ def extract_dataset(  # noqa: PLR0913 - the memo-specified public knob surface (
     Returns
     -------
     dict[str, torch.Tensor] | list[pathlib.Path]
-        In-memory concatenated outputs on the device the model produced
-        them on (never a host copy), or written shard paths.
+        In-memory outputs on the model's device (no host copy), or shard paths.
 
     Raises
     ------

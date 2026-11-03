@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1424 modules, 633470 lines, 0 modules without a docstring.
+83 packages, 1424 modules, 633497 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -21,7 +21,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 37841 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10578 |
 | `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 54 | 35756 |
 | `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 5 | 484 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11508 |
@@ -404,12 +404,12 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 594 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10578 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Extraction v2 runtime (extract memo items 4-19). | 104 |
-| `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 98 |
+| `_engine_batching` | Pure batching and device-move helpers behind the extraction engine. | 125 |
 | `callable_identity` | Callable identity for extraction resume (extract + item 15). | 710 |
 | `context` | Batch context, row validation, and user-key validation (extract item 4). | 250 |
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 211 |
