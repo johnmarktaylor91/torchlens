@@ -130,7 +130,7 @@ EXEMPTION_LEDGER: tuple[Exemption, ...] = (
         proof="torchlens.validation.core:_is_provable_functionless_source_or_boundary",
         refuses=(
             "a functionless COMPUTATIONAL op, which returns failed_result "
-            "('functionless_computational_op') -- the 2026-06-02 placeholder class"
+            "('no_replayable_function') -- the 2026-06-02 placeholder class"
         ),
     ),
     Exemption(

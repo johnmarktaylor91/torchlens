@@ -1,6 +1,10 @@
 # Hook repos are pinned to full commit SHAs; the `# vX.Y.Z` trailer names the
 # tag each SHA was resolved from (the ruff trailer must equal the ruff== pin
 # in pyproject.toml and .github/workflows/pr.yml).
+# Only hooks that finish in seconds live here. Slower checks run in CI only:
+# mypy, the repository checks (scripts/checks/run_all.py), actionlint and the
+# full-tree gitleaks scan in .github/workflows/pr.yml; the tier marker lint at
+# pytest collection. The public-repo marker check is the global git hook's.
 default_install_hook_types: [pre-commit, pre-push]
 
 repos:

@@ -1379,7 +1379,7 @@ def _classify_user_excluded_replay_surface(
 
     if result.decision != "unverified":
         return result
-    if result.reason not in {"missing_saved_args", "missing_saved_parent_payload"}:
+    if result.reason not in {"missing_saved_args", "parent_payload_missing"}:
         return result
     justification = _not_saved_by_user_justification(trace, layer, result.reason)
     if justification is None:
@@ -2685,7 +2685,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
     if layer.func is None:
         if _is_provable_functionless_source_or_boundary(layer):
             return ValidationCheckResult.exempted("functionless_source_or_boundary")
-        return ValidationCheckResult.failed_result("functionless_computational_op")
+        return ValidationCheckResult.failed_result("no_replayable_function")
 
     # Registry 1: skip ALL validation for nondeterministic ops (e.g., empty_like).
     # Membership is proved PER CALL: Tensor.new's value-bearing overloads
@@ -2701,7 +2701,7 @@ def _check_whether_func_on_saved_parents_yields_saved_tensor(
 
     saved_output = _saved_out_payload(layer)
     if saved_output is None:
-        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+        return ValidationCheckResult.unverified("parent_payload_missing")
 
     # Pre-execution perturbation exemptions (structural args, custom checks).
     if perturb and _check_perturbation_exemptions(self, layer, layers_to_perturb):
@@ -3273,7 +3273,7 @@ def _prepare_input_args_for_validating_layer(
                 parent_values = _saved_out_payload(parent_layer)
             if parent_values is None:
                 if parent_layer_arg in layers_to_perturb:
-                    return None, "missing_saved_parent_payload"
+                    return None, "parent_payload_missing"
                 continue
             parent_values = align_parent_to_slot_device(
                 input_args, arg_type, key, parent_values.detach().clone()

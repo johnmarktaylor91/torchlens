@@ -219,7 +219,7 @@ def completeness_backstop_counts(trace: "Trace") -> tuple[int, int]:
     # ``unowned_gap_dispatch_count``. The write itself (``copy_``) IS captured; only this
     # accessor view is legitimately uncaptured -- a THIRD not-in-captured-count category
     # alongside orphan-pruned dead computation. The witness flags each such event
-    # (``state_view_accessor``: unowned + non-mutating + pure-view + registered buffer only),
+    # (``state_view_accessor``: unowned, non-mutating, pure view of a buffer or pending lazy slot),
     # so counting them here is apples-to-apples with the census: it is a strict SUBSET of the
     # exact ``unowned_dispatch`` entries already added to the dispatch census, so crediting it
     # in the backstop exactly offsets its own contribution. A genuine untraced dispatch (a
