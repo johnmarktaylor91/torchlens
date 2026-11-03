@@ -16984,6 +16984,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -16997,6 +16998,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -17447,6 +17449,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -17547,6 +17551,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -17560,6 +17565,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -18010,6 +18016,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -18109,6 +18117,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "memory_format"
     ],
@@ -18124,6 +18133,7 @@
     "autograd.grad_fn_class_name": "CloneBackward0",
     "autograd.grad_fn_class_qualname": "builtins.CloneBackward0",
     "autograd.grad_fn_handle": "<callable CloneBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -18564,6 +18574,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -18680,6 +18692,11 @@
     "activation_transform": null,
     "address": "encoder.dropout1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -18698,6 +18715,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -19164,6 +19182,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -19279,6 +19299,11 @@
     "activation_transform": null,
     "address": "encoder.dropout",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -19297,6 +19322,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -19775,6 +19801,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -19890,6 +19918,11 @@
     "activation_transform": null,
     "address": "encoder.dropout2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -19908,6 +19941,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -20374,6 +20408,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -20489,6 +20525,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -20504,6 +20541,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -20952,6 +20990,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -21067,6 +21107,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -21082,6 +21123,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -21530,6 +21572,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -21645,6 +21689,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -21660,6 +21705,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -22108,6 +22154,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -22221,6 +22269,7 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -22234,6 +22283,7 @@
     "autograd.grad_fn_class_name": "none",
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -22606,6 +22656,8 @@
     "parents": [],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -22704,6 +22756,14 @@
     "activation_transform": null,
     "address": "encoder.norm1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -22723,6 +22783,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -23238,6 +23299,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -23364,6 +23427,14 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -23383,6 +23454,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -23887,6 +23959,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -24013,6 +24087,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "w",
+     "b"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -24030,6 +24109,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -24494,6 +24574,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -24625,6 +24707,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "attn_output",
+     "out_proj_weight",
+     "out_proj_bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -24642,6 +24729,7 @@
     "autograd.grad_fn_class_name": "AddmmBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddmmBackward0",
     "autograd.grad_fn_handle": "<callable AddmmBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 2,
@@ -25100,6 +25188,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -25226,6 +25316,11 @@
     "activation_transform": null,
     "address": "encoder.linear1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -25243,6 +25338,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -25714,6 +25810,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -25837,6 +25935,11 @@
     "activation_transform": null,
     "address": "encoder.linear2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -25854,6 +25957,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -26337,6 +26441,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -26446,6 +26552,7 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
     "args_template": null,
@@ -26459,6 +26566,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -26873,6 +26981,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -26969,6 +27079,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "2",
+     "0",
+     "1",
+     "3"
+    ],
     "arg_names": [
      "input",
      "dims"
@@ -26985,6 +27101,7 @@
     "autograd.grad_fn_class_name": "PermuteBackward0",
     "autograd.grad_fn_class_qualname": "builtins.PermuteBackward0",
     "autograd.grad_fn_handle": "<callable PermuteBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -27444,6 +27561,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -27561,6 +27680,9 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [
+     "input"
+    ],
     "arg_names": [
      "input",
      "inplace"
@@ -27577,6 +27699,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 1,
@@ -28017,6 +28140,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -28126,6 +28251,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz * tgt_len",
+     "embed_dim"
+    ],
     "arg_names": [
      "input",
      "shape"
@@ -28142,6 +28271,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -28587,6 +28717,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -28702,6 +28834,14 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "k",
+     "v",
+     "attn_mask",
+     "dropout_p",
+     "is_causal"
+    ],
     "arg_names": [
      "query",
      "key",
@@ -28724,6 +28864,7 @@
     "autograd.grad_fn_class_name": "ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_handle": "<callable ScaledDotProductFlashAttentionForCpuBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -29217,6 +29358,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -29336,6 +29479,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-2"
+    ],
     "arg_names": [
      "input: Tensor",
      "dim: Optional[Union[int",
@@ -29353,6 +29499,7 @@
     "autograd.grad_fn_class_name": "SqueezeBackward1",
     "autograd.grad_fn_class_qualname": "builtins.SqueezeBackward1",
     "autograd.grad_fn_handle": "<callable SqueezeBackward1>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -29802,6 +29949,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -29920,6 +30069,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -29937,6 +30090,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -30387,6 +30541,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -30497,6 +30653,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "-2"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -30514,6 +30674,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -30974,6 +31135,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -31094,6 +31257,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -31111,6 +31278,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -31567,6 +31735,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -31681,6 +31851,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -31698,6 +31872,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -32154,6 +32329,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -32268,6 +32445,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -32285,6 +32466,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -32741,6 +32923,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -32855,6 +33039,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -32872,6 +33060,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -33344,6 +33533,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -33454,6 +33645,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-1",
+     "(3, E)"
+    ],
     "arg_names": [
      "input",
      "dim",
@@ -33471,6 +33666,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -33934,6 +34130,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -34053,6 +34251,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim"
@@ -34069,6 +34270,7 @@
     "autograd.grad_fn_class_name": "UnsqueezeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.UnsqueezeBackward0",
     "autograd.grad_fn_handle": "<callable UnsqueezeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -34517,6 +34719,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -34636,6 +34840,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -34651,6 +34860,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -35103,6 +35313,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -35218,6 +35430,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "k.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -35233,6 +35450,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -35685,6 +35903,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -35800,6 +36020,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "v.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -35815,6 +36040,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -36267,6 +36493,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -36382,6 +36610,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "tgt_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -36397,6 +36631,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -36857,6 +37092,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -36974,6 +37211,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -36989,6 +37232,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -37449,6 +37693,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -37566,6 +37812,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -37581,6 +37833,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -38041,6 +38294,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -38158,6 +38413,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz",
+     "attn_output.size(1)"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -38173,6 +38433,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -38620,6 +38881,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -60710,6 +60973,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -60723,6 +60987,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -61173,6 +61438,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -61273,6 +61540,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -61286,6 +61554,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -61736,6 +62005,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -61835,6 +62106,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "memory_format"
     ],
@@ -61850,6 +62122,7 @@
     "autograd.grad_fn_class_name": "CloneBackward0",
     "autograd.grad_fn_class_qualname": "builtins.CloneBackward0",
     "autograd.grad_fn_handle": "<callable CloneBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -62290,6 +62563,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -62406,6 +62681,11 @@
     "activation_transform": null,
     "address": "encoder.dropout1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -62424,6 +62704,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -62890,6 +63171,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -63005,6 +63288,11 @@
     "activation_transform": null,
     "address": "encoder.dropout",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -63023,6 +63311,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -63501,6 +63790,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -63616,6 +63907,11 @@
     "activation_transform": null,
     "address": "encoder.dropout2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -63634,6 +63930,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -64100,6 +64397,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -64215,6 +64514,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -64230,6 +64530,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -64678,6 +64979,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -64793,6 +65096,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -64808,6 +65112,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -65256,6 +65561,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -65371,6 +65678,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -65386,6 +65694,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -65834,6 +66143,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -65947,6 +66258,7 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -65960,6 +66272,7 @@
     "autograd.grad_fn_class_name": "none",
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -66332,6 +66645,8 @@
     "parents": [],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -66430,6 +66745,14 @@
     "activation_transform": null,
     "address": "encoder.norm1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -66449,6 +66772,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -66964,6 +67288,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -67090,6 +67416,14 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -67109,6 +67443,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -67613,6 +67948,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -67739,6 +68076,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "w",
+     "b"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -67756,6 +68098,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -68220,6 +68563,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -68351,6 +68696,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "attn_output",
+     "out_proj_weight",
+     "out_proj_bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -68368,6 +68718,7 @@
     "autograd.grad_fn_class_name": "AddmmBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddmmBackward0",
     "autograd.grad_fn_handle": "<callable AddmmBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 2,
@@ -68826,6 +69177,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -68952,6 +69305,11 @@
     "activation_transform": null,
     "address": "encoder.linear1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -68969,6 +69327,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -69440,6 +69799,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -69563,6 +69924,11 @@
     "activation_transform": null,
     "address": "encoder.linear2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -69580,6 +69946,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -70063,6 +70430,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -70172,6 +70541,7 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
     "args_template": null,
@@ -70185,6 +70555,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -70599,6 +70970,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -70695,6 +71068,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "2",
+     "0",
+     "1",
+     "3"
+    ],
     "arg_names": [
      "input",
      "dims"
@@ -70711,6 +71090,7 @@
     "autograd.grad_fn_class_name": "PermuteBackward0",
     "autograd.grad_fn_class_qualname": "builtins.PermuteBackward0",
     "autograd.grad_fn_handle": "<callable PermuteBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -71170,6 +71550,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -71287,6 +71669,9 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [
+     "input"
+    ],
     "arg_names": [
      "input",
      "inplace"
@@ -71303,6 +71688,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 1,
@@ -71743,6 +72129,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -71852,6 +72240,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz * tgt_len",
+     "embed_dim"
+    ],
     "arg_names": [
      "input",
      "shape"
@@ -71868,6 +72260,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -72313,6 +72706,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -72428,6 +72823,14 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "k",
+     "v",
+     "attn_mask",
+     "dropout_p",
+     "is_causal"
+    ],
     "arg_names": [
      "query",
      "key",
@@ -72450,6 +72853,7 @@
     "autograd.grad_fn_class_name": "ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_handle": "<callable ScaledDotProductFlashAttentionForCpuBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -72943,6 +73347,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -73062,6 +73468,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-2"
+    ],
     "arg_names": [
      "input: Tensor",
      "dim: Optional[Union[int",
@@ -73079,6 +73488,7 @@
     "autograd.grad_fn_class_name": "SqueezeBackward1",
     "autograd.grad_fn_class_qualname": "builtins.SqueezeBackward1",
     "autograd.grad_fn_handle": "<callable SqueezeBackward1>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -73528,6 +73938,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -73646,6 +74058,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -73663,6 +74079,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -74113,6 +74530,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -74223,6 +74642,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "-2"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -74240,6 +74663,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -74700,6 +75124,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -74820,6 +75246,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -74837,6 +75267,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -75293,6 +75724,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -75407,6 +75840,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -75424,6 +75861,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -75880,6 +76318,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -75994,6 +76434,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -76011,6 +76455,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -76467,6 +76912,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -76581,6 +77028,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -76598,6 +77049,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -77070,6 +77522,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -77180,6 +77634,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-1",
+     "(3, E)"
+    ],
     "arg_names": [
      "input",
      "dim",
@@ -77197,6 +77655,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -77660,6 +78119,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -77779,6 +78240,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim"
@@ -77795,6 +78259,7 @@
     "autograd.grad_fn_class_name": "UnsqueezeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.UnsqueezeBackward0",
     "autograd.grad_fn_handle": "<callable UnsqueezeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -78243,6 +78708,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -78362,6 +78829,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -78377,6 +78849,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -78829,6 +79302,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -78944,6 +79419,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "k.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -78959,6 +79439,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -79411,6 +79892,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -79526,6 +80009,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "v.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -79541,6 +80029,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -79993,6 +80482,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -80108,6 +80599,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "tgt_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -80123,6 +80620,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -80583,6 +81081,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -80700,6 +81200,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -80715,6 +81221,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -81175,6 +81682,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -81292,6 +81801,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -81307,6 +81822,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -81767,6 +82283,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -81884,6 +82402,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz",
+     "attn_output.size(1)"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -81899,6 +82422,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -82346,6 +82870,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -104499,6 +105025,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -104512,6 +105039,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -104962,6 +105490,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -105062,6 +105592,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -105075,6 +105606,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -105525,6 +106057,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -105624,6 +106158,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "memory_format"
     ],
@@ -105639,6 +106174,7 @@
     "autograd.grad_fn_class_name": "CloneBackward0",
     "autograd.grad_fn_class_qualname": "builtins.CloneBackward0",
     "autograd.grad_fn_handle": "<callable CloneBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -106079,6 +106615,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -106195,6 +106733,11 @@
     "activation_transform": null,
     "address": "encoder.dropout1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -106213,6 +106756,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -106679,6 +107223,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -106794,6 +107340,11 @@
     "activation_transform": null,
     "address": "encoder.dropout",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -106812,6 +107363,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -107290,6 +107842,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -107405,6 +107959,11 @@
     "activation_transform": null,
     "address": "encoder.dropout2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "p",
+     "training"
+    ],
     "arg_names": [
      "input",
      "p",
@@ -107423,6 +107982,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -107889,6 +108449,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -108004,6 +108566,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -108019,6 +108582,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -108467,6 +109031,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -108582,6 +109148,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -108597,6 +109164,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -109045,6 +109613,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -109160,6 +109730,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -109175,6 +109746,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": "<callable SelectBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -109623,6 +110195,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -109736,6 +110310,7 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -109749,6 +110324,7 @@
     "autograd.grad_fn_class_name": "none",
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -110121,6 +110697,8 @@
     "parents": [],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -110219,6 +110797,14 @@
     "activation_transform": null,
     "address": "encoder.norm1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -110238,6 +110824,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -110753,6 +111340,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -110879,6 +111468,14 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "normalized_shape",
+     "weight",
+     "bias",
+     "eps",
+     "torch.backends.cudnn.enabled"
+    ],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -110898,6 +111495,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -111402,6 +112000,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -111528,6 +112128,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "w",
+     "b"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -111545,6 +112150,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": "<callable AddBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -112009,6 +112615,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -112140,6 +112748,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "attn_output",
+     "out_proj_weight",
+     "out_proj_bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -112157,6 +112770,7 @@
     "autograd.grad_fn_class_name": "AddmmBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddmmBackward0",
     "autograd.grad_fn_handle": "<callable AddmmBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 2,
@@ -112615,6 +113229,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -112741,6 +113357,11 @@
     "activation_transform": null,
     "address": "encoder.linear1",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -112758,6 +113379,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -113229,6 +113851,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -113352,6 +113976,11 @@
     "activation_transform": null,
     "address": "encoder.linear2",
     "annotations": {},
+    "arg_expressions": [
+     "input",
+     "self.weight",
+     "self.bias"
+    ],
     "arg_names": [
      "input",
      "weight",
@@ -113369,6 +113998,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -113852,6 +114482,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -113961,6 +114593,7 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "Tensor(2x3x4, float32)",
     "args_template": null,
@@ -113974,6 +114607,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": "<callable NativeLayerNormBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -114388,6 +115022,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -114484,6 +115120,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "2",
+     "0",
+     "1",
+     "3"
+    ],
     "arg_names": [
      "input",
      "dims"
@@ -114500,6 +115142,7 @@
     "autograd.grad_fn_class_name": "PermuteBackward0",
     "autograd.grad_fn_class_qualname": "builtins.PermuteBackward0",
     "autograd.grad_fn_handle": "<callable PermuteBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -114959,6 +115602,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -115076,6 +115721,9 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [
+     "input"
+    ],
     "arg_names": [
      "input",
      "inplace"
@@ -115092,6 +115740,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": "<callable ReluBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 1,
@@ -115532,6 +116181,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -115641,6 +116292,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz * tgt_len",
+     "embed_dim"
+    ],
     "arg_names": [
      "input",
      "shape"
@@ -115657,6 +116312,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -116102,6 +116758,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -116217,6 +116875,14 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "q",
+     "k",
+     "v",
+     "attn_mask",
+     "dropout_p",
+     "is_causal"
+    ],
     "arg_names": [
      "query",
      "key",
@@ -116239,6 +116905,7 @@
     "autograd.grad_fn_class_name": "ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_handle": "<callable ScaledDotProductFlashAttentionForCpuBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -116732,6 +117399,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -116851,6 +117520,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-2"
+    ],
     "arg_names": [
      "input: Tensor",
      "dim: Optional[Union[int",
@@ -116868,6 +117540,7 @@
     "autograd.grad_fn_class_name": "SqueezeBackward1",
     "autograd.grad_fn_class_qualname": "builtins.SqueezeBackward1",
     "autograd.grad_fn_handle": "<callable SqueezeBackward1>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -117317,6 +117990,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -117435,6 +118110,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -117452,6 +118131,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -117902,6 +118582,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -118012,6 +118694,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "-2"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -118029,6 +118715,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -118489,6 +119176,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -118609,6 +119298,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -118626,6 +119319,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -119082,6 +119776,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -119196,6 +119892,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -119213,6 +119913,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -119669,6 +120370,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -119783,6 +120486,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0",
+     "1"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -119800,6 +120507,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -120256,6 +120964,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -120370,6 +121080,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "1",
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim0",
@@ -120387,6 +121101,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": "<callable TransposeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -120859,6 +121574,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -120969,6 +121686,10 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "-1",
+     "(3, E)"
+    ],
     "arg_names": [
      "input",
      "dim",
@@ -120986,6 +121707,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -121449,6 +122171,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -121568,6 +122292,9 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "0"
+    ],
     "arg_names": [
      "input",
      "dim"
@@ -121584,6 +122311,7 @@
     "autograd.grad_fn_class_name": "UnsqueezeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.UnsqueezeBackward0",
     "autograd.grad_fn_handle": "<callable UnsqueezeBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -122032,6 +122760,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -122151,6 +122881,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -122166,6 +122901,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -122618,6 +123354,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -122733,6 +123471,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "k.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -122748,6 +123491,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -123200,6 +123944,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -123315,6 +124061,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "v.shape[0]",
+     "bsz * num_heads",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -123330,6 +124081,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -123782,6 +124534,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -123897,6 +124651,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "tgt_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -123912,6 +124672,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -124372,6 +125133,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -124489,6 +125252,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -124504,6 +125273,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -124964,6 +125734,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -125081,6 +125853,12 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "bsz",
+     "num_heads",
+     "src_len",
+     "head_dim"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -125096,6 +125874,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -125556,6 +126335,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -125673,6 +126454,11 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [
+     "tgt_len",
+     "bsz",
+     "attn_output.size(1)"
+    ],
     "arg_names": [
      "shape"
     ],
@@ -125688,6 +126474,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": "<callable ViewBackward0>",
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -126135,6 +126922,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -148231,6 +149020,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -148244,6 +149034,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -148662,6 +149453,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -148762,6 +149555,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -148775,6 +149569,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -149193,6 +149988,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -149292,6 +150089,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "memory_format"
     ],
@@ -149307,6 +150105,7 @@
     "autograd.grad_fn_class_name": "CloneBackward0",
     "autograd.grad_fn_class_qualname": "builtins.CloneBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -149727,6 +150526,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -149843,6 +150644,7 @@
     "activation_transform": null,
     "address": "encoder.dropout1",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "p",
@@ -149861,6 +150663,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -150308,6 +151111,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -150419,6 +151224,7 @@
     "activation_transform": null,
     "address": "encoder.dropout",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "p",
@@ -150437,6 +151243,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -150896,6 +151703,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -151007,6 +151816,7 @@
     "activation_transform": null,
     "address": "encoder.dropout2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "p",
@@ -151025,6 +151835,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -151472,6 +152283,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -151583,6 +152396,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -151598,6 +152412,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -152026,6 +152841,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -152141,6 +152958,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -152156,6 +152974,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -152584,6 +153403,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -152699,6 +153520,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "key"
     ],
@@ -152714,6 +153536,7 @@
     "autograd.grad_fn_class_name": "SelectBackward0",
     "autograd.grad_fn_class_qualname": "builtins.SelectBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -153142,6 +153965,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -153255,6 +154080,7 @@
     "activation_transform": null,
     "address": null,
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -153268,6 +154094,7 @@
     "autograd.grad_fn_class_name": "none",
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -153637,6 +154464,8 @@
     "parents": [],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -153735,6 +154564,7 @@
     "activation_transform": null,
     "address": "encoder.norm1",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -153754,6 +154584,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -154250,6 +155081,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -154369,6 +155202,7 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "normalized_shape",
@@ -154388,6 +155222,7 @@
     "autograd.grad_fn_class_name": "NativeLayerNormBackward0",
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -154873,6 +155708,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -154992,6 +155829,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "weight",
@@ -155009,6 +155847,7 @@
     "autograd.grad_fn_class_name": "AddBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -155454,6 +156293,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -155581,6 +156422,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "weight",
@@ -155598,6 +156440,7 @@
     "autograd.grad_fn_class_name": "AddmmBackward0",
     "autograd.grad_fn_class_qualname": "builtins.AddmmBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 2,
@@ -156038,6 +156881,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -156160,6 +157005,7 @@
     "activation_transform": null,
     "address": "encoder.linear1",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "weight",
@@ -156177,6 +157023,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -156629,6 +157476,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -156748,6 +157597,7 @@
     "activation_transform": null,
     "address": "encoder.linear2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "weight",
@@ -156765,6 +157615,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -157229,6 +158080,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -157334,6 +158187,7 @@
     "activation_transform": null,
     "address": "encoder.norm2",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [],
     "args_summary": "",
     "args_template": null,
@@ -157347,6 +158201,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": "builtins.NativeLayerNormBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -157730,6 +158585,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -157814,6 +158671,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dims"
@@ -157830,6 +158688,7 @@
     "autograd.grad_fn_class_name": "PermuteBackward0",
     "autograd.grad_fn_class_qualname": "builtins.PermuteBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -158269,6 +159128,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -158381,6 +159242,7 @@
     "activation_transform": null,
     "address": "encoder",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "inplace"
@@ -158397,6 +159259,7 @@
     "autograd.grad_fn_class_name": "ReluBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ReluBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 1,
@@ -158818,6 +159681,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -158925,6 +159790,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "shape"
@@ -158941,6 +159807,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -159366,6 +160233,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -159478,6 +160347,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "query",
      "key",
@@ -159500,6 +160370,7 @@
     "autograd.grad_fn_class_name": "ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ScaledDotProductFlashAttentionForCpuBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 5,
@@ -159945,6 +160816,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -160057,6 +160930,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input: Tensor",
      "dim: Optional[Union[int",
@@ -160074,6 +160948,7 @@
     "autograd.grad_fn_class_name": "SqueezeBackward1",
     "autograd.grad_fn_class_qualname": "builtins.SqueezeBackward1",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -160502,6 +161377,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -160618,6 +161495,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -160635,6 +161513,7 @@
     "autograd.grad_fn_class_name": null,
     "autograd.grad_fn_class_qualname": null,
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": null,
@@ -161066,6 +161945,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -161173,6 +162054,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -161190,6 +162072,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -161629,6 +162512,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -161746,6 +162631,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -161763,6 +162649,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -162200,6 +163087,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -162311,6 +163200,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -162328,6 +163218,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -162765,6 +163656,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -162876,6 +163769,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -162893,6 +163787,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -163330,6 +164225,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -163441,6 +164338,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim0",
@@ -163458,6 +164356,7 @@
     "autograd.grad_fn_class_name": "TransposeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.TransposeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -163911,6 +164810,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -164018,6 +164919,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim",
@@ -164035,6 +164937,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -164479,6 +165382,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -164595,6 +165500,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "input",
      "dim"
@@ -164611,6 +165517,7 @@
     "autograd.grad_fn_class_name": "UnsqueezeBackward0",
     "autograd.grad_fn_class_qualname": "builtins.UnsqueezeBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -165039,6 +165946,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -165156,6 +166065,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -165171,6 +166081,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -165604,6 +166515,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -165715,6 +166628,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -165730,6 +166644,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -166163,6 +167078,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -166274,6 +167191,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -166289,6 +167207,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -166722,6 +167641,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -166833,6 +167754,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -166848,6 +167770,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -167289,6 +168212,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -167401,6 +168326,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -167416,6 +168342,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -167857,6 +168784,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -167969,6 +168898,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -167984,6 +168914,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -168425,6 +169356,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,
@@ -168537,6 +169470,7 @@
     "activation_transform": null,
     "address": "encoder.self_attn",
     "annotations": {},
+    "arg_expressions": [],
     "arg_names": [
      "shape"
     ],
@@ -168552,6 +169486,7 @@
     "autograd.grad_fn_class_name": "ViewBackward0",
     "autograd.grad_fn_class_qualname": "builtins.ViewBackward0",
     "autograd.grad_fn_handle": null,
+    "autograd.grad_for": "<callable OpAutograd.grad_for>",
     "autograd.grad_shape": null,
     "autograd.grads": "<torchlens._data_classes.op.GradientRecordAccessor>",
     "autograd.num_autograd_tensors": 0,
@@ -168981,6 +169916,8 @@
     ],
     "pass_number": 1,
     "payload": "<torchlens._data_classes._record_groups_payload.OpPayload>",
+    "payload.materialize_grad": "<callable OpPayload.materialize_grad>",
+    "payload.materialize_out": "<callable OpPayload.materialize_out>",
     "payload.transformed_grad": null,
     "payload.transformed_grad_dtype": null,
     "payload.transformed_grad_shape": null,

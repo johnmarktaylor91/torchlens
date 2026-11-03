@@ -1676,3 +1676,51 @@ flag: none
 reason: fields.1 cost group: Op and Layer cost members now read as op.cost.<leaf> and layer.cost.<leaf>; stored fields keep their persisted key, derived members moved to cost.<leaf>, and each record gains its cost view
 env: pure JSON key move, verified by the pinned-environment surface oracle run
 recorded: 2026-11-03T11:11:48+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.710056+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.736911+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.760692+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.783460+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.808343+00:00
+---
+generator: tests/surface_oracle
+flag: TORCHLENS_UPDATE_SURFACE_ORACLE=1
+reason: fields.1 regroup: Op and Layer concern groups
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 33c117b8821fbd87056600d22b6861495d4586c4 (dirty)
+recorded: 2026-11-03T13:40:07.842743+00:00
