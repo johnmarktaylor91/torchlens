@@ -29,6 +29,7 @@ def _replay_capture_events(cores: tuple[CapturedRunCore, ...], all_events: list[
     if selected is None or selected[1] is None:
         return None
     source_core, capture_events = selected
+    assert capture_events is not None
     # The projection clone was made BEFORE the capture-end seal, so its
     # watermark normally arrives via the seal's dual-stamp; the sealed core's
     # own watermark is the authoritative fallback (reviewer note S-N2: either

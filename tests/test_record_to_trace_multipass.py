@@ -71,7 +71,7 @@ def test_three_pass_recording_cooks_like_trace() -> None:
 
     inputs = _inputs(3)
     torch.manual_seed(0)
-    exhaustive = tl.trace(_ThreeCalls().eval(), *inputs)
+    exhaustive = tl.trace(_ThreeCalls().eval(), tuple(inputs))
     torch.manual_seed(0)
     recording = _record_passes(_Cell(), inputs)
     assert recording.num_passes == 3
@@ -120,7 +120,7 @@ def test_three_pass_recording_keeps_one_output_layer_per_pass() -> None:
 
     inputs = _inputs(3)
     torch.manual_seed(0)
-    exhaustive = tl.trace(_ThreeCalls().eval(), *inputs)
+    exhaustive = tl.trace(_ThreeCalls().eval(), tuple(inputs))
     torch.manual_seed(0)
     cooked = _record_passes(_Cell(), inputs).to_trace()
 

@@ -59,10 +59,12 @@ class FoldedPasses:
     layer_counter: int = 0
 
 
-def _refuse(shape: str) -> CaptureNotActiveError:
+def _unconvertible(shape: str, *, code: str = _CODE) -> CaptureNotActiveError:
+    """The typed refusal for a multi-pass shape the fold cannot convert."""
+
     return CaptureNotActiveError(
         f"Recording.to_trace() cannot convert this multi-pass Recording: {shape}",
-        code=_CODE,
+        code=code,
         remedy="record one pass per Recording before converting",
     )
 
@@ -162,9 +164,10 @@ def _check_pass_convertible(core: CapturedRunCore, pass_number: int) -> None:
         return
     late = [amendment for amendment in journal.op_amendments if amendment.seq > watermark]
     if late:
-        raise _refuse(
+        raise _unconvertible(
             f"pass {pass_number} carries {len(late)} post-seal amendment(s) "
-            f"({sorted({amendment.family for amendment in late})}) the fold cannot renumber"
+            f"({sorted({amendment.family for amendment in late})}) the fold cannot renumber",
+            code=_CODE,
         )
 
 
@@ -197,7 +200,9 @@ def _split_boundary_label(label: str) -> tuple[str, str, int]:
 
     parts = label.rsplit(":", 2)
     if len(parts) != 3 or parts[1] not in ("enter", "exit") or not parts[2].isdigit():
-        raise _refuse(f"module boundary label {label!r} is not <address>:enter|exit:<n>")
+        raise _unconvertible(
+            f"module boundary label {label!r} is not <address>:enter|exit:<n>", code=_CODE
+        )
     return parts[0], parts[1], int(parts[2])
 
 
@@ -220,9 +225,10 @@ def _relabeled(event: Any, offsets: _PassOffsets) -> tuple[str, int, int, int]:
         expected = f"{layer_type}_{event.type_index}_{event.raw_index}_raw"
         new_label = f"{layer_type}_{new_type_index}_{new_raw_index}_raw"
     if event.label_raw != expected:
-        raise _refuse(
+        raise _unconvertible(
             f"record {event.label_raw!r} does not follow the {layer_type} label spelling "
-            f"{expected!r}, so its pass cannot be renumbered"
+            f"{expected!r}, so its pass cannot be renumbered",
+            code=_CODE,
         )
     return new_label, new_raw_index, new_type_index, new_step_index
 
@@ -234,7 +240,9 @@ def _label_map(events: Sequence[Any], offsets: _PassOffsets, pass_number: int) -
     for event in events:
         new_label, _raw, _type, _step = _relabeled(event, offsets)
         if event.label_raw in mapping:
-            raise _refuse(f"pass {pass_number} records the raw label {event.label_raw!r} twice")
+            raise _unconvertible(
+                f"pass {pass_number} records the raw label {event.label_raw!r} twice", code=_CODE
+            )
         mapping[event.label_raw] = new_label
     return mapping
 
@@ -245,8 +253,8 @@ def _mapped_label(label: str, label_map: Mapping[str, str]) -> str:
     try:
         return label_map[label]
     except KeyError:
-        raise _refuse(
-            f"a record refers to {label!r}, which no record of its pass carries"
+        raise _unconvertible(
+            f"a record refers to {label!r}, which no record of its pass carries", code=_CODE
         ) from None
 
 
@@ -259,7 +267,9 @@ def _relabel_record(
     """Return one later-pass record rewritten into the first pass's label space."""
 
     if not isinstance(event, OpRecord):
-        raise _refuse(f"record {event.label_raw!r} is a {type(event).__name__}, not an OpRecord")
+        raise _unconvertible(
+            f"record {event.label_raw!r} is a {type(event).__name__}, not an OpRecord", code=_CODE
+        )
     new_label, raw_index, type_index, step_index = _relabeled(event, offsets)
     modules = tuple(
         (address, int(call_index) + offsets.module_calls.get(address, 0))
@@ -284,7 +294,6 @@ def _relabel_record(
         event,
         core=core,
         function=_relabeled_function(event.function, offsets),
-        templates=_relabeled_templates(event.templates, label_map),
         graph=_relabeled_graph(event.graph, label_map, barcode_map),
         modules_facet=_relabeled_modules(event.modules_facet, modules, offsets),
         params_facet=_relabeled_params(event.params_facet, barcode_map),
@@ -300,12 +309,6 @@ def _relabeled_function(function: Any, offsets: _PassOffsets) -> Any:
     if function is None or function.func_call_id is None:
         return function
     return replace(function, func_call_id=int(function.func_call_id) + offsets.func_call_id)
-
-
-def _relabeled_templates(templates: Any, label_map: Mapping[str, str]) -> Any:
-    if templates is None:
-        return None
-    return replace(templates, parent_label_raw=_mapped_label(templates.parent_label_raw, label_map))
 
 
 def _relabeled_graph(
@@ -461,10 +464,14 @@ def _merge_pass_facts(
     addresses = tuple(facts.get("output_tensor_addresses", ()))
     labels = tuple(facts.get("output_labels", ()))
     if len(labels) != len(tensors):
-        raise _refuse(f"pass {pass_number} sealed {len(tensors)} outputs but {len(labels)} labels")
+        raise _unconvertible(
+            f"pass {pass_number} sealed {len(tensors)} outputs but {len(labels)} labels", code=_CODE
+        )
     for index, (tensor, label) in enumerate(zip(tensors, labels, strict=True)):
         if label is None:
-            raise _refuse(f"an output tensor of pass {pass_number} carries no capture label")
+            raise _unconvertible(
+                f"an output tensor of pass {pass_number} carries no capture label", code=_CODE
+            )
         folded.output_tensors.append(tensor)
         folded.output_tensor_addresses.append(addresses[index] if index < len(addresses) else "")
         folded.output_labels.append(_mapped_label(label, label_map))

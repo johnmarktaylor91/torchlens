@@ -974,7 +974,7 @@ torchlens/backends/torch/prehook_provenance.py::_interpose_registration_apis	66
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper	88
 torchlens/backends/torch/prehook_provenance.py::_make_pre_hook_wrapper.wrapped	71
 torchlens/backends/torch/prehook_provenance.py::_snapshot_state	82
-torchlens/backends/torch/rescue.py	935
+torchlens/backends/torch/rescue.py	934
 torchlens/backends/torch/rescue.py::capture_with_rescue	339
 torchlens/backends/torch/sources.py::log_source_tensor_exhaustive	264
 torchlens/backends/torch/sources.py::log_source_tensor_predicate	120

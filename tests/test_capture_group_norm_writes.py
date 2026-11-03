@@ -71,16 +71,24 @@ class _BatchNormControl(nn.Module):
 
 
 def _journal(model: nn.Module, train: bool) -> tuple[set[str], set[str]]:
-    """Return (journaled buffer addresses, buffers whose version counter moved)."""
+    """Return (journaled buffer addresses, buffers whose bytes or version counter changed).
+
+    A fused kernel may rewrite a buffer without touching its version counter, so
+    the witness compares bytes as well.
+    """
 
     model.train(train)
-    before = {name: buf._version for name, buf in model.named_buffers()}
+    before = {name: (buf._version, buf.detach().clone()) for name, buf in model.named_buffers()}
     torch.manual_seed(0)
     trace = tl.trace(model, torch.rand(2, 4, 3, 3))
-    moved = {name for name, buf in model.named_buffers() if buf._version != before[name]}
+    changed = {
+        name
+        for name, buf in model.named_buffers()
+        if buf._version != before[name][0] or not torch.equal(buf, before[name][1])
+    }
     journaled = {event.address for event in trace._buffer_write_events}
     assert bool(trace.buffer_write_ops) == bool(journaled)
-    return journaled, moved
+    return journaled, changed
 
 
 @pytest.mark.parametrize(
@@ -91,12 +99,12 @@ def _journal(model: nn.Module, train: bool) -> tuple[set[str], set[str]]:
 def test_group_norm_journals_only_real_buffer_writes(
     model_cls: type[nn.Module], train: bool
 ) -> None:
-    journaled, moved = _journal(model_cls(), train)
-    assert moved == set()
+    journaled, changed = _journal(model_cls(), train)
+    assert changed == set()
     assert journaled == set()
 
 
 def test_batch_norm_control_still_journals_running_statistics() -> None:
-    journaled, moved = _journal(_BatchNormControl(), train=True)
-    assert moved >= {"bn.running_mean", "bn.running_var"}
+    journaled, changed = _journal(_BatchNormControl(), train=True)
+    assert changed >= {"bn.running_mean", "bn.running_var"}
     assert journaled >= {"bn.running_mean", "bn.running_var"}

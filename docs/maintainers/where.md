@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1437 modules, 635387 lines, 0 modules without a docstring.
+83 packages, 1437 modules, 635396 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,7 +15,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 50 | 25876 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 50 | 25884 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1493 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4588 |
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 37841 |
@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6358 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8471 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3937 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 112 | 54373 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 112 | 54374 |
 | `torchlens.bridge` | External-tool bridge namespace. | 25 | 7812 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 27 | 8873 |
@@ -209,13 +209,13 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (50 modules, 25876 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (50 modules, 25884 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 1 |
 | `_annotations_travel` | Per-sub-key TRAVEL POLICY for ''Trace.annotations'' (lane F40a, foldA ). | 285 |
-| `_cook_facts` | Run facts and the replay journal a cooked Recording hands its Trace shell. | 67 |
+| `_cook_facts` | Run facts and the replay journal a cooked Recording hands its Trace shell. | 68 |
 | `_cooked_inventory` | What a recording hands its cooked Trace besides the records themselves. | 146 |
 | `_episode_coupling` | Attested episode-intervention coupling. | 536 |
 | `_episode_derivation` | Episode step-output derivation: the declaration-driven evidence readers. | 725 |
@@ -227,7 +227,7 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_forward_helpers` | Forward-pass helpers for the RUN stage: memory bracket, backend lookup and predicate forward. | 595 |
 | `_fused_attention_hold` | Hold torch's fused attention fast path off for one captured forward. | 102 |
 | `_input_records` | Input and label record helpers for the RUN stage. | 463 |
-| `_multipass_cook` | Fold the sealed cores of a multi-pass Recording into one cook-ready stream. | 470 |
+| `_multipass_cook` | Fold the sealed cores of a multi-pass Recording into one cook-ready stream. | 477 |
 | `_nonfinite_prefix` | Failure-safe prefix finalization + the ONE raw-to-public label resolver. | 379 |
 | `_outcome_payload` | Persisted-attestation codec and load-time outcome resolution. | 422 |
 | `_outcome_types` | Leaf vocabulary, capability table and sidecar readers of the outcome authority. | 401 |
@@ -1249,7 +1249,7 @@ tinygrad backend preview. (7 modules, 3937 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (112 modules, 54373 lines)
+Torch backend implementation package for TorchLens capture. (112 modules, 54374 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1278,7 +1278,7 @@ Torch backend implementation package for TorchLens capture. (112 modules, 54373 
 | `_fire_timing` | Per-fire backward timing helpers (L9 ; split under the size ratchet). | 145 |
 | `_foreign_data` | Foreign data round trips in plain forward code: departures, re-entries, replay. | 481 |
 | `_function_boundary` | Foreign-kernel boundary for ''torch.autograd.Function'' forwards that leave torch. | 720 |
-| `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 100 |
+| `_fused_norm_writes` | Which fused normalization calls write the running statistics they are handed. | 102 |
 | `_grad_fn_orders` | Resolve GradFn ''order'' values from creators, roots and known topology. | 183 |
 | `_grad_fn_pairing` | Pair autograd ''GradFn'' nodes with the forward ops whose outputs they belong to. | 93 |
 | `_grad_fn_source` | Best-effort source metadata for autograd grad-fn classes. | 115 |
@@ -1360,7 +1360,7 @@ Torch backend implementation package for TorchLens capture. (112 modules, 54373 
 | `ops` | Log tensors produced by decorated torch operations. | 602 |
 | `param_mutation` | In-place mutation of Parameters during torch capture (receiver policy). | 712 |
 | `prehook_provenance` | Reversible forward-pre-hook input provenance for PyTorch eager capture. | 1003 |
-| `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 935 |
+| `rescue` | Rescue re-run: recover escaped ops with a TorchFunctionMode net. | 934 |
 | `sources` | Log torch capture source tensors. | 641 |
 | `structure_only_belt` | Structure-only teaching-refusal belts (L7a memo sec 2, -default branch). | 674 |
 | `tensor_tracking` | Track torch tensor provenance, family links, and equivalence classes. | 1656 |
