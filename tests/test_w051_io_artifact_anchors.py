@@ -133,19 +133,26 @@ def test_manifest_row_count_disagreeing_with_metadata_refuses(
         manifest["records"]["op"]["rows"] = 999
 
     path = _tampered(source_bundle, tmp_path / "rows.tlspec", mutate_manifest=declare_999)
-    _assert_refuses(path, contract.REFUSAL_CODES["record_file_corrupt"], field="op")
+    error = _assert_refuses(path, contract.REFUSAL_CODES["record_file_corrupt"])
+    assert "999" in error.fields["detail"], error.fields
 
 
 # --- (b) op-graph coherence ---------------------------------------------------
 
 
 def test_duplicate_label_refuses(source_bundle: Path, tmp_path: Path) -> None:
+    """A repeated op label refuses at the format 3 record identity check.
+
+    The format 3 reader resolves op rows by label before the graph validator
+    runs, so the duplicate is caught there with the cell position named.
+    """
+
     def duplicate(state: dict[str, Any]) -> None:
         ops = state["_layer_list"]
         ops[2].label = ops[1].label
 
     path = _tampered(source_bundle, tmp_path / "dup.tlspec", duplicate)
-    _assert_refuses(path, "artifact_graph_structure_invalid", reason="duplicate_label")
+    _assert_refuses(path, contract.REFUSAL_CODES["record_schema_invalid"], at="op[2].label")
 
 
 def test_dangling_parent_refuses(source_bundle: Path, tmp_path: Path) -> None:
