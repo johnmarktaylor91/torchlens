@@ -114,7 +114,7 @@ def test_paddle_module_exit_changes_output_and_validates() -> None:
     )
     producer = _relu_op(trace)
     assert producer.is_edited
-    assert trace.capture_events.op_event_by_label_raw[producer._label_raw].fire_results
+    assert trace._capture_events.op_event_by_label_raw[producer._label_raw].fire_results
     assert list(producer.edits)
     assert np.allclose(_output_op(trace).out.numpy(), 0.5)
     assert PaddleBackend().validate_trace(trace) is True

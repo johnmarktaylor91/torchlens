@@ -69,7 +69,7 @@ def test_mlx_module_exit_changes_output_and_validates() -> None:
     )
     producer = next(op for op in trace._layer_list if op.type == "linear")
     assert producer.is_edited
-    assert trace.capture_events.op_event_by_label_raw[producer._label_raw].fire_results
+    assert trace._capture_events.op_event_by_label_raw[producer._label_raw].fire_results
     assert np.allclose(np.asarray(trace._layer_list[-1].out), np.asarray(model.l2.bias))
     assert MLXBackend().validate_trace(trace).passed
 
@@ -117,6 +117,27 @@ def test_mlx_module_exit_nested_leaves_aliases_and_repeated_calls(
         Model(), _input(), backend="mlx", intervene=tl.when(tl.module(address), tl.scale(0.5))
     )
     assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+def test_mlx_module_exit_inside_opaque_parent_validates() -> None:
+    """A selected attention projection remains editable through its parent."""
+
+    class Model(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attn = nn.MultiHeadAttention(4, 2, bias=False)
+            for name in ("query_proj", "key_proj", "value_proj", "out_proj"):
+                getattr(self.attn, name).weight = mx.full((4, 4), 0.25)
+
+        def __call__(self, x: Any) -> Any:
+            return self.attn(x, x, x)
+
+    x = mx.arange(8).reshape(1, 2, 4).astype(mx.float32) / 8
+    trace = tl.trace(
+        Model(), x, backend="mlx", intervene=tl.when(tl.module("attn.value_proj"), tl.zero_ablate())
+    )
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), 0)
     assert MLXBackend().validate_trace(trace).passed
 
 
