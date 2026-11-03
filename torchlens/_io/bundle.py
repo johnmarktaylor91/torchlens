@@ -101,7 +101,7 @@ from .format3.payloads import (
     tensor_reference,
 )
 from .format3.recipe import write_trace_recipe
-from .format3.restore import true_up_record
+from .format3.restore import loaded_persistent_buffer_universe, true_up_record
 from .format3.route import Format3LoadRequest, is_format3_root, load_format3
 from .format3.writer import (
     EnvelopeSpec,
@@ -1044,6 +1044,12 @@ def _finish_format3_trace(
         manifest.get("files") or {},
         map_location=map_location,
     )
+    # A runnable resave declares its persistent-buffer slots from the capture-time universe;
+    # without a live model the validated descriptor is that universe's source.
+    if trace._runnable.persistent_buffer_universe is None:
+        trace._runnable.persistent_buffer_universe = loaded_persistent_buffer_universe(
+            trace._runnable.descriptor
+        )
     if manifest.get("disclosures") is not None:
         format3_reader.attach_disclosure_advisory(trace, manifest["disclosures"])
     if manifest.get("intervention") is not None:

@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1398 modules, 637068 lines, 0 modules without a docstring.
+83 packages, 1400 modules, 637447 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -22,8 +22,8 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1209 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 58 | 36474 |
-| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 18 | 7909 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 58 | 36485 |
+| `torchlens._io.format3` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 20 | 8277 |
 | `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 23 | 11257 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
@@ -416,7 +416,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (58 modules, 36474 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (58 modules, 36485 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -450,8 +450,8 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_tlspec_json_helpers` | Pure value helpers for the unified ''.tlspec'' manifest writer. | 93 |
 | `_torch_symbols` | Load/decode/exec-path re-export of the canonical ''torch_attr'' helper (// secC_1/secD_1). | 16 |
 | `accessor_rebuild` | Rebuild weakref-backed model accessors after finalization or rehydrate. | 158 |
-| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3816 |
-| `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 355 |
+| `bundle` | Portable directory-bundle save/load helpers for TorchLens model logs. | 3822 |
+| `bundle_container` | Bundle-container loading for ''tl.load'': ''bundle.json'' and its members. | 360 |
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 276 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1996 |
@@ -481,26 +481,28 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._io.format3`
 
-The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (18 modules, 7909 lines)
+The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. (20 modules, 8277 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | The 3.0 saved format: typed JSON records plus safetensors blobs, no pickle. | 15 |
 | `_families` | Apply code-owned family grammar data to decoded cells before record construction. | 452 |
+| `_family_nodes` | Family grammar nodes for the 3.0 saved format (design section 9). | 554 |
+| `_tables` | Record tables of the 3.0 saved format: reading, digest checks and the column contract. | 259 |
 | `codec_policy` | Codec role policy for format 3 tensor cells (contract: payload backend boundary). | 81 |
 | `container` | The 3.0 bundle container: members as envelope references, relations as JSON. | 326 |
-| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 300 |
-| `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 793 |
+| `contract` | Constants of the 3.0 saved format, pinned against the persisted-field contract. | 304 |
+| `decode` | Typed JSON cells back to Python values: the decoder half of the 3.0 value codec. | 777 |
 | `payloads` | Tensor payloads of the 3.0 saved format: chunked safetensors files and lazy references. | 480 |
-| `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 800 |
+| `reader` | Reader of the 3.0 saved format: manifest first, digests, record tables, records. | 797 |
 | `recipe` | The intervention recipe of the 3.0 saved format: ''intervention.json''. | 779 |
-| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 94 |
+| `restore` | Record state restore for the 3.0 reader: one decoded row becomes one record object. | 161 |
 | `route` | Routing of ''bundle.load'' into the 3.0 saved format: the root test and the door dispatch. | 80 |
 | `runnable` | The 3.0 runnable component: descriptor JSON plus safetensors state, no pickle. | 400 |
 | `runnable_families` | Tensor families of the 3.0 runnable component: safetensors files and tensor references. | 284 |
-| `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 771 |
+| `schema` | Record columns and declarative family grammars for the 3.0 saved format. | 271 |
 | `summaries` | Closed shapes of the optional manifest summaries (''model_fingerprint'' | 119 |
-| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 763 |
+| `validate` | Cross-record invariants of the 3.0 saved format, run after every table is decoded. | 766 |
 | `values` | The typed-value codec of the 3.0 saved format: Python values to tagged JSON and back. | 646 |
 | `writer` | The 3.0 writer: a trace or bundle to typed JSON record tables plus safetensors chunks. | 726 |
 

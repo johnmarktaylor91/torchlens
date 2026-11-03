@@ -7,20 +7,35 @@ default (``_buffer_persistence`` ``null`` became ``{}``), and a column the save 
 omitted (``forward_args`` at ``portable``) that leaves the attribute unset, so a property
 over it (``has_saved_forward_args``) raises instead of answering ``False``. Nothing here
 touches a class attribute or property: only instance slots the schema names.
+
+``settle_tuple`` and ``settle_mapping`` rebuild a decoded container with the type the
+decoder gave it once its members are settled; ``loaded_persistent_buffer_universe``
+rebuilds, from the validated runnable descriptor, the capture-time persistent-buffer
+universe a runnable resave of a loaded trace declares its slots from.
 """
 
 from __future__ import annotations
 
 import inspect
+from collections import defaultdict
 from collections.abc import Mapping
 from functools import cache
 from typing import Any, Final
 
 from ..._data_classes._state_adapter import state_restore
 from ..._data_classes.field_policy import StorageKind
+from .decode import CELL_CODE, cell_error
 from .schema import record_schema
+from .values import tuple_subtypes
 
-__all__ = ["computed_columns", "restore_record", "true_up_record"]
+__all__ = [
+    "computed_columns",
+    "loaded_persistent_buffer_universe",
+    "restore_record",
+    "settle_mapping",
+    "settle_tuple",
+    "true_up_record",
+]
 
 TLSPEC_KEY: Final = "tlspec_version"
 _UNSET: Final = object()
@@ -92,3 +107,55 @@ def true_up_record(obj: Any, row: Mapping[str, Any], kind: str) -> None:
                 setattr(obj, name, None)
         elif current is _UNSET:
             setattr(obj, name, None)
+
+
+def settle_tuple(value: tuple[Any, ...], items: list[Any], at: str) -> tuple[Any, ...]:
+    """Rebuild a decoded tuple with the type the decoder gave it: a named tuple through
+    ``_make``, a ``tuple_subtypes`` constructor (torch.Size, torch.return_types) through the
+    code-owned table, else ``tuple``. The type is the decoder's, never a name from the artifact.
+    """
+
+    cls = type(value)
+    if cls is tuple:
+        return tuple(items)
+    maker = getattr(cls, "_make", None)
+    if callable(maker):
+        return maker(items)
+    if cls in tuple_subtypes().values():
+        return cls(tuple(items))
+    raise cell_error(at, f"tuple of type {cls.__name__} cannot be rebuilt", code=CELL_CODE)
+
+
+def settle_mapping(value: dict[Any, Any], items: dict[Any, Any]) -> dict[Any, Any]:
+    """Rebuild a decoded dict with its builtin default factory when it is a defaultdict."""
+
+    if isinstance(value, defaultdict):
+        return defaultdict(value.default_factory, items)
+    return items
+
+
+def loaded_persistent_buffer_universe(descriptor: Any) -> dict[str, dict[str, Any]] | None:
+    """Return ``name -> {shape, dtype, device}`` for the descriptor's persistent buffer slots.
+
+    A live capture records this universe from the model; a loaded trace has no model, so a
+    runnable resave reads the same facts from the descriptor the load validated (every
+    persistent buffer is a tensor slot with a state binding). ``None`` without a descriptor.
+    """
+
+    if descriptor is None:
+        return None
+    universe: dict[str, dict[str, Any]] = {}
+    for slot in descriptor.tensor_slots:
+        binding = slot.state_binding
+        role = getattr(slot.role, "value", slot.role)
+        if binding is None or not binding.persistent or role != "buffer":
+            continue
+        device = slot.device_type
+        if slot.device_index is not None:
+            device = f"{device}:{slot.device_index}"
+        universe[binding.state_dict_name] = {
+            "shape": tuple(slot.shape),
+            "dtype": slot.dtype,
+            "device": device,
+        }
+    return universe

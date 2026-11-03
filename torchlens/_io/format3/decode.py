@@ -34,6 +34,7 @@ from ._families import (
     cell_error,
 )
 from .contract import (
+    JSON_SAFE_INT,
     RECORD_INDEX,
     TENSOR_REFERENCE_FIELDS,
     TYPED_VALUE_KEY,
@@ -234,7 +235,15 @@ class Decoder:
 
         if depth > MAX_CELL_DEPTH:
             raise cell_error(at, f"nesting deeper than {MAX_CELL_DEPTH}", code=CELL_CODE)
-        if data is None or isinstance(data, (bool, int, str)):
+        if data is None or isinstance(data, (bool, str)):
+            return data
+        if isinstance(data, int):
+            if abs(data) > JSON_SAFE_INT:
+                raise cell_error(
+                    at,
+                    f"a bare integer beyond {JSON_SAFE_INT}; the writer tags such values",
+                    code=CELL_CODE,
+                )
             return data
         if isinstance(data, float):
             if not math.isfinite(data):
@@ -766,28 +775,3 @@ def _element_size(dtype_name: str) -> int:
     """Return the storage bytes of one element of a storable dtype."""
 
     return torch.empty((), dtype=dtype_table()[dtype_name]).element_size()
-
-
-def settle_tuple(value: tuple[Any, ...], items: list[Any], at: str) -> tuple[Any, ...]:
-    """Rebuild a decoded tuple with the type the decoder gave it: a named tuple through
-    ``_make``, a ``tuple_subtypes`` constructor (torch.Size, torch.return_types) through the
-    code-owned table, else ``tuple``. The type is the decoder's, never a name from the artifact.
-    """
-
-    cls = type(value)
-    if cls is tuple:
-        return tuple(items)
-    maker = getattr(cls, "_make", None)
-    if callable(maker):
-        return maker(items)
-    if cls in tuple_subtypes().values():
-        return cls(tuple(items))
-    raise cell_error(at, f"tuple of type {cls.__name__} cannot be rebuilt", code=CELL_CODE)
-
-
-def settle_mapping(value: dict[Any, Any], items: dict[Any, Any]) -> dict[Any, Any]:
-    """Rebuild a decoded dict with its builtin default factory when it is a defaultdict."""
-
-    if isinstance(value, defaultdict):
-        return defaultdict(value.default_factory, items)
-    return items
