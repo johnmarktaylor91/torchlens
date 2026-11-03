@@ -180,11 +180,13 @@ def test_retained_bytes_are_linear_in_generated_tokens() -> None:
     assert records_per_step == len(FAMILIES["distilgpt2"][1])
     # Tensors: one more record per site per added token, nothing else.
     assert len(reachable[long]) - len(reachable[short]) == (long - short) * records_per_step
-    # Bytes beyond the payload: only the last pass's own cache grows, by one position per token.
+    # Bytes beyond the payload: only the last pass's own cache (one position per token) and
+    # the generated ids (one token id per token) grow.
     config = model.config
     kv_bytes_per_position = config.n_layer * 2 * config.n_embd * torch.float32.itemsize
+    bytes_per_token = kv_bytes_per_position + runs[long].sequences.element_size()
     extra = {n: sum(reachable[n].values()) - payload[n] for n in runs}
-    assert extra[long] - extra[short] <= (long - short) * kv_bytes_per_position, extra
+    assert extra[long] - extra[short] <= (long - short) * bytes_per_token, extra
 
 
 def test_sampled_generation_records_its_seed_and_reproduces() -> None:
