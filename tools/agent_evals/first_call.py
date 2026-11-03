@@ -5,7 +5,7 @@ Usage (from the repository root)::
     python tools/agent_evals/first_call.py selfcheck
     python tools/agent_evals/first_call.py prepare --out DIR [--mode index|bare] [--cards ID,...]
     python tools/agent_evals/first_call.py live --agent-cmd TEMPLATE --out DIR --label TIER
-        [--runs N] [--jobs N] [--mode index|bare] [--cards ID,...]
+        [--runs N] [--jobs N] [--mode index|bare] [--cards ID,...] [--keep-env NAME ...]
     python tools/agent_evals/first_call.py grade --dir DIR
     python tools/agent_evals/first_call.py summary DIR [DIR ...]
 
@@ -17,10 +17,16 @@ command once per card and run, then grades. The template may use ``{prompt}`` (p
 ``{instructions}`` (the ``AGENTS.md`` path, empty in ``bare`` mode), ``{package}`` (the vendored
 package directory, which plays the installed package: grant the agent read access to it),
 ``{workdir}`` and ``{solution}``; it runs in the task directory. Live mode calls a model and never runs in CI.
+The agent gets a clean environment: only :data:`SUBJECT_ENV` and the names given with
+``--keep-env`` (say, the variable holding its credential) pass through, so nothing from the
+caller's session (instruction-file switches, hook triggers, tokens) reaches the agent under test.
 
 Grading reads ``solution.py`` without running it. The *entry call* is the first TorchLens call in
 source order, skipping helper constructors (selectors such as ``tl.module`` and edits such as
-``tl.steer``, which are only ever arguments in a canonical call). A run passes when the entry
+``tl.steer``, which are only ever arguments in a canonical call). A call whose result is stored
+in a name that a later TorchLens call takes as an argument hands the entry to that later call
+(``edit = tl.when(...)`` then ``tl.trace(model, x, intervene=edit)`` enters through
+``tl.trace``). A run passes when the entry
 call is the card's canonical entry call or one its ``accept`` list allows. A card marked
 ``hard_fail`` also fails when any of its ``avoid_calls`` appears anywhere (the per-step capture
 trap). A card whose canonical is ``none`` passes when none of its ``avoid_calls`` appears.
@@ -34,6 +40,7 @@ import argparse
 import ast
 import importlib.util
 import json
+import os
 import shlex
 import shutil
 import subprocess
@@ -53,6 +60,8 @@ INIT_BLOCK_PATH = REPO_ROOT / "torchlens" / "agent" / "_init_block.py"
 BARS = {"mid": 0.90, "small": 0.75}
 #: Wall-clock limit for one live agent invocation.
 AGENT_TIMEOUT_S = 600
+#: Environment variables a live agent inherits; ``--keep-env`` adds more by name.
+SUBJECT_ENV = ("HOME", "PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "TERM", "TMPDIR", "SHELL")
 #: Names that are never an entry call even if no canonical uses them as an argument.
 EXTRA_HELPER_PREFIXES = ("tl.options.", "tl.label", "tl.op")
 #: What each fixture puts in the script's namespace, as the prompt describes it.
@@ -166,9 +175,31 @@ def torchlens_calls(source: str) -> list[str]:
     ['tl.trace', 'tl.func']
     """
 
+    return [name for name, _ in call_sites(source)]
+
+
+def call_sites(source: str) -> list[tuple[str, ast.Call]]:
+    """Return every TorchLens call in ``source`` with its node, in source order.
+
+    Parameters
+    ----------
+    source:
+        Python source text.
+
+    Returns
+    -------
+    list[tuple[str, ast.Call]]
+        ``(normalised tl. name, call node)`` ordered by line, then column.
+
+    Raises
+    ------
+    SyntaxError
+        When ``source`` does not parse.
+    """
+
     tree = ast.parse(source)
     aliases = _aliases(tree)
-    found: list[tuple[int, int, str]] = []
+    found: list[tuple[int, int, str, ast.Call]] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -179,8 +210,34 @@ def torchlens_calls(source: str) -> list[str]:
         if root not in aliases:
             continue
         normalised = aliases[root] + (f".{rest}" if rest else "")
-        found.append((node.lineno, node.col_offset, normalised))
-    return [name for _, _, name in sorted(found)]
+        found.append((node.lineno, node.col_offset, normalised, node))
+    found.sort(key=lambda row: (row[0], row[1]))
+    return [(name, node) for _, _, name, node in found]
+
+
+def _assigned_name(tree: ast.AST, call: ast.Call) -> str | None:
+    """Return ``N`` when ``call`` is the whole value of an assignment ``N = call``.
+
+    ``call`` may come from another parse of the same source, so it is matched by position.
+    """
+
+    span = (call.lineno, call.col_offset, call.end_lineno, call.end_col_offset)
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+            continue
+        value, target = node.value, node.targets[0]
+        if not isinstance(value, ast.Call) or not isinstance(target, ast.Name):
+            continue
+        if (value.lineno, value.col_offset, value.end_lineno, value.end_col_offset) == span:
+            return target.id
+    return None
+
+
+def _passes_name(call: ast.Call, name: str) -> bool:
+    """Return whether ``name`` is passed directly as one of ``call``'s arguments."""
+
+    values = [*call.args, *(keyword.value for keyword in call.keywords)]
+    return any(isinstance(value, ast.Name) and value.id == name for value in values)
 
 
 def _primary_call(source: str) -> str | None:
@@ -228,6 +285,51 @@ class Grader:
 
         return next((call for call in calls if not self.is_helper(call)), None)
 
+    def entry_from_source(self, source: str) -> str | None:
+        """Return the entry call, following a built spec into the call that consumes it.
+
+        The entry is the first non-helper call in source order. When that call only builds a
+        value stored in a name (``edit = tl.when(...)``) and a later TorchLens call takes that
+        name as an argument (``tl.trace(model, x, intervene=edit)``), the later call is the
+        entry: the value was an argument written on its own line. A spec used any other way
+        (``edit.bind(model)``) keeps its own call as the entry.
+
+        Parameters
+        ----------
+        source:
+            Python source text.
+
+        Returns
+        -------
+        str | None
+            The entry call's ``tl.`` name, or ``None`` when there is none.
+
+        Raises
+        ------
+        SyntaxError
+            When ``source`` does not parse.
+        """
+
+        sites = [(name, node) for name, node in call_sites(source) if not self.is_helper(name)]
+        if not sites:
+            return None
+        tree = ast.parse(source)
+        index = 0
+        for _ in range(len(sites)):
+            bound = _assigned_name(tree, sites[index][1])
+            consumer = next(
+                (
+                    later
+                    for later in range(index + 1, len(sites))
+                    if bound is not None and _passes_name(sites[later][1], bound)
+                ),
+                None,
+            )
+            if consumer is None:
+                break
+            index = consumer
+        return sites[index][0]
+
     def grade(self, card: Any, source: str | None) -> dict[str, Any]:
         """Grade one solution against one card.
 
@@ -255,7 +357,7 @@ class Grader:
         except SyntaxError as exc:
             return {**row, "passed": False, "avoid_hit": [], "names_covered": False,
                     "reason": f"syntax error: {exc.msg}"}  # fmt: skip
-        entry = self.entry_call(calls)
+        entry = self.entry_from_source(source)
         avoid_hit = sorted(set(card.avoid_calls) & set(calls))
         wanted = set() if expected is None else set(torchlens_calls(card.canonical))
         row.update(entry=entry, avoid_hit=avoid_hit, names_covered=wanted <= set(calls))
@@ -332,10 +434,35 @@ def prepare_card(card: Any, task_dir: Path, mode: str, package_dir: Path) -> Pat
     return task_dir
 
 
+def subject_env(keep: Iterable[str] = (), source: dict[str, str] | None = None) -> dict[str, str]:
+    """Return the environment a live agent runs with: :data:`SUBJECT_ENV` plus ``keep``.
+
+    Parameters
+    ----------
+    keep:
+        Extra variable names to pass through (for example the agent's credential variable).
+    source:
+        Environment to copy from (default: this process's).
+
+    Returns
+    -------
+    dict[str, str]
+        The allowed variables that are set in ``source``.
+    """
+
+    env = os.environ if source is None else source
+    return {name: env[name] for name in (*SUBJECT_ENV, *keep) if name in env}
+
+
 def _run_one(
-    card: Any, task_dir: Path, agent_cmd: str, grader: Grader, package_dir: Path
+    card: Any,
+    task_dir: Path,
+    agent_cmd: str,
+    grader: Grader,
+    package_dir: Path,
+    env: dict[str, str],
 ) -> dict[str, Any]:
-    """Run the agent command in one prepared directory, then grade it."""
+    """Run the agent command in one prepared directory with ``env``, then grade it."""
 
     instructions = task_dir / "AGENTS.md"
     command = agent_cmd.format(
@@ -348,7 +475,7 @@ def _run_one(
     started = time.monotonic()
     try:
         proc = subprocess.run(
-            command, shell=True, cwd=task_dir, timeout=AGENT_TIMEOUT_S, check=False
+            command, shell=True, cwd=task_dir, env=env, timeout=AGENT_TIMEOUT_S, check=False
         )
         agent_rc: int | None = proc.returncode
     except subprocess.TimeoutExpired:
@@ -367,7 +494,15 @@ def grade_dir(card: Any, task_dir: Path, grader: Grader) -> dict[str, Any]:
 
 
 def run_live(
-    cards: list[Any], out: Path, agent_cmd: str, *, label: str, runs: int, jobs: int, mode: str
+    cards: list[Any],
+    out: Path,
+    agent_cmd: str,
+    *,
+    label: str,
+    runs: int,
+    jobs: int,
+    mode: str,
+    keep_env: Iterable[str] = (),
 ) -> list[dict[str, Any]]:
     """Prepare and run every card ``runs`` times with ``jobs`` agents at once."""
 
@@ -378,8 +513,11 @@ def run_live(
         for run in range(runs)
         for card in cards
     ]
+    env = subject_env(keep_env)
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
-        results = list(pool.map(lambda item: _run_one(*item, agent_cmd, grader, package_dir), plan))
+        results = list(
+            pool.map(lambda item: _run_one(*item, agent_cmd, grader, package_dir, env), plan)
+        )
     for result in results:
         result.update(label=label, mode=mode)
     return results
@@ -474,6 +612,12 @@ def main(argv: list[str] | None = None) -> int:
             sp.add_argument("--label", required=True, help="subject tier, e.g. small or mid")
             sp.add_argument("--runs", type=int, default=1)
             sp.add_argument("--jobs", type=int, default=1)
+            sp.add_argument(
+                "--keep-env",
+                action="append",
+                default=[],
+                help="environment variable the agent also inherits (repeatable)",
+            )
     grade_parser = sub.add_parser("grade")
     grade_parser.add_argument("--dir", type=Path, required=True)
     summary_parser = sub.add_parser("summary")
@@ -496,6 +640,7 @@ def main(argv: list[str] | None = None) -> int:
         results = run_live(
             selected, args.out, args.agent_cmd,
             label=args.label, runs=args.runs, jobs=args.jobs, mode=args.mode,
+            keep_env=args.keep_env,
         )  # fmt: skip
         (args.out / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
         print(json.dumps(summarize(results), indent=2))

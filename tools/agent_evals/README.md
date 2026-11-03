@@ -83,6 +83,8 @@ python tools/agent_evals/first_call.py summary DIR [DIR ...]
 ```
 
 Choose the agent under test by tier (small, mid, frontier), not by a fixed model name, and grant
-it read access to `{package}` and write access to its task directory only. A failure is a docs or
+it read access to `{package}` and write access to its task directory only. The agent runs in a
+clean environment (home, path, locale and shell variables only); pass the variable holding its
+credential with `--keep-env NAME`. A failure is a docs or
 index finding: fix the card's `avoid` line, the read-first rules or the page, regenerate with
 `tools/docs/build_agent_index.py`, and rerun.

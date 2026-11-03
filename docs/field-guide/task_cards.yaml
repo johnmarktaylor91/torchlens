@@ -26,7 +26,7 @@ rules:
   - "Steering or patching many forwards, or through `generate()`: build the edit once and bind it, `tl.when(site, edit).bind(model)`. Never run `tl.trace` per step: a capture per step costs far more than a hook."
   - "Address sites with selectors: `tl.module(\"layer3\")` is a module's output, `tl.func(\"relu\")` every relu op, `tl.in_module(\"layer3\")` the ops inside a module. Op labels such as `\"relu_1_2\"` exist only after a capture."
   - "Edit a captured trace with `trace.fork().do(site, edit, model=model, inputs=x)`; edit during capture with `tl.trace(model, x, intervene=tl.when(site, edit))`."
-  - "Hand results on as a saved path (`trace.save(\"run.tlspec\")`, reopened with `tl.load`), not printed tensors. Inspect an artifact you did not make with the read-only tools, manifest first."
+  - "Hand results on as a saved path (`trace.save(\"run.tlspec\")`, reopened with `tl.load`), not printed tensors. Open your own or a trusted file with `tl.load` directly; inspect an untrusted one with the read-only tools, manifest first."
   - "Errors are typed: branch on `exc.fields['code']` and follow `exc.fields['remedy']`, never the message text."
   - "Trace the eager module, never a `torch.compile`, TorchScript or exported artifact, and never run captures from several threads at once."
 

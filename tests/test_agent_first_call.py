@@ -67,6 +67,31 @@ def test_per_step_capture_fails_the_steering_card() -> None:
     assert GRADER.grade(card, good)["passed"]
 
 
+def test_a_spec_built_on_its_own_line_counts_as_the_call_that_consumes_it() -> None:
+    """``edit = tl.when(...)`` handed to ``tl.trace(intervene=edit)`` grades as ``tl.trace``."""
+
+    source = (
+        "import torchlens as tl\n"
+        "edit = tl.when(tl.module('model.layers.6'), tl.steer(d))\n"
+        "trace = tl.trace(lm, ids, intervene=edit)\n"
+    )
+    assert GRADER.grade(CARDS["steer-once"], source)["entry"] == "tl.trace"
+    assert GRADER.grade(CARDS["steer-once"], source)["passed"]
+    persistent = GRADER.grade(CARDS["steer-generate"], source)
+    assert persistent["entry"] == "tl.trace" and not persistent["passed"]
+    bound = "import torchlens as tl\nedit = tl.when(tl.module('m'), tl.steer(d))\nedit.bind(lm)\n"
+    assert GRADER.grade(CARDS["steer-generate"], bound)["entry"] == "tl.when"
+
+
+def test_a_live_agent_inherits_only_the_allowed_environment() -> None:
+    """Session variables stay with the caller; ``--keep-env`` names pass through."""
+
+    source = {"HOME": "/h", "PATH": "/bin", "SESSION_TOKEN": "x", "AGENT_KEY": "k"}
+    assert first_call.subject_env(source=source) == {"HOME": "/h", "PATH": "/bin"}
+    kept = first_call.subject_env(["AGENT_KEY", "UNSET"], source=source)
+    assert kept == {"HOME": "/h", "PATH": "/bin", "AGENT_KEY": "k"}
+
+
 def test_wrong_tool_card_passes_only_without_a_capture() -> None:
     """For a ``none`` canonical, saying no passes and reaching for a capture fails."""
 
