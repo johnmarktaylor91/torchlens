@@ -28,7 +28,7 @@ from torchlens.intervention._topology.topology import (
     _preferential_topological_order,
     build_supergraph,
 )
-from torchlens.intervention.errors import BundleComparisonError
+from torchlens.intervention.errors import BundleComparisonError, MultiMatchWarning
 
 
 class _Recurrent(nn.Module):
@@ -266,11 +266,13 @@ def test_diff_drawing_of_a_reused_module_does_not_refuse(tmp_path: Path) -> None
     model = _ReusedRelu().eval()
     trace = _trace(model, torch.randn(1, 2, 4, 4))
     ablated = trace.fork("ablated")
-    ablated.do(
-        tl.module("relu"),
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(confirm_mutation=True),
-    )
+    # The module runs twice, so the selector fans out to both of its sites.
+    with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
+        ablated.do(
+            tl.module("relu"),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(confirm_mutation=True),
+        )
     bundle = tl.Bundle({"clean": trace, "ablated": ablated}, baseline="clean")
 
     dot = bundle.draw(graph="diff", path=str(tmp_path / "d"), open_viewer=False)
