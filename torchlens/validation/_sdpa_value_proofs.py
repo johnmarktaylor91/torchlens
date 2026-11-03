@@ -26,15 +26,13 @@ only for a perturbed key (slot 1). A perturbed value or mask stays strict.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 
 from ._operand_value_proofs import sole_perturbed_slot
+from ._posthoc_decision import PosthocPerturbDecision
 from ._value_predicates import _is_all_zero_value
-
-if TYPE_CHECKING:
-    from .exemptions import PosthocPerturbDecision
 
 _SDPA_FUNC_NAME = "scaled_dot_product_attention"
 #: Positional index and default of each sdpa keyword the proofs read.
@@ -267,8 +265,6 @@ def sdpa_value_proof_decision(
     PosthocPerturbDecision
         Exempt decision for a proved case, otherwise non-exempt.
     """
-
-    from .exemptions import PosthocPerturbDecision
 
     if sdpa_zero_value_output(layer, layers_to_perturb, args):
         return PosthocPerturbDecision(
