@@ -20,7 +20,10 @@
   in the ambient namespace the docs pages assume: `tl` (torchlens), `torch`, `nn`, a small
   eval-mode `model` and a matching input `x`; everything else an example uses it defines
   itself. An example that needs an optional dependency starts with
-  `>>> # requires: <module>` and is skipped where that module is absent. Keep shown output
+  `>>> # requires: <module>` and is skipped where that module is absent. A module the
+  enforcing CI environment lacks is listed in `OPTIONAL_EXAMPLE_MODULES` in that test file
+  and installed by a nightly leg (`bridges-real` or the LIT leg) that runs its examples with
+  a PASSED floor, so every example runs somewhere. Keep shown output
   deterministic (print a shape, a count or a bool rather than a tensor repr).
 - Type hints on all functions; public signatures name TorchLens types (`Trace`, `Layer`,
   `Op`, option dataclasses) rather than `Any`.

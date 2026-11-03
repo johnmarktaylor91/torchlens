@@ -1523,8 +1523,10 @@ jobs:
       - name: Real-LIT gates (PASSED-count attested)
         run: |
           pytest tests/test_lit_bridge_real.py tests/test_lit_bridge_contract.py \
+            tests/test_docstring_examples.py::test_optional_examples_run \
             -p no:randomly --tb=short -q --junitxml="${{ runner.temp }}/junit/lit.junit.xml"
-          echo "lit.junit.xml 0 --min-passed 16" >> "${{ runner.temp }}/junit/legs.floor"
+          # 16 bridge rows + 1 lit_nlp docstring-example cell.
+          echo "lit.junit.xml 0 --min-passed 17" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload junit and executed-test floors
         if: ${{ !cancelled() }}
@@ -1553,34 +1555,56 @@ jobs:
           - leg: vision
             extras: "dev,gradcam,shap,captum"
             pkgs: "torchvision"
-            files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py"
-            floor: "15"
+            files: "tests/test_bridge_real_gradcam.py tests/test_bridge_real_captum.py tests/test_bridge_real_shap.py tests/test_bridge_real_profiler.py tests/test_docstring_examples.py::test_optional_examples_run"
+            # +2: the captum and pytorch_grad_cam docstring-example cells.
+            floor: "17"
           - leg: steer
             extras: "dev,steering,dialz"
             pkgs: "transformers"
-            files: "tests/test_bridge_real_steering_vectors.py tests/test_bridge_real_dialz.py"
-            floor: "13"
+            files: "tests/test_bridge_real_steering_vectors.py tests/test_bridge_real_dialz.py tests/test_docstring_examples.py::test_optional_examples_run"
+            # +2: the steering_vectors and dialz docstring-example cells.
+            floor: "15"
           - leg: repeng
             extras: "dev,repeng"
             pkgs: "transformers"
-            files: "tests/test_bridge_real_repeng.py"
+            files: "tests/test_bridge_real_repeng.py tests/test_docstring_examples.py::test_optional_examples_run"
             # Floor = every row in the file (3 converter rows + 1 layer/model-type row).
             # The former 6 counted the control_vector() trainer rows, removed when the
             # bridge became a thin converter of the native direction (U46.2).
-            floor: "4"
+            # +1: the repeng docstring-example cell.
+            floor: "5"
           - leg: interop
             extras: "dev,depyf,inseq"
             pkgs: "transformers"
-            files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_b2_bridge_inseq.py"
+            files: "tests/test_bridge_real_depyf.py tests/test_bridge_real_inseq.py tests/test_b2_bridge_inseq.py tests/test_docstring_examples.py::test_optional_examples_run"
             # Floor = every row in the three files (depyf 2 + inseq 3 + b2 inseq 4).
             # The former 7 counted the nnsight file's 2 rows, deleted with its
             # bridge and extra (U13.2); the b2 inseq file is new real-package coverage.
-            floor: "9"
+            # +2: the depyf and inseq docstring-example cells.
+            floor: "11"
           - leg: track
             extras: "dev,trackers-relay-test"
             pkgs: "mlflow pandas"
-            files: "tests/test_export_real_mlflow.py tests/test_trackers_real_wandb_sink.py tests/test_trackers_sinks_relay_pins.py"
-            floor: "5"
+            files: "tests/test_export_real_mlflow.py tests/test_trackers_real_wandb_sink.py tests/test_trackers_sinks_relay_pins.py tests/test_docstring_examples.py::test_optional_examples_run"
+            # +2: the wandb and tensorboard docstring-example cells.
+            floor: "7"
+          # The docstring examples of the optional modules no other leg installs
+          # (tests/test_docstring_examples.py OPTIONAL_EXAMPLE_MODULES): one cell per module.
+          - leg: examples
+            extras: "dev,neuro,treescope,mcp,lightning,hf,compat-shims,sae"
+            pkgs: "dagua"
+            files: "tests/test_docstring_examples.py::test_optional_examples_run"
+            # rsatoolbox, xarray, treescope, mcp, lightning, timm, torchextractor,
+            # sentence_transformers, sae_lens and dagua.
+            floor: "10"
+          # Brain-Score conflicts with [neuro] (docs/reference/neuro.md), so its two
+          # example modules get their own leg.
+          - leg: brainscore
+            extras: "dev,brainscore"
+            pkgs: ""
+            files: "tests/test_docstring_examples.py::test_optional_examples_run"
+            # brainscore_vision and brainio.
+            floor: "2"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
