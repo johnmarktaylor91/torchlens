@@ -75,10 +75,7 @@ def _resolve_storage_intent(options: _RecordingConfig) -> StorageIntent:
 
     if options.streaming is None or options.streaming.path is None:
         return StorageIntent(in_ram=True, on_disk=False)
-    return StorageIntent(
-        in_ram=options.streaming.retain_in_memory,
-        on_disk=True,
-    )
+    return StorageIntent(in_ram=options.streaming.retain_in_memory, on_disk=True)
 
 
 def _empty_recording(options: _RecordingConfig) -> Recording:
@@ -128,6 +125,9 @@ class RecordingState:
     step_index: int = 0
     no_tensor_capture: bool = False
     all_contexts: list[RecordContext] = field(default_factory=list)
+    #: Op contexts by raw label (latest wins, as a scan of ``all_contexts`` answers): the
+    #: module-exit re-evaluation of a ``tl.module`` save reads it instead of rescanning.
+    op_contexts_by_label: dict[str, RecordContext] = field(default_factory=dict)
     storage_intent: StorageIntent = field(init=False)
     storage_backend: _StorageBackend = field(init=False)
     grad_fn_to_context: _GradFnContextMap = field(default_factory=_GradFnContextMap)
@@ -164,6 +164,8 @@ class RecordingState:
         """Append an event context to the bounded sliding window."""
 
         self.all_contexts.append(ctx)
+        if ctx.kind == "op" and ctx.raw_label is not None:
+            self.op_contexts_by_label[ctx.raw_label] = ctx
         window_size = self.options.lookback or self.options.history_size
         if window_size == 0:
             return
@@ -1276,10 +1278,7 @@ def _reference_annotations(save_mode: str, payload: Any) -> dict[str, Any]:
 
     if save_mode != "reference" or not isinstance(payload, torch.Tensor):
         return {}
-    return {
-        "save_mode": "reference",
-        "saved_out_version": tensor_version_or_none(payload),
-    }
+    return {"save_mode": "reference", "saved_out_version": tensor_version_or_none(payload)}
 
 
 class LiveOpView:

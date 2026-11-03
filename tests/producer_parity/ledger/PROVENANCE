@@ -4267,3 +4267,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e87f7028a170464b2df420b766f5700cab516f71 (clean)
 recorded: 2026-11-03T19:39:17.079424+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rulings-gap-6 streaming generation recorder
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 806ca1c72583d166746724829d5c0067ef94a1de (dirty)
+recorded: 2026-11-03T13:07:19.283455+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: rulings-gap-6 streaming generation recorder
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 806ca1c72583d166746724829d5c0067ef94a1de (dirty)
+recorded: 2026-11-03T13:07:30.311410+00:00

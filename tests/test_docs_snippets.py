@@ -650,6 +650,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/linear_probes.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,

@@ -388,7 +388,7 @@
   "field": "kind",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 9,
+  "sites": 10,
   "via_getattr": false
  },
  {
@@ -6520,14 +6520,6 @@
   "via_getattr": false
  },
  {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/backends/torch/_predicate_forward.py",
-  "has_default": false,
-  "sites": 1,
-  "via_getattr": false
- },
- {
   "ambiguous": false,
   "field": "module_stack",
   "file": "torchlens/backends/torch/_predicate_forward.py",
@@ -8958,6 +8950,14 @@
   "has_default": false,
   "sites": 1,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/recording/_generation_stream.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,

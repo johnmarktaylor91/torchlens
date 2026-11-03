@@ -1,0 +1,479 @@
+"""Per-token series, ring buffer, disk spill and cost guard of the generation recorder.
+
+The :class:`_StepSink` runs after every forward that ``generate()`` issues.
+A Recorder pass keeps its retained payloads on the capture events of its
+sealed run core and projects them into records when the session ends, so the
+sink works on that core: it projects the pass's records, replaces the declared
+sites' payloads by their reducers' values (releasing the activation the event
+held), stores the records on the core for the final projection, reads the
+declared KV-cache slices, evicts the forwards the ring buffer no longer holds
+(spilling them to disk when asked), and checks the retained-byte budget.
+:class:`TokenSeries` is what ``GenerationRecording.series(name)`` returns.
+"""
+
+from __future__ import annotations
+
+import dataclasses
+from collections.abc import Callable, Iterator, Mapping
+from pathlib import Path
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, NoReturn
+
+import torch
+
+from .._capture.projections import activation_record_from_event
+from .._errors import InvalidArgumentError
+from .._ir.selector_eval import module_union_matches, selector_from_spec
+from ._generation_options import GenerationOptions
+from .types import ActivationRecord
+
+if TYPE_CHECKING:
+    from ._recorder import Recorder
+
+__all__ = ["TokenSeries"]
+
+_REFUSAL = "tl.record(..., generate_kwargs=...) refuses: {}"
+
+
+@dataclasses.dataclass(frozen=True)
+class TokenSeries:
+    """One per-token series of a generation recording (DOCUMENTED-UNSTABLE).
+
+    Attributes
+    ----------
+    name:
+        The reducer site address or the KV series name (``kv.<layer>.key``).
+    positions:
+        The absolute sequence positions the series covers, prompt positions
+        first; forwards the ring buffer dropped are absent from the front.
+    values:
+        The values, one row per position along the first axis.
+    """
+
+    name: str
+    positions: range
+    values: torch.Tensor
+
+    def __len__(self) -> int:
+        return len(self.positions)
+
+
+def _nbytes(tensor: torch.Tensor | None) -> int:
+    """Return the payload bytes of ``tensor`` (0 for ``None``)."""
+
+    return 0 if tensor is None else tensor.numel() * tensor.element_size()
+
+
+def _cache_layers(cache: Any) -> int:
+    """Return how many decoder layers a KV cache holds (0 when unreadable)."""
+
+    for attr in ("layers", "key_cache"):
+        entries = getattr(cache, attr, None)
+        if entries is not None:
+            return len(entries)
+    return len(cache) if isinstance(cache, (tuple, list)) else 0
+
+
+def _cache_layer_kv(cache: Any, layer: int) -> tuple[torch.Tensor, torch.Tensor] | None:
+    """Return one layer's ``(keys, values)`` from a transformers cache of any vintage."""
+
+    layers = getattr(cache, "layers", None)
+    if layers is not None:
+        entry = layers[layer]
+        keys, values = getattr(entry, "keys", None), getattr(entry, "values", None)
+    elif getattr(cache, "key_cache", None) is not None:
+        keys, values = cache.key_cache[layer], cache.value_cache[layer]
+    elif isinstance(cache, (tuple, list)):
+        keys, values = cache[layer][0], cache[layer][1]
+    else:
+        return None
+    if isinstance(keys, torch.Tensor) and isinstance(values, torch.Tensor):
+        return keys, values
+    return None
+
+
+def _kv_slice(tensor: torch.Tensor, window: range) -> torch.Tensor:
+    """Return the ``[positions, heads, head_dim]`` slice of one cache tensor."""
+
+    return torch.movedim(tensor[0, :, window.start : window.stop, :], 1, 0).detach().clone()
+
+
+#: Projection facts of a pass whose outputs were released (the newest pass keeps its own).
+_NO_OUTPUTS: Mapping[str, tuple[()]] = MappingProxyType(
+    {"output_tensors": (), "output_tensor_addresses": (), "output_labels": ()}
+)
+
+
+def _release(event: Any, payload: torch.Tensor | None) -> None:
+    """Replace the payload a capture event holds for its output (``None`` releases it).
+
+    The tensor reference is shared by every copy of the event (the pass core, the
+    recorder's journal, replay projections), so one write reaches them all and the
+    activation it held is freed.
+    """
+
+    output = getattr(event, "output", None)
+    for attr, value in (("tensor", payload), ("transformed_tensor", None)):
+        ref = getattr(output, attr, None)
+        if ref is not None and hasattr(ref, "payload"):
+            object.__setattr__(ref, "payload", value)
+
+
+class _StepSink:
+    """Per-forward bookkeeping of a widened generation recording."""
+
+    def __init__(
+        self,
+        options: GenerationOptions,
+        recorder: Recorder,
+        max_new_tokens: Callable[[int], int | None],
+    ) -> None:
+        self.options = options
+        self.recorder = recorder
+        self.max_new_tokens = max_new_tokens
+        self._site_sets = {site: frozenset({site}) for site in options.reducers}
+        self.windows: list[range] = []
+        self.pass_of_step: list[int] = []
+        self.values: dict[str, dict[int, torch.Tensor]] = {site: {} for site in options.reducers}
+        self.bytes_by_step: list[int] = []
+        self.evicted: dict[int, str] = {}
+        self.spill_files: dict[int, Path] = {}
+        self.step_records: dict[int, list[ActivationRecord]] = {}
+        self.step_events: dict[int, list[Any]] = {}
+        self.retained_bytes = 0
+        self.peak_bytes = 0
+
+    # -- per forward -------------------------------------------------------------------
+
+    def after_pass(
+        self, step: int, pass_index: int, window: range, kwargs: Mapping[str, Any]
+    ) -> None:
+        """Reduce, read the KV slices, evict and guard after one recorded forward."""
+
+        self.windows.append(window)
+        self.pass_of_step.append(pass_index)
+        step_bytes = self._reduce(step, window)
+        step_bytes += self._read_kv(step, window, kwargs.get("past_key_values"))
+        self._release_unkept(step)
+        self.bytes_by_step.append(step_bytes)
+        self.retained_bytes += step_bytes
+        self._evict(step)
+        self.peak_bytes = max(self.peak_bytes, self.retained_bytes)
+        self._guard(step)
+
+    def _site_of(self, record: ActivationRecord) -> str | None:
+        """Return the declared reducer site ``record`` is the output of, if any."""
+
+        for site, addresses in self._site_sets.items():
+            if module_union_matches(record.ctx, addresses):
+                return site
+        return None
+
+    def _pass_core(self, step: int) -> tuple[Any, list[ActivationRecord], list[Any]]:
+        """Return forward ``step``'s sealed run core with its records and their events."""
+
+        cores = self.recorder._captured_run_cores
+        if len(cores) != step + 1:
+            self._refuse(
+                f"forward {step} left {len(cores)} sealed capture core(s) where {step + 1} were "
+                f"expected (a forward the recorder did not run as one pass)",
+                "record a model whose generate() calls model.forward once per step",
+            )
+        records: list[ActivationRecord] = []
+        events: list[Any] = []
+        for event in cores[step].events:
+            record = activation_record_from_event(event)
+            if record is not None:
+                records.append(record)
+                events.append(event)
+        return cores[step], records, events
+
+    def _store(self, step: int, core: Any, records: list[ActivationRecord]) -> None:
+        """Pin ``records`` on forward ``step``'s core: the final projection reads them."""
+
+        facts = MappingProxyType({**core.projection_facts, "records": tuple(records)})
+        self.recorder._captured_run_cores[step] = dataclasses.replace(core, projection_facts=facts)
+        self.step_records[step] = records
+
+    def _reduce(self, step: int, window: range) -> int:
+        """Replace the declared sites' payloads of one pass by their reduced values."""
+
+        core, records, events = self._pass_core(step)
+        self.step_events[step] = events
+        seen: set[str] = set()
+        total = 0
+        for index, (record, event) in enumerate(zip(records, events, strict=True)):
+            site = self._site_of(record)
+            if site is None:
+                total += _nbytes(record.ram_payload) + _nbytes(record.transformed_ram_payload)
+                continue
+            if site in seen:
+                self._refuse(
+                    f"site {site!r} produced more than one record in forward {step}",
+                    "declare a site whose module runs once per forward",
+                )
+            seen.add(site)
+            value = self._reduced_value(site, record, window, step)
+            _release(event, None)
+            records[index] = dataclasses.replace(
+                record,
+                ram_payload=value,
+                transformed_ram_payload=None,
+                metadata={
+                    **record.metadata,
+                    "reducer": getattr(self.options.reducers[site], "name", "callable"),
+                    "reduced_from_shape": tuple(record.ctx.shape or ()),
+                },
+            )
+            self.values[site][step] = value
+            total += _nbytes(value)
+        self._store(step, core, records)
+        missing = set(self.options.reducers) - seen
+        if missing:
+            self._refuse(
+                f"forward {step} recorded no output for the declared site(s) {sorted(missing)}",
+                "declare module addresses the model runs on every forward "
+                "(model.get_submodule(address) must exist)",
+            )
+        return total
+
+    def _release_unkept(self, step: int) -> None:
+        """Free what no kept record of forward ``step`` projects, and the previous forward's logits.
+
+        A forward's model inputs are logged with their payloads whether or not the
+        save predicate keeps them; under ``generate()`` they include the KV cache fed
+        back at every step, which grows with the sequence, so holding every pass's
+        inputs would cost memory quadratic in the length. A widened recording keeps
+        the declared sites and reducers only: the unkept payloads go once the step is
+        reduced, and so do the logits of every pass but the newest (the projection
+        reads the newest pass's outputs).
+        """
+
+        cores = self.recorder._captured_run_cores
+        kept = {
+            id(event)
+            for record, event in zip(self.step_records[step], self.step_events[step], strict=True)
+            if record.ram_payload is not None or record.transformed_ram_payload is not None
+        }
+        for event in cores[step].events:
+            if id(event) not in kept:
+                _release(event, None)
+        if step > 0:
+            previous = cores[step - 1]
+            facts = MappingProxyType({**previous.projection_facts, **_NO_OUTPUTS})
+            cores[step - 1] = dataclasses.replace(previous, projection_facts=facts)
+
+    def _reduced_value(
+        self, site: str, record: ActivationRecord, window: range, step: int
+    ) -> torch.Tensor:
+        """Run one reducer and check its position-major contract."""
+
+        payload = (
+            record.ram_payload if record.ram_payload is not None else record.transformed_ram_payload
+        )
+        if payload is None:
+            self._refuse(
+                f"site {site!r} kept no payload in forward {step} (save_out=False?)",
+                "let the save predicate keep the site's payload",
+            )
+        value = self.options.reducers[site](payload)
+        if not isinstance(value, torch.Tensor) or value.dim() == 0 or value.shape[0] != len(window):
+            got = tuple(value.shape) if isinstance(value, torch.Tensor) else type(value).__name__
+            self._refuse(
+                f"the reducer of {site!r} returned {got} for a forward of {len(window)} "
+                f"position(s); a reducer returns a tensor whose first axis runs over the "
+                f"forward's positions",
+                "return one row per position (torchlens.recording.reducers.norm/top_k/probe do)",
+            )
+        return value.detach()
+
+    def _read_kv(self, step: int, window: range, cache: Any) -> int:
+        """Keep the declared layers' new KV-cache slices for one forward."""
+
+        declared = self.options.kv_sites
+        if declared == () or declared is False:
+            return 0
+        if cache is None or _cache_layers(cache) == 0:
+            self._refuse(
+                f"kv_sites= was declared but forward {step} received no readable KV cache "
+                f"(past_key_values is {type(cache).__name__})",
+                "use a model whose generate() passes a transformers Cache to forward",
+            )
+        n_layers = _cache_layers(cache)
+        layers = range(n_layers) if isinstance(declared, bool) else declared
+        total = 0
+        for layer in layers:
+            if layer >= n_layers:
+                self._refuse(
+                    f"kv_sites names layer {layer} but the cache holds {n_layers} layer(s)",
+                    f"pass layer indexes below {n_layers}",
+                )
+            pair = _cache_layer_kv(cache, layer)
+            if pair is None or pair[0].shape[-2] < window.stop:
+                self._refuse(
+                    f"the KV cache of layer {layer} does not hold positions {window.start} to "
+                    f"{window.stop - 1} after forward {step} (a sliding or offloaded cache?)",
+                    "record with a plain DynamicCache (the generate() default)",
+                )
+            for part, tensor in zip(("key", "value"), pair, strict=True):
+                name = f"kv.{layer}.{part}"
+                value = _kv_slice(tensor, window)
+                self.values.setdefault(name, {})[step] = value
+                total += _nbytes(value)
+        return total
+
+    # -- ring buffer and spill -----------------------------------------------------------
+
+    def _evict(self, step: int) -> None:
+        """Spill or drop the forward the ring buffer no longer holds."""
+
+        keep_last = self.options.keep_last
+        if keep_last is None:
+            return
+        old = step - keep_last
+        if old < 0 or old in self.evicted:
+            return
+        payloads: dict[str, torch.Tensor] = {}
+        for name, by_step in self.values.items():
+            value = by_step.pop(old, None)
+            if value is not None:
+                payloads[name] = value
+        records = self.step_records[old]
+        for index, (record, event) in enumerate(zip(records, self.step_events[old], strict=True)):
+            _release(event, None)
+            if record.ctx.address in self.options.reducers:
+                key = str(record.ctx.address)
+            else:
+                key = str(record.ctx.label)
+                for payload in (record.ram_payload, record.transformed_ram_payload):
+                    if payload is not None:
+                        payloads[key] = payload
+            records[index] = self._evicted_record(record, old, key)
+        self._store(old, self.recorder._captured_run_cores[old], records)
+        fate = "dropped"
+        if self.options.spill is not None:
+            path = Path(self.options.spill)
+            path.mkdir(parents=True, exist_ok=True)
+            file = path / f"step-{old:06d}.pt"
+            torch.save({key: value.contiguous() for key, value in payloads.items()}, file)
+            self.spill_files[old] = file
+            fate = "spilled"
+        self.evicted[old] = fate
+        self.retained_bytes -= self.bytes_by_step[old]
+
+    def _evicted_record(self, record: ActivationRecord, step: int, key: str) -> ActivationRecord:
+        """Return ``record`` with its payloads released and its fate in the metadata."""
+
+        fate = "spilled" if self.options.spill is not None else "dropped"
+        metadata = {**record.metadata, "payload": fate, "spill_key": key}
+        if self.options.spill is not None:
+            metadata["spill_file"] = str(Path(self.options.spill) / f"step-{step:06d}.pt")
+        return dataclasses.replace(
+            record, ram_payload=None, transformed_ram_payload=None, metadata=metadata
+        )
+
+    # -- guard ---------------------------------------------------------------------------
+
+    def _guard(self, step: int) -> None:
+        """Refuse when the retained bytes exceed, or will exceed, the budget."""
+
+        budget = self.options.max_saved_bytes
+        if budget is None:
+            return
+        if self.retained_bytes > budget:
+            self._budget_refusal(
+                f"forward {step} brought the retained payloads to {self.retained_bytes:,} "
+                f"bytes, over the {budget:,}-byte budget"
+            )
+        if step != 1 or self.options.keep_last is not None:
+            return
+        new_tokens = self.max_new_tokens(self.windows[0].stop)
+        if new_tokens is None:
+            return
+        projected = self.bytes_by_step[0] + self.bytes_by_step[1] * new_tokens
+        if projected > budget:
+            self._budget_refusal(
+                f"the prefill retained {self.bytes_by_step[0]:,} bytes and the first decode "
+                f"step {self.bytes_by_step[1]:,}, so {new_tokens:,} new tokens would retain "
+                f"about {projected:,} bytes, over the {budget:,}-byte budget"
+            )
+
+    def _budget_refusal(self, reason: str) -> NoReturn:
+        """Refuse the generation: its retained bytes exceed the budget."""
+
+        raise InvalidArgumentError(
+            _REFUSAL.format(reason),
+            code="record_generation_budget_exceeded",
+            remedy=(
+                "reduce the declared sites (GenerationOptions(reducers=)), bound the ring "
+                "(keep_last=, with spill= to keep the rest on disk), or raise max_saved_bytes="
+            ),
+            reason=reason,
+        )
+
+    def _refuse(self, reason: str, remedy: str) -> NoReturn:
+        """Refuse the generation: a reducer or KV site broke its contract."""
+
+        raise InvalidArgumentError(
+            _REFUSAL.format(reason),
+            code="record_generation_reducer_invalid",
+            remedy=remedy,
+            reason=reason,
+        )
+
+    # -- reading -------------------------------------------------------------------------
+
+    @property
+    def series_names(self) -> tuple[str, ...]:
+        """Return the names ``series()`` answers, reducer sites first."""
+
+        return tuple(self.values)
+
+    def _rows(self, name: str) -> Iterator[tuple[int, torch.Tensor]]:
+        """Yield ``(step, value)`` for every step still readable, in step order."""
+
+        in_memory = self.values.get(name, {})
+        for step in range(len(self.windows)):
+            if step in in_memory:
+                yield step, in_memory[step]
+            elif self.evicted.get(step) == "spilled":
+                loaded = torch.load(self.spill_files[step], weights_only=True)
+                if name in loaded:
+                    yield step, loaded[name]
+
+    def series(self, name: str) -> TokenSeries:
+        """Return the per-token series ``name`` over every readable position."""
+
+        if name not in self.values:
+            raise InvalidArgumentError(
+                f"no per-token series named {name!r}; this recording has "
+                f"{list(self.values) or 'none (declare reducers= or kv_sites=)'}",
+                code="record_generation_step_missing",
+                remedy="pass a reducer site address or a kv.<layer>.key / kv.<layer>.value name",
+            )
+        rows = list(self._rows(name))
+        if not rows:
+            raise InvalidArgumentError(
+                f"every forward of series {name!r} was dropped by the ring buffer",
+                code="record_generation_step_missing",
+                remedy="pass spill= beside keep_last= to keep evicted forwards on disk",
+            )
+        start = self.windows[rows[0][0]].start
+        stop = self.windows[rows[-1][0]].stop
+        values = torch.cat([value for _, value in rows], dim=0)
+        return TokenSeries(name=name, positions=range(start, stop), values=values)
+
+
+def site_selector(sites: tuple[str, ...]) -> Any:
+    """Return the ``tl.module`` union of the declared reducer sites.
+
+    The save must be a selector that names the sites as modules: the recorder
+    joins a module's output facts to its output op at module exit and
+    re-evaluates only a module-bearing selector there, so a plain callable
+    never sees a module output as such.
+    """
+
+    selector = selector_from_spec("module", sites[0], None)
+    for site in sites[1:]:
+        selector = selector | selector_from_spec("module", site, None)
+    return selector
