@@ -47,6 +47,7 @@ def _run_scaled_loop(session: tc.ChecksSession, model: nn.Module, optimizer, sca
         scaler.update()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_chassis.py, debug/_checks/_ledgers.py and more.
 def test_checks_publish_the_new_series_on_the_shared_stream() -> None:
     """Scale, skipped-attempts, clip-factor, ratio series reach subscribers."""
 
@@ -84,36 +85,7 @@ def test_checks_publish_the_new_series_on_the_shared_stream() -> None:
     assert all(event.axis_provenance == "hook_only" for event in skip_events)
 
 
-def test_watchdog_state_is_a_verdict_series() -> None:
-    """The watchdog delivers verdict events, not silence, under total skip."""
-
-    torch.manual_seed(0)
-    model = nn.Linear(4, 4)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    scaler = GradScaler("cpu")
-    stream = EventStream()
-    session = tc.ChecksSession(
-        model, optimizer, scaler=scaler, accumulation_steps=1, event_stream=stream
-    )
-    session.attach()
-    try:
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            for _ in range(8):
-                optimizer.zero_grad()
-                loss = model(torch.randn(2, 4)).sum() * torch.tensor(float("inf"))
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-    finally:
-        session.detach()
-
-    watchdog_events = [e for e in stream.snapshot() if e.key == "checks/watchdog"]
-    assert watchdog_events
-    assert watchdog_events[-1].kind == "verdict"
-    assert watchdog_events[-1].verdict == "tripped"
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_unavailable_is_mandatory_vocabulary_on_the_stream() -> None:
     """Censored magnitude arrives as kind='unavailable' with a reason."""
 
@@ -138,6 +110,7 @@ def test_unavailable_is_mandatory_vocabulary_on_the_stream() -> None:
     assert magnitude_event.reason and "max_norm" in magnitude_event.reason
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _observability/_chassis.py.
 def test_throwing_subscriber_never_corrupts_collection() -> None:
     """The C06 isolation contract holds under the checks producer."""
 

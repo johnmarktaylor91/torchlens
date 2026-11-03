@@ -6,7 +6,6 @@ measurement, so every additive column sums to the ungrouped op view.
 
 from __future__ import annotations
 
-import inspect
 from collections.abc import Iterator
 from typing import Any
 
@@ -31,16 +30,6 @@ class _TwoLineModel(nn.Module):
         return y * 2 + 1  # two ops on one line
 
 
-def _line_of(marker: str) -> int:
-    """Return the source line of ``_TwoLineModel.forward`` holding ``marker``."""
-
-    lines, start = inspect.getsourcelines(_TwoLineModel.forward)
-    for offset, text in enumerate(lines):
-        if marker in text:
-            return start + offset
-    raise AssertionError(f"marker {marker!r} not in forward")
-
-
 @pytest.fixture(scope="module")
 def two_line_trace() -> Iterator[Any]:
     torch.manual_seed(0)
@@ -51,6 +40,7 @@ def two_line_trace() -> Iterator[Any]:
         captured.cleanup()
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile_source_line.py.
 def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> None:
     ungrouped = two_line_trace.profile().to_pandas()
     grouped = two_line_trace.profile(group_by="source_line").to_pandas()
@@ -61,20 +51,7 @@ def test_grouped_activation_bytes_sum_to_the_ungrouped_view(two_line_trace) -> N
     assert len(grouped) < len(ungrouped)
 
 
-def test_one_line_with_two_ops_is_one_row(two_line_trace) -> None:
-    grouped = two_line_trace.profile(group_by="source_line").to_pandas()
-    line = _line_of("two ops on one line")
-    name = f"{inspect.getsourcefile(_TwoLineModel)}:{line}"
-
-    row = grouped.loc[grouped["name"] == name]
-    assert len(row) == 1
-    assert int(row["op_count"].iloc[0]) == 2
-    assert row["kind"].iloc[0] == "source_line"
-    assert row["role"].iloc[0] == "SUBTOTAL"
-    boundary = grouped.loc[grouped["kind"] == "boundary"]
-    assert list(boundary["name"]) == ["<inputs and outputs>"]
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_grouped_profile_records_its_key_and_prints(two_line_trace) -> None:
     profile = two_line_trace.profile(group_by="source_line", sort_by="activation_memory")
 
@@ -89,6 +66,7 @@ def test_grouped_profile_records_its_key_and_prints(two_line_trace) -> None:
     )
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_profile.py.
 def test_group_by_refuses_other_levels_and_keys(two_line_trace) -> None:
     with pytest.raises(ValueError, match="use level='op'"):
         two_line_trace.profile("module", group_by="source_line")

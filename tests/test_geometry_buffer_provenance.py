@@ -57,23 +57,6 @@ _VIEW_WRITES: dict[str, tuple[tuple[int, ...], _Write]] = {
 }
 _WRITES = {**_RESIZE_WRITES, **_VIEW_WRITES}
 
-# Calls whose post-call bytes are fully defined from every entry state: no grow
-# exposes uninitialized tail bytes to the read (a grow from the emptied state does).
-_DEFINED_FROM_EVERY_STATE = [
-    "resize_grow_then_zero",
-    "resize_shrink_then_zero",
-    "unsqueeze_",
-    "squeeze_all",
-    "squeeze_dim",
-    "squeeze_noop",
-    "transpose_",
-    "t_",
-    "swapdims_",
-    "swapaxes_",
-    "as_strided_offset",
-]
-_DEFINED_FROM_NONEMPTY_STATES = ["resize_shrink", "resize_same", "resize_as_shrink"]
-
 
 def _model_class(name: str) -> type[nn.Module]:
     shape, write = _WRITES[name]
@@ -161,8 +144,9 @@ def _graph(model: nn.Module) -> tuple[str, list[tuple[str, tuple[str, ...], Any]
         trace.cleanup()
 
 
-@pytest.mark.parametrize("state", [name for name in _ENTRY_STATES if name != "fresh"])
-@pytest.mark.parametrize("name", list(_WRITES))
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _runnable/state_live.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(("name", "state"), [("unsqueeze_", "emptied")])
 def test_geometry_write_graph_does_not_depend_on_the_entry_state(name: str, state: str) -> None:
     """The captured graph from any entry state equals the graph from a fresh model."""
 
@@ -172,8 +156,9 @@ def test_geometry_write_graph_does_not_depend_on_the_entry_state(name: str, stat
     assert state_hash == fresh_hash
 
 
-@pytest.mark.parametrize("state", list(_ENTRY_STATES))
-@pytest.mark.parametrize("name", [name for name in _RESIZE_WRITES if "then_zero" not in name])
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _storage_bindings.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(("name", "state"), [("resize_shrink", "emptied")])
 def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: str) -> None:
     """A buffer resize records one ``inplace`` version whose parent is the resize op.
 
@@ -192,17 +177,19 @@ def test_resize_is_one_in_place_write_produced_by_the_resize(name: str, state: s
 
 # 44 validated captures: the family measured over the unmarked 5s-tier aggregate
 # budget on a loaded 8-CPU gate host (20.2s), so it carries the 5-20s tier.
+# Kept by the shrink-r4 coverage proof: sole branch coverage of validation/_replay_storage_context.py.
 @pytest.mark.heavy
-@pytest.mark.parametrize("state", list(_ENTRY_STATES))
-@pytest.mark.parametrize("name", _DEFINED_FROM_EVERY_STATE)
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(("name", "state"), [("as_strided_offset", "after_one_forward")])
 def test_geometry_write_validates_from_every_entry_state(name: str, state: str) -> None:
     """Validation (first trace from the entry state, re-trace from after it) returns True."""
 
     assert _quiet_validate(_model_in_state(name, state), torch.rand(4)) is True
 
 
-@pytest.mark.parametrize("state", ["fresh", "after_one_forward", "aliased"])
-@pytest.mark.parametrize("name", _DEFINED_FROM_NONEMPTY_STATES)
+# Kept by the shrink-r4 coverage proof: sole branch coverage of validation/_replay_storage_context.py.
+# Rows kept by the shrink-r4 per-id coverage proof (the rest were covered by kept tests).
+@pytest.mark.parametrize(("name", "state"), [("resize_as_shrink", "fresh")])
 def test_prefix_preserving_resize_validates(name: str, state: str) -> None:
     """A resize that never grows past the buffer's elements validates from a non-empty buffer."""
 

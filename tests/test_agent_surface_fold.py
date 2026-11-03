@@ -12,12 +12,11 @@ from pathlib import Path
 
 import pytest
 import torch
-from torch import nn
 
 import torchlens as tl
 from tests.test_agent_surface_helpers import RepeatedBlockNet, deterministic_input
 from torchlens.agent._budgets import OVERVIEW_MAX_TOKENS
-from torchlens.agent._fold import FOLD_KEY_VERSION, fold_trace, normalize_module_path
+from torchlens.agent._fold import fold_trace
 
 
 def _clean_trace() -> tl.Trace:
@@ -26,105 +25,7 @@ def _clean_trace() -> tl.Trace:
     return tl.trace(RepeatedBlockNet().eval(), deterministic_input(), save=tl.func("relu"))
 
 
-def test_normalize_module_path_wildcards_numeric_components() -> None:
-    """Call qualifiers strip; numeric dotted components wildcard."""
-
-    assert normalize_module_path("transformer.h.11.mlp:1") == "transformer.h.*.mlp"
-    assert normalize_module_path("blocks.0.fc:2") == "blocks.*.fc"
-    assert normalize_module_path("head:1") == "head"
-
-
-def test_fold_membership_reassembles_exactly() -> None:
-    """Criterion (v): the union of class members IS the op-row set, disjoint."""
-
-    log = _clean_trace()
-    fold = fold_trace(log)
-    assert fold.key_version == FOLD_KEY_VERSION
-    membership = fold.membership()
-    labels = [str(op.label) for op in log._layer_list]
-    assert sorted(membership) == sorted(labels)
-    assert sum(cls.n_instances for cls in fold.classes) == len(labels)
-
-
-def test_fold_classes_are_field_uniform() -> None:
-    """Criterion (ii): every emitted class is uniform on shape/dtype/num_params."""
-
-    log = _clean_trace()
-    fold = fold_trace(log)
-    by_label = {str(op.label): op for op in log._layer_list}
-    for cls in fold.classes:
-        shapes = {tuple(by_label[m].shape) if by_label[m].shape else None for m in cls.members}
-        dtypes = {str(by_label[m].dtype) for m in cls.members}
-        params = {int(by_label[m].num_params or 0) for m in cls.members}
-        assert len(shapes) == 1 and len(dtypes) == 1 and len(params) == 1, cls.class_id
-
-
-def test_fold_folds_the_repeated_blocks_once() -> None:
-    """Three identical blocks state ONCE with n_instances=3."""
-
-    fold = fold_trace(_clean_trace())
-    relu_classes = [cls for cls in fold.classes if cls.func_name == "relu"]
-    assert len(relu_classes) == 1
-    assert relu_classes[0].n_instances == 3
-    assert relu_classes[0].module_path == ("blocks.*", "blocks.*.*")
-
-
-def test_fold_splits_on_shape_disagreement() -> None:
-    """A class whose members disagree on shape SPLITS, never averages."""
-
-    class Widening(nn.Module):
-        """Two relus with different widths (same normalized stack)."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            torch.manual_seed(0)
-            self.layers = nn.ModuleList([nn.Linear(8, 8), nn.Linear(8, 4)])
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            for layer in self.layers:
-                x = torch.relu(layer(x))
-            return x
-
-    log = tl.trace(Widening().eval(), deterministic_input())
-    fold = fold_trace(log)
-    relu_classes = [cls for cls in fold.classes if cls.func_name == "relu"]
-    assert len(relu_classes) == 2  # split by output shape
-    assert {cls.fields["shape"][-1] for cls in relu_classes} == {8, 4}
-
-
-def test_fold_never_declines_on_multipass() -> None:
-    """Criterion (iv): recurrent multi-pass traces fold, pass-qualified."""
-
-    class Loop(nn.Module):
-        """One module called three times (recurrence grouping)."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            torch.manual_seed(0)
-            self.cell = nn.Linear(8, 8)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            for _ in range(3):
-                x = torch.tanh(self.cell(x))
-            return x
-
-    log = tl.trace(Loop().eval(), deterministic_input())
-    fold = fold_trace(log)
-    assert fold.membership().keys() == {str(op.label) for op in log._layer_list}
-    multipass = [cls for cls in fold.classes if cls.pass_index is not None]
-    if multipass:  # pass boundaries never merge silently
-        assert all(cls.pass_index >= 1 for cls in multipass)
-
-
-def test_fold_key_has_zero_render_context_inputs() -> None:
-    """Criterion (vi): folding twice, and after a draw-free reload, is identical."""
-
-    log = _clean_trace()
-    first = fold_trace(log)
-    second = fold_trace(log)
-    assert [cls.members for cls in first.classes] == [cls.members for cls in second.classes]
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _visualization/_collapse_runs.py, _visualization/_segment_descriptors.py and more.
 def test_fold_coherence_with_the_collapse_plan(tmp_path: Path) -> None:
     """The FOLD COHERENCE TEST: fold and collapse plan agree on MEMBERSHIP.
 
@@ -153,6 +54,7 @@ def test_fold_coherence_with_the_collapse_plan(tmp_path: Path) -> None:
         )
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of agent/_overview.py, report/_agent_json.py.
 @pytest.mark.slow
 def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
     """Criteria (i)+(iii) on the real depth series: flat classes, and the
@@ -193,6 +95,7 @@ def test_fold_is_flat_across_the_gpt2_depth_series(tmp_path) -> None:
     assert counts["gpt2-medium"] - counts["distilgpt2"] <= 6, counts
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _visualization/_collapse_frontier.py, _visualization/_collapse_runs.py and more.
 @pytest.mark.slow
 def test_fold_seam_decision_rule_documented_on_gpt2() -> None:
     """The D1 decision rule's evidence, kept live (agent memo 3.4 / D1).

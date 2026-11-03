@@ -46,6 +46,7 @@ def offline_hub(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     return fetched
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _capture/_structure_evidence.py, _capture/_weightsfree_admission.py and more and a sole campaign mutation kill.
 def test_hub_name_summary_builds_on_meta_without_weights(offline_hub: list[str]) -> None:
     report = tl.summary("gpt2", input_shape=(1, 8))
 
@@ -59,18 +60,10 @@ def test_hub_name_summary_builds_on_meta_without_weights(offline_hub: list[str])
     assert f"{expected_params:,}" in text or str(expected_params) in text
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _user_public_impls.py.
 def test_hub_name_summary_needs_input_evidence(offline_hub: list[str]) -> None:
     with pytest.raises(Exception) as excinfo:
         tl.summary("gpt2")
     assert getattr(excinfo.value, "fields", {}).get("code") == (
         "weightsfree_facade_input_evidence_required"
     )
-
-
-def test_hub_meta_model_is_all_meta(offline_hub: list[str]) -> None:
-    from torchlens.report._summary_hub import build_hub_meta_model
-
-    model = build_hub_meta_model("gpt2")
-    assert type(model).__name__ == "GPT2LMHeadModel"
-    assert not model.training
-    assert all(parameter.is_meta for parameter in model.parameters())

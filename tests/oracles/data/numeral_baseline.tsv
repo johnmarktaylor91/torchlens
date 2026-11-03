@@ -7641,8 +7641,6 @@ test-docstrings	tests/test_data_substrate_extraction_v2.py	14
 test-docstrings	tests/test_data_substrate_extraction_v2.py	16
 test-docstrings	tests/test_data_substrate_transforms.py	13
 test-docstrings	tests/test_dead_config_debloat.py	47
-test-docstrings	tests/test_debug_bisect_precision.py	32
-test-docstrings	tests/test_debug_bisect_precision.py	64
 test-docstrings	tests/test_debug_cost_audit_behaviors.py	100
 test-docstrings	tests/test_decoration.py	138
 test-docstrings	tests/test_decoration.py	1944

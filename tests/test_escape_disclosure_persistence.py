@@ -10,9 +10,7 @@ a positive one still never does (tamper must not forge ``True``).
 from __future__ import annotations
 
 import copy
-import warnings
 
-import pytest
 import torch
 from torch import nn
 
@@ -34,6 +32,7 @@ def _traced(tmp_path):
     return tl.trace(_TinyModel(), torch.randn(1, 4))
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_pickle_state.py, _io/scrub.py and a sole campaign mutation kill.
 def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     """capture_verified=False + reason must round-trip through .tlspec."""
 
@@ -51,23 +50,7 @@ def test_negative_verification_verdict_survives_save_load(tmp_path) -> None:
     assert loaded.provenance.verification_reason == "escape_rescue_unrecovered"
 
 
-def test_positive_verification_claim_never_persists(tmp_path) -> None:
-    """A True verdict (or any non-False value) loads as None: verdicts can
-    only degrade across persistence, so a tampered artifact cannot forge a
-    verified capture."""
-
-    trace = _traced(tmp_path)
-    trace._provenance_verified = True
-    trace._provenance_verification_reason = "witness_verified"
-
-    bundle = tmp_path / "positive.tlspec"
-    trace.save(str(bundle))
-    loaded = tl.load(str(bundle))
-
-    assert loaded.provenance.verified is None
-    assert loaded.provenance.verification_reason is None
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/_trace_pickle_state.py and a sole campaign mutation kill.
 def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     """A same-session deepcopy is not a persistence boundary: both verdict
     directions survive it."""
@@ -84,21 +67,3 @@ def test_deepcopy_keeps_the_full_live_verdict(tmp_path) -> None:
     clone = copy.deepcopy(trace)
     assert clone.provenance.verified is False
     assert clone.provenance.verification_reason == "mode_rescue_rerun"
-
-
-def test_deferred_storage_key_never_touches_fake_tensor_storage() -> None:
-    """grind-r5 b6 R16 (sol): the deferred-alias key helper must classify a
-    FakeTensor ineligible WITHOUT reading its data pointer (torch emits an
-    'almost definitely a bug' warning on that read, ahead of the typed
-    refusal the entry guard owns)."""
-
-    fake_tensor_mode = pytest.importorskip("torch._subclasses.fake_tensor").FakeTensorMode
-
-    from torchlens._utils.tensor_utils import _deferred_storage_key
-
-    with fake_tensor_mode() as mode:
-        fake = mode.from_tensor(torch.randn(2, 2))
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        assert _deferred_storage_key(fake) is None

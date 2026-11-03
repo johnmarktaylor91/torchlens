@@ -132,6 +132,7 @@ def test_str_is_pure_ascii(golden_report) -> None:
     str(golden_report).encode("ascii")
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_env_override(monkeypatch) -> None:
     """Rung 2: the environment override wins over everything below."""
 
@@ -141,24 +142,7 @@ def test_detection_env_override(monkeypatch) -> None:
     assert detect_style(io.StringIO()) == "ascii"
 
 
-def test_detection_ci_rung_beats_a_tty(monkeypatch) -> None:
-    """Rung 3: CI/GITHUB_ACTIONS resolve ASCII even on a capable pty."""
-
-    monkeypatch.delenv("TORCHLENS_SUMMARY_STYLE", raising=False)
-    monkeypatch.setenv("CI", "true")
-
-    class _Tty(io.StringIO):
-        """A capable interactive stream."""
-
-        encoding = "utf-8"
-
-        def isatty(self) -> bool:
-            return True
-
-    monkeypatch.setenv("TERM", "xterm-256color")
-    assert detect_style(_Tty()) == "ascii"
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_falls_toward_ascii(monkeypatch) -> None:
     """Non-tty, dumb TERM, and non-round-tripping encodings all -> ASCII."""
 
@@ -187,6 +171,7 @@ def test_detection_falls_toward_ascii(monkeypatch) -> None:
     assert detect_style(_DumbTty()) == "ascii"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_summary_charset.py.
 def test_detection_affirms_unicode_only_when_verified(monkeypatch) -> None:
     """The ONLY path to unicode: interactive + TERM + verified encoding."""
 

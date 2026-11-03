@@ -21,9 +21,6 @@ import sys
 
 import pytest
 
-from torchlens._utils import _torch_compat
-from torchlens._utils.rng import host_nondeterminism_monitor
-
 pytestmark = pytest.mark.filterwarnings("ignore::UserWarning")
 
 _FIRST_SELECTIVE_CAPTURE_IS_CLEAN = """
@@ -78,15 +75,3 @@ def test_first_selective_runnable_capture_is_not_poisoned_by_lazy_dynamo_import(
         f"STDOUT:{completed.stdout}\nSTDERR:{completed.stderr}"
     )
     assert "OK" in completed.stdout
-
-
-def test_monitor_entry_warms_lazy_torch_imports() -> None:
-    """Entering the monitor latches the compat warm flag before any patch."""
-
-    import torch
-    from torch import nn
-
-    with host_nondeterminism_monitor(nn.Identity()):
-        assert _torch_compat._LAZY_TORCH_IMPORTS_WARMED is True
-        assert "torch._dynamo" in sys.modules
-    assert torch is not None

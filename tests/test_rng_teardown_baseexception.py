@@ -23,25 +23,7 @@ def _fresh_monitor() -> host_nondeterminism_monitor:
     return host_nondeterminism_monitor(model=None)
 
 
-def test_keyboard_interrupt_in_one_restore_still_drains_the_queue():
-    """A BaseException in one restore never strands the later restores."""
-
-    monitor = _fresh_monitor()
-    ran: list[str] = []
-
-    def _boom() -> None:
-        ran.append("boom")
-        raise KeyboardInterrupt
-
-    monitor._restores.extend([lambda: ran.append("first"), _boom, lambda: ran.append("last")])
-    with pytest.raises(KeyboardInterrupt):
-        monitor._teardown()
-    # Restores run in reverse registration order; ALL of them must have run.
-    assert ran == ["last", "boom", "first"]
-    assert monitor._restores == []
-    assert "patch_restore_interrupted" in monitor.result.uncertain_detail
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/rng/monitor.py.
 def test_keyboard_interrupt_before_the_queue_still_drains_it():
     """A BaseException in the profile-hook stage never strands the queue."""
 
@@ -60,6 +42,7 @@ def test_keyboard_interrupt_before_the_queue_still_drains_it():
     assert "teardown_interrupted" in monitor.result.uncertain_detail
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/rng/monitor.py.
 def test_second_teardown_after_interrupt_is_a_safe_no_op():
     """The idempotence latch keeps holding after an interrupted unwind."""
 
@@ -77,6 +60,7 @@ def test_second_teardown_after_interrupt_is_a_safe_no_op():
     assert ran == ["drained"]
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/rng/monitor.py.
 def test_plain_exception_semantics_unchanged():
     """Ordinary restore Exceptions stay flagged-and-swallowed as before."""
 
