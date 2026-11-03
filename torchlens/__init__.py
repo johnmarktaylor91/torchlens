@@ -21,7 +21,7 @@ if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
 
-__version__ = "2.36.3"
+from ._vocab._package_version import __version__ as __version__
 
 if _TYPE_CHECKING:
     from ._data_classes.trace import Trace
