@@ -1045,7 +1045,7 @@ torchlens/debug/_grad_fn_walk.py::walk_grad_fn	98
 torchlens/debug/_gradients.py::grad_health	66
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	146
 torchlens/debug/_graph.py::_compare_rows	126
-torchlens/debug/_graph.py::dead_neurons_rows	81
+torchlens/debug/_graph.py::dead_neurons_rows	78
 torchlens/debug/_graph.py::lineage	80
 torchlens/debug/_graph_breaks.py::graph_breaks	67
 torchlens/debug/_infer_failure_classify.py::classify_nongeometric_failure	68
