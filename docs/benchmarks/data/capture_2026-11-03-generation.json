@@ -1,0 +1,173 @@
+{
+ "measured_on": "2026-11-03",
+ "host": {
+  "name": "the same 32-core Intel Xeon worker, four torch threads, one process per token count",
+  "cpus": 32,
+  "torch_threads": 4
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CPU build)",
+  "torchvision": "0.28.0",
+  "transformers": "5.18.0",
+  "torchlens": "development branch, 2026-11-03",
+  "nnsight": "0.8.1"
+ },
+ "harness": "tl.record(model, ids, save=<every block MLP and the final layer norm>, generate_kwargs={max_new_tokens: N, min_new_tokens: N, do_sample: False, use_cache: True}); model EleutherAI/pythia-70m float32, prompt \"The study of the brain begins with\"",
+ "prompt_tokens": 7,
+ "generation_plain": {
+  "plain-500": {
+   "n_steps": 500,
+   "wall_s": 428.66,
+   "wall_per_token_ms": 857.33,
+   "peak_saved_bytes": 7254016,
+   "rss_mib": 5453.6,
+   "rss_mib_every_60_s": [
+    [
+     0,
+     19
+    ],
+    [
+     61,
+     1039
+    ],
+    [
+     121,
+     1659
+    ],
+    [
+     182,
+     2183
+    ],
+    [
+     243,
+     2854
+    ],
+    [
+     303,
+     3567
+    ],
+    [
+     364,
+     4390
+    ],
+    [
+     425,
+     5044
+    ]
+   ]
+  },
+  "plain-1000": {
+   "n_steps": 1000,
+   "wall_s": 1336.26,
+   "wall_per_token_ms": 1336.26,
+   "peak_saved_bytes": 14422016,
+   "rss_mib": 16081.8,
+   "rss_mib_every_60_s": [
+    [
+     0,
+     39
+    ],
+    [
+     61,
+     928
+    ],
+    [
+     122,
+     1265
+    ],
+    [
+     182,
+     1671
+    ],
+    [
+     243,
+     2143
+    ],
+    [
+     304,
+     2663
+    ],
+    [
+     364,
+     3224
+    ],
+    [
+     425,
+     3841
+    ],
+    [
+     486,
+     4471
+    ],
+    [
+     547,
+     5204
+    ],
+    [
+     608,
+     5842
+    ],
+    [
+     669,
+     6574
+    ],
+    [
+     729,
+     7193
+    ],
+    [
+     790,
+     7945
+    ],
+    [
+     851,
+     8849
+    ],
+    [
+     911,
+     9685
+    ],
+    [
+     972,
+     10654
+    ],
+    [
+     1033,
+     11506
+    ],
+    [
+     1094,
+     12331
+    ],
+    [
+     1154,
+     13060
+    ],
+    [
+     1215,
+     13945
+    ],
+    [
+     1276,
+     14772
+    ],
+    [
+     1337,
+     15638
+    ]
+   ]
+  },
+  "plain-2000": {}
+ },
+ "page_rows": [
+  {
+   "section": "known_costs",
+   "text": "| 500 | 857 ms | 5.3 GiB | 6.9 MiB |"
+  },
+  {
+   "section": "known_costs",
+   "text": "| 1,000 | 1,336 ms | 15.7 GiB | 13.8 MiB |"
+  }
+ ]
+}
