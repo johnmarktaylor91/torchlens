@@ -11,6 +11,7 @@ import torchlens as tl
 from torchlens._selection.selectors import output_at
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
+    SiteResolutionError,
 )
 
 
@@ -140,3 +141,17 @@ def test_target_specs_freeze_and_resolve_clearly(phase2_log: tl.Trace) -> None:
     one_spec = tl.module("block.linear").to_target_spec()
     assert phase2_log[one_spec].layer_label == "linear_1_1"
     assert phase2_log[one_spec.freeze()].layer_label == "linear_1_1"
+
+
+def test_resolution_empty_selection_and_one_thing_refusals(phase2_log: tl.Trace) -> None:
+    """A set selector may be empty and uncapped; a one-thing spelling must match one site."""
+
+    assert phase2_log[tl.func("does_not_exist")].is_empty
+    assert len(phase2_log[tl.func("does_not_exist")]) == 0
+    assert len(phase2_log[tl.func("relu")]) == 2
+
+    with pytest.raises(SiteResolutionError, match="matched 0 sites"):
+        phase2_log[tl.label("does_not_exist")]
+
+    with pytest.raises(AmbiguousSiteError, match="names one site"):
+        phase2_log[tl.func("relu").to_target_spec()]
