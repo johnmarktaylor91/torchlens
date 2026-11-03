@@ -84,9 +84,11 @@ def test_lean_keeps_the_selected_records_and_journals_nothing_else(name: str) ->
 def test_lean_records_based_reads_are_complete(name: str) -> None:
     lean = _record_lean(name)
     default = record_default(name)
-    assert [r.ctx.label for r in lean.records_in_pass(0)] == [
-        r.ctx.label for r in default.records_in_pass(0)
-    ]
+    assert sorted(lean.by_pass) == sorted(default.by_pass) != []
+    for pass_number in default.by_pass:
+        assert [r.ctx.label for r in lean.records_in_pass(pass_number)] == [
+            r.ctx.label for r in default.records_in_pass(pass_number)
+        ]
     assert isinstance(lean.summary(), str)
     pd = pytest.importorskip("pandas")
     frame = lean.to_pandas()
@@ -162,7 +164,7 @@ def test_recorder_door_takes_the_lean_keyword() -> None:
     rec = recorder.recording
     assert rec.options.lean is True
     assert len(rec.records) == 2
-    assert [len(list(rec.records_in_pass(i))) for i in (0, 1)] == [1, 1]
+    assert sorted(len(list(rec.records_in_pass(p))) for p in rec.by_pass) == [1, 1]
     assert all(e.predicate_matched for e in _events(rec).amended_op_records())
 
 
