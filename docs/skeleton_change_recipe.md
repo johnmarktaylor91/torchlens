@@ -277,7 +277,9 @@ print(compat_v2.outcome)
 ```
 
 ```text
-_SiteTable(1 site: addmm_8_93)
+_SiteTable: 1 site
+  addmm_8
+  more      .labels()  .to_pandas()
 EXACT
 ```
 

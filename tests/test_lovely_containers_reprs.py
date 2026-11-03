@@ -142,7 +142,7 @@ def test_bundle_repr_distribution_and_member_lines() -> None:
 
 # Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 def test_edge_record_repr_designed() -> None:
-    """Edge records render source -> target lines, sentinel-silent."""
+    """Edge records describe the argument occurrence without raw labels or sentinels."""
 
     class _Viewy(nn.Module):
         def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -156,8 +156,9 @@ def test_edge_record_repr_designed() -> None:
     records = [e for op in trace._layer_list for e in (getattr(op, "edge_uses", ()) or ())]
     assert records
     texts = [repr(e) for e in records]
-    assert all(text.startswith("edge ") and " -> " in text for text in texts)
-    assert any("[view]" in text for text in texts)
+    assert all(text.startswith("EdgeUseRecord: ") and " argument " in text for text in texts)
+    assert any(", view" in text for text in texts)
+    assert all(str(record).splitlines()[0] == repr(record) for record in records)
     assert all("unknown" not in text for text in texts)  # sentinel never prints
     trace.cleanup()
 
