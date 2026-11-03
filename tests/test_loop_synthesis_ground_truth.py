@@ -285,6 +285,42 @@ def _trace_and_check(
     assert check_metadata_invariants(traced)
 
 
+class _RepeatedFusedRecurrent(nn.Module):
+    """Call one fused recurrent module repeatedly with state feedback."""
+
+    def __init__(self, kind: type[nn.RNNBase], calls: int) -> None:
+        """Initialize the selected fused recurrent module.
+
+        Parameters
+        ----------
+        kind:
+            ``nn.RNN``, ``nn.GRU``, or ``nn.LSTM``.
+        calls:
+            Number of repeated calls.
+        """
+        super().__init__()
+        self.recurrent = kind(4, 4, batch_first=True)
+        self.calls = calls
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Feed each call's state into the next call.
+
+        Parameters
+        ----------
+        x:
+            Batched input sequence.
+
+        Returns
+        -------
+        torch.Tensor
+            Final sequence output.
+        """
+        state: Any = None
+        for _ in range(self.calls):
+            x, state = self.recurrent(x) if state is None else self.recurrent(x, state)
+        return x
+
+
 @pytest.mark.parametrize(
     ("case", "first", "second", "truth"),
     [
@@ -440,4 +476,26 @@ def test_pure_param_free_partition_matches_brute_force_truth(
     traced = trace_fn(model_type(), torch.randn(1, 4))
     for stem, truth_sites in truth.items():
         _assert_brute_force_partition(traced, stem, truth_sites)
+    assert check_metadata_invariants(traced)
+
+
+@pytest.mark.parametrize(
+    ("kind", "stem", "slots"),
+    [
+        pytest.param(nn.RNN, "rnntanh", 2, id="RNN"),
+        pytest.param(nn.GRU, "gru", 2, id="GRU"),
+        pytest.param(nn.LSTM, "lstm", 3, id="LSTM"),
+    ],
+)
+def test_fused_recurrent_slots_match_brute_force_truth(
+    kind: type[nn.RNNBase], stem: str, slots: int
+) -> None:
+    """Pin fused RNN/GRU/LSTM calls to one three-pass layer per output slot."""
+    calls = 3
+    traced = trace_fn(_RepeatedFusedRecurrent(kind, calls), torch.randn(1, 5, 4))
+    ops = _ops_with_stem(traced, stem)
+    layers = {op.layer_label for op in ops}
+    assert len(ops) == calls * slots
+    assert len(layers) == slots
+    assert all(sum(op.layer_label == layer for op in ops) == calls for layer in layers)
     assert check_metadata_invariants(traced)

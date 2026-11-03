@@ -195,3 +195,34 @@ def test_amp_hint_fires_only_for_pure_inf_findings_without_scale() -> None:
         assert disclosed.grad_scale == 65536.0
     finally:
         captured.cleanup()
+
+
+def test_unpaired_birth_is_never_overclaimed() -> None:
+    """A birth inside an unsaved (unpaired) node stays first-among-checked.
+
+    A custom autograd Function has no paired traced op, so ``save_grads``
+    never saved its payloads: the tool must report the non-finite evidence
+    WITHOUT fabricating a birth claim it cannot prove.
+    """
+
+    class _WithBadBackward(nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.linear = nn.Linear(3, 3)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            """Route through the NaN-emitting custom Function."""
+
+            return _NanBirthBackward.apply(self.linear(x)).sum()
+
+    captured = _backward_trace(_WithBadBackward(), torch.randn(2, 3, requires_grad=True))
+    try:
+        result = bisect_nan_backward(captured)
+        assert result.found
+        assert result.birth is None
+        assert result.verdict_scope == "found_first_among_checked"
+        assert result.uncertainty_zone, "the unchecked custom node must be named"
+        assert any(t.verdict == "propagated" for t in result.transitions)
+        assert "no birth is provable" in result.message
+    finally:
+        captured.cleanup()

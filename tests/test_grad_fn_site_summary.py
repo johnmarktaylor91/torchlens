@@ -69,3 +69,12 @@ def test_keyless_op_backed_rollup_refuses_site_key_unavailable(monkeypatch) -> N
     with pytest.raises(InvalidArgumentError) as excinfo:
         _ = trace.grad_fn_site_summary
     assert excinfo.value.fields["code"] == "site_key_unavailable"
+
+
+def test_unattributed_grad_fns_group_under_none_bucket() -> None:
+    trace = _backward_trace()
+    summary = trace.grad_fn_site_summary
+    assert None in summary, "AccumulateGrad nodes should land in the None bucket"
+    unattributed = summary[None]
+    assert unattributed["fire_count"] > 0
+    assert any(label.startswith("accumulategrad") for label in unattributed["grad_fn_labels"])

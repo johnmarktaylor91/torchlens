@@ -71,3 +71,14 @@ def test_scramble_source_and_from_both_passed_refuses() -> None:
     assert excinfo.value.fields["code"] == "intervention_source_conflict"
     assert "source=" in str(excinfo.value)
     assert "from_=" in str(excinfo.value)
+
+
+def test_typo_can_never_flip_batch_independent_open() -> None:
+    """A1b belt: no constructible spec with a bad token exists, so the append
+    gate can never see ``is_batch_independent=True`` from a typo."""
+
+    with pytest.raises(InvalidArgumentError):
+        tl.mean_ablate(dim="btach")
+    # The only constructible self spellings derive fail-closed flags:
+    assert tl.mean_ablate(dim=None).is_batch_independent is False
+    assert tl.mean_ablate(dim=0).is_batch_independent is False

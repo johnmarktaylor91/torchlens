@@ -17,6 +17,7 @@ from torchlens._constants import (  # noqa: E402
     BUFFER_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
+from torchlens._data_classes._summary import format_call_arg  # noqa: E402
 from torchlens._data_classes.buffer import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
     BufferAccessor,
@@ -139,6 +140,40 @@ def io_pandas_log() -> tuple[Any, _IoPandasModel, torch.Tensor]:
     return log, model, x
 
 
+class _CondConvModel(nn.Module):
+    """Conv-plus-conditional model for layer-pass dataframe column checks."""
+
+    def __init__(self) -> None:
+        """Build the conv layer whose call produces a non-empty func_config."""
+
+        super().__init__()
+        self.conv = nn.Conv2d(1, 2, 3, stride=2, padding=1)
+        # Deterministic positive weights so the THEN branch always fires.
+        nn.init.constant_(self.conv.weight, 0.1)
+        nn.init.constant_(self.conv.bias, 0.0)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run a conv followed by a tensor-driven conditional.
+
+        Parameters
+        ----------
+        x:
+            Input image tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Branch-selected output tensor.
+        """
+
+        y = self.conv(x)
+        if y.mean() > 0:
+            y = torch.relu(y)
+        else:
+            y = torch.sigmoid(y)
+        return y
+
+
 @pytest.mark.parametrize(
     ("accessor", "field_order"),
     [
@@ -215,3 +250,78 @@ def test_tabular_exports_round_trip(
         parquet_df = pd.read_parquet(parquet_path)
         assert list(parquet_df.columns) == list(expected_df.columns)
         assert len(parquet_df) == len(expected_df)
+
+
+def test_trace_to_pandas_func_config_and_conditional_values() -> None:
+    """``func_config`` and ``conditional_then_children`` carry per-op values."""
+
+    log = trace_fn(
+        _CondConvModel(),
+        torch.rand(1, 1, 8, 8),
+        save="all",
+    )
+    try:
+        model_df = log.to_pandas()
+
+        assert "func_config" in model_df.columns
+        assert "conditional_then_children" in model_df.columns
+
+        conv_row = model_df[model_df["layer_label"] == "conv2d_1_1"].iloc[0]
+        assert conv_row["func_config"] == log["conv2d_1_1"].func_config
+        assert conv_row["func_config"]["stride"] == (2, 2)
+        assert conv_row["conditional_then_children"] == ("relu_1_4",)
+
+        relu_row = model_df[model_df["layer_label"] == "relu_1_4"].iloc[0]
+        assert relu_row["func_config"] == {}
+        assert relu_row["conditional_then_children"] == ()
+    finally:
+        log.cleanup()
+
+
+def test_module_pass_summaries_are_formatted_before_gc(
+    io_pandas_log: tuple[Any, _IoPandasModel, torch.Tensor],
+) -> None:
+    """Module-pass summary strings should survive the forward-arg GC step.
+
+    Parameters
+    ----------
+    io_pandas_log:
+        Logged model fixture.
+    """
+    log, model, x = io_pandas_log
+    payload, config, kwargs = model.build_block_inputs(x)
+    pass_log = log.module_calls["block:1"]
+
+    expected_args_summary = format_call_arg((x, payload, config))
+    expected_kwargs_summary = format_call_arg(kwargs)
+
+    assert pass_log.forward_args is None
+    assert pass_log.forward_kwargs is None
+    assert pass_log.forward_args_summary == expected_args_summary
+    assert pass_log.forward_kwargs_summary == expected_kwargs_summary
+
+
+def test_buffer_accessor_to_pandas_schema(
+    io_pandas_log: tuple[Any, _IoPandasModel, torch.Tensor],
+) -> None:
+    """BufferAccessor should export one row per buffer with canonical columns.
+
+    Regression gate for the ``initial_value`` MAJOR: this column used to be
+    silently absent from ``BUFFER_LOG_FIELD_ORDER`` and therefore missing
+    from every ``to_pandas()`` export built on it.
+
+    Parameters
+    ----------
+    io_pandas_log:
+        Logged model fixture.
+    """
+    log, _, _ = io_pandas_log
+    df = log.buffers.to_pandas()
+    expected_columns = [
+        field for field in BUFFER_LOG_FIELD_ORDER if field not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
+    ]
+    assert list(df.columns) == expected_columns
+    assert "initial_value" in df.columns
+    assert "versions" not in df.columns
+    assert len(df) == len(log.buffers)
+    assert df.loc[0, "initial_value"] is not None

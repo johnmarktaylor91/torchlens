@@ -57,3 +57,18 @@ def test_portable_explicit_flags_keep_historical_meaning(trace, tmp_path):
     trace.save(tmp_path / "with_args", include_saved_args=True)
     trace.save(tmp_path / "no_args", include_saved_args=False)
     assert _blob_count(tmp_path / "with_args") > _blob_count(tmp_path / "no_args")
+
+
+def test_omitted_flags_keep_level_defaults(trace, tmp_path):
+    """Defaults per level are unchanged: the sentinel only detects EXPLICIT values."""
+
+    trace.save(tmp_path / "portable", level="portable")
+    trace.save(tmp_path / "audit", level="audit")
+    trace.save(tmp_path / "exec", level="executable_with_callables")
+    # audit ships no payload blobs; executable ships strictly more than portable
+    # (the saved-args/RNG payloads its level exists for).
+    assert _blob_count(tmp_path / "audit") == 0
+    assert _blob_count(tmp_path / "exec") > _blob_count(tmp_path / "portable")
+    for name in ("portable", "audit", "exec"):
+        loaded = tl.load(tmp_path / name)
+        assert loaded._num_ops == trace._num_ops

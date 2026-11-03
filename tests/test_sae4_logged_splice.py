@@ -158,3 +158,17 @@ def test_logged_splice_at_a_tuple_returning_module_refuses_and_the_unlogged_spli
     assert caught.value.fields["code"] == "sae_splice_logged_output_not_tensor"
     result = tl.bridge.sae.splice(model, x, site="pair.inner", sae=sae)
     assert result.latents_site is None and result.latents.shape == (2, 3)
+
+
+def test_logged_splice_keeps_a_latent_edit(setup) -> None:
+    model, x, sae = setup
+
+    def drop_latent_one(latents: torch.Tensor) -> torch.Tensor:
+        edited = latents.clone()
+        edited[..., 1] = 0
+        return edited
+
+    on = _splice(model, x, sae, log_latents=True, latents_edit=drop_latent_one)
+    off = _splice(model, x, sae, latents_edit=drop_latent_one)
+    assert torch.equal(on.spliced_outputs[0], off.spliced_outputs[0])
+    assert torch.equal(on.spliced[on.latents_site].out, off.latents)

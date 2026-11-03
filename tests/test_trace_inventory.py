@@ -89,3 +89,44 @@ def test_sites_table_refuses_keyless_legacy_artifacts() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         trace.sites()
     assert excinfo.value.fields["code"] == "site_key_unavailable"
+
+
+def test_bill_of_materials_reports_captured_facts() -> None:
+    """Every figure matches the fields the trace already carries."""
+
+    torch.manual_seed(2)
+    model = nn.Sequential(nn.Linear(4, 3), nn.ReLU(), nn.BatchNorm1d(3))
+    trace = tl.trace(model, torch.randn(2, 4), save=tl.func("relu"))
+
+    bom = trace.bill_of_materials()
+
+    assert set(bom) == {
+        "capture",
+        "graph",
+        "parameters",
+        "buffers",
+        "activations",
+        "backward",
+        "annotations",
+        # A09 sumfam D20: logged values are inventory (read-back surface).
+        "logged_values",
+    }
+    assert bom["capture"]["backend"] == "torch"
+    assert bom["capture"]["outcome_status"] == "complete"
+    assert bom["capture"]["model_class_name"] == "Sequential"
+    assert bom["graph"]["num_ops"] == len(trace._layer_list)
+    assert bom["graph"]["num_layers"] == len(trace.layers)
+    assert bom["graph"]["num_modules"] == len(trace.modules)
+    assert bom["parameters"]["num_params"] == trace.num_params
+    assert bom["parameters"]["num_param_tensors"] == len(trace.params)
+    assert bom["buffers"]["num_buffer_tensors"] == len(trace.buffers)
+    saved = [op for op in trace._layer_list if op.has_saved_activation]
+    # Payload-scope law (C02; sumfam D8): BOM's byte figures are
+    # retained_now; the at_capture facts print BESIDE them.
+    assert bom["activations"]["payload_scope"] == "retained_now"
+    assert bom["activations"]["num_saved_at_capture"] == len(saved)
+    assert bom["activations"]["at_capture_memory"] == sum(int(op.activation_memory) for op in saved)
+    # A live full-save trace still holds everything it captured.
+    assert bom["activations"]["retained_now_memory"] == bom["activations"]["at_capture_memory"]
+    assert bom["backward"]["num_grad_fn_records"] == 0
+    assert bom["annotations"] == ()

@@ -634,3 +634,12 @@ def test_selector_subtraction_non_selector_operand_refuses_typed():
     with pytest.raises(ArgumentTypeError) as excinfo:
         _ = tl.func("relu") - 3
     assert excinfo.value.fields["code"] == "selector_subtraction_operand_invalid"
+
+
+def test_empty_selection_legal_end_to_end(log):
+    """Zero matches is disclosure, never an error."""
+
+    resolved = log[tl.label("no_such_layer_anywhere").__selection__()]
+    assert len(resolved) == 0
+    assert resolved.is_empty is True
+    assert bool(resolved) is False

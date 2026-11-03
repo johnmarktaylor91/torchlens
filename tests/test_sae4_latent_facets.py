@@ -352,3 +352,9 @@ def test_sae_target_unit_outside_the_latents_refuses_naming_the_sae_spelling(set
         tl.attribution.saliency(model, x, target=tl.attribution.SiteTarget("fc1", sae=sae, unit=7))
     assert caught.value.fields["code"] == "attribution_site_unit_invalid"
     assert "unit=0, sae=sae" in str(caught.value)
+
+
+def test_latent_selector_repr_is_its_spelling(setup) -> None:
+    assert repr(tl.facet("res").latent(2)) == "tl.facet('res').latent(2)"
+    assert repr(tl.facet("res").latent([0, 2])) == "tl.facet('res').latent([0,2])"
+    assert repr(tl.facet("res").latent([1])) == "tl.facet('res').latent([1])"

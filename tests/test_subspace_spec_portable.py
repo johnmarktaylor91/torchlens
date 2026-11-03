@@ -173,3 +173,17 @@ def _coded(error: BaseException) -> Any:
             return current
         current = current.__cause__ or current.__context__
     raise AssertionError(f"no coded error in the chain of {error!r}")
+
+
+@pytest.mark.parametrize("rank", [1, 4])
+@pytest.mark.parametrize("verb", ["scale", "zero_ablate"])
+def test_saved_rotation_reapplies_bit_identically(tmp_path: Path, rank: int, verb: str) -> None:
+    edit = tl.scale(2.0) if verb == "scale" else tl.zero_ablate()
+    session = _edited(_ROTATION[:rank], edit)
+    loaded = _save_load(session, tmp_path / "rotation.tlspec")
+    helper = loaded.hook_specs[0].helper
+    assert helper.name == "subspace_edit" and helper.portability == "builtin"
+    assert helper.args[0].name == verb
+    reapplied = _apply(loaded)
+    assert torch.equal(reapplied[_SITE].out, session[_SITE].out)
+    assert torch.equal(_out(reapplied), _out(session))

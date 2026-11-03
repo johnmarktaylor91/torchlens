@@ -1711,3 +1711,73 @@ def test_timm_beit_base_patch16_224(default_input1):
         ),
     )
     assert validate_forward_pass(model, default_input1)
+
+
+def test_simple_moe():
+    """Mixture of Experts with top-2 routing — built-in, no external deps."""
+    import torch.nn as nn
+
+    class SimpleMoE(nn.Module):
+        def __init__(self, input_dim=16, hidden_dim=32, num_experts=4, top_k=2):
+            super().__init__()
+            self.experts = nn.ModuleList(
+                [
+                    nn.Sequential(
+                        nn.Linear(input_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Linear(hidden_dim, input_dim),
+                    )
+                    for _ in range(num_experts)
+                ]
+            )
+            self.gate = nn.Linear(input_dim, num_experts)
+            self.top_k = top_k
+
+        def forward(self, x):
+            gate_logits = self.gate(x)
+            weights, indices = torch.topk(torch.softmax(gate_logits, dim=-1), self.top_k, dim=-1)
+            weights = weights / weights.sum(dim=-1, keepdim=True)
+            output = torch.zeros_like(x)
+            for i in range(self.top_k):
+                expert_idx = indices[:, :, i] if x.dim() == 3 else indices[:, i]
+                for j, expert in enumerate(self.experts):
+                    mask = expert_idx == j
+                    if mask.any():
+                        if x.dim() == 3:
+                            expert_input = x[mask]
+                        else:
+                            expert_input = x[mask]
+                        expert_output = expert(expert_input)
+                        w = weights[:, :, i][mask] if x.dim() == 3 else weights[:, i][mask]
+                        output[mask] = output[mask] + w.unsqueeze(-1) * expert_output
+            return output
+
+    model = SimpleMoE()
+    x = torch.rand(2, 16)
+    show_model_graph(
+        model,
+        x,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "toy-networks", "simple_moe")
+        ),
+    )
+    assert validate_forward_pass(model, x)
+
+
+@pytest.mark.heavy
+def test_electra_small():
+    transformers = pytest.importorskip("transformers")
+    tokenizer = transformers.AutoTokenizer.from_pretrained("google/electra-small-discriminator")
+    model = transformers.ElectraModel.from_pretrained("google/electra-small-discriminator")
+    model_inputs = tokenizer("to be or not to be", return_tensors="pt")
+    show_model_graph(
+        model,
+        [],
+        model_inputs,
+        rolled=False,
+        visualization=tl.options.VisualizationOptions(
+            container_path=opj(VIS_OUTPUT_DIR, "nlp-models", "electra_small")
+        ),
+    )
+    assert validate_forward_pass(model, [], model_inputs)

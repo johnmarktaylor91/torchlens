@@ -131,3 +131,15 @@ def test_keep_grad_inside_a_subspace_checks_the_coordinates() -> None:
     fork = target.fork()
     fork.do(selection, keep_grad(scale(0.5)))
     assert fork[fork.output_layers[0]].out.requires_grad
+
+
+def test_keep_grad_zero_ablate_raises_and_scale_zero_keeps_the_graph() -> None:
+    error = _detached_error(lambda: _capture(keep_grad(zero_ablate())))
+    assert error.fields["site"] == "lin1:1"  # the capture-time label of the selected module
+    assert error.fields["reason"] == "edit_detached"
+    assert "keep_grad(tl.scale(0.0))" in error.fields["remedy"]
+    out, model = _capture(keep_grad(scale(0.0)))
+    plain, _ = _capture(zero_ablate())
+    assert torch.equal(out, plain)
+    out.sum().backward()
+    assert torch.equal(model.lin1.weight.grad, torch.zeros_like(model.lin1.weight))

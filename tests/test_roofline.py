@@ -95,3 +95,18 @@ def test_view_ops_report_zero_logical_traffic() -> None:
         assert op.bytes_read == Bytes(0)
         assert op.bytes_written == Bytes(0)
         assert op.arithmetic_intensity is None
+
+
+def test_conv2d_theoretical_bytes_and_intensity() -> None:
+    """Conv2d traffic includes the input, kernel, bias, and output once."""
+
+    trace = tl.trace(
+        nn.Conv2d(2, 3, kernel_size=3, bias=True),
+        torch.ones(1, 2, 5, 5, dtype=torch.float32),
+    )
+    op = _op(trace, "conv2d")
+    # Read: input 1*2*5*5*4 = 200; params (3*2*3*3 + 3)*4 = 228; total 428.
+    # Write: output 1*3*3*3*4 = 108 bytes; total traffic 536 bytes.
+    assert op.bytes_read == Bytes(428)
+    assert op.bytes_written == Bytes(108)
+    assert op.arithmetic_intensity == pytest.approx(float(op.flops_forward) / 536)

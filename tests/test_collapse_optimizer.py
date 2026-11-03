@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import random
 from collections.abc import Callable, Iterator, Mapping
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 from typing import Any
 
 import pytest
@@ -286,6 +286,12 @@ def _landmark_swallow_count(trace: tl.Trace, result: object) -> int:
             if signal is not None and signal.landmark_edges >= 2:
                 total += 1
     return total
+
+
+def _require_transformers() -> ModuleType:
+    """Import transformers or skip the calling test."""
+
+    return pytest.importorskip("transformers")
 
 
 @pytest.mark.parametrize(
@@ -709,3 +715,32 @@ def test_repeat_fold_discovery_scans_module_table_once(
         f"child-path discovery iterated trace.modules {scans['n']} times "
         f"for {len(children)} siblings -- the per-sibling full scan is back"
     )
+
+
+# test_rolled_v2_gru_auto_is_non_noop moved to
+# tests/test_collapse_power_ladder.py (F11 memo D8 rewrote its contract;
+# the file sits at the 2000-line unledgered cap).
+def test_gpt2_small_config_auto_collapses_blocks_without_landmark_swallows() -> None:
+    """GPT-2 small-config auto renders transformer blocks as honest boxes."""
+
+    transformers = _require_transformers()
+    config = transformers.GPT2Config(
+        n_layer=2,
+        n_head=2,
+        n_embd=16,
+        n_positions=16,
+        n_ctx=16,
+        vocab_size=100,
+    )
+    trace = _trace(transformers.GPT2Model(config), torch.randint(0, 100, (1, 8)))
+    try:
+        result = select_collapse_plan(trace, RenderContext(), mode="auto")
+        analysis = analyze_collapse(trace)
+
+        assert result.visible_count in range(18, 29)
+        assert {"h.0", "h.1"}.issubset(result.selected)
+        assert _landmark_swallow_count(trace, result) == 0
+        assert analysis.signals["h.0"].landmark_edges == 0
+        assert analysis.signals["h.1"].landmark_edges == 0
+    finally:
+        trace.cleanup()

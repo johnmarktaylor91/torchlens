@@ -18,10 +18,12 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization.surgery_visuals import (
+    make_surgery_mark_spec_fn,
     surgery_census,
     surgery_facts,
     surgery_stage,
 )
+from torchlens._vocab.node_spec import NodeSpec
 from torchlens.viz import intervention_diff
 
 _CAPTURE = tl.options.CaptureOptions(replayable=True, save_args=True)
@@ -224,3 +226,28 @@ def test_diff_refuses_self_and_empty_operands(chain_capture) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         intervention_diff(log, _Husk())  # type: ignore[arg-type]
     assert excinfo.value.fields["code"] == "surgery_diff_incomparable"
+
+
+def test_cohort_mark_is_heuristic_and_dashed() -> None:
+    """A targeted site's un-fired sibling pass gets a DASHED heuristic mark."""
+
+    torch.manual_seed(0)
+    model = _SharedBlock().eval()
+    x = torch.randn(3, 4)
+    log = tl.trace(model, x, capture=_CAPTURE)
+    fork = log.fork()
+    fork.do(fork[tl.units("linear_1_1:1", [(0, 0)])], tl.zero_ablate())
+    facts = surgery_facts(fork)
+    by_label = {mark.call_label: mark for mark in facts.marks}
+    assert by_label["linear_1_1:1"].basis == "fact"
+    assert by_label["linear_1_1:2"].basis == "heuristic"
+    assert by_label["linear_1_1:2"].kind == "declared_target"
+    assert "no fire recorded at this instance" in by_label["linear_1_1:2"].row
+    spec_fn = make_surgery_mark_spec_fn(fork, facts)
+    heuristic_spec = spec_fn(fork.ops["linear_1_1:2"], NodeSpec(["linear_1_1:2"]))
+    assert heuristic_spec is not None
+    assert "dashed" in (heuristic_spec.style or "")
+    assert heuristic_spec.penwidth == 2.25
+    fact_spec = spec_fn(fork.ops["linear_1_1:1"], NodeSpec(["linear_1_1:1"]))
+    assert fact_spec is not None
+    assert "dashed" not in (fact_spec.style or "")

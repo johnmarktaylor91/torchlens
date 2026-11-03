@@ -169,3 +169,10 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     fork.attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))
+
+
+def test_do_accepts_site_spec_on_the_replay_engine() -> None:
+    log = _ready(_TinyModel())
+    fork = log.fork()
+    fork.do(tl.when(site(func="relu"), tl.scale(0.0)))
+    assert torch.count_nonzero(fork["relu_1_2"].out) == 0

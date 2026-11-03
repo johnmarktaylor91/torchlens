@@ -118,3 +118,32 @@ def test_noise_std_distinguishes_audit_rows() -> None:
 # ---------------------------------------------------------------------------
 # The envelope chain and the ONE builder's uniform stamps
 # ---------------------------------------------------------------------------
+
+
+def test_envelope_rows_survive_save_load() -> None:
+    import os
+    import tempfile
+
+    model = _TinyModel()
+    fork = _ready_trace(model).fork()
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.0)))
+    path = os.path.join(tempfile.mkdtemp(), "c03_evidence.tlspec")
+    fork.save(path)
+    loaded = tl.load(path)
+    events = _event_rows(loaded)
+    assert events and events[-1]["status"] == "fired"
+    assert loaded.intervention_audit
+
+
+def test_event_chain_is_lineage_ordered() -> None:
+    model = _TinyModel()
+    fork = _ready_trace(model).fork()
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.5)))
+    fork.do(tl.when(tl.func("relu"), tl.scale(0.25)))
+    rows = _event_rows(fork)
+    assert len(rows) == 2
+    lineage_a, ordinal_a = rows[0]["event_id"].split(":")
+    lineage_b, ordinal_b = rows[1]["event_id"].split(":")
+    assert lineage_a == lineage_b
+    assert (int(ordinal_a), int(ordinal_b)) == (1, 2)
+    assert rows[1]["parent_event_id"] == rows[0]["event_id"]

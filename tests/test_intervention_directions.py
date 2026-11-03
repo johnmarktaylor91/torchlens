@@ -24,7 +24,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._selection.subspace import BasisProvenance
-from torchlens.intervention import _directions, fit_direction
+from torchlens.intervention import Direction, _directions, fit_direction
 
 _HIDDEN = 8
 _SITE = "layers.1"
@@ -353,3 +353,41 @@ def test_library_layer_refusals(stack: dict[str, Any]) -> None:
     head = fit_direction(stack["pos"], stack["neg"], "head")
     assert _code(head.library_layer) == "direction_layer_unknown"
     assert head.library_layer(1) == 1
+
+
+def test_sequence_of_traces_equals_one_batched_trace(stack: dict[str, Any]) -> None:
+    """Traces of single prompts concatenate to the batched trace's direction."""
+
+    model = stack["model"]
+    singles = [_trace(model, stack["pos_ids"][i : i + 1]) for i in range(6)]
+    try:
+        split = fit_direction(singles, stack["neg"], _SITE, "pca")
+    finally:
+        for trace in singles:
+            trace.cleanup()
+    batched = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
+    torch.testing.assert_close(split.vector, batched.vector, atol=1e-6, rtol=0)
+
+
+def test_pca_is_the_top_eigenvector_of_the_differences(stack: dict[str, Any]) -> None:
+    """``pca`` is the top eigenvector of D^T D, unit norm, signed toward the positives."""
+
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE, "pca")
+    positive, negative = stack["rows"]
+    deltas = (positive - negative).double()
+    _values, vectors = torch.linalg.eigh(deltas.T @ deltas)
+    oracle = vectors[:, -1]
+    oracle = oracle if float((deltas @ oracle).mean()) > 0 else -oracle
+    torch.testing.assert_close(direction.vector.double(), oracle, atol=1e-5, rtol=0)
+    assert float((deltas @ direction.vector.double()).mean()) > 0
+
+
+def test_mean_diff_is_the_mean_row_difference(stack: dict[str, Any]) -> None:
+    """``mean_diff`` is ``(pos - neg).mean(0)`` of the hooked last-token rows, bit for bit."""
+
+    direction = fit_direction(stack["pos"], stack["neg"], _SITE)
+    positive, negative = stack["rows"]
+    assert isinstance(direction, Direction)
+    assert direction.vector.dtype == torch.float32
+    assert torch.equal(direction.vector, (positive - negative).mean(dim=0))
+    assert direction.num_pairs == 6 and direction.site == _SITE

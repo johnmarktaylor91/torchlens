@@ -24,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.injection import InjectedOp, InjectionProvenance
 
 _LOGGED = tl.options.CaptureOptions(log_injections=True)
 
@@ -146,3 +147,62 @@ def test_streamed_to_disk_intervene_capture_settles_and_loads(chain, tmp_path) -
     # the artifact loads, and the session counter never persists.
     assert loaded.outcome.status.name == "COMPLETE"
     assert getattr(loaded, "_tl_intervene_selector_fire_count", None) is None
+
+
+def test_injection_anchored_provenance_c07_grammar(chain) -> None:
+    """Provenance is verbatim the C07 slot: anchored key + display label."""
+
+    model, x = chain
+    spec = tl.when(tl.func("relu"), _sae_like)
+    logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
+    records = logged.injected_ops
+    assert len(records) == 5  # eye, matmul, relu, sigmoid, mul
+    first = records[0]
+    assert isinstance(first, InjectedOp)
+    prov = first.provenance
+    assert isinstance(prov, InjectionProvenance)
+    # the C07 entry-dark slot's exact field set, no more, no fewer
+    assert sorted(vars(prov)) == [
+        "firing_index",
+        "host_pass",
+        "host_site_key",
+        "local_op_ordinal",
+        "nesting_path",
+        "output_slot",
+        "spec_rule_id",
+    ]
+    host = logged["relu_1_2"].ops[0]
+    assert prov.host_site_key == host.site_key
+    assert prov.spec_rule_id == spec.rules[0].rule_id  # PERSISTED rule id
+    assert prov.host_pass == 1
+    assert prov.firing_index == 1
+    assert prov.nesting_path == ()
+    assert [r.provenance.local_op_ordinal for r in records] == [1, 2, 3, 4, 5]
+    # the human label anchors to the host's FINAL label (display sugar)
+    assert first.label == f"{host.label}/inj_1"
+    assert first.host_label == host.label
+    assert records[0].func_name == "eye"
+    assert isinstance(first.out, torch.Tensor)
+
+
+def test_injection_misfire_two_edit_labels_never_shift(chain) -> None:
+    """THE MISFIRE TEST: early-site injections never move a later target.
+
+    Both halves measured: (a) live labels, type indexes, and raw indexes of
+    every model op are IDENTICAL with and without ``log_injections`` (no
+    global label-counter consumption); (b) every model op's site key is
+    IDENTICAL (no site-key cohort ordinal consumption). The second edit
+    targets the LATER site by the same spelling in both runs and fires.
+    """
+
+    model, x = chain
+    spec = tl.when(tl.func("relu"), _sae_like) & tl.when(tl.func("tanh"), tl.scale(0.5))
+    base = tl.trace(model, x, intervene=spec)
+    logged = tl.trace(model, x, intervene=spec, capture=_LOGGED)
+    assert [op.label for op in logged._layer_list] == [op.label for op in base._layer_list]
+    assert [op.raw_label for op in logged._layer_list] == [op.raw_label for op in base._layer_list]
+    assert [op.site_key for op in logged._layer_list] == [op.site_key for op in base._layer_list]
+    # the LATER edit fired identically: same tanh output in both runs
+    assert torch.allclose(logged["tanh_1_4"].out, base["tanh_1_4"].out)
+    assert len(logged.injected_ops) > 0
+    assert len(base.injected_ops) == 0

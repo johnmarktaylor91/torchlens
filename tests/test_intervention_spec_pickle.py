@@ -15,6 +15,7 @@ split on one object. Two aligned fixes:
   which every post-capture consumer already tolerates.
 """
 
+import copy
 import pickle
 from collections.abc import Iterator
 
@@ -23,6 +24,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.intervention.types import Edit
 
 
 class _Net(nn.Module):
@@ -114,3 +116,38 @@ def test_every_minted_builtin_helper_name_is_rebuildable() -> None:
         f"builtin helper constructors mint names the rebuild registry cannot "
         f"restore (dead saved artifacts): {unknown}"
     )
+
+
+def test_intervened_trace_pickles_like_it_saves(intervened_trace: tl.Trace, tmp_path) -> None:
+    """The RED-capable parity case: pickle succeeds where Trace.save succeeds."""
+
+    blob = pickle.dumps(intervened_trace)
+    restored = pickle.loads(blob)
+    assert len(restored._layer_list) == len(intervened_trace._layer_list)
+    # The saved (intervened) activation payload survives the round-trip.
+    assert torch.equal(restored["relu_1_2"].ops[0].out, intervened_trace["relu_1_2"].ops[0].out)
+    # Trace.save of the very same object keeps working (the parity claim).
+    path = str(tmp_path / "iv.tlspec")
+    intervened_trace.save(path)
+    assert tl.load(path)["relu_1_2"] is not None
+
+
+def test_helper_spec_deepcopy_keeps_factory_identity() -> None:
+    """``copy.deepcopy`` keeps its pre-pickle-hook factory-sharing semantics."""
+
+    spec = tl.zero_ablate()
+    duplicate = copy.deepcopy(spec)
+    assert duplicate.factory is spec.factory
+
+
+def test_builtin_helper_spec_pickle_rebuilds_factory() -> None:
+    """A builtin ``Edit`` pickles; the restored factory works."""
+
+    spec = tl.zero_ablate()
+    restored = pickle.loads(pickle.dumps(spec))
+    assert isinstance(restored, Edit)
+    assert restored.name == spec.name
+    assert restored.factory is not None
+    hook = restored()
+    out = hook(torch.ones(3), ctx=None)
+    assert torch.equal(out, torch.zeros(3))

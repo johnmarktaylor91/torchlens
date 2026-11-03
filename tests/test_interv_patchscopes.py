@@ -298,3 +298,15 @@ class TestIdentityPatchscope:
                 hits.append(int(int(got[0, _READ].argmax()) == words[-1]))
         assert sum(decoded[1]) == len(_SOURCES)
         assert sum(decoded[11]) == 0
+
+
+def test_mapping_is_disclosed_in_the_edit_identity(tiny_gpt2: torch.nn.Module) -> None:
+    """The audit identity of the edit carries the mapping, never tensors."""
+
+    source = tl.trace(tiny_gpt2, _SOURCE)
+    edit = tl.patch_from(source, source_site="transformer.h.0:1", positions={-1: 3})
+    kwargs = dict(edit.kwargs)
+    assert kwargs["source_site"] == repr("transformer.h.0:1")
+    assert kwargs["positions"] == repr(((-1, 3),))
+    assert kwargs["position_axis"] == "1"
+    assert repr(edit).startswith("tl.Edit('patch_from'")

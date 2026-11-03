@@ -238,3 +238,25 @@ def test_interleaved_parallel_streams_partition_per_stream() -> None:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.parametrize("length", [2, 3])
+def test_bare_functional_chain_is_never_a_loop(length) -> None:
+    """A bare single-op self-chain stays single-pass at every length.
+
+    ``tanh(tanh(x))`` and ``tanh(tanh(tanh(x)))`` carry no recurrence evidence
+    beyond their own repetition (the steady calls are fed exclusively by the
+    class itself), so the self-evidence gate dissolves them -- the historical
+    minimum-body-size policy, restated topologically.
+    """
+
+    class BareChain(nn.Module):
+        def forward(self, x):
+            for _ in range(length):
+                x = torch.tanh(x)
+            return x
+
+    torch.manual_seed(0)
+    traced = trace_fn(BareChain(), torch.randn(1, 4))
+    assert _pass_counts(traced, "tanh") == [1] * length, _layer_passes(traced)
+    assert check_metadata_invariants(traced)

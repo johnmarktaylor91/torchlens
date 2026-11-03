@@ -124,3 +124,32 @@ def test_resnet50_block_splice_box_and_marks(tmp_path) -> None:
     assert "surgery census" in svg
     assert "splice_module" in sidecar
     _assert_no_banned_verbs(sidecar)
+
+
+@pytest.mark.heavy
+@pytest.mark.real_model
+def test_distilgpt2_live_lane_census_and_splice_box(tmp_path) -> None:
+    """GATE: real distilgpt2 LIVE-intervened capture, per-lane checked.
+
+    The exported figure and its travelling census carry the live lane's
+    wording and never the replay lane's -- the replay text is false here.
+    """
+
+    model = _distilgpt2()
+    ids = torch.tensor([[464, 3139, 286, 4881, 318]])
+    log = tl.trace(
+        model,
+        ids,
+        intervene=tl.when(tl.in_module("transformer.h.0") & tl.func("tanh"), tl.scale(0.5)),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    census_text = surgery_census(log).to_text()
+    assert "lane capture: 1 transaction(s)" in census_text
+    assert _LIVE_WORDING in census_text
+    assert _REPLAY_WORDING not in census_text
+    svg, sidecar = _render_with_sidecar(log, tmp_path, "distilgpt2_live")
+    assert "surgery census" in svg
+    assert _REPLAY_WORDING not in sidecar
+    assert _LIVE_WORDING in sidecar
+    _assert_no_banned_verbs(svg)
+    _assert_no_banned_verbs(sidecar)

@@ -197,3 +197,15 @@ def test_forward_rolled_grad_overlay_labels_partial_passes(tmp_path: Path) -> No
     ).dot
 
     assert "bwd 2" in dot
+
+
+def test_draw_combined_module_clusters() -> None:
+    """Paired backward nodes are placed in the forward op's module cluster."""
+    trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
+    addmm = next(
+        grad_fn_handle
+        for grad_fn_handle in trace.autograd.grad_fns
+        if grad_fn_handle.type == "addmm"
+    )
+
+    assert _module_key_for_grad_fn(trace, addmm, "upstream") == "fc:1"

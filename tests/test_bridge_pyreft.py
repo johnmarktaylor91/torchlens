@@ -20,6 +20,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
+from torchlens._selection.subspace import _basis_digest
 
 _SITE = "linear_1_1"
 _D = 6
@@ -159,6 +160,14 @@ _MALFORMED = {
 }
 
 
+def _reloaded_helper(fork: Any, tmp_path: Path) -> Any:
+    """Return the staged edit as a portable save reloads it."""
+
+    path = tmp_path / "loreft.tlspec"
+    tl.io.save_intervention(fork, path, level="portable")
+    return tl.io.load_intervention_spec(path).hook_specs[0].helper
+
+
 @pytest.mark.parametrize("case", sorted(_MALFORMED))
 def test_malformed_artifact_refuses_and_the_remedy_runs(tmp_path: Path, case: str) -> None:
     build, code = _MALFORMED[case]
@@ -178,3 +187,28 @@ def test_positions_that_are_not_a_bool_mask_refuse(tmp_path: Path) -> None:
     positions = torch.zeros(2, 5, dtype=torch.bool)
     positions[:, -1] = True
     assert artifact.subspace(_SITE, positions=positions) is not None
+
+
+def test_applied_edit_equals_the_hand_loreft_formula(tmp_path: Path) -> None:
+    """``h + Q^T (W h + b - Q h)`` with ``Q`` the float64 orthonormalised ``R^T``."""
+
+    artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
+    fork = _ready().fork()
+    fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
+    result = fork.push()[_SITE].out
+    helper = _reloaded_helper(fork, tmp_path)
+    kwargs = dict(helper.kwargs)
+    rows = kwargs["basis"]
+    assert kwargs["orthonormalised"] is True and kwargs["source_dtype"] == "float32"
+    assert kwargs["origin_sha256"] == _basis_digest(_ROTATION.T.double().contiguous())
+    assert kwargs["basis_sha256"] == _basis_digest(rows)
+    assert kwargs["method"] == "loreft"
+    weight, bias = _WEIGHT.double(), _BIAS.double()
+    with torch.no_grad():
+        h = _MODEL.lin1(_X)
+        hand = h + (h @ weight.T + bias - h @ rows.T) @ rows
+    mask = _positions().unsqueeze(-1).expand(2, 5, _D)
+    assert torch.allclose(result, torch.where(mask, hand, h), rtol=0.0, atol=1e-12)
+    assert torch.equal(result[~mask], h[~mask])
+    # Orthonormalising the float32 rotation moves the rows by float32 rounding only.
+    assert float((rows - _ROTATION.T.double()).abs().max()) < 1e-6

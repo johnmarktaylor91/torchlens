@@ -187,3 +187,14 @@ def _coded(error: BaseException) -> Any:
             return current
         current = current.__cause__ or current.__context__
     raise AssertionError(f"no coded error in the chain of {error!r}")
+
+
+def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
+    """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
+
+    fork = _ready().fork()
+    fork.do(tl.units(_SITE, _mask()), tl.scale(2.0))
+    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="audit")
+    loaded = tl.io.load_intervention_spec(tmp_path / "plain.tlspec")
+    saved = loaded.hook_specs[0].helper
+    assert saved.portability == "opaque_audit" and saved.factory is None

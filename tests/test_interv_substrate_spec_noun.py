@@ -16,6 +16,7 @@ from torch import nn
 import torchlens as tl
 from torchlens import Recipe
 from torchlens._errors import ArgumentTypeError, InvalidArgumentError
+from torchlens.intervention.spec import classify_where
 
 
 class _TinyModel(nn.Module):
@@ -164,3 +165,32 @@ def test_backward_rules_of_multi_clause_spec_not_dropped() -> None:
         dict(hook_spec.metadata).get("created_by") == "intervene_backward_selector"
         for hook_spec in staged.hook_specs
     )
+
+
+def test_multi_clause_spec_applies_every_rule() -> None:
+    model = _TinyModel()
+    spec = tl.when(tl.in_module("fc1"), tl.scale(0.0)).merge(tl.when(tl.func("relu"), tl.add(1.0)))
+    log = tl.trace(model, torch.randn(2, 4), intervene=spec)
+    # fc1 output zeroed, then relu(0)=0 gets +1: relu out is all ones
+    assert torch.allclose(log["relu_1_2"].out, torch.ones(2, 4))
+
+
+def test_address_law_classification() -> None:
+    assert classify_where(tl.func("relu")) == "structural"
+    assert classify_where(tl.in_module("fc1")) == "structural"
+    assert classify_where(tl.label("relu_1_2")) == "recorded"
+    assert classify_where(lambda ctx: True) == "value_dependent"
+    # composite: worst class wins
+    assert classify_where(tl.func("relu") & tl.label("relu_1_2")) == "recorded"
+
+
+def test_single_rule_compat_surface() -> None:
+    """Single-clause specs keep the historical .selector/.decision reads."""
+
+    selector = tl.func("relu")
+    spec = tl.when(selector, tl.scale(0.5))
+    assert spec.selector is selector
+    assert spec.decision is not None
+    multi = spec.merge(tl.when(tl.func("linear"), tl.scale(0.5)))
+    assert multi.selector is None
+    assert multi.decision is None
