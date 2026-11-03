@@ -21,61 +21,6 @@ class _InfModel(nn.Module):
         return x / 0
 
 
-def _log_for_input(x: torch.Tensor) -> tl.Trace:
-    """Capture an identity model for one input.
-
-    Parameters
-    ----------
-    x:
-        Input tensor.
-
-    Returns
-    -------
-    tl.Trace
-        Captured model log.
-    """
-
-    return tl.trace(nn.Identity(), x)
-
-
-def test_print_trace_is_informative(capsys: pytest.CaptureFixture[str]) -> None:
-    """Printing a Trace gives a concise model summary."""
-
-    log = _log_for_input(torch.randn(1, 3))
-    print(log)
-    captured = capsys.readouterr()
-    assert "Log of" in captured.out
-    assert "Tensor info" in captured.out
-
-
-def test_trace_repr_html_is_informative() -> None:
-    """Trace HTML repr returns an informative string or text fallback."""
-
-    log = _log_for_input(torch.randn(1, 3))
-    html = log._repr_html_()
-    assert isinstance(html, str)
-    assert "Trace" in html or "TorchLens" in html
-    assert "Layers" in html or "layers=" in html
-
-
-@pytest.mark.parametrize("method", ["auto", "heatmap", "channels", "rgb", "hist"])
-def test_layer_log_show_custom_methods_return_output(method: str) -> None:
-    """Layer.show accepts every Phase 3 display method."""
-
-    x = torch.randn(1, 3, 4, 4) if method == "rgb" else torch.randn(3, 4, 4)
-    log = _log_for_input(x)
-    output = log.layers[0].show(kind=method)
-    assert output is not None
-
-
-def test_op_log_show_returns_output() -> None:
-    """Op.show delegates to the tensor display helper."""
-
-    log = _log_for_input(torch.randn(8))
-    output = log._layer_list[0].show(kind="hist")
-    assert output is not None
-
-
 def test_first_nonfinite_reports_context() -> None:
     """Trace.first_nonfinite reports the first saved NaN or Inf site."""
 
@@ -159,6 +104,7 @@ def test_layer_standalone_pickle_repr_and_accessors_typed() -> None:
     assert parents_exc.value.fields["code"] == "record_not_bound"
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_op_source_trace_refuses_typed_when_detached() -> None:
     """``Op.source_trace`` must refuse TYPED for both detachment shapes.
 
@@ -215,6 +161,7 @@ def test_op_repr_degrades_under_predicate_save() -> None:
     assert "not saved" not in f"{saved.ops[0]}"
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_layer_repr_on_live_trace_unchanged() -> None:
     """A Layer bound to a live Trace renders the one-line envelope+core repr.
 

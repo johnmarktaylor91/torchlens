@@ -30,6 +30,15 @@ def encode(trace: Any, site: Any, sae: Any) -> Any:
         If SAE Lens is unavailable.
     TypeError
         If ``sae`` cannot encode an out.
+
+    Examples
+    --------
+    >>> # requires: sae_lens
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> trace = tl.trace(clf, torch.randn(1, 12))
+    >>> latents = tl.bridge.sae_lens.encode(trace, "linear", nn.Linear(3, 5))
+    >>> tuple(latents.shape)
+    (1, 5)
     """
 
     try:
@@ -77,6 +86,15 @@ def reconstruct(trace: Any, site: Any, sae: Any) -> Any:
         If SAE Lens is unavailable.
     TypeError
         If ``sae`` cannot reconstruct an out.
+
+    Examples
+    --------
+    >>> # requires: sae_lens
+    >>> clf = nn.Sequential(nn.Flatten(), nn.Linear(12, 3)).eval()
+    >>> trace = tl.trace(clf, torch.randn(1, 12))
+    >>> recon = tl.bridge.sae_lens.reconstruct(trace, "linear", nn.Linear(3, 3))
+    >>> tuple(recon.shape)
+    (1, 3)
     """
 
     try:

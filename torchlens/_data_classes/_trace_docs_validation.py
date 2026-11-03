@@ -10,16 +10,6 @@ from __future__ import annotations
 __all__ = ["DOCS"]
 
 DOCS: dict[str, str] = {
-    "save_new_outs": (
-        """Re-run the model with new inputs, saving only outs.
-        
-        Parameters
-        ----------
-        model, input_args, input_kwargs, save, save_grads, seed, backward_ready:
-            Forwarded unchanged to
-            :func:`torchlens._capture.trace.save_new_outs`.
-        """
-    ),
     "validate_forward_pass": (
         """Validate saved outs against ground-truth model outputs.
         
@@ -273,22 +263,6 @@ DOCS: dict[str, str] = {
             claim (the recorder pass); a bare nested entry without it refuses.
         """
     ),
-    "log_backward": (
-        """Run backward from ``loss`` while capturing first-class backward metadata.
-        
-        Parameters
-        ----------
-        loss:
-            Tensor whose ``grad_fn_handle`` roots the backward graph.
-        **backward_kwargs:
-            Keyword arguments forwarded to ``torch.Tensor.backward``.
-        
-        Returns
-        -------
-        Trace
-            This model log, for chaining.
-        """
-    ),
     "backward": (
         """Run backward from ``loss`` and populate this Trace with backward metadata.
         
@@ -312,16 +286,6 @@ DOCS: dict[str, str] = {
         -------
         Any
             Backward recording context manager.
-        """
-    ),
-    "disarm_triggers": (
-        """Detach this Trace from global autograd backward interception.
-        
-        Returns
-        -------
-        None
-            Future plain ``loss.backward()`` or ``torch.autograd.*`` calls will
-            not record into this Trace.
         """
     ),
     "_remove_log_entry": (

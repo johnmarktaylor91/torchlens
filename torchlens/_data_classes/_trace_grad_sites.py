@@ -32,7 +32,7 @@ if TYPE_CHECKING:
 
 #: HookSpec metadata naming the attach batch that armed a gradient rule.
 _ARMING_GROUP_KEY = "arming_group"
-#: HookSpec metadata naming the ``do`` arming row (``None`` for attach_hooks).
+#: HookSpec metadata naming the ``do`` arming row (``None`` for a plain sticky hook).
 _ARMING_EVENT_KEY = "arming_event_id"
 #: Arming group of the sticky backward hooks a capture-time ``intervene=``
 #: staged (marked ``created_by`` by the capture door); their arming row is the
@@ -85,7 +85,7 @@ def sticky_hook_entry(entry: Any, arming_group: str) -> tuple[dict[str, Any], An
     Parameters
     ----------
     entry:
-        One normalized hook entry of an ``attach_hooks`` batch.
+        One normalized hook entry of a ``do`` attach batch.
     arming_group:
         The arming group id of that batch.
 
@@ -190,9 +190,9 @@ def select_signal_plan_engine(
     InvalidArgumentError
         ``intervention_engine_invalid`` for an unknown engine, and
         ``replay_gradient_edit_unsupported`` for ``engine="replay"`` or an
-        ``auto`` engine with neither ``model=`` nor ``x=``.
+        ``auto`` engine with neither ``model=`` nor ``inputs=``.
     EngineDispatchError
-        When only one of ``model=`` / ``x=`` is given.
+        When only one of ``model=`` / ``inputs=`` is given.
     """
 
     if engine not in {"auto", "replay", "rerun", "set_only"}:

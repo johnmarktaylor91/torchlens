@@ -236,7 +236,6 @@ def test_initialized_cuda_snapshot_shape_is_unchanged(
     assert states["torch_cuda"] is fake_states[0]
 
 
-@pytest.mark.smoke
 def test_failing_cuda_rng_read_warns_latches_and_skips_restore(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

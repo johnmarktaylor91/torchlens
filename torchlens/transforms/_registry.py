@@ -90,6 +90,18 @@ def register_transform(
     TransformContractError
         ``transform_builtin_shadowed`` when the name collides with a builtin
         (builtin names are closed and non-replaceable).
+
+    Examples
+    --------
+    >>> def plan_same(spec, input_spec, ctx):
+    ...     return tl.transforms.PlannedStep(spec.name, 1, input_spec, True, False, False)
+    >>> negate = tl.transforms.TransformDefinition(
+    ...     name="demo_negate", version=1, normalize_params=dict, plan_fn=plan_same,
+    ...     apply_fn=lambda spec, tensor, ctx: -tensor, zero_param_preset=True)
+    >>> if "demo_negate" not in tl.transforms.registered_transform_names():
+    ...     register_transform(negate)
+    >>> tl.transforms.chain("demo_negate").apply(torch.ones(1, 2)).tolist()
+    [[-1.0, -1.0]]
     """
 
     if not isinstance(definition, TransformDefinition):
@@ -140,6 +152,12 @@ def lookup_transform(name: str) -> TransformDefinition:
     ------
     TransformContractError
         ``transform_name_unknown`` when the name is not registered.
+
+    Examples
+    --------
+    >>> definition = lookup_transform("flatten")
+    >>> definition.name, type(definition).__name__
+    ('flatten', 'TransformDefinition')
     """
 
     snapshot = _TRANSFORMS_REGISTRY.snapshot()
@@ -167,6 +185,12 @@ def registered_transform_names() -> tuple[str, ...]:
     -------
     tuple[str, ...]
         Sorted registered names (builtins plus customs).
+
+    Examples
+    --------
+    >>> names = registered_transform_names()
+    >>> "flatten" in names, "srp" in names, names == tuple(sorted(names))
+    (True, True, True)
     """
 
     return tuple(sorted(_TRANSFORMS_REGISTRY.snapshot().values))

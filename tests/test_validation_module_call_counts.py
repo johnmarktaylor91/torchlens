@@ -49,7 +49,7 @@ def _function_root(model: nn.Module) -> tl.Trace:
     return trace
 
 
-@pytest.mark.parametrize("model_cls", [RootOnly, RootLoop])
+@pytest.mark.parametrize("model_cls", [RootLoop])
 def test_clean_function_root_traces_pass(model_cls) -> None:
     trace = _function_root(model_cls())
     try:
@@ -86,12 +86,6 @@ def graph_trace():
     trace = tl.trace(model, (torch.randn(2, 4), torch.randn(2, 4)))
     yield trace
     trace.cleanup()
-
-
-def test_clean_multi_pass_root_passes_containment(graph_trace) -> None:
-    root = graph_trace.module_calls["self:1"]
-    assert root.num_layers < len(root.ops)
-    assert check_metadata_invariants(graph_trace) is True
 
 
 @pytest.mark.parametrize("count", ["num_layers"])

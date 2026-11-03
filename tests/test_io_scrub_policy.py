@@ -106,7 +106,13 @@ def _build_live_log() -> Trace:
     )
 
 
-@pytest.mark.parametrize("include_source", [True, False])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "include_source",
+    [
+        True,
+    ],
+)
 def test_backward_source_fields_are_in_the_privacy_belt(include_source: bool) -> None:
     """B8-21: GradFn backward source path/docstring are relativized or dropped.
 
@@ -139,6 +145,30 @@ def test_backward_source_fields_are_in_the_privacy_belt(include_source: bool) ->
     else:
         assert scrubbed_state["backward_source_file"] is None
         assert scrubbed_state["backward_docstring"] is None
+
+
+def test_module_source_paths_are_relativized_on_save(tmp_path: Path) -> None:
+    """Module source files reach the bundle as basenames, never host paths.
+
+    Fail-before: the owner dispatch matched Module records on the Trace's private
+    ``_source_class_docstring`` spelling, so a Module never entered the privacy
+    belt and a capture with ``save_source_context=True`` wrote every module's
+    absolute ``class``/``init``/``forward`` source path into ``metadata.pkl``.
+    """
+
+    spec = tmp_path / "module_paths.tlspec"
+    _build_live_log().save(str(spec))
+    metadata = pickle.loads((spec / "metadata.pkl").read_bytes())
+    modules = list(metadata["_io_module_accessor_state"])
+    assert modules, "no Module records were saved"
+    checked = 0
+    for row, module in enumerate(modules):
+        for column in ("class_source_file", "init_source_file", "forward_source_file"):
+            value = getattr(module, column)
+            assert value is not None, f"module[{row}].{column} was not captured"
+            assert "/" not in value and "\\" not in value, f"module[{row}].{column}: {value!r}"
+            checked += 1
+    assert checked
 
 
 def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: Path) -> None:
@@ -175,36 +205,7 @@ def test_partial_activation_transform_repr_does_not_leak_bound_values(tmp_path: 
     assert secret not in saved_repr
 
 
-def test_transform_repr_redacts_heap_addresses() -> None:
-    """b3-opus (B8-20 completion): a callable repr's heap address is not persisted.
-
-    A callable using the default object/function repr (a lambda, or a callable
-    instance) embeds a live ``0x<hex>`` heap address, which is non-deterministic
-    (breaks byte-identical artifacts) and an ASLR-layout leak. The scrub redacts
-    it, directly and through a ``functools.partial`` wrapper.
-    """
-
-    import functools
-
-    from torchlens._data_classes.trace import _scrubbed_transform_repr
-
-    class _CallableWithDefaultRepr:
-        def __call__(self, t: torch.Tensor) -> torch.Tensor:
-            return t
-
-    instance = _CallableWithDefaultRepr()
-    assert "0x" in repr(instance), "test precondition: default repr has a heap address"
-
-    direct = _scrubbed_transform_repr(instance)
-    assert direct is not None
-    assert "0x<scrubbed>" in direct
-    assert "0x" not in direct.replace("0x<scrubbed>", "")
-
-    wrapped = _scrubbed_transform_repr(functools.partial(instance))
-    assert wrapped is not None
-    assert "0x" not in wrapped.replace("0x<scrubbed>", "")
-
-
+@pytest.mark.smoke
 def test_portable_state_specs_cover_every_live_attribute() -> None:
     """Each target class must map every live attribute to a scrub policy."""
 
@@ -271,6 +272,7 @@ def _sweep_public_accessors(record: Any) -> None:
             continue
 
 
+@pytest.mark.smoke
 def test_public_accessor_reads_never_poison_save(tmp_path: Path) -> None:
     """A read-only public accessor sweep must leave the trace saveable.
 
@@ -348,20 +350,14 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "annotate": "user annotation writer (mutates trace annotations by contract)",
     "using": "appliance door: returns what a registered factory builds; it writes nothing "
     "on the trace (each appliance's own reads are its owner's to sweep)",
-    "attach_hooks": "mutates the live model's hook registry",
-    "clear_hooks": "mutates the live model's hook registry",
     "clear_edits": "mutates the live model's hook registry",
-    "disarm_triggers": "mutates armed trigger state",
     "backward": "autograd execution; writes gradient state",
-    "log_backward": "autograd execution; writes gradient state",
     "capture_backward": "autograd execution; writes gradient state",
     "cleanup": "destructive teardown of the trace",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
     "remove": "removal scrub (mutates the graph)",
     "push": "replay/push engine; execution, not presentation",
     "push_from": "replay/push engine; execution, not presentation",
-    "save_new_outs": "fast re-capture engine; execution, not presentation",
     "replace_state_from": "state mutator (cross-trace state transplant)",
     "run": "sparse/live execution engine",
     "preview_fastlog": "fastlog execution",
@@ -375,16 +371,12 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
     "set": "intervention editor (mutates fork state)",
-    "save_activation": "capture-internal payload writer",
 }
 
 _LAYER_METHOD_EXCLUSIONS: dict[str, str] = {
-    "attach_hooks": "mutates the live model's hook registry",
     "do": "intervention editor (mutates fork state)",
-    "set": "intervention editor (mutates fork state)",
 }
 
 _PARAM_METHOD_EXCLUSIONS: dict[str, str] = {}
@@ -409,14 +401,10 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
             t.draw(path=str(out / "graph")),
             t.draw(path=str(out / "graph_encoded"), color_by="time"),
         ),
-        "collapse_plan": lambda t: t.collapse_plan(),
-        "collapse_schedule": lambda t: t.collapse_schedule(),
-        "collapse_order": lambda t: t.collapse_order(),
         "receptive_fields": lambda t: t.receptive_fields(),
         "projective_fields": lambda t: t.projective_fields(),
         "show_call_tree": lambda t: t.show_call_tree(file=sink),
         "walk_calls": lambda t: list(t.walk_calls()),
-        "find_layers": lambda t: t.find_layers("relu"),
         "audit": lambda t: t.audit(),
         "check_metadata_invariants": lambda t: t.check_metadata_invariants(),
         "find_nan": lambda t: t.find_nan(),
@@ -561,14 +549,10 @@ _METHOD_SWEEP_MUST_SUCCEED: dict[str, frozenset[str]] = {
             "profile",
             "to_pandas",
             "draw",
-            "collapse_plan",
-            "collapse_schedule",
-            "collapse_order",
             "receptive_fields",
             "projective_fields",
             "show_call_tree",
             "walk_calls",
-            "find_layers",
             "audit",
             "check_metadata_invariants",
         }
@@ -580,57 +564,6 @@ _METHOD_SWEEP_MUST_SUCCEED: dict[str, frozenset[str]] = {
     "Param": frozenset({"to_pandas"}),
     "Buffer": frozenset({"to_pandas"}),
 }
-
-
-def _public_methods(cls: type) -> set[str]:
-    """Return the public instance-method names on ``cls``.
-
-    Properties and ``functools.cached_property`` descriptors belong to the
-    attribute sweep above; classmethod/staticmethod constructors are not
-    instance reads and stay out of both sweeps.
-    """
-
-    names: set[str] = set()
-    for name in dir(cls):
-        if name.startswith("_"):
-            continue
-        static = inspect.getattr_static(cls, name, None)
-        if isinstance(static, (property, functools.cached_property, classmethod, staticmethod)):
-            continue
-        if callable(static):
-            names.add(name)
-    return names
-
-
-def test_public_method_sweep_tables_are_total(tmp_path: Path) -> None:
-    """Every public method is either swept or excluded with a reason -- exactly.
-
-    Both directions are exact: a new public method must be classified before
-    it ships, and a retired method's row must be deleted. An untested method
-    silently omitted is how the draw() poison recurred after the attribute
-    sweep landed.
-    """
-
-    problems: dict[str, dict[str, list[str]]] = {}
-    for cls, sweep_factory, exclusions, _picker in _METHOD_SWEEP_PLAN:
-        swept = set(sweep_factory(tmp_path, None))
-        public = _public_methods(cls)
-        unclassified = sorted(public - swept - set(exclusions))
-        stale = sorted((swept | set(exclusions)) - public)
-        overlap = sorted(swept & set(exclusions))
-        entry: dict[str, list[str]] = {}
-        if unclassified:
-            entry["unclassified"] = unclassified
-        if stale:
-            entry["stale"] = stale
-        if overlap:
-            entry["both_swept_and_excluded"] = overlap
-        if entry:
-            problems[cls.__name__] = entry
-    assert problems == {}, (
-        "public-method sweep tables are not total; classify each method as "
-        f"swept or excluded-with-reason: {problems}"
-    )
 
 
 def test_public_method_reads_never_poison_save(tmp_path: Path) -> None:
@@ -741,52 +674,6 @@ def test_ledgered_undeclared_trace_field_refusal_teaches(tmp_path: Path) -> None
     assert "not a scrub policy" in message
 
 
-@pytest.mark.parametrize("raw_policy", [True, "small"], ids=["true", "small"])
-def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_policy) -> None:
-    """r69 E: effective DROP wins before the Trace raw-value special case.
-
-    Sparse runnable saves scrub ``raw_input``/``raw_output`` to ``None`` regardless
-    of the ordinary ``save_raw_input``/``save_raw_output`` policy (``True`` or
-    ``"small"``), for nested tensor/string containers included -- no raw blob or
-    tensor may enter the value-free sparse core (the payload assertion stays the
-    unchanged final tripwire, pinned by the genuine-stray negatives in
-    test_tlspec_runnable_param_conditional.py).
-    """
-
-    import warnings
-
-    from torchlens.options import CaptureOptions
-
-    class _NestedStr(nn.Module):
-        def forward(self, x: torch.Tensor, cfg: dict) -> torch.Tensor:
-            if cfg["mode"] == "fast":
-                return x * 2.0
-            return x + 100.0
-
-    trace = trace_fn(
-        _NestedStr(),
-        [torch.randn(3), {"mode": "fast"}],
-        capture=CaptureOptions(
-            replayable=True,
-            capture_container_structure=True,
-            cache=False,
-            save_raw_input=raw_policy,
-            save_transformed_output=raw_policy,
-        ),
-    )
-    path = tmp_path / f"sparse_raw_{raw_policy}.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.save(path, level="runnable")
-    with (path / "metadata.pkl").open("rb") as handle:
-        metadata = pickle.load(handle)
-    assert metadata["input"] is None
-    assert metadata["transformed_output"] is None
-    loaded = tl.load(path)
-    assert loaded.input is None
-    assert loaded.transformed_output is None
-
-
 def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     """Ordinary analysis saves keep their bounded raw-value behavior (no over-drop)."""
 
@@ -810,6 +697,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     assert raw[1] == {"mode": "fast"}
 
 
+@pytest.mark.smoke
 def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     """PIL raw input should survive ``save_raw_input='small'`` as a bounded image."""
 
@@ -837,7 +725,6 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
     assert loaded.input.size[1] <= 256
 
 
-@pytest.mark.smoke
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 

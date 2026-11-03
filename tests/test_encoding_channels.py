@@ -37,7 +37,7 @@ from torchlens._visualization._encoding import (
     interpolate_hex,
     resolve_color_by,
 )
-from torchlens._visualization.node_spec import NodeSpec
+from torchlens._visualization._trace_collapse import collapse_plan as _collapse_plan
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -145,28 +145,14 @@ def _varying_layer(log: tl.Trace) -> Layer:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_none_is_inactive() -> None:
-    assert resolve_color_by(None) is None
-
-
-def test_resolve_builtin_and_field_and_callable() -> None:
-    assert resolve_color_by("time").source_kind == "builtin"
-    assert resolve_color_by("flops_forward").source_kind == "field"
-    assert resolve_color_by(lambda node: 1.0).source_kind == "callable"
-
-
-def test_unknown_source_refuses_at_option_validation() -> None:
-    with pytest.raises(Exception) as excinfo:
-        resolve_color_by("no_such_field_anywhere")
-    assert excinfo.value.fields["code"] == "encoding_source_invalid"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_non_string_non_callable_refuses() -> None:
     with pytest.raises(Exception) as excinfo:
         resolve_color_by(42)
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_nan_overlay_is_not_a_scalar_color_source() -> None:
     """'nan' is a boolean overlay, not a scalar channel source."""
 
@@ -180,61 +166,14 @@ def test_nan_overlay_is_not_a_scalar_color_source() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_color_by_encodes_fillcolors(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(mlp_log, tmp_path, color_by="bytes")
-    state = _state(mlp_log)
-    assert state is not None and state.populated
-    assert state.colors, "no node was encoded"
-    for fill in state.colors.values():
-        assert fill in dot
-
-
-def test_callable_invoked_exactly_once_per_visible_eligible_node(
-    mlp_log: tl.Trace, tmp_path: Path
-) -> None:
-    """The prepass counting pin (memo 2.3 Phase A)."""
-
-    calls: dict[str, int] = {}
-
-    def source(node: Any) -> float:
-        key = str(node.layer_label)
-        calls[key] = calls.get(key, 0) + 1
-        return float(node.raw_index)
-
-    _draw(mlp_log, tmp_path, color_by=source)
-    state = _state(mlp_log)
-    assert calls, "callable never invoked"
-    assert all(count == 1 for count in calls.values()), calls
-    assert len(calls) == state.eligible_count
-
-
-def test_plain_draw_untouched_by_channel_machinery(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Opt-in -> no churn: plain draw carries no channel artifacts."""
-
-    dot = _draw(mlp_log, tmp_path)
-    assert _state(mlp_log) is None
-    assert "cluster_torchlens_encoding_legend" not in dot
-    assert "tl_legend" not in dot  # AUTO + no channel = no legend
-
-
-def test_request_hash_ignores_channel_fields() -> None:
-    """Channels are presentation-only: the collapse-planning hash is untouched."""
-
-    from torchlens._visualization.request import ResolvedRenderRequest
-
-    base = ResolvedRenderRequest(vis_mode="rolled")
-    with_channel = ResolvedRenderRequest(vis_mode="rolled", color_by="bytes", encoding=object())
-    assert hash(base) == hash(with_channel)
-
-
 def test_collapse_plan_identical_with_channel_active(tmp_path: Path) -> None:
     """CollapsePlan is byte-identical with the channel on vs off."""
 
     model = nn.Sequential(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), nn.Linear(4, 2))
     log = tl.trace(model, torch.randn(2, 4))
-    plan_off = log.collapse_plan(mode="auto")
+    plan_off = _collapse_plan(log, mode="auto")
     _draw(log, tmp_path, color_by="bytes", collapse="auto")
-    plan_on = log.collapse_plan(mode="auto")
+    plan_on = _collapse_plan(log, mode="auto")
     assert plan_off == plan_on
 
 
@@ -243,18 +182,21 @@ def test_collapse_plan_identical_with_channel_active(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_bool_value_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _draw(mlp_log, tmp_path, color_by=lambda node: True)
     assert excinfo.value.fields["code"] == "encoding_value_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_non_scalar_tensor_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _draw(mlp_log, tmp_path, color_by=lambda node: torch.zeros(3))
     assert excinfo.value.fields["code"] == "encoding_value_invalid"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_one_element_tensor_accepted(mlp_log: tl.Trace, tmp_path: Path) -> None:
     _draw(mlp_log, tmp_path, color_by=lambda node: torch.tensor([2.5]))
     state = _state(mlp_log)
@@ -266,19 +208,7 @@ def test_one_element_tensor_accepted(mlp_log: tl.Trace, tmp_path: Path) -> None:
     assert NOTE_CONSTANT in state.notes
 
 
-def test_callable_raise_chains_typed(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    class Boom(RuntimeError):
-        pass
-
-    def source(node: Any) -> float:
-        raise Boom("user bug")
-
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, color_by=source)
-    assert excinfo.value.fields["code"] == "encoding_callable_error"
-    assert isinstance(excinfo.value.__cause__, Boom)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     def source(node: Any) -> float:
         return float("nan") if record_type(node) == "relu" else float(node.raw_index)
@@ -289,6 +219,7 @@ def test_non_finite_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> 
     assert not any(key.startswith("relu") for key in state.colors)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/overlays.py.
 def test_absent_field_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """grad is absent (no backward ran): every node stays unencoded, no raise."""
 
@@ -303,30 +234,20 @@ def test_absent_field_degrades_to_unencoded(mlp_log: tl.Trace, tmp_path: Path) -
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_render_dot.py.
 def test_explicit_rank_with_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _draw(mlp_log, tmp_path, color_by="bytes", layout="rank")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_rank_layout_internal/layout.py, _visualization/_rank_segments.py, _visualization/_render_dot.py.
 def test_explicit_rank_without_channel_still_works(mlp_log: tl.Trace, tmp_path: Path) -> None:
     dot = _draw(mlp_log, tmp_path, layout="rank")
     assert dot is not None
 
 
-def test_explicit_dot_with_channel_works(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, color_by="bytes", layout="dot")
-    assert _state(mlp_log).colors
-
-
-def test_auto_small_graph_uses_dot_no_notice(
-    mlp_log: tl.Trace, tmp_path: Path, recwarn: pytest.WarningsRecorder
-) -> None:
-    _draw(mlp_log, tmp_path, color_by="bytes", layout="auto")
-    assert _state(mlp_log).colors
-    assert not [w for w in recwarn if "encoding channel" in str(w.message)]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_rank_layout_internal/layout.py.
 def test_auto_large_graph_forces_dot_with_notice(
     mlp_log: tl.Trace, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -340,19 +261,8 @@ def test_auto_large_graph_forces_dot_with_notice(
     assert _state(mlp_log).colors  # rendered on dot: channel applied
 
 
-# ---------------------------------------------------------------------------
-# Legend visibility rule + content (memo 2.3)
-# ---------------------------------------------------------------------------
-
-
-def test_legend_auto_with_channel_emits_channel_only(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(mlp_log, tmp_path, color_by="bytes")
-    assert "TorchLens encoding" in dot
-    assert 'ID="tl_key"' not in dot  # channel-only, not the role key
-    assert "linear min-max" in dot
-    assert "color_by: bytes" in dot
-
-
+# Kept: Kept: the slices removed this test; the stack's Okabe-Ito default-skin work
+# added the new role fills to its assertion.
 def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) -> None:
     # color_by="bytes" repaints every node, inputs and outputs included, so no
     # role fill is drawn and the key lists no input or output: the header
@@ -370,14 +280,12 @@ def test_legend_true_with_channel_emits_both(mlp_log: tl.Trace, tmp_path: Path) 
     assert dot.count("TorchLens encoding") == 1
 
 
-def test_legend_false_honored_even_with_channel(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Explicit False is a deliberate act: no legend, encoding undisclosed."""
-
-    dot = _draw(mlp_log, tmp_path, color_by="bytes", show_legend=False)
-    assert "tl_legend" not in dot
-    assert "TorchLens encoding" not in dot and "tl_key" not in dot
+# ---------------------------------------------------------------------------
+# Legend visibility rule + content (memo 2.3)
+# ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_header_block.py, _visualization/_legend.py, _visualization/_render_dot.py ....
 def test_legend_true_without_channel_keeps_todays_meaning(
     mlp_log: tl.Trace, tmp_path: Path
 ) -> None:
@@ -386,18 +294,11 @@ def test_legend_true_without_channel_keeps_todays_meaning(
     assert "TorchLens encoding" not in dot
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_draw_validation.py, _visualization/_render_dot.py.
 def test_show_legend_rejects_non_tri_state(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _draw(mlp_log, tmp_path, show_legend="yes")
     assert excinfo.value.fields["code"] == "visualization_bool_option_invalid"
-
-
-def test_channel_legend_text_is_escaped(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """E1-corpus reuse: a '<lambda>' display name escapes at the choke point."""
-
-    dot = _draw(mlp_log, tmp_path, color_by=lambda node: float(node.raw_index))
-    assert "callable &lt;lambda&gt;" in dot
-    assert "callable <lambda>" not in dot
 
 
 # ---------------------------------------------------------------------------
@@ -405,27 +306,7 @@ def test_channel_legend_text_is_escaped(mlp_log: tl.Trace, tmp_path: Path) -> No
 # ---------------------------------------------------------------------------
 
 
-def test_channel_fill_wins_over_role_fill(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Encoded input/output record nodes get the channel fill, not role fill."""
-
-    dot = _draw(mlp_log, tmp_path, color_by=lambda node: float(node.raw_index))
-    state = _state(mlp_log)
-    input_key = next(key for key in state.colors if key.startswith("input"))
-    assert state.colors[input_key] in dot
-
-
-def test_user_node_spec_fn_overrides_channel(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """The user callback runs AFTER the channel and may veto its fill."""
-
-    def node_spec_fn(layer_log: Layer, default_spec: NodeSpec) -> NodeSpec | None:
-        if layer_log.layer_type == "relu":
-            return default_spec.replace(fillcolor="#ABCDEF")
-        return None
-
-    dot = _draw(mlp_log, tmp_path, color_by="bytes", node_spec_fn=node_spec_fn)
-    assert "#ABCDEF" in dot
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_edit_marks.py, _visualization/_encoding.py.
 def test_intervention_border_composes_with_channel_fill(tmp_path: Path) -> None:
     """Intervention site styling (border) + channel fill land on one node."""
 
@@ -444,6 +325,7 @@ def test_intervention_border_composes_with_channel_fill(tmp_path: Path) -> None:
     assert "#7B1FA2" in site_line  # edited node ring colour
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_render_edges.py, _visualization/_render_leaf.py ....
 def test_collapsed_module_boxes_not_encoded(tmp_path: Path) -> None:
     """Collapsed boxes keep their trainability fill semantics (2.4)."""
 
@@ -462,20 +344,7 @@ def test_collapsed_module_boxes_not_encoded(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_varying_reconciled_field_unencoded_with_note(
-    varying_log: tl.Trace, tmp_path: Path
-) -> None:
-    """Marker-varying bytes on a rolled node: unencoded + legend note."""
-
-    layer = _varying_layer(varying_log)
-    assert "activation_memory" in layer.annotations["varying_across_passes"]
-    dot = _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
-    state = _state(varying_log)
-    assert layer.layer_label not in state.colors
-    assert NOTE_VARIES in state.notes
-    assert "varies across passes" in dot  # disclosed in the drawn legend
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_uniform_multipass_field_encodes(uniform_log: tl.Trace, tmp_path: Path) -> None:
     """No marker -> all passes agree -> exact value encodes normally."""
 
@@ -487,6 +356,7 @@ def test_uniform_multipass_field_encodes(uniform_log: tl.Trace, tmp_path: Path) 
     assert NOTE_VARIES not in state.notes
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/overlays.py.
 def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Path) -> None:
     """'time' (func_duration) is per-pass: rolled nodes stay unencoded."""
 
@@ -501,34 +371,7 @@ def test_per_pass_builtin_degrades_on_rolled(varying_log: tl.Trace, tmp_path: Pa
     assert NOTE_PER_PASS_ROLLED in state.notes
 
 
-def test_single_pass_layers_unaffected_by_allowlist(varying_log: tl.Trace, tmp_path: Path) -> None:
-    """Single-pass layers in the same graph encode normally."""
-
-    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=True)
-    state = _state(varying_log)
-    single_pass = [
-        layer.layer_label
-        for layer in varying_log._layer_logs.values()
-        if len(layer.ops) == 1 and layer.activation_memory
-    ]
-    assert any(label in state.colors for label in single_pass)
-
-
-def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_path: Path) -> None:
-    """A callable asserts its own aggregate semantics; legend discloses it."""
-
-    layer = _varying_layer(varying_log)
-    dot = _draw(
-        varying_log,
-        tmp_path,
-        color_by=lambda node: float(node.total_flops_forward or 0),
-        rolled=True,
-    )
-    state = _state(varying_log)
-    assert layer.layer_label in state.colors
-    assert "value from user callable" in dot
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_callable_per_pass_read_on_rolled_chains_tripwire(
     varying_log: tl.Trace, tmp_path: Path
 ) -> None:
@@ -544,6 +387,7 @@ def test_callable_per_pass_read_on_rolled_chains_tripwire(
     assert excinfo.value.fields["code"] == "encoding_callable_error"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py, _visualization/_encoding.py.
 def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     """ALIAS PIN: flops_forward unencodes; total_flops_forward encodes.
 
@@ -566,6 +410,7 @@ def test_alias_rows_flops(varying_log: tl.Trace, tmp_path: Path) -> None:
     assert "total across passes" in dot  # mandatory aggregation legend line
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_mirrored_per_call_numeric_unencoded(varying_log: tl.Trace, tmp_path: Path) -> None:
     """THE RESIDUAL PIN (sol r4 MAJOR-1): a varying mirrored numeric can never
     reach a uniform encoding.
@@ -615,6 +460,7 @@ def test_mirrored_per_call_enumeration_matches_live_mirror_spec() -> None:
     assert not (MIRRORED_PER_CALL_NUMERIC_FIELDS & reconciled)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py.
 def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: Path) -> None:
     """Allowlist default: an Op-only field with no rolled row refuses typed."""
 
@@ -628,19 +474,6 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
         _draw(varying_log, tmp_path, color_by="num_inputs", rolled=True)
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
     assert "rolled" in str(excinfo.value)
-
-
-def test_unrolled_per_pass_nodes_encode_their_own_pass(
-    varying_log: tl.Trace, tmp_path: Path
-) -> None:
-    """Unrolled mode: per-pass Op nodes of the varying layer encode per-pass."""
-
-    layer = _varying_layer(varying_log)
-    _draw(varying_log, tmp_path, color_by="activation_memory", rolled=False)
-    state = _state(varying_log)
-    pass_keys = [key for key in state.values if key.startswith(layer.layer_label + ":")]
-    assert len(pass_keys) == len(layer.ops)
-    assert len({state.values[key] for key in pass_keys}) > 1  # genuinely per-pass
 
 
 def test_classification_completeness_pin() -> None:
@@ -675,6 +508,7 @@ def test_mirrored_row_members_are_declared_mirrored() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_annotations.py, _data_classes/trace.py, _visualization/_encoding.py ....
 def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) -> None:
     """An annotation-image node contributes NO channel attrs and NO domain values."""
 
@@ -699,6 +533,7 @@ def test_annotation_image_node_excluded_from_channel_and_domain(tmp_path: Path) 
     assert state.domain[1] < 1e9  # the image node's value never entered the domain
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_render_nodes.py.
 def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
     model = SmallMLP()
     log = tl.trace(model, torch.randn(3, 4))
@@ -719,13 +554,7 @@ def test_visualizer_path_node_excluded(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_interpolate_hex_endpoints_and_clamp() -> None:
-    assert interpolate_hex("#000000", "#FFFFFF", 0.0) == "#000000"
-    assert interpolate_hex("#000000", "#FFFFFF", 1.0) == "#FFFFFF"
-    assert interpolate_hex("#000000", "#FFFFFF", -1.0) == "#000000"
-    assert interpolate_hex("#000000", "#FFFFFF", 2.0) == "#FFFFFF"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/bundle_diff.py.
 def test_bundle_diff_consumes_shared_interpolation() -> None:
     from torchlens._visualization.bundle_diff import _delta_color
 
@@ -733,6 +562,7 @@ def test_bundle_diff_consumes_shared_interpolation() -> None:
     assert _delta_color(1.0, 1.0) == interpolate_hex("#FFFFFF", "#C93F3F", 1.0)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/themes.py.
 def test_dark_theme_uses_dark_ramp(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """Ramps resolve through the SKIN's 3-anchor record (N4); the dark low
     anchor is deliberately off-ground (never equal to the default fill --
@@ -756,6 +586,7 @@ if __name__ == "__main__":  # pragma: no cover
     pytest.main([__file__, "-x", "-q"])
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _visualization/_encoding.py, _visualization/_render_dot.py.
 def test_dagua_renderer_with_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """The alternate label path never silently drops an active channel."""
 

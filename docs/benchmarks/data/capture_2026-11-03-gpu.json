@@ -1,0 +1,1099 @@
+{
+ "measured_on": "2026-11-03",
+ "host": {
+  "name": "a 20-core Intel Core i9-9900X 3.50 GHz Linux workstation with an NVIDIA GeForce RTX 2080 Ti, one torch thread per process, load average about 10",
+  "cpus": 20,
+  "torch_threads": 1,
+  "gpu": "NVIDIA GeForce RTX 2080 Ti"
+ },
+ "versions": {
+  "python": "3.10",
+  "torch": "2.13.0 (CUDA 12.6 build)",
+  "torchvision": "0.28.0 (CUDA 12.6 build)",
+  "transformers": "5.18.0",
+  "torchlens": "2.36.3",
+  "nnsight": "0.8.1"
+ },
+ "harness": "benchmarks/capture/driver.py --device cuda",
+ "resnet18": {
+  "groups": {
+   "A/single_module_output/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.3,
+    "min_ms": 2.29,
+    "max_ms": 2.34,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/single_module_output/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.32,
+    "min_ms": 2.31,
+    "max_ms": 2.32,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/single_module_output/nnsight/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.61,
+    "min_ms": 2.56,
+    "max_ms": 2.72,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 389.71,
+    "min_ms": 376.99,
+    "max_ms": 403.93,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 98.55,
+    "min_ms": 95.98,
+    "max_ms": 158.48,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 376.36,
+    "min_ms": 372.56,
+    "max_ms": 393.48,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/tl_bind/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a bound edit records nothing; it serves edit contracts only"
+   },
+   "A/single_module_output/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "dataset extraction serves the dataset contract only"
+   },
+   "A/single_module_output/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 0.76,
+    "min_ms": 0.75,
+    "max_ms": 0.82,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/single_module_output/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision is measured only on its extraction task"
+   },
+   "A/single_module_output/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "Captum is measured only on its matching attribution contract"
+   },
+   "A/single_module_output/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "A/matched_retained/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.28,
+    "min_ms": 2.26,
+    "max_ms": 2.31,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/matched_retained/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.32,
+    "min_ms": 2.32,
+    "max_ms": 2.35,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/matched_retained/nnsight/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.79,
+    "min_ms": 2.68,
+    "max_ms": 2.8,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 393.3,
+    "min_ms": 381.82,
+    "max_ms": 394.75,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 99.29,
+    "min_ms": 98.7,
+    "max_ms": 101.98,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 424.07,
+    "min_ms": 421.54,
+    "max_ms": 432.47,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/tl_bind/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a bound edit records nothing; it serves edit contracts only"
+   },
+   "A/matched_retained/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "dataset extraction serves the dataset contract only"
+   },
+   "A/matched_retained/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.3,
+    "min_ms": 2.27,
+    "max_ms": 2.5,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/matched_retained/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision is measured only on its extraction task"
+   },
+   "A/matched_retained/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "Captum is measured only on its matching attribution contract"
+   },
+   "A/matched_retained/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "A/replacement_edit/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.35,
+    "min_ms": 2.28,
+    "max_ms": 2.49,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/replacement_edit/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.34,
+    "min_ms": 2.34,
+    "max_ms": 2.36,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/replacement_edit/nnsight/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.65,
+    "min_ms": 2.61,
+    "max_ms": 2.94,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 377.55,
+    "min_ms": 371.17,
+    "max_ms": 449.89,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 103.33,
+    "min_ms": 102.42,
+    "max_ms": 115.96,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_extract/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "tl.extract reads outputs; edits and gradients use other entry points"
+   },
+   "A/replacement_edit/tl_bind/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.7,
+    "min_ms": 3.58,
+    "max_ms": 4.06,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/replacement_edit/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "dataset extraction serves the dataset contract only"
+   },
+   "A/replacement_edit/tv_fx/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a feature extractor reads outputs; it has no edit or gradient contract"
+   },
+   "A/replacement_edit/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision is measured only on its extraction task"
+   },
+   "A/replacement_edit/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "Captum is measured only on its matching attribution contract"
+   },
+   "A/replacement_edit/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "A/repeated_steering/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 15.18,
+    "min_ms": 13.67,
+    "max_ms": 15.2,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/repeated_steering/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 13.1,
+    "min_ms": 13.08,
+    "max_ms": 15.33,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/repeated_steering/nnsight/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 17.01,
+    "min_ms": 16.59,
+    "max_ms": 17.29,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3606.27,
+    "min_ms": 3593.17,
+    "max_ms": 4195.65,
+    "processes": 3,
+    "samples_per_process": [
+     5,
+     5,
+     5
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1059.18,
+    "min_ms": 1046.07,
+    "max_ms": 1192.38,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_extract/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "tl.extract reads outputs; edits and gradients use other entry points"
+   },
+   "A/repeated_steering/tl_bind/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 33.63,
+    "min_ms": 29.87,
+    "max_ms": 49.86,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/repeated_steering/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "dataset extraction serves the dataset contract only"
+   },
+   "A/repeated_steering/tv_fx/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a feature extractor reads outputs; it has no edit or gradient contract"
+   },
+   "A/repeated_steering/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision is measured only on its extraction task"
+   },
+   "A/repeated_steering/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "Captum is measured only on its matching attribution contract"
+   },
+   "A/repeated_steering/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "A/same_site_gradient/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.88,
+    "min_ms": 8.82,
+    "max_ms": 9.37,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/same_site_gradient/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 9.27,
+    "min_ms": 8.69,
+    "max_ms": 10.54,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/same_site_gradient/nnsight/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "the .grad proxy resolved to None in this nnsight version"
+   },
+   "A/same_site_gradient/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 551.37,
+    "min_ms": 466.61,
+    "max_ms": 576.62,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/same_site_gradient/tl_record/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "this comparison uses tl.record without backward capture"
+   },
+   "A/same_site_gradient/tl_extract/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "tl.extract reads outputs; edits and gradients use other entry points"
+   },
+   "A/same_site_gradient/tl_bind/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a bound edit records nothing; it serves edit contracts only"
+   },
+   "A/same_site_gradient/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "dataset extraction serves the dataset contract only"
+   },
+   "A/same_site_gradient/tv_fx/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a feature extractor reads outputs; it has no edit or gradient contract"
+   },
+   "A/same_site_gradient/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision is measured only on its extraction task"
+   },
+   "A/same_site_gradient/captum/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 7.76,
+    "min_ms": 7.32,
+    "max_ms": 8.92,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": true
+   },
+   "A/same_site_gradient/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "A/ordered_dataset_features/raw/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.32,
+    "min_ms": 8.14,
+    "max_ms": 10.46,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": null
+   },
+   "A/ordered_dataset_features/hooks/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.2,
+    "min_ms": 7.59,
+    "max_ms": 8.25,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "A/ordered_dataset_features/nnsight/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 8.48,
+    "min_ms": 8.47,
+    "max_ms": 9.35,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_trace_sparse/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1779.53,
+    "min_ms": 1721.04,
+    "max_ms": 1947.33,
+    "processes": 3,
+    "samples_per_process": [
+     11,
+     12,
+     11
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_record/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 393.03,
+    "min_ms": 387.17,
+    "max_ms": 421.0,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_extract/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 1863.36,
+    "min_ms": 1836.5,
+    "max_ms": 1913.71,
+    "processes": 3,
+    "samples_per_process": [
+     9,
+     8,
+     9
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/tl_bind/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "a bound edit records nothing; it serves edit contracts only"
+   },
+   "A/ordered_dataset_features/tl_extract_dataset/resnet18": {
+    "statuses": [
+     "error"
+    ],
+    "reason": "RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!"
+   },
+   "A/ordered_dataset_features/tv_fx/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.02,
+    "min_ms": 3.0,
+    "max_ms": 3.13,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ],
+    "exact": "bit"
+   },
+   "A/ordered_dataset_features/thingsvision/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "thingsvision has no release that installs beside this torch, torchvision and transformers (see peers.txt); thingsvision not importable: ModuleNotFoundError: No module named 'thingsvision'"
+   },
+   "A/ordered_dataset_features/captum/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "Captum is measured only on its matching attribution contract"
+   },
+   "A/ordered_dataset_features/transformer_lens/resnet18": {
+    "statuses": [
+     "unsupported"
+    ],
+    "reason": "TransformerLens reimplements its supported decoder families; generic subjects are not among them (decoders are measured in the mech-interp workloads)"
+   },
+   "B/raw_forward/reference/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.3,
+    "min_ms": 2.27,
+    "max_ms": 2.33,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/hooks_all_modules/reference/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3.1,
+    "min_ms": 3.08,
+    "max_ms": 3.44,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/raw_forward_wrapped/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2.39,
+    "min_ms": 2.36,
+    "max_ms": 3.11,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_default/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 427.04,
+    "min_ms": 391.87,
+    "max_ms": 435.26,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/full_trace_declared/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 381.29,
+    "min_ms": 355.33,
+    "max_ms": 433.64,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/record/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 99.82,
+    "min_ms": 95.38,
+    "max_ms": 109.57,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/validate/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 2546.49,
+    "min_ms": 2445.69,
+    "max_ms": 2699.34,
+    "processes": 3,
+    "samples_per_process": [
+     5,
+     7,
+     6
+    ]
+   },
+   "B/save_load/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 3400.59,
+    "min_ms": 3207.94,
+    "max_ms": 3667.69,
+    "processes": 3,
+    "samples_per_process": [
+     5,
+     6,
+     5
+    ]
+   },
+   "B/backward_capture/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 507.38,
+    "min_ms": 495.54,
+    "max_ms": 652.98,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/draw/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 234.26,
+    "min_ms": 232.54,
+    "max_ms": 249.15,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     20,
+     20
+    ]
+   },
+   "B/bundle_compare/torchlens/resnet18": {
+    "statuses": [
+     "ok"
+    ],
+    "median_ms": 986.8,
+    "min_ms": 969.0,
+    "max_ms": 1013.13,
+    "processes": 3,
+    "samples_per_process": [
+     20,
+     19,
+     18
+    ]
+   }
+  },
+  "meta": {
+   "environment": {
+    "hostname": "benchmark-host",
+    "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+    "python": "3.10.19",
+    "cpu_count": 20,
+    "torch_num_threads": 1,
+    "omp_num_threads_env": "1",
+    "load_average_1m": 10.47,
+    "device": "cuda",
+    "gpu_name": "NVIDIA GeForce RTX 2080 Ti"
+   },
+   "versions": {
+    "torch": "2.13.0+cu126",
+    "torchvision": "0.28.0+cu126",
+    "transformers": "5.18.0",
+    "nnsight": "0.8.1",
+    "transformer_lens": "4.3.0",
+    "thingsvision": null,
+    "captum": "0.9.0",
+    "numpy": "2.2.6",
+    "psutil": "7.2.2",
+    "torchlens": "2.36.3",
+    "git_sha": null
+   },
+   "protocol": {
+    "warmups": 3,
+    "samples": 20,
+    "processes": 3,
+    "fresh_subprocess": true,
+    "memory_runs": 3,
+    "budget_s_per_cell": 20.0,
+    "min_samples": 3
+   },
+   "aa_noise": {
+    "pairs": 2,
+    "medians_ms": [
+     8.291479665786028,
+     7.894658949226141
+    ],
+    "max_rel_diff": 0.05026445336169773
+   }
+  },
+  "not_measured": [
+   "A/ordered_dataset_features/tl_extract_dataset: RuntimeError: Expected all tensors to be on the same device, but found at least two devices, cuda:0 and cpu!"
+  ]
+ },
+ "page_rows": [
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | plain forward, nothing attached | 2.30 ms (2.29 ms to 2.34 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | forward hook | 2.32 ms (2.31 ms to 2.32 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | nnsight 0.8.1 | 2.61 ms (2.56 ms to 2.72 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | torchvision fx `create_feature_extractor` | 0.76 ms (0.75 ms to 0.82 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | `tl.record(..., save=tl.module(site))` | 98.55 ms (95.98 ms to 158.48 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | `tl.trace(..., save=tl.module(site))` | 389.71 ms (376.99 ms to 403.93 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output (`layer2`), n=3 processes | `tl.extract` | 376.36 ms (372.56 ms to 393.48 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module replaced by zeros, n=3 processes | forward hook | 2.34 ms (2.34 ms to 2.36 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module replaced by zeros, n=3 processes | nnsight 0.8.1 | 2.65 ms (2.61 ms to 2.94 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module replaced by zeros, n=3 processes | `tl.when(...).bind(model)` | 3.70 ms (3.58 ms to 4.06 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module replaced by zeros, n=3 processes | `tl.record(..., intervene=tl.when(...))` | 103.33 ms (102.42 ms to 115.96 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | forward hooks | 13.10 ms (13.08 ms to 15.33 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | nnsight 0.8.1 | 17.01 ms (16.59 ms to 17.29 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | `tl.when(...).bind(model)` | 33.63 ms (29.87 ms to 49.86 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | `tl.record(..., intervene=...)` per strength | 1.06 s (1.05 s to 1.19 s) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, eight steering strengths, n=3 processes | `tl.trace` then `fork().do(...)` | 3.61 s (3.59 s to 4.20 s) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | forward hook | 8.20 ms (7.59 ms to 8.25 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | nnsight 0.8.1 | 8.48 ms (8.47 ms to 9.35 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | torchvision fx `create_feature_extractor` | 3.02 ms (3.00 ms to 3.13 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4, n=3 processes | `tl.record` per batch | 393.03 ms (387.17 ms to 421.00 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, one module's output over 16 stimuli in batches of 4 | `tl.extract_dataset` | fails: inputs end up on two devices (cuda:0 and cpu) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, gradient at one module output (`layer2`), n=3 processes | forward hook plus tensor hook | 9.27 ms (8.69 ms to 10.54 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, gradient at one module output (`layer2`), n=3 processes | Captum 0.9.0 layer gradient | 7.76 ms (7.32 ms to 8.92 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, gradient at one module output (`layer2`), n=3 processes | `tl.trace` with gradients saved | 551.37 ms (466.61 ms to 576.62 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | plain forward | 2.30 ms (2.27 ms to 2.33 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | plain forward, TorchLens imported and torch wrapped | 2.39 ms (2.36 ms to 3.11 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | forward hooks on every module | 3.10 ms (3.08 ms to 3.44 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | `tl.record` (sparse recorder) | 99.82 ms (95.38 ms to 109.57 ms) |"
+  },
+  {
+   "section": "resnet18_gpu",
+   "text": "| ResNet-18, GPU, full forward, n=3 processes | `tl.trace(model, x)` (full trace) | 427.04 ms (391.87 ms to 435.26 ms) |"
+  }
+ ]
+}

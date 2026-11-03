@@ -104,6 +104,7 @@ def _examples() -> list[Any]:
     return params
 
 
+@pytest.mark.smoke_cells("test_migration_page_example_runs[migration/from_torchview.md:3]")
 @pytest.mark.parametrize(("page", "index", "tool", "expected", "code"), _examples())
 def test_migration_page_example_runs(
     page: str, index: int, tool: str, expected: Any, code: str

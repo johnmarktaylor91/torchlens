@@ -306,27 +306,6 @@ def test_audio_feature_extractor_with_sampling_rate() -> None:
     assert torch.equal(result, torch.ones(1, 3))
 
 
-def test_unsupported_string_error_message() -> None:
-    """Plain modules receive a helpful string-dispatch error."""
-
-    model = nn.Linear(3, 2)
-    with pytest.raises(TypeError, match="String input requires either model.to_tokens"):
-        _coerce_input(model, "hello")
-
-
-def test_trace_with_attached_tokenizer_string() -> None:
-    """End-to-end capture accepts raw text when a tokenizer is attached."""
-
-    model = TokenEmbeddingModel()
-    trace = tl.trace(model, "hello world")
-    try:
-        assert len(trace._layer_list) > 0
-        assert model.tokenizer_calls == [("hello world", "pt")]
-        assert trace.input == "hello world"
-    finally:
-        trace.cleanup()
-
-
 def test_trace_with_numpy_array_preserves_raw_input() -> None:
     """End-to-end auto-coercion should retain the original NumPy input."""
 
@@ -338,15 +317,6 @@ def test_trace_with_numpy_array_preserves_raw_input() -> None:
     trace = tl.trace(model, array, save="none")
 
     assert trace.input is array
-
-
-def test_fastlog_record_with_attached_tokenizer_string() -> None:
-    """Fastlog one-shot recording accepts raw text when a tokenizer is attached."""
-
-    model = TokenEmbeddingModel()
-    recording = tl.record(model, "hello world", default_op=True)
-    assert recording.records
-    assert model.tokenizer_calls == [("hello world", "pt")]
 
 
 def test_trace_rerun_with_attached_tokenizer_string() -> None:

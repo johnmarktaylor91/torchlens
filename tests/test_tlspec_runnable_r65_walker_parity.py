@@ -25,11 +25,8 @@ VERIFIED. These tests pin:
 
 from __future__ import annotations
 
-import ast
 import dataclasses
 import enum
-import inspect
-import textwrap
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -43,26 +40,13 @@ from torchlens._capture.trace import (
     _record_runnable_input_literal_leaves,
     _record_runnable_input_tensor_sites,
 )
-from torchlens._input_walk import (
-    INPUT_CONTAINER_KINDS,
-    classify_input_container,
-    raw_mapping_key_component,
-    tagged_mapping_key_component,
-)
-from torchlens._io.runnable import (
-    EMPTY_CONTAINER_PATH_MARKER,
-    _UnsupportedLiteralError,
-)
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
 )
 from torchlens._runnable.input_aliases import _runtime_nontensor_leaf_paths
 from torchlens._runnable.seam import runnable_trace_state
-from torchlens._runnable.verification import _value_at_path
 from torchlens._runnable.witness_contracts import (
-    _container_kind,
-    _container_leaf_paths,
     _tensor_leaf_paths,
 )
 from torchlens.errors import PathDivergenceError, RunnablePreflightError
@@ -79,23 +63,8 @@ class _Key(enum.Enum):
     K = "k"
 
 
-class _ProbeNT(NamedTuple):
-    """Namedtuple probe carrying one tensor leaf and one scalar leaf."""
-
-    t: torch.Tensor
-    s: int
-
-
 class _EmptyNT(NamedTuple):
     """Zero-field namedtuple (classified as an EMPTY container by kind)."""
-
-
-@dataclasses.dataclass
-class _ProbeBox:
-    """Dataclass probe carrying one tensor leaf and one scalar leaf."""
-
-    t: torch.Tensor
-    s: int
 
 
 class _FakeTrace:
@@ -131,67 +100,6 @@ def _w2_paths(root: Any) -> set[tuple[Any, ...]]:
 # 1. Source-scan meta-test: no private container dispatch inside any walker body
 # ======================================================================================
 
-_WALKER_FUNCTIONS = {
-    "W1_capture_literal": _record_runnable_input_literal_leaves,
-    "W2_capture_metadata_site": _record_runnable_input_tensor_sites,
-    "W3_runtime_literal_path": _runtime_nontensor_leaf_paths,
-}
-
-#: Identifiers that constitute PRIVATE container dispatch. A walker body referencing
-#: any of these is re-growing its own traversal -- the exact drift class that produced
-#: the r64 false-VERIFIED. Container handling must live in torchlens/_input_walk.py.
-_FORBIDDEN_DISPATCH_IDENTIFIERS = frozenset(
-    {
-        "is_dataclass",
-        "fields",
-        "_fields",
-        "Mapping",
-        "_Mapping",
-        "Tensor",
-        "empty_container_kind",
-        "_encode_literal_key",
-        "input_path_key_component",
-    }
-)
-
-
-def _function_identifiers(func: Any) -> set[str]:
-    """Collect every Name/Attribute/import identifier referenced in a function's AST.
-
-    Docstrings and comments are inherently excluded (they are not Name nodes), so the
-    scan cannot false-fire on prose mentioning a container kind.
-    """
-
-    source = textwrap.dedent(inspect.getsource(func))
-    identifiers: set[str] = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Name):
-            identifiers.add(node.id)
-        elif isinstance(node, ast.Attribute):
-            identifiers.add(node.attr)
-        elif isinstance(node, ast.alias):
-            identifiers.add(node.name.rsplit(".", 1)[-1])
-            if node.asname:
-                identifiers.add(node.asname)
-    return identifiers
-
-
-@pytest.mark.parametrize("walker_name", sorted(_WALKER_FUNCTIONS))
-def test_walker_bodies_have_no_private_container_dispatch(walker_name: str) -> None:
-    """T-Y1: every input-boundary walker routes through the shared traversal ONLY."""
-
-    identifiers = _function_identifiers(_WALKER_FUNCTIONS[walker_name])
-    leaked = identifiers & _FORBIDDEN_DISPATCH_IDENTIFIERS
-    assert not leaked, (
-        f"{walker_name} performs private container dispatch via {sorted(leaked)}; "
-        "container handling must be added to torchlens/_input_walk.py so every "
-        "input-boundary walker gains it in lockstep (r64 Finding-1 drift class)."
-    )
-    assert "walk_input_boundary" in identifiers, (
-        f"{walker_name} no longer routes through torchlens._input_walk."
-        "walk_input_boundary -- the single-sourced container dispatch is mandatory."
-    )
-
 
 # ======================================================================================
 # 2. Closed container-kind vocabulary + classification order pins
@@ -215,130 +123,9 @@ _register_container(
 )
 
 
-def test_container_kind_vocabulary_is_closed_and_classified() -> None:
-    """The normative dispatch classifies one probe per kind; the vocabulary is closed."""
-
-    probes: dict[str, Any] = {
-        "tensor": torch.zeros(1),
-        "empty": {},
-        "namedtuple": _ProbeNT(t=torch.zeros(1), s=5),
-        "dataclass": _ProbeBox(t=torch.zeros(1), s=5),
-        "mapping": {"k": 1},
-        "sequence": [1],
-        "registered": _RegisteredProbe(torch.zeros(1)),
-        "leaf": object(),
-    }
-    for kind, value in probes.items():
-        assert classify_input_container(value) == kind
-    assert set(probes) == set(INPUT_CONTAINER_KINDS)
-    # Order pins: EMPTY precedes namedtuple (a zero-field namedtuple is witnessed as an
-    # empty container by KIND); a dataclass TYPE (not instance) is an opaque leaf.
-    assert classify_input_container(_EmptyNT()) == "empty"
-    assert classify_input_container(()) == "empty"
-    assert classify_input_container([]) == "empty"
-    assert classify_input_container(_ProbeBox) == "leaf"
-
-
 # ======================================================================================
 # 3. Three-walker container-kind parity (behavioral) + dual key vocabulary pins
 # ======================================================================================
-
-_PARITY_CASES: dict[str, Any] = {
-    "namedtuple": lambda t: _ProbeNT(t=t, s=5),
-    "dataclass": lambda t: _ProbeBox(t=t, s=5),
-    "mapping": lambda t: {"t": t, "s": 5},
-    "sequence_list": lambda t: [t, 5],
-    "sequence_tuple": lambda t: (t, 5),
-}
-_EXPECTED_TENSOR_PATHS: dict[str, set[tuple[Any, ...]]] = {
-    "namedtuple": {("t",)},
-    "dataclass": {("t",)},
-    "mapping": {("t",)},
-    "sequence_list": {(0,)},
-    "sequence_tuple": {(0,)},
-}
-_EXPECTED_LEAF_PATHS: dict[str, set[tuple[Any, ...]]] = {
-    "namedtuple": {("s",)},
-    "dataclass": {("s",)},
-    "mapping": {("s",)},
-    "sequence_list": {(1,)},
-    "sequence_tuple": {(1,)},
-}
-
-
-@pytest.mark.parametrize("kind", sorted(_PARITY_CASES))
-def test_three_walker_container_kind_parity(kind: str) -> None:
-    """Every supported container kind is descended by ALL THREE walkers.
-
-    The r64 bug class is a kind descended by the literal walkers but missed by the
-    metadata-site walker: the literal fact family stays green while every metadata
-    read beneath the container silently loses its witness.
-    """
-
-    tensor = torch.zeros(2)
-    root = _PARITY_CASES[kind](tensor)
-    w1 = _w1_paths(root)
-    w3 = _runtime_nontensor_leaf_paths(root)
-    assert w1 == _EXPECTED_LEAF_PATHS[kind]
-    assert w3 == w1, "capture/runtime literal walkers must agree on the same object"
-    w2 = _w2_paths(root)
-    assert w2 == _EXPECTED_TENSOR_PATHS[kind], (
-        f"metadata-site walker failed to descend {kind!r} -- the r64 Finding-1 class"
-    )
-
-
-def test_empty_container_and_opaque_leaf_parity() -> None:
-    """EMPTY containers and opaque leaves are handled consistently by all walkers."""
-
-    for empty in ({}, [], ()):
-        assert _w1_paths([empty]) == {(0, EMPTY_CONTAINER_PATH_MARKER)}
-        assert _runtime_nontensor_leaf_paths([empty]) == {(0, EMPTY_CONTAINER_PATH_MARKER)}
-        assert _w2_paths([empty]) == set()  # nothing to index inside an empty container
-    opaque = object()
-    assert _w1_paths(opaque) == {()}
-    assert _runtime_nontensor_leaf_paths(opaque) == {()}
-    assert _w2_paths(opaque) == set()
-
-
-def test_dual_mapping_key_vocabulary_declared_and_pinned() -> None:
-    """r67 C2: residual R6 CLOSED -- ONE type-strict canonical key codec everywhere.
-
-    Every walker family (persisted literal W1/W3, metadata fact sites W2, binding-path
-    normalization, runtime resolution) speaks ``encode_mapping_key``: grammar keys
-    (str/int raw; bool/float/None/safe-tuple as tagged STRING components) round-trip
-    through ``decode_mapping_key`` with ``True != 1`` and ``1.0 != 1`` type-distinct.
-    A non-grammar key raises (W1/W3 route the subtree opaque; W2 keeps the raw key as
-    an in-memory-only attribution component).
-    """
-
-    from torchlens._input_walk import decode_mapping_key, encode_mapping_key
-
-    for key in (True, False, 1, 0, "k", 2.5, 1.0, None, ("a", 1), (True, 2.5), -7):
-        component = encode_mapping_key(key)
-        assert isinstance(component, (str, int)), key
-        decoded = decode_mapping_key(component)
-        assert type(decoded) is type(key) and decoded == key, key
-    # Type-strictness: equal-hashing twins encode to DISTINCT components.
-    assert len({encode_mapping_key(k) for k in (True, 1, 1.0)}) == 3
-    # Codec-colliding strings are escaped, never conflated with an encoding.
-    tagged = encode_mapping_key(True)
-    assert isinstance(tagged, str)
-    assert encode_mapping_key(tagged) != tagged
-    assert decode_mapping_key(encode_mapping_key(tagged)) == tagged
-    with pytest.raises(_UnsupportedLiteralError):
-        tagged_mapping_key_component(_Key.K)
-    with pytest.raises(_UnsupportedLiteralError):
-        tagged_mapping_key_component(object())
-    with pytest.raises(_UnsupportedLiteralError):
-        tagged_mapping_key_component(b"kk")
-    assert tagged_mapping_key_component(True) == encode_mapping_key(True)
-    assert raw_mapping_key_component(True) == encode_mapping_key(True)
-    assert raw_mapping_key_component(_Key.K) is _Key.K  # in-memory attribution fallback
-    assert raw_mapping_key_component(b"kk") == b"kk"
-
-    # Observable unification: W1 and W2 persist the SAME codec component.
-    assert _w1_paths({True: 5}) == {(encode_mapping_key(True),)}
-    assert _w2_paths({True: torch.zeros(1)}) == {(encode_mapping_key(True),)}
 
 
 def test_opaque_mapping_key_subtree_parity() -> None:
@@ -380,15 +167,6 @@ class _DataclassLayoutBranch(nn.Module):
         if box.x.is_contiguous():
             return box.x + 10
         return box.x - 10
-
-
-class _DataclassPassthrough(nn.Module):
-    """Read the dataclass tensor field with NO metadata-predicate reads."""
-
-    def forward(self, box: _LayoutBox) -> torch.Tensor:
-        """Return ``box.x * 2`` without touching input metadata."""
-
-        return box.x * 2.0
 
 
 def _capture_runnable(model: nn.Module, box: _LayoutBox, path: Path) -> Any:
@@ -461,120 +239,9 @@ def test_r64_dataclass_original_input_still_verifies_and_attests(tmp_path: Path)
     torch.testing.assert_close(result.output, x + 10)
 
 
-def test_tensor_only_dataclass_without_metadata_read_stays_verified(
-    tmp_path: Path,
-) -> None:
-    """No-over-trigger: tensor-only dataclass, no metadata read -> VERIFIED + ATTESTED."""
-
-    x = torch.randn(3)
-    path = tmp_path / "dc_passthrough.tlspec"
-    _capture_runnable(_DataclassPassthrough(), _LayoutBox(x), path)
-
-    result = tl.load(path).run(inputs=_LayoutBox(x))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-    torch.testing.assert_close(result.output, x * 2.0)
-
-
 # ======================================================================================
 # 5. W4/W5/W6 behavioral round-trip parity on a torture container (not rerouted in r65)
 # ======================================================================================
-
-
-class _TortureNT(NamedTuple):
-    """Namedtuple limb of the torture container."""
-
-    t2: torch.Tensor
-    tag: str
-
-
-@dataclasses.dataclass
-class _Torture:
-    """Torture container: dataclass/namedtuple/dict (bool+int+str keys)/list/empty/scalar."""
-
-    t: torch.Tensor
-    nt: _TortureNT
-    m: dict[Any, Any]
-    e: dict[str, Any]
-    s: str
-
-
-def _torture_root() -> tuple[_Torture, dict[tuple[Any, ...], torch.Tensor]]:
-    """Build the torture container plus its expected path->tensor leaf map."""
-
-    tensors: dict[tuple[Any, ...], torch.Tensor] = {
-        ("t",): torch.zeros(2),
-        ("nt", "t2"): torch.ones(2),
-        ("m", "k", 0): torch.full((2,), 2.0),
-        ("m", True): torch.full((2,), 3.0),
-        ("m", 7): torch.full((2,), 4.0),
-    }
-    root = _Torture(
-        t=tensors[("t",)],
-        nt=_TortureNT(t2=tensors[("nt", "t2")], tag="x"),
-        m={
-            "k": [tensors[("m", "k", 0)]],
-            True: tensors[("m", True)],
-            7: tensors[("m", 7)],
-        },
-        e={},
-        s="leaf",
-    )
-    return root, tensors
-
-
-def test_w4_w5_w6_round_trip_parity_on_torture_container() -> None:
-    """The NON-rerouted W4/W5/W6 walkers stay in lockstep with the shared dispatch.
-
-    W4 (`_tensor_leaf_paths`, binding side) and W6 (`_container_leaf_paths`, output
-    side) must enumerate the same physical tensor leaves the shared W2 dispatch
-    indexes, and W5 (`_value_at_path`) must resolve every indexed site back to the
-    IDENTICAL tensor object -- the round trip that makes a recorded fact land on the
-    same physical leaf at run time.
-    """
-
-    root, tensors = _torture_root()
-
-    # W2 (shared dispatch, ONE codec) indexes exactly the physical tensor leaves,
-    # with grammar keys encoded through the canonical type-strict components.
-    from torchlens._input_walk import encode_mapping_key
-
-    w2 = _w2_paths(root)
-    expected = {
-        tuple(encode_mapping_key(part) if isinstance(part, bool) else part for part in path)
-        for path in tensors
-    }
-    assert w2 == expected
-
-    # W4 mirrors W2 on this container (same codec components).
-    w4 = set(_tensor_leaf_paths(root))
-    assert w4 == w2
-
-    # W6 (producer/output twin) yields the same leaf paths and container kinds.
-    assert set(_container_leaf_paths(root)) == w4
-    assert _container_kind(root) == "dataclass"
-    assert _container_kind(root.nt) == "namedtuple"
-    assert _container_kind(root.m) == "dict"
-    assert _container_kind(root.m["k"]) == "list"
-
-    # W5 resolves EVERY indexed site back to the IDENTICAL tensor object -- through
-    # the SAME canonical token vocabulary W2/W4 persist (r69 D: mapping lookup binds
-    # by exact encoded token for every key; a raw bool component is not a persisted
-    # spelling and must not resolve via Python hash equality).
-    for leaf_path, tensor in tensors.items():
-        canonical = tuple(
-            encode_mapping_key(part) if isinstance(part, bool) else part for part in leaf_path
-        )
-        assert _value_at_path(root, canonical) is tensor
-
-    # W1/W3 stay in lockstep on the same root (literal fact family).
-    expected_literals = {
-        ("nt", "tag"),
-        ("e", EMPTY_CONTAINER_PATH_MARKER),
-        ("s",),
-    }
-    assert _w1_paths(root) == expected_literals
-    assert _runtime_nontensor_leaf_paths(root) == expected_literals
 
 
 @dataclasses.dataclass

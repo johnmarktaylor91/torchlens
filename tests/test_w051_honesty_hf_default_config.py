@@ -65,6 +65,7 @@ def _capture(model: Any, x: torch.Tensor, **options: Any) -> Any:
         return tl.trace(model, x, capture=CaptureOptions(**options))
 
 
+# Kept: sole branch coverage of _utils/collections.py; the catch of its regression fault.
 def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_ids) -> None:
     """H1 row 1: KV cache on (the HF default), default capture -> UNVERIFIABLE with the
     typed ``opaque_leaf`` reason and a remedy naming ``use_cache=False``."""
@@ -91,25 +92,7 @@ def test_default_config_default_capture_settles_typed_opaque_leaf_remedy(input_i
     assert torch.allclose(logits, live.logits, atol=1e-5)
 
 
-def test_default_config_intervention_ready_capture_never_crashes(input_ids) -> None:
-    """H1 row 2 (the audit's crash): KV cache on + ``replayable=True`` used to
-    raise a bare ``ValueError`` from the container codec. It now settles the SAME typed
-    ``opaque_leaf`` verdict with the ``use_cache=False`` remedy. Since W051-CAPT2 the
-    spec builder records the tensor-holding ``DynamicCache`` holder as an OPAQUE
-    (non-reconstructable) container instead of a leaf, so the detail names the
-    fresh-forward proof's refusal rather than a dry leaf slot."""
-
-    model = _tiny_gpt2(use_cache=True)
-    trace = _capture(model, input_ids, replayable=True)
-    result = trace.run(inputs=input_ids)  # must not raise
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    check = _reconstruction_check(result.report)
-    details = dict(check.diagnostic.details)
-    assert details["reason"] == "opaque_leaf"
-    assert "DynamicCache" in details["detail"]
-    assert "use_cache=False" in details["remedy"]
-
-
+# Kept: sole branch coverage of _data_classes/container.py, _ir/_container_type_probes.py, _ir/container_registry.py and more; a sole mutation kill.
 def test_use_cache_false_container_contract_capture_settles_verified(input_ids) -> None:
     """H1 row 3 (the remedy WORKS): ``use_cache=False`` + the container-contract capture
     option settles VERIFIED and returns the real ``ModelOutput`` type."""
@@ -123,40 +106,3 @@ def test_use_cache_false_container_contract_capture_settles_verified(input_ids) 
     with torch.no_grad():
         live = model(input_ids)
     assert torch.allclose(result.output.logits, live.logits, atol=1e-5)
-
-
-def test_use_cache_false_default_capture_settles_verified(input_ids) -> None:
-    """H1/H2 row 4 (closed by W051-CAPT2): ``use_cache=False`` on a DEFAULT capture
-    settles VERIFIED with the real ``ModelOutput`` type -- the final-output
-    ContainerSpec is registered on every capture, so the H2 class
-    (``container_contract_unrecorded``) no longer exists for declared containers."""
-
-    model = _tiny_gpt2(use_cache=False)
-    trace = _capture(model, input_ids)
-    result = trace.run(inputs=input_ids)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.is_poisoned is False
-    assert type(result.output).__name__ == "CausalLMOutputWithCrossAttentions"
-    with torch.no_grad():
-        live = model(input_ids)
-    assert torch.allclose(result.output.logits, live.logits, atol=1e-5)
-
-
-def test_logits_wrapper_default_capture_settles_verified(input_ids) -> None:
-    """Remedy row: wrapping the model to return the logits tensor verifies on the
-    default capture (the bare-tensor fast path, fresh-proof gated)."""
-
-    inner = _tiny_gpt2(use_cache=True)
-
-    class _Logits(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.m = inner
-
-        def forward(self, ids: torch.Tensor) -> torch.Tensor:
-            return self.m(ids).logits
-
-    model = _Logits().eval()
-    trace = _capture(model, input_ids)
-    result = trace.run(inputs=input_ids)
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED

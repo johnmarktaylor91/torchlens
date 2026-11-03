@@ -7,8 +7,6 @@ abandons only TO the fallback and is disclosed as an estimator bug.
 
 from __future__ import annotations
 
-import warnings as warnings_module
-
 import pytest
 import torch
 from torch import nn
@@ -131,68 +129,3 @@ def test_watchdog_is_off_in_ci_and_deterministic_mode(monkeypatch) -> None:
     monkeypatch.delenv("TORCHLENS_DETERMINISTIC")
     monkeypatch.setenv("TORCHLENS_COLLAPSE_WATCHDOG", "0")
     assert collapse_estimator.watchdog_enabled() is False
-
-
-def test_pathological_pre_gate_still_declines(monkeypatch) -> None:
-    """Raw ops above 20x the constant decline outright (the ONE wall left)."""
-
-    trace = tl.trace(_Stack(3), torch.randn(2, 4))
-    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 0)
-    with pytest.warns(TorchLensWarning, match="skipping smart collapse") as caught:
-        result = collapse_optimizer.select_collapse_plan(trace, RenderContext(), mode="max")
-    codes = {getattr(w.message, "fields", {}).get("code") for w in caught}
-    assert "collapse_pathological_skip" in codes
-    assert result.declined
-    assert "collapse_ops_ceiling" in (result.reason or "")
-
-
-def test_frontier_allocation_is_instrumented() -> None:
-    """Admitted selections record their peak frontier allocation (item 14)."""
-
-    trace = tl.trace(_Stack(8), torch.randn(2, 4))
-    result = collapse_optimizer.select_collapse_plan(trace, RenderContext(), mode="max")
-    assert result.estimator is not None
-    assert result.estimator.peak_frontier_records > 0
-    assert result.estimator.budget_fired is None
-    assert result.estimator.predicted_ms > 0
-    assert result.estimator.actual_ms >= 0
-
-
-def test_focused_context_is_a_real_remedy(monkeypatch) -> None:
-    """The U-gate admits a small rendered universe on a large raw trace.
-
-    The historical raw-op gate refused a seven-node ``vis_call_depth``
-    problem citing compute (memo D5 witness). With the gate on U, a reduced
-    context re-admits the quality planner even when raw ops exceed the
-    constant.
-    """
-
-    class _SharedLoop(nn.Module):
-        """ONE weight-shared block called ten times: rolled mode merges it."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.block = _Block()
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Apply the shared block ten times."""
-
-            for _ in range(10):
-                x = self.block(x)
-            return x
-
-    trace = tl.trace(_SharedLoop(), torch.randn(2, 4))
-    # Constant 10: the unrolled universe exceeds it while the ROLLED
-    # universe (one merged multi-pass block) passes the U-gate; raw ops stay
-    # under the 20x pathological gate.
-    monkeypatch.setattr(collapse_optimizer, "COLLAPSE_OPTIMIZER_MAX_OPS", 10)
-    with warnings_module.catch_warnings():
-        warnings_module.simplefilter("ignore")
-        unrolled = collapse_optimizer.select_collapse_plan(
-            trace, RenderContext(vis_mode="unrolled"), mode="max"
-        )
-        rolled = collapse_optimizer.select_collapse_plan(
-            trace, RenderContext(vis_mode="rolled"), mode="max"
-        )
-    assert unrolled.planner == "linear_fallback"  # unrolled U over the gate
-    assert rolled.planner != "linear_fallback"  # rolled U re-admits

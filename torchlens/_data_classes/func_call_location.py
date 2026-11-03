@@ -26,7 +26,8 @@ actual ``None`` value in the lazy-loading placeholders.
 
 import inspect
 import linecache
-from typing import Any
+import os
+from typing import Any, cast
 
 from .._constants import FUNC_CALL_LOCATION_FIELD_ORDER
 from .._io._field_policy import FieldPolicy
@@ -65,6 +66,188 @@ def _snapshot_func_metadata(func_obj: Any) -> tuple[str | None, str | None]:
     return func_signature, getattr(func_obj, "__doc__", None)
 
 
+# Status of a frame's source text, as reported by ``FuncCallLocation`` reprs.
+_SOURCE_TEXT_UNAVAILABLE = "source unavailable"
+_SOURCE_TEXT_CHANGED = "source changed on disk since capture"
+_SOURCE_TEXT_MISSING = "source file not found"
+
+
+def source_fingerprint(filename: str, num_context_lines: int) -> tuple[Any, ...] | None:
+    """Return the capture-time identity of a source file for lazy text reads.
+
+    Captures without ``save_source_context`` record no source text; the text is
+    read from the file when someone asks for it. This fingerprint, taken once
+    per file per capture, lets that later read tell whether the file is still
+    the one that ran: ``("stat", size, mtime_ns, n)`` for a file on disk,
+    ``("linecache", None, None, n)`` for interactive source (notebook cells)
+    that only ``linecache`` holds, ``None`` when neither is available. ``n`` is
+    the requested number of context lines on each side.
+
+    Parameters
+    ----------
+    filename:
+        The frame's ``co_filename``.
+    num_context_lines:
+        Context lines requested on each side of the call line.
+
+    Returns
+    -------
+    tuple[Any, ...] | None
+        The fingerprint, or ``None`` when the source cannot be read later.
+    """
+
+    try:
+        stat = os.stat(filename)
+    except (OSError, ValueError):
+        entry = linecache.cache.get(filename)
+        if entry is not None and len(entry) == 4 and entry[1] is None:
+            return ("linecache", None, None, num_context_lines)
+        return None
+    return ("stat", stat.st_size, stat.st_mtime_ns, num_context_lines)
+
+
+def cached_source_fingerprint(
+    filename: str, num_context_lines: int, context_cache: dict[Any, tuple[Any, ...]] | None
+) -> tuple[Any, ...] | None:
+    """Return a file's source fingerprint, taken at most once per capture.
+
+    One ``os.stat`` per distinct file per capture (``context_cache`` is the
+    capture's code-context cache): it lets an unsnapshotted frame read its
+    text lazily and refuse it when the file later changed.
+    """
+
+    if context_cache is None:
+        return source_fingerprint(filename, num_context_lines)
+    key = ("__torchlens_source_fingerprint__", filename, num_context_lines)
+    cached = context_cache.get(key)
+    if cached is None:
+        # Stored boxed in a 1-tuple: the cache holds tuples, and the
+        # fingerprint itself may be ``None``.
+        cached = (source_fingerprint(filename, num_context_lines),)
+        context_cache[key] = cached
+    return cast(tuple[Any, ...] | None, cached[0])
+
+
+def with_source_fingerprint(location: Any, trace: Any) -> "FuncCallLocation":
+    """Fix a freshly captured location's source text policy; return it.
+
+    With ``save_source_context`` the text is snapshotted now; otherwise the
+    file's fingerprint is stamped so the text can be read lazily, with the
+    trace's ``num_context_lines`` around the line. For one-off locations built
+    outside ``_get_code_context`` (which caches one fingerprint per file per
+    capture). ``location`` is a ``FuncCallLocation``; it is typed ``Any``
+    because ``_linecache_entry`` is a runtime-only row cell with no declared
+    annotation (the record schema bindings are generated from annotations).
+    """
+
+    if location.source_loading_enabled:
+        location._ensure_source_loaded()  # save_source_context: snapshot at capture
+    else:
+        location._linecache_entry = source_fingerprint(
+            location.file, int(getattr(trace, "num_context_lines", 7))
+        )
+    return location
+
+
+def _source_view(
+    all_lines: list[str], line_number: int, num_context_lines: int
+) -> tuple[list[str], str, str, str, int]:
+    """Build the text fields of one frame from its file's lines.
+
+    Returns ``(code_context, source_context, code_context_labeled, call_line,
+    num_context_lines)`` for the window of ``num_context_lines`` lines on each
+    side of ``line_number``.
+    """
+
+    start = max(0, line_number - num_context_lines - 1)
+    end = min(len(all_lines), start + 2 * num_context_lines + 1)
+    code_lines = all_lines[start:end]
+    call_line_idx = line_number - 1 - start
+    call_line = code_lines[call_line_idx].strip() if 0 <= call_line_idx < len(code_lines) else ""
+    labeled = "\n".join(
+        f"  --->  {line.rstrip()}" if i == call_line_idx else f"        {line.rstrip()}"
+        for i, line in enumerate(code_lines)
+    )
+    return code_lines, "".join(code_lines), labeled, call_line, len(code_lines)
+
+
+def _read_fingerprinted_lines(filename: str, fingerprint: Any) -> list[str] | str:
+    """Return the file's current lines, or a status when they cannot be trusted.
+
+    The lines are returned only when the file still matches ``fingerprint``
+    (same size and modification time as at capture); otherwise the result is
+    the status text the repr shows instead of wrong source.
+    """
+
+    if not isinstance(fingerprint, tuple) or len(fingerprint) != 4:
+        return _SOURCE_TEXT_UNAVAILABLE
+    if fingerprint[0] == "linecache":
+        entry = linecache.cache.get(filename)
+        if entry is None or len(entry) != 4:
+            return _SOURCE_TEXT_UNAVAILABLE
+        return list(entry[2])
+    try:
+        stat = os.stat(filename)
+    except (OSError, ValueError):
+        return _SOURCE_TEXT_MISSING
+    if (stat.st_size, stat.st_mtime_ns) != (fingerprint[1], fingerprint[2]):
+        return _SOURCE_TEXT_CHANGED
+    linecache.checkcache(filename)
+    return linecache.getlines(filename) or _SOURCE_TEXT_UNAVAILABLE
+
+
+def _torch_package_dir() -> str:
+    """Return the normalized directory of the installed ``torch`` package.
+
+    Computed on each call with no cache: torch is already in ``sys.modules``
+    and the path arithmetic is cheap, and this runs only on display paths, so
+    holding the value as process state (a module global or a memo) buys nothing.
+    """
+
+    import torch
+
+    return os.path.normcase(os.path.dirname(os.path.abspath(torch.__file__)))
+
+
+def display_frame(code_context: Any) -> "FuncCallLocation | None":
+    """Return the frame a display should name as the line that ran an op.
+
+    ``code_context`` is ordered outermost to innermost, so the innermost frame
+    (the last) ran the op. When that frame is inside torch's own Python code
+    (``torch/nn/functional.py`` under a ``Linear`` call, say), the line a user
+    wants is the innermost one outside torch: the model line that called into
+    torch. When every frame is torch's, the innermost frame is returned.
+    """
+
+    frames = list(code_context or ())
+    if not frames:
+        return None
+    torch_dir = _torch_package_dir() + os.sep
+    for frame in reversed(frames):
+        file = getattr(frame, "file", "") or ""
+        if not os.path.normcase(os.path.abspath(file)).startswith(torch_dir):
+            return cast("FuncCallLocation", frame)
+    return cast("FuncCallLocation", frames[-1])
+
+
+def short_source_path(file: str) -> str:
+    """Return a short, readable form of a source path for one-line displays.
+
+    Installed packages show from the package root (``transformers/activations.py``),
+    files under the working directory show relative to it, anything else in full.
+    """
+
+    normalized = file.replace("\\", "/")
+    for marker in ("/site-packages/", "/dist-packages/"):
+        if marker in normalized:
+            return normalized.rsplit(marker, 1)[1]
+    try:
+        relative = os.path.relpath(file)
+    except ValueError:
+        return file
+    return file if relative.startswith("..") else relative
+
+
 class FuncCallLocation:
     """A location in source code where a function call occurred.
 
@@ -78,6 +261,21 @@ class FuncCallLocation:
     **Legacy path** (direct construction, e.g. tests): pass the legacy
     source-context keyword arguments directly. Values are stored directly
     with no lazy loading.
+
+    **Unsnapshotted frames** (``source_loading_enabled=False``, the capture
+    default): no text is stored. When the capture recorded a source
+    fingerprint, the text properties read the file at access time and return
+    its current lines, but only while the file still has the size and
+    modification time it had at capture; when it changed or is gone they
+    return the no-source values and the repr says why.
+    Examples
+    --------
+    >>> where = FuncCallLocation(file="model.py", line_number=12, func_name="forward")
+    >>> where.func_name, where.line_number
+    ('forward', 12)
+    >>> location = tl.trace(model, x).ops[1].code_context[0]
+    >>> isinstance(location, FuncCallLocation), isinstance(location.line_number, int)
+    (True, True)
     """
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
@@ -106,6 +304,10 @@ class FuncCallLocation:
         _PORTABLE_STATE_SPEC,
         schema_key="func_call_location",
     )
+
+    # Reached through the class by ``_utils.introspection``, which cannot
+    # import this module at module scope.
+    _cached_source_fingerprint = staticmethod(cached_source_fingerprint)
 
     def __init__(
         self,
@@ -246,40 +448,64 @@ class FuncCallLocation:
             return
         self._source_loaded = True
 
-        context_window = 2 * self._num_context_lines_requested + 1
-
         # Load source lines via linecache (cached per file, no re-reads)
         all_lines = linecache.getlines(self.file)
         if all_lines:
-            # Extract context window around the call line
-            start = max(0, self.line_number - self._num_context_lines_requested - 1)
-            end = min(len(all_lines), start + context_window)
-            code_lines = all_lines[start:end]
-
-            self._code_context = code_lines
-            self._source_context = "".join(code_lines)
-            self._num_context_lines = len(code_lines)
-
-            # The call line is at the position within the context window
-            call_line_idx = self.line_number - 1 - start
-            if 0 <= call_line_idx < len(code_lines):
-                self._call_line = code_lines[call_line_idx].strip()
-            else:
-                self._call_line = ""
-
-            # Build labeled context with arrow at the call line
-            labeled_lines = []
-            for i, line in enumerate(code_lines):
-                if i == call_line_idx:
-                    labeled_lines.append(f"  --->  {line.rstrip()}")
-                else:
-                    labeled_lines.append(f"        {line.rstrip()}")
-            self._code_context_labeled = "\n".join(labeled_lines)
+            (
+                self._code_context,
+                self._source_context,
+                self._code_context_labeled,
+                self._call_line,
+                self._num_context_lines,
+            ) = _source_view(all_lines, self.line_number, self._num_context_lines_requested)
         else:
             self._initialize_no_source_state()
 
         # Release the func obj reference
         self._frame_func_obj = None
+
+    def _source_text_state(self) -> tuple[tuple[Any, ...] | None, str]:
+        """Return ``(text fields or None, status)`` for this frame.
+
+        Snapshotted frames serve their stored text. An unsnapshotted frame
+        with a capture fingerprint reads its file now (see
+        :func:`_read_fingerprinted_lines`); the status names why no text is
+        shown when it cannot.
+        """
+
+        self._ensure_source_loaded()
+        stored = (
+            self._code_context,
+            self._source_context,
+            self._code_context_labeled,
+            self._call_line,
+            self._num_context_lines,
+        )
+        if self.source_loading_enabled or self._code_context is not None:
+            return (stored if self._code_context is not None else None), _SOURCE_TEXT_UNAVAILABLE
+        # Runtime-only (never persisted); the capture path sets it on
+        # unsnapshotted frames, and an unset cell means "no fingerprint".
+        fingerprint = getattr(self, "_linecache_entry", None)
+        if fingerprint is None or not self.file:
+            return None, _SOURCE_TEXT_UNAVAILABLE
+        lines = _read_fingerprinted_lines(self.file, fingerprint)
+        if isinstance(lines, str):
+            return None, lines
+        return _source_view(lines, self.line_number, int(fingerprint[3])), ""
+
+    def _text_field(self, index: int) -> Any:
+        """Return one text field, the lazily read one when nothing is stored."""
+
+        view, _status = self._source_text_state()
+        if view is None:
+            return (
+                self._code_context,
+                self._source_context,
+                self._code_context_labeled,
+                self._call_line,
+                self._num_context_lines,
+            )[index]
+        return view[index]
 
     # --- Lazy properties ---
     # Each property calls _load_source() before returning its cached value.
@@ -294,8 +520,7 @@ class FuncCallLocation:
         Optional[List[str]]
             Source context lines, or ``None`` when unavailable.
         """
-        self._ensure_source_loaded()
-        return self._code_context
+        return self._text_field(0)
 
     @code_context.setter
     def code_context(self, value: list[str] | None) -> None:
@@ -317,8 +542,7 @@ class FuncCallLocation:
         str
             Joined source context string.
         """
-        self._ensure_source_loaded()
-        return self._source_context
+        return self._text_field(1)
 
     @source_context.setter
     def source_context(self, value: str) -> None:
@@ -340,8 +564,7 @@ class FuncCallLocation:
         str
             Source context annotated with a marker on the captured call line.
         """
-        self._ensure_source_loaded()
-        return self._code_context_labeled
+        return self._text_field(2)
 
     @code_context_labeled.setter
     def code_context_labeled(self, value: str) -> None:
@@ -363,8 +586,7 @@ class FuncCallLocation:
         str
             Stripped source line for the captured call.
         """
-        self._ensure_source_loaded()
-        return self._call_line
+        return self._text_field(3)
 
     @call_line.setter
     def call_line(self, value: str) -> None:
@@ -386,8 +608,7 @@ class FuncCallLocation:
         int
             Count of source lines available for this call site.
         """
-        self._ensure_source_loaded()
-        return self._num_context_lines
+        return self._text_field(4)
 
     @num_context_lines.setter
     def num_context_lines(self, value: int) -> None:
@@ -454,11 +675,12 @@ class FuncCallLocation:
             f"  line: {self.line_number}",
             f"  function: {self.func_name}",
         ]
-        if self.code_context is not None:
+        view, status = self._source_text_state()
+        if view is not None:
             lines.append("  code:")
-            lines.append(self.code_context_labeled)
+            lines.append(view[2])
         else:
-            lines.append("  code: source unavailable")
+            lines.append(f"  code: {status}")
         return "\n".join(lines)
 
     def to_html_link(self) -> str:

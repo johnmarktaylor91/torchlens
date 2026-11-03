@@ -95,7 +95,7 @@ with the partial capture on `exc.partial_trace`.
 | Knob | Faster setting | Tradeoff |
 | --- | --- | --- |
 | Payload selection | `save=tl.func(...)` or `save=tl.in_module(...)` | Unsaved activations cannot be read later. |
-| Source text | `capture=CaptureOptions(save_source_context=False)` | File/line identity remains, but source text is not loaded. |
+| Source text | `capture=CaptureOptions(save_source_context=False)` (the default) | File/line identity is stored, but no source text: it is read from the file when you look at it, so it reflects the file on disk at read time, and a file changed or removed since capture shows that reason instead of text. `save_source_context=True` snapshots the text at capture. |
 | Window payloads | `lookback_payload_policy="metadata_only"` | `tl.followed_by(...)` can select metadata without retaining raw tensors. |
 | Retroactive payloads | `lookback_payload_policy="detached_raw"` | Enables payload recovery for recent matched ops at bounded memory cost. |
 | Disk storage | `storage=tl.to_disk(path)` | Reduces RAM pressure. The model output the forward returns stays in memory (the output op may alias it), and a later `trace.run(...)` re-captures every payload into RAM while the bundle keeps the original capture. Blob writes overlap capture on a bounded async pipeline by default; `max_pending_bytes` (256 MiB default) caps the RAM pending writes may hold, and a disk slower than capture blocks the forward instead of accumulating memory. `async_writes=False` restores synchronous per-blob writes. |
@@ -126,6 +126,14 @@ trace = tl.trace(model, x)
 print(trace.health.num_escape_detector_events, trace.health.escape_detector_callback_ns)
 unwrap_torch()
 ```
+
+`CaptureOptions(aten_ops=True)` records the ATen rows behind each op and `aten_ops="values"` also
+keeps what each ATen call returned (`AtenOp.out`). Measured on one 4-thread CPU worker (torch 2.13,
+medians of 3): ResNet-18 at 224px, plain trace 0.53 s, rows 0.64 s, rows with values 0.61 s
+(107 rows, 44 MiB of ATen values against 31 MiB of `Op.out`); GPT-2 small at 1x32 tokens, plain
+trace 2.18 s, rows 2.9 s, rows with values 2.8 s (518 rows, 256 MiB against 96 MiB). The dispatch
+mode is the cost; the values add memory (roughly 1.4x to 2.7x the saved `Op.out` bytes, since every
+intermediate ATen result is kept), not time. With the switch off nothing is installed.
 
 The independent aten-level completeness witness is also opt-in and can run alone or alongside the
 callable detector. **This is the only route to `capture_verified=True`.** A plain `tl.trace()` never
@@ -236,7 +244,7 @@ dimension 0, executes one sub-batch at a time, and returns one accumulated in-me
 The v1 limits are intentionally narrow: torch backend only, positional inputs only, no
 `backward_ready`, no `save_grads`, no live `hooks=`, no public `intervene=`, and no
 `storage=tl.to_disk(...)`/`storage=`. Loaded or live chunked traces also reject
-`log_backward()` because they do not retain one full-batch autograd graph.
+`backward()` because they do not retain one full-batch autograd graph.
 
 Auto mode splits only when there is exactly one `ndim > 0` tensor leaf under standard Python
 containers (`list`, `tuple`, `dict`, or `namedtuple`). If there are several candidates, pass
@@ -334,7 +342,7 @@ assert torch.count_nonzero(patched.find_sites(tl.func("relu")).first().out) == 0
 ```
 
 Use `intervene=` when the edited value must affect downstream execution. For post-hoc experiments
-on an existing trace, prefer `trace.fork()`, `set(...)` or `attach_hooks(...)`, and `push()`
+on an existing trace, prefer `trace.fork()` with `do(..., intervention=InterventionOptions(engine="set_only"))` and `push()`, or `do(...)`, which stages the edit and replays it in one call
 (which engine fits which question: [intervention explainers](intervention_explainers.md#which-engine-when)).
 
 ## Long sequences and long contexts
@@ -379,7 +387,7 @@ model[0].requires_grad_(False)  # frozen first layer, and x needs no gradient
 x = torch.randn(2, 16)
 
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-trace.log_backward(trace[trace.output_layers[0]].out.sum())
+trace.backward(trace[trace.output_layers[0]].out.sum())
 
 status = tl.report.backward_status(trace)
 # Only the last layer's weight gradient runs (2 * 2 * 32 * 4 FLOPs): nothing upstream of
@@ -403,7 +411,7 @@ class Attend(nn.Module):
 
 def executed(model, x):
     trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace[trace.output_layers[0]].out.sum())
+    trace.backward(trace[trace.output_layers[0]].out.sum())
     return tl.report.backward_status(trace).executed_flops
 
 

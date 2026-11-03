@@ -62,7 +62,16 @@ def first_source_trace(records: Iterable[Any]) -> Any:
 
 
 class Accessor(Generic[T]):
-    """Generic dict-like accessor for ordered TorchLens log objects."""
+    """Generic dict-like accessor for ordered TorchLens log objects.
+
+    Examples
+    --------
+    >>> layers = tl.trace(model, x).layers
+    >>> isinstance(layers, Accessor), len(layers)
+    (True, 5)
+    >>> "relu_1_2" in layers, layers[2].func_name
+    (True, 'relu')
+    """
 
     def __init__(
         self,

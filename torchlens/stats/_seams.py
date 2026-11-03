@@ -123,13 +123,22 @@ class NarrationObserver:
     """Live stats-line echo mounted on the shipped observer surface.
 
     Mounts exactly like a tap
-    (``capture=CaptureOptions(replayable=True, hooks=echo_obs)``,
+    (``capture=CaptureOptions(hooks=echo_obs)``,
     the ``site``/``__call__(out, *, ctx)`` protocol) and returns the observed
     value unchanged. :attr:`signal` is derived from the site: ``tl.grad(site)``
     narrates the gradient of the site's output on each backward pass. Each firing appends one
     ``address -> core`` line to ``lines`` and forwards it to ``sink`` when
     given. Stats computation and rendering run under ``pause_logging`` so
     the echo can never contaminate the capture with its own torch ops.
+
+    Examples
+    --------
+    >>> echo = tl.stats.narrate(tl.func("relu"))
+    >>> isinstance(echo, NarrationObserver)
+    True
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(echo.lines)
+    1
     """
 
     site: Any = None
@@ -159,7 +168,7 @@ class NarrationObserver:
             address = self._address(ctx)
             # Never break a forward from an echo: degrade to the typed token.
             core = fail_open(
-                lambda: render_core_line(tensor_stats(out, identity=address), style=self.style),
+                lambda: render_core_line(tensor_stats(out, _identity=address), style=self.style),
                 lambda error: f"(echo unavailable: {type(error).__name__})",
             )
             line = f"{address} -> {core}" if address else core
@@ -191,9 +200,7 @@ def narrate(
     Mounts on the shipped hook surface exactly like ``tl.observers.tap``::
 
         obs = tl.stats.narrate(tl.func("relu"), sink=print)
-        tl.trace(model, x,
-                 capture=tl.options.CaptureOptions(
-                     replayable=True, hooks=obs))
+        tl.trace(model, x, capture=tl.options.CaptureOptions(hooks=obs))
 
     Parameters
     ----------
@@ -210,6 +217,14 @@ def narrate(
     -------
     EchoObserver
         Callable observer for the ``hooks=`` surface.
+
+    Examples
+    --------
+    >>> lines = []
+    >>> echo = tl.stats.narrate(tl.func("relu"), sink=lines.append)
+    >>> _ = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True, hooks=echo))
+    >>> len(lines), "->" in lines[0]
+    (1, True)
     """
 
     return NarrationObserver(site=site, sink=sink, style=style)

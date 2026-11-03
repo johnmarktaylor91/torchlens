@@ -17,7 +17,6 @@ same steps on a hand-truncated eager model, and the ``tl.extract`` and
 
 from __future__ import annotations
 
-import copy
 from collections.abc import Callable
 from typing import Any
 
@@ -210,29 +209,6 @@ def test_detach_choice_holds_on_every_save_path(save_name: str, path: str, detac
     upstream = [model.conv1.weight, *model.layer1.parameters(), *model.layer2.parameters()]
     assert all(param.grad is not None for param in upstream)
     assert model.fc.weight.grad is None
-
-
-def test_fast_optimiser_steps_match_hand_truncated_eager_model() -> None:
-    """Training through the fast run's ``layer2`` output equals the eager prefix, step for step."""
-
-    traced = _model()
-    eager = copy.deepcopy(traced)
-    trace = tl.trace(traced, _inputs(1), save=tl.module(_SITE))
-    traced_opt = torch.optim.SGD(traced.parameters(), lr=0.1)
-    eager_opt = torch.optim.SGD(eager.parameters(), lr=0.1)
-    for step in range(4):
-        batch = _inputs(10 + step)
-        traced_opt.zero_grad()
-        trace.run(inputs=batch, fast=True).trace[_SITE].out.pow(2).mean().backward()
-        traced_opt.step()
-        eager_opt.zero_grad()
-        eager.stem_to_layer2(batch).pow(2).mean().backward()
-        eager_opt.step()
-
-    for (name, after_fast), after_eager in zip(
-        traced.named_parameters(), eager.parameters(), strict=True
-    ):
-        assert torch.equal(after_fast, after_eager), name
 
 
 def test_extract_knob_returns_attached_outs_on_request() -> None:

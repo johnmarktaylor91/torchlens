@@ -151,13 +151,12 @@ def _assert_matches_fresh(trace: Any, fresh: dict[str, Any]) -> None:
         assert torch.equal(outs[address], expected), address
 
 
-@pytest.mark.smoke
 def test_rerun_after_attach_hooks_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
     """``attach_hooks`` on a plain capture, then reruns, save the steered sites."""
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     for _ in range(_REPEATS):
         _rerun(trace, model, x)
         _assert_matches_fresh(trace, fresh)
@@ -169,7 +168,7 @@ def test_rerun_after_clear_hooks_resaves_the_plain_sites() -> None:
     model, x = _setup()
     plain = tl.trace(model, x, save=_save())
     trace = tl.trace(model, x, save=_save(), intervene=tl.when(tl.module(_SITE), _steer()))
-    trace.clear_hooks()
+    trace._clear_hooks()
     _rerun(trace, model, x)
     assert _saved_labels(trace) == _saved_labels(plain)
     for address, expected in _site_outs(plain).items():
@@ -204,7 +203,7 @@ def test_chunked_rerun_resaves_the_requested_sites(fresh: dict[str, Any]) -> Non
 
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     _rerun(trace, model, x, replay=tl.options.ReplayOptions(chunk_size=1))
     _assert_matches_fresh(trace, fresh)
 
@@ -215,7 +214,11 @@ def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> N
     model, x = fresh["model"], fresh["x"]
     trace = tl.trace(model, x, save=_save())
     value = torch.full_like(fresh["outs"][_SITE], 0.5)
-    trace.set(tl.module(_SITE), value, confirm_mutation=True)
+    trace.do(
+        tl.module(_SITE),
+        value,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
     _rerun(trace, model, x)
     # Same graph shape as the steered capture: one replacement op at the site.
     assert _saved_labels(trace) == fresh["saved"]
@@ -253,7 +256,7 @@ def test_restored_trace_rerun_with_shifted_graph_refuses() -> None:
     model, x = _setup()
     trace = _restored(model, x)
     before = _saved_labels(trace)
-    trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
+    trace._attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     with pytest.raises(ControlFlowDivergenceError) as excinfo:
         trace.run(model, x)
     assert excinfo.value.fields["code"] == "rerun_resave_ops_shifted"

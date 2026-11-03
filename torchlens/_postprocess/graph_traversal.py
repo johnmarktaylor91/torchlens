@@ -451,7 +451,7 @@ def _add_output_layers(
             # detachment state: cooked/sparse traces store detached payloads
             # (a retained graph would poison later captures), while live
             # traces keep the graph-attached output — it is the very handle
-            # log_backward() differentiates through.
+            # backward() differentiates through.
             _parent_payload = (
                 output_node.out if output_node.out is not None else output_node.transformed_out
             )

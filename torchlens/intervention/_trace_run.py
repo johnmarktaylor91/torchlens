@@ -1,6 +1,6 @@
 """Trace run and push functions reached from the records through ``_data_classes._doors.intervention``.
 
-``Trace.run``, ``Trace.push``, ``Trace.push_from`` and ``Trace.disarm_triggers`` are the thin methods;
+``Trace.run``, ``Trace.push``, ``Trace.push_from`` and ``trace.autograd.disarm`` are the thin methods;
 the ``_runnable`` / ``_fast_run`` / ``_fast_live_steer`` dispatch lives here.
 """
 
@@ -73,7 +73,7 @@ if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
 __all__ = [
-    "disarm_triggers",
+    "disarm",
     "push",
     "push_from",
     "run",
@@ -486,7 +486,7 @@ def run(  # noqa: PLR0913  (the thin Trace.run shell keeps this documented call 
                 "the legacy intervened rerun trace.run(model, x) or capture "
                 "fresh with tl.trace(model, x, intervene=...); to run "
                 "WITHOUT it, detach the staged spec first "
-                "(trace.clear_hooks() or detach_hooks(site=/handle=)).",
+                "(trace.clear_edits(site=...) or trace.clear_edits(handle=...)).",
                 code="run_staged_spec_unapplied",
                 remedy="apply the spec via run(model, x) / tl.trace(..., "
                 "intervene=...), or detach the staged hooks before "
@@ -792,6 +792,6 @@ def _resolve_rerun_output_transform(
     return None
 
 
-def disarm_triggers(trace: Trace) -> None:
-    """Body of ``Trace.disarm_triggers``; the method carries the documented contract."""
+def disarm(trace: Trace) -> None:
+    """Body of ``trace.autograd.disarm``; the method carries the documented contract."""
     _disarm_triggers_impl(trace)

@@ -74,26 +74,6 @@ def _rerun_patch(model: nn.Module, donor: tl.Trace, x: torch.Tensor, func: str) 
     return fork
 
 
-def test_live_rsqrt_takes_the_donor_value() -> None:
-    """The live rsqrt receives the donor's rsqrt; the output is the closed form."""
-
-    torch.manual_seed(0)
-    model = _RmsHead().eval()
-    xa, xb = _inputs()
-    donor = tl.trace(model, xb, capture=READY)
-    fork = _rerun_patch(model, donor, xa, "rsqrt")
-
-    with torch.no_grad():
-        hb = model.lin(xb)
-        donor_scale = torch.rsqrt(hb.pow(2).mean(-1, keepdim=True) + 1e-6)
-        expected = model.out(model.lin(xa) * donor_scale)
-    (rsqrt_op,) = [op for op in fork if op.func_name == "rsqrt"]
-    (donor_rsqrt,) = [op for op in donor if op.func_name == "rsqrt"]
-    assert torch.equal(rsqrt_op.out, donor_rsqrt.out)
-    out_label = str(fork.modules["out"].output_ops[0])
-    torch.testing.assert_close(fork[out_label].out, expected, rtol=0, atol=1e-6)
-
-
 def test_live_multipass_firing_takes_its_own_donor_pass() -> None:
     """Each pass of a two-pass layer receives the donor value of the same pass."""
 

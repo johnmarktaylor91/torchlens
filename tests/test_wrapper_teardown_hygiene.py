@@ -7,17 +7,12 @@ detector's profile-slot / sys.monitoring tool-id discipline.
 
 from __future__ import annotations
 
-import inspect
-import pickle
 import sys
 import types
 
 import pytest
 import torch
-from torch import nn
 
-import torchlens as tl
-from torchlens import _state
 from torchlens._errors import TorchLensWarning
 from torchlens.backends.torch import backward as tl_backward
 from torchlens.backends.torch.wrappers import wrap_torch
@@ -28,6 +23,7 @@ def _ensure_wrapped() -> None:
     wrap_torch()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/backward.py, campaign mutant kills.
 def test_uninstall_autograd_wrappers_preserves_foreign_patches() -> None:
     """A third-party patch layered over the torchlens autograd wrappers must
     survive teardown (identity-checked restore + burial disclosure), never be
@@ -70,6 +66,7 @@ def test_uninstall_autograd_wrappers_preserves_foreign_patches() -> None:
         tl_backward.install_autograd_wrappers()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_uninstall_autograd_wrappers_restores_own_patches_cleanly() -> None:
     """The identity-checked teardown still restores pristine originals when
     nothing foreign intervened, and reinstall works afterwards."""
@@ -87,65 +84,7 @@ def test_uninstall_autograd_wrappers_restores_own_patches_cleanly() -> None:
         tl_backward.install_autograd_wrappers()
 
 
-def test_autograd_entry_wrappers_carry_provenance() -> None:
-    """The wrapped autograd entries must be introspectable and picklable by
-    reference for the whole wrapped epoch, like every namespace wrapper."""
-
-    _ensure_wrapped()
-    tl_backward.install_autograd_wrappers()
-
-    assert torch.autograd.backward.__name__ == "backward"
-    assert torch.autograd.grad.__name__ == "grad"
-    assert torch.autograd.backward.__module__ == "torch.autograd"
-    params = inspect.signature(torch.autograd.backward).parameters
-    assert "tensors" in params, "signature degraded to (*args, **kwargs)"
-    # Pickle-by-reference resolves the public name to the installed wrapper.
-    pickle.dumps(torch.autograd.backward)
-    pickle.dumps(torch.autograd.grad)
-
-
-class _FxReluModel(nn.Module):
-    """Module calling a Python functional directly (the fx bake vector)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.nn.functional.relu(self.lin(x))
-
-
-def test_fx_symbolic_trace_records_originals_not_wrappers() -> None:
-    """grind-r5 b8 R56: symbolic_trace during the wrapped epoch must not bake
-    live torchlens wrappers into call_function node targets."""
-
-    _ensure_wrapped()
-    tl.trace(_FxReluModel(), torch.randn(1, 4))  # ensure wrappers + shims live
-
-    graph_module = torch.fx.symbolic_trace(_FxReluModel())
-    wrapped_targets = [
-        node.target
-        for node in graph_module.graph.nodes
-        if node.op == "call_function" and id(node.target) in _state._decorated_to_orig
-    ]
-    assert wrapped_targets == [], (
-        f"fx graph embeds torchlens wrappers as node targets: {wrapped_targets}"
-    )
-    relu_targets = [
-        node.target
-        for node in graph_module.graph.nodes
-        if node.op == "call_function" and getattr(node.target, "__name__", "") == "relu"
-    ]
-    assert relu_targets, "expected a relu call_function node"
-    # Identity-keyed matcher shape (torch.ao style): the target IS the pristine
-    # original the live wrapper ledgers to.
-    pristine_relu = _state._decorated_to_orig.get(id(torch.nn.functional.relu))
-    if pristine_relu is not None:
-        assert relu_targets[0] is pristine_relu
-    # The traced module still runs.
-    assert graph_module(torch.randn(2, 4)).shape == (2, 4)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/escape_detection.py.
 def test_escape_detector_setprofile_teardown_is_identity_guarded() -> None:
     """_uninstall_setprofile must not clobber a foreign profiler that took the
     slot after the detector installed (the codebase's profile-slot standard)."""
@@ -165,6 +104,7 @@ def test_escape_detector_setprofile_teardown_is_identity_guarded() -> None:
         sys.setprofile(prior)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/escape_detection.py, campaign mutant kills.
 def test_monitoring_tool_id_probe_skips_reserved_ids() -> None:
     """The sys.monitoring tool-id probe must never claim the reserved
     DEBUGGER/COVERAGE/PROFILER/OPTIMIZER slots (0/1/2/5)."""

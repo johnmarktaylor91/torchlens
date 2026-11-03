@@ -40,6 +40,14 @@ class FeatureShapingError(_ActionableErrorMixin, ConfigurationError, ValueError)
     axis) and ``feature_rows_ids_mismatch`` (row/id cardinality
     disagreement -- proceeding would mislabel every row after the shorter
     of the two).
+
+    Examples
+    --------
+    >>> try:
+    ...     tl.features.as_matrix(torch.tensor(1.0))
+    ... except FeatureShapingError as error:
+    ...     print(type(error).__name__, error.fields["code"])
+    FeatureShapingError feature_matrix_scalar_input
     """
 
     def __init__(self, problem: str, *, code: str, remedy: str, **context: object) -> None:
@@ -79,6 +87,14 @@ class ShapingRecord:
         Shape of the returned 2-D matrix.
     batch_axis:
         Which input axis was the stimulus axis.
+
+    Examples
+    --------
+    >>> matrix, record = tl.features.as_matrix(torch.zeros(5, 4, 3))
+    >>> isinstance(record, ShapingRecord)
+    True
+    >>> record.input_shape, record.output_shape, record.batch_axis
+    ((5, 4, 3), (5, 12), 0)
     """
 
     op: str
@@ -130,6 +146,14 @@ def as_matrix(
     FeatureShapingError
         ``feature_matrix_scalar_input`` on a 0-dim tensor;
         ``feature_rows_ids_mismatch`` on a row/id cardinality disagreement.
+
+    Examples
+    --------
+    >>> matrix, record = tl.features.as_matrix(torch.zeros(4, 5, 2), batch_axis=1)
+    >>> matrix.shape
+    torch.Size([5, 8])
+    >>> record.batch_axis
+    1
     """
 
     if tensor.ndim == 0:
@@ -178,6 +202,13 @@ class SiteMatrix:
     input_preprocessing:
         The source's input-preprocessing provenance block when it carries
         one (extraction manifests; legacy reads as unknown), else ``None``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, torch.randn(3, 3, 8, 8), save="all")
+    >>> result = tl.features.site_matrix(trace, "relu_1_2")
+    >>> isinstance(result, SiteMatrix), result.matrix.shape
+    (True, torch.Size([3, 256]))
     """
 
     matrix: torch.Tensor
@@ -281,6 +312,12 @@ def site_matrix(source: Any, site: str) -> SiteMatrix:
     FeatureShapingError
         ``feature_site_payload_unavailable`` when the site holds no payload;
         ``feature_rows_ids_mismatch`` on row/id disagreement.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, torch.randn(3, 3, 8, 8), save="all")
+    >>> tl.features.site_matrix(trace, "relu_1_2").matrix.shape
+    torch.Size([3, 256])
     """
 
     from pathlib import Path

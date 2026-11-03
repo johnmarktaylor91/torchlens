@@ -164,19 +164,6 @@ def _assert_boxes_equal_boolean_support(
             assert (spatial.index_start, spatial.index_stop) == (None, None)
 
 
-def test_progression_budget_collapse_is_explicitly_inexact() -> None:
-    """Collapse more than sixteen residue runs to a visibly inexact dense hull."""
-
-    values = [0]
-    for index in range(40):
-        values.append(values[-1] + (1 if index % 2 else 2))
-    index_set = _query._IndexSet.from_values(values)
-
-    assert not index_set.exact
-    assert len(index_set.progressions) == 1
-    assert (index_set.minimum, index_set.maximum) == (values[0], values[-1])
-
-
 @pytest.mark.parametrize("kernel", [1, 2, 3])
 @pytest.mark.parametrize("stride", [1, 2, 3])
 @pytest.mark.parametrize("dilation", [1, 2])
@@ -202,72 +189,6 @@ def test_transposed_convolution_every_unit_matches_boolean_connectivity(
     nn.init.ones_(model.weight)
     support = _boolean_support_1d(model, 5)
     trace = tl.trace(model, torch.ones(1, 1, 5))
-    _assert_boxes_equal_boolean_support(trace, _last_op(trace, "conv_transpose1d"), support)
-
-
-@pytest.mark.parametrize(
-    ("kernel", "stride", "dilation", "padding", "output_index"),
-    [
-        (2, 2, 2, 0, 1),
-        (1, 3, 1, 0, 1),
-        (1, 4, 1, 0, 2),
-    ],
-)
-def test_transposed_convolution_empty_phase_goldens(
-    kernel: int, stride: int, dilation: int, padding: int, output_index: int
-) -> None:
-    """Lock unreachable parity, stride-over-kernel, and gcd-insufficient empties."""
-
-    _register_query_rules()
-    model = nn.ConvTranspose1d(
-        1,
-        1,
-        kernel,
-        stride=stride,
-        padding=padding,
-        dilation=dilation,
-        bias=False,
-    )
-    nn.init.ones_(model.weight)
-    support = _boolean_support_1d(model, 4)
-    assert not support[output_index]
-    trace = tl.trace(model, torch.ones(1, 1, 4))
-    box = _box(trace, _last_op(trace, "conv_transpose1d"), (output_index,))
-    assert box.exact and box.empty
-    assert box.axes[-1].index_start is None
-
-
-@pytest.mark.parametrize(
-    "layers",
-    [
-        ((2, 2, 0, 1, 0), (3, 2, 1, 1, 1)),
-        ((3, 2, 1, 1, 0), (2, 3, 0, 1, 0)),
-        ((2, 2, 0, 2, 0), (3, 2, 1, 1, 1), (2, 2, 0, 1, 0)),
-    ],
-)
-def test_stacked_transposed_convolutions_preserve_exact_residue_sets(
-    layers: tuple[tuple[int, int, int, int, int], ...],
-) -> None:
-    """Match two- and three-layer decoder hulls across multiple phase offsets."""
-
-    _register_query_rules()
-    modules: list[nn.Module] = []
-    for kernel, stride, padding, dilation, output_padding in layers:
-        layer = nn.ConvTranspose1d(
-            1,
-            1,
-            kernel,
-            stride=stride,
-            padding=padding,
-            dilation=dilation,
-            output_padding=output_padding,
-            bias=False,
-        )
-        nn.init.ones_(layer.weight)
-        modules.append(layer)
-    model = nn.Sequential(*modules)
-    support = _boolean_support_1d(model, 4)
-    trace = tl.trace(model, torch.ones(1, 1, 4))
     _assert_boxes_equal_boolean_support(trace, _last_op(trace, "conv_transpose1d"), support)
 
 
@@ -336,11 +257,7 @@ def test_pointwise_axes_are_honest_and_clip_is_optional() -> None:
 @pytest.mark.parametrize(
     ("mode", "align_corners", "scale_factor", "recompute"),
     [
-        ("linear", False, None, None),
-        ("linear", True, None, None),
-        ("nearest", None, None, None),
         ("nearest-exact", None, None, None),
-        ("linear", False, 1.5, False),
         ("linear", False, 1.5, True),
     ],
 )

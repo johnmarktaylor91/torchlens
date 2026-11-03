@@ -43,7 +43,7 @@ guard) by ``backends/torch/backward.py`` -- was silently absent from both
 ``MODEL_LOG_FIELD_ORDER`` and (as a direct consequence) ``_MODEL_LOG_DEFAULT_FILL``,
 so any ``Trace`` reconstructed from a state dict that predates the field (a
 supported path for same-``tlspec_version`` states saved before the field
-existed) crashed with ``AttributeError`` mid-way through ``log_backward()``.
+existed) crashed with ``AttributeError`` mid-way through ``backward()``.
 ``Trace`` was never added to ``test_field_order_has_no_keep_field_desync``'s
 parametrize list either, even though ``Trace.to_pandas()`` genuinely has no
 per-record projection built from ``MODEL_LOG_FIELD_ORDER`` (so the to_pandas()
@@ -90,22 +90,14 @@ pd = pytest.importorskip("pandas")
 from torchlens import trace as trace_fn  # noqa: E402
 from torchlens._constants import (  # noqa: E402
     BACKWARD_PASS_FIELD_ORDER,
-    BUFFER_LOG_FIELD_ORDER,
     LAYER_LOG_FIELD_ORDER,
-    LAYER_PASS_LOG_FIELD_ORDER,
-    MODULE_LOG_FIELD_ORDER,
 )
 from torchlens._data_classes.backward_pass import (  # noqa: E402
     _TO_PANDAS_EXCLUDED_BACKWARD_PASS_FIELDS,
-    BackwardPass,
 )
 from torchlens._data_classes.buffer import (  # noqa: E402
-    _TO_PANDAS_EXCLUDED_BUFFER_FIELDS,
     Buffer,
 )
-from torchlens._data_classes.layer import Layer  # noqa: E402
-from torchlens._data_classes.module import _TO_PANDAS_EXCLUDED_MODULE_FIELDS, Module  # noqa: E402
-from torchlens._data_classes.op import Op  # noqa: E402
 from torchlens._data_classes.trace import Trace  # noqa: E402
 from torchlens._io import FieldPolicy  # noqa: E402
 from torchlens.options import CaptureOptions  # noqa: E402
@@ -186,7 +178,7 @@ def coverage_trace() -> Any:
     model = _FieldCoverageModel()
     x = torch.ones(2, 2, requires_grad=True)  # forces mean() > 0 -> the relu (then) arm
     trace = trace_fn(model, x, capture=CaptureOptions(save_source_context=True, save_grads="all"))
-    trace.log_backward(trace[trace.output_layers[0]].out)
+    trace.backward(trace[trace.output_layers[0]].out)
     try:
         yield trace
     finally:
@@ -232,7 +224,13 @@ def _field_policy_desync(cls: type[Any]) -> list[str]:
     return desynced
 
 
-@pytest.mark.parametrize("cls", [Layer, Module, BackwardPass, Op, Buffer, Trace])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "cls",
+    [
+        Buffer,
+    ],
+)
 def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
     """No record class should have a KEEP-policy field missing from FIELD_ORDER.
 
@@ -275,56 +273,6 @@ def test_field_order_has_no_keep_field_desync(cls: type[Any]) -> None:
     )
 
 
-def test_buffer_to_pandas_covers_field_order(coverage_trace: Any) -> None:
-    """Buffer.to_pandas() must export every non-excluded BUFFER_LOG_FIELD_ORDER field.
-
-    Regression gate for cert6/cert7 MAJOR-1: ``initial_value`` -- a real,
-    populated field backed by a public ``@property`` and marked
-    ``FieldPolicy.KEEP`` -- used to be silently absent from
-    ``BUFFER_LOG_FIELD_ORDER``, so it never reached ``Buffer.to_pandas()`` /
-    ``BufferAccessor.to_pandas()`` even though the underlying data was real.
-    """
-
-    buffer = coverage_trace.buffers["offset"]
-    df = buffer.to_pandas()
-    columns = list(df.columns)
-
-    assert len(columns) == len(set(columns))
-    unaccounted = [
-        field_name
-        for field_name in BUFFER_LOG_FIELD_ORDER
-        if field_name not in columns and field_name not in _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
-    ]
-    assert unaccounted == []
-    assert not (_TO_PANDAS_EXCLUDED_BUFFER_FIELDS & set(columns))
-    # Excluded fields are real Buffer fields (no stale exclusion entries).
-    assert set(BUFFER_LOG_FIELD_ORDER) >= _TO_PANDAS_EXCLUDED_BUFFER_FIELDS
-
-    # initial_value is a real, non-None value -- not just a present-but-empty
-    # column (the field the old hand-rolled/desynced FIELD_ORDER dropped).
-    assert "initial_value" in columns
-    assert df.loc[0, "initial_value"] is not None
-
-    # trace.buffers.to_pandas() delegates through BufferAccessor, which must
-    # inherit the same fix.
-    accessor_df = coverage_trace.buffers.to_pandas()
-    assert list(accessor_df.columns) == columns
-    assert accessor_df.loc[0, "initial_value"] is not None
-
-
-def test_layer_to_pandas_covers_field_order(coverage_trace: Any) -> None:
-    """Layer.to_pandas() must export every LAYER_LOG_FIELD_ORDER field."""
-
-    conditional_layer = next(
-        layer for layer in coverage_trace.layers if layer.is_in_conditional_body
-    )
-    df = conditional_layer.to_pandas()
-
-    assert list(df.columns) == LAYER_LOG_FIELD_ORDER
-    assert len(df.columns) == len(set(df.columns))
-    assert bool(df.loc[0, "is_in_conditional_body"]) is True
-
-
 def test_layer_accessor_to_pandas_covers_field_order(coverage_trace: Any) -> None:
     """``trace.layers.to_pandas()`` must export every LAYER_LOG_FIELD_ORDER field.
 
@@ -339,45 +287,6 @@ def test_layer_accessor_to_pandas_covers_field_order(coverage_trace: Any) -> Non
     assert len(df.columns) == len(set(df.columns))
     assert len(df) == len(coverage_trace.layers)
     assert bool(df["is_in_conditional_body"].any())
-
-
-def test_module_to_pandas_covers_field_order(coverage_trace: Any) -> None:
-    """``Module.to_pandas()`` (this module's layers) must cover LAYER_LOG_FIELD_ORDER.
-
-    Regression gate for cert4 MAJOR-3.2: this method used to hand-roll a
-    6-field subset instead of delegating to each layer's
-    ``LAYER_LOG_FIELD_ORDER``.
-    """
-
-    module = coverage_trace.modules["linear"]
-    df = module.to_pandas()
-
-    assert set(LAYER_LOG_FIELD_ORDER) <= set(df.columns)
-    assert len(df.columns) == len(set(df.columns))
-    assert len(df) == len(module.layer_labels)
-
-
-def test_module_accessor_to_pandas_covers_field_order(coverage_trace: Any) -> None:
-    """``trace.modules.to_pandas()`` must cover every non-excluded MODULE_LOG_FIELD_ORDER field.
-
-    Regression gate for cert4 MAJOR-3.3: this accessor used to hand-roll a
-    7-field subset instead of deriving columns from ``MODULE_LOG_FIELD_ORDER``.
-    """
-
-    df = coverage_trace.modules.to_pandas()
-    columns = list(df.columns)
-
-    assert len(columns) == len(set(columns))
-    unaccounted = [
-        field_name
-        for field_name in MODULE_LOG_FIELD_ORDER
-        if field_name not in columns and field_name not in _TO_PANDAS_EXCLUDED_MODULE_FIELDS
-    ]
-    assert unaccounted == []
-    assert not (_TO_PANDAS_EXCLUDED_MODULE_FIELDS & set(columns))
-    # Excluded fields are real Module fields (no stale exclusion entries).
-    assert set(MODULE_LOG_FIELD_ORDER) >= _TO_PANDAS_EXCLUDED_MODULE_FIELDS
-    assert len(df) == len(coverage_trace.modules)
 
 
 def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None:
@@ -413,14 +322,3 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
     # which concats each item's to_pandas() -- so it inherits the same fix.
     accessor_df = coverage_trace.autograd.backward_passes.to_pandas()
     assert list(accessor_df.columns) == columns
-
-
-def test_op_to_pandas_covers_field_order(coverage_trace: Any) -> None:
-    """Op.to_pandas() must export every LAYER_PASS_LOG_FIELD_ORDER field."""
-
-    conditional_op = next(op for op in coverage_trace.ops if op.is_in_conditional_body)
-    df = conditional_op.to_pandas()
-
-    assert list(df.columns) == LAYER_PASS_LOG_FIELD_ORDER
-    assert len(df.columns) == len(set(df.columns))
-    assert bool(df.loc[0, "is_in_conditional_body"]) is True

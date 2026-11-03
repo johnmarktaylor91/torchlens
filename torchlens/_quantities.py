@@ -14,6 +14,13 @@ class Quantity(ABC):  # noqa: B024 - deliberate marker ABC, see the docstring
     Quantity subclasses also subclass a concrete numeric type such as ``int`` or
     ``float``.  The marker base lets callers test for all unit-aware quantities
     with ``isinstance(value, Quantity)``.
+
+    Examples
+    --------
+    >>> isinstance(tl.types.Bytes(2048), Quantity)
+    True
+    >>> isinstance(2048, Quantity)
+    False
     """
 
 
@@ -373,7 +380,18 @@ def _scaled_unit_divisor(unit_name: str, units: tuple[tuple[str, float], ...]) -
 
 
 class Bytes(_IntQuantity):
-    """Memory quantity stored as bytes with human-readable display."""
+    """Memory quantity stored as bytes with human-readable display.
+
+    Examples
+    --------
+    >>> size = Bytes(2048)
+    >>> str(size)
+    '2.0 KB'
+    >>> format(size, "raw")
+    '2048'
+    >>> size == 2048
+    True
+    """
 
     _unit_name: ClassVar[str] = "byte"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -511,7 +529,16 @@ class Bytes(_IntQuantity):
 
 
 class Duration(_FloatQuantity):
-    """Duration quantity stored in seconds."""
+    """Duration quantity stored in seconds.
+
+    Examples
+    --------
+    >>> elapsed = Duration(0.0015)
+    >>> str(elapsed)
+    '1.5 ms'
+    >>> isinstance(elapsed, float)
+    True
+    """
 
     _unit_name: ClassVar[str] = "duration"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -551,7 +578,16 @@ class Duration(_FloatQuantity):
 
 
 class Flops(_IntQuantity):
-    """Floating-point operation count quantity."""
+    """Floating-point operation count quantity.
+
+    Examples
+    --------
+    >>> work = Flops(1_500_000)
+    >>> str(work)
+    '1.5 MFLOPs'
+    >>> format(work, "raw")
+    '1500000'
+    """
 
     _unit_name: ClassVar[str] = "FLOP"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (
@@ -582,7 +618,16 @@ class Flops(_IntQuantity):
 
 
 class Macs(_IntQuantity):
-    """Multiply-accumulate operation count quantity."""
+    """Multiply-accumulate operation count quantity.
+
+    Examples
+    --------
+    >>> work = Macs(1_500_000)
+    >>> str(work)
+    '1.5 MMACs'
+    >>> work == 1_500_000
+    True
+    """
 
     _unit_name: ClassVar[str] = "MAC"
     _UNITS: ClassVar[tuple[tuple[str, float], ...]] = (

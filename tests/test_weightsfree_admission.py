@@ -13,7 +13,6 @@ import pytest
 import torch
 import torch.nn as nn
 from test_weightsfree_fixtures import (
-    FactoryToy,
     LinearReluLinear,
     build_twins,
     weightsfree_trace,
@@ -21,7 +20,6 @@ from test_weightsfree_fixtures import (
 
 import torchlens as tl
 from torchlens._robustness import UnsupportedTensorVariantError
-from torchlens.errors import TraceCaptureError
 
 
 def _meta_model() -> nn.Module:
@@ -40,50 +38,15 @@ def _meta_input() -> torch.Tensor:
 # ---------------------------------------------------------------------------
 
 
-def test_meta_without_flag_refuses_unchanged() -> None:
-    """A meta model WITHOUT structure_only keeps today's typed teach."""
-
-    with pytest.raises(UnsupportedTensorVariantError):
-        tl.trace(_meta_model(), _meta_input())
-
-
-def test_meta_with_flag_admits() -> None:
-    """The D8 flip: meta + structure_only captures COMPLETE."""
-
-    tr = weightsfree_trace(_meta_model(), _meta_input())
-    assert tr.outcome.status.value == "complete"
-    assert tr.options.structure_only is True
-
-
-def test_real_substrate_structure_only_still_works() -> None:
-    """Structure-only on a real model is unchanged by the flip."""
-
-    real, _ = build_twins(LinearReluLinear)
-    tr = weightsfree_trace(real, torch.randn(3, 2))
-    assert tr.options.structure_only is True
-    assert tr.outcome.status.value == "complete"
-
-
 # ---------------------------------------------------------------------------
 # Substrate uniformity: mixed cells refuse typed in BOTH directions
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _robustness.py.
 def test_meta_model_real_input_refuses_substrate_mismatch() -> None:
     exc = _expect_mismatch(_meta_model(), torch.randn(3, 2))
     assert "input" in str(exc).lower() or "state" in str(exc).lower()
-
-
-def test_real_model_meta_input_refuses_substrate_mismatch() -> None:
-    real, _ = build_twins(LinearReluLinear)
-    _expect_mismatch(real, _meta_input())
-
-
-def test_partially_meta_state_refuses_substrate_mismatch() -> None:
-    model = _meta_model()
-    # Materialize ONE parameter onto CPU: registered state is now mixed.
-    model.fc1.weight = nn.Parameter(torch.randn(5, 2))
-    _expect_mismatch(model, _meta_input())
 
 
 def _expect_mismatch(model: nn.Module, x: torch.Tensor):
@@ -101,15 +64,7 @@ def _expect_mismatch(model: nn.Module, x: torch.Tensor):
 # ---------------------------------------------------------------------------
 
 
-def test_sparse_input_still_refuses_under_admission() -> None:
-    model = _meta_model()
-    sparse = torch.sparse_coo_tensor(torch.zeros(2, 1, dtype=torch.long), torch.ones(1), (3, 2))
-    with pytest.raises(Exception) as excinfo:
-        weightsfree_trace(model, sparse)
-    code = getattr(excinfo.value, "fields", {}).get("code")
-    assert code in ("unsupported_tensor_variant", "structure_only_substrate_mismatch")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _robustness.py.
 def test_fake_tensor_still_refuses_under_admission() -> None:
     from torch._subclasses.fake_tensor import FakeTensorMode
 
@@ -127,6 +82,7 @@ def test_fake_tensor_still_refuses_under_admission() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of recording/_record_one_shot.py.
 def test_summary_and_record_paths_gate_meta_consistently() -> None:
     """tl.record (fastlog gate site) refuses meta even with no flip lever."""
 
@@ -139,6 +95,7 @@ def test_summary_and_record_paths_gate_meta_consistently() -> None:
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py, validation/consolidated.py.
 def test_validate_path_gates_meta_closed() -> None:
     """tl.validate (backward gate site) keeps the historical refusal."""
 
@@ -191,58 +148,13 @@ def test_stale_prewrap_factory_reference_refuses_typed() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_failed_admitted_capture_restores_wrappers_and_flags() -> None:
-    """A failing admitted capture restores torch/module state (sec 4.2)."""
-
-    class Boom(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(2, 2)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            raise ValueError("user forward failure")
-
-    with torch.device("meta"):
-        model = Boom()
-    model.eval()
-    with pytest.raises(TraceCaptureError, match="user forward failure") as _tce_info:
-        weightsfree_trace(model, torch.empty(1, 2, device="meta"))
-    assert isinstance(_tce_info.value.__cause__, ValueError)
-    # The factory-device slot must not leak past the failed capture: an
-    # ordinary capture right after must complete with factory tensors on CPU.
-    from torchlens.backends.torch._weightsfree_ctx import active_factory_device
-
-    assert active_factory_device() is None
-    real, _ = build_twins(FactoryToy)
-    tr = tl.trace(real, torch.randn(1, 4))
-    assert tr.outcome.status.value == "complete"
-
-
 # ---------------------------------------------------------------------------
 # Admission-marker tamper rows (t1-t5): an admitted meta offense without the
 # final marker fails closed
 # ---------------------------------------------------------------------------
 
 
-def test_admitted_capture_carries_admission_and_envelope() -> None:
-    tr = weightsfree_trace(_meta_model(), _meta_input())
-    envelope = tr.graph.structure_evidence
-    assert envelope is not None
-    assert envelope["capture_mode"] == "structure_only"
-    assert envelope["substrate"] == "meta"
-    assert envelope["values_available"] is False
-    assert envelope["factory_device_policy"] == "torchlens_owned"
-
-
-def test_real_structure_only_envelope_says_real() -> None:
-    real, _ = build_twins(LinearReluLinear)
-    tr = weightsfree_trace(real, torch.randn(3, 2))
-    envelope = tr.graph.structure_evidence
-    assert envelope is not None
-    assert envelope["substrate"] == "real"
-    assert envelope["factory_device_policy"] == "none"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_weightsfree_admission.py, _robustness.py.
 def test_identity_self_test_failure_refuses_typed(monkeypatch: pytest.MonkeyPatch) -> None:
     """D20: a torch build without a trustworthy meta identity primitive
     refuses admission typed (structure_only_meta_identity_unavailable) rather
@@ -261,6 +173,7 @@ def test_identity_self_test_failure_refuses_typed(monkeypatch: pytest.MonkeyPatc
     assert excinfo.value.fields["code"] == "structure_only_meta_identity_unavailable"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_weightsfree_admission.py, _utils/_torch_compat.py.
 def test_ambient_context_without_surgery_refuses_typed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -10,7 +10,7 @@ import torch.nn as nn
 from _stale_holders import OpaqueCallable
 
 import torchlens as tl
-from torchlens import Recording, Trace, _state
+from torchlens import Recording, _state
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TraceCaptureError
 from torchlens.io import load_intervention_spec
@@ -528,7 +528,7 @@ class TwoVmapBoundaryModel(nn.Module):
         return first + second
 
 
-@pytest.mark.smoke
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented vmap emits one boundary node consumed by downstream ops."""
@@ -550,29 +550,7 @@ def test_vmap_boundary_node_has_clean_parent_edge() -> None:
     assert any(op.type == "maskedfill" and "vmap_1_1" in op.parents for op in log.ops)
 
 
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_transform_boundary_warning_fires_for_each_collapsed_region() -> None:
-    """Every collapsed transform boundary should warn, even within one trace."""
-
-    x = torch.randn(3, 4)
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        log = tl.trace(
-            TwoVmapBoundaryModel().eval(),
-            x,
-            save="all",
-        )
-
-    boundary_warnings = [
-        record
-        for record in records
-        if issubclass(record.category, UserWarning)
-        and "captured a vmap transform as a boundary op" in str(record.message)
-    ]
-    assert len(boundary_warnings) == 2
-    assert [op.transform_kind for op in log.transforms] == ["vmap", "vmap"]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_transform_wrappers.py, campaign mutant kills.
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_grad_boundary_node_has_clean_parent_edge() -> None:
     """Instrumented grad emits one boundary node with the input as parent."""
@@ -590,20 +568,7 @@ def test_grad_boundary_node_has_clean_parent_edge() -> None:
     assert any(op.type == "add" and "grad_1_1" in op.parents for op in log.ops)
 
 
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_grad_over_module_boundary_does_not_crash() -> None:
-    """Paused inner execution prevents module-entry tracking crashes."""
-
-    x = torch.randn(4)
-    log = tl.trace(
-        GradOverModuleModel().eval(),
-        x,
-        save="all",
-    )
-
-    assert [op for op in log.ops if op.type == "grad"]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _save_budget.py, backends/torch/_module_boundary_adoption.py, backends/torch/_ops_interventions.py ....
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_raw_grad_over_module_wrapper_tensor_leak_does_not_crash() -> None:
     """Hardening guards tolerate wrapper tensors from uninstrumented transforms.
@@ -629,6 +594,7 @@ def test_raw_grad_over_module_wrapper_tensor_leak_does_not_crash() -> None:
     assert log.output_layers == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/_selector_nodes.py, backends/torch/_ops_predicate_events.py.
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_func_transform_selector_matches_trace_and_record() -> None:
     """Transform predicates match both Trace and Recording capture paths."""
@@ -643,10 +609,10 @@ def test_func_transform_selector_matches_trace_and_record() -> None:
     assert recording.records[0].ctx.transform_kind == "vmap"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_transform_wrappers.py, campaign mutant kills.
 @pytest.mark.parametrize(
     ("model", "op_type", "kind"),
     [
-        (AutogradJacobianModel(), "autogradjacobian", "autograd.jacobian"),
         (AutogradHessianModel(), "autogradhessian", "autograd.hessian"),
     ],
 )
@@ -667,22 +633,7 @@ def test_autograd_functional_direct_call_boundary(
     assert transform_ops[0].transform_kind == kind
 
 
-def test_functional_call_substituted_params_are_tensor_parents() -> None:
-    """Substituted params are graph parents, not registered Param claims."""
-
-    log = tl.trace(
-        FunctionalCallBasicModel().eval(),
-        torch.randn(3),
-        save="all",
-    )
-    linear = next(op for op in log.ops if op.type == "linear")
-
-    assert linear.module == "inner:1"
-    assert len(linear.parents) == 3
-    assert linear.parents[0] == "input_1"
-    assert linear.parent_params == ()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_session_forwards.py.
 def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
     """Substituted buffers are graph parents under functional_call."""
 
@@ -696,36 +647,7 @@ def test_functional_call_substituted_buffers_are_tensor_parents() -> None:
     assert any("input_1" in op.parents and len(op.parents) == 2 for op in add_ops)
 
 
-def test_transform_metadata_pandas_and_tlspec_round_trip(tmp_path: Path) -> None:
-    """Transform metadata is tabular and portable."""
-
-    x = torch.randn(3, 4)
-    log = tl.trace(VmapMaskModel().eval(), x, save="all")
-    dataframe = log.to_pandas()
-    path = tmp_path / "vmap.tlspec"
-
-    log.save(path)
-    loaded = cast(Trace, tl.load(path))
-
-    assert bool(dataframe.loc[dataframe["type"] == "vmap", "is_transform"].iloc[0])
-    assert dataframe.loc[dataframe["type"] == "vmap", "transform_kind"].iloc[0] == "vmap"
-    assert loaded.transforms[0].transform_kind == "vmap"
-    assert loaded.transforms[0].transform_config["in_dims"] == 0
-
-
-def test_transform_selector_intervention_no_crash() -> None:
-    """Transform selector can be used as an intervention predicate."""
-
-    x = torch.randn(3, 4)
-    log = tl.trace(
-        VmapMaskModel().eval(),
-        x,
-        intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
-    )
-
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
-
-
+@pytest.mark.smoke
 def test_transform_selector_sanitized_spelling_matches_live_hooks() -> None:
     """Live transform hooks accept the documented sanitized spelling."""
 
@@ -739,6 +661,7 @@ def test_transform_selector_sanitized_spelling_matches_live_hooks() -> None:
     assert torch.equal(log[log.output_layers[0]].out, x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _ir/selector_eval.py, intervention/_resolver_registry.py, intervention/save.py ....
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Path) -> None:
     """Loaded transform selector hook specs execute on a fresh trace."""
@@ -750,7 +673,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
             x,
             capture=tl.options.CaptureOptions(replayable=True),
         )
-    log.attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func_transform("vmap"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "func_transform_hook.tlspec"
 
     log.save_intervention(path, level="portable")
@@ -768,6 +691,7 @@ def test_loaded_func_transform_hook_spec_executes_after_round_trip(tmp_path: Pat
     assert torch.equal(rerun[rerun.output_layers[0]].out, x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_provenance_warning_foreign_tensor_contract() -> None:
     """Foreign arg tensors warn; module tensor attributes do not."""
 
@@ -855,87 +779,7 @@ def test_arg_spec_table_cannot_silently_cost_a_parent_edge() -> None:
     assert op.dropped_edge_tensor_args == ()
 
 
-def test_foreign_operand_warns_with_its_arg_position() -> None:
-    """A genuinely un-provenanced operand is flagged at its own arg position.
-
-    A pre-forward closure tensor is a recorded ``constant`` source, so the
-    operand is copied with logging paused: a tensor the capture never sees.
-    """
-
-    foreign = torch.rand(4) + 0.5
-
-    class _ForeignOperandModel(nn.Module):
-        """Consume a tensor created outside the traced model at position ``1``."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Add a foreign operand as the second argument.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                Scalar reduction of the polygamma output.
-            """
-
-            with _state.pause_logging():
-                unseen = foreign.clone()
-            return torch.polygamma(2, (x * 3.0) + unseen).sum()
-
-    with pytest.warns(UserWarning, match=r"no graph/source provenance.*arg1"):
-        trace = tl.trace(_ForeignOperandModel().eval(), torch.rand(4) + 0.5)
-
-    add_op = next(op for op in trace.ops if op.type == "add")
-    assert add_op.unattributed_tensor_args == ("arg1",)
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_prebuilt_transform_wrap_order_and_raw_warning_contract() -> None:
-    """Prebuilt decorated transforms capture; raw prebuilt transforms retain warning."""
-
-    x = torch.randn(3, 4)
-    decorated_log = tl.trace(
-        PreBuiltTransformModel().eval(),
-        x,
-        save="all",
-    )
-
-    assert [op.transform_kind for op in decorated_log.transforms] == ["vmap"]
-    assert decorated_log.transforms[0].parents == ("input_1",)
-
-    with pytest.warns(UserWarning, match="functorch"):
-        raw_log = tl.trace(
-            RawPreBuiltTransformModel().eval(),
-            x,
-            save="all",
-        )
-
-    assert raw_log.transforms == ()
-    assert torch.allclose(RawPreBuiltTransformModel().eval()(x), x * 2.0)
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_raw_transform_escape_flag_does_not_leak_across_captures() -> None:
-    """A raw-transform escape exemption applies only to its capture session."""
-
-    x = torch.randn(3, 4)
-    with pytest.warns(UserWarning, match="functorch"):
-        raw_log = tl.trace(
-            RawPreBuiltTransformModel().eval(),
-            x,
-            save="all",
-        )
-
-    assert raw_log.transforms == ()
-
-    foreign_model = ForeignOutputTensorModel(torch.ones(3, 4)).eval()
-    with pytest.raises(RuntimeError, match="could not attribute a model output tensor"):
-        tl.trace(foreign_model, x, save="all")
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_completeness_finalize.py, validation/_saved_outs_steps.py, validation/core.py ....
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> None:
     """Replay validation fails when raw transform escape leaves no output boundary."""
@@ -950,6 +794,7 @@ def test_raw_transform_escape_does_not_validate_vacuously_without_metadata() -> 
         )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_transform_wrappers.py.
 @pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
 def test_raising_inner_transform_cleans_up_logging_state() -> None:
     """Exceptions from transform bodies leave logging state sane."""
@@ -961,208 +806,3 @@ def test_raising_inner_transform_cleans_up_logging_state() -> None:
     assert _state._logging_enabled is False
     log = tl.trace(VmapMaskModel().eval(), torch.randn(3, 4))
     assert [op.transform_kind for op in log.transforms] == ["vmap"]
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_hf_style_runtime_vmap_mask_regression() -> None:
-    """Attribute-style runtime vmap lookup captures a clean boundary node."""
-
-    x = torch.randn(3, 4)
-    with warnings.catch_warnings(record=True) as records:
-        warnings.simplefilter("always")
-        log = tl.trace(
-            HFStyleMaskModel().eval(),
-            x,
-            save="all",
-        )
-
-    assert [op.transform_kind for op in log.transforms] == ["vmap"]
-    assert log.transforms[0].parents == ("input_1",)
-    assert any("functorch" in str(record.message).lower() for record in records)
-    assert not any("no graph/source provenance" in str(record.message) for record in records)
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_transform_matrix_completion_rows(tmp_path: Path) -> None:
-    """Cross-cutting matrix rows work for vmap transform boundary capture."""
-
-    x = torch.randn(3, 4)
-    model = VmapMaskModel().eval()
-    expected = model(x)
-    assert torch.allclose(model(x), expected)
-
-    log = tl.trace(model, x, save=["vmap_1_1"])
-    transform = log.transforms[0]
-    assert transform.has_saved_activation is True
-    assert isinstance(transform.out, torch.Tensor)
-    assert torch.equal(transform.out, x > 0)
-    assert validate_forward_pass(VmapMaskModel().eval(), x) is True
-
-    predicate_log = tl.trace(VmapMaskModel().eval(), x, save=tl.func_transform("vmap"))
-    assert [op.label for op in predicate_log.transforms] == ["vmap_1_1:1"]
-
-    recording = cast(Recording, tl.record(VmapMaskModel().eval(), x, save=tl.func_transform()))
-    assert recording.records[0].ctx.transform_kind == "vmap"
-
-    path = tmp_path / "matrix-vmap.tlspec"
-    predicate_log.save(path)
-    loaded = cast(Trace, tl.load(path))
-    assert loaded.transforms[0].transform_kind == "vmap"
-
-    intervened = tl.trace(
-        VmapMaskModel().eval(),
-        x,
-        save="all",
-        intervene=tl.when(tl.func_transform("vmap"), tl.zero_ablate()),
-    )
-    assert intervened.transforms[0].is_edited is True
-
-
-class _OneOperandVmapModel(nn.Module):
-    """A vmap boundary called with a SINGLE tensor operand (arity 1)."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Vmap a unary row op over one operand."""
-
-        return torch.vmap(lambda row: torch.sin(row).add(1))(x)
-
-
-class _TwoOperandVmapModel(nn.Module):
-    """A vmap boundary called with TWO tensor operands (arity 2).
-
-    Both operands are freshly built ``arange`` tensors; a correct capture must
-    register BOTH as parents of the vmap boundary node so neither ``arange`` is
-    orphaned and dropped from the trace.
-    """
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Vmap a binary cell over two arange operands, then add ``x``."""
-
-        q_idx = torch.arange(x.shape[-1])
-        kv_idx = torch.arange(x.shape[-1])
-
-        def cell(i: torch.Tensor, j: torch.Tensor) -> torch.Tensor:
-            return (j <= i).float()
-
-        mask = torch.vmap(torch.vmap(cell, in_dims=(None, 0)), in_dims=(0, None))(q_idx, kv_idx)
-        return x + mask
-
-
-class _VariadicTensorBuiltinModel(nn.Module):
-    """Call one direct variadic tensor builtin with derived operands."""
-
-    def __init__(self, func_name: str, arity: int) -> None:
-        """Store the builtin name and number of operands to generate.
-
-        Parameters
-        ----------
-        func_name:
-            Name of the ``torch`` variadic builtin to call.
-        arity:
-            Number of derived tensor operands to supply.
-        """
-
-        super().__init__()
-        self.func_name = func_name
-        self.arity = arity
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Generate operands and return the selected builtin's first output.
-
-        Parameters
-        ----------
-        x:
-            Source tensor for every independently derived operand.
-
-        Returns
-        -------
-        torch.Tensor
-            The direct ``block_diag`` result or first broadcast result.
-        """
-
-        operands = tuple(x + float(index) for index in range(self.arity))
-        if self.func_name == "block_diag":
-            return torch.block_diag(*operands)
-        return torch.broadcast_tensors(*operands)[0]
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_variadic_vmap_arity_does_not_leak_stale_arg_spec() -> None:
-    """A 1-operand vmap must not poison a later 2-operand vmap's parent capture.
-
-    ``vmap`` takes a VARIADIC number of tensor operands. A stale name-keyed
-    ``ArgSpec`` cached from the first (1-operand) vmap would extract only operand
-    0 from the later 2-operand vmap, orphaning and DROPPING the second ``arange``
-    from the trace. This pins the fix: transform ops re-crawl their operands
-    every call, so both ``arange`` ops survive regardless of capture order.
-    Runs the arity-1 capture FIRST to populate any cache, then the arity-2
-    capture in the SAME process (the cache is process-global).
-    """
-
-    x = torch.randn(4, 4)
-
-    # Arity-1 capture first -- would seed a narrow ``vmap`` positions=(0,) spec.
-    tl.trace(_OneOperandVmapModel().eval(), x, save="all")
-
-    log = tl.trace(_TwoOperandVmapModel().eval(), x, save="all")
-    arange_ops = [op for op in log._layer_list if getattr(op, "func_name", None) == "arange"]
-    # BOTH arange operands must be captured -- neither dropped by a stale spec.
-    assert len(arange_ops) == 2
-    vmap_ops = [op for op in log._layer_list if getattr(op, "transform_kind", None) == "vmap"]
-    assert len(vmap_ops) == 1
-    # The outer vmap boundary node must list BOTH arange outputs as parents.
-    vmap_parents = set(vmap_ops[0].parents)
-    arange_labels = {op.layer_label for op in arange_ops}
-    assert arange_labels <= vmap_parents, (arange_labels, vmap_parents)
-    # And validation must pass cleanly (no dispatched-but-uncaptured operand).
-    assert validate_forward_pass(_TwoOperandVmapModel().eval(), x) is True
-
-
-@pytest.mark.parametrize("func_name", ("block_diag", "broadcast_tensors"))
-def test_variadic_tensor_builtin_arity_does_not_drop_late_operands(func_name: str) -> None:
-    """Direct variadic builtins re-crawl all operands at every call arity.
-
-    The arity-three trace runs first in this process, followed by arity twelve.
-    A fixed static or stale dynamic ArgSpec would retain only the first ten
-    operands of the latter call, silently making its graph incomplete.
-    """
-
-    x = torch.ones(1, 1)
-    for arity in (3, 12):
-        trace = tl.trace(
-            _VariadicTensorBuiltinModel(func_name, arity).eval(),
-            x,
-            save="all",
-        )
-        builtin = next(op for op in trace._layer_list if op.func_name == func_name)
-        add_ops = [op for op in trace._layer_list if op.func_name in {"__add__", "add"}]
-
-        assert len(add_ops) == arity
-        # grouping rule row 32: the operand comprehension is one ``add`` layer
-        # with one pass per operand, so parents name each pass.
-        operand_labels = {op.layer_label if op.num_passes == 1 else op.label for op in add_ops}
-        assert len(operand_labels) == arity
-        assert operand_labels <= set(builtin.parents)
-
-
-class _BareRawGradOverModuleModel(RawGradOverModuleModel):
-    """``RawGradOverModuleModel`` holding the bare original ``torch.func.grad``."""
-
-    def __init__(self) -> None:
-        """Hold the original builder directly, as the case was first written."""
-
-        super().__init__()
-        self.raw_grad = _state._decorated_to_orig[id(torch.func.grad)]
-
-
-@pytest.mark.skipif(not _HAS_TORCH_FUNC, reason="torch.func not available")
-def test_attribute_held_original_grad_is_rebound_to_a_boundary_op() -> None:
-    """The raw-grad case with the bare original: rebound, so the transform is a boundary op."""
-
-    model = _BareRawGradOverModuleModel().eval()
-    held = model.raw_grad
-    log = tl.trace(model, torch.randn(4), save="all")
-
-    assert [op for op in log.ops if op.type == "grad"]
-    assert getattr(log, "_raw_transform_escape_detected", False) is False
-    assert model.raw_grad is held

@@ -65,7 +65,7 @@ def test_fork_do_gradient_site_refuses_and_the_remedy_runs(edit: str) -> None:
     assert fields["code"] == "replay_gradient_edit_unsupported"
     message = str(excinfo.value)
     assert "linear_1_1" in message
-    assert "model= and x=" in message and "engine='set_only'" in message
+    assert "model= and inputs=" in message and "engine='set_only'" in message
     # Nothing changed: values, recipe, and no sticky hook left to re-fire on the next push.
     for label, value in before.items():
         assert torch.equal(fork[label].out, value)

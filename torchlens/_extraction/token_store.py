@@ -59,6 +59,27 @@ class TokenRows:
     position:
         ``int64 [n_tokens]``: each token's index within its stimulus's
         true (unpadded) extent.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> def collate(texts):
+    ...     ids = torch.tensor([[int(word) for word in text.split()] for text in texts])
+    ...     return {"input_ids": ids, "attention_mask": torch.ones_like(ids)}
+    >>> class Embed(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.emb = nn.Embedding(10, 4)
+    ...     def forward(self, input_ids, attention_mask=None):
+    ...         return self.emb(input_ids)
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     _ = tl.dataset_extraction.extract_dataset(
+    ...         Embed().eval(), ["1 2", "3 4 5"], {"h": "emb"}, batch_size=1, path=folder,
+    ...         collate=collate, ragged="trim", progress=False,
+    ...     )
+    ...     tokens = tl.dataset_extraction.open_extraction(folder).token_rows()
+    >>> tokens.num_tokens, tokens.position.tolist()
+    (5, [0, 1, 0, 1, 2])
     """
 
     values: dict[str, torch.Tensor]

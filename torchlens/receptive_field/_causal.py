@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._capture.arg_positions import _normalize_func_name
+from ._rules import ReceptiveFieldRuleContext
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -116,8 +117,6 @@ def causal_offset_from_weights(op: Op, dim: int) -> int | None:
 
 def softmax_dim(op: Op) -> int | None:
     """Return a softmax op's recorded dimension, or ``None``."""
-
-    from ._rules import ReceptiveFieldRuleContext
 
     dim = ReceptiveFieldRuleContext(op).arg("dim", op.func_config.get("dim", -1))
     return dim if isinstance(dim, int) else None

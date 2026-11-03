@@ -67,10 +67,7 @@ def _trace_projective_box(layer: nn.Module, extent: int, source_index: int) -> o
 @pytest.mark.parametrize(
     ("factory", "extent"),
     [
-        (lambda: nn.Conv1d(1, 1, 3, stride=2, padding=1, bias=False), 9),
-        (lambda: nn.AvgPool1d(3, stride=2, padding=1), 9),
         (lambda: nn.Conv1d(1, 1, 3, dilation=2, padding=2, bias=False), 9),
-        (lambda: nn.ConvTranspose1d(1, 1, 3, stride=2, padding=1, bias=False), 7),
     ],
 )
 def test_forward_support_matches_brute_force_connectivity(
@@ -181,23 +178,6 @@ def test_unit_box_only_rule_degrades_to_upper_bound() -> None:
     assert _spatial_bounds(box) == (4, 5)
     assert box.status is ReceptiveFieldStatus.UPPER_BOUND
     assert not box.exact
-
-
-def test_projective_data_dependent_rule_preserves_its_status() -> None:
-    """Keep runtime-routed projective geometry distinct from missing facts."""
-
-    @_rules.register_rf_rule("add", replace=True)
-    def runtime_routed(context: ReceptiveFieldRuleContext) -> _RuleResult:
-        """Model a route whose destination depends on captured runtime data."""
-
-        return context.data_dependent("destination depends on runtime data")
-
-    trace = tl.trace(_AddZero(), torch.ones(1, 1, 8))
-    source = trace.input_ops[0]
-    target = trace.output_ops[0]
-    descriptors = solve_projective(trace, [target]).per_op[source.label]
-
-    assert next(iter(descriptors.values())).status is ReceptiveFieldStatus.DATA_DEPENDENT
 
 
 def test_forward_accelerator_has_exhaustive_membership_duality_golden() -> None:

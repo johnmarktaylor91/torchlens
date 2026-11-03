@@ -163,7 +163,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         ("ResidualNorm",),
         "The bundle graph and the bundle diff of clean, intervened and successor traces.",
         (
-            _panel("a", "ResidualNorm", "show_bundle_graph", call="bundle_graph", capture=_EDIT),
+            _panel("a", "ResidualNorm", "bundle.draw", call="bundle_graph", capture=_EDIT),
             _panel("b", "ResidualNorm", "bundle_diff", call="bundle_diff", capture=_EDIT),
         ),
         pending_parts={"relation page": "the bundle relation page (11.30) is not built yet"},
@@ -179,7 +179,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="backward")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "backward"},
             ),
             _panel(
@@ -187,7 +187,7 @@ SENTINELS: tuple[Sentinel, ...] = (
                 "Grad",
                 'draw(graph="combined")',
                 capture=_GRAD,
-                prep="log_backward",
+                prep="backward",
                 kwargs={"graph": "combined"},
             ),
             _panel(

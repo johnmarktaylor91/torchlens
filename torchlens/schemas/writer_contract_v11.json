@@ -46,6 +46,7 @@
     "mutation_kind": "keep",
     "namespace": "keep",
     "operator": "keep",
+    "out": "blob_recursive",
     "outcome": "keep",
     "output_tensor_facts": "keep",
     "overload": "keep",
@@ -240,7 +241,7 @@
     "_time_finished": "keep",
     "_time_started": "keep",
     "backward_duration": "keep",
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "call_index": "keep",
     "fire_record": "keep",
     "grad_fn_label": "keep",
@@ -524,7 +525,7 @@
     "_source_ref": "weakref_strip"
    },
    "torchlens._data_classes.op.GradientRecord": {
-    "backward_pass_index": "keep",
+    "backward_pass_number": "keep",
     "dtype": "keep",
     "grad": "blob",
     "memory": "keep",
@@ -747,8 +748,8 @@
     "_args": "blob_recursive",
     "_kwargs": "blob_recursive",
     "incomplete_reasons": "keep",
+    "input_structure": "keep",
     "is_capture_complete": "keep",
-    "structure": "keep",
     "summary": "keep",
     "tensor_observations": "keep"
    },
@@ -815,7 +816,7 @@
    },
    "torchlens._data_classes.trace.Trace": {
     "_activation_transform_repr": "keep",
-    "_active_backward_pass_index": "drop",
+    "_active_backward_pass_number": "drop",
     "_ambiguous_lookup_keys": "keep",
     "_annotation_blobs": "blob_recursive",
     "_append_history": "keep",
@@ -1332,6 +1333,7 @@
      "mutation_kind": "keep",
      "namespace": "keep",
      "operator": "keep",
+     "out": "blob_recursive",
      "outcome": "keep",
      "output_tensor_facts": "keep",
      "overload": "keep",
@@ -1366,6 +1368,7 @@
      "mutation_kind": "fact",
      "namespace": "fact",
      "operator": "fact",
+     "out": "fact",
      "outcome": "fact",
      "output_tensor_facts": "fact",
      "overload": "fact",
@@ -1400,6 +1403,7 @@
      "mutation_kind",
      "namespace",
      "operator",
+     "out",
      "outcome",
      "output_tensor_facts",
      "overload",
@@ -1814,7 +1818,7 @@
      "_time_finished": "keep",
      "_time_started": "keep",
      "backward_duration": "keep",
-     "backward_pass_index": "keep",
+     "backward_pass_number": "keep",
      "call_index": "keep",
      "fire_record": "keep",
      "grad_fn_label": "keep",
@@ -1830,7 +1834,7 @@
      "_time_finished": "fact",
      "_time_started": "fact",
      "backward_duration": "fact",
-     "backward_pass_index": "fact",
+     "backward_pass_number": "fact",
      "call_index": "fact",
      "fire_record": "fact",
      "grad_fn_label": "fact",
@@ -1846,7 +1850,7 @@
      "_time_finished",
      "_time_started",
      "backward_duration",
-     "backward_pass_index",
+     "backward_pass_number",
      "call_index",
      "fire_record",
      "grad_fn_label",
@@ -3265,7 +3269,7 @@
     "class": "torchlens._data_classes.trace.Trace",
     "field_policies": {
      "_activation_transform_repr": "keep",
-     "_active_backward_pass_index": "drop",
+     "_active_backward_pass_number": "drop",
      "_ambiguous_lookup_keys": "keep",
      "_annotation_blobs": "blob_recursive",
      "_append_history": "keep",
@@ -4008,5 +4012,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8e07954c99363d0e7bda8aa3f1f5a6b982695f73a3ff12f70b855f8cd6afbd38"
+ "writer_contract_digest": "01ae886d4b9d5f41ae627728dd07ff953af158b8a08b8b3382f2cb6d89e25616"
 }

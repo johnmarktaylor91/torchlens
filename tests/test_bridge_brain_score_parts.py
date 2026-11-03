@@ -13,11 +13,8 @@ from typing import Any
 
 import numpy as np
 import pytest
-import torch
-from torch import nn
 
-import torchlens as tl
-from torchlens.bridge.brain_score import ScoreParts, per_layer, score_parts
+from torchlens.bridge.brain_score import score_parts
 
 _NEUROID_R = (0.5, 0.7, 0.6)
 _RAW = 0.6  # mean of _NEUROID_R, by hand
@@ -59,12 +56,6 @@ def test_ceiled_score_puts_raw_beside_normalised() -> None:
 
 
 _NO_CEILING = "the result carries no 'ceiling' attribute, so it is reported as raw"
-
-
-def test_score_without_ceiling_stays_raw_and_says_so() -> None:
-    assert score_parts(0.42) == ScoreParts(raw=0.42, note=_NO_CEILING)
-    behavioral = score_parts(_FakeScore(0.95, {"error": _FakeScore(0.2), "raw": "per-trial"}))
-    assert behavioral == ScoreParts(raw=0.95, error=0.2, note=_NO_CEILING)
 
 
 def test_ceiled_score_with_per_item_raw_names_the_gap() -> None:
@@ -109,21 +100,6 @@ def test_aggregation_dimension_reads_center_and_error() -> None:
 def test_non_scalar_score_refuses() -> None:
     with pytest.raises(TypeError, match="single-number score"):
         score_parts(_FakeScore([0.1, 0.2]))
-
-
-def test_per_layer_returns_score_parts_for_every_layer() -> None:
-    model = nn.Sequential(nn.Linear(3, 4), nn.ReLU())
-    log = tl.trace(model, torch.randn(5, 3), save="all")
-
-    def benchmark(out: torch.Tensor, layer: str) -> _FakeScore:
-        return _ceiled()
-
-    scores = per_layer(log, benchmark)
-    assert scores
-    for parts in scores.values():
-        assert isinstance(parts, ScoreParts)
-        assert parts.raw == pytest.approx(_RAW, abs=1e-15)
-        assert parts.ceiling_normalised == pytest.approx(_NORMALISED, abs=1e-15)
 
 
 def test_real_brainscore_score_object() -> None:

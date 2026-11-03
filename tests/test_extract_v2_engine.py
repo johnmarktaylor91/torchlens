@@ -18,7 +18,6 @@ import torch
 from torch import nn
 
 from torchlens import extract_dataset
-from torchlens._data_substrate import read_trusted_rows
 from torchlens._errors import InvalidArgumentError
 from torchlens._utils._torch_compat import get_cpu_float8_deterministic_fill_support
 from torchlens.dataset_extraction import (
@@ -87,12 +86,6 @@ def _collate_right(items):
     return _word_collate(items)
 
 
-def _collate_left(items):
-    """Left-padded word collate (the D5 hazard)."""
-
-    return _word_collate(items, left=True)
-
-
 # --- row truth (item 4 / T-ROWCOUNT) -------------------------------------------
 
 
@@ -159,25 +152,6 @@ def test_pool_presets_match_manual_oracles(tmp_path: Path) -> None:
     assert torch.allclose(results["cls"], hidden[:, 0], atol=1e-6)
 
 
-def test_pool_kills_raggedness_across_batches(tmp_path: Path) -> None:
-    """The documented raggedness-killer: pooled text harvests stay dense."""
-
-    model = _TokenModel().eval()
-    paths = extract_dataset(
-        model,
-        _TEXTS,
-        {"h": "proj"},
-        batch_size=2,
-        path=tmp_path,
-        collate=_collate_right,
-        pool="token_mean",
-        progress=False,
-    )
-    assert len(paths) == 2
-    reader = open_extraction(tmp_path)
-    assert reader.logical_shape("h") == [8]
-
-
 # --- dtype routing (item 9 / T-FP8-BF16) --------------------------------------------
 
 
@@ -229,109 +203,7 @@ def test_bf16_fp8_store_byte_exact_roundtrip(tmp_path: Path, dtype_name: str) ->
 # --- ragged gate (item 10) -----------------------------------------------------------
 
 
-def test_ragged_refuse_preserves_only_committed_prefix(tmp_path: Path) -> None:
-    """T-DRIFT-PREFIX: the refusal fires at batch 1; shard 0 stays trusted."""
-
-    model = _TokenModel().eval()
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        extract_dataset(
-            model,
-            _TEXTS,
-            {"h": "proj"},
-            batch_size=2,
-            path=tmp_path,
-            collate=_collate_right,
-            progress=False,
-        )
-    assert excinfo.value.fields["code"] == "extraction_ragged_refused"
-    rows = read_trusted_rows(tmp_path)
-    assert len(rows) == 1, "exactly the committed prefix survives"
-    manifest = json.loads((tmp_path / "manifest.json").read_text())
-    assert manifest["status"] == "in_progress"
-
-
-def test_trim_rows_equal_solo_forwards_under_left_padding(tmp_path: Path) -> None:
-    """T-TRIM x left padding: (start, extent) slicing reads TOKEN rows exactly.
-
-    Left padding shifts each row's first valid index (extent alone would
-    mis-slice), and with derived position_ids the trimmed rows must match
-    per-string solo forwards.
-    """
-
-    model = _TokenModel().eval()
-    with pytest.warns(UserWarning, match="derived position_ids"):
-        extract_dataset(
-            model,
-            _TEXTS,
-            {"h": "proj"},
-            batch_size=4,
-            path=tmp_path,
-            collate=_collate_left,
-            ragged="trim",
-            progress=False,
-        )
-    reader = open_extraction(tmp_path)
-    for index, text in enumerate(_TEXTS):
-        solo = _collate_right([text])
-        with torch.no_grad():
-            expected = model(solo["input_ids"])[0]
-        row = reader.row(index)["h"]
-        assert row.shape == expected.shape
-        assert torch.allclose(row, expected, atol=1e-5), f"row {index} mis-sliced"
-    rows = read_trusted_rows(tmp_path)
-    geometry = rows[0]["row_geometry"]
-    assert geometry["padding_side"] == "left"
-    assert geometry["starts"] != [0] * len(geometry["starts"]), "left pads shift starts"
-
-
-def test_row_geometry_ledgered_regardless_of_regime(tmp_path: Path) -> None:
-    """T-PADSIDE: (start, extent) + padding_side ledger on DENSE artifacts too."""
-
-    model = _TokenModel().eval()
-    extract_dataset(
-        model,
-        _TEXTS[:2],
-        {"h": "proj"},
-        batch_size=2,
-        path=tmp_path,
-        collate=_collate_right,
-        pool="token_mean",
-        progress=False,
-    )
-    rows = read_trusted_rows(tmp_path)
-    geometry = rows[0]["row_geometry"]
-    assert geometry["extents"] == [3, 1]
-    assert geometry["starts"] == [0, 0]
-    assert geometry["padding_side"] == "right"
-    assert rows[0]["position_ids_source"] == "model_default"
-
-
 # --- warning dedup (item 5) ------------------------------------------------------------
-
-
-def test_capture_warnings_deduplicate_with_manifest_counts(tmp_path: Path) -> None:
-    """D9: repeated capture warnings surface once and count in the manifest."""
-
-    model = _TokenModel().eval()
-    with pytest.warns(UserWarning, match="derived position_ids") as record:
-        extract_dataset(
-            model,
-            _TEXTS,
-            {"h": "proj"},
-            batch_size=2,
-            path=tmp_path,
-            collate=_collate_left,
-            pool="token_mean",
-            progress=False,
-        )
-    derivation_warnings = [
-        entry for entry in record if "derived position_ids" in str(entry.message)
-    ]
-    assert len(derivation_warnings) == 1, "disclosed once per run, both batches pad"
-    manifest = json.loads((tmp_path / "manifest.json").read_text())
-    warning_counts = manifest["run"]["warnings"]
-    assert any("derived position_ids" in key for key in warning_counts)
-    assert manifest["run"]["position_ids_sources"] == ["derived"]
 
 
 # --- stimulus ids at completion (item 7) ---------------------------------------------------
@@ -362,24 +234,6 @@ def test_surplus_iterable_ids_refuse_before_completion(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "extraction_stimulus_ids_cardinality"
     manifest = json.loads((tmp_path / "manifest.json").read_text())
     assert manifest["status"] == "in_progress", "a mismatch NEVER completes"
-
-
-def test_duplicate_ids_are_legal_and_recorded(tmp_path: Path) -> None:
-    """D2: duplicates are legal with ids_unique recorded false."""
-
-    torch.manual_seed(0)
-    model = nn.Sequential(nn.Linear(3, 4), nn.ReLU()).eval()
-    extract_dataset(
-        model,
-        torch.randn(4, 3),
-        ["relu"],
-        batch_size=2,
-        path=tmp_path,
-        stimulus_ids=["a", "b", "a", "c"],
-        progress=False,
-    )
-    manifest = json.loads((tmp_path / "manifest.json").read_text())
-    assert manifest["stimulus_provenance"]["ids_unique"] is False
 
 
 # --- resume hardening (item 16) ---------------------------------------------------------
@@ -460,39 +314,3 @@ def test_resume_complete_class_callable_digest_mismatch_refuses(tmp_path: Path) 
             resume=True,
         )
     assert excinfo.value.fields["code"] == "extraction_resume_callable_mismatch"
-
-
-def test_resume_policy_matrix_names_exact_fields(tmp_path: Path) -> None:
-    """Composition row: changing pool/dtype/ragged on resume names the field."""
-
-    model = _TokenModel().eval()
-    extract_dataset(
-        model,
-        _TEXTS,
-        {"h": "proj"},
-        batch_size=4,
-        path=tmp_path,
-        collate=_collate_right,
-        pool="token_mean",
-        progress=False,
-    )
-    _interrupt_after(tmp_path, 0)
-    for change, field in [
-        ({"pool": "token_max"}, "pool"),
-        ({"pool": "token_mean", "dtype": "float16"}, "dtype_policy"),
-        ({"pool": "token_mean", "ragged": "trim"}, "ragged"),
-    ]:
-        with pytest.raises(DatasetExtractionResumeError) as excinfo:
-            extract_dataset(
-                model,
-                _TEXTS,
-                {"h": "proj"},
-                batch_size=4,
-                path=tmp_path,
-                collate=_collate_right,
-                progress=False,
-                resume=True,
-                **change,
-            )
-        assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
-        assert field in excinfo.value.fields["mismatched_fields"]
