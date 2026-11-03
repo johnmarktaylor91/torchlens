@@ -98,8 +98,9 @@ against an original reference implementation was measured.
 Use `--steer-layer 4` to steer a different GPT-2 block, `--critic gpt2` to make a second GPT-2
 the critic, or `--draft-tokens 20` for a longer draft. These small examples use a randomly
 initialized module and need no downloads. The first builds a clean and an ablated run of a
-nested module, bundles them, and checks the difference at every module against plain hooks,
-including the inner module that shares the ablated module's last operation.
+nested module, bundles them, and checks the difference at every module against plain hooks
+that record each module's output as its consumers see it, including the inner module that
+shares the ablated module's last operation and keeps its own value.
 
 ```python
 # recipe-test: tool=torchlens expected=True
@@ -127,24 +128,32 @@ ablated = clean.fork("ablated")
 ablated.do(tl.module("mlp"), tl.zero_ablate())
 bundle = tl.Bundle({"clean": clean, "ablated": ablated}, baseline="clean")
 
-plain: dict[str, list[torch.Tensor]] = {}
-handles = [
-    m.register_forward_hook(lambda mod, a, out, n=n: plain.setdefault(n, []).append(out))
-    for n, m in model.named_modules()
-    if n
-]
-with torch.no_grad():
-    model(x)
-    handles.append(model.mlp.register_forward_hook(lambda mod, a, out: torch.zeros_like(out)))
-    model(x)
-for h in handles:
-    h.remove()
+
+def plain_outputs(zero_mlp: bool) -> dict[str, torch.Tensor]:
+    """Module outputs as their consumers see them, from plain hooks."""
+    seen: dict[str, torch.Tensor] = {}
+    handles = []
+    if zero_mlp:  # registered first, so the recorders below see the zeroed output
+        handles.append(model.mlp.register_forward_hook(lambda mod, a, out: torch.zeros_like(out)))
+    handles += [
+        m.register_forward_hook(lambda mod, a, out, n=n: seen.setdefault(n, out))
+        for n, m in model.named_modules()
+        if n
+    ]
+    with torch.no_grad():
+        model(x)
+    for h in handles:
+        h.remove()
+    return seen
+
+
+plain_clean, plain_ablated = plain_outputs(zero_mlp=False), plain_outputs(zero_mlp=True)
 RESULT = all(
     torch.equal(
         bundle["ablated"].modules[n].calls[0].outs[0] - bundle["clean"].modules[n].calls[0].outs[0],
-        plain[n][1] - plain[n][0],
+        plain_ablated[n] - plain_clean[n],
     )
-    for n in plain
+    for n in plain_clean
 )
 ```
 
