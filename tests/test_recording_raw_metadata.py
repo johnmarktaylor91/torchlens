@@ -107,7 +107,7 @@ def test_raw_metadata_works_on_failed_partial_recordings() -> None:
         Exploding(),
         torch.randn(1, 4),
         save=tl.func("linear"),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed
 

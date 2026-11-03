@@ -401,6 +401,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_save_new_outs_train_mode_overrides() -> None:
     """Explicit save_new_outs backward_ready overrides detach flags temporarily."""
 
@@ -450,7 +451,7 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
     recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
-        default_op=False,
+        recording=tl.options.RecordingOptions(default_op=False),
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
 
@@ -464,11 +465,12 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 
+@pytest.mark.smoke
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
     """CaptureSpec save_grad=False contradicts backward_ready keep-grad sugar."""
 
@@ -476,7 +478,9 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            default_op=tl.recording.CaptureSpec(save_grad=False),
+            recording=tl.options.RecordingOptions(
+                default_op=tl.recording.CaptureSpec(save_grad=False)
+            ),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 

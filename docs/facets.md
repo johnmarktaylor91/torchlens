@@ -409,7 +409,9 @@ layer's residual stream, and earlier layers do not use that basis, so early-laye
 weak evidence and often look like noise even when the layer carries the information
 (Belrose et al., 2023, introduced the tuned lens for this reason). Read the lens as a trend
 across depth, compare it with a probe or a tuned lens passed as `lens=`, and do not read one early
-layer's top token as what that layer "thinks".
+layer's top token as what that layer "thinks". A Jacobian lens (the corpus-average Jacobian
+of the final residual with respect to a block's, passed as `lens=`) is fitted from public
+primitives in [the Jacobian lens recipe](recipes/jacobian_lens.md).
 
 `torchlens._semantic.logit_lens_predictions` is the streaming reduction of the
 same sweep: it projects ONE layer at a time, keeps only per-position top-k

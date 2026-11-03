@@ -92,7 +92,6 @@ def test_exact_budget_refusal_fails_the_capture_typed() -> None:
         stats_module.EXACT_NUMEL_BUDGET = original
 
 
-@pytest.mark.smoke
 def test_reuse_rung_prints_only_paid_for_facts() -> None:
     """Reuse never scans: no armed feature means no stats segment at all."""
 

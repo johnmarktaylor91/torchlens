@@ -23,6 +23,7 @@ def test_device_map_row_absent_reads_pass_ok() -> None:
     assert (row.is_detected, row.status, row.severity) == (False, "pass", "ok")
 
 
+@pytest.mark.smoke
 def test_device_map_row_single_execution_device_reads_pass_info() -> None:
     """A pure-CPU map (and cpu/disk offload maps) is the supported envelope."""
 

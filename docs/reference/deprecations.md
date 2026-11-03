@@ -87,6 +87,7 @@ unaffected.
 | `show_model_graph` | `torchlens.draw` | removed |
 | `draw_backward` | `torchlens.draw` | removed; pass `graph="backward"` |
 | `draw_combined` | `torchlens.draw` | removed; pass `graph="combined"` |
+| `show_bundle_graph` | `torchlens.Bundle.draw` | removed; call `bundle.draw(path)` (`graph=` replaces `signal=`, `node_overrides=` replaces `vis_node_overrides=`, `open_viewer=True` opens a viewer) |
 | `load_intervention_spec` | `torchlens.io.load_intervention_spec` | removed |
 | `ModuleInputSnapshot` | `torchlens.types.ModuleInputSnapshot` | removed |
 | `PreHookEffect` | `torchlens.types.PreHookEffect` | removed |

@@ -105,9 +105,26 @@ class _AtenExecutionContext:
     }
 
 
+class _AtenValueCell:
+    """Mutable holder for one ATen call's retained output value(s).
+
+    The event stays frozen; the cell lets the owner's later ``save=`` verdict
+    release a value the recorder kept speculatively (``payload = None``).
+    """
+
+    __slots__ = ("payload",)
+
+    def __init__(self, payload: Any) -> None:
+        self.payload = payload
+
+
 @dataclass(frozen=True, slots=True)
 class _AtenCallEvent:
-    """Value-free facts for one observed ATen dispatcher call."""
+    """Facts for one observed ATen dispatcher call.
+
+    Value-free except ``output_values``, which carries a value cell only when
+    the capture asked for ATen values.
+    """
 
     capture_phase: str
     forward_pass_index: int | None
@@ -137,6 +154,7 @@ class _AtenCallEvent:
     exception_type: str | None
     execution_context: _AtenExecutionContext
     seq: int = 0
+    output_values: _AtenValueCell | None = None
 
 
 @dataclass(frozen=True, slots=True)

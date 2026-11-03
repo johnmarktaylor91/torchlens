@@ -8760,11 +8760,35 @@
   "via_getattr": true
  },
  {
+  "ambiguous": false,
+  "field": "parent_arg_positions",
+  "file": "torchlens/receptive_field/rules/_utils.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/rules/_utils.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/receptive_field/rules/attention.py",
   "has_default": false,
   "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "parents",
+  "file": "torchlens/receptive_field/rules/elementwise.py",
+  "has_default": false,
+  "sites": 1,
   "via_getattr": false
  },
  {

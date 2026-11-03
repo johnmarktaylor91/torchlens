@@ -69,7 +69,6 @@ def test_walk_double_backprop_gradient_graph() -> None:
     assert any(node.kind == "leaf" for node in sketch.nodes)
 
 
-@pytest.mark.smoke
 def test_graphless_tensor_refuses_typed_and_teaches() -> None:
     """No grad_fn anywhere: typed refusal with the stable code and a remedy."""
 
@@ -81,7 +80,6 @@ def test_graphless_tensor_refuses_typed_and_teaches() -> None:
         walk_grad_fn([torch.randn(2).detach(), 7])
 
 
-@pytest.mark.smoke
 def test_truncation_is_disclosed_never_silent() -> None:
     """Hitting max_nodes sets the flag and the render says so."""
 
@@ -95,7 +93,6 @@ def test_truncation_is_disclosed_never_silent() -> None:
     assert "WALK TRUNCATED" in source
 
 
-@pytest.mark.smoke
 def test_sketch_dot_source_is_structure_only_with_legend() -> None:
     """DOT source carries the legend and never any tensor values."""
 

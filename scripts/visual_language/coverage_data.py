@@ -551,6 +551,20 @@ ENTRY_CHEATS: Mapping[str, tuple[str, ...]] = {
         "backward_node_spec_fn",
         "intervening_cluster",
     ),
+    # Bundle.draw is the bundle's own door (the merged graph and graph="diff"); the slides
+    # teach Trace.draw, so its bundle-only keywords are cheat lines here.
+    "Bundle.draw": (
+        "path",
+        "graph",
+        "nodes",
+        "rolled",
+        "theme",
+        "node_overrides",
+        "edge_overrides",
+        "members",
+        "metric",
+        "on",
+    ),
 }
 
 #: ``"<entry>.<param>"`` to the reason it changes nothing visible.

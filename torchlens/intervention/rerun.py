@@ -1207,16 +1207,21 @@ def _rerun_save_kwargs(log: Trace) -> dict[str, Any]:
     Returns
     -------
     dict[str, Any]
-        Save keyword arguments for ``_run_model_and_save_specified_outs``.
+        Save keyword arguments for ``_run_model_and_save_specified_outs``,
+        including the source's ``aten_ops`` request: the rerun re-records the
+        ATen profile (and its values), so a same-shape refresh swaps in rows
+        and values that match the refreshed ``Op.out``.
     """
 
     # Session-only fields: a trace restored from pickle carries neither.
     options = log.__dict__.get("_predicate_save_options")
     request = log.__dict__.get("_rerun_save_request") or {}
+    aten_ops = cast('bool | Literal["values"]', log._options_aten_ops)
     if request.get("replayable", False) and getattr(options, "keep_op", None) is None:
-        return {key: value for key, value in request.items() if key != "replayable"}
+        return {"aten_ops": aten_ops, **{k: v for k, v in request.items() if k != "replayable"}}
     layers_to_save, save_predicate, lookback, lookback_payload_policy = _rerun_save_scope(log)
     return {
+        "aten_ops": aten_ops,
         "layers_to_save": layers_to_save,
         "save_predicate": save_predicate,
         "lookback": lookback,

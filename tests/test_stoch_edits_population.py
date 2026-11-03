@@ -60,7 +60,6 @@ def test_datum_count_mismatch_refuses() -> None:
     assert excinfo.value.fields["code"] == "population_datum_count_mismatch"
 
 
-@pytest.mark.smoke
 def test_empty_and_unsupported_sources_refuse() -> None:
     """Zero members and non-population sources refuse typed."""
 
@@ -72,7 +71,6 @@ def test_empty_and_unsupported_sources_refuse() -> None:
     assert excinfo.value.fields["code"] == "population_source_invalid"
 
 
-@pytest.mark.smoke
 def test_reducers_are_deterministic_tensors() -> None:
     """D3: mean/std are reductions over the member stack, never draws."""
 
@@ -98,7 +96,6 @@ def test_reducer_accumulates_reduced_precision_in_float32() -> None:
     assert torch.equal(result, oracle)
 
 
-@pytest.mark.smoke
 def test_reducer_agreement_and_refusals() -> None:
     """Conditioned reductions honor agreement classes; empty classes refuse."""
 

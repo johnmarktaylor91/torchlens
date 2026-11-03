@@ -97,6 +97,38 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
             UserWarning,
             stacklevel=3,
         )
+    _warn_multiclause_intervene_fired_nowhere(state)
+
+
+def _warn_multiclause_intervene_fired_nowhere(state: RecordingState) -> None:
+    """Warn when a multi-clause ``intervene=`` spec fired at no site at all.
+
+    A multi-clause spec has no single ``.selector``, so the selector check
+    above never sees it; without this, a spec whose every forward rule missed
+    recorded silently.
+
+    Parameters
+    ----------
+    state:
+        Completed recording state carrying the intervene fire count.
+    """
+
+    from ..intervention.spec import Recipe
+
+    spec = state.options.intervene
+    if not isinstance(spec, Recipe) or len(spec.rules) < 2:
+        return
+    if state.intervene_selector_fire_count != 0:
+        return
+    forward_rules = [rule for rule in spec.rules if rule.signal != "backward"]
+    if not forward_rules:
+        return
+    names = ", ".join(rule.rule_id for rule in forward_rules)
+    warnings.warn(
+        f"Capture-time intervention rules [{names}] matched zero sites; no intervention fired.",
+        UserWarning,
+        stacklevel=4,
+    )
 
 
 def _unwrap_ddp_for_fastlog(
@@ -694,8 +726,7 @@ class Recorder:
             # trusted (matching the historical recovery behavior).
             combined_events.concat(failed_events, lanes=("op_events", "pre_hook_events"))
         self._capture_events = combined_events
-        trace.capture_events = combined_events
-        trace._capture_events = combined_events
+        trace.capture_events = trace._capture_events = combined_events
         self._state.runtime_trace = trace
         session = type("_FastlogCaptureSession", (), {})()
         session.capture_events = self._capture_events
@@ -706,6 +737,7 @@ class Recorder:
         session.captured_run_cores = self._captured_run_cores
         recording = Recording.from_capture_events(session)
         self._stamp_failed_recording(recording, exc)
+        object.__setattr__(recording, "_output", output_forward_failed(safe_exception_str(exc)))
         return recording
 
     def _stamp_failed_recording(self, recording: Recording, exc: BaseException) -> None:
