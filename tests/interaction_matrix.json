@@ -1859,7 +1859,7 @@
    "status": "composes",
    "evidence": "tests/test_fastlog_halt.py::test_record_halt_predicate_stops_after_save_decision",
    "confidence": "high",
-   "note": "The record twin refuses non-callable halt with recording_halt_predicate_type_invalid."
+   "note": "The record twin refuses non-callable halt with halt_predicate_type_invalid, the same code and class as tl.trace."
   },
   {
    "a": "halt",
@@ -2897,10 +2897,10 @@
   {
    "id": "A38",
    "pair": [],
-   "summary": "Predicate type errors are twin codes with different lineages: tl.trace halt_predicate_type_invalid (ArgumentTypeError, TypeError) and intervention_predicate_type_invalid, versus tl.record recording_halt_predicate_type_invalid and recording_intervention_predicate_type_invalid (InvalidArgumentError, ValueError).",
-   "evidence": "docs/reference/error_refusal_contract.md",
+   "summary": "Predicate type errors raise the same code and class on both entry points: tl.trace and tl.record refuse a non-callable halt with halt_predicate_type_invalid and a non-callable intervene with intervention_predicate_type_invalid (ArgumentTypeError, TypeError lineage).",
+   "evidence": "tests/test_exception_taxonomy_records.py",
    "recommendation": "close",
-   "ruling": "pending"
+   "ruling": "closed"
   },
   {
    "id": "A39",
