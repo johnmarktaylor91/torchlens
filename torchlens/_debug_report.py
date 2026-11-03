@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+import os
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -39,6 +40,50 @@ _MAX_PLAIN_DEPTH = 6
 
 #: Exits every card names on its ``More:`` line.
 REPORT_EXITS: tuple[str, ...] = (".to_pandas()", ".to_dict()")
+
+#: Table columns whose cells are ``file:line`` source locations. A card shows
+#: them through :func:`display_source_line` and never cuts off their tail.
+_SOURCE_COLUMNS: tuple[str, ...] = ("source_line", "source_file:line")
+
+
+def display_source_line(location: str | None) -> str | None:
+    """Return a ``file:line`` location as a printed card shows it.
+
+    Report fields and table columns keep the full path; a card prints the
+    path relative to the current directory when the file is under it, so the
+    line a finding names stays short enough to read.
+
+    Parameters
+    ----------
+    location:
+        ``"file:line"`` (or a bare path), or ``None``.
+
+    Returns
+    -------
+    str | None
+        The location with its path made relative to the working directory
+        when the file is under it; otherwise unchanged.
+    """
+
+    if not location:
+        return location
+    path, sep, line = location.rpartition(":")
+    if not sep or not line.isdigit():
+        path, line = location, ""
+    try:
+        relative = os.path.relpath(path)
+    except ValueError:  # another drive on Windows
+        return location
+    if relative.startswith(os.pardir) or os.path.isabs(relative):
+        return location
+    return f"{relative}:{line}" if line else relative
+
+
+def at_source(location: str | None) -> str:
+    """Return `` at <file:line>`` for a card finding, or ``""`` without one."""
+
+    shown = display_source_line(location)
+    return f" at {shown}" if shown else ""
 
 
 def _require_pandas() -> Any:
@@ -300,6 +345,7 @@ class _TableReport(Report):
     frame: Any
     subject_text: str
     finding_columns: tuple[str, ...]
+    coverage_text: str | None = None
 
     @property
     def report_type(self) -> str:
@@ -317,13 +363,20 @@ class _TableReport(Report):
 
         return "empty" if len(self.frame) == 0 else f"{len(self.frame)} rows"
 
+    def _report_coverage(self) -> str | None:
+        """What this report did and did not examine, when the helper says."""
+
+        return self.coverage_text
+
     def _report_findings(self) -> list[str]:
         """One-line findings for the card, most severe first."""
 
         columns = [column for column in self.finding_columns if column in self.frame.columns]
         findings = []
         for record in self.frame[columns].to_dict(orient="records"):
-            findings.append(", ".join(f"{key}={_cell(value)}" for key, value in record.items()))
+            findings.append(
+                ", ".join(f"{key}={_cell(value, key)}" for key, value in record.items())
+            )
         return findings
 
     def to_pandas(self) -> Any:
@@ -353,11 +406,18 @@ class _TableReport(Report):
         return f"{self.report_type}({self.subject}) status={self.status}"
 
 
-def _cell(value: Any) -> str:
-    """Render one table cell compactly for a finding line."""
+def _cell(value: Any, column: str = "") -> str:
+    """Render one table cell compactly for a finding line.
+
+    A source-location cell is shown relative to the working directory and,
+    when still too long, shortened from the front so its ``:line`` survives.
+    """
 
     if isinstance(value, float):
         return f"{value:.4g}"
+    if column in _SOURCE_COLUMNS and isinstance(value, str):
+        text = display_source_line(value) or value
+        return text if len(text) <= 60 else "..." + text[-57:]
     text = str(value)
     return text if len(text) <= 60 else text[:57] + "..."
 
@@ -368,6 +428,7 @@ def table_report(
     *,
     subject: str,
     finding_columns: Sequence[str],
+    coverage: str | None = None,
 ) -> Report:
     """Wrap a helper's frame in the tabular :class:`Report`.
 
@@ -381,6 +442,8 @@ def table_report(
         What the helper examined.
     finding_columns:
         Columns shown on each finding line of the printed card.
+    coverage:
+        Optional coverage line for the card (what was and was not examined).
 
     Returns
     -------
@@ -393,6 +456,7 @@ def table_report(
         frame=frame,
         subject_text=subject,
         finding_columns=tuple(finding_columns),
+        coverage_text=coverage,
     )
 
 

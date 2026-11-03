@@ -3323,11 +3323,16 @@ deprecation shim owed*
   lead line, at most five findings, the exact remainder, the exits). The
   typed results (`HealthReport`, `DeterminismReport`, `NonfiniteReport`,
   `FindNanReport`, `ParamHealthReport`, ...) subclass it; those with a house-voice
-  `__repr__` keep printing it and serve the card as `report.card()`. The
+  `__repr__` (`HealthReport`, `ParamHealthReport`) keep printing it and serve
+  the card as `report.card()`. The
   table helpers `compare`, `compare_params`, `dead_neurons`,
   `grad_health`, `hot_path` and `recompute_candidates` return a
   tabular `Report` whose `.to_pandas()` is the DataFrame they used to
   return (`attrs` included); the report has a table and never is one.
+  Every finding that names an op names its user source line too: the
+  `source_line` field or column holds `"<file>:<line>"` with the full path, and
+  the card prints ` at <file>:<line>` relative to the working directory when
+  the file is under it.
 
 **Trace.profile(group_by="source_line") / ProfileReport.group_by** — *unstable — no deprecation shim owed*
 : `group_by="source_line"` folds the op rows of `trace.profile()` into one
