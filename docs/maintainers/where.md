@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1439 modules, 647496 lines, 0 modules without a docstring.
+83 packages, 1439 modules, 647291 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 33031 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32847 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1254 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25254 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38203 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38197 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10636 |
@@ -34,7 +34,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._registry` | Private registry kernel package (architecture ; never public API). | 3 | 549 |
 | `torchlens._runnable` | Frozen type contracts for sparse runnable ''.tlspec'' artifacts. | 19 | 14908 |
 | `torchlens._selection` | Selection: naming sites and resolving them on a trace. | 20 | 10329 |
-| `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7089 |
+| `torchlens._semantic` | Semantic facet views for TorchLens records. | 12 | 7083 |
 | `torchlens._semantic.recipes` | Built-in TorchLens semantic facet recipes. | 9 | 2937 |
 | `torchlens._snoop` | Live narration for TorchLens captures (the torchsnooper niche, better). | 10 | 2141 |
 | `torchlens._trace_core` | Private per-trace semantic store substrate (trace_core_design.md). | 13 | 4188 |
@@ -72,7 +72,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.examples` | Example-loading namespace for small TorchLens artifacts. | 1 | 84 |
 | `torchlens.experiment` | torchlens.experiment: multi-run experiments as first-class objects. | 5 | 2043 |
 | `torchlens.experimental` | Experimental TorchLens APIs with unstable naming and behavior. | 2 | 373 |
-| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 977 |
+| `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5524 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
 | `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 75 | 36196 |
@@ -93,13 +93,13 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
 | `torchlens.validation` | Validation subpackage for saved activations, backward capture, and invariants. | 68 | 30855 |
-| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4557 |
+| `torchlens.viz` | Visualization convenience namespace for TorchLens. | 9 | 4553 |
 
 ## Modules by package
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (74 modules, 33031 lines)
+TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32847 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -165,7 +165,7 @@ TorchLens - extract outs and metadata from PyTorch models. (74 modules, 33031 li
 | `_transport` | Device/layout-aware host transport for tensor digest and codec paths. | 98 |
 | `_user_funcs` | Public API entry points for TorchLens. | 595 |
 | `_user_funcs_guards` | Entry-time refusals shared by the public ''trace'' door. | 85 |
-| `_user_public_impls` | (syntax error at line 1839) | 1839 |
+| `_user_public_impls` | Private implementations for public user-facing utility commands. | 1655 |
 | `_validation_argument_references` | Parameter arguments that forward validation's own capture keeps by reference. | 447 |
 | `_validation_state_snapshot` | Restore snapshots and copy-failure reporting for forward validation. | 401 |
 | `dataset_extraction` | Batched dataset extraction with a self-describing, resumable disk artifact. | 788 |
@@ -288,7 +288,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38203 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38197 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -363,7 +363,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38203 
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_repr` | Value-record line/card renderers (lovely memo item 6). | 571 |
-| `aten_op` | (syntax error at line 95) | 206 |
+| `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 200 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 372 |
 | `buffer` | Persistent buffer entities and dict-like accessors. | 486 |
@@ -719,7 +719,7 @@ Selection: naming sites and resolving them on a trace. (20 modules, 10329 lines)
 
 ### `torchlens._semantic`
 
-Semantic facet views for TorchLens records. (12 modules, 7089 lines)
+Semantic facet views for TorchLens records. (12 modules, 7083 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -730,7 +730,7 @@ Semantic facet views for TorchLens records. (12 modules, 7089 lines)
 | `_norm_reconstruction` | Shared, validated norm linearization record (mikit , build item 3). | 358 |
 | `_state_guard` | Model-state and global-RNG guard shared by the facet patching helpers. | 196 |
 | `coverage` | Facet-coverage reporting for the recipe-maintenance pipeline. | 225 |
-| `facets` | (syntax error at line 1659) | 2158 |
+| `facets` | Derived semantic facet views for TorchLens records. | 2152 |
 | `logit_lens` | Logit-lens appliance over semantic facets. | 1433 |
 | `patching` | Prebuilt activation and attribution patching helpers for facets. | 1104 |
 | `reconstruction` | Read-only reconstruction helpers for semantic facets. | 661 |
@@ -1568,12 +1568,12 @@ Experimental TorchLens APIs with unstable naming and behavior. (2 modules, 373 l
 
 ### `torchlens.experimental.dagua`
 
-Experimental Dagua rendering bridge exports. (3 modules, 977 lines)
+Experimental Dagua rendering bridge exports. (3 modules, 972 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Experimental Dagua rendering bridge exports. | 17 |
-| `_bridge` | (syntax error at line 874) | 893 |
+| `_bridge` | Experimental Dagua-backed visualization bridge for TorchLens Trace objects. | 888 |
 | `_clusters` | Module cluster boxes for the experimental Dagua bridge. | 67 |
 
 ### `torchlens.export`
@@ -2103,12 +2103,12 @@ Validation subpackage for saved activations, backward capture, and invariants. (
 
 ### `torchlens.viz`
 
-Visualization convenience namespace for TorchLens. (9 modules, 4557 lines)
+Visualization convenience namespace for TorchLens. (9 modules, 4553 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
 | `__init__` | Visualization convenience namespace for TorchLens. | 158 |
-| `_drawing` | ''tl.viz.Drawing'': the result of every TorchLens picture call. | 392 |
+| `_drawing` | ''tl.viz.Drawing'': the result of every TorchLens picture call. | 388 |
 | `_heatmap_axes` | Heatmap axis-label layout: margins, overlap selection, honest omission. | 698 |
 | `_node_visualizers` | Node visualizer factories for ''trace.draw(node_spec_fn=...)'' (''torchlens.viz.nodes''). | 378 |
 | `_tensor_display` | Minimal tensor display helpers for ''Layer.show'' and ''Op.show''. | 274 |
