@@ -7178,6 +7178,22 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "params",
+  "file": "torchlens/bundle/_relation_grades.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/bundle/_relations.py",
   "has_default": false,
   "sites": 22,
