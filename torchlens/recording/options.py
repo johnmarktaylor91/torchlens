@@ -377,6 +377,22 @@ def _validate_resolved_recording_values(values: Mapping[str, Any]) -> None:
             remedy="pass save_raw_activations=True or False",
             argument="save_raw_activations",
         )
+    _validate_resolved_grad_values(values, save_grads, grad_transform)
+
+
+def _validate_resolved_grad_values(
+    values: Mapping[str, Any], save_grads: Any, grad_transform: Any
+) -> None:
+    """Validate resolved gradient payload policies and boolean storage flags.
+
+    Parameters
+    ----------
+    values
+        Resolved recording settings containing the boolean storage flags.
+    save_grads, grad_transform
+        Already-read gradient settings, validated after forward payload policies.
+    """
+
     if (
         save_grads is not None
         and not isinstance(save_grads, (bool, CaptureSpec))

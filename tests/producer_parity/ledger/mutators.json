@@ -13,7 +13,7 @@
   "torchlens/backends/torch/model_prep.py": 2
  },
  "op_events_inplace_writes": {
-  "torchlens/recording/types.py": 1
+  "torchlens/recording/_types_ancestry.py": 1
  },
  "replace_op_event_callers": {}
 }
