@@ -3739,3 +3739,51 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: e4426118bb468a7acee6e79d963b9db12e77084d (dirty)
 recorded: 2026-11-02T09:23:00.304908+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: public ATen op recording merged with train 1926c4d4c
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 737f2976bbcbeac9112c626fcb76a8778e1234d7 (dirty)
+recorded: 2026-11-02T11:32:22.293334+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: public ATen op recording merged with train 1926c4d4c
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 737f2976bbcbeac9112c626fcb76a8778e1234d7 (dirty)
+recorded: 2026-11-02T11:32:28.763167+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: public ATen operation recording merged with the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cc67637da444ba85c164a7dedc0e78cccf7af3f6 (dirty)
+recorded: 2026-11-03T01:43:44.491866+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: public ATen operation recording merged with the train
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: cc67637da444ba85c164a7dedc0e78cccf7af3f6 (dirty)
+recorded: 2026-11-03T01:43:50.612508+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: ATen accessors re-expressed on the folded Trace
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 37dfd968e30a6b9d62cca3f2723018d307f1c473 (dirty)
+recorded: 2026-11-03T02:24:36.940674+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: aten-public: ATen accessors re-expressed on the folded Trace
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 37dfd968e30a6b9d62cca3f2723018d307f1c473 (dirty)
+recorded: 2026-11-03T02:24:43.171703+00:00

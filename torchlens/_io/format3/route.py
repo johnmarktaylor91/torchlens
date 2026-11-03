@@ -7,7 +7,7 @@ reader, so the loader's layering (largest cycle, in-function imports) is unchang
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Final, cast
+from typing import TYPE_CHECKING, Any, Final, Literal, cast
 
 import torch
 
@@ -43,21 +43,26 @@ def load_format3(
     map_location: str | torch.device,
     materialize_nested: bool,
     payload_hints: PayloadLoadHints | None,
+    *,
+    unknown_relations: Literal["opaque", "refuse"] = "opaque",
 ) -> Trace | Bundle | InterventionSpec:
-    """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names."""
+    """Dispatch a 3.0 artifact to the format3 reader door its manifest ``kind`` names
+    (``unknown_relations`` reaches the bundle door only)."""
 
     try:
         kind = reader.read_manifest(bundle_path)["kind"]
         if kind == "intervention":
             return cast("InterventionSpec", reader.load_intervention_recipe(bundle_path))
+        options: dict[str, Any] = {
+            "lazy": lazy,
+            "map_location": map_location,
+            "materialize_nested": materialize_nested,
+            "payload_hints": payload_hints,
+        }
+        if kind == "bundle":
+            options["unknown_relations"] = unknown_relations
         door = reader.load_bundle if kind == "bundle" else reader.load_trace
-        loaded = door(
-            bundle_path,
-            lazy=lazy,
-            map_location=map_location,
-            materialize_nested=materialize_nested,
-            payload_hints=payload_hints,
-        )
+        loaded = door(bundle_path, **options)
     except RecursionError as exc:
         # A hostile record graph nested deeply enough to blow the C stack during
         # rehydration surfaces typed, never as a raw RecursionError.

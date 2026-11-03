@@ -108,10 +108,12 @@ def inputs() -> torch.Tensor:
     return torch.randn(2, 4, generator=torch.Generator().manual_seed(1))
 
 
-def _save(model: _Toy, inputs: torch.Tensor, spec: Any, root: Path) -> Saved:
+def _save(
+    model: _Toy, inputs: torch.Tensor, spec: Any, root: Path, *, level: str = "portable"
+) -> Saved:
     live = tl.trace(model, inputs, intervene=spec)
     with _validator_ledger() as calls:
-        live.save(root, level="portable")
+        live.save(root, level=level)
     return Saved(live, root, frozenset(calls))
 
 
@@ -126,7 +128,9 @@ def builtin_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> I
 
 @pytest.fixture(scope="module")
 def callable_saved(model: _Toy, inputs: torch.Tensor, tmp_path_factory: Any) -> Iterator[Saved]:
-    saved = _save(model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable")
+    saved = _save(
+        model, inputs, _callable_spec(), tmp_path_factory.mktemp("f7") / "callable", level="audit"
+    )
     try:
         yield saved
     finally:
@@ -304,3 +308,54 @@ def test_save_preflight_and_loaded_validators_run_on_both_traces(
     _retamper(forged, "intervention.json", _unknown_edit)
     with pytest.raises(TorchLensError):
         tl.load(forged)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "unknown_recipe_key",
+        "unknown_capture_key",
+        "bad_capture_index",
+        "capture_not_array",
+        "bad_capture_args",
+        "bad_capture_slice",
+    ],
+)
+def test_forged_capture_rule_schema_refuses(
+    builtin_saved: Saved, tmp_path: Path, fault: str
+) -> None:
+    """Original predicates have a closed schema and cannot bypass the label-restage guard."""
+
+    root = tmp_path / "forged_capture"
+    builtin_saved.live.save(root, level="portable")
+
+    def forge(recipe: dict[str, Any]) -> None:
+        assert recipe["capture_rules"]
+        if fault == "unknown_recipe_key":
+            recipe["capture_rules_unknown"] = []
+        elif fault == "unknown_capture_key":
+            recipe["capture_rules"][0]["unknown"] = True
+        elif fault == "bad_capture_index":
+            recipe["capture_rules"][0]["index"] = True
+        elif fault == "bad_capture_args":
+            recipe["capture_rules"][0]["edit"]["args"] = 1
+        elif fault == "bad_capture_slice":
+            recipe["capture_rules"][0]["selector"]["slice_spec"] = {"unknown": 1}
+        else:
+            recipe["capture_rules"] = {}
+
+    _retamper(root, "intervention.json", forge)
+    with pytest.raises(TorchLensError) as caught:
+        tl.load(root)
+    assert _error_code(caught.value) == "manifest_schema_invalid"
+
+
+def test_callable_edit_refuses_a_portable_trace_save(
+    model: _Toy, inputs: torch.Tensor, tmp_path: Path
+) -> None:
+    """The portable save door refuses user code; audit saves retain the disclosed placeholder."""
+
+    live = tl.trace(model, inputs, intervene=_callable_spec())
+    with pytest.raises(TorchLensError) as caught:
+        live.save(tmp_path / "portable_callable", level="portable")
+    assert _error_code(caught.value) == "intervention_spec_not_portable"

@@ -141,7 +141,7 @@ def test_local_sha256_matches_the_io_authority(clean: Path) -> None:
     from torchlens._utils.hashing import sha256_file
     from torchlens.agent._artifacts import _sha256_of_file
 
-    target = clean / "metadata.pkl"
+    target = clean / "manifest.json"
     assert _sha256_of_file(target) == sha256_file(target)
 
 

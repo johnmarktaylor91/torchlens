@@ -315,7 +315,7 @@ releases; keep the 2.x family locked unless release work explicitly says otherwi
 | Where is bundle diff rendering? | `torchlens/_visualization/bundle_diff.py` |
 | Where is fastlog storage decided? | `torchlens/recording/_storage_resolver.py` |
 | Where are bridge integrations? | `torchlens/bridge/` |
-| Where is compat reporting? | `torchlens/compat/_report.py` |
+| Where is the environment and model report (`tl.report.doctor`)? | `torchlens/report/_doctor.py` (entry point), `torchlens/report/_environment.py` (environment checks), `torchlens/compat/_report.py` (model checks) |
 | Where are observer taps/spans? | `torchlens/observers.py` |
 | Where are release guards? | `scripts/no_major_parser.py`, `scripts/check_no_breaking_markers.py`, `pyproject.toml` |
 

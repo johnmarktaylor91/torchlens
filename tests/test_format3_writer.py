@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import warnings
 from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
@@ -402,8 +403,7 @@ def _check_blob_layout(root: Path) -> dict[str, list[str]]:
         assert match is not None
         by_codec.setdefault(match.group(1), []).append(int(match.group(2)))
     assert all(sorted(series) == list(range(len(series))) for series in by_codec.values())
-    for blob_id, entry in manifest["tensors"].items():
-        assert entry["key"] in keys_by_chunk[entry["blob"]], blob_id
+    assert "tensors" not in manifest
     referenced = 0
     for payload in _records(root).values():
         for node in _walk_json(payload):
@@ -634,13 +634,37 @@ def test_pruning_retains_complete_orphan_records_or_no_shells(
         assert bool(trace._orphan_logs) is keep_orphans
         if keep_orphans:
             assert all(isinstance(op.label, str) for op in trace._orphan_logs)
-        else:
-            path = tmp_path / "pruned.tlspec"
-            trace.save(path)
-            loaded = tl.load(path)
-            try:
-                assert loaded._orphan_logs == ()
-            finally:
-                loaded.cleanup()
+        path = tmp_path / "orphans.tlspec"
+        trace.save(path)
+        loaded = tl.load(path)
+        try:
+            assert [op.label for op in loaded._orphan_logs] == [
+                op.label for op in trace._orphan_logs
+            ]
+        finally:
+            loaded.cleanup()
+    finally:
+        trace.cleanup()
+
+
+def test_injected_record_rows_have_their_declared_identity(tmp_path: Path) -> None:
+    """Synthetic persisted injection rows carry label as well as their layer label."""
+
+    from tests.test_w051_bind_fixwave import _LOGGED, _MLP, _sae_like, _seeded
+
+    model, value = _seeded(_MLP)
+    spec = tl.when(tl.module("fc1"), _sae_like)
+    with warnings.catch_warnings(record=True) as notices:
+        warnings.simplefilter("always", UserWarning)
+        trace = tl.trace(model, value, intervene=spec, capture=_LOGGED)
+    assert all("fired at zero sites" in str(notice.message) for notice in notices)
+    try:
+        root = tmp_path / "injected.tlspec"
+        trace.save(root, level="audit")
+        columns = _records(root)["op"]["columns"]
+        injected = [index for index, value in enumerate(columns["injection_provenance"]) if value]
+        assert injected
+        assert all(isinstance(columns["label"][index], str) for index in injected)
+        assert all(columns["label"][index] == columns["layer_label"][index] for index in injected)
     finally:
         trace.cleanup()

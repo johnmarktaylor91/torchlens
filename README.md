@@ -509,6 +509,12 @@ print(prof_log.profile().evidence_labels())
 if torch.cuda.is_available():
     nvtx_log = tl.trace(model, torch.randn(1, 3, 64, 64),
                         capture=tl.options.CaptureOptions(emit_nvtx=True))
+
+# ATen level: record the operations each torch call dispatched to (opt-in; the
+# default capture installs no dispatch mode and the accessors refuse typed)
+aten_log = tl.trace(model, torch.randn(1, 3, 64, 64),
+                    capture=tl.options.CaptureOptions(aten_ops=True))
+print([row.operator for row in aten_log.ops[0].aten_ops])
 ```
 
 Dataset-level statistics stream in constant memory -- including *exact*

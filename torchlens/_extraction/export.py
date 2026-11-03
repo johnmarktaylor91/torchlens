@@ -741,5 +741,4 @@ def _contract_source_section(reader: Any, ledger_path: Path) -> dict[str, Any]:
         "stimulus_ids_digest": (manifest.get("signature") or {}).get("stimulus_ids_digest"),
         "n_stimuli": reader.n_stimuli,
         "n_shards": reader.n_shards,
-        "unknown_v1_prefix_semantics": bool(manifest.get("unknown_v1_prefix_semantics", False)),
     }

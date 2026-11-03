@@ -25,11 +25,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch import backward as backward_module
-from torchlens.backends.torch._aten_capture import _activate_aten_recording_for_tests
 from torchlens.report import backward_status
 from torchlens.validation.invariants import check_metadata_invariants
 
 _OPTIONS = tl.options.CaptureOptions(backward_ready=True)
+_ARMED_OPTIONS = tl.options.CaptureOptions(backward_ready=True, aten_ops=True)
 _MATMULS = ("mm", "addmm")
 
 
@@ -42,12 +42,9 @@ def _two_captures(
     first = nn.Linear(4, 3) if first is None else first
     second = nn.Linear(3, 2)
     x1, x2 = torch.randn(5, 4), torch.randn(5, 3)
-    kwargs: dict[str, Any] = {"capture": _OPTIONS, "save_mode": "reference"}
-    if armed:
-        with _activate_aten_recording_for_tests():
-            trace1, trace2 = tl.trace(first, x1, **kwargs), tl.trace(second, x2, **kwargs)
-    else:
-        trace1, trace2 = tl.trace(first, x1, **kwargs), tl.trace(second, x2, **kwargs)
+    capture = _ARMED_OPTIONS if armed else _OPTIONS
+    kwargs: dict[str, Any] = {"capture": capture, "save_mode": "reference"}
+    trace1, trace2 = tl.trace(first, x1, **kwargs), tl.trace(second, x2, **kwargs)
     return trace1, trace2, first, second
 
 
@@ -103,12 +100,11 @@ def test_multi_root_backward_walks_each_root_in_the_capture_it_reaches(entry: st
         y1, y2 = _out(trace1), _out(trace2)
         root1, root2 = y1.sum(), y2.sum()
         graph1, graph2 = _graph_nodes(root1), _graph_nodes(root2)
-        with _activate_aten_recording_for_tests():
-            if entry == "backward":
-                torch.autograd.backward([root1, root2])
-            else:
-                params = [*first.parameters(), *second.parameters()]
-                torch.autograd.grad([root1, root2], params)
+        if entry == "backward":
+            torch.autograd.backward([root1, root2])
+        else:
+            params = [*first.parameters(), *second.parameters()]
+            torch.autograd.grad([root1, root2], params)
         assert set(trace1._grad_fn_logs) == graph1.keys()
         assert set(trace2._grad_fn_logs) == graph2.keys()
         cases = ((trace1, root1, 2 * 5 * 4 * 3), (trace2, root2, 2 * 5 * 3 * 2))
@@ -167,8 +163,7 @@ def test_shared_node_markers_never_outlive_their_node() -> None:
     z = untraced(torch.randn(5, 3)).sum()  # built first: its nodes run after the shared ones
     trace1, trace2, _, _ = _two_captures(armed=True)
     try:
-        with _activate_aten_recording_for_tests():
-            torch.autograd.backward([_out(trace1).sum() + _out(trace2).sum(), z])
+        torch.autograd.backward([_out(trace1).sum() + _out(trace2).sum(), z])
         for trace in (trace1, trace2):
             attribution = _single_pass(trace)
             assert attribution.unattributed_flops == 60
@@ -235,10 +230,9 @@ def test_three_readers_charge_each_capture_its_own_marker() -> None:
 
     trace1, trace2, _, _ = _two_captures(armed=True, first=_Checkpointed())
     try:
-        with _activate_aten_recording_for_tests():
-            y1, y2 = _out(trace1), _out(trace2)
-            y1.sum().backward(retain_graph=True)
-            (y1.sum() + y2.sum()).backward()
+        y1, y2 = _out(trace1), _out(trace2)
+        y1.sum().backward(retain_graph=True)
+        (y1.sum() + y2.sum()).backward()
         shared = {trace1: 2, trace2: 1}
         recorded_any = False
         for trace, pass_index in shared.items():

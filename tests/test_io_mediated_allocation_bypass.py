@@ -68,13 +68,16 @@ import struct
 import warnings
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 import torch
+from _format3_envelope import redigest
 from torch import nn
 
 import torchlens as tl
+from torchlens._io import ArtifactError
 from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io._inline_tensor import rebuild_inline_tensor
 from torchlens._io._safe_unpickle import (
@@ -114,7 +117,7 @@ def _preserve_disclosure_flags() -> Any:
     cross-file failure. Snapshot and restore both flags around every test here.
     """
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     before = (
         bundle_module._NONPERSISTENT_DISCLOSURE_WARNED,
@@ -286,17 +289,22 @@ def test_reconstruct_belt_fires_white_box_and_fails_closed() -> None:
 
 
 def test_reconstruct_gadget_refused_end_to_end_through_tl_load(tmp_path: Path) -> None:
-    """The gadget planted in a REAL artifact's metadata.pkl is refused by ``tl.load``."""
+    """The gadget planted in a real artifact's trace record is refused by ``tl.load``."""
 
     path = tmp_path / "hostile.tlspec"
     tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
-    (path / "metadata.pkl").write_bytes(_reconstruct_pickle("numpy.core.multiarray", _N))
+    (path / "records/trace.json").write_bytes(_reconstruct_pickle("numpy.core.multiarray", _N))
+    redigest(path, "records/trace.json")
 
-    with pytest.raises(Exception) as caught:
-        tl.load(path)
-    assert "mediated allocation" in str(caught.value) or "mediated allocation" in str(
-        caught.value.__cause__
-    )
+    with (
+        patch.object(SafeBundleUnpickler, "load") as native_load,
+        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
+    ):
+        with pytest.raises(ArtifactError) as caught:
+            tl.load(path)
+        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+        native_load.assert_not_called()
+        python_load.assert_not_called()
 
 
 # --------------------------------------------------------------------------- #
@@ -526,12 +534,19 @@ def test_rebuild_amplification_refused_end_to_end_through_tl_load(tmp_path: Path
 
     path = tmp_path / "hostile_rebuild.tlspec"
     tl.trace(nn.Linear(3, 2), torch.ones(2, 3), capture=_CAP).save(path)
-    (path / "metadata.pkl").write_bytes(
+    (path / "records/trace.json").write_bytes(
         _rebuild_amplification_pickle(_embedded_blob(_uint8_typed_storage(), legacy=True), _N)
     )
-    with pytest.raises(Exception) as caught:
-        tl.load(path)
-    assert "_load_from_bytes" in str(caught.value) + str(caught.value.__cause__)
+    redigest(path, "records/trace.json")
+    with (
+        patch.object(SafeBundleUnpickler, "load") as native_load,
+        patch.object(_PurePythonBundleUnpickler, "load") as python_load,
+    ):
+        with pytest.raises(ArtifactError) as caught:
+            tl.load(path)
+        assert caught.value.fields["code"] == "bundle_metadata_integrity_refused"
+        native_load.assert_not_called()
+        python_load.assert_not_called()
 
 
 @pytest.mark.smoke
