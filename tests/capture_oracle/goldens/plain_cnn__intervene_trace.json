@@ -248,6 +248,7 @@
             "fire_results[0].fire_record.func_call_id": "populated",
             "fire_results[0].fire_record.grad_kind": "unknown",
             "fire_results[0].fire_record.replaced": "populated",
+            "fire_results[0].fire_record.sampling": "defaulted_empty",
             "fire_results[0].fire_record.seed": "unknown",
             "fire_results[0].fire_record.signal": "populated",
             "fire_results[0].fire_record.site_label": "populated",
@@ -623,20 +624,20 @@
     "schema_version": 1,
     "tracking": {
       "cuda_peak_memory_median_bytes": null,
-      "python_peak_memory_median_bytes": 521977,
+      "python_peak_memory_median_bytes": 526387,
       "sample_count": 3,
       "torch_version": "2.13.0+cpu",
-      "wall_time_median_ms": 108.11675898730755
+      "wall_time_median_ms": 35.57328192982823
     }
   },
   "sha256_chunks": [
-    "d44430fe",
-    "5ffc2b2e",
-    "f9b51153",
-    "9d98502b",
-    "8b6ac6c7",
-    "1b5fb699",
-    "7474289c",
-    "803814b7"
+    "152df020",
+    "e102c617",
+    "dddda1ee",
+    "f0796ad5",
+    "c816f8dd",
+    "54b8118e",
+    "ef873e32",
+    "95dfbbdf"
   ]
 }
