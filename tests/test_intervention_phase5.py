@@ -191,6 +191,18 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     assert log3.provenance.fingerprint != log1.provenance.fingerprint
 
 
+def test_provenance_fingerprint_equals_public_structural_hash() -> None:
+    """``trace.provenance.fingerprint`` is the address-free hash ``tl.fingerprint.trace`` returns."""
+
+    log = tl.trace(
+        _LinearSplitModel(),
+        torch.randn(2, 3),
+        capture=tl.options.CaptureOptions(replayable=True),
+    )
+    assert log.provenance.fingerprint == tl.fingerprint.trace(log)
+    assert log.provenance.fingerprint == compute_graph_shape_hash(log, include_module_address=False)
+
+
 def test_graph_shape_hash_is_referentially_transparent() -> None:
     """Computing graph hashes repeatedly does not mutate layer metadata."""
 

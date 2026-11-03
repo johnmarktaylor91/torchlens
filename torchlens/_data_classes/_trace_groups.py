@@ -565,7 +565,11 @@ class TraceProvenance(_TraceGroup):
 
     @property
     def fingerprint(self) -> Any:
-        """hash of captured topology + shape-relevant structure."""
+        """Address-free hash of captured topology and shape-relevant structure.
+
+        Equal to ``tl.fingerprint.trace(trace)``: module addresses do not
+        contribute, so renaming a submodule leaves the fingerprint unchanged.
+        """
 
         return self._trace._provenance_fingerprint
 
