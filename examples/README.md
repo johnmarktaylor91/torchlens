@@ -27,6 +27,7 @@ Each runs with `python examples/<script>.py`.
 | [`capture_unification_selective.py`](capture_unification_selective.py) | Minimal examples of the unified capture path with selective saving. |
 | [`debug_utilities.py`](debug_utilities.py) | The trace debugging helpers. |
 | [`jacobian_lens_demo.py`](jacobian_lens_demo.py) | Fitting a Jacobian lens for GPT-2 small from public TorchLens calls and reading it out (downloads GPT-2 small). |
+| [`quick/paris_vs_rome.py`](quick/paris_vs_rome.py) | Patching each GPT-2 small attention head from a France prompt into an Italy prompt to find the heads that make the model answer " Paris" (downloads GPT-2 small). |
 | [`runnable_tlspec.py`](runnable_tlspec.py) | Saving, loading and executing a sparse runnable `.tlspec` artifact. |
 | [`semantic_io_legibility_demo.py`](semantic_io_legibility_demo.py) | Semantic input and output labels on a tiny deterministic model, with no downloads. |
 | [`treescope_cards_gallery.py`](treescope_cards_gallery.py) | Rendering the treescope card fragments and offline reports for the reachable fixtures into one folder with an index page. |
