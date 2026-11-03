@@ -410,7 +410,15 @@ def _build_output_meta(
 
 
 class DecodeStyleUnknownError(InvalidArgumentError):
-    """``decode_output(style=...)`` names a style no built-in or registered detector resolves."""
+    """``decode_output(style=...)`` names a style no built-in or registered detector resolves.
+
+    Examples
+    --------
+    >>> issubclass(DecodeStyleUnknownError, tl.errors.InvalidArgumentError)
+    True
+    >>> issubclass(DecodeStyleUnknownError, tl.errors.TorchLensError)
+    True
+    """
 
 
 def refuse_unknown_decode_style(style: Any) -> NoReturn:
