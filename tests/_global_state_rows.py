@@ -668,6 +668,14 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # Post-T52 census sweep (F27): registries other merged lanes added
         # without classifying -- explicit register/list surfaces.
         ("torchlens/_visualization/theme_registry.py", "_REGISTRY"),
+        # Monitor warm-up registrations: higher layers enroll at import the lazy
+        # imports a first capture would otherwise trigger inside a monitor window;
+        # append-only for the process, run before every window arms.
+        ("torchlens/_utils/rng/monitor_state.py", "_WARMUPS"),
+        # Doctor capability-snapshot provider: report/_doctor.py registers the
+        # torch-aware snapshot at import; the basis module falls back to the torch
+        # compat snapshot when nothing is registered.
+        ("torchlens/_doctor_types.py", "_CAPABILITY_SNAPSHOT_PROVIDER"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "_FROZEN_POLICIES"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "FROZEN_POLICY_NAMES"),
         ("torchlens/backends/registry.py", "_REGISTRY"),
