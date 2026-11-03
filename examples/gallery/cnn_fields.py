@@ -10,8 +10,10 @@ the gradient-support equality in this entry is an additional empirical test.
 from __future__ import annotations
 
 import argparse
+import json
 import time
 import traceback
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -85,26 +87,44 @@ def draw_fields(
     plt.close(fig)
 
 
-def measure(
-    model: nn.Module, x: torch.Tensor, layer: str, channel: int, out: Path
-) -> gallery.Entry:
-    """Measure the fixed oracles and controls and reload the saved trace.
+def record_check(
+    entry: gallery.Entry, out: Path, kind: str, name: str, check: gallery.Check
+) -> None:
+    """Persist and print a measurement immediately, retaining it on later failure.
 
     Parameters
     ----------
-    model, x, layer, channel, out:
-        Pinned model/input, target, channel and artifact directory.
+    entry, out, kind, name, check:
+        Mutable run record, output directory, check group, key and fixed-rule outcome.
+    """
+    getattr(entry, kind)[name] = check
+    print(f"{kind.upper()} {name}: {json.dumps(asdict(check), sort_keys=True)}", flush=True)
+    (out / "cnn_fields.json").write_text(json.dumps(asdict(entry), indent=1, sort_keys=True))
+
+
+def measure(
+    model: nn.Module, x: torch.Tensor, layer: str, channel: int, out: Path, entry: gallery.Entry
+) -> gallery.Entry:
+    """Measure fixed rules and replay a saved-input edit through a fresh model run.
+
+    Parameters
+    ----------
+    model, x, layer, channel, out, entry:
+        Pinned model/input, target, output directory and persistent measurement record.
 
     Returns
     -------
     gallery.Entry
-        Complete measurement record.
+        Complete measurement record, including portable rerun evidence.
     """
     trace = tl.trace(model, x, save="all", capture=tl.options.CaptureOptions(replayable=True))
     target = trace[layer]
     source = trace.input_ops[0]
     h, w = target.out.shape[-2:]
     unit = (0, channel, h // 2, w // 2)
+    entry.pinned.update(
+        {"shape": list(x.shape), "mode": "eval", "dtype": "float32", "unit": list(unit)}
+    )
     box = target.receptive_field.at(unit[-2:])
     inside = torch.zeros_like(x, dtype=torch.bool)
     inside[box.slices()] = True
@@ -115,45 +135,12 @@ def measure(
     expected = torch.zeros((SIDE, SIDE), dtype=torch.bool)
     expected[lo:hi, lo:hi] = True
     spatial = inside.any(dim=(0, 1))
-    empirical = gradient_mask(model, x, layer, unit)
-    baseline = float(target.out[unit])
-    outside_fork = trace.fork()
-    outside_fork.do(tl.units(source.label, outside), tl.zero_ablate())
-    outside_delta = abs(float(outside_fork[layer].out[unit]) - baseline)
-    inside_fork = trace.fork()
-    inside_fork.do(tl.units(source.label, inside), tl.zero_ablate())
-    inside_delta = abs(float(inside_fork[layer].out[unit]) - baseline)
-    patch = torch.zeros_like(inside)
-    patch[:, :, SIDE // 2 : SIDE // 2 + PATCH, SIDE // 2 : SIDE // 2 + PATCH] = True
-    projected = source.projective_field.of(patch, within=layer)
-    projected_mask = next(iter(projected)).mask.any(dim=(0, 1))
-    plain_changed = feature(model, x.masked_fill(patch, 0), layer).ne(target.out).any(dim=(0, 1))
-    outside_patch = torch.zeros_like(inside)
-    outside_patch[:, :, :PATCH, :PATCH] = True
-    is_outside = not bool((outside_patch & inside).any())
-    control_fork = trace.fork()
-    control_fork.do(tl.units(source.label, outside_patch), tl.zero_ablate())
-    control_delta = abs(float(control_fork[layer].out[unit]) - baseline)
-    serial = analytic(model, layer, serial=True)
-    serial_lo = max(0, serial[2] + unit[-1] * serial[1] - serial[0] // 2)
-    serial_hi = min(SIDE, serial[2] + unit[-1] * serial[1] + serial[0] // 2 + 1)
-    entry = gallery.Entry(
-        "cnn_fields",
-        CLAIM,
-        {
-            "seed": SEED,
-            "shape": list(x.shape),
-            "arch": "resnet18",
-            "weights": "IMAGENET1K_V1",
-            "mode": "eval",
-            "dtype": "float32",
-            "layer": layer,
-            "channel": channel,
-            "unit": list(unit),
-        },
-    )
-    entry.oracles = {
-        "analytic_box": gallery.Check(
+    record_check(
+        entry,
+        out,
+        "oracles",
+        "analytic_box",
+        gallery.Check(
             "exact clipped box and exact status",
             {
                 "expected": [lo, hi],
@@ -162,48 +149,108 @@ def measure(
             },
             box.exact and torch.equal(spatial, expected),
         ),
-        "gradient_support": gallery.Check(
-            f"IoU >= {IOU_MIN}", iou(spatial, empirical), iou(spatial, empirical) >= IOU_MIN
-        ),
-        "outside_ablation": gallery.Check(
+    )
+    empirical = gradient_mask(model, x, layer, unit)
+    overlap = iou(spatial, empirical)
+    record_check(
+        entry,
+        out,
+        "oracles",
+        "gradient_support",
+        gallery.Check(f"IoU >= {IOU_MIN}", overlap, overlap >= IOU_MIN),
+    )
+    baseline = float(target.out[unit])
+    outside_fork = trace.fork()
+    outside_fork.do(tl.units(source.label, outside), tl.zero_ablate())
+    outside_delta = abs(float(outside_fork[layer].out[unit]) - baseline)
+    record_check(
+        entry,
+        out,
+        "oracles",
+        "outside_ablation",
+        gallery.Check(
             "nonempty outside mask; unit delta == 0 float32",
             {"delta": outside_delta, "pixels": int(outside.any(dim=(0, 1)).sum())},
             bool(outside.any()) and outside_delta == OUTSIDE_DELTA,
         ),
-        "inside_ablation": gallery.Check("unit delta > 0", inside_delta, inside_delta > 0),
-        "projective_support": gallery.Check(
-            f"IoU >= {IOU_MIN}",
-            iou(projected_mask, plain_changed),
-            iou(projected_mask, plain_changed) >= IOU_MIN,
-        ),
-    }
-    entry.controls = {
-        "serial_module_chain": gallery.Check(
-            "registered-leaf chain gives a different clipped box",
-            {"serial": [serial_lo, serial_hi], "dag": [lo, hi]},
-            (serial_lo, serial_hi) != (lo, hi),
-        ),
-        "same_size_outside_patch": gallery.Check(
+    )
+    inside_fork = trace.fork()
+    inside_fork.do(tl.units(source.label, inside), tl.zero_ablate())
+    inside_delta = abs(float(inside_fork[layer].out[unit]) - baseline)
+    record_check(
+        entry,
+        out,
+        "oracles",
+        "inside_ablation",
+        gallery.Check("unit delta > 0", inside_delta, inside_delta > 0),
+    )
+    patch = torch.zeros_like(inside)
+    patch[:, :, SIDE // 2 : SIDE // 2 + PATCH, SIDE // 2 : SIDE // 2 + PATCH] = True
+    projected = source.projective_field.of(patch, within=layer)
+    projected_mask = next(iter(projected)).mask.any(dim=(0, 1))
+    plain_changed = feature(model, x.masked_fill(patch, 0), layer).ne(target.out).any(dim=(0, 1))
+    overlap = iou(projected_mask, plain_changed)
+    record_check(
+        entry,
+        out,
+        "oracles",
+        "projective_support",
+        gallery.Check(f"IoU >= {IOU_MIN}", overlap, overlap >= IOU_MIN),
+    )
+    outside_patch = torch.zeros_like(inside)
+    outside_patch[:, :, :PATCH, :PATCH] = True
+    is_outside = not bool((outside_patch & inside).any())
+    control_fork = trace.fork()
+    control_fork.do(tl.units(source.label, outside_patch), tl.zero_ablate())
+    control_delta = abs(float(control_fork[layer].out[unit]) - baseline)
+    record_check(
+        entry,
+        out,
+        "controls",
+        "same_size_outside_patch",
+        gallery.Check(
             "4x4 corner patch is outside; unit delta == 0",
             {"outside": is_outside, "delta": control_delta},
             is_outside and control_delta == 0,
         ),
-    }
+    )
+    serial = analytic(model, layer, serial=True)
+    serial_lo = max(0, serial[2] + unit[-1] * serial[1] - serial[0] // 2)
+    serial_hi = min(SIDE, serial[2] + unit[-1] * serial[1] + serial[0] // 2 + 1)
+    record_check(
+        entry,
+        out,
+        "controls",
+        "serial_module_chain",
+        gallery.Check(
+            "registered-leaf chain gives a different clipped box",
+            {"serial": [serial_lo, serial_hi], "dag": [lo, hi]},
+            (serial_lo, serial_hi) != (lo, hi),
+        ),
+    )
     draw_fields(x, spatial, empirical, projected_mask, plain_changed, out)
     trace.annotations["gallery"] = {"layer": layer, "unit": list(unit), "baseline": baseline}
     artifact = out / "cnn_fields.tlspec"
     trace.save(artifact, level="portable", overwrite=True)
 
     def replay(loaded: Any) -> dict[str, Any]:
-        """Replay the outside-field intervention on the reloaded trace."""
+        """Apply the saved-input edit without propagation, then rerun the model."""
         fork = loaded.fork()
-        fork.do(tl.units(source.label, outside), tl.zero_ablate())
+        fork.do(
+            tl.units(source.label, outside),
+            tl.zero_ablate(),
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
+        # Input-leaf edits use set_only; rerun consumes the edited saved input.
+        fork.run(model, fork.input_ops[0].out)
         delta = abs(float(fork[layer].out[unit]) - baseline)
-        return {"matched": delta == OUTSIDE_DELTA, "outside_unit_delta": delta}
+        return {
+            "matched": delta == OUTSIDE_DELTA and delta == outside_delta,
+            "outside_unit_delta": delta,
+            "in_memory_delta": outside_delta,
+        }
 
     entry.artifact = gallery.artifact_record(artifact, replay)
-    entry.verbs = ("capture", "select", "read", "do", "compare", "save")
-    entry.architectures = ("ResNet-18",)
     return entry
 
 
@@ -226,21 +273,23 @@ def main() -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     model = models.resnet18(weights=models.ResNet18_Weights.IMAGENET1K_V1).eval()
     x = torch.randn(1, 3, SIDE, SIDE)
+    entry = gallery.Entry(
+        "cnn_fields",
+        CLAIM,
+        {
+            "seed": SEED,
+            "arch": args.arch,
+            "weights": "IMAGENET1K_V1",
+            "layer": args.layer,
+            "channel": args.channel,
+        },
+    )
+    entry.verbs = ("capture", "select", "read", "do", "compare", "save")
+    entry.architectures = ("ResNet-18",)
     try:
-        entry = measure(model, x, args.layer, args.channel, args.out)
+        entry = measure(model, x, args.layer, args.channel, args.out, entry)
     except Exception as exc:
         traceback.print_exc()
-        entry = gallery.Entry(
-            "cnn_fields",
-            CLAIM,
-            {
-                "seed": SEED,
-                "arch": args.arch,
-                "weights": "IMAGENET1K_V1",
-                "layer": args.layer,
-                "channel": args.channel,
-            },
-        )
         entry.oracles["execution"] = gallery.Check(
             "measurement completes without a capture gap",
             {"type": type(exc).__name__, "message": str(exc)},
