@@ -22,6 +22,7 @@ spellings through owner names the head side retired (``LayerAccessor.head`` once
 from __future__ import annotations
 
 import dataclasses
+import re
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -222,14 +223,63 @@ def _present(corpus: Corpus, place: str, row: dict[str, Any]) -> bool:
     Returns
     -------
     bool
-        True when any qualified or contextual spelling, or an emphasised leaf, appears.
+        True when any qualified spelling appears, or a contextual spelling or emphasised
+        leaf appears where it can mean this row: for a member or record key, in a
+        paragraph (or under a heading) that also names the owner; for other kinds,
+        anywhere.
     """
 
     patterns = spelling.spellings(row)
     strengths = (spelling.QUALIFIED, spelling.CONTEXTUAL, spelling.LEAF)
-    return any(
-        spelling.find(text, patterns, strengths, prose=True) for _, text in corpus.files[place]
-    )
+    owners = _owners(row) if row["kind"] == "member" else set()
+    if row["kind"] == "receipt":
+        owners = {str(row.get("owner", ""))} - {""}
+    for _, text in corpus.files[place]:
+        hits = spelling.find(text, patterns, strengths, prose=True)
+        if not hits:
+            continue
+        if not owners or any(strength == spelling.QUALIFIED for *_, strength in hits):
+            return True
+        lines = text.splitlines()
+        if any(_owner_nearby(lines, number, owners) for number, *_ in hits):
+            return True
+    return False
+
+
+def _owner_nearby(lines: list[str], number: int, owners: set[str]) -> bool:
+    """Return whether an owner name is spelled in the hit's paragraph or its heading.
+
+    A bare leaf such as ``differentiable`` is also a keyword of unrelated functions; the
+    glossary line that documents ``InterventionOptions.differentiable`` names the class
+    in the same entry (a blank-line-delimited paragraph) or in the heading above it.
+
+    Parameters
+    ----------
+    lines
+        The file's lines.
+    number
+        1-based line of the hit.
+    owners
+        Owner spellings (class names, or the record attribute).
+
+    Returns
+    -------
+    bool
+        True when any owner appears as a word in that span.
+    """
+
+    start = number - 1
+    while start > 0 and lines[start - 1].strip():
+        start -= 1
+    end = number
+    while end < len(lines) and lines[end].strip():
+        end += 1
+    heading = start - 1
+    while heading >= 0 and not lines[heading].startswith("#"):
+        heading -= 1
+    span = lines[start:end] + ([lines[heading]] if heading >= 0 else [])
+    pattern = re.compile(r"(?<!\w)(?:" + "|".join(map(re.escape, sorted(owners))) + r")(?!\w)")
+    return any(pattern.search(line) for line in span)
 
 
 def _stale(
