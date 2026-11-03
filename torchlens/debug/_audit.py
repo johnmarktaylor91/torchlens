@@ -61,6 +61,14 @@ class HealthReport(Report):
         Names of diagnostics that ran.
     skipped:
         ``(check, reason)`` entries for diagnostics not supported by the capture.
+
+    Examples
+    --------
+    >>> report = tl.trace(model, x).audit()
+    >>> isinstance(report, HealthReport), "find_nan" in report.checks_run
+    (True, True)
+    >>> ("compare", "requires a second trace") in report.skipped
+    True
     """
 
     findings: tuple[AuditFinding, ...]

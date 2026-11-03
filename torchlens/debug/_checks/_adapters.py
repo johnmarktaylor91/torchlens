@@ -34,6 +34,17 @@ class OptimizerFacts:
 
     ``is_known`` gates every derived band: an unknown optimizer yields
     ``band_reason`` instead of a guessed decay/momentum model.
+
+    Examples
+    --------
+    >>> facts = tl.debug.OptimizerFacts(
+    ...     kind="SGD", is_known=True, decoupled_decay=False, band_reason=None,
+    ...     param_group_facts=({"lr": 0.1, "n_params": 4},),
+    ... )
+    >>> facts.group_fact(0, "lr")
+    0.1
+    >>> facts.group_fact(5, "lr") is None
+    True
     """
 
     kind: str
