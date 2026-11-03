@@ -1120,8 +1120,12 @@ VERSION_AUTHORITY_PINS: dict[str, int] = {
     # the privatised Trace members and the floor raised to v11 (older artifacts
     # re-save from source; tests/test_rehydration_floor.py). Contract of record:
     # torchlens/schemas/writer_contract_v11.json. MERGED_TLSPEC_VERSION did not move.
-    "TLSPEC_VERSION": 11,
-    "MIN_TLSPEC_VERSION": 11,
+    # v12: the 3.0 columnar-record write — Op.is_constant (stamped by the shared
+    # constants rule) and Op.arg_expressions persist on the op record, and the floor
+    # moves with the contract (tests/test_rehydration_floor.py). Contract of record:
+    # torchlens/schemas/writer_contract_v12.json. MERGED_TLSPEC_VERSION did not move.
+    "TLSPEC_VERSION": 12,
+    "MIN_TLSPEC_VERSION": 12,
     "MERGED_TLSPEC_VERSION": 7,
 }
 

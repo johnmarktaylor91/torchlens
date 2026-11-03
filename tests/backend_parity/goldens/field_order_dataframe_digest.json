@@ -112,6 +112,7 @@
       "min_distance_to_output",
       "max_distance_to_output",
       "is_buffer",
+      "is_constant",
       "address",
       "buffer_pass",
       "buffer_source",
@@ -537,6 +538,7 @@
       "min_distance_to_output",
       "max_distance_to_output",
       "is_buffer",
+      "is_constant",
       "address",
       "buffer_pass",
       "buffer_source",
@@ -596,6 +598,7 @@
       "activation_memory",
       "address",
       "annotations",
+      "arg_expressions",
       "arg_names",
       "atomic_module_call",
       "autograd_memory",
@@ -672,6 +675,7 @@
       "io_role",
       "is_atomic_module",
       "is_buffer",
+      "is_constant",
       "is_edited",
       "is_final_output",
       "is_inplace",
@@ -1058,13 +1062,13 @@
     ]
   },
   "sha256_chunks": [
-    "42a22f71",
-    "cf81ab14",
-    "07623f16",
-    "114de74d",
-    "ae9e3d75",
-    "2ba6b53f",
-    "746861b2",
-    "60c18e87"
+    "4467e71e",
+    "31c14348",
+    "6ea9c949",
+    "e6b46e62",
+    "df67e509",
+    "0de5f496",
+    "ce35e3f8",
+    "d2dd6ac2"
   ]
 }
