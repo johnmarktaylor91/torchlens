@@ -1384,24 +1384,6 @@ class InterventionOptions:
 
         return {field_name: getattr(self, field_name) for field_name in _INTERVENTION_FIELDS}
 
-    def is_field_explicit(self, field_name: str) -> bool:
-        """Return whether a field was explicitly supplied by the caller."""
-
-        return _field_is_explicit(self, field_name)
-
-    @classmethod
-    def from_values(
-        cls,
-        values: Mapping[str, Any],
-        specified_fields: frozenset[str],
-    ) -> InterventionOptions:
-        """Build an instance from already-resolved field values."""
-
-        instance = object.__new__(cls)
-        _set_frozen_fields(instance, _INTERVENTION_FIELDS, values)
-        object.__setattr__(instance, "_specified_fields", specified_fields)
-        return instance
-
 
 @dataclass(frozen=True, init=False)
 class StorageOptions:
