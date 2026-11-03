@@ -136,7 +136,7 @@ If your generation loop is your own code rather than `generate()`, call the bind
 step (`bound(ids)`); the binding is reused across steps and the input may grow.
 
 To steer only on the steps where a condition holds, with a per-token audit of when the steer was
-applied, see the [conditional steering recipe](../recipes/conditional_steering.md).
+applied, see the [conditional steering recipe](../field-guide/conditional_steering.md).
 
 A bound `generate` never traces, so it records nothing beyond the fire counts in
 `bound.last_report`. To record what generation computed, capture the whole run

@@ -1,0 +1,7 @@
+# TorchLens
+
+> A package for extracting activations from PyTorch models and saving portable bundles
+
+## Field guide
+
+- [Draw a reproducible subsample before extracting features](https://johnmarktaylor91.github.io/torchlens/2.x/field-guide/seeded_subsample/): Draw the subsample yourself with a seeded generator and pass the original ids, so the artifact names the items it holds.
