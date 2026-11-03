@@ -14,6 +14,7 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 from ... import _state
 from ..._errors import CaptureGapWarning
 from ..._utils._torch_symbols import torch_attr
+from ._state_bytes import _whole_storage_uint8
 from .escape_detection import (
     ExpectedOriginalToken,
 )
@@ -596,7 +597,6 @@ from ._completeness_boundaries import (  # noqa: E402
 from ._completeness_dispatch import (  # noqa: E402
     _event_is_capture_accounted,
     _finalize_runnable_ledger,
-    _whole_storage_uint8,
 )
 from ._completeness_patches import (  # noqa: E402
     _observe_invisible_host_escapes,

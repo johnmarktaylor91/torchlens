@@ -27,7 +27,7 @@ from .._capture_attr_observer import (
 )
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._storage_bindings import rebind_if_moved, record_storage_binding
-from .._utils.tensor_utils import sparse_component_tensors
+from .._utils._sparse_parts import sparse_component_tensors
 from .state import (
     LiveDeclaredStateSnapshot,
     declared_slot_unchanged,

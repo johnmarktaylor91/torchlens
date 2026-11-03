@@ -21,14 +21,13 @@ from torch import nn
 import torchlens as tl
 from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
-from torchlens._utils.tensor_utils import sparse_component_tensors, sparse_with_values
-from torchlens.backends.torch.buffer_writes import _whole_storage_uint8
-from torchlens.backends.torch.rescue import _state_bytes_equal
+from torchlens._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from torchlens.backends.torch._state_bytes import _state_bytes_equal, _whole_storage_uint8
 from torchlens.errors import ArtifactError, TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.hooks import live_selector_matches_site
 from torchlens.types import FailureOrigin
-from torchlens.validation.core import _perturb_layer_outs
+from torchlens.validation._perturb import _perturb_layer_outs
 
 _LIVE_SUBJECT = SimpleNamespace(_layer_label_raw="relu_1")
 

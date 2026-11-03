@@ -12,7 +12,8 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils._torch_compat import tensor_version_or_none
-from .buffer_writes import _whole_storage_uint8, peek_buffer_write_tracker
+from ._state_bytes import _whole_storage_uint8
+from .buffer_writes import peek_buffer_write_tracker
 from .escape_detection import (
     ExpectedOriginalToken,
 )
