@@ -954,7 +954,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   gate on the rendered pair only.
 
 **Bundle.episode_status** *(spelling documented-unstable)*
-: `b.episode_status(episode_id, *, ledger=None)` folds the outcomes of the members named by
+: `b.episode_status(episode_id, *, episode_ledger=None)` folds the outcomes of the members named by
   `episode_member` rows into a derived episode status (`EpisodeFoldResult`). A derivation, never
   a stored Bundle outcome; without a ledger the ledger-only arms degrade to `episode_unknown`.
 
