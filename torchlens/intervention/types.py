@@ -24,8 +24,8 @@ from .._selection.target import (
     TargetSpec as TargetSpec,
     TensorSliceSpec as TensorSliceSpec,
 )
+from .._utils._tensor_layout import CaptureLayout
 from ._hook_spec_match import _hook_spec_matches
-from ._replay_layout import CaptureLayout
 
 GraphShapeHash: TypeAlias = str
 InterventionAction: TypeAlias = Literal["replace", "add_hook", "scale", "transform"]
@@ -224,7 +224,7 @@ class FunctionRegistryKey:
 class ParentRef:
     """Template component that resolves to a previously captured tensor.
 
-    ``_capture_layout`` is private and session-only: see :mod:`._replay_layout`.
+    ``_capture_layout`` is private and session-only: see :mod:`torchlens._utils._tensor_layout`.
     """
 
     parent_label: str

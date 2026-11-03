@@ -11,12 +11,12 @@ from ..._ir.container import (
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
 from ..._storage_bindings import STORAGE_CONTEXT_RECEIVER_FUNCS, copy_with_storage_context
+from ..._utils._tensor_layout import CaptureLayout, layout_of
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ..._validation_argument_references import active_argument_references
-from ...intervention._replay_layout import CaptureLayout, layout_of
 from ...intervention.types import (
     ArgComponent,
     CapturedArgTemplate,

@@ -25,6 +25,7 @@ from .._ir.container import (
 from .._quantities import Bytes
 from .._selection.resolver import _label_index_scope
 from .._trace_state import TraceState
+from .._utils._tensor_layout import relay_to_layout
 from .._utils.display import progress_bar
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..errors._base import TorchLensError
@@ -51,7 +52,6 @@ from ._replay_context import (
     _record_capture_digest,
     _replay_site_key,
 )
-from ._replay_layout import relay_to_layout
 from ._replay_sites import (
     _buffer_thread_candidate,
     _frontier_leaf,
