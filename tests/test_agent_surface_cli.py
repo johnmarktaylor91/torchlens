@@ -45,7 +45,7 @@ def test_tier0_verbs_stay_torch_free(clean: Path) -> None:
 
     probe = (
         "import sys\n"
-        "from torchlens.agent import cli\n"
+        "from torchlens.agent import _cli as cli\n"
         "rc = cli.main({args!r})\n"
         "assert rc == 0, rc\n"
         "assert 'torch' not in sys.modules, 'tier-0 verb imported torch'\n"

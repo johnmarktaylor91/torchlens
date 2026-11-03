@@ -501,13 +501,13 @@ def trace_setstate(trace: Trace, state: dict[str, Any], *, conditional_accessor:
     state["_cost_pinned_autograd_memory"] = None  # a restored trace pins nothing
     state.pop("_uncalled_module_addresses", None)
     if state.get("_intervention_spec") is None:
-        state["_intervention_spec"] = _doors.intervention().types.InterventionSpec()
+        state["_intervention_spec"] = _doors.intervention()._types.InterventionSpec()
     if not state.get("_graph_relationship_evidence"):
         state["_graph_relationship_evidence"] = {
-            "model": _doors.intervention().types.Relationship.UNKNOWN,
-            "weights": _doors.intervention().types.Relationship.UNKNOWN,
-            "input": _doors.intervention().types.Relationship.UNKNOWN,
-            "graph": _doors.intervention().types.Relationship.UNKNOWN,
+            "model": _doors.intervention()._types.Relationship.UNKNOWN,
+            "weights": _doors.intervention()._types.Relationship.UNKNOWN,
+            "input": _doors.intervention()._types.Relationship.UNKNOWN,
+            "graph": _doors.intervention()._types.Relationship.UNKNOWN,
         }
     if state["_options_backward_ready"] is None:
         state["_options_backward_ready"] = False

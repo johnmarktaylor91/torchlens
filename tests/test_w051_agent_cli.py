@@ -124,7 +124,7 @@ def test_tier0_info_on_a_non_directory_path_stays_torch_free(tmp_path: Path) -> 
     probe = (
         "import sys\n"
         f"sys.path.insert(0, {REPO_ROOT!r})\n"
-        "from torchlens.agent import cli\n"
+        "from torchlens.agent import _cli as cli\n"
         f"rc = cli.main(['info', {str(stray)!r}, '--json'])\n"
         "assert rc == 0, rc\n"
         "assert 'torch' not in sys.modules, 'tier-0 info imported torch'\n"

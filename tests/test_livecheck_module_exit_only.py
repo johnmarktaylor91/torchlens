@@ -37,8 +37,8 @@ from torchlens.backends.torch import (
     ops as torch_ops,
 )
 from torchlens.intervention import (
+    _runtime as intervention_runtime,
     hooks as _intervention_hooks,
-    runtime as intervention_runtime,
 )
 from torchlens.intervention._spec import Recipe
 from torchlens.intervention.hooks import NormalizedHookEntry

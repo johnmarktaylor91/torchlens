@@ -23,8 +23,8 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.validation import (
+    _backward as backward_validation,
     _layer_grad_report as layer_grad_report,
-    backward as backward_validation,
     last_validation_failure,
 )
 from torchlens.validation._diagnostics import (

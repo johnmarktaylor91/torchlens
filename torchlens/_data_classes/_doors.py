@@ -56,7 +56,7 @@ def intervention() -> ModuleType:
         _trace_hooks,
         _trace_run,
         _trace_selection_edits,
-        types,
+        _types,
     )
 
     return _package_of(_trace_edits)

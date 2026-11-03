@@ -176,28 +176,34 @@ SHADOW_IMPORT = re.compile(rf"^(\s*(?:from|import)\s+torchlens\.)({_alt(SHADOWED
 _SLASHED = _alt(tuple(e.replace(".", "/") for e in ALL_MOVED))
 PATHED_FULL = re.compile(rf"(?<![\w.-])(torchlens/)({_SLASHED})(?=\.py\b|/)")
 PATHED_REL = re.compile(rf"(?<![\w/.-])()({_SLASHED})(?=\.py\b|/)")
-ABS_BARE = re.compile(r"^(\s*from\s+)torchlens\.(\w+)(\s+import\s+)(\(?)([^\n#]*)", re.M)
-REL_FROM = re.compile(r"^(\s*from\s+)(\.+)([\w.]*)(\s+import\s+)(\(?)([^\n#]*)", re.M)
+# The imported names are one line, or a parenthesized block that may span lines.
+ABS_BARE = re.compile(r"^(\s*from\s+)torchlens\.(\w+)(\s+import\s+)(\([^)]*\)|[^\n#]*)", re.M)
+REL_FROM = re.compile(r"^(\s*from\s+)(\.+)([\w.]*)(\s+import\s+)(\([^)]*\)|[^\n#]*)", re.M)
+_IMPORTED = re.compile(r"\b(\w+)\b(?:\s+as\s+(\w+))?")
 
 
 def _rewrite_names(parent: str, names: str) -> str:
-    """Rewrite ``leaf`` (or ``leaf as x``) to ``_leaf as leaf`` for moved, unshadowed leaves."""
-    out = []
-    for chunk in names.split(","):
-        bits = chunk.strip().split()
-        if bits and f"{parent}.{bits[0]}" in MOVED:
-            local = bits[2] if len(bits) == 3 and bits[1] == "as" else bits[0]
-            lead = chunk[: len(chunk) - len(chunk.lstrip())]
-            trail = chunk[len(chunk.rstrip()) :]
-            out.append(f"{lead}{_private_leaf(f'{parent}.{bits[0]}')} as {local}{trail}")
-        else:
-            out.append(chunk)
-    return ",".join(out)
+    """Rewrite ``leaf`` (or ``leaf as x``) to ``_leaf as leaf`` for moved, unshadowed leaves.
+
+    ``names`` is one line or a parenthesized block; comments are left alone.
+    """
+
+    def one(match: re.Match[str]) -> str:
+        leaf, local = match.group(1), match.group(2) or match.group(1)
+        if f"{parent}.{leaf}" not in MOVED:
+            return match.group(0)
+        return f"{_private_leaf(f'{parent}.{leaf}')} as {local}"
+
+    lines = []
+    for line in names.split("\n"):
+        code, hash_, comment = line.partition("#")
+        lines.append(_IMPORTED.sub(one, code) + hash_ + comment)
+    return "\n".join(lines)
 
 
 def _abs_bare(match: re.Match[str]) -> str:
-    head, parent, imp, paren, names = match.groups()
-    return f"{head}torchlens.{parent}{imp}{paren}{_rewrite_names(parent, names)}"
+    head, parent, imp, names = match.groups()
+    return f"{head}torchlens.{parent}{imp}{_rewrite_names(parent, names)}"
 
 
 def _remap_parts(parts: list[str]) -> list[str]:
@@ -208,7 +214,7 @@ def _remap_parts(parts: list[str]) -> list[str]:
 
 
 def _rel_from(match: re.Match[str], package: list[str]) -> str:
-    head, dots, name, imp, paren, names = match.groups()
+    head, dots, name, imp, names = match.groups()
     up = len(dots) - 1
     if up > len(package):
         return match.group(0)
@@ -221,11 +227,11 @@ def _rel_from(match: re.Match[str], package: list[str]) -> str:
         if changed < len(base):
             return match.group(0)
         tail = new[len(base) :]
-        return f"{head}{dots}{'.'.join(tail)}{imp}{paren}{names}"
+        return f"{head}{dots}{'.'.join(tail)}{imp}{names}"
     if len(base) == 2 and base[0] == "torchlens" and not tail:
-        return f"{head}{dots}{imp}{paren}{_rewrite_names(base[1], names)}"
+        return f"{head}{dots}{imp}{_rewrite_names(base[1], names)}"
     if len(old) == 2 and old[0] == "torchlens":
-        return f"{head}{dots}{name}{imp}{paren}{_rewrite_names(old[1], names)}"
+        return f"{head}{dots}{name}{imp}{_rewrite_names(old[1], names)}"
     return match.group(0)
 
 
