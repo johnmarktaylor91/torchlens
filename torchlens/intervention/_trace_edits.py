@@ -40,6 +40,7 @@ from ._trace_selection_edits import (
     apply_selection_do,
     is_selection_batch,
     push_from_handles,
+    settle_edited_product,
 )
 from .types import InterventionSpec, TargetSpec
 
@@ -48,7 +49,6 @@ if TYPE_CHECKING:
 
 __all__: list[str] = []
 
-from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._capture_state_helpers import _fingerprint_model_weights, _qualname_for_model
 from .._ir.selector_eval import normalize_selector_like
 from .._runnable import refuse_poisoned_trace
@@ -319,7 +319,7 @@ def settle_selection_do(
     )
     record_do_intervention_event(trace, txn, status=None, staged_only=staged_only)
     if not staged_only:
-        quarantine_episode_after_perturbed_replay(trace)
+        settle_edited_product(trace)
 
 
 def do(  # noqa: PLR0913 - trace stands in for self on the moved method
@@ -451,7 +451,7 @@ def do_with_options(  # noqa: PLR0913 -- do()'s own arguments, after it merges t
     record_do_intervention_event(trace, txn, status=None)
     # Lane F42: the push/rerun replayed a perturbed cone -- inherited
     # episode step evidence no longer describes the edited product.
-    quarantine_episode_after_perturbed_replay(result)
+    settle_edited_product(result)
     return result
 
 

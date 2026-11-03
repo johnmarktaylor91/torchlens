@@ -542,6 +542,28 @@ def output_table(
     return pd.DataFrame(filtered_rows, columns=["batch_item", "rank", "label", "prob"])
 
 
+def refresh_decoded_output(trace: "Trace") -> None:
+    """Re-decode a trace whose output tensors an intervention rewrote.
+
+    The rows captured at trace time describe the forward that produced them;
+    after replay or rerun propagates edited values to the output they would
+    still name the clean answer. Recompute them from the retained output at
+    the captured top-n. When no output tensor is retained the rows are
+    dropped, so ``decode_output`` refuses instead of answering stale.
+
+    Parameters
+    ----------
+    trace:
+        Trace whose state just became replay- or rerun-propagated.
+    """
+
+    if getattr(trace, "_decoded_output", None) is None:
+        return
+    postprocessor = getattr(trace, "_provenance_output_postprocessor", None)
+    top_n = getattr(postprocessor, "top_n_captured", None)
+    trace._decoded_output = _recompute_decoded_output(trace, top_n=top_n)
+
+
 def _recompute_decoded_output(trace: "Trace", top_n: int | None) -> Any | None:
     """Best-effort decoded-output recompute from retained output logits.
 

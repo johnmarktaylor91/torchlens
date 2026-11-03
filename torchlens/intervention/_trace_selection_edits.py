@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._capture._episode_coupling import quarantine_episode_after_perturbed_replay
 from .._data_classes._trace_intervention_records import (
     _edit_identity,
     mark_intervention_spec_mutated,
@@ -559,3 +560,22 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
         return replay_module._run_replay(
             trace, origins, hook_entries=hook_entries, strict=strict, preserve_origins=False
         )
+
+
+def settle_edited_product(trace: Any) -> None:
+    """Inherited evidence no longer describes an edited product.
+
+    Episode step evidence is quarantined (lane F42) and the decoded output
+    rows captured with the clean forward are recomputed from the edited
+    output, so ``decode_output`` on the fork names the fork's answer.
+
+    Parameters
+    ----------
+    trace:
+        The trace (usually a fork) whose values a non-staged edit changed.
+    """
+
+    quarantine_episode_after_perturbed_replay(trace)
+    from ..stats._trace_tables import refresh_decoded_output
+
+    refresh_decoded_output(trace)
