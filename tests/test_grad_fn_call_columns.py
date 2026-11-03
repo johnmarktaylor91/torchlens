@@ -33,9 +33,9 @@ def _trace_with_passes(num_passes: int) -> tl.Trace:
 
     x = torch.randn(1, 8, requires_grad=True)
     trace = tl.trace(_mlp(), x, save="all", capture=CaptureOptions(save_grads="all"))
-    out = trace[trace.output_layers[0]].out
+    loss = trace[trace.output_layers[0]].out.sum()
     for _ in range(num_passes):
-        torch.autograd.grad(out.sum(), x, retain_graph=True)
+        torch.autograd.grad(loss, x, retain_graph=True)
     return trace
 
 
@@ -76,10 +76,11 @@ def test_grad_fn_call_opcodes_scale_by_owner_not_by_call(tmp_path: Path) -> None
     few, many = _trace_with_passes(2), _trace_with_passes(40)
     (tmp_path / "few").mkdir()
     (tmp_path / "many").mkdir()
-    few_cost, few_calls, _ = _call_opcodes(few, tmp_path / "few")
+    few_cost, few_calls, few_grad_fns = _call_opcodes(few, tmp_path / "few")
     many_cost, many_calls, num_grad_fns = _call_opcodes(many, tmp_path / "many")
     extra_passes = 38
-    assert many_calls - few_calls >= extra_passes * num_grad_fns, "every pass must fire the nodes"
+    assert num_grad_fns == few_grad_fns, "the passes must reuse the same autograd nodes"
+    assert many_calls - few_calls >= extra_passes * 4, "every pass must fire the nodes"
     bound = 4 * num_grad_fns + 32 * extra_passes
     assert many_cost - few_cost < bound, (
         f"grad_fn-call opcodes grew {many_cost - few_cost} ({few_cost} -> {many_cost}) for "
@@ -164,12 +165,16 @@ def test_grad_fn_calls_round_trip(tmp_path: Path, lazy: bool) -> None:
 def test_trace_without_backward_never_names_the_tables(tmp_path: Path) -> None:
     """A trace without a backward pass persists its grad_fns exactly as before."""
 
-    from torchlens._io._grad_fn_call_columns import reduce_with_grad_fn_call_columns
+    from torchlens._io._grad_fn_call_packing import (
+        GradFnCallPacker,
+        reduce_with_grad_fn_call_columns,
+    )
 
     trace = tl.trace(_mlp(), torch.randn(1, 8, requires_grad=True), save="all")
     for grad_fn in trace._grad_fn_logs.values():
         assert len(grad_fn.calls) == 0
-        assert reduce_with_grad_fn_call_columns(None, grad_fn, type(grad_fn), 5) is NotImplemented
+        packer = GradFnCallPacker({})
+        assert reduce_with_grad_fn_call_columns(packer, grad_fn, type(grad_fn), 5) is NotImplemented
     path = tmp_path / "plain.tlspec"
     trace.save(path, level="portable")
     metadata = (path / "metadata.pkl").read_bytes()
