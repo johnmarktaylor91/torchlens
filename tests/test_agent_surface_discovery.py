@@ -89,7 +89,6 @@ def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     # inferred rung, so the historical trace_inputs_missing site is gone.
 
 
-@pytest.mark.smoke
 def test_option_field_keyword_names_its_options_class() -> None:
     """tl.trace(model, x, save_grads=True) names CaptureOptions, not input_kwargs."""
 
@@ -107,7 +106,6 @@ def test_option_field_keyword_names_its_options_class() -> None:
     assert "CaptureOptions(save_grads=...)" in str(near.value)
 
 
-@pytest.mark.smoke
 def test_guessed_attribute_names_point_at_the_real_field() -> None:
     """op.activation, trace.layer_list and op.parent_layers name .out/.layers/.parents."""
 
