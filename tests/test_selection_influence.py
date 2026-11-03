@@ -20,10 +20,11 @@ import torch.nn as nn
 from torch.nn import functional
 
 import torchlens as tl
+from torchlens._selection.provenance import SelectionProvenance
 from torchlens._selection.selection import _join_relation
 from torchlens.errors import SelectionError
 from torchlens.receptive_field import _influence as influence
-from torchlens.receptive_field._influence import _basis_of, _field_status_of, _influence
+from torchlens.receptive_field._influence import _influence
 from torchlens.receptive_field._types import ReceptiveFieldStatus
 
 # ---------------------------------------------------------------------------
@@ -241,8 +242,8 @@ def test_receptive_hull_to_input_matches_hand_computation(stack) -> None:
     expected = _slices_mask((1, 1, 16, 16), slice(None), slice(None), slice(2, 13), slice(2, 13))
     assert torch.equal(entry.mask, expected)
     assert entry.provenance.relation == "exact"
-    assert _basis_of(entry) == "geometric"
-    assert _field_status_of(entry) == "exact"
+    assert entry.provenance.basis == "geometric"
+    assert entry.provenance.field_status == "exact"
     assert len(list(resolved)) == 1
 
 
@@ -292,7 +293,7 @@ def test_projective_hull_from_input_matches_hand_computation(stack) -> None:
         # the per-unit lifts' relations (the stride-2 transposition is graded
         # upper_bound by the field engine, so no exactness is invented here).
         assert entry.provenance.relation == _lifted_relation(stack, source, units, op, "projective")
-        assert _field_status_of(entry) in {"exact", "upper_bound"}
+        assert entry.provenance.field_status in {"exact", "upper_bound"}
 
 
 def test_projective_default_target_is_the_model_output(stack) -> None:
@@ -413,7 +414,7 @@ def test_global_axis_is_covered_whole_beside_a_windowed_axis(mixed) -> None:
         entry.mask, _slices_mask((1, 1, 8, 8), slice(None), slice(None), slice(2, 6), slice(None))
     )
     assert entry.provenance.relation == "exact"
-    assert _field_status_of(entry) == "exact"
+    assert entry.provenance.field_status == "exact"
 
 
 def test_whole_site_seed_on_a_global_block_is_a_whole_site_mask(mixed) -> None:
@@ -425,7 +426,7 @@ def test_whole_site_seed_on_a_global_block_is_a_whole_site_mask(mixed) -> None:
     )
     assert bool(entry.mask.all())
     assert entry.provenance.relation == "exact"
-    assert _field_status_of(entry) == "exact"
+    assert entry.provenance.field_status == "exact"
 
 
 def test_status_fold_is_worst_of_in_the_documented_order() -> None:
@@ -452,6 +453,7 @@ def test_data_dependent_routing_refuses_geometry_typed(routed) -> None:
     seed = tl.units(source.label, [(0, 0, 4, 4)])
     with pytest.raises(SelectionError) as excinfo:
         routed[_influence(seed)]
+    assert excinfo.value.fields["code"] == "influence_geometry_unavailable"
     assert excinfo.value.fields["reason"] == "influence_geometry_unavailable"
     assert excinfo.value.fields["field_status"] == "data_dependent"
     assert "method='gradient'" in str(excinfo.value)
@@ -466,7 +468,7 @@ def test_attention_without_windowed_axes_refuses_geometry_typed() -> None:
         seed = tl.units(trace.input_ops[0].label, [(0, 0, 0, 0)])
         with pytest.raises(SelectionError) as excinfo:
             trace[_influence(seed)]
-        assert excinfo.value.fields["reason"] == "influence_geometry_unavailable"
+        assert excinfo.value.fields["code"] == "influence_geometry_unavailable"
     finally:
         trace.cleanup()
 
@@ -483,8 +485,8 @@ def test_gradient_method_routes_through_the_index_list(routed) -> None:
             expected[0, 0, position, 3:6] = True
     assert torch.equal(entry.mask, expected)
     assert entry.provenance.relation == "exact"
-    assert _basis_of(entry) == "gradient"
-    assert _field_status_of(entry) == "empirical"
+    assert entry.provenance.basis == "gradient"
+    assert entry.provenance.field_status == "empirical"
     assert "probes=1" in entry.provenance.source
 
 
@@ -522,9 +524,35 @@ def test_probe_budget_refuses_before_any_probe(stack) -> None:
     seed = tl.units(conv3.label, _patch(range(0, 6), range(0, 6)))
     with pytest.raises(SelectionError) as excinfo:
         stack[_influence(seed, direction="receptive", method="gradient", probe_budget=4)]
+    assert excinfo.value.fields["code"] == "influence_probe_budget"
     assert excinfo.value.fields["reason"] == "influence_probe_budget"
     assert excinfo.value.fields["probes"] == 36
     assert excinfo.value.fields["probe_budget"] == 4
+
+
+def test_typed_disclosure_survives_complement_and_agreeing_composition(stack) -> None:
+    """``~`` keeps basis and field status; ``|`` keeps them only when both sides agree."""
+
+    seed = tl.units(stack.input_ops[0].label, _patch(range(7, 9), range(7, 9)))
+    target = stack.output_ops[0]
+    geometric = stack[_influence(seed)]
+    gradient = stack[_influence(seed, method="gradient")]
+    status = _entry(geometric, target).provenance.field_status
+    flipped = _entry(~geometric, target).provenance
+    assert (flipped.basis, flipped.field_status) == ("geometric", status)
+    agreeing = _entry(geometric | geometric, target).provenance
+    assert (agreeing.basis, agreeing.field_status) == ("geometric", status)
+    mixed = _entry(geometric | gradient, target).provenance
+    assert (mixed.basis, mixed.field_status) == (None, None)
+
+
+def test_provenance_basis_and_field_status_vocabularies_are_closed() -> None:
+    """An off-vocabulary basis or field status cannot be constructed."""
+
+    with pytest.raises(ValueError, match="basis must be one of"):
+        SelectionProvenance(relation="exact", basis="sampled")
+    with pytest.raises(ValueError, match="field_status must be one of"):
+        SelectionProvenance(relation="exact", field_status="approximate")
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +573,7 @@ def test_empty_seed_yields_zero_masks_at_every_target(stack) -> None:
     for row in rows:
         assert not row.mask.any()
         assert row.provenance.relation == "exact"
-        assert _field_status_of(row) == "none"
+        assert row.provenance.field_status == "none"
 
 
 def test_param_seed_refuses_kind_incompatible(stack) -> None:

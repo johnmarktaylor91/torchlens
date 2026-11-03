@@ -16,32 +16,32 @@ resulting hull becomes a mask over the target site; rectangles and seed
 sites fold per target through ``_mask_union`` and ``_join_relation``. The
 field status folds worst-of in the order EXACT < WHOLE_INPUT < UPPER_BOUND;
 ``DATA_DEPENDENT``, ``UNKNOWN`` and ``UNSUPPORTED`` descriptors never yield a
-geometric mask and refuse typed (``selection_unresolvable`` with reason
-``influence_geometry_unavailable``), pointing at the gradient method.
+geometric mask and refuse typed (``influence_geometry_unavailable``),
+pointing at the gradient method.
 
 Gradient method (``method="gradient"``). One autograd probe per
 (seed unit, target site) through the shipped per-unit probes, the autograd
 graph retained so the trace stays probe-able; supports OR per target site.
 Seeds are never summed into one backward (sign cancellation can hide a true
 influence). The probe count is bounded by ``probe_budget``
-(refusal reason ``influence_probe_budget``) and stated before any probe runs.
+(refusal ``influence_probe_budget``) and stated before any probe runs.
 
-Disclosure. Basis and field status ride the entry's ``provenance.source``
-string (``influence(<direction>, basis=<geometric|gradient>,
-field_status=<status>)``), read back with :func:`_basis_of` and
-:func:`_field_status_of`; the public provenance dataclass gains no field
-here. Batch is a pointwise axis: a seed on one batch row stays on that row
-unless a batch-coupling op widens it, and the status says so.
+Disclosure. Every entry states ``provenance.basis`` (``geometric`` or
+``gradient``) and ``provenance.field_status`` (the folded geometric status,
+``empirical`` for probes, ``none`` for an all-empty seed);
+``provenance.source`` reads ``influence(<direction>)``, plus the probe count
+and ``cross_batch_influence`` for the gradient method. Batch is a pointwise
+axis: a seed on one batch row stays on that row unless a batch-coupling op
+widens it, and the status says so.
 
-Nothing in this module is public. The public entry point (its name, the
-provenance fields and the error codes) waits on the owner's ruling; the
-producer below is the one-line seam a future public wrapper calls.
+The entry point is not public yet: the producer below is the one-line seam a
+future public wrapper calls.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 import torch
@@ -146,36 +146,21 @@ def _influence(
     )
 
 
-def _source_string(direction: str, basis: str, field_status: str, **extra: Any) -> str:
-    """Spell the private disclosure carried in ``provenance.source``."""
+def _source_string(direction: str, **extra: Any) -> str:
+    """Spell the free-text disclosure carried in ``provenance.source``."""
 
     tail = "".join(f", {key}={value}" for key, value in extra.items())
-    return f"{_SOURCE_PREFIX}{direction}, basis={basis}, field_status={field_status}{tail})"
+    return f"{_SOURCE_PREFIX}{direction}{tail})"
 
 
-def _source_field(entry: Site, key: str) -> str | None:
-    """Read one ``key=value`` item back from an influence entry's source."""
+def _influence_entry(
+    op: Any, mask: _Mask, relation: str, source: str, basis: str, field_status: str
+) -> Site:
+    """Build one influence entry with its typed ``basis`` and ``field_status``."""
 
-    source = entry.provenance.source
-    if not source.startswith(_SOURCE_PREFIX) or not source.endswith(")"):
-        return None
-    for item in source[len(_SOURCE_PREFIX) : -1].split(", "):
-        name, separator, value = item.partition("=")
-        if separator and name == key:
-            return value
-    return None
-
-
-def _basis_of(entry: Site) -> str | None:
-    """Return ``"geometric"`` / ``"gradient"`` for an influence entry, else ``None``."""
-
-    return _source_field(entry, "basis")
-
-
-def _field_status_of(entry: Site) -> str | None:
-    """Return the folded field status name of an influence entry, else ``None``."""
-
-    return _source_field(entry, "field_status")
+    entry = _act_entry(op, mask, relation, source)
+    provenance = replace(entry.provenance, basis=basis, field_status=field_status)
+    return replace(entry, provenance=provenance)
 
 
 # ---------------------------------------------------------------------------
@@ -193,8 +178,11 @@ def _resolve_influence_term(node: _InfluenceTerm, trace: Any) -> Selection:
     if not seeds:
         # G9 rule: an all-empty seed reaches nothing, disclosed as zero-mask
         # entries at every target (family kept), never as an error.
-        source = _source_string(node.direction, node.method, "none")
-        entries = [_act_entry(op, _mask_empty(_site_shape(op)), "exact", source) for op in targets]
+        source = _source_string(node.direction)
+        entries = [
+            _influence_entry(op, _mask_empty(_site_shape(op)), "exact", source, node.method, "none")
+            for op in targets
+        ]
         return Selection(trace, "ACT", entries)
     if node.method == "gradient":
         return _gradient_influence(trace, seeds, targets, node)
@@ -262,8 +250,10 @@ def _geometric_influence(
             folded = _mask_union(folded, mask)
             relation = _join_relation(relation, pair_relation)
             statuses.extend(pair_statuses)
-        source = _source_string(node.direction, "geometric", _worst_status(statuses))
-        entries.append(_act_entry(target, folded, relation, source))
+        source = _source_string(node.direction)
+        entries.append(
+            _influence_entry(target, folded, relation, source, "geometric", _worst_status(statuses))
+        )
     return Selection(trace, "ACT", entries)
 
 
@@ -364,7 +354,7 @@ def _refuse_ungeometric(descriptor: ReceptiveField, seed_op: Any, target: Any) -
             f"influence geometry between {seed_op.label!r} and {target.label!r} is "
             f"unavailable (field status {descriptor.status.value!r}): {error} "
             "Use method='gradient' on a backward-ready trace for an empirical answer.",
-            code="selection_unresolvable",
+            code="influence_geometry_unavailable",
             seed_site=seed_op.label,
             target_site=target.label,
             field_status=descriptor.status.value,
@@ -526,7 +516,7 @@ def _refuse_over_probe_budget(seed_units: int, target_sites: int, probe_budget: 
             f"the gradient method would run {total} autograd probes ({seed_units} seed "
             f"unit(s) x {target_sites} target site(s)), over probe_budget={probe_budget}. "
             "Narrow the seed or the targets, raise probe_budget=, or use the geometric method.",
-            code="selection_unresolvable",
+            code="influence_probe_budget",
             probes=total,
             probe_budget=probe_budget,
         )
@@ -570,17 +560,15 @@ def _gradient_influence(
             supports[target.label] |= support
             cross_batch[target.label] = cross_batch[target.label] or crossed
     entries = [
-        _act_entry(
+        _influence_entry(
             target,
             _mask_from_dense(shapes[target.label], supports[target.label]),
             "exact",
             _source_string(
-                node.direction,
-                "gradient",
-                "empirical",
-                cross_batch_influence=cross_batch[target.label],
-                probes=total,
+                node.direction, cross_batch_influence=cross_batch[target.label], probes=total
             ),
+            "gradient",
+            "empirical",
         )
         for target in targets
     ]
