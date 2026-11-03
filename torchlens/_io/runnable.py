@@ -84,6 +84,7 @@ from .._runnable import (
 )
 from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
+from .._utils._display_bounded import RecordTuple
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
 from ..errors.runnable import SparseCorePayloadError
@@ -4502,7 +4503,6 @@ refusal through the existing typed ``UNSUPPORTED_LITERAL`` diagnostic.
 
 def _encode_literal(value: Any, _depth: int = 0) -> NonTensorLiteral:
     """Encode a Python value using only the frozen safe literal grammar.
-
     r69 B: scalar admission is CLASSIFIER-FIRST (``torchlens._input_walk.
     classify_scalar``), before any ``isinstance`` numeric/string normalization, so
     no call-recipe or fact-envelope path can launder a semantic-typed scalar (enum
@@ -4572,7 +4572,7 @@ def _encode_literal(value: Any, _depth: int = 0) -> NonTensorLiteral:
             LiteralSequenceKind.LIST,
             tuple(_encode_literal(item, _depth + 1) for item in value),
         )
-    if type(value) is tuple or type(value) is torch.Size:
+    if type(value) in (tuple, torch.Size, RecordTuple):
         return LiteralSequence(
             LiteralSequenceKind.TUPLE,
             tuple(_encode_literal(item, _depth + 1) for item in value),

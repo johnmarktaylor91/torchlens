@@ -7,17 +7,16 @@ Every HTML entry point uses the never-raise, escaping CardTree boundary.
 
 from __future__ import annotations
 
+from html import escape
 from typing import Any
 
 from ..._data_classes._trace_missing_attrs import is_live_trace
-from ._access import resolve_copy_root
-from ._axis_labels import sdpa_attention_hint
 from ._card_suppression import card_render_suppressed
 from ._value_cards import layer_value_card, op_value_card
 from .cardtree import (
     Card,
     CardCollection,
-    CardKey,
+    CardHtml,
     CardNode,
     CardSection,
     CardText,
@@ -132,49 +131,23 @@ def layer_card(layer: Any, *, root: str | None = None) -> Card:
 
 
 def trace_card(trace: Any, *, root: str | None = None) -> Card:
-    """Assemble the Trace overview card (replaces the 525-byte box)."""
+    """The same title and fact rows as ``print(trace)``, without analysis or a tree."""
 
-    resolved_root = resolve_copy_root(trace, explicit_root=root)
-    layers = list(trace._layer_logs or {})
-    total, saved = _save_counts(trace)
-    facts: list[CardNode] = [
-        CardText(
-            f"Layers: {len(layers)} | Ops: {trace._num_ops} | "
-            f"backend: {(trace._provenance_backend if is_live_trace(trace) else '?')} | "
-            f"modules: {len(trace.modules) if hasattr(trace, 'modules') else '?'}"
-        ),
-        CardText(
-            f"params: {getattr(trace, 'num_params', '?')} | "
-            f"flops fwd: {getattr(getattr(trace, 'cost', None), 'total_flops_forward', '?')}"
-        ),
-        CardText(f"saved: {saved if saved is not None else '?'}/{total or '?'} op records"),
-    ]
-    nonfinite = _first_nonfinite_text(trace)
-    if nonfinite:
-        facts.append(CardText(f"NaN/Inf: {nonfinite}"))
-    hint = sdpa_attention_hint(trace)
-    if hint:
-        facts.append(CardText(hint, role="notice"))
-    if resolved_root.source == "namespace":
-        facts.append(CardText(f"as: {resolved_root.expression}", role="muted"))
-    key_index = CardCollection(
-        children=tuple(CardKey(resolved_root.key_expression(str(k))) for k in layers[:64]),
-        budget=20,
+    rows = trace._repr_card_rows()
+    html = (
+        "<table>"
+        + "".join(
+            f"<tr><th>{escape(label)}</th><td>{escape(value)}</td></tr>" for label, value in rows
+        )
+        + "</table>"
     )
-    modules = _module_index(trace)
-    children: tuple[CardNode, ...] = (
-        *facts,
-        CardSection(title="lookup keys", children=(key_index,), folded=True),
-        *modules,
-        _proof_section(trace),
-    )
-    title = str(getattr(trace, "name", None) or getattr(trace, "model_name", "Trace"))
-    status = getattr(getattr(trace, "outcome", None), "status", None)
     return Card(
-        title=f"TorchLens Trace: {title}",
-        badge=getattr(status, "name", None),
+        title=repr(trace),
         kind="trace",
-        children=children,
+        children=(
+            CardHtml(html),
+            CardText("more      .summary()  .modules  .layers  .ops  .params"),
+        ),
     )
 
 

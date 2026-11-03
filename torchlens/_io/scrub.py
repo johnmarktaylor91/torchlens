@@ -1,5 +1,4 @@
 """Portable state scrubbing for TorchLens model logs.
-
 This module converts a live ``Trace`` object graph into portable metadata
 plus a list of tensor blob specs. It is the save-side counterpart to
 rehydration: every class-specific ``_PORTABLE_STATE_SPEC`` is applied here so
@@ -27,6 +26,7 @@ import torch
 from .._constants import MODEL_LOG_FIELD_ORDER
 from .._data_classes._state_adapter import state_items, state_new, state_restore
 from .._data_classes.trace import Trace, _scrubbed_transform_repr
+from .._utils._display_bounded import RecordTuple, short_dataclass_repr
 from ..errors._base import TorchLensWarning
 from . import TLSPEC_VERSION, ArtifactError, BlobRef, FieldPolicy, prerelease as _prerelease
 from ._small_raw import _small_raw_value
@@ -62,14 +62,12 @@ _SCRUB_IN_PROGRESS = object()
 
 def _pin_in_memo(memo: dict[int, Any], value: Any) -> None:
     """Keep ``value`` alive for the memo's lifetime so its ``id`` cannot recycle.
-
     The portable-walk memos key rebuilt results by ``id(original)``. When an
     original container is a temporary (dropped once its owner's field is
     replaced), CPython may reuse its address for a later object, which would
     then falsely hit the memo and receive an unrelated rebuilt value. Pinning
     every memoized original under a reserved key (``id(memo)``, the same
     device ``copy.deepcopy`` uses) makes the id-keyed lookup sound.
-
     Parameters
     ----------
     memo:
@@ -84,7 +82,6 @@ def _pin_in_memo(memo: dict[int, Any], value: Any) -> None:
 @dataclass(frozen=True)
 class BlobSpec:
     """A payload selected for portable blob persistence.
-
     Parameters
     ----------
     blob_id:
@@ -780,7 +777,7 @@ def _rebuild_tuple_value(
     if isinstance(value, torch.Size):
         return torch.Size(materialized)
     value_type = type(value)
-    if value_type is tuple:
+    if value_type is tuple or value_type is RecordTuple:
         return materialized
     if not _type_is_load_reconstructible(value_type):
         _disclose_container_downgrade(
@@ -854,6 +851,8 @@ class _ScrubWalk:
     container rule in :data:`_SCRUB_NODE_HANDLERS` and differ only at the
     leaves (:func:`_scrub_object_node`) and in their cycle/depth wording.
     """
+
+    __repr__ = short_dataclass_repr
 
     options: _ScrubOptions
     memo: dict[int, Any]

@@ -7,6 +7,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from typing import Any
 
+from .._data_classes._aten_display import bind_owner_keys
 from .._data_classes.aten_op import (
     AtenOp,
     OpRef,
@@ -205,6 +206,7 @@ def _finalize_forward_primitive_profile(trace: Any) -> None:
         if gap.capture_phase != "forward" or gap.owner_func_call_id is None:
             continue
         object.__setattr__(gap, "parent_op_refs", refs_by_call.get(gap.owner_func_call_id, ()))
+    bind_owner_keys(trace)
     core = trace.__dict__.get("_trace_core")
     if core is not None:
         adopt_records(core, "primitive_op", profile.primitive_ops)

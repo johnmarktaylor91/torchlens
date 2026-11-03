@@ -33,6 +33,7 @@ from .._constants import FUNC_CALL_LOCATION_FIELD_ORDER
 from .._io._field_policy import FieldPolicy
 from .._io.format_contract import TLSPEC_VERSION, default_fill_state, read_tlspec_version
 from .._source_links import vscode_file_line_link
+from .._utils._display_records import frame_repr, frame_str
 from .field_policy import build_record_field_policy_table
 
 # Sentinel object to distinguish "not yet loaded" from an actual None value.
@@ -667,21 +668,8 @@ class FuncCallLocation:
         """
         self._func_docstring = value
 
-    def __repr__(self) -> str:
-        """Show file, line number, function name, and source context with arrow."""
-        lines = [
-            "FuncCallLocation:",
-            f"  file: {self.file}",
-            f"  line: {self.line_number}",
-            f"  function: {self.func_name}",
-        ]
-        view, status = self._source_text_state()
-        if view is not None:
-            lines.append("  code:")
-            lines.append(view[2])
-        else:
-            lines.append(f"  code: {status}")
-        return "\n".join(lines)
+    __repr__ = frame_repr
+    __str__ = frame_str
 
     def to_html_link(self) -> str:
         """Return a VS Code source-location anchor for HTML renderers.

@@ -32,6 +32,7 @@ from typing import Any
 
 import torch
 
+from .._utils._display_bounded import RecordTuple
 from ._canonical_pickle import dump_canonical_metadata
 from .format_errors import ArtifactError
 from .state_contract import governed_artifact_load
@@ -128,7 +129,7 @@ def _sanitize(value: Any, depth: int) -> Any:
         return {key: _sanitize(item, depth + 1) for key, item in value.items()}
     if type(value) is list:
         return [_sanitize(item, depth + 1) for item in value]
-    if type(value) is tuple:
+    if type(value) in (tuple, RecordTuple):
         return tuple(_sanitize(item, depth + 1) for item in value)
     return value
 

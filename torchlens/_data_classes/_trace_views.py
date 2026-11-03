@@ -11,7 +11,8 @@ from __future__ import annotations
 import difflib
 from typing import TYPE_CHECKING, Any
 
-from .layer import Layer
+from .._utils._display_bounded import RecordTuple
+from .._utils._display_collections import callable_list_repr, callable_list_str
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -36,7 +37,7 @@ from ._trace_accessors import (
 from .backward_pass import BackwardPassAccessor
 from .derived_grad import IntermediateDerivedGradAccessor
 from .grad_fn import GradFnAccessor
-from .layer import LayerAccessor
+from .layer import Layer, LayerAccessor
 from .module import ModuleAccessor
 from .op import Op
 
@@ -99,7 +100,9 @@ def ops(trace: Trace) -> TraceOpAccessor:
 def transforms(trace: Trace) -> tuple[Op, ...]:
     """Body of ``Trace.transforms``; the record keeps the thin spelling and docstring."""
 
-    return tuple(op for op in trace._layer_list if getattr(op, "is_transform", False))
+    return RecordTuple(
+        (op for op in trace._layer_list if getattr(op, "is_transform", False)), "Transforms", "ops"
+    )
 
 
 def layers(trace: Trace) -> LayerAccessor:
@@ -526,6 +529,9 @@ class _CallableList(list[Any]):
     This keeps rare report surfaces callable for user ergonomics without adding
     extra callable custom_methods to the Trace method state_history.
     """
+
+    __repr__ = callable_list_repr
+    __str__ = callable_list_str
 
     def __call__(self) -> list[Any]:
         """Return a plain-list copy of this report.

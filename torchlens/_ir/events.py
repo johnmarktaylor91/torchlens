@@ -15,10 +15,21 @@ if TYPE_CHECKING:
     from .refs import ParamRef, TensorRef
     from .semantics import BackendSemantics, CapturePolicy
 
-# "intervention_replacement" is deliberately NOT an operation kind: an
-# intervention is an EDIT (an InterventionAppliedEvent referencing its target),
-# never a synthetic operation, so a functionless op can no longer be expressed
-# as a legal kind. (No producer ever constructed the retired literal.)
+
+def _bounded_record_repr(record: Any) -> str:
+    # Keep the journal vocabulary independent of rendering until it is displayed.
+    from .._utils._display_records import ir_record_repr
+
+    return ir_record_repr(record)
+
+
+def _bounded_record_str(record: Any) -> str:
+    from .._utils._display_records import capture_events_str
+
+    return capture_events_str(record)
+
+
+# Interventions amend an operation; they never synthesize one.
 OpEventKind = Literal["op", "source", "synthetic_output"]
 EdgeUseKind = Literal["arg", "kwarg", "container", "module", "buffer", "output", "control"]
 JaxEquationKind = Literal[
@@ -42,6 +53,8 @@ BackwardStatus = Literal["ok", "error"]
 @dataclass(frozen=True, slots=True)
 class _AtenTensorFact:
     """Value-free tensor metadata observed at one dispatcher boundary."""
+
+    __repr__ = _bounded_record_repr
 
     container_path: tuple[object, ...]
     tensor_impl_capability: str
@@ -71,6 +84,8 @@ class _AtenTensorFact:
 @dataclass(frozen=True, slots=True)
 class _AtenExecutionContext:
     """Immutable execution-environment stamp for one dispatcher call."""
+
+    __repr__ = _bounded_record_repr
 
     pytorch_version: str
     backend: str
@@ -107,9 +122,7 @@ class _AtenExecutionContext:
 
 class _AtenValueCell:
     """Mutable holder for one ATen call's retained output value(s).
-
-    The event stays frozen; the cell lets the owner's later ``save=`` verdict
-    release a value the recorder kept speculatively (``payload = None``).
+    The owner releases speculative values by clearing the cell payload.
     """
 
     __slots__ = ("payload",)
@@ -121,10 +134,11 @@ class _AtenValueCell:
 @dataclass(frozen=True, slots=True)
 class _AtenCallEvent:
     """Facts for one observed ATen dispatcher call.
-
     Value-free except ``output_values``, which carries a value cell only when
     the capture asked for ATen values.
     """
+
+    __repr__ = _bounded_record_repr
 
     capture_phase: str
     forward_pass_index: int | None
@@ -161,6 +175,8 @@ class _AtenCallEvent:
 class _ModePausedInteriorEvent:
     """Boundary-only disclosure for a strict constructor's unobserved interior."""
 
+    __repr__ = _bounded_record_repr
+
     capture_phase: str
     sequence_before: int
     sequence_after: int
@@ -173,6 +189,8 @@ class _ModePausedInteriorEvent:
 class BlobRef:
     """Portable reference to an externalized tensor/blob payload."""
 
+    __repr__ = _bounded_record_repr
+
     uri: str
     format: str
     dtype: str | None
@@ -184,6 +202,8 @@ class BlobRef:
 @dataclass(frozen=True, slots=True)
 class BackwardPassStart:
     """Core event marking the beginning of one autograd engine invocation."""
+
+    __repr__ = _bounded_record_repr
 
     pass_index: int
     trigger: BackwardTrigger
@@ -206,6 +226,8 @@ class BackwardPassStart:
 class OpGradObserved:
     """Core event emitted when a tensor hook observes an operation gradient."""
 
+    __repr__ = _bounded_record_repr
+
     op_label: str
     pass_index: int
     payload_ref: object | None
@@ -221,6 +243,8 @@ class OpGradObserved:
 class ParamGradObserved:
     """Core event emitted when an AccumulateGrad hook observes a parameter gradient."""
 
+    __repr__ = _bounded_record_repr
+
     param_address: str
     pass_index: int
     payload_ref: object | None
@@ -234,7 +258,6 @@ class ParamGradObserved:
 @dataclass(frozen=True, slots=True)
 class BackwardPassEnd:
     """Core event marking completion of one autograd engine invocation.
-
     ``close_path`` is the implicit-pass close-path disclosure (L9 memo 1.2;
     provisional spelling, DOCUMENTED-UNSTABLE pending naming-session/S2
     routing): ``"engine_drain"`` when the queued engine final callback
@@ -242,6 +265,8 @@ class BackwardPassEnd:
     for explicit (non-implicit) passes. Sidecar-event-only in wave 2 -- the
     projected ``BackwardPass`` record field waits for the wave-3 bump.
     """
+
+    __repr__ = _bounded_record_repr
 
     pass_index: int
     duration: float | None
@@ -255,13 +280,14 @@ class BackwardPassEnd:
 @dataclass(frozen=True, slots=True)
 class GradFnDiscovered:
     """Torch enrichment event for a discovered autograd node object.
-
     ``source`` is deep-frozen by the stream writer
     (:meth:`~torchlens._ir.capture_events.CaptureEvents.append_backward`
     snapshots it into a read-only mapping): the backward projection copies it
     by value at materialize time, so it must be immutable on the event or an
     in-place mutation could bypass ``backward_revision``.
     """
+
+    __repr__ = _bounded_record_repr
 
     object_id: int
     class_name: str
@@ -290,12 +316,13 @@ BackwardCoverageGapReason = Literal[
 @dataclass(frozen=True, slots=True)
 class BackwardCoverageGap:
     """Core event recording one autograd node the walk could not observe.
-
     A hook-registration or discovery skip is a typed journal fact, never a
     silent ``continue``: only proven framework-contract exclusions preserve a
     complete-coverage claim, and validation fails closed on every other
     reason.
     """
+
+    __repr__ = _bounded_record_repr
 
     pass_index: int
     object_id: int | None
@@ -309,7 +336,6 @@ class BackwardCoverageGap:
 @dataclass(frozen=True, slots=True)
 class GradFnFired:
     """Torch enrichment event emitted from an autograd node hook.
-
     ``fire_started_monotonic`` / ``fire_finished_monotonic`` are the L9
     per-fire timing pair (provisional spellings, DOCUMENTED-UNSTABLE): BOTH
     stamps come from ``time.perf_counter()`` in the same process, paired at
@@ -319,6 +345,8 @@ class GradFnFired:
     never a cross-fire or cross-clock pair. The wall-clock ``timestamp``
     stays the event-ordering stamp and is NEVER a duration operand.
     """
+
+    __repr__ = _bounded_record_repr
 
     object_id: int
     pass_index: int
@@ -334,7 +362,6 @@ class GradFnFired:
 @dataclass(frozen=True, slots=True)
 class CheckpointInvocationObserved:
     """Torch enrichment event minted for one classified checkpoint invocation.
-
     L9 memo 2.3 (provisional spelling, DOCUMENTED-UNSTABLE): the token is a
     per-trace monotonic ordinal minted ONLY in the patched
     ``saved_tensors_hooks.__enter__`` for ``_checkpoint_hook`` instances on
@@ -344,6 +371,8 @@ class CheckpointInvocationObserved:
     checkpoint-invocation witness field.
     """
 
+    __repr__ = _bounded_record_repr
+
     token: int
     timestamp: float
     seq: int = 0
@@ -352,6 +381,8 @@ class CheckpointInvocationObserved:
 @dataclass(frozen=True, slots=True)
 class OutputRef:
     """Captured output metadata and optional payload references."""
+
+    __repr__ = _bounded_record_repr
 
     tensor: TensorRef
     transformed_tensor: TensorRef | None
@@ -371,6 +402,8 @@ class OutputRef:
 class OutputVersionEvent:
     """Pre-child parent output snapshot for replay validation."""
 
+    __repr__ = _bounded_record_repr
+
     parent_raw_label: str
     child_raw_label: str
     child_output_path: tuple[object, ...]
@@ -383,6 +416,8 @@ class OutputVersionEvent:
 @dataclass(frozen=True, slots=True)
 class FunctionCallRef:
     """Backend-neutral function call summary captured for an op event."""
+
+    __repr__ = _bounded_record_repr
 
     func: object | None
     func_name: str | None
@@ -410,6 +445,8 @@ class FunctionCallRef:
 class ArgTemplateRef:
     """References to saved argument values and replay templates."""
 
+    __repr__ = _bounded_record_repr
+
     saved_args: object | None
     saved_kwargs: object | None
     args_template: object | None
@@ -421,6 +458,8 @@ class ArgTemplateRef:
 class ParentEdge:
     """Raw parent dependency edge for graph construction."""
 
+    __repr__ = _bounded_record_repr
+
     parent_label_raw: str
     arg_position: object
     _edge_use: str
@@ -428,14 +467,12 @@ class ParentEdge:
 
 def edge_use_kind(record: object) -> str | None:
     """Return the semantic edge-use kind stored on an edge record.
-
     Parameters
     ----------
     record
         Edge-use record: a ``ParentEdge`` (``_edge_use``), a materialized edge-use
         record (``edge_use``) or the legacy tuple shape
         ``(parent_label, arg_position, edge_use)``.
-
     Returns
     -------
     str | None
@@ -490,6 +527,8 @@ def is_value_edge_use(record: object) -> bool:
 class ModuleFrame:
     """Single active module-call frame at capture time."""
 
+    __repr__ = _bounded_record_repr
+
     address: str
     address_normalized: str | None
     module_type: str
@@ -529,6 +568,8 @@ class InterventionAppliedEvent:
     documented boundary the runnable contract draws.
     """
 
+    __repr__ = _bounded_record_repr
+
     label_raw: str
     kind: InterventionEditKind
     origin: InterventionEditOrigin
@@ -546,6 +587,8 @@ BufferWriteKind = Literal["reassign", "inplace", "fused", "data_reassign"]
 class BufferWriteEvent:
     """Captured registered-buffer write event."""
 
+    __repr__ = _bounded_record_repr
+
     address: str
     kind: BufferWriteKind
     producer_label_raw: str | None
@@ -562,6 +605,8 @@ class BufferWriteEvent:
 @dataclass(frozen=True, slots=True)
 class ModulePrepEvent:
     """Prep-time module metadata emitted before a forward pass."""
+
+    __repr__ = _bounded_record_repr
 
     address: str
     all_addresses: tuple[str, ...]
@@ -596,6 +641,8 @@ class ModulePrepEvent:
 class ModuleEnterEvent:
     """Module forward-entry metadata emitted during exhaustive capture."""
 
+    __repr__ = _bounded_record_repr
+
     address: str
     call_index: int
     call_label: str
@@ -616,6 +663,8 @@ class ModuleEnterEvent:
 class PreHookProvenanceEvent:
     """Typed sidecar for one module invocation's user pre-hook provenance."""
 
+    __repr__ = _bounded_record_repr
+
     address: str
     call_index: int | None
     inputs_before_pre_hooks: object | None
@@ -629,6 +678,8 @@ class PreHookProvenanceEvent:
 @dataclass(frozen=True, slots=True)
 class ModuleExitEvent:
     """Module forward-exit metadata emitted during exhaustive capture."""
+
+    __repr__ = _bounded_record_repr
 
     address: str
     call_index: int
@@ -655,6 +706,8 @@ class ModuleExitEvent:
 @dataclass(frozen=True, slots=True)
 class OpEvent:
     """Single backend operation event emitted during capture."""
+
+    __repr__ = _bounded_record_repr
 
     kind: str
     label_raw: str
@@ -716,6 +769,8 @@ class OpEvent:
 class InterventionState:
     """Final Trace intervention state folded from capture/runtime metadata."""
 
+    __repr__ = _bounded_record_repr
+
     has_direct_writes: bool
     spec_revision: int
     out_recipe_revision: int
@@ -726,22 +781,6 @@ class InterventionState:
 
 
 def __getattr__(name: str) -> object:
-    """Return compatibility attributes that moved out of the event schema module.
-
-    Parameters
-    ----------
-    name
-        Attribute name requested from :mod:`torchlens._ir.events`.
-
-    Returns
-    -------
-    object
-        Moved compatibility attribute.
-
-    Raises
-    ------
-    AttributeError
-        If ``name`` is not a compatibility export.
-    """
+    """Reject unknown event-schema attributes."""
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

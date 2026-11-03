@@ -166,7 +166,8 @@ def test_live_repr_reads_events_during_capture() -> None:
 
     count = stashed(log, "observations")["summary_count"]
     assert count == stashed(log, "observations")["event_count"]
-    assert f"layers={count}" in stashed(log, "observations")["live_repr"]
+    assert f"{count} op events" in stashed(log, "observations")["live_repr"]
+    assert "capture in progress" in stashed(log, "observations")["live_repr"]
 
 
 def test_mid_forward_summary_refuses_typed() -> None:

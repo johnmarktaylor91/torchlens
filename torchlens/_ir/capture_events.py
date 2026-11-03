@@ -29,6 +29,8 @@ from .events import (
     ParamGradObserved,
     PreHookProvenanceEvent,
     _AtenCallEvent,
+    _bounded_record_repr,
+    _bounded_record_str,
     _ModePausedInteriorEvent,
 )
 from .live_index import LiveIndex
@@ -102,19 +104,15 @@ _LANE_APPENDERS: dict[str, str] = {
 
 class SealedJournalWriteError(RuntimeError):
     """Base for every refused write to a sealed source journal.
-
     ``CaptureSession.seal()`` freezes a journal into its ``CapturedRunCore``:
     the op spine is snapshotted (folded through the amendment reducer) and the
     forward sibling lanes are snapshotted onto the pre-seal projection clone.
-    A write to any of those lanes AFTER the seal silently diverges the live
-    journal from the artifact every consumer projects from, so the whole class
-    fails closed here rather than at the far end of a projection.
+    Writes after sealing diverge from the artifact; this boundary fails closed.
     """
 
 
 class SealedJournalAmendmentError(SealedJournalWriteError):
     """A typed amendment was appended to a sealed source journal.
-
     After ``CaptureSession.seal()`` folds a journal into its
     ``CapturedRunCore``, the sealed source refuses further amendment appends
     fail-closed (DoR 4.5.5): post-seal knowledge must route through a working
@@ -125,7 +123,6 @@ class SealedJournalAmendmentError(SealedJournalWriteError):
 
 class SealedJournalAppendError(SealedJournalWriteError):
     """A forward-lane event was appended to a sealed source journal.
-
     Finding B1-15: sealed-journal enforcement was HALF-HEIGHT -- only the
     amendment lane checked ``amendments_sealed``, while the op lane's
     :meth:`CaptureEvents.append` and every forward sibling appender wrote
@@ -249,6 +246,9 @@ def _clone_op_event_for_replay(event: Any) -> Any:
 @dataclass(slots=False)
 class CaptureEvents:
     """Mutable event buffer allocated once per capture."""
+
+    __repr__ = _bounded_record_repr
+    __str__ = _bounded_record_str
 
     op_events: list[JournalOp] = field(default_factory=list)
     module_prep_events: list[ModulePrepEvent] = field(default_factory=list)
