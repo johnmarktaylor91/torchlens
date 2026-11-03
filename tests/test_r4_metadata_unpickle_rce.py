@@ -60,7 +60,7 @@ class _StatefulLinear(nn.Module):
 
 
 def _metadata_files(bundle_path: Path) -> list[Path]:
-    """Return the metadata record files of a saved 3.0 artifact (``records/*.json``)."""
+    """Return the metadata record files of a saved artifact (``records/*.json``)."""
 
     return sorted((bundle_path / "records").glob("*.json"))
 
@@ -139,7 +139,7 @@ def test_control_flow_bundle_round_trips(tmp_path: Path) -> None:
     bundle = tmp_path / "cf"
     tl.trace(_ControlFlow(), x, save="all").save(bundle, level="portable")
     records = _metadata_files(bundle)
-    assert records, "a 3.0 artifact writes its metadata as records/*.json"
+    assert records, "a saved artifact writes its metadata as records/*.json"
     assert not (bundle / "metadata.pkl").exists()
     for record in records:
         raw = record.read_bytes()

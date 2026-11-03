@@ -76,7 +76,7 @@ def _encode_cell(value, *, top: bool = False):
 
     Typed tuples (and any sequence assigned to a column, the shape the writer
     gives the dataflow columns) become typed tuples again, bytes the format's
-    base64 cell, so a forgery reaches the injected-row validators instead of
+    encoded bytes cell, so a forgery reaches the injected-row validators instead of
     the cell grammar in front of them.
     """
 

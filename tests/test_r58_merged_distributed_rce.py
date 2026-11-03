@@ -433,7 +433,7 @@ def _rehash_artifact(art: Path) -> None:
 def _plant_member_metadata(art: Path, payload: bytes) -> None:
     """Replace rank 1's metadata record with ``payload``, keeping its own file index true.
 
-    A 3.0 member keeps its metadata in ``records/trace.json`` (the 2.x ``metadata.pkl``
+    A saved member keeps its metadata in ``records/trace.json`` (the 2.x ``metadata.pkl``
     is gone); the member manifest's digest row is restamped so the planted bytes reach
     the member's metadata reader instead of its file-digest check.
     """

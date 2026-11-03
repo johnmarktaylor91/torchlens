@@ -98,7 +98,7 @@ def _forbid_unpicklers(monkeypatch: pytest.MonkeyPatch) -> None:
     """Every unpickler door fails the test if loading a planted artifact reaches one."""
 
     def _boom(*args: object, **kwargs: object) -> object:
-        raise AssertionError("an unpickler ran while loading a planted 3.0 artifact")
+        raise AssertionError("an unpickler ran while loading a planted artifact")
 
     for owner, name in (
         (pickle, "Unpickler"),
@@ -118,7 +118,7 @@ def test_lazyimportref_type_reduce_rce_denied_through_tl_load(
 ) -> None:
     """A forged LazyImportRef REDUCE planted in a real artifact raises + never runs os.system.
 
-    The 3.0 reader has two places a planted pickle can sit: a 2.x ``metadata.pkl`` at the
+    The reader has two places a planted pickle can sit: a 2.x ``metadata.pkl`` at the
     artifact root (refused as a 2.x artifact before anything is read) and the trace record
     (parsed as bounded UTF-8 JSON, refused at the JSON gate). Neither door may reach an
     unpickler, so the gadget's REDUCE never runs; the unpickler's own deny of the
