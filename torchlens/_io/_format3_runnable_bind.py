@@ -88,12 +88,12 @@ def _family_kind(blob_id: str) -> str | None:
     return None
 
 
-def _index_error(blob_id: str, detail: str) -> ArtifactError:
+def _index_error(blob_id: str, detail: str, *, code: str = _INDEX_CODE) -> ArtifactError:
     """Return the manifest-index refusal for a runnable blob id."""
 
     return ArtifactError(
         f"Runnable payload {blob_id!r} does not satisfy the 3.0 saved-format contract: {detail}.",
-        code=_INDEX_CODE,
+        code=code,
         remedy=_RESAVE,
         blob_id=blob_id,
         detail=detail,
@@ -185,10 +185,12 @@ def runnable_payload_index(
         blob, key = str(fields.get("blob", "")), fields.get("key")
         digest = files.get(blob, {}).get("sha256") if isinstance(files.get(blob), Mapping) else None
         if not blob or not isinstance(key, str) or not isinstance(digest, str):
-            raise _index_error(blob_id, "its chunk is not a listed artifact file")
+            raise _index_error(blob_id, "its chunk is not a listed artifact file", code=_INDEX_CODE)
         label = labels.get(blob_id)
         if label is None and descriptor is not None:
-            raise _index_error(blob_id, "the run descriptor declares no slot for it")
+            raise _index_error(
+                blob_id, "the run descriptor declares no slot for it", code=_INDEX_CODE
+            )
         refs.append(
             RunnablePayloadRef(
                 blob_id, kind, label if label is not None else blob_id, blob, digest, key
@@ -197,12 +199,12 @@ def runnable_payload_index(
     return RunnablePayloadIndex(tuple(refs))
 
 
-def _integrity_error(blob_path: Path, detail: str) -> ArtifactError:
+def _integrity_error(blob_path: Path, detail: str, *, code: str = _INTEGRITY_CODE) -> ArtifactError:
     """Return the integrity refusal for a runnable payload chunk."""
 
     return ArtifactError(
         f"Runnable payload chunk {blob_path} failed its integrity check: {detail}.",
-        code=_INTEGRITY_CODE,
+        code=code,
         remedy=_RESAVE,
         detail=detail,
     )
@@ -220,9 +222,13 @@ def _read_one_tensor_blob(blob_path: Path, map_location: str | torch.device) -> 
             remedy="install safetensors>=0.4",
         ) from exc
     except (OSError, SafetensorError, ValueError) as exc:
-        raise _integrity_error(blob_path, f"the file could not be read ({exc})") from exc
+        raise _integrity_error(
+            blob_path, f"the file could not be read ({exc})", code=_INTEGRITY_CODE
+        ) from exc
     if tensor is None:
-        raise _integrity_error(blob_path, f"it lacks the {ONE_TENSOR_KEY!r} tensor")
+        raise _integrity_error(
+            blob_path, f"it lacks the {ONE_TENSOR_KEY!r} tensor", code=_INTEGRITY_CODE
+        )
     return tensor
 
 
@@ -256,18 +262,30 @@ def read_runnable_payload(
     key = getattr(entry, "key", None)
     if key is None:
         if sha256_file(blob_path) != entry.sha256:
-            raise _integrity_error(blob_path, f"sha256 differs from the manifest ({entry.blob_id})")
+            raise _integrity_error(
+                blob_path,
+                f"sha256 differs from the manifest ({entry.blob_id})",
+                code=_INTEGRITY_CODE,
+            )
         return _read_one_tensor_blob(blob_path, map_location)
     try:
         observed = chunk_sha256(blob_path)
     except OSError as exc:
-        raise _integrity_error(blob_path, f"the file could not be read ({exc})") from exc
+        raise _integrity_error(
+            blob_path, f"the file could not be read ({exc})", code=_INTEGRITY_CODE
+        ) from exc
     if observed != entry.sha256:
-        raise _integrity_error(blob_path, f"sha256 differs from the manifest ({entry.blob_id})")
+        raise _integrity_error(
+            blob_path, f"sha256 differs from the manifest ({entry.blob_id})", code=_INTEGRITY_CODE
+        )
     try:
         with safe_open(str(blob_path), framework="pt", device=str(map_location)) as handle:
             if key not in handle.keys():
-                raise _integrity_error(blob_path, f"it lacks key {key!r} ({entry.blob_id})")
+                raise _integrity_error(
+                    blob_path, f"it lacks key {key!r} ({entry.blob_id})", code=_INTEGRITY_CODE
+                )
             return handle.get_tensor(key)
     except (OSError, SafetensorError, ValueError) as exc:
-        raise _integrity_error(blob_path, f"key {key!r} could not be read ({exc})") from exc
+        raise _integrity_error(
+            blob_path, f"key {key!r} could not be read ({exc})", code=_INTEGRITY_CODE
+        ) from exc

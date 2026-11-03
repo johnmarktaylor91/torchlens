@@ -480,11 +480,13 @@ class DecodedArtifact:
                     zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
                     cells = self._rebuild_accessors(kind, row_number, row)
-                    for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
-                        cells = {**cells, slot: cells.get(column)}
                     _restore_record(
                         obj, cells, version=self.version, computed=computed_columns(kind)
                     )
+                    # After the hook: the state contract knows the column, not its slot.
+                    for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
+                        if cells.get(column) is not None:
+                            object.__setattr__(obj, slot, cells[column])
 
     def _rebuild_accessors(
         self, kind: str, row_number: int, row: Mapping[str, Any]
@@ -585,8 +587,7 @@ def computed_columns(kind: str) -> frozenset[str]:
 def _restore_record(
     obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
 ) -> None:
-    # A COMPUTED column is written from the live property; installing it would shadow
-    # the property with dead state, so only its backing slot (if any) is restored.
+    # A COMPUTED column comes from the live property; installing it would shadow the property.
     """Run the record's state hook on its decoded row, computed columns dropped."""
 
     state = {name: value for name, value in row.items() if name not in computed}
@@ -606,8 +607,7 @@ def _restore_record(
 _LOAD_HOOKS: dict[str, Callable[..., Any]] = {}
 _HOOK_KINDS: Final = frozenset({"trace", "bundle", "recipe"})
 
-#: Computed columns a loaded record keeps behind its property (column to backing slot):
-#: arg templates and source-derived argument expressions cannot be recomputed after a load.
+#: Computed columns kept behind their property after a load (column to backing slot).
 _TEMPLATE_SLOTS: Final = {
     f"forward_{k}_template": f"_forward_{k}_template" for k in ("args", "kwargs")
 }

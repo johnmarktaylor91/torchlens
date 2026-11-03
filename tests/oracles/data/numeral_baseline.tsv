@@ -1070,7 +1070,6 @@ docs-md	docs/maintainers/where.md	110
 docs-md	docs/maintainers/where.md	1101
 docs-md	docs/maintainers/where.md	1104
 docs-md	docs/maintainers/where.md	111
-docs-md	docs/maintainers/where.md	1112
 docs-md	docs/maintainers/where.md	1114
 docs-md	docs/maintainers/where.md	1121
 docs-md	docs/maintainers/where.md	1129
@@ -1119,11 +1118,9 @@ docs-md	docs/maintainers/where.md	1324
 docs-md	docs/maintainers/where.md	1329
 docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
-docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
-docs-md	docs/maintainers/where.md	1366
 docs-md	docs/maintainers/where.md	137
 docs-md	docs/maintainers/where.md	1372
 docs-md	docs/maintainers/where.md	1379
@@ -1159,7 +1156,6 @@ docs-md	docs/maintainers/where.md	15,
 docs-md	docs/maintainers/where.md	1502
 docs-md	docs/maintainers/where.md	1507
 docs-md	docs/maintainers/where.md	151
-docs-md	docs/maintainers/where.md	1510
 docs-md	docs/maintainers/where.md	152
 docs-md	docs/maintainers/where.md	1529
 docs-md	docs/maintainers/where.md	153
@@ -1171,7 +1167,6 @@ docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	1574
 docs-md	docs/maintainers/where.md	1576
 docs-md	docs/maintainers/where.md	158
-docs-md	docs/maintainers/where.md	15823
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	1597
 docs-md	docs/maintainers/where.md	16
@@ -1199,7 +1194,6 @@ docs-md	docs/maintainers/where.md	17
 docs-md	docs/maintainers/where.md	170
 docs-md	docs/maintainers/where.md	171
 docs-md	docs/maintainers/where.md	1713
-docs-md	docs/maintainers/where.md	17182
 docs-md	docs/maintainers/where.md	172
 docs-md	docs/maintainers/where.md	173
 docs-md	docs/maintainers/where.md	1731
@@ -1398,7 +1392,6 @@ docs-md	docs/maintainers/where.md	30
 docs-md	docs/maintainers/where.md	300
 docs-md	docs/maintainers/where.md	3005
 docs-md	docs/maintainers/where.md	301
-docs-md	docs/maintainers/where.md	30171
 docs-md	docs/maintainers/where.md	302
 docs-md	docs/maintainers/where.md	303
 docs-md	docs/maintainers/where.md	305
@@ -1410,8 +1403,6 @@ docs-md	docs/maintainers/where.md	310
 docs-md	docs/maintainers/where.md	311
 docs-md	docs/maintainers/where.md	313
 docs-md	docs/maintainers/where.md	314
-docs-md	docs/maintainers/where.md	315
-docs-md	docs/maintainers/where.md	31498
 docs-md	docs/maintainers/where.md	317
 docs-md	docs/maintainers/where.md	318
 docs-md	docs/maintainers/where.md	319
@@ -1445,7 +1436,6 @@ docs-md	docs/maintainers/where.md	352
 docs-md	docs/maintainers/where.md	353
 docs-md	docs/maintainers/where.md	355
 docs-md	docs/maintainers/where.md	356
-docs-md	docs/maintainers/where.md	35654
 docs-md	docs/maintainers/where.md	357
 docs-md	docs/maintainers/where.md	358
 docs-md	docs/maintainers/where.md	359
@@ -1464,7 +1454,6 @@ docs-md	docs/maintainers/where.md	370
 docs-md	docs/maintainers/where.md	371
 docs-md	docs/maintainers/where.md	3712
 docs-md	docs/maintainers/where.md	372
-docs-md	docs/maintainers/where.md	37312
 docs-md	docs/maintainers/where.md	3732
 docs-md	docs/maintainers/where.md	374
 docs-md	docs/maintainers/where.md	375
@@ -1703,7 +1692,6 @@ docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	6303
 docs-md	docs/maintainers/where.md	631
-docs-md	docs/maintainers/where.md	631835
 docs-md	docs/maintainers/where.md	633
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
@@ -4211,8 +4199,6 @@ package-docstrings	torchlens/_io/bundle.py	19
 package-docstrings	torchlens/_io/bundle.py	1_1
 package-docstrings	torchlens/_io/bundle.py	2.31.0
 package-docstrings	torchlens/_io/bundle.py	21
-package-docstrings	torchlens/_io/bundle.py	256
-package-docstrings	torchlens/_io/bundle.py	256_
 package-docstrings	torchlens/_io/bundle.py	2_3
 package-docstrings	torchlens/_io/bundle.py	3.0
 package-docstrings	torchlens/_io/bundle.py	3.3
@@ -6315,8 +6301,6 @@ package-docstrings	torchlens/intervention/types.py	10
 package-docstrings	torchlens/intervention/types.py	11.
 package-docstrings	torchlens/intervention/types.py	24
 package-docstrings	torchlens/intervention/types.py	75
-package-docstrings	torchlens/io/__init__.py	2.0_
-package-docstrings	torchlens/io/__init__.py	2.16_
 package-docstrings	torchlens/mechinterp/_aliases.py	16
 package-docstrings	torchlens/mechinterp/_demo.py	19
 package-docstrings	torchlens/mechinterp/_demo.py	21
@@ -6789,9 +6773,6 @@ package-docstrings	torchlens/transforms/_srp_hash.py	40
 package-docstrings	torchlens/transforms/_srp_hash.py	62
 package-docstrings	torchlens/transforms/_srp_hash.py	63
 package-docstrings	torchlens/transforms/_srp_hash.py	64
-package-docstrings	torchlens/validation/__init__.py	2.16
-package-docstrings	torchlens/validation/__init__.py	2.16.
-package-docstrings	torchlens/validation/__init__.py	2.33
 package-docstrings	torchlens/validation/_autograd_grad_replay.py	64
 package-docstrings	torchlens/validation/_completeness_backstop.py	43
 package-docstrings	torchlens/validation/_destination_coverage.py	256
@@ -7966,7 +7947,6 @@ test-docstrings	tests/test_intervention_spec_pickle.py	10
 test-docstrings	tests/test_io_bundle.py	0.8.0
 test-docstrings	tests/test_io_bundle.py	128
 test-docstrings	tests/test_io_bundle.py	16
-test-docstrings	tests/test_io_bundle.py	2.0_
 test-docstrings	tests/test_io_bundle.py	21
 test-docstrings	tests/test_io_bundle.py	256
 test-docstrings	tests/test_io_bundle.py	64
@@ -8014,7 +7994,6 @@ test-docstrings	tests/test_io_streaming.py	0700
 test-docstrings	tests/test_io_streaming.py	10
 test-docstrings	tests/test_io_streaming.py	128
 test-docstrings	tests/test_io_streaming.py	19
-test-docstrings	tests/test_io_streaming.py	2.16_
 test-docstrings	tests/test_io_streaming.py	20
 test-docstrings	tests/test_io_streaming.py	62
 test-docstrings	tests/test_jax_backend_hardening.py	32
@@ -8552,10 +8531,7 @@ test-docstrings	tests/test_recipe_dissection.py	64.
 test-docstrings	tests/test_recipe_dissection.py	7697
 test-docstrings	tests/test_record_schema_bindings.py	11
 test-docstrings	tests/test_reentrant_trace.py	55
-test-docstrings	tests/test_rehydration_floor.py	10,
 test-docstrings	tests/test_rehydration_floor.py	2.16
-test-docstrings	tests/test_rehydration_floor.py	2.16_
-test-docstrings	tests/test_rehydration_floor.py	2026
 test-docstrings	tests/test_rehydration_floor.py	65
 test-docstrings	tests/test_release_model.py	56
 test-docstrings	tests/test_render_bugs.py	14
@@ -8941,13 +8917,11 @@ test-docstrings	tests/test_tlspec_codec_device_allowlist.py	55
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	56
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	57
 test-docstrings	tests/test_tlspec_codec_device_allowlist.py	64
-test-docstrings	tests/test_tlspec_detection.py	11.0
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	10
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2.13
 test-docstrings	tests/test_tlspec_envelope_ceiling.py	2026
 test-docstrings	tests/test_tlspec_envelope_state_contract.py	10
 test-docstrings	tests/test_tlspec_intervention_transitional.py	11.0
-test-docstrings	tests/test_tlspec_intervention_transitional.py	2.16.0
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	10,000
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	16
 test-docstrings	tests/test_tlspec_parse_depth_guard.py	33

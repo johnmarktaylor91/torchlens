@@ -504,3 +504,26 @@ def test_symlinked_record_file_refuses(saved, tmp_path, tripwires):
     target.unlink()
     target.symlink_to(real)
     _refuses(copy, tripwires)
+
+
+def test_tag_refusal_carries_the_ruled_cell_code(saved, tmp_path, tripwires):
+    """A cell that fails its type check refuses with the ruled ``record_schema_invalid``."""
+
+    cell = _tagged(FOREIGN_TAGS[0], type="os.system", args=["id"], fields={}, items=[], name="x")
+    error = _refuses(_with_cell(saved, tmp_path / "ruled", cell), tripwires)
+    assert error.fields["code"] == "record_schema_invalid"
+
+
+def test_recursion_during_rehydration_refuses_typed(saved, monkeypatch):
+    """A record graph that exhausts the interpreter stack surfaces typed, never raw."""
+
+    import torchlens as tl
+    from torchlens._io.format3 import reader
+
+    def explode(*args, **kwargs):
+        raise RecursionError("maximum recursion depth exceeded")
+
+    monkeypatch.setattr(reader, "load_trace", explode)
+    with pytest.raises(ArtifactError) as info:
+        tl.load(saved)
+    assert info.value.fields["code"] == "rehydrate_recursion_limit"
