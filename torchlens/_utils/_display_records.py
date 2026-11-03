@@ -124,7 +124,7 @@ def _group_identity(group: Any) -> str:
             f"TraceCost of {trace.name or 'unnamed'}",
             [],
             [
-                f"{format_duration(trace._cost_func_calls_duration)} compute",
+                f"{format_duration(float(trace._cost_func_calls_duration))} compute",
                 f"{format_iec_bytes(trace._cost_saved_activation_memory)} saved",
             ],
         )

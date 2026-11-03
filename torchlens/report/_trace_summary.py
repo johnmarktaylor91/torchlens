@@ -19,6 +19,7 @@ from .._utils._display_numbers import (
     format_duration,
     format_exact_count,
     format_iec_bytes,
+    plural,
 )
 from .._utils.fail_open import fail_open
 from ._factcore import capture_fingerprint
@@ -290,10 +291,7 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
             "saved",
             f"{exact(saved)} of {exact(len(trace._layer_list))} layer outputs, {format_iec_bytes(trace._cost_saved_activation_memory)}",
         ),
-        (
-            "outputs",
-            f"{exact(len(trace.output_layers))} output {'site' if len(trace.output_layers) == 1 else 'sites'}",
-        ),
+        ("outputs", plural(len(trace.output_layers), "output site")),
         ("flops", "MACs reported as FLOPs // 2"),
     ]
     if getattr(trace, "_provenance_verified", None) is False:

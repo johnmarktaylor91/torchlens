@@ -28,7 +28,7 @@ def _tensor_flow(row: Any) -> str:
     inputs, outputs = row.input_tensor_facts, row.output_tensor_facts
     if len(inputs) == len(outputs) == 1:
         return f"{_fact_text(inputs[0], device=False)} to {_fact_text(outputs[0])}"
-    return f"{len(inputs)} tensor {plural(len(inputs), 'input')}, {len(outputs)} tensor {plural(len(outputs), 'output')}"
+    return f"{plural(len(inputs), 'tensor input')}, {plural(len(outputs), 'tensor output')}"
 
 
 def aten_repr(row: Any) -> str:
