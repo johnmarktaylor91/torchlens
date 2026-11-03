@@ -20,7 +20,7 @@ from typing import Any
 from scripts.visual_language.slides import Panel, Slide
 
 #: Only what every sentinel render needs to be written as an SVG file and not opened.
-OUTPUT: Mapping[str, Any] = {"file_format": "svg", "vis_save_only": True}
+OUTPUT: Mapping[str, Any] = {"file_format": "svg", "open_viewer": False}
 SKINS = ("torchlens", "paper", "dark", "colorblind", "high_contrast")
 
 
@@ -72,7 +72,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         "Module boxes and depth widths, dashed not-from-input, buffers, box3d collapse.",
         (
             _panel("a", "ResidualNorm", "default"),
-            _panel("b", "ResidualNorm", "vis_call_depth=1", kwargs={"vis_call_depth": 1}),
+            _panel("b", "ResidualNorm", "depth=1", kwargs={"depth": 1}),
             _panel("c", "ResidualNorm", 'collapse="max"', kwargs={"collapse": "max"}),
         ),
     ),
@@ -83,8 +83,8 @@ SENTINELS: tuple[Sentinel, ...] = (
         "Unrolled against rolled, (xN), In/Out labels, back-edges, stack_by.",
         (
             _panel("a", "RNNCellSeq", "default (unrolled)"),
-            _panel("b", "RNNCellSeq", 'vis_mode="rolled"', kwargs={"vis_mode": "rolled"}),
-            _panel("c", "LoopShapes", 'vis_mode="rolled"', kwargs={"vis_mode": "rolled"}),
+            _panel("b", "RNNCellSeq", "rolled=True", kwargs={"rolled": True}),
+            _panel("c", "LoopShapes", "rolled=True", kwargs={"rolled": True}),
             _panel("d", "Loop", "stack_by=True", kwargs={"stack_by": True}),
         ),
     ),
@@ -140,9 +140,9 @@ SENTINELS: tuple[Sentinel, ...] = (
             _panel(
                 "a",
                 "ResidualNorm",
-                'vis_intervention_mode="as_node"',
+                'intervention_mode="as_node"',
                 intervene="zero_relu",
-                kwargs={"vis_intervention_mode": "as_node"},
+                kwargs={"intervention_mode": "as_node"},
             ),
             _panel("b", "ResidualNorm", "render_surgery", call="surgery", capture=_EDIT),
             _panel(
@@ -170,26 +170,26 @@ SENTINELS: tuple[Sentinel, ...] = (
             _panel(
                 "a",
                 "Grad",
-                "draw_backward()",
-                call="draw_backward",
+                'draw(graph="backward")',
                 capture=_GRAD,
                 prep="log_backward",
+                kwargs={"graph": "backward"},
             ),
             _panel(
                 "b",
                 "Grad",
-                "draw_combined()",
-                call="draw_combined",
+                'draw(graph="combined")',
                 capture=_GRAD,
                 prep="log_backward",
+                kwargs={"graph": "combined"},
             ),
             _panel(
                 "c",
                 "HigherOrder",
-                "draw_backward() of a double backward",
-                call="draw_backward",
+                'draw(graph="backward") of a double backward',
                 capture=_GRAD,
                 prep="higher_order",
+                kwargs={"graph": "backward"},
             ),
         ),
     ),
@@ -248,8 +248,7 @@ SENTINELS: tuple[Sentinel, ...] = (
         ("BranchConv",),
         "The first picture a new user sees: the one-call facade, default collapse auto.",
         (_panel("a", "BranchConv", "quickstart.render(model, x)", call="quickstart_render"),),
-        note="pending name: tl.render (naming sprint, defaults.8); renders "
-        "torchlens._quickstart.render today",
+        note="tl.draw, the one-call picture (glossary); renders torchlens._quickstart.draw",
     ),
     Sentinel(
         "SN14",

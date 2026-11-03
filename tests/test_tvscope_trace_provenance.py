@@ -63,7 +63,7 @@ def test_record_survives_save_load_with_stable_status(tmp_path) -> None:
     log = tl.trace(
         _Tiny().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="torchvision_weights",
@@ -90,7 +90,7 @@ def test_unverified_fallback_status_survives_save_load(tmp_path) -> None:
     log = tl.trace(
         _Tiny().eval(),
         torch.randn(2, 8),
-        capture=tl.options.CaptureOptions(layers_to_save="none"),
+        save="none",
     )
     log._provenance_input_preprocessor = ResolvedPreprocessing(
         source="imagenet_default",

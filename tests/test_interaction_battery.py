@@ -108,9 +108,8 @@ def test_fork_do_x_index_edits_the_fork_only() -> None:
 def test_record_x_intervene_returns_the_edited_output() -> None:
     """``tl.record`` with ``intervene=`` returns the edited output and records the site."""
 
-    output, recording = tl.record(
-        LinearReluLinear(), X, save=tl.func("relu"), intervene=ZERO_RELU, return_output=True
-    )
+    recording = tl.record(LinearReluLinear(), X, save=tl.func("relu"), intervene=ZERO_RELU)
+    output = recording.output
     assert torch.equal(output, torch.ones(1, 1))
     assert len(recording.records) == 1
 

@@ -10,7 +10,9 @@ from typing import Any, cast
 
 import graphviz
 
-from ..recording.types import DryRun, RecordContext
+from ..recording._dry_run import DryRun
+from ..recording.types import RecordContext
+from ..viz._drawing import Drawing
 from . import _render_utils
 from ._render_common import GraphvizRenderError
 
@@ -159,7 +161,7 @@ def draw(
     vis_outpath: str | None = None,
     vis_save_only: bool = True,
     vis_fileformat: str = "pdf",
-) -> str:
+) -> Drawing:
     """Render a flat Graphviz graph of op events with module-color rails.
 
     Parameters
@@ -175,8 +177,8 @@ def draw(
 
     Returns
     -------
-    str
-        Graphviz DOT source.
+    Drawing
+        The picture; ``str()`` of it is the DOT source.
     """
 
     dot = graphviz.Digraph("fastlog_dry_run")
@@ -201,7 +203,7 @@ def draw(
             dot.edge(f"event_{op_contexts[op_number - 1].event_index}", f"event_{ctx.event_index}")
     if vis_outpath is not None:
         _render_dry_run_graph(dot, vis_outpath, vis_fileformat, vis_save_only)
-    return cast(str, dot.source)
+    return Drawing(dot=cast(str, dot.source), file_format=vis_fileformat)
 
 
 def _render_dry_run_graph(

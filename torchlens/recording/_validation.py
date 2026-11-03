@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from typing import Final
 
-from .._errors import KeywordConflictError
 from .exceptions import RecordingConfigError
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .types import CaptureSpec
 
 _POSTPROCESS_PRESETS: Final[set[str]] = {
@@ -16,7 +15,7 @@ _POSTPROCESS_PRESETS: Final[set[str]] = {
 }
 
 
-def validate_recording_options(options: RecordingOptions) -> None:
+def validate_recording_options(options: _RecordingConfig) -> None:
     """Validate fastlog options that depend on combined public settings.
 
     Parameters
@@ -55,7 +54,7 @@ def validate_postprocess(postprocess: str) -> None:
         )
 
 
-def _validate_non_empty_capture(options: RecordingOptions) -> None:
+def _validate_non_empty_capture(options: _RecordingConfig) -> None:
     """Reject statically empty fastlog configurations.
 
     An armed ``narrate=`` narrator is a legal capture on its own ("narrate
@@ -80,7 +79,7 @@ def _validate_non_empty_capture(options: RecordingOptions) -> None:
         )
 
 
-def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
+def _validate_disk_only_keep_grad_defaults(options: _RecordingConfig) -> None:
     """Reject static save_grad defaults for disk-only storage."""
 
     if (
@@ -97,31 +96,6 @@ def _validate_disk_only_keep_grad_defaults(options: RecordingOptions) -> None:
             raise RecordingConfigError(
                 f"{name} cannot use save_grad=True with disk-only fastlog storage"
             )
-
-
-def refuse_storage_streaming_conflict(storage: object, streaming: object) -> None:
-    """Refuse ``storage=`` together with ``streaming=`` (one spelling per call).
-
-    Parameters
-    ----------
-    storage, streaming:
-        The two keyword values as passed (``None`` or ``MISSING`` means unset).
-
-    Raises
-    ------
-    KeywordConflictError
-        ``storage_argument_conflict`` when both were supplied.
-    """
-
-    def _supplied(value: object) -> bool:
-        return value is not None and type(value).__name__ != "MissingType"
-
-    if _supplied(storage) and _supplied(streaming):
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
 
 
 def refuse_episode_on_record(episode: object) -> None:

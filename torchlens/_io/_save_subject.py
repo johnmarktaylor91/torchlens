@@ -13,6 +13,8 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+from .._errors import SelectionError
+
 
 def resolve_save_subject(trace: Any) -> Any:
     """Return the Trace ``save`` should write for ``trace``.
@@ -58,8 +60,6 @@ def resolve_save_subject(trace: Any) -> Any:
     # (owners disjoint; a slice can only exist after its module imported).
     slice_presenter = sys.modules.get("torchlens._trace_slice")
     if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from torchlens._selection.errors import SelectionError
-
         raise SelectionError(
             "trace.save() does not support TraceSlice: a slice is a VIEW with "
             "declared dangling boundary edges, not a self-contained capture. "

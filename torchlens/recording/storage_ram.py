@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import torch
 
-from ._cooked_ancestry import _distinct_label_index_keys
 from ._storage_resolver import _resolve_storage
-from .options import RecordingOptions
+from .options import _RecordingConfig
 from .types import (
     ActivationRecord,
     CaptureSpec,
@@ -14,6 +13,7 @@ from .types import (
     RecordContext,
     Recording,
     StorageIntent,
+    _distinct_label_index_keys,
 )
 
 
@@ -37,7 +37,7 @@ class RamStorageBackend:
         spec: CaptureSpec,
         intent: StorageIntent,
         *,
-        options: RecordingOptions,
+        options: _RecordingConfig,
         ctx: RecordContext | GradRecordContext | None,
         kind: str = "activation",
     ) -> tuple[

@@ -1,24 +1,10 @@
-"""Cook-path ancestry helpers shared by the Recording projection.
-
-``_backfill_cooked_ancestry`` is THE sanctioned in-place op-lane writer on the
-cook path (it runs only on the ``_copy_for_replay`` projection a cook owns,
-never on the sealed Recording stream); ``_distinct_label_index_keys`` is the
-record-index key rule the lazy projection and the cook share.
-"""
+"""Ancestry backfill for cook-owned recording replay projections."""
 
 from __future__ import annotations
 
-from dataclasses import replace as _dc_replace
+__tl_layer__ = "L1"
+
 from typing import Any
-
-from .._ir.op_record import AncestryFacet, OpRecord
-
-
-def _distinct_label_index_keys(label: str, raw_label: str | None) -> tuple[str, ...]:
-    """Return the distinct label keys (primary, then raw alias) that index one record."""
-    if raw_label is None or raw_label == label:
-        return (label,)
-    return (label, raw_label)
 
 
 def _backfill_cooked_ancestry(events: Any) -> None:
@@ -51,6 +37,22 @@ def _backfill_cooked_ancestry(events: Any) -> None:
         Replay-projection ``CaptureEvents`` whose op lane should be
         ancestry-backfilled before Trace postprocessing.
     """
+
+    _backfill_cooked_op_records(events)
+
+
+def _backfill_cooked_op_records(events: Any) -> None:
+    """Replace replay-projection op records with derived ancestry facts.
+
+    Parameters
+    ----------
+    events
+        Cook-owned working projection whose op lane and fold cache are updated.
+    """
+    from dataclasses import replace as _dc_replace
+
+    from .._ir.op_record import AncestryFacet, OpRecord
+
     folded = events.amended_op_records()
     closures: dict[str, tuple[frozenset[str], frozenset[str]]] = {}
     by_raw_label = events.live_index.by_raw_label

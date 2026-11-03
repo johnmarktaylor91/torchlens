@@ -169,12 +169,14 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
     clean_log = tl.trace(
         model,
         clean,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     corrupted_log = tl.trace(
         model,
         corrupted,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_args=True),
+        capture=tl.options.CaptureOptions(save_args=True),
+        save="all",
     )
     clean_head = clean_log.modules["block.attn"].facets.head(0).result.detach().clone()
 

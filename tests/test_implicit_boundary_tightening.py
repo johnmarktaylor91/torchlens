@@ -40,7 +40,8 @@ def _plain_trace() -> tl.Trace:
     return tl.trace(
         _PlainModel(),
         torch.randn(3, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
 
 
@@ -129,8 +130,8 @@ def _cpu_async_capture(*, engine_drain: bool, monkeypatch) -> tuple[tl.Trace, nn
     trace = tl.trace(
         model,
         torch.randn(3, 4, requires_grad=True),
-        save_mode="cpu_async",
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all", save_mode="cpu_async"),
+        save="all",
     )
     _run_unmanaged_backward(trace)
     backward_mod._close_implicit_backward_pass_if_open(trace)
@@ -297,7 +298,8 @@ def test_error_path_backstop_sync_point_still_closes(monkeypatch) -> None:
     trace = tl.trace(
         _PlainModel(),
         x,
-        capture=tl.options.CaptureOptions(layers_to_save="all", save_grads="all"),
+        capture=tl.options.CaptureOptions(save_grads="all"),
+        save="all",
     )
     loss = trace[trace.output_layers[0]].out.sum()
     original_backward = backward_mod._ORIGINAL_AUTOGRAD_BACKWARD

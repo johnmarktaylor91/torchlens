@@ -42,7 +42,7 @@ def raw_leg():
     model.eval()
     tokens = model.to_tokens(PROMPT)  # explicit ids to BOTH sides (BOS measured)
     _, cache = model.run_with_cache(tokens)
-    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, tokens, save="all")
     try:
         yield model, tokens, cache, log
     finally:
@@ -110,7 +110,7 @@ def test_g2b_folded_gauge_blocking_rows():
     model.eval()
     tokens = model.to_tokens(PROMPT)
     _, cache = model.run_with_cache(tokens)
-    log = tl.trace(model, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(model, tokens, save="all")
 
     acc = mi.residual_accumulation(log, include_mid=True)
     for ours, theirs in zip(acc.rows, _tlens_states(model, cache), strict=True):
@@ -150,7 +150,7 @@ def test_g2c_cross_model_on_the_model_users_run():
     tlens.eval()
     tokens = tlens.to_tokens(PROMPT)
     _, cache = tlens.run_with_cache(tokens)
-    log = tl.trace(hf, tokens, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    log = tl.trace(hf, tokens, save="all")
 
     acc = mi.residual_accumulation(log, include_mid=True)
     states = _tlens_states(tlens, cache)

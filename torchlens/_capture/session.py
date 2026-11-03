@@ -1021,7 +1021,7 @@ def compile_legacy_capture_plan(
     deferred_activation = bool(deferred_selector)
     deferred_gradients = bool(getattr(trace, "_deferred_gradient_selector", None))
     graph_connected = bool(trace._options_backward_ready)
-    from .._trace_selector_helpers import _selector_requires_unwindowed_escrow
+    from .._trace_selection_shape import _selector_requires_unwindowed_escrow
 
     negative_windows = _negative_selector_windows(layers_to_save)
     grad_negative_windows = _negative_selector_windows(grad_layers_to_save)
