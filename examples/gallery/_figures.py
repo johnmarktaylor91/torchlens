@@ -198,7 +198,7 @@ def draw_causal_tracing(out: Path) -> list[Path]:
         fig.colorbar(
             image,
             ax=[left, right],
-            label="Average indirect effect (answer probability recovered)",
+            label="Average indirect effect\n(answer probability recovered)",
             shrink=0.92,
             pad=0.02,
         )
@@ -251,10 +251,10 @@ def draw_cnn_fields(out: Path) -> list[Path]:
             q1 + 0.03 * side,
             p0 - 0.015 * side,
             f"{q1 - q0} x {p1 - p0} patch",
-            color=GREEN,
+            color=INK,
             fontsize=SMALL,
             va="bottom",
-            bbox={"facecolor": "white", "edgecolor": "none", "alpha": 0.85, "pad": 1.5},
+            bbox={"facecolor": "white", "edgecolor": GREEN, "alpha": 0.9, "pad": 1.5},
         )
         left.set(xticks=(0, side // 2, side - 1), yticks=(0, side // 2, side - 1))
         left.set_title(f"Input ({side} x {side} noise)\nfield of one {layer} unit", loc="left")
@@ -344,7 +344,7 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
                 [-0.6, x[-1] + 0.2], [level, level], color=GREY, linestyle=":", lw=1, zorder=0
             )
             curve.text(
-                -0.4, level - 0.03, f"{label} {level:g}", va="top", fontsize=SMALL, color=GREY
+                -0.4, level - 0.03, f"{label} {level:g}", va="top", fontsize=SMALL, color=MUTED
             )
         curve.axhline(0, color=RULE, lw=0.7, zorder=0)
         curve.set(
@@ -392,14 +392,14 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(WIDTH, 4.9), layout="constrained")
         ax.plot([0, 1], [0, 1], color=GREY, linestyle=":", lw=1, zorder=1)
-        ax.text(0.72, 0.68, "chance", color=GREY, rotation=38, rotation_mode="anchor")
+        ax.text(0.72, 0.68, "chance", color=MUTED, rotation=38, rotation_mode="anchor")
         ax.plot(roc[:, 0], roc[:, 1], color=BLUE, lw=2.2, zorder=2)
         ax.scatter([data["fpr_at_k"]], [data["recall_at_k"]], s=48, color=VERMILION, zorder=3)
         ax.annotate(
             f"top {data['k']} heads: {data['recall_at_k']:.0%} of Wang's {positives}",
             (data["fpr_at_k"], data["recall_at_k"]),
             xytext=(data["fpr_at_k"] + 0.06, data["recall_at_k"] - 0.1),
-            color=VERMILION,
+            color=INK,
             arrowprops={"arrowstyle": "-", "color": VERMILION, "lw": 0.8},
         )
         ax.set(
