@@ -662,9 +662,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         # canonical message names the owning flag and the refused option.
         (
             {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
-            "interventions=False.*intervene",
+            "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("relu")}, "interventions=False.*halt"),
+        ({"halt": tl.func("relu")}, "can_intervene=False.*halt"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -894,13 +894,13 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
@@ -988,11 +988,11 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 

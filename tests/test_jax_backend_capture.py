@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from collections import OrderedDict
 from collections.abc import Callable
@@ -468,10 +469,11 @@ def _path_token(component: object) -> tuple[str, object]:
         Component type name and stored key/index value.
     """
 
-    if hasattr(component, "key"):
-        return (type(component).__name__, getattr(component, "key"))
-    if hasattr(component, "index"):
-        return (type(component).__name__, getattr(component, "index"))
+    if dataclasses.is_dataclass(component) and not isinstance(component, type):
+        # Path components are single-field dataclasses (v11 keeps DictKey._key and
+        # NamedField._name private), so read the one stored field by its declared name.
+        (stored,) = dataclasses.fields(component)
+        return (type(component).__name__, getattr(component, stored.name))
     return (type(component).__name__, component)
 
 
@@ -1003,6 +1005,7 @@ def test_synthetic_control_parent_is_retained_by_orphan_pruning() -> None:
             self.internal_sink_ops: list[str] = []
             self.internally_terminated_bool_ops: list[str] = []
             self.keep_orphans = False
+            self.is_stopped = False
             self._orphan_labels: list[str] = []
 
         def _batch_remove_log_entries(

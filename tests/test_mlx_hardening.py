@@ -509,7 +509,7 @@ def test_mlx_intermediate_derived_grads_are_not_backward_capture() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,), intermediate_grads=True),
     )
 
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
@@ -559,13 +559,13 @@ def test_mlx_derived_grads_are_not_backward_capture() -> None:
         grad_options=GradOptions(loss_fn=_grad_loss, input_grad_argnums=(0,)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 

@@ -1102,9 +1102,9 @@ def test_jax_rejects_callback_effects() -> None:
         # canonical message names the owning flag and the refused option.
         (
             {"intervene": tl.when(tl.func("tanh"), tl.zero_ablate())},
-            "interventions=False.*intervene",
+            "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("tanh")}, "interventions=False.*halt"),
+        ({"halt": tl.func("tanh")}, "can_intervene=False.*halt"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

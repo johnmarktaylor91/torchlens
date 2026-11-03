@@ -971,7 +971,7 @@ class MLXBackend:
             spec = get_backend_spec("mlx")
             if not spec.capabilities.can_intervene:
                 raise BackendUnsupportedError(
-                    "MLX backend capability table declares interventions=False; "
+                    "MLX backend capability table declares can_intervene=False; "
                     "refusing trace(intervene=/halt=) instead of silently "
                     "ignoring the requested behavior.",
                     code="interventions_unsupported",
