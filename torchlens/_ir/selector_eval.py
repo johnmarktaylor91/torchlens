@@ -730,7 +730,9 @@ def _compile_predicate(selector: BaseSelector, lane: str) -> _Matcher:
 def _refuse_predicate_payload(subject: Any) -> bool:
     """Refuse a predicate selector whose payload is not callable."""
 
-    raise SiteResolutionError("tl.where(...) requires a callable predicate.")
+    raise SiteResolutionError(
+        "tl.where(...) requires a callable predicate.", code="where_predicate_not_callable"
+    )
 
 
 def _match_predicate_live(subject: Any, *, predicate: Callable[[Any], Any]) -> bool:
@@ -740,7 +742,9 @@ def _match_predicate_live(subject: Any, *, predicate: Callable[[Any], Any]) -> b
         return bool(predicate(subject))
     except Exception as exc:
         raise SiteResolutionError(
-            f"live predicate selector failed at {getattr(subject, '_layer_label_raw', '<unknown>')}"
+            "live predicate selector failed at "
+            f"{getattr(subject, '_layer_label_raw', '<unknown>')}",
+            code="live_predicate_failed",
         ) from exc
 
 
@@ -765,7 +769,8 @@ def _refuse_followed_by_composition(subject: Any) -> bool:
 
     raise SelectorCompositionError(
         "tl.followed_by(...) only supports candidate & tl.followed_by(successor); "
-        "standalone, negated, or OR-composed followed_by selectors are unsupported."
+        "standalone, negated, or OR-composed followed_by selectors are unsupported.",
+        code="followed_by_composition_unsupported",
     )
 
 
@@ -1293,7 +1298,9 @@ def selector_from_spec(
     builder = _spec_builders().get(kind)
     selector = None if builder is None else builder(kind, value, metadata or {}, lifecycle)
     if selector is None:
-        raise SiteResolutionError(f"Unsupported target spec selector kind {kind!r}.")
+        raise SiteResolutionError(
+            f"Unsupported target spec selector kind {kind!r}.", code="selector_kind_unsupported"
+        )
     return selector
 
 
@@ -1429,7 +1436,9 @@ def _spec_facet(
                     module_address=None if module_address is None else str(module_address),
                 ),
             )
-    raise SiteResolutionError(f"Unsupported facet selector payload {value!r}.")
+    raise SiteResolutionError(
+        f"Unsupported facet selector payload {value!r}.", code="facet_selector_invalid"
+    )
 
 
 def _spec_site(
@@ -1491,7 +1500,10 @@ def _spec_backward_pass(
     """Build ``backward_pass`` from an integer pass index."""
 
     if not isinstance(value, int):
-        raise SiteResolutionError("backward_pass target specs require an integer pass index.")
+        raise SiteResolutionError(
+            "backward_pass target specs require an integer pass index.",
+            code="backward_pass_selector_invalid",
+        )
     return cast(BaseSelector, factory(value))
 
 
@@ -1531,7 +1543,10 @@ def _spec_composite(
     """Build an n-ary ``and`` / ``or`` from a sequence of nested selector specs."""
 
     if not isinstance(value, Sequence) or isinstance(value, str):
-        raise SiteResolutionError(f"{kind!r} target specs require a sequence of nested selectors.")
+        raise SiteResolutionError(
+            f"{kind!r} target specs require a sequence of nested selectors.",
+            code="composite_selector_invalid",
+        )
     children = tuple(
         normalize_selector_like(child, lifecycle=cast(Lifecycle, lifecycle)) for child in value
     )
@@ -1551,7 +1566,8 @@ def _spec_lookaround(
             f"tl.{kind}(...) target spec carries an opaque audit payload {inner!r}; "
             "an inner predicate saved by repr cannot be reconstructed. Rebuild the "
             "selector in code, or re-save the spec with a structural selector inner "
-            "such as tl.func(...)."
+            "such as tl.func(...).",
+            code="lookback_selector_inner_opaque",
         )
     if not isinstance(inner, BaseSelector) and not callable(inner):
         inner = normalize_selector_like(inner, lifecycle="capture")
@@ -1641,8 +1657,13 @@ def normalize_selector_like(selector_like: Any, *, lifecycle: Lifecycle) -> Base
 
         return label(str(selector_like.layer_label))
     if lifecycle == "live":
-        raise SiteResolutionError(f"Unsupported live hook selector {selector_like!r}.")
-    raise SiteResolutionError(f"Unsupported site query {selector_like!r}.")
+        raise SiteResolutionError(
+            f"Unsupported live hook selector {selector_like!r}.",
+            code="live_hook_selector_unsupported",
+        )
+    raise SiteResolutionError(
+        f"Unsupported site query {selector_like!r}.", code="site_query_unsupported"
+    )
 
 
 def _spec_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSelector | None:
