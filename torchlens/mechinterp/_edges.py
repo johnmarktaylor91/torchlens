@@ -75,6 +75,18 @@ class ComponentSender:
     value:
         The node's output ``[batch, pos, d_model]``: what it adds to the
         residual stream, and so its contribution on every outgoing edge.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)), save="all")
+    >>> sender = tl.mechinterp.component_graph(trace).nodes["input"]
+    >>> isinstance(sender, ComponentSender), sender.kind
+    (True, 'input')
     """
 
     name: str
@@ -112,6 +124,18 @@ class ComponentReceiver:
         The captured receiver input ``[batch, pos, d_model]`` (pre-norm).
     senders:
         The source nodes whose outputs sum to ``value``, in node order.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)), save="all")
+    >>> receiver = tl.mechinterp.component_graph(trace).receivers["logits"]
+    >>> isinstance(receiver, ComponentReceiver), receiver.kind
+    (True, 'logits')
     """
 
     name: str
@@ -133,7 +157,20 @@ class ComponentReceiver:
 
 @dataclass(frozen=True, eq=False)
 class ComponentEdge:
-    """One edge ``sender->receiver`` of the component graph."""
+    """One edge ``sender->receiver`` of the component graph.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)), save="all")
+    >>> edge = tl.mechinterp.component_graph(trace).edges["m0->logits"]
+    >>> isinstance(edge, ComponentEdge), edge.name, tuple(edge.contribution.shape)
+    (True, 'm0->logits', (1, 6, 8))
+    """
 
     sender: ComponentSender
     receiver: ComponentReceiver
@@ -176,6 +213,19 @@ class ComponentGraph:
     excludes them (``sum(e.sender.kind != "bias" for e in graph.edges.values())``).
     ``identity_receipt`` records the in-API check that every receiver's
     input equals the sum of its incoming contributions.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> graph = tl.mechinterp.component_graph(trace)
+    >>> isinstance(graph, ComponentGraph), len(graph.edges) > 0
+    (True, True)
     """
 
     def __init__(
@@ -516,6 +566,19 @@ def component_graph(trace: Any) -> ComponentGraph:
     ComponentGraph
         Nodes, receivers and edges keyed by vocabulary name, with the
         receiver-input identity already checked.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> graph = tl.mechinterp.component_graph(trace)
+    >>> "logits" in graph.receivers, "input" in graph.nodes
+    (True, True)
     """
 
     builder = _Builder(trace)

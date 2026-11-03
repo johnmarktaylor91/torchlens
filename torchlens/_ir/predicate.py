@@ -14,7 +14,17 @@ _DEFERRED_VALUE_FIELDS = frozenset({"tensor_requires_grad", "is_scalar_bool", "b
 
 
 class MLXValueUnavailableError(RuntimeError):
-    """Raised when MLX lazy evaluation makes a predicate value unavailable."""
+    """Raised when MLX lazy evaluation makes a predicate value unavailable.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.MLXValueUnavailableError, RuntimeError)
+    True
+    >>> try:
+    ...     raise tl.errors.MLXValueUnavailableError("needs mx.eval")
+    ... except RuntimeError as e:
+    ...     print(type(e).__name__)
+    MLXValueUnavailableError"""
 
 
 class _DeferredValue:
@@ -107,7 +117,17 @@ def coerce_deferred_value(value: Any) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class ModuleStackFrame:
-    """One frame in the active module stack."""
+    """One frame in the active module stack.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> recording = tl.record(model, x, save=lambda ctx: seen.append(ctx) or False)
+    >>> frame = next(c for c in seen if c.kind == "op").module_stack[-1]
+    >>> isinstance(frame, ModuleStackFrame)
+    True
+    >>> frame.address, frame.module_type, frame.pass_number
+    ('0', 'Conv2d', 1)"""
 
     address: str
     module_type: str
@@ -207,6 +227,19 @@ class RecordContext:
         Labels of the module calls whose output this event is. Empty for events
         that are not a module-call output; a provisional op carries ``()`` until
         the module-exit hook resolves its membership.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> def spy(ctx):
+    ...     seen.append(ctx)
+    ...     return False
+    >>> recording = tl.record(model, x, save=spy)
+    >>> ctx = next(c for c in seen if c.kind == "op")
+    >>> isinstance(ctx, tl.recording.RecordContext)
+    True
+    >>> ctx.layer_type, ctx.shape, ctx.pass_number
+    ('conv2d', (1, 4, 8, 8), 1)
     """
 
     kind: EventKind | str

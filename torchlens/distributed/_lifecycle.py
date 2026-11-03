@@ -71,12 +71,26 @@ class AmbiguousGroupLifetimeError(CompatibilityError, RuntimeError):
 
     Structured context on ``fields``: ``kind`` (always
     ``"ambiguous_group_lifetime"``), ``membership_digest``, and ``reason``.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousGroupLifetimeError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(AmbiguousGroupLifetimeError, RuntimeError)
+    True
     """
 
 
 @dataclass(frozen=True)
 class GroupIdentity:
-    """Resolved lifetime identity of one process group on this rank."""
+    """Resolved lifetime identity of one process group on this rank.
+
+    Examples
+    --------
+    >>> ident = GroupIdentity(membership_digest="d41d8", lifetime_ordinal=0,
+    ...                       ordinal_source="armed", global_ranks=(0, 1), backend="gloo")
+    >>> ident.group_uid
+    ('d41d8', 0)"""
 
     membership_digest: str
     lifetime_ordinal: int
@@ -93,7 +107,15 @@ class GroupIdentity:
 
 @dataclass(frozen=True)
 class ArmingRecord:
-    """What ``arm()`` established, stamped on every boundary record."""
+    """What ``arm()`` established, stamped on every boundary record.
+
+    Examples
+    --------
+    >>> tl.distributed.disarm()
+    >>> record = tl.distributed.arm()
+    >>> isinstance(record, ArmingRecord), record.source
+    (True, 'explicit')
+    >>> tl.distributed.disarm()"""
 
     install_epoch: InstallEpoch
     recognizer_snapshot: str
@@ -145,7 +167,13 @@ def auto_arm_degradation() -> str | None:
 
 
 def is_armed() -> bool:
-    """Whether the distributed opt-in is currently armed in this process."""
+    """Whether the distributed opt-in is currently armed in this process.
+
+    Examples
+    --------
+    >>> tl.distributed.disarm()
+    >>> tl.distributed.is_armed()
+    False"""
 
     return _STATE is not None
 
@@ -556,6 +584,16 @@ def arm() -> ArmingRecord:
         When the arm-time recognizer derivation refuses this torch runtime.
     CompatibilityError
         When torch has no distributed support.
+
+    Examples
+    --------
+    >>> tl.distributed.disarm()
+    >>> record = tl.distributed.arm()
+    >>> record.install_epoch, tl.distributed.is_armed()
+    ('armed_before_any_group', True)
+    >>> tl.distributed.arm() is record
+    True
+    >>> tl.distributed.disarm()
     """
 
     return _arm(source="explicit")
@@ -692,6 +730,13 @@ def disarm() -> None:
     """Remove the lifecycle wraps and drop all armed state.
 
     Primarily for tests; ordinary programs stay armed for process lifetime.
+
+    Examples
+    --------
+    >>> _ = tl.distributed.arm()
+    >>> tl.distributed.disarm()
+    >>> tl.distributed.is_armed()
+    False
     """
 
     global _STATE, _AUTO_ARM_DEGRADATION

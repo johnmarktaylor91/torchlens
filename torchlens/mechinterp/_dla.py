@@ -106,6 +106,18 @@ def token_directions(trace: Any, tokens: Any) -> torch.Tensor:
         A finished torchlens trace with an unembedding head.
     tokens:
         Token id or sequence of token ids.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> tuple(tl.mechinterp.token_directions(trace, [3, 4]).shape)
+    (8, 2)
     """
 
     anchor = resolve_lm_head(trace)
@@ -242,6 +254,19 @@ def direct_logit_contributions(
     ContributionScores
         Per-component rows + the ONE verified constant row + the captured
         native logits, with the in-API identity receipt.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> scores = tl.mechinterp.direct_logit_contributions(trace, answer=3, vs=4)
+    >>> scores.identity_receipt["result"]
+    'verified'
     """
 
     anchor = resolve_lm_head(trace)

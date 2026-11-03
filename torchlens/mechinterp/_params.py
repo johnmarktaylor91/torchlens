@@ -74,6 +74,18 @@ class ProjectionSource:
         ``None`` for unfused roles.
     verification:
         ``"payload_verified"`` or ``"unavailable"`` (payloads not saved).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)), save="all")
+    >>> source = tl.mechinterp.head_weight_views(trace, "transformer.h.0.attn").sources["q"]
+    >>> isinstance(source, ProjectionSource), source.has_fused_qkv
+    (True, True)
     """
 
     role: str
@@ -94,6 +106,19 @@ class HeadWeightViews:
     d_model]``. Biases are head-indexed where the parameter exists
     (``b_o`` stays ``[d_model]`` -- it is not attributable per head; mikit
     D10 keeps it a verified remainder, never spread).
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> views = tl.mechinterp.head_weight_views(trace, "transformer.h.0.attn")
+    >>> isinstance(views, HeadWeightViews), views.num_q_heads, views.d_head
+    (True, 2, 4)
     """
 
     w_q: torch.Tensor
@@ -412,6 +437,19 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
     -------
     HeadWeightViews
         Verified views + orientation/GQA/fusion/shared-storage metadata.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> views = tl.mechinterp.head_weight_views(trace, "transformer.h.0.attn")
+    >>> tuple(views.w_q.shape), tuple(views.w_o.shape)
+    ((2, 8, 4), (2, 4, 8))
     """
 
     module = trace.modules[attention] if isinstance(attention, str) else attention
@@ -606,6 +644,18 @@ def qk_circuit(trace: Any, attention: Any) -> FactoredMatrix:
     FactoredMatrix
         Factors ``A = W_Q`` ``[n_q_heads, d_model, d_head]`` and
         ``B = W_K^T`` ``[n_q_heads, d_head, d_model]``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> tuple(tl.mechinterp.qk_circuit(trace, "transformer.h.0.attn").shape)
+    (2, 8, 8)
     """
 
     views = _views_for(trace, attention)
@@ -635,6 +685,18 @@ def ov_circuit(trace: Any, attention: Any) -> FactoredMatrix:
     FactoredMatrix
         Factors ``A = W_V`` ``[n_q_heads, d_model, d_head]`` and
         ``B = W_O`` ``[n_q_heads, d_head, d_model]``.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
+    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> tuple(tl.mechinterp.ov_circuit(trace, "transformer.h.0.attn").shape)
+    (2, 8, 8)
     """
 
     views = _views_for(trace, attention)

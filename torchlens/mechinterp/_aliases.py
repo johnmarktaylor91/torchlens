@@ -74,6 +74,14 @@ class AliasResolution:
     generation:
         Which TLens generation vocabulary matched (``2.x`` / ``3.x-bridge`` /
         ``4.x``).
+
+    Examples
+    --------
+    >>> found = AliasResolution("blocks.0.attn.hook_q", "real", facet="q")
+    >>> found.status
+    'real'
+    >>> found.facet
+    'q'
     """
 
     query: str
@@ -87,7 +95,16 @@ class AliasResolution:
 
 
 def translation_table() -> list[dict[str, Any]]:
-    """Return the (TLens name, generation)-keyed translation rows."""
+    """Return the (TLens name, generation)-keyed translation rows.
+
+    Examples
+    --------
+    >>> rows = tl.mechinterp.translation_table()
+    >>> len(rows) > 0
+    True
+    >>> "2.x" in {row["generation"] for row in rows}
+    True
+    """
 
     with (
         resources.files("torchlens.mechinterp")
@@ -352,6 +369,13 @@ def resolve_alias(trace: Any, name: Any) -> AliasResolution:
     -------
     AliasResolution
         Never raises for an unresolvable name -- the status IS the answer.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> found = tl.mechinterp.resolve_alias(trace, "blocks.0.attn.hook_q")
+    >>> found.status
+    'structurally_absent'
     """
 
     return _resolve(trace, _parse_query(name))
@@ -415,6 +439,15 @@ def alias_report(trace: Any, *, generation: str = "2.x") -> list[AliasResolution
     every executed layer and resolved against THIS trace; the result is the
     coverage matrix for the model in front of the user (published per R0
     family by CI).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = tl.mechinterp.alias_report(trace)
+    >>> len(report) > 0
+    True
+    >>> all(entry.status == "structurally_absent" for entry in report)
+    True
     """
 
     rows = [row for row in translation_table() if row["generation"] == generation]

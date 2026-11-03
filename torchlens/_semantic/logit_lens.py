@@ -79,6 +79,13 @@ class LogitLensError(TorchLensError, RuntimeError):
 
     Contracted refusals carry a stable ``fields["code"]``; the historical
     ``RuntimeError`` lineage is preserved for existing catch sites.
+
+    Examples
+    --------
+    >>> issubclass(LogitLensError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(LogitLensError, RuntimeError)
+    True
     """
 
 
@@ -149,6 +156,15 @@ class LogitLens:
         check under ``logit_lens(verify=...)``).
     final_logits:
         The model's captured real output logits when readable, else ``None``.
+
+    Examples
+    --------
+    >>> lens = LogitLens(entries=(), facet="resid_post", lens_source="user",
+    ...                  is_validated=False, final_logits=None)
+    >>> lens.lens_source
+    'user'
+    >>> print(lens.summary())
+    logit lens (resid_post, lens=user)
     """
 
     entries: tuple[LogitLensEntry, ...]
@@ -278,6 +294,17 @@ class LogitLensPrediction:
         Requested-token values: ids as given, logits/probabilities shaped
         ``[batch, n_positions, n_tokens]``, and ONE-BASED ranks (int64, tie
         convention recorded on the parent result).
+
+    Examples
+    --------
+    >>> z = torch.zeros(1, 1, 2)
+    >>> row = LogitLensPrediction("blocks.0", 0, "resid_post", "projected through final norm/head",
+    ...                           (5,), z.long(), z, z, torch.zeros(1, 1), (), z[..., :0],
+    ...                           z[..., :0], z[..., :0].long())
+    >>> row.positions
+    (5,)
+    >>> tuple(row.top_ids.shape)
+    (1, 1, 2)
     """
 
     address: str
@@ -315,6 +342,15 @@ class LogitLensPredictions:
         Whether the reconstructed lens passed numeric validation.
     tie_convention:
         Recorded rank tie convention for ``token_ranks``.
+
+    Examples
+    --------
+    >>> preds = LogitLensPredictions(rows=(), k=5, facet="resid_post", lens_source="user",
+    ...                              is_validated=False)
+    >>> preds.k
+    5
+    >>> len(preds.rows)
+    0
     """
 
     rows: tuple[LogitLensPrediction, ...]

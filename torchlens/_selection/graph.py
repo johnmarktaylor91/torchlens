@@ -464,6 +464,12 @@ def neighborhood(
     refuses typed on unknown seed sites (``site_not_in_trace``) and on
     member sites with no output index space (``non_tensor_site`` /
     ``no_index_space``). DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.neighborhood("relu_1_2", hops=1)].labels
+    ('conv2d_1_1:1', 'relu_1_2:1', 'conv2d_2_3:1')
     """
 
     if isinstance(hops, bool) or not isinstance(hops, int) or hops < 0:
@@ -498,6 +504,12 @@ def between(sources: Any, sinks: Any) -> Selector:
     ``provenance.relation="exact"``. The same region as a graph VIEW with
     an explicit boundary is ``trace.between(sources, sinks)``.
     DOCUMENTED-UNSTABLE spelling.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> trace[tl.between("conv2d_1_1", "conv2d_2_3")].labels
+    ('conv2d_1_1:1', 'relu_1_2:1', 'conv2d_2_3:1')
     """
 
     return Selector(
