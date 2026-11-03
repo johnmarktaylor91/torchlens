@@ -78,7 +78,6 @@ _LEDGERED_SPRINT_TOKEN_FILES: frozenset[str] = frozenset(
         "test_r29_capval_hardening.py",
         "test_r34_security_io.py",
         "test_r36_cuda_hygiene.py",
-        "test_r3_torch_namespace_rce.py",
         "test_r43_gate_inversion.py",
         "test_r45_property_classification.py",
         "test_r45_torch_symbol_decode.py",
