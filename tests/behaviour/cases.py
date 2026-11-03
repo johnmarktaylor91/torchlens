@@ -307,7 +307,16 @@ TOY_CASES: tuple[Case, ...] = (
         "conditional",
     ),
     _toy("repeated_module", example_models.RepeatedModule, _img, "recurrent", "child_module"),
-    _toy("nested_modules", example_models.NestedModules, _img64, "recurrent", "child_module"),
+    # NestedModules draws torch.rand in Level21.forward, so it is stochastic (an
+    # unseeded capture reseeds torch from its own stream; see CaptureOptions.random_seed).
+    _toy(
+        "nested_modules",
+        example_models.NestedModules,
+        _img64,
+        "recurrent",
+        "child_module",
+        "stochastic",
+    ),
     _toy("loop_no_param", example_models.SimpleLoopNoParam, _loop_img, "recurrent"),
     _toy(
         "recurrent_params",
