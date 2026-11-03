@@ -311,6 +311,16 @@ class _Fold(nn.Module):
         return F.fold(x, output_size=(4, 4), kernel_size=(2, 2)).sum() + x.sum()
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_size_driving_allowlist_and_gate_are_deleted() -> None:
+    """The projection is NOT gated by a callable qualname/tail allowlist: the r55
+    enumeration symbols are absent, so no op-name list can silently re-open the class."""
+
+    assert not hasattr(rex, "_SIZE_DRIVING_QUALNAME_TAILS")
+    assert not hasattr(rex, "_call_is_size_driving")
+    assert not hasattr(rex, "_has_integer_literal")  # renamed to _has_numeric_literal
+
+
 # --------------------------------------------------------------------------- #
 # (c) ENUMERATION-FREE mechanism pins: the projection runs for ANY callable      #
 #     regardless of its qualname/registry entry, and pure views / input-returns  #

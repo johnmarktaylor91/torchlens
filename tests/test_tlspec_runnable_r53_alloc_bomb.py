@@ -18,6 +18,7 @@ suite is the whole-class immunizer:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import resource
 import typing
@@ -132,6 +133,49 @@ def _is_integer_annotation(annotation: Any) -> bool:
     if origin in (tuple, list):
         return any(arg is int for arg in args)
     return False
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_every_descriptor_integer_field_is_anchored() -> None:
+    """No integer descriptor field may silently scale an allocation (r53 free_1).
+
+    Reflect over the frozen descriptor dataclasses' integer-typed fields and
+    assert each is declared in the anchor table. A new unanchored integer field
+    -- the exact shape of the free_1 bomb -- becomes a failing test.
+    """
+
+    resolved_hints = {cls: typing.get_type_hints(cls) for cls in _DESCRIPTOR_DATACLASSES}
+    discovered: set[tuple[type, str]] = set()
+    for cls in _DESCRIPTOR_DATACLASSES:
+        hints = resolved_hints[cls]
+        for field in dataclasses.fields(cls):
+            annotation = hints.get(field.name, field.type)
+            if _is_integer_annotation(annotation):
+                discovered.add((cls, field.name))
+
+    documented = {key for key in _INTEGER_FIELD_ANCHORS if key in discovered}
+    missing = discovered - documented
+    assert not missing, (
+        "Undeclared integer descriptor field(s) can silently scale an allocation; "
+        f"add an anchor row + parse check for: {sorted((c.__name__, n) for c, n in missing)}"
+    )
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_allocation_scaling_fields_have_dedicated_parse_bounds() -> None:
+    """The three allocation-scaling fields are exactly the free_1 loci."""
+
+    scaling = {
+        key
+        for key, anchor in _INTEGER_FIELD_ANCHORS.items()
+        if anchor in _ALLOCATION_SCALING_ANCHORS
+    }
+    assert scaling == {
+        (RunnableCallDescriptor, "num_positional_args"),
+        (RunnableCallDescriptor, "num_keyword_args"),
+        (TensorSlotDescriptor, "shape"),
+        (TensorSlotDescriptor, "rank"),
+    }
 
 
 _DESCRIPTOR_DATACLASSES = (

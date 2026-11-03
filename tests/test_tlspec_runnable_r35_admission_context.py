@@ -121,6 +121,41 @@ def _conv_twins(xc: torch.Tensor) -> dict[str, torch.Tensor]:
     }
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_r35_matmul_carveout_unchanged_no_conv_sdpa_extension() -> None:
+    """H_B_RESOLUTION: NO conv/transpose-conv/SDPA extension of the ULP carve-out."""
+
+    from torchlens._runnable.execution import _LAYOUT_SENSITIVE_BLAS_QUALNAMES
+
+    assert (
+        frozenset(
+            {
+                "linear",
+                "matmul",
+                "mm",
+                "bmm",
+                "mv",
+                "dot",
+                "vdot",
+                "inner",
+                "outer",
+                "ger",
+                "addmm",
+                "addbmm",
+                "baddbmm",
+                "addmv",
+                "addr",
+                "einsum",
+                "tensordot",
+            }
+        )
+        == _LAYOUT_SENSITIVE_BLAS_QUALNAMES
+    )
+    assert not any(
+        "conv" in name or "attention" in name for name in _LAYOUT_SENSITIVE_BLAS_QUALNAMES
+    )
+
+
 # ---------------------------------------------------------------------------
 # corr2_8 + decision E -- execution-context capture and restore.
 # ---------------------------------------------------------------------------

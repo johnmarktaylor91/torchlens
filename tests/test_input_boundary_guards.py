@@ -173,6 +173,20 @@ def _tight_stack(fn: Any, headroom: int = 130) -> Any:
         sys.setrecursionlimit(old_limit)
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_input_search_ceiling_locksteps_the_shared_ceiling() -> None:
+    """The tensor-extraction walker's ceiling covers the boundary contract.
+
+    ``INPUT_SEARCH_DEPTH_LIMIT`` was a private 64 while the boundary ceiling
+    is 200, so a legal depth-65..200 input passed every walker and then
+    silently dropped its tensor leaves into a traversal gap.
+    """
+
+    from torchlens._utils.introspection import INPUT_SEARCH_DEPTH_LIMIT
+
+    assert INPUT_SEARCH_DEPTH_LIMIT > INPUT_TREE_MAX_DEPTH
+
+
 # Kept: sole branch coverage of _input_walk.py.
 def test_walk_input_boundary_stack_exhaustion_refuses_typed() -> None:
     """A LEGAL 100-deep input under a consumed stack refuses typed, never raw."""

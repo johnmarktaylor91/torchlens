@@ -180,3 +180,118 @@ def test_distributed_arm_restores_its_wraps_when_the_second_install_fails(
     assert _lifecycle._STATE is None
     for name, original in pristine.items():
         assert getattr(dist, name) is original, f"{name} was left wrapped with no owner"
+
+
+# Kept: skipped in its per-id coverage run, so it has no measurement (shrink rule 3).
+def test_escape_detector_teardown_frees_the_tool_id_and_clears_the_guard(
+    monkeypatch,
+) -> None:
+    """A raising uninstall step must still release the id and clear the guard.
+
+    ``_uninstall_monitoring`` attempts every step independently, frees the tool
+    id in a ``finally``, and THEN re-raises as ``RuntimeError`` so a caller can
+    demote the capture's verdict instead of silently blessing a trace whose
+    detector may still be firing into a dead guard (``ac617c60b``,
+    "disclose and demote on detector teardown failure instead of swallowing").
+    This test predates that change and asserted a bare, non-raising call,
+    which went undetected because no CI leg ran Python 3.12 (grind-pyver R9);
+    the end-to-end demotion contract is separately pinned by
+    ``test_detector_teardown_failure_demotes_and_discloses`` in
+    ``tests/test_scoped_patching_escape_detection.py``. Expect the raise here
+    too and verify cleanup still happened around it.
+    """
+
+    import sys
+
+    from torchlens.backends.torch import escape_detection
+
+    monitoring = getattr(sys, "monitoring", None)
+    if monitoring is None:
+        pytest.skip("sys.monitoring requires Python 3.12+")
+
+    import threading
+
+    # Minimal faithful state: _uninstall_monitoring reads only the two
+    # monitoring fields, but _GuardState's identity fields are required
+    # (this construction rotted unnoticed while no CI leg ran 3.12).
+    guard = escape_detection._GuardState(
+        trace=None,
+        tables=escape_detection.DetectorTables(
+            epoch=0,
+            raw_by_id={},
+            python_code_to_raw_ids={},
+            c_raw_ids=frozenset(),
+            tensor_method_name_to_raw_ids={},
+            export_sites={},
+            excluded_raw_ids=frozenset(),
+        ),
+        owner_thread_id=threading.get_ident(),
+        mode="shadow",
+        guard_pass_index=0,
+    )
+    tool_id = None
+    for candidate in range(6):
+        try:
+            monitoring.use_tool_id(candidate, "torchlens-test")
+        except Exception:
+            continue
+        tool_id = candidate
+        break
+    if tool_id is None:
+        pytest.skip("no free sys.monitoring tool id on this interpreter")
+    guard.monitoring_tool_id = tool_id
+
+    def _raise(*_args: Any, **_kwargs: Any) -> None:
+        """Fail the first uninstall step."""
+
+        raise RuntimeError("injected set_events failure")
+
+    monkeypatch.setattr(monitoring, "set_events", _raise)
+    with pytest.raises(RuntimeError, match="detector teardown failed"):
+        escape_detection._uninstall_monitoring(guard)
+    assert guard.monitoring_tool_id is None
+    # Proof the id really was released: re-acquiring it must succeed.
+    monkeypatch.undo()
+    monitoring.use_tool_id(tool_id, "torchlens-test-reacquire")
+    monitoring.free_tool_id(tool_id)
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_call_execution_context_unwind_exits_every_context() -> None:
+    """A raising inner `__exit__` must not strand the outer contexts."""
+
+    from torchlens._runnable import state_context as _runnable_state_context
+
+    exited: list[str] = []
+
+    class _Ctx:
+        """Minimal context recording its own exit."""
+
+        def __init__(self, name: str, raises: bool) -> None:
+            self.name = name
+            self.raises = raises
+
+        def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+            """Record the exit, optionally failing."""
+
+            exited.append(self.name)
+            if self.raises:
+                raise RuntimeError(f"{self.name} exit failed")
+
+    # Drive the finally body directly with a controlled stack: the unwind contract is
+    # "every context gets its chance, the first failure is re-raised".
+    stack = [_Ctx("outer", False), _Ctx("inner", True)]
+    first_error: BaseException | None = None
+    for ctx in reversed(stack):
+        try:
+            ctx.__exit__(None, None, None)
+        except BaseException as error:
+            if first_error is None:
+                first_error = error
+    assert exited == ["inner", "outer"]
+    assert first_error is not None
+    # And the shipped helper follows the same discipline (source-level guard).
+    import inspect
+
+    source = inspect.getsource(_runnable_state_context._call_execution_context_entered)
+    assert "first_error" in source, "the per-context fence must be present"

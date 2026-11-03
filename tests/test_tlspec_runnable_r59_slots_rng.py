@@ -31,6 +31,7 @@ Whole-class immunizers pinned here:
 
 from __future__ import annotations
 
+import inspect
 import queue
 import random
 import shutil
@@ -200,6 +201,24 @@ def test_registered_module_slot_generator_is_swept_and_draw_flips_digest(
     worker.join()
     after = host_nondeterminism_monitor._digest_rng_instance(gen)
     assert after != holders[id(gen)], f"{placement}/{kind}: slot draw did not flip the digest"
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_seed_loop_routes_registered_modules_through_custom_holder_children() -> None:
+    """The registered-module seed loop must call ``_custom_holder_children(module)`` (dict +
+    slots) whenever the blanket premark is present; the dict-only seed is the r58 hon_1 bug and
+    must never come back."""
+
+    src = inspect.getsource(host_nondeterminism_monitor._sweep_model_generators)
+    has_blanket_premark = "{id(module) for module in modules()}" in src
+    seeds_slots = "_custom_holder_children(module)" in src
+    assert seeds_slots or not has_blanket_premark, (
+        "registered modules are premarked (never re-walked) but seeded without their "
+        "__slots__ values -- the r58 hon_1 false-VERIFIED hole"
+    )
+    assert 'getattr(module, "__dict__", {}).values()' not in src, (
+        "dict-only registered-module seed reintroduced (r58 hon_1 regression)"
+    )
 
 
 # --- end-to-end: pre-existing worker draw -> UNVERIFIABLE, never ATTESTED --------------------

@@ -178,6 +178,23 @@ def _record_instances(trace: Trace, cls: type[Any]) -> Iterable[Any]:
         yield next(iter(trace.autograd.backward_passes))
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_layer_field_order_includes_live_aggregate_fields() -> None:
+    """Layer FIELD_ORDER includes aggregate fields kept by _FIELD_POLICY."""
+
+    expected_fields = {
+        "io_role",
+        "is_atomic_module",
+        "output_of_modules",
+        "output_of_module_calls",
+        "has_input_ancestor",
+        "buffer_write_kind",
+        "buffer_pass",
+    }
+
+    assert expected_fields.issubset(LAYER_LOG_FIELD_ORDER)
+
+
 # Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("case", RECORD_CASES, ids=lambda case: case.cls.__name__)
 def test_record_field_policy_is_field_order_source(case: RecordCase) -> None:

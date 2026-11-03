@@ -89,6 +89,18 @@ class _PreexistingWorker:
         self.thread.join()
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_stopped_preexisting_worker_has_exited() -> None:
+    """A stopped worker thread is gone before the next test captures. A pre-existing thread that
+    exits inside a later capture window changes the thread count, which (correctly) ceilings that
+    unrelated capture to UNVERIFIABLE, so ``stop()`` must join."""
+
+    worker = _PreexistingWorker()
+    worker.run(lambda: None)
+    worker.stop()
+    assert not worker.thread.is_alive()
+
+
 @pytest.fixture
 def preexisting_worker() -> Any:
     worker = _PreexistingWorker()

@@ -357,6 +357,42 @@ def test_projection_allocator_death_fails_closed_typed() -> None:
         assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_no_raw_clone_on_op_output_bind_or_reconstruct_paths() -> None:
+    """Every op-output snapshot clone in ``_bind_call_outputs`` / ``_reconstruct_output`` /
+    ``_populate_source_slots`` routes through ``guarded_clone`` -- no raw ``detach().clone()``
+    remains on those paths (a new unguarded clone site re-opens the free_2 class)."""
+
+    import inspect
+
+    for fn in (
+        torchlens._runnable.call_outputs._bind_call_outputs,
+        torchlens._runnable.call_outputs._reconstruct_output,
+        torchlens._runnable.call_arguments._populate_source_slots,
+    ):
+        src = inspect.getsource(fn)
+        assert "value.detach().clone()" not in src, (
+            f"{fn.__name__} has a raw op-output clone outside guarded_clone"
+        )
+        assert "guarded_clone(" in src
+
+
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
+def test_count_sentinel_precedes_generic_fail_open() -> None:
+    """The count sentinel (and the allocation-classed carve-out) are handled BEFORE the
+    generic fail-open in ``_preflight_call_allocation`` -- ordering is load-bearing."""
+
+    import inspect
+
+    src = inspect.getsource(_preflight_call_allocation)
+    idx_sentinel = src.index("except _ProjectionCountExceeded")
+    idx_alloc = src.index("_is_allocator_death")
+    idx_return = src.rindex("return")
+    assert idx_sentinel < idx_alloc, "count sentinel must precede the generic clause"
+    # the fail-open `return` lives inside the generic clause, after the alloc carve-out
+    assert idx_alloc < idx_return
+
+
 # --------------------------------------------------------------------------- #
 # (9) source meta-tests -- no raw clone escapes the guard; sentinel ordering      #
 # --------------------------------------------------------------------------- #

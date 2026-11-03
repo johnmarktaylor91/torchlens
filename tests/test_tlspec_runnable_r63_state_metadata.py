@@ -31,6 +31,7 @@ every state-binding clone routed through the staging helper.
 
 from __future__ import annotations
 
+import re
 import warnings
 from pathlib import Path
 from types import MappingProxyType
@@ -492,3 +493,28 @@ def test_r63_staging_canonicalizes_physical_form(tmp_path: Path) -> None:
         assert value.is_contiguous()
         assert value.stride() == (3, 1)
         assert value.storage_offset() == 0
+
+
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
+def test_r63_source_tripwire_state_binding_uses_staging_helper() -> None:
+    """No state-binding path calls bare ``_byte_guarded_clone`` around the staging helper."""
+
+    import torchlens._runnable.state as module
+
+    source = Path(module.__file__).read_text()
+
+    def _body(name: str) -> str:
+        match = re.search(rf"^def {name}\(.*?(?=^def |\Z)", source, flags=re.MULTILINE | re.DOTALL)
+        assert match is not None, name
+        return match.group(0)
+
+    for binder in (
+        "bind_embedded_trace_state",
+        "bind_embedded_nonpersistent_buffers",
+        "_validate_named_slot_mapping",
+    ):
+        body = _body(binder)
+        assert "_byte_guarded_clone(" not in body, binder
+        assert "_staged_state_clone(" in body, binder
+    helper = _body("_staged_state_clone")
+    assert "_byte_guarded_clone(" in helper  # the byte guard stays load-bearing inside
