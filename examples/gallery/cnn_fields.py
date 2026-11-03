@@ -100,7 +100,7 @@ def measure(
     gallery.Entry
         Complete measurement record.
     """
-    trace = tl.trace(model, x, save="all")
+    trace = tl.trace(model, x, save="all", capture=tl.options.CaptureOptions(replayable=True))
     target = trace[layer]
     source = trace.input_ops[0]
     h, w = target.out.shape[-2:]

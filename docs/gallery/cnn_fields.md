@@ -64,7 +64,7 @@ import torchlens as tl
 torch.manual_seed(17)
 model = nn.Sequential(nn.Conv2d(3, 4, 3, padding=1), BasicBlock(4, 4)).eval()
 x = torch.randn(1, 3, 16, 16)
-trace = tl.trace(model, x)
+trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 box = trace["1"].receptive_field.at((8, 8))
 RESULT = box.exact and all(a.clipped_stop - a.clipped_start == 7 for a in box.axes[-2:])
 ```
