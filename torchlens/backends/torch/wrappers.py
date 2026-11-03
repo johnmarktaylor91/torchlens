@@ -87,7 +87,7 @@ from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
     _is_inplace_augmented_assignment_dunder,
     _record_label_version_snapshot,
-    _stamp_same_object_mutation,
+    _stamp_same_object,
 )
 from ._ops_containers import _walk_output_tensors_with_paths
 from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
@@ -1373,7 +1373,7 @@ def torch_func_decorator(
             arg_copies = args
             kwarg_copies = kwargs
 
-        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs)
+        buffer_snapshots = snapshot_buffer_args(trace, func_name, arg_tensorlike, kwargs, args)
 
         # ---- Storage-rebinding setter pre-call snapshot (r28 reconcile) ----
         # ``t.data = rhs`` rebinds the receiver onto RHS's storage. Whether the
@@ -1603,7 +1603,7 @@ def torch_func_decorator(
                 )
             # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
             if not is_storage_rebinding_setter:
-                _stamp_same_object_mutation(out_orig, args[0], mutation_signature)
+                _stamp_same_object(out_orig, args[0], mutation_signature, force_distinct_return)
 
         if canonical_capture_callable is None:
             capture_func, capture_func_name = _canonical_capture_callable(

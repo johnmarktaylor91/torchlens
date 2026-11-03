@@ -645,15 +645,18 @@ def _tamper_recorded_training_literal(log, sink, value):
 
 
 def test_eval_mode_batchnorm_refresh_allowed_default_path():
-    """D18 NEW capability: eval-mode BatchNorm is refresh-eligible by default."""
+    """D18 NEW capability: eval-mode BatchNorm is refresh-eligible by default.
+
+    An eval-mode norm reads its running statistics and writes no buffer, so
+    the capture holds no buffer sink to route.
+    """
 
     model = _BatchNormModel()
     model.eval()
     x = torch.randn(3, 4)
     log = trace_fn(model, x, capture=tl.options.CaptureOptions(seed=1))
     try:
-        sinks = _buffer_sinks(log)
-        assert sinks and all(sink.buffer_value_changed is False for sink in sinks)
+        assert _buffer_sinks(log) == []
         x2 = torch.randn(3, 4)
         log.save_new_outs(model, x2, seed=1)
         fresh = trace_fn(model, x2, capture=tl.options.CaptureOptions(seed=1))
@@ -753,13 +756,13 @@ def test_train_claim_with_unchanged_values_refuses():
     from torchlens.errors import BufferSinkRoutingError
 
     model = _BatchNormModel()
-    model.eval()
+    model.train()
     log = trace_fn(model, torch.randn(3, 4))
     try:
-        sinks = _buffer_sinks(log)
-        assert all(sink.buffer_value_changed is False for sink in sinks)
-        bn_sink = next(sink for sink in sinks if sink.buffer_source_func_name == "batch_norm")
-        _tamper_recorded_training_literal(log, bn_sink, True)
+        bn_sink = next(
+            sink for sink in _buffer_sinks(log) if sink.buffer_source_func_name == "batch_norm"
+        )
+        bn_sink._internal_set("buffer_value_changed", False)
         with pytest.raises(BufferSinkRoutingError) as exc_info:
             log.save_new_outs(model, torch.randn(3, 4))
         _assert_buffer_sink_refusal(exc_info)
@@ -829,9 +832,10 @@ def test_buffer_value_changed_none_fails_closed():
     from torchlens.errors import BufferSinkRoutingError
 
     model = _BatchNormModel()
-    model.eval()
+    model.train()
     log = trace_fn(model, torch.randn(3, 4))
     try:
+        assert _buffer_sinks(log)
         for sink in _buffer_sinks(log):
             sink._internal_set("buffer_value_changed", None)
         with pytest.raises(BufferSinkRoutingError) as exc_info:

@@ -905,7 +905,7 @@ torchlens/backends/torch/_predicate_boundary_replacements.py::log_predicate_boun
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_enter	63
 torchlens/backends/torch/_predicate_forward.py::_predicate_module_exit	75
 torchlens/backends/torch/_predicate_forward.py::_record_predicate_module_boundary_outputs	144
-torchlens/backends/torch/_tl.py	1784
+torchlens/backends/torch/_tl.py	1749
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator	98
 torchlens/backends/torch/_transform_wrappers.py::direct_transform_decorator.wrapped_direct	73
 torchlens/backends/torch/_transform_wrappers.py::transform_builder_decorator	112
@@ -915,7 +915,7 @@ torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	887
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4246
+torchlens/backends/torch/backward.py	4191
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74
@@ -924,7 +924,7 @@ torchlens/backends/torch/backward.py::_install_saved_tensors_hooks_scope	62
 torchlens/backends/torch/backward.py::_make_grad_fn_hook	192
 torchlens/backends/torch/backward.py::_make_grad_fn_hook._hook_body	135
 torchlens/backends/torch/backward.py::_materialize_backward_projections	81
-torchlens/backends/torch/backward.py::_materialize_backward_projections_impl	234
+torchlens/backends/torch/backward.py::_materialize_backward_projections_impl	231
 torchlens/backends/torch/backward.py::_observe_saved_tensors_hooks_enter	70
 torchlens/backends/torch/backward.py::_run_backward_with_capture	275
 torchlens/backends/torch/backward.py::_traces_for_roots	63
@@ -933,7 +933,7 @@ torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
 torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
-torchlens/backends/torch/buffer_writes.py	1787
+torchlens/backends/torch/buffer_writes.py	1772
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_param_index	68
 torchlens/backends/torch/buffer_writes.py::session_validated_buffer_address	61

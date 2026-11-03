@@ -74,19 +74,24 @@ def test_eval_bn_meta_twin_no_phantom_writes() -> None:
     assert not any(
         kind in ("inplace", "data_reassign", "reassign") for kind, _, _ in _write_rows(tr_meta)
     ), "eval-mode meta twin fabricated a non-declared write"
+    # An eval-mode batch_norm call reads its running statistics and writes
+    # nothing (its training argument is False), on either substrate.
+    assert real_kinds == [], f"eval-mode BatchNorm journaled writes: {real_kinds}"
 
 
 def test_declared_fused_writes_survive_weightsfree() -> None:
     """W1-BUF-2: declared (fused) mutations are recorded as HYPOTHESIS rows.
 
     The mechanism is the SAME shipped fused-mutator classification the real
-    path uses — record existence never keys on a value comparison — so
-    weights-free parity holds by construction; only ``value_changed`` is
-    unknowable and rides the tri-state.
+    path uses — record existence never keys on a value comparison, only on the
+    call's declared ``training`` flag — so weights-free parity holds by
+    construction; only ``value_changed`` is unknowable and rides the tri-state.
     """
 
     real, meta = build_twins(ConvBnPool)
-    x = torch.randn(1, 3, 8, 8)
+    real.train()
+    meta.train()
+    x = torch.randn(2, 3, 8, 8)
     tr_real = tl.trace(real, x)
     tr_meta = weightsfree_trace(meta, meta_like(x))
     real_fused = [r for r in _write_rows(tr_real) if r[0] == "fused"]
