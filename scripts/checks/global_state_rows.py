@@ -741,6 +741,11 @@ _PROCESS_CACHES = frozenset(
     {
         # Call-site grouping per-code memos (content token, instruction map),
         # WeakKeyDictionary keyed by the code object, bounded by live code.
+        # Record concern-group table: the group-view class registry filled at import
+        # by the 16 view classes, and the per-type record-kind memo (Op, Layer or
+        # neither) that record_member() consults on every duck-typed read.
+        ("torchlens/_utils/_record_group_table.py", "OP_GROUP_VIEWS"),
+        ("torchlens/_utils/_record_group_table.py", "_RECORD_KIND_BY_TYPE"),
         ("torchlens/_utils/_call_site.py", "_CODE_TOKENS"),
         ("torchlens/_utils/_call_site.py", "_INSTRUCTION_MAPS"),
         # Per-filename memo of the "is this frame TorchLens's own code" verdict
@@ -1582,6 +1587,17 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_data_classes/_labels.py", "__all__"),
         ("torchlens/_data_classes/_layer_views.py", "__all__"),
         ("torchlens/_data_classes/_op_cost.py", "__all__"),
+        ("torchlens/_data_classes/_op_bytes.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_autograd.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_call.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_graph.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_module_context.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_payload.py", "__all__"),
+        ("torchlens/_data_classes/_record_groups_source.py", "__all__"),
+        ("torchlens/_data_classes/_removed_members.py", "__all__"),
+        ("torchlens/_private_submodules.py", "__all__"),
+        ("torchlens/_utils/_record_group_table.py", "__all__"),
         ("torchlens/_data_classes/_op_relations.py", "__all__"),
         ("torchlens/_data_classes/_op_save.py", "__all__"),
         ("torchlens/_data_classes/_trace_annotations.py", "__all__"),
