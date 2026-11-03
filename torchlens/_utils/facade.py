@@ -124,7 +124,7 @@ def removed_set_remedy(owner: str, receiver: str, args: str) -> str:
     """Return the ``facade_redirect`` remedy for a removed ``<owner>.set`` member.
 
     ``set`` applied a callable once; the ``set_only`` engine of ``do`` stages a
-    callable as a sticky hook (walk ruling names.3), so the remedy says both.
+    callable as a sticky hook that stays until detached, so the remedy says both.
 
     Parameters
     ----------
