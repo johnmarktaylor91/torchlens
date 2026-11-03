@@ -1,58 +1,70 @@
 # Neuro extraction with an order-error control
 
-This entry compares layer and residual-add activations against independent PyTorch extraction
-and rsatoolbox 0.3.2 correlation RDMs. The 24-stimulus ResNet-18 run passed all 13 sites. It checks extraction
-correctness; the target used to compare layer rankings is synthetic.
+This entry checks extraction against independent PyTorch hooks and rsatoolbox 0.3.2.
+The 24-stimulus ResNet-18 run passed; the 8-stimulus ViT-B/16 check exceeded the fixed RDM
+error limit, so the entry did not pass and moves to the next batch. The layer-ranking target
+is synthetic, and no neuroscience benchmark result is claimed.
 
 | Item | Recorded setup |
 | --- | --- |
-| Claim | Layer-wise RDMs agree with independent extraction and rsatoolbox 0.3.2. |
-| Script and run line | `python examples/gallery/neuro_rdms.py --out outputs/neuro_rdms` |
-| Pinned inputs | ResNet-18 `IMAGENET1K_V1`, eval, float32; first 24 Fashion-MNIST test images in split order; RGB, antialiased bilinear 224x224, ImageNet normalization; seed 17. |
-| Data hash | SHA256 `346e55b948d973a97e58d2351dde16a484bd415d4595297633bb08f03db6a073` of the compressed image file. |
-| Verdict | Passed on ResNet-18; Linux x86_64 CPU, 3 November 2026 at 6:57 AM PT; TorchLens 2.36.3, commit `30390061a`. |
-| Cost | 32.2 s analysis; 45.98 s process wall, two CPU threads; 1,129,956 KiB peak RSS. |
+| Claim | Layer-wise and residual-add RDMs agree with independent extraction and rsatoolbox. |
+| Script and run line | `python examples/gallery/neuro_rdms.py --out outputs/neuro_rdms/resnet18` |
+| Pinned inputs | ResNet-18 `IMAGENET1K_V1`, eval, float32; first 24 Fashion-MNIST test images in split order; RGB, antialiased bilinear 224x224, ImageNet normalization; seed 17. ViT-B/16 uses the same setup with eight images under `--quick`. |
+| Data hash | Compressed-file SHA256 `346e55b948d973a97e58d2351dde16a484bd415d4595297633bb08f03db6a073`. |
+| Verdict | Did not pass overall. ResNet-18 passed, 3 November 2026 at 6:57 AM PT, commit `30390061a`; ViT-B/16 did not pass, 7:01 AM PT, commit `d827db741`. Both used TorchLens 2.36.3 on Linux x86_64 CPU. |
+| Cost | ResNet: 32.2 s analysis, 45.98 s process wall, 1,129,956 KiB peak RSS. ViT: 22.2 s analysis, 35.32 s process wall, 1,685,592 KiB peak RSS. Both used two CPU threads. |
 
-The [Fashion-MNIST source](https://github.com/zalandoresearch/fashion-mnist) supplies the test
-images under its MIT license. The input hash is independently listed by
+The [Fashion-MNIST source](https://github.com/zalandoresearch/fashion-mnist) supplies images
+under its MIT license. The hash is independently listed by
 [TensorFlow Datasets](https://github.com/tensorflow/datasets/blob/master/tensorflow_datasets/url_checksums/fashion_mnist.txt).
-The script verifies the hash before decompressing, then uses identifiers `fashion-mnist:test:00000`
-through `fashion-mnist:test:00023`. It does not redistribute the dataset.
+The script verifies the hash before decompression and preserves identifiers
+`fashion-mnist:test:00000` onward. It does not redistribute the dataset.
 
 ## Oracles
 
-Every stage and residual-add RDM must correlate at Pearson >= 0.999 with the independent
-extraction. Correlation distances from TorchLens must agree with rsatoolbox's own pipeline
-to maximum absolute error <= 1e-6. Both pipelines must select the same best layer against
-the final selected stage's independent RDM. This target is a software check, not a neural
-recording. Across five stages and eight residual adds, minimum Pearson was `0.9999999999999988`, maximum absolute RDM error was `4.973799150320701e-13`, and both paths selected `avgpool`: all pass.
+| Fixed rule | ResNet-18, 24 images | ViT-B/16, 8 images |
+| --- | --- | --- |
+| Every RDM Pearson >= 0.999 | Minimum `0.9999999999999988`, pass | Minimum `0.9999999999981969`, pass |
+| Every max absolute RDM error <= 1e-6 | Maximum `4.973799150320701e-13`, pass | Maximum `1.065007076750391e-06`, fail |
+| Same best layer on the synthetic final-stage target | `avgpool` for both, pass | `encoder.ln` for both, pass |
 
-The independent path uses forward hooks on module outputs and explicitly recomputes each
-pre-ReLU residual sum from the main branch and identity/projection branch. ViT's independent
-path recomputes the positional sum and both residual sums per encoder block.
+ResNet includes five stages and all eight pre-ReLU residual additions. ViT includes three
+stages, the positional sum and all 24 encoder residual additions. Its encoder-layer output
+also names one residual sum, so 28 requested measurements resolve to 27 unique sites.
+The independent path uses plain forward hooks and functional recomputation of each sum.
+The failed ViT error limit remains unchanged; no full ViT rerun followed that failure.
 
 ## Controls
 
-Shuffle one side with NumPy's generator at seed 123. Every per-layer RDM correlation must
-fall below 0.5, and comparing stored stimulus identifiers must flag the order mismatch. The
-JSON stamp records `stimulus_order_mismatch=true`. Shuffled correlations ranged from `-0.0679072257` to `-0.0271927852`, all below 0.5: pass.
+Shuffle one side with NumPy seed 123: every correlation must fall below 0.5. ResNet's range
+was `[-0.06790722566, -0.02719278523]`; ViT's was `[-0.1558196402, 0.3135794525]`: both pass. Comparing stored stimulus identifiers
+must flag the mismatch: both passed, and both JSON stamps record
+`stimulus_order_mismatch=true`.
 
 ## Artifact and replay
 
-The portable `neuro_rdms.tlspec` stores selected activations, layer addresses, stimulus identifiers,
-preprocessing, order-error identifiers and the RDMs. After `tl.load`, the script recomputes one
-RDM through `tl.neuro.rdms` and checks maximum absolute difference <= 1e-6. The activations can
-also be handed to `tl.neuro.datasets` for rsatoolbox. The saved directory has 109,342,780 bytes and sorted-path/content SHA256 `1fc37e4de867ffc4f05fed509e1c671d10b629e3801a4554a23b3de11f1f6f36`. Reloaded RDM max error was 0.0: pass; the stored order mismatch remained flagged.
+Both runs save a portable `neuro_rdms.tlspec`, retaining activations, addresses, stimulus IDs,
+preprocessing, shuffled IDs and RDMs. Use separate output directories for the two runs.
+After `tl.load`, the script recomputes the first RDM; the fixed replay error limit is 1e-6.
+Both replay errors were exactly zero and both stored order mismatches remained flagged.
+
+| Run | Bytes | Sorted-path/content SHA256 |
+| --- | --- | --- |
+| ResNet-18 | 109,342,780 | `1fc37e4de867ffc4f05fed509e1c671d10b629e3801a4554a23b3de11f1f6f36` |
+| ViT-B/16 | 132,667,341 | `acca03a29e5158a4cad089c8cdcf65a412e8df6951d96d6db5f8c24c3730d2b1` |
 
 ## Basis-grid row
 
-Verbs: capture, select, read, compare, save. Measured source lines: TorchLens 245; plain PyTorch 56;
-original reference not measured. The TorchLens count includes CLI setup, loading, reporting,
-plotting and helpers. The plain count covers the independent hook extraction, functional
-residual recomputation and rsatoolbox calculation functions. Original thingsvision source lines are not measured.
-The recorded passing architecture here is ResNet-18; the second-architecture run is reported separately when complete.
+Verbs: capture, select, read, compare, save. Both architectures were executed, with the
+separate verdicts above. Nonblank, noncomment, non-docstring source counts were TorchLens
+245 / plain 56 for the ResNet run, and TorchLens 247 / plain 56 after the pass-aware alias
+lookup correction used by ViT. TorchLens counts include setup, CLI, plotting, reporting and
+helpers; plain counts cover independent extraction, residual recomputation and rsatoolbox.
+Original thingsvision reference lines were not measured.
 
 ## The stamp
+
+ResNet-18 headline:
 
 ```text
 {
@@ -73,6 +85,30 @@ The recorded passing architecture here is ResNet-18; the second-architecture run
   "torch_threads": 2,
   "torchlens": "2.36.3",
   "wall_seconds": 32.2
+}
+```
+
+ViT-B/16 quick check:
+
+```text
+{
+  "commit": "d827db741045922c46dbcc3393c651e48539d308",
+  "date_utc": "2026-11-03T15:01:19Z",
+  "device": "cpu",
+  "libraries": {
+    "numpy": "2.2.6",
+    "rsatoolbox": "0.3.2",
+    "torchvision": "0.28.0+cpu",
+    "transformers": "5.18.0"
+  },
+  "machine": "x86_64",
+  "platform": "Linux-5.15.0-139-generic-x86_64-with-glibc2.31",
+  "python": "3.10.19",
+  "stimulus_order_mismatch": true,
+  "torch": "2.13.0+cpu",
+  "torch_threads": 2,
+  "torchlens": "2.36.3",
+  "wall_seconds": 22.2
 }
 ```
 
