@@ -46,9 +46,9 @@ also be handed to `tl.neuro.datasets` for rsatoolbox. Artifact measurements are 
 
 ## Basis-grid row
 
-Verbs: capture, select, read, compare, save. Region counts include setup and helper functions
-within the TorchLens and independent PyTorch implementations; the separate stimulus loader
-and reporting code are shared overhead. Original thingsvision source lines are not measured.
+Verbs: capture, select, read, compare, save. The TorchLens count includes CLI setup, loading, reporting,
+plotting and helpers. The plain count covers the independent hook extraction, functional
+residual recomputation and rsatoolbox calculation functions. Original thingsvision source lines are not measured.
 Architecture claims are restricted to executed runs.
 
 ## The stamp

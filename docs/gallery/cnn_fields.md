@@ -37,8 +37,9 @@ Artifact size, hash and replay result are pending.
 ## Basis-grid row
 
 Verbs: capture, select, read, do, compare, save. The script measures nonblank, noncomment,
-non-docstring lines in the marked TorchLens and independent PyTorch regions, including their
-helper functions. The original TensorFlow reference implementation's lines are not measured.
+non-docstring lines in the marked regions. The TorchLens region includes CLI setup,
+reporting, plotting and helpers; the plain region counts the independent geometry and hook
+oracle functions. These are stated scopes, not an original-reference code comparison. The original TensorFlow reference implementation's lines are not measured.
 Only architectures actually executed are reported.
 
 ## The stamp

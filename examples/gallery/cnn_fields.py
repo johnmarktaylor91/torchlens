@@ -6,6 +6,7 @@ https://doi.org/10.23915/distill.00021. A geometric hull is potential support;
 the gradient-support equality in this entry is an additional empirical test.
 """
 
+# region: torchlens
 from __future__ import annotations
 
 import argparse
@@ -27,106 +28,6 @@ SIDE = 224
 IOU_MIN = 0.95
 PATCH = 4
 OUTSIDE_DELTA = 0.0
-
-
-# region: plain
-def advance(field: tuple[int, int, int], module: nn.Module) -> tuple[int, int, int]:
-    """Propagate size, jump and first-centre through a convolution or pool.
-
-    Parameters
-    ----------
-    field, module:
-        Incoming geometry and the spatial module.
-
-    Returns
-    -------
-    tuple
-        Receptive size, jump and first-centre in input pixel coordinates.
-    """
-    size, jump, start = field
-    kernel = module.kernel_size
-    stride = module.stride
-    padding = module.padding
-    k = kernel if isinstance(kernel, int) else kernel[0]
-    s = stride if isinstance(stride, int) else stride[0]
-    p = padding if isinstance(padding, int) else padding[0]
-    return size + (k - 1) * jump, jump * s, start + ((k - 1) // 2 - p) * jump
-
-
-def analytic(model: nn.Module, layer: str, *, serial: bool = False) -> tuple[int, int, int]:
-    """Compute ResNet geometry independently, or the deliberately wrong leaf chain.
-
-    Parameters
-    ----------
-    model, layer, serial:
-        ResNet, target stage, and whether to treat registered leaves as serial.
-
-    Returns
-    -------
-    tuple
-        Size, jump and first-centre.
-    """
-    field = advance(advance((1, 1, 0), model.conv1), model.maxpool)
-    for stage_index in range(1, int(layer[-1]) + 1):
-        for block in getattr(model, f"layer{stage_index}"):
-            incoming = field
-            field = advance(advance(incoming, block.conv1), block.conv2)
-            if block.downsample is not None:
-                skip = advance(incoming, block.downsample[0])
-                if serial:
-                    field = advance(field, block.downsample[0])
-                else:
-                    assert skip[1:] == field[1:]
-                    field = (max(field[0], skip[0]), *field[1:])
-    return field
-
-
-def feature(model: nn.Module, x: torch.Tensor, layer: str) -> torch.Tensor:
-    """Extract a module output with a plain hook.
-
-    Parameters
-    ----------
-    model, x, layer:
-        Model, input batch and module address.
-
-    Returns
-    -------
-    torch.Tensor
-        Module output, preserving autograd.
-    """
-    values: list[torch.Tensor] = []
-
-    def collect(_module: nn.Module, _args: Any, output: torch.Tensor) -> None:
-        """Collect one module output."""
-        values.append(output)
-
-    hook = model.get_submodule(layer).register_forward_hook(collect)
-    try:
-        model(x)
-    finally:
-        hook.remove()
-    return values[0]
-
-
-def gradient_mask(model: nn.Module, x: torch.Tensor, layer: str, unit: tuple) -> torch.Tensor:
-    """Measure the spatial gradient support without TorchLens.
-
-    Parameters
-    ----------
-    model, x, layer, unit:
-        Model, input, target module and complete element index.
-
-    Returns
-    -------
-    torch.Tensor
-        Spatial boolean support mask.
-    """
-    leaf = x.detach().clone().requires_grad_(True)
-    grad = torch.autograd.grad(feature(model, leaf, layer)[unit], leaf)[0]
-    return grad.ne(0).any(dim=(0, 1))
-
-
-# endregion
 
 
 def iou(left: torch.Tensor, right: torch.Tensor) -> float:
@@ -184,7 +85,6 @@ def draw_fields(
     plt.close(fig)
 
 
-# region: torchlens
 def measure(
     model: nn.Module, x: torch.Tensor, layer: str, channel: int, out: Path
 ) -> gallery.Entry:
@@ -307,9 +207,6 @@ def measure(
     return entry
 
 
-# endregion
-
-
 def main() -> None:
     """Run the gallery entry and print its stamped verdict."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -354,6 +251,109 @@ def main() -> None:
     }
     entry.lines["reference"] = "not measured"
     gallery.report(entry, args.out, "cpu", started)
+
+
+# endregion
+
+
+# region: plain
+def advance(field: tuple[int, int, int], module: nn.Module) -> tuple[int, int, int]:
+    """Propagate size, jump and first-centre through a convolution or pool.
+
+    Parameters
+    ----------
+    field, module:
+        Incoming geometry and the spatial module.
+
+    Returns
+    -------
+    tuple
+        Receptive size, jump and first-centre in input pixel coordinates.
+    """
+    size, jump, start = field
+    kernel = module.kernel_size
+    stride = module.stride
+    padding = module.padding
+    k = kernel if isinstance(kernel, int) else kernel[0]
+    s = stride if isinstance(stride, int) else stride[0]
+    p = padding if isinstance(padding, int) else padding[0]
+    return size + (k - 1) * jump, jump * s, start + ((k - 1) // 2 - p) * jump
+
+
+def analytic(model: nn.Module, layer: str, *, serial: bool = False) -> tuple[int, int, int]:
+    """Compute ResNet geometry independently, or the deliberately wrong leaf chain.
+
+    Parameters
+    ----------
+    model, layer, serial:
+        ResNet, target stage, and whether to treat registered leaves as serial.
+
+    Returns
+    -------
+    tuple
+        Size, jump and first-centre.
+    """
+    field = advance(advance((1, 1, 0), model.conv1), model.maxpool)
+    for stage_index in range(1, int(layer[-1]) + 1):
+        for block in getattr(model, f"layer{stage_index}"):
+            incoming = field
+            field = advance(advance(incoming, block.conv1), block.conv2)
+            if block.downsample is not None:
+                skip = advance(incoming, block.downsample[0])
+                if serial:
+                    field = advance(field, block.downsample[0])
+                else:
+                    assert skip[1:] == field[1:]
+                    field = (max(field[0], skip[0]), *field[1:])
+    return field
+
+
+def feature(model: nn.Module, x: torch.Tensor, layer: str) -> torch.Tensor:
+    """Extract a module output with a plain hook.
+
+    Parameters
+    ----------
+    model, x, layer:
+        Model, input batch and module address.
+
+    Returns
+    -------
+    torch.Tensor
+        Module output, preserving autograd.
+    """
+    values: list[torch.Tensor] = []
+
+    def collect(_module: nn.Module, _args: Any, output: torch.Tensor) -> None:
+        """Collect one module output."""
+        values.append(output)
+
+    hook = model.get_submodule(layer).register_forward_hook(collect)
+    try:
+        model(x)
+    finally:
+        hook.remove()
+    return values[0]
+
+
+def gradient_mask(model: nn.Module, x: torch.Tensor, layer: str, unit: tuple) -> torch.Tensor:
+    """Measure the spatial gradient support without TorchLens.
+
+    Parameters
+    ----------
+    model, x, layer, unit:
+        Model, input, target module and complete element index.
+
+    Returns
+    -------
+    torch.Tensor
+        Spatial boolean support mask.
+    """
+    leaf = x.detach().clone().requires_grad_(True)
+    grad = torch.autograd.grad(feature(model, leaf, layer)[unit], leaf)[0]
+    return grad.ne(0).any(dim=(0, 1))
+
+
+# endregion
 
 
 if __name__ == "__main__":

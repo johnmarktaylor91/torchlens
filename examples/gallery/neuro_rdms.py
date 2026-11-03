@@ -5,6 +5,7 @@ as the independent correlation-distance implementation, not a neural benchmark.
 Fashion-MNIST test images (Zalando, MIT license) have a pinned compressed SHA256.
 """
 
+# region: torchlens
 from __future__ import annotations
 
 import argparse
@@ -73,111 +74,6 @@ def stimuli(count: int) -> tuple[torch.Tensor, list[str]]:
     return x, [f"fashion-mnist:test:{i:05d}" for i in range(count)]
 
 
-# region: plain
-def plain_extract(model: nn.Module, x: torch.Tensor, stages: list[str]) -> dict[str, torch.Tensor]:
-    """Extract stages and recompute every ResNet residual sum independently.
-
-    Parameters
-    ----------
-    model, x, stages:
-        Eval model, pinned stimulus batch and module outputs to retain.
-
-    Returns
-    -------
-    dict
-        Module outputs and pre-ReLU residual sums in execution order.
-    """
-    outputs: dict[str, torch.Tensor] = {}
-    hooks: list[Any] = []
-
-    def capture(name: str) -> Any:
-        """Build a module hook that snapshots values before in-place edits."""
-
-        def collect(_module: nn.Module, _args: Any, output: torch.Tensor) -> None:
-            """Retain one independent module output."""
-            outputs[name] = output.detach().clone()
-
-        return collect
-
-    for stage in stages:
-        hooks.append(model.get_submodule(stage).register_forward_hook(capture(stage)))
-    blocks = [
-        (name, module)
-        for name, module in model.named_modules()
-        if isinstance(module, models.resnet.BasicBlock)
-    ]
-    for index, (_name, block) in enumerate(blocks):
-        hooks.append(block.bn2.register_forward_hook(capture(f"main_{index}")))
-        if block.downsample is not None:
-            hooks.append(block.downsample.register_forward_hook(capture(f"skip_{index}")))
-        else:
-
-            def remember(_module: nn.Module, args: Any, i: int = index) -> None:
-                """Retain the identity-branch input."""
-                outputs[f"skip_{i}"] = args[0].detach().clone()
-
-            hooks.append(block.register_forward_pre_hook(remember))
-    vit_blocks = list(model.encoder.layers.children()) if not blocks else []
-    if vit_blocks:
-
-        def position(_module: nn.Module, args: Any) -> None:
-            """Recompute the positional embedding addition."""
-            outputs["position"] = args[0].detach().clone() + model.encoder.pos_embedding.detach()
-
-        hooks.append(model.encoder.register_forward_pre_hook(position))
-        for index, block in enumerate(vit_blocks):
-
-            def remember_vit(_module: nn.Module, args: Any, i: int = index) -> None:
-                """Retain the first residual input."""
-                outputs[f"vit_skip_{i}"] = args[0].detach().clone()
-
-            def remember_second(_module: nn.Module, args: Any, i: int = index) -> None:
-                """Retain the second residual input."""
-                outputs[f"vit_second_skip_{i}"] = args[0].detach().clone()
-
-            hooks.append(block.register_forward_pre_hook(remember_vit))
-            hooks.append(block.dropout.register_forward_hook(capture(f"attention_{index}")))
-            hooks.append(block.ln_2.register_forward_pre_hook(remember_second))
-            hooks.append(block.mlp.register_forward_hook(capture(f"mlp_{index}")))
-    try:
-        with torch.no_grad():
-            model(x)
-    finally:
-        for hook in hooks:
-            hook.remove()
-    result = {stage: outputs[stage] for stage in stages}
-    result.update(
-        {f"residual_{i}": outputs[f"main_{i}"] + outputs[f"skip_{i}"] for i in range(len(blocks))}
-    )
-    if vit_blocks:
-        result["residual_0"] = outputs["position"]
-        for i in range(len(vit_blocks)):
-            result[f"residual_{2 * i + 1}"] = outputs[f"vit_skip_{i}"] + outputs[f"attention_{i}"]
-            result[f"residual_{2 * i + 2}"] = outputs[f"vit_second_skip_{i}"] + outputs[f"mlp_{i}"]
-    return result
-
-
-def reference_rdm(features: torch.Tensor) -> np.ndarray:
-    """Compute correlation distances with rsatoolbox's own Dataset pipeline.
-
-    Parameters
-    ----------
-    features:
-        Independent activations with stimuli on the first axis.
-
-    Returns
-    -------
-    numpy.ndarray
-        Condensed upper-triangle dissimilarities in presentation order.
-    """
-    matrix = features.flatten(1).double().numpy()
-    dataset = rsatoolbox.data.Dataset(measurements=matrix)
-    return rsatoolbox.rdm.calc_rdm(dataset, method="correlation").dissimilarities[0]
-
-
-# endregion
-
-
 def pearson(left: np.ndarray, right: np.ndarray) -> float:
     """Compare condensed RDMs with Pearson correlation.
 
@@ -242,7 +138,6 @@ def draw_rdms(
     plt.close(fig)
 
 
-# region: torchlens
 def measure(
     model: nn.Module, x: torch.Tensor, ids: list[str], arch: str, out: Path
 ) -> gallery.Entry:
@@ -382,9 +277,6 @@ def measure(
     return entry
 
 
-# endregion
-
-
 def main() -> None:
     """Run extraction and the fixed order-error control."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -424,6 +316,114 @@ def main() -> None:
     summary["stamp"]["stimulus_order_mismatch"] = entry.measured.get("stimulus_order_mismatch")
     (args.out / "neuro_rdms.json").write_text(json.dumps(summary, indent=1, sort_keys=True) + "\n")
     print("STAMP: " + json.dumps(summary["stamp"], sort_keys=True))
+
+
+# endregion
+
+
+# region: plain
+def plain_extract(model: nn.Module, x: torch.Tensor, stages: list[str]) -> dict[str, torch.Tensor]:
+    """Extract stages and recompute every ResNet residual sum independently.
+
+    Parameters
+    ----------
+    model, x, stages:
+        Eval model, pinned stimulus batch and module outputs to retain.
+
+    Returns
+    -------
+    dict
+        Module outputs and pre-ReLU residual sums in execution order.
+    """
+    outputs: dict[str, torch.Tensor] = {}
+    hooks: list[Any] = []
+
+    def capture(name: str) -> Any:
+        """Build a module hook that snapshots values before in-place edits."""
+
+        def collect(_module: nn.Module, _args: Any, output: torch.Tensor) -> None:
+            """Retain one independent module output."""
+            outputs[name] = output.detach().clone()
+
+        return collect
+
+    for stage in stages:
+        hooks.append(model.get_submodule(stage).register_forward_hook(capture(stage)))
+    blocks = [
+        (name, module)
+        for name, module in model.named_modules()
+        if isinstance(module, models.resnet.BasicBlock)
+    ]
+    for index, (_name, block) in enumerate(blocks):
+        hooks.append(block.bn2.register_forward_hook(capture(f"main_{index}")))
+        if block.downsample is not None:
+            hooks.append(block.downsample.register_forward_hook(capture(f"skip_{index}")))
+        else:
+
+            def remember(_module: nn.Module, args: Any, i: int = index) -> None:
+                """Retain the identity-branch input."""
+                outputs[f"skip_{i}"] = args[0].detach().clone()
+
+            hooks.append(block.register_forward_pre_hook(remember))
+    vit_blocks = list(model.encoder.layers.children()) if not blocks else []
+    if vit_blocks:
+
+        def position(_module: nn.Module, args: Any) -> None:
+            """Recompute the positional embedding addition."""
+            outputs["position"] = args[0].detach().clone() + model.encoder.pos_embedding.detach()
+
+        hooks.append(model.encoder.register_forward_pre_hook(position))
+        for index, block in enumerate(vit_blocks):
+
+            def remember_vit(_module: nn.Module, args: Any, i: int = index) -> None:
+                """Retain the first residual input."""
+                outputs[f"vit_skip_{i}"] = args[0].detach().clone()
+
+            def remember_second(_module: nn.Module, args: Any, i: int = index) -> None:
+                """Retain the second residual input."""
+                outputs[f"vit_second_skip_{i}"] = args[0].detach().clone()
+
+            hooks.append(block.register_forward_pre_hook(remember_vit))
+            hooks.append(block.dropout.register_forward_hook(capture(f"attention_{index}")))
+            hooks.append(block.ln_2.register_forward_pre_hook(remember_second))
+            hooks.append(block.mlp.register_forward_hook(capture(f"mlp_{index}")))
+    try:
+        with torch.no_grad():
+            model(x)
+    finally:
+        for hook in hooks:
+            hook.remove()
+    result = {stage: outputs[stage] for stage in stages}
+    result.update(
+        {f"residual_{i}": outputs[f"main_{i}"] + outputs[f"skip_{i}"] for i in range(len(blocks))}
+    )
+    if vit_blocks:
+        result["residual_0"] = outputs["position"]
+        for i in range(len(vit_blocks)):
+            result[f"residual_{2 * i + 1}"] = outputs[f"vit_skip_{i}"] + outputs[f"attention_{i}"]
+            result[f"residual_{2 * i + 2}"] = outputs[f"vit_second_skip_{i}"] + outputs[f"mlp_{i}"]
+    return result
+
+
+def reference_rdm(features: torch.Tensor) -> np.ndarray:
+    """Compute correlation distances with rsatoolbox's own Dataset pipeline.
+
+    Parameters
+    ----------
+    features:
+        Independent activations with stimuli on the first axis.
+
+    Returns
+    -------
+    numpy.ndarray
+        Condensed upper-triangle dissimilarities in presentation order.
+    """
+    matrix = features.flatten(1).double().numpy()
+    dataset = rsatoolbox.data.Dataset(measurements=matrix)
+    return rsatoolbox.rdm.calc_rdm(dataset, method="correlation").dissimilarities[0]
+
+
+# endregion
 
 
 if __name__ == "__main__":
