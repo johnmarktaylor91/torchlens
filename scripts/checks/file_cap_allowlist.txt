@@ -886,7 +886,7 @@ torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	126
 torchlens/backends/torch/_ops_finalize.py::_raise_if_nonfinite_requested	119
-torchlens/backends/torch/_ops_interventions.py	827
+torchlens/backends/torch/_ops_interventions.py	826
 torchlens/backends/torch/_ops_interventions.py::_apply_live_hooks_to_outputs_legacy	114
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_intervention	72
 torchlens/backends/torch/_ops_interventions.py::_apply_predicate_mode_interventions_to_outputs	105
@@ -1326,7 +1326,7 @@ torchlens/receptive_field/rules/interpolation.py::interpolate	63
 torchlens/receptive_field/rules/transforms.py::getitem	76
 torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	196
-torchlens/recording/_recorder.py	847
+torchlens/recording/_recorder.py	848
 torchlens/recording/_recorder.py::Recorder.__init__	167
 torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
