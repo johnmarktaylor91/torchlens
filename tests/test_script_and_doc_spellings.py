@@ -50,3 +50,11 @@ def test_render_scripts_use_live_draw_keywords(rel: str) -> None:
     assert sites, f"{rel}: no draw call found"
     stale = {site: sorted(kws - live) for site, kws in sites.items() if kws - live}
     assert not stale, f"{rel} passes removed draw keywords: {stale}"
+
+
+def test_tinygrad_guide_spells_the_save_option() -> None:
+    """The tinygrad implementation guide names the restricted option by its live spelling."""
+
+    guide = (_REPO_ROOT / "torchlens/backends/tinygrad/AGENTS.md").read_text(encoding="utf-8")
+    assert "layers_to_save" not in guide
+    assert '`save` must be `"all"`' in guide
