@@ -207,7 +207,7 @@ def test_final_sizes_fit_labels_and_scale_from_a_shared_base(
     finals = state.final_sizes
     assert finals and set(finals) <= set(state.size_fractions)
     floor = estimate_label_box(["x"], DEFAULT_FONT_PT)
-    for key, size in finals.items():
+    for size in finals.values():
         assert size[0] >= floor[0] and size[1] >= floor[1]
     # Area / base area is exactly 1 + f * (M - 1) for every node; nodes that share
     # the median base are therefore ordered by value.

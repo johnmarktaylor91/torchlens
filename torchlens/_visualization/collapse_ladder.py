@@ -501,10 +501,9 @@ def auto_from_ladder(
         )
     if chosen is schedule.steps[-1]:
         return max_result
-    selected, folds = _ladder_state_through(schedule.steps, chosen)
-    plan, segments, selected = _even_auto_plan(
-        trace, context, source_graph, chosen, selected, folds
-    )
+    ladder_state = _ladder_state_through(schedule.steps, chosen)
+    folds = ladder_state[1]
+    plan, segments, selected = _even_auto_plan(trace, context, source_graph, chosen, ladder_state)
     return optimizer.OptimizerResult(
         selected=selected,
         repeat_folds=folds,
@@ -541,8 +540,7 @@ def _even_auto_plan(
     context: RenderContext,
     source_graph: SourceGraph | None,
     chosen: CollapseScheduleStep,
-    selected: frozenset[str],
-    folds: dict[str, ModuleRepeatFold],
+    ladder_state: tuple[frozenset[str], dict[str, ModuleRepeatFold]],
 ) -> tuple[CollapsePlan, dict[str, Any], frozenset[str]]:
     """Even out the chosen ladder point: box stray small modules, fold runs.
 
@@ -550,9 +548,11 @@ def _even_auto_plan(
     small module expanded between boxed siblings (convnext's stem and
     stage-2 downsample) and a run of identical blocks as one box each
     (convnext's nine stage-2 blocks). Both passes only condense: the evened
-    plan never has more visible nodes than the ladder point.
+    plan never has more visible nodes than the ladder point. ``ladder_state``
+    is the ``(selected, folds)`` pair accumulated through ``chosen``.
     """
 
+    selected, folds = ladder_state
     plan = chosen.plan
     boxes = _even_auto_boxes(trace, analyze_collapse(trace).signals, selected)
     if boxes != selected:
@@ -628,7 +628,8 @@ def _fold_identical_runs(
 
     optimizer = _optimizer()
     analysis = analyze_collapse(trace)
-    budget = (
+    legality = (
+        analysis,
         optimizer._rendered_module_hidden_counts(trace, context),
         optimizer._optimizer_total_units(trace, context),
     )
@@ -638,7 +639,7 @@ def _fold_identical_runs(
     index = 0
     while index < len(plan.nodes):
         node = plan.nodes[index]
-        run = _identical_run(trace, context, analysis, plan.nodes, index, budget)
+        run = _identical_run(trace, context, legality, plan.nodes, index)
         if len(run) >= EVEN_FOLD_MIN_RUN:
             ops = optimizer._child_segment_covered_ops(analysis, run)
             descriptor = optimizer._make_child_segment_descriptor(trace, context, run, ops)
@@ -659,17 +660,21 @@ def _fold_identical_runs(
 def _identical_run(
     trace: Trace,
     context: RenderContext,
-    analysis: Any,
+    legality: tuple[Any, Any, int],
     nodes: tuple[PlanNode, ...],
     start: int,
-    budget: tuple[Any, int],
 ) -> tuple[str, ...]:
-    """Return the identical-digest prefix of the legal segment run at ``start``."""
+    """Return the identical-digest prefix of the legal segment run at ``start``.
+
+    ``legality`` is ``(analysis, rendered hidden counts, total units)``, the
+    inputs of the max planner's segment legality.
+    """
 
     if not isinstance(nodes[start], ModuleBox):
         return ()
+    analysis, hidden_counts, total_units = legality
     run = _optimizer()._legal_plan_child_segment_run(
-        trace, context, analysis, nodes, start, budget[0], budget[1], dominance_limit=0.75
+        trace, context, analysis, nodes, start, hidden_counts, total_units, dominance_limit=0.75
     )
     if not run:
         return ()
