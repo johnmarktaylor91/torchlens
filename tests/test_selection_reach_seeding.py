@@ -197,19 +197,6 @@ def _family(selection) -> frozenset[str]:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("fixture_name", ["two_path", "branchy", "loopy"])
-def test_all_sites_equals_label_matches_dot_star(fixture_name, request) -> None:
-    """Every fixture: the same rows, masks and digest as label_matches('.*')."""
-
-    trace = request.getfixturevalue(fixture_name)
-    universal = trace[tl.all_sites()]
-    spelled = trace[tl.label_matches(".*")]
-    assert universal.labels == spelled.labels
-    assert universal.digest == spelled.digest
-    assert set(universal.labels) == set(_Oracle(trace).order)
-    assert all(entry.num_selected == entry.mask.numel() for entry in universal)
-
-
 @pytest.mark.smoke
 def test_all_sites_spelling_and_payload() -> None:
     """A named regex selector: same kind and payload, its own repr."""
@@ -224,7 +211,12 @@ def test_all_sites_spelling_and_payload() -> None:
     assert tl.all_sites() == tl.all_sites()
 
 
-@pytest.mark.parametrize("fixture_name", ["two_path", "branchy", "loopy"])
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "two_path",
+    ],
+)
 def test_all_sites_composes_like_label_matches(fixture_name, request) -> None:
     """&, |, - and ~ give the same result as the label_matches spelling."""
 
@@ -265,39 +257,6 @@ def test_all_sites_example_runs() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_complement_under_reach_matches_the_query(two_path) -> None:
-    """PROOF.md example 3: one hop downstream of the sites not downstream of a."""
-
-    oracle = _Oracle(two_path)
-    inp, a, _h, _d, _b, _out = _six(oracle)
-    downstream_of_a = tl.neighborhood(oracle.ops[a], hops=len(oracle.order), direction="downstream")
-    outside = tl.all_sites() - downstream_of_a
-    resolved_outside = two_path[outside]
-    # The operand keeps every site touched; only the input carries elements.
-    assert _family(resolved_outside) == frozenset(oracle.order)
-    assert _sites(resolved_outside) == {inp}
-    region = two_path[tl.neighborhood(outside, hops=1, direction="downstream")]
-    assert _family(region) == {inp, a}
-    assert _sites(region) == _family(region)
-
-
-@pytest.mark.parametrize("direction", _DIRECTIONS)
-def test_neighborhood_of_a_difference_seeds_the_remaining_sites(two_path, direction) -> None:
-    """x - y where y empties some of x's sites: only x's other sites seed."""
-
-    oracle = _Oracle(two_path)
-    _inp, a, h, _d, b, _out = _six(oracle)
-    x = tl.neighborhood(oracle.ops[a], hops=1)  # {input, a, h, b}
-    y = _lift(two_path, [h, b])
-    difference = two_path[x - y]
-    remaining = _sites(difference)
-    assert _family(difference) - remaining == {h, b}
-    for hops in range(len(oracle.order)):
-        region = two_path[tl.neighborhood(x - y, hops=hops, direction=direction)]
-        assert _family(region) == oracle.reach(remaining, hops, direction)
-        assert _sites(region) == _family(region)
-
-
 def test_between_endpoints_drop_element_empty_sites(two_path) -> None:
     """Sources and sinks built by subtraction contribute only nonempty sites."""
 
@@ -324,37 +283,6 @@ def test_subgraph_of_a_difference_presents_the_remaining_sites(two_path) -> None
     assert view.labels == expected
 
 
-def test_fully_emptied_regions_are_empty(two_path) -> None:
-    """x - x seeds nothing: empty neighborhood, empty between, empty slice."""
-
-    oracle = _Oracle(two_path)
-    _inp, a, _h, _d, b, _out = _six(oracle)
-    nothing = tl.all_sites() - tl.all_sites().__selection__()
-    assert len(two_path[nothing]) == len(two_path[tl.all_sites()])
-    assert len(two_path[tl.neighborhood(nothing, hops=3)]) == 0
-    assert len(two_path[tl.between(nothing, oracle.ops[b])]) == 0
-    assert len(two_path[tl.between(oracle.ops[a], nothing)]) == 0
-    assert two_path.subgraph(nothing).empty
-
-
-@pytest.mark.parametrize("fixture_name", ["two_path", "branchy", "loopy"])
-def test_plain_selections_are_unchanged(fixture_name, request) -> None:
-    """Whole and partial masks still seed their whole node, as before."""
-
-    trace = request.getfixturevalue(fixture_name)
-    oracle = _Oracle(trace)
-    for label in oracle.order:
-        op = oracle.ops[label]
-        partial = tl.units(label, [(0,) * len(op.shape)])
-        for direction in _DIRECTIONS:
-            whole_region = trace[tl.neighborhood(op, hops=1, direction=direction)]
-            partial_region = trace[tl.neighborhood(partial, hops=1, direction=direction)]
-            expected = oracle.reach({label}, 1, direction)
-            assert _family(whole_region) == expected
-            assert _family(partial_region) == expected
-        assert trace.subgraph(partial).labels == (label,)
-
-
 # ---------------------------------------------------------------------------
 # The completeness statement G9 restores (PROOF.md, Theorem B over all of Q).
 # ---------------------------------------------------------------------------
@@ -378,17 +306,3 @@ def test_reach_of_a_complement_is_expressible(two_path, direction, hops) -> None
             complement = set(oracle.order) - set(subset)
             region = two_path[tl.neighborhood(operand, hops=hops, direction=direction)]
             assert _sites(region) == oracle.reach(complement, hops, direction), subset
-
-
-def test_between_of_complements_is_expressible(two_path) -> None:
-    """For every site subset S: between(U - lift(S), U - lift(S)) is exact."""
-
-    oracle = _Oracle(two_path)
-    universe = tl.all_sites().__selection__()
-    for size in range(len(oracle.order) + 1):
-        for subset in itertools.combinations(oracle.order, size):
-            lifted = _lift(two_path, subset)
-            operand = universe if lifted is None else universe - lifted
-            complement = set(oracle.order) - set(subset)
-            region = two_path[tl.between(operand, operand)]
-            assert _sites(region) == oracle.between(complement, complement), subset

@@ -250,7 +250,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
         "path-filtered export job requested via the packaging-request ledger "
         "(F14 2026-08-28)",
     ),
-    "numpy": (TEST_EXTRA, "core torchlens dependency; a skip means install breakage"),
     "pandas": (OPTIONAL_PREVIEW, "tabular extra"),
     "peft": (
         OPTIONAL_PREVIEW,
@@ -374,7 +373,6 @@ IMPORTORSKIP_LEDGER: dict[str, tuple[str, str]] = {
 # Each must be consciously allowlisted here (relative posix path from tests/).
 DYNAMIC_IMPORTORSKIP_SITES = frozenset(
     {
-        "test_backend_registry.py",  # importorskips the registry's own dependency map
         "test_subfolder_imports.py",  # importorskips each subfolder's declared optional deps
     }
 )

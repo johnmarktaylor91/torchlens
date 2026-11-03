@@ -243,17 +243,6 @@ def _is_warning_name(name: str) -> bool:
     return name in WARNING_NAMES
 
 
-@pytest.mark.parametrize("name", CATALOG_NAMES)
-def test_each_named_error_is_importable_and_has_severity(name: str) -> None:
-    """Every v5.2 catalog entry is importable and has a valid severity."""
-
-    cls = _catalog_class(name)
-
-    assert getattr(tl.errors, name) is cls
-    assert hasattr(cls, "severity"), f"{name} missing severity tag"
-    assert cls.severity in ("recoverable", "informational", "fatal")
-
-
 def test_error_warning_partition_is_consistent() -> None:
     """Catalog entries use exception and warning bases consistently."""
 
@@ -277,38 +266,38 @@ def test_catalog_manifest_covers_named_entries() -> None:
     assert set(CATALOG_EXERCISE_MANIFEST) == set(CATALOG_NAMES)
 
 
+# Severity policy examples (Phase 14): representative entries and the severity they must carry.
+_SEVERITY_POLICY_EXAMPLES: dict[str, str] = {
+    "HookSignatureError": "fatal",
+    "GraphShapeMismatchError": "fatal",
+    "ControlFlowDivergenceError": "fatal",
+    "ModelMismatchError": "fatal",
+    "BundleComparisonError": "fatal",
+    "ReplayPreconditionError": "recoverable",
+    "SiteResolutionError": "recoverable",
+    "AppendMismatchError": "recoverable",
+    "SpecMutationError": "recoverable",
+    "TraceMutationWarning": "informational",
+}
+
+
 @pytest.mark.parametrize("name", CATALOG_NAMES)
-def test_catalog_messages_include_required_payload_fields(name: str) -> None:
-    """Named-field constructors include cited variables in user-facing text."""
+def test_catalog_entry_contract(name: str) -> None:
+    """One check per catalog code: importable, severity tagged, policy example, payload text."""
 
     cls = _catalog_class(name)
-    instance = cls(site="relu_1_2", helper="zero_ablate", shape=(2, 3))
 
+    assert getattr(tl.errors, name) is cls
+    assert hasattr(cls, "severity"), f"{name} missing severity tag"
+    assert cls.severity in ("recoverable", "informational", "fatal")
+    if name in _SEVERITY_POLICY_EXAMPLES:
+        assert cls.severity == _SEVERITY_POLICY_EXAMPLES[name]
+
+    instance = cls(site="relu_1_2", helper="zero_ablate", shape=(2, 3))
     message = str(instance)
     assert "relu_1_2" in message
     assert "zero_ablate" in message
     assert "(2, 3)" in message
-
-
-@pytest.mark.parametrize(
-    ("name", "expected"),
-    (
-        ("HookSignatureError", "fatal"),
-        ("GraphShapeMismatchError", "fatal"),
-        ("ControlFlowDivergenceError", "fatal"),
-        ("ModelMismatchError", "fatal"),
-        ("BundleComparisonError", "fatal"),
-        ("ReplayPreconditionError", "recoverable"),
-        ("SiteResolutionError", "recoverable"),
-        ("AppendMismatchError", "recoverable"),
-        ("SpecMutationError", "recoverable"),
-        ("TraceMutationWarning", "informational"),
-    ),
-)
-def test_catalog_severity_policy_examples(name: str, expected: str) -> None:
-    """Representative entries follow the Phase 14 severity policy."""
-
-    assert _catalog_class(name).severity == expected
 
 
 def test_axis_a_public_verbs_success_paths() -> None:

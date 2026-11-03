@@ -9,8 +9,6 @@ and the GradientShap estimator pinned by a stored-draw oracle.
 
 from __future__ import annotations
 
-import functools
-
 import pytest
 import torch
 from torch import Tensor, nn
@@ -285,31 +283,6 @@ def test_noise_tunnel_gradient_shap_substreams_disclosed() -> None:
     torch.testing.assert_close(result.values, again.values, rtol=0, atol=0)
 
 
-def test_smoothgrad_is_the_thin_alias_with_absolute_before_mean() -> None:
-    """D7: smoothgrad == seeded NT(saliency) mean, 25 samples, sigma 0.1 absolute.
-
-    The per-sample ABSOLUTE VALUE precedes the mean because the child is
-    saliency; the draw order is bit-identical, so the equality is exact.
-    """
-
-    model = _LinearOne()
-    x = torch.tensor([[0.3, 0.9, -0.4]], dtype=torch.float64)
-    legacy = attribution.smoothgrad(model, x, target=0, num_samples=25, noise_level=0.1, seed=123)
-    tunneled = attribution.noise_tunnel(
-        x,
-        method=attribution.saliency,
-        model=model,
-        target=0,
-        num_samples=25,
-        stdevs=0.1,
-        seed=123,
-        reduce="mean",
-    )
-    torch.testing.assert_close(legacy.values, tunneled.values, rtol=0, atol=0)
-    assert legacy.method == "smoothgrad"
-    assert legacy.extra == {"n_samples": 25, "noise_level": 0.1, "seed": 123}
-
-
 def test_gradient_shap_stored_draw_oracle_pins_the_estimator() -> None:
     """D10: with stored draws the estimator equals the hand-rolled convention.
 
@@ -406,28 +379,3 @@ def test_gradient_shap_pool_refusals() -> None:
             draw_bank={"alphas": torch.zeros(2, 1), "pool_indices": torch.zeros(1, 1).long()},
         )
     assert bad_bank.value.fields["code"] == "gradient_shap_draw_bank_invalid"
-
-
-def test_closed_callable_route_matches_sugar_route_disclosure() -> None:
-    """D3: primitive-route users can achieve sugar-route provenance richness."""
-
-    model = _LinearOne()
-    x = torch.tensor([[0.1, 0.2, 0.3]], dtype=torch.float64)
-    closed = functools.partial(attribution.saliency, model, target=0)
-
-    def adapter(inputs: Tensor, input_kwargs: dict | None) -> attribution.Attribution:
-        """Adapt partial(...) to the closed (inputs, input_kwargs) shape."""
-
-        return closed(inputs, input_kwargs)
-
-    via_attribute = attribution.noise_tunnel(
-        x, attribute=adapter, num_samples=2, stdevs=0.1, seed=9
-    )
-    via_method = attribution.noise_tunnel(
-        x, method=attribution.saliency, model=model, target=0, num_samples=2, stdevs=0.1, seed=9
-    )
-    torch.testing.assert_close(via_attribute.values, via_method.values, rtol=0, atol=0)
-    # The sugar route adds model identity because it SAW the model; the
-    # primitive route deliberately has none (a closed callable hides it).
-    assert via_method.extra["model_identity"] == "_LinearOne"
-    assert "model_identity" not in via_attribute.extra

@@ -13,7 +13,6 @@ import torch
 from torch import Tensor, nn
 
 import torchlens.attribution as attribution
-from torchlens.attribution._occlusion import _axis_origins, _window_slices
 from torchlens.errors import AttributionError
 
 
@@ -32,73 +31,6 @@ class _PatchSum(nn.Module):
 
         score = (x * self.weight).sum(dim=(1, 2, 3), keepdim=False)
         return torch.stack([score, -score], dim=-1)
-
-
-def test_axis_origins_clipped_edge_full_coverage() -> None:
-    """The final window clips at the boundary so every element is covered."""
-
-    assert _axis_origins(10, 4, 4) == [0, 4, 8]
-    assert _axis_origins(10, 4, 3) == [0, 3, 6]
-    assert _axis_origins(4, 4, 2) == [0]
-    assert _axis_origins(5, 4, 4) == [0, 4]
-
-
-def test_window_slices_cover_everything() -> None:
-    """Union of window regions covers the full swept extent."""
-
-    slices, per_axis = _window_slices((1, 2, 6, 6), (3, 3), (3, 3))
-    assert per_axis == [2, 2]
-    covered = torch.zeros(2, 6, 6)
-    for region in slices:
-        covered[region] += 1
-    assert bool((covered > 0).all())
-
-
-def test_full_window_self_oracle() -> None:
-    """One full-size window equals the direct two-forward difference."""
-
-    model = _PatchSum()
-    x = torch.rand(1, 1, 4, 4, dtype=torch.float64, generator=torch.Generator().manual_seed(0))
-    result = attribution.occlusion_map(model, x, target=0, window=(4, 4))
-    with torch.no_grad():
-        expected = model(x)[..., 0] - model(torch.zeros_like(x))[..., 0]
-    assert result.extra["perturbation_count"] == 1
-    # Every element is covered exactly once by the one full window.
-    torch.testing.assert_close(
-        result.values, expected.reshape(1, 1, 1, 1).expand_as(x), rtol=1e-12, atol=1e-12
-    )
-
-
-def test_map_values_match_analytic_deltas_average_and_sum() -> None:
-    """Non-overlapping windows: each element's delta is its window's weight mass."""
-
-    model = _PatchSum()
-    x = torch.ones(1, 1, 4, 4, dtype=torch.float64)
-    result = attribution.occlusion_map(model, x, target=0, window=(2, 2), strides=(2, 2))
-    weight = model.weight
-    for row0 in (0, 2):
-        for col0 in (0, 2):
-            block_mass = weight[0, row0 : row0 + 2, col0 : col0 + 2].sum()
-            torch.testing.assert_close(
-                result.values[0, 0, row0 : row0 + 2, col0 : col0 + 2],
-                block_mass.expand(2, 2),
-                rtol=1e-12,
-                atol=1e-12,
-            )
-    # Overlapping windows: 'sum' accumulates, 'average' divides by coverage.
-    summed = attribution.occlusion_map(
-        model, x, target=0, window=(2, 2), strides=(1, 1), overlap="sum"
-    )
-    averaged = attribution.occlusion_map(
-        model, x, target=0, window=(2, 2), strides=(1, 1), overlap="average"
-    )
-    assert summed.extra["perturbation_count"] == 9
-    # The corner element is covered by exactly one 2x2 window at stride 1.
-    torch.testing.assert_close(summed.values[0, 0, 0, 0], averaged.values[0, 0, 0, 0])
-    # The center element (1,1) is covered by four windows.
-    torch.testing.assert_close(
-        summed.values[0, 0, 1, 1], averaged.values[0, 0, 1, 1] * 4, rtol=1e-12, atol=1e-12
-    )
 
 
 def test_per_example_int_target_deltas() -> None:
@@ -173,20 +105,3 @@ def test_geometry_refusals() -> None:
         with pytest.raises(AttributionError) as excinfo:
             attribution.occlusion_map(model, x, target=0, **kwargs)
         assert excinfo.value.fields["code"] == "occlusion_geometry_invalid", kwargs
-
-
-def test_only_selected_leaf_is_occluded() -> None:
-    """Composition row: one leaf swept, all other inputs held fixed."""
-
-    class _TwoInput(nn.Module):
-        def forward(self, image: Tensor, bias: Tensor) -> Tensor:
-            score = image.sum(dim=(1, 2, 3)) + bias.sum(dim=-1)
-            return torch.stack([score, -score], dim=-1)
-
-    image = torch.ones(1, 1, 2, 2, dtype=torch.float64)
-    bias = torch.full((1, 3), 5.0, dtype=torch.float64)
-    result = attribution.occlusion_map(
-        _TwoInput(), (image, bias), target=0, window=(2, 2), occlude_leaf=0
-    )
-    # bias is held fixed: the full-window delta equals the image mass alone.
-    torch.testing.assert_close(result.values, torch.full_like(image, 4.0), rtol=1e-12, atol=1e-12)

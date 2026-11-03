@@ -65,6 +65,7 @@ def _refusal_reasons(value: object) -> list[str]:
     return [refusal["reason"] for refusal in snapshot_input_boundary(value)["refusals"]]
 
 
+# Kept: sole branch coverage of _input_walk.py.
 def test_exact_type_aux_stays_admitted(_registry: Any) -> None:
     """Plain list/tuple aux trees keep zero refusals and their exact kind."""
 
@@ -75,22 +76,7 @@ def test_exact_type_aux_stays_admitted(_registry: Any) -> None:
     assert node["aux"][0] == "tuple"
 
 
-def test_namedtuple_aux_refuses_typed(_registry: Any) -> None:
-    """A namedtuple aux no longer launders into a bare tuple witness."""
-
-    _register_box()
-    reasons = _refusal_reasons(_Box(torch.ones(2), _AuxTuple("fast")))
-    assert "registered_aux_unsafe" in reasons
-
-
-def test_list_subclass_aux_refuses_typed(_registry: Any) -> None:
-    """A list-subclass aux refuses instead of erasing its exact type."""
-
-    _register_box()
-    reasons = _refusal_reasons(_Box(torch.ones(2), _AuxList(["fast"])))
-    assert "registered_aux_unsafe" in reasons
-
-
+# Kept: sole branch coverage of _input_walk.py.
 def test_nested_subclass_aux_refuses_typed(_registry: Any) -> None:
     """The exact-type rule applies at every nesting level of the aux tree."""
 

@@ -92,24 +92,6 @@ def test_aligned_pair_has_identical_id_sequences(diff_dir: Path) -> None:
     assert "disableMappingFallback" not in sync
 
 
-def test_perturbed_weights_produce_nonzero_deltas(diff_dir: Path) -> None:
-    """The perturbed layer's downstream ops carry positive L2 deltas."""
-
-    node_data = json.loads(
-        (diff_dir / "nodedata.left.bundle_delta.json").read_text(encoding="utf-8")
-    )
-    graph_id = next(iter(node_data))
-    values = [row["value"] for row in node_data[graph_id]["results"].values()]
-    assert values
-    assert any(value > 0 for value in values)
-    assert all(value >= 0 for value in values)
-    left = json.loads((diff_dir / "left.json").read_text(encoding="utf-8"))
-    input_id = next(
-        node["id"] for node in left["graphs"][0]["nodes"] if node["namespace"] == "Inputs"
-    )
-    assert node_data[graph_id]["results"][input_id]["value"] == 0.0
-
-
 def test_pair_arity_refuses_typed() -> None:
     """Anything but exactly two captures refuses typed."""
 

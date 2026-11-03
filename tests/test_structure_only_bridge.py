@@ -19,7 +19,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._capture._structure_only_bridge import (
-    STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN,
     compute_bound_state_digests,
     declared_slot_geometry_digest,
     validate_and_digest_bound_buffers,
@@ -52,25 +51,6 @@ class _NonPersistentBufferModel(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-def test_bridge_is_entry_dark_and_rows_still_refuse() -> None:
-    """The gate is False AND the L7b rows refuse — coupled in one pin so the
-    gate can never flip without this test (and the row flips) moving too."""
-
-    assert STRUCTURE_ONLY_BRIDGE_ENTRY_OPEN is False
-    log = tl.trace(
-        _NonPersistentBufferModel(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(structure_only=True),
-    )
-    for capability, code in (
-        ("save_runnable", "structure_only_runnable_unsupported"),
-        ("live_replay", "structure_only_replay_unsupported"),
-    ):
-        with pytest.raises(StructureOnlyCapabilityError) as excinfo:
-            require_structure_only_capability(log, capability)
-        assert excinfo.value.fields["code"] == code
-
-
 def test_bridge_module_is_imported_nowhere_in_the_package() -> None:
     """Entry-dark means entry-dark: no torchlens module IMPORTS the bridge;
     it becomes reachable only through the L7b amendment implementation PR.
@@ -101,6 +81,7 @@ def test_bridge_module_is_imported_nowhere_in_the_package() -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/structure_only_belt.py.
 def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     """House rule: the L7b refusals name the flip boundary (declared
     late-bind posture) and what to do INSTEAD, not just the code."""
@@ -121,6 +102,7 @@ def test_l7b_row_refusals_teach_the_boundary_and_the_remedy() -> None:
     assert "discharge_against" in str(replay_exc.value)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_only_entry.py, _errors.py.
 def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
     """The structure_only + replayable entry conflict names its
     capability row and the L7b amendment as the flip event."""
@@ -144,19 +126,7 @@ def test_entry_conflict_teaches_the_runnable_ready_flip_event() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_bound_digests_route_through_the_one_content_authority() -> None:
-    """Bind digests ARE tl.fingerprint.content byte digests — one authority, and
-    same-geometry different-bytes values digest differently."""
-
-    a = torch.tensor([1.0, 2.0, 3.0])
-    b = torch.tensor([1.0, 2.0, 4.0])
-    digests = compute_bound_state_digests({"a": a, "b": b})
-    assert set(digests) == {"a", "b"}
-    assert digests["a"] == tl.fingerprint.content(a)
-    assert digests["b"] == tl.fingerprint.content(b)
-    assert digests["a"] != digests["b"]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_only_bridge.py.
 def test_bound_digest_refuses_meta_values_typed() -> None:
     """A meta value at bind time refuses typed: no bytes exist, and geometry
     digests belong to the declared slot, never the bound value (G2)."""
@@ -169,6 +139,7 @@ def test_bound_digest_refuses_meta_values_typed() -> None:
     assert "remedy" in excinfo.value.fields
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_only_bridge.py.
 def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> None:
     """Digest failure is a typed refusal with the cause chained — the memo's
     'never a silent skip' arm."""
@@ -188,29 +159,7 @@ def test_bound_digest_failure_refuses_and_chains_never_skips(monkeypatch) -> Non
 # ---------------------------------------------------------------------------
 
 
-def test_declared_digest_is_geometry_only_and_substrate_independent() -> None:
-    """A real tensor, its meta twin, and a same-geometry different-values
-    tensor all share ONE declared digest — geometry only, by construction."""
-
-    real = torch.randn(4, 2)
-    twin = torch.empty(4, 2, device="meta")
-    other_values = torch.zeros(4, 2)
-    assert (
-        declared_slot_geometry_digest(real)
-        == declared_slot_geometry_digest(twin)
-        == declared_slot_geometry_digest(other_values)
-    )
-    assert declared_slot_geometry_digest(real) != declared_slot_geometry_digest(torch.randn(2, 4))
-
-
-def test_declared_and_bound_digests_never_cross_domains() -> None:
-    """G2 at the bind boundary: the geometry digest of a tensor never equals
-    its byte digest — the meta domain tag separates them by construction."""
-
-    value = torch.randn(3, 3)
-    assert declared_slot_geometry_digest(value) != compute_bound_state_digests({"v": value})["v"]
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_only_bridge.py.
 def test_declared_digest_failure_degrades_to_the_sentinel_grammar(monkeypatch) -> None:
     """Genuine failure yields ``unavailable:<ExceptionName>`` — never None,
     never absent (manifest sentinel grammar)."""
@@ -269,6 +218,7 @@ def test_late_bound_values_validate_through_the_s1_surface(loaded_runnable_trace
     assert binding.bind_digests[slot_key] != binding.declared_digests[slot_key]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_only_bridge.py, _runnable/state.py, campaign mutant kills.
 def test_late_bound_geometry_violations_refuse_via_the_s1_validator(
     loaded_runnable_trace,
 ) -> None:

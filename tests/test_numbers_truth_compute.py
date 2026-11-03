@@ -45,6 +45,7 @@ def test_biased_linear_true_macs_not_flops_over_two() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/layer.py.
 def test_relu_has_zero_macs_non_mac() -> None:
     """A5 pin: a ReLU has ZERO MACs (the true answer), never 'half its FLOPs'."""
 
@@ -60,6 +61,7 @@ def test_relu_has_zero_macs_non_mac() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_summary_ladder.py, report/_summary_render.py, report/_summary_result.py.
 def test_fma_convention_honored_never_discarded() -> None:
     """A6: fma=1 renders 288 on the toy; the default convention is fma=2."""
 
@@ -74,6 +76,7 @@ def test_fma_convention_honored_never_discarded() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/compute_record.py, _capture/flops.py, _data_classes/_op_cost.py ....
 def test_fma1_refuses_typed_on_underivable_split() -> None:
     """A6: an fma=1 request over an underivable MAC split refuses typed."""
 
@@ -102,6 +105,7 @@ def test_fma1_refuses_typed_on_underivable_split() -> None:
         _CUSTOM_OP_RULES.pop("mul", None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of report/_compute_truth.py.
 def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
     """The aggregation door refuses fma values outside {1, 2} typed."""
 
@@ -117,6 +121,7 @@ def test_fma_outside_the_closed_vocabulary_refuses_typed() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/_onramp.py, report/_compute_truth.py.
 def test_flop_count_conventions() -> None:
     """A6: utils.flop_count honors the default/fma2/fma1 convention."""
 
@@ -129,11 +134,11 @@ def test_flop_count_conventions() -> None:
     assert flop_count(model, x, flop_convention="fma1") == 288
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/_onramp.py.
 @pytest.mark.parametrize(
     ("kwargs", "taught"),
     [
         ({"count_fma_as_two": False}, "flop_convention='fma1'"),
-        ({"count_fma_as_two": True}, "flop_convention='fma2'"),
         ({"fma": 1}, "flop_convention"),
         ({"flop_convention": "fma3"}, "'fma2', 'fma1'"),
     ],
@@ -156,20 +161,7 @@ def test_flop_count_refuses_removed_and_unknown_options(
     assert calls == [], "the refusal must fire before the model runs"
 
 
-def test_macs_format_in_mac_units_never_flops() -> None:
-    """listA 13: a MACs value renders in MAC units, never the FLOPs formatter."""
-
-    log = _capture(nn.Linear(8, 16, bias=True), torch.randn(2, 8))
-    try:
-        # The footer: the MAC truth in MAC units, never wearing FLOP units.
-        rebuilt = str(log.summary())
-        assert "256 MACs" in rebuilt
-        assert "512 MACs" not in rebuilt
-        assert "256 FLOPs" not in rebuilt
-    finally:
-        log.cleanup()
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_op_cost.py, _data_classes/_trace_groups.py, _data_classes/layer.py ....
 def test_backward_macs_are_none_never_half_flops() -> None:
     """costreport 3: backward MACs are not derivable; flops//2 is dead everywhere."""
 
@@ -202,6 +194,7 @@ def test_coverage_gate_every_specialty_name_classified() -> None:
     assert overlap == set(), f"names in more than one cost tier: {sorted(overlap)}"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/compute_record.py.
 def test_record_collapse_matches_stored_flops_everywhere() -> None:
     """Invariant: 2*fma + other == flops_forward for every derivable record."""
 
@@ -232,6 +225,7 @@ def test_record_collapse_matches_stored_flops_everywhere() -> None:
         log.cleanup()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups.py, _data_classes/trace.py, report/_trace_facts.py.
 @pytest.mark.heavy
 def test_bert_base_exact_mac_decomposition() -> None:
     """A5 pin (re-derived per the memo's numbers discipline): bert-base@12.

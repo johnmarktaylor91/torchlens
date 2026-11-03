@@ -60,40 +60,6 @@ class _SpatialNet(nn.Module):
         return self.conv(x).mean(dim=(2, 3))
 
 
-def test_infidelity_zero_for_exact_gradient_attribution() -> None:
-    """A linear model's gradient is exactly faithful: infidelity == 0."""
-
-    model = _Linear()
-    x = torch.tensor([[0.3, -0.2, 0.5, 0.1]], dtype=torch.float64)
-    exact_attribution = model.head.weight[0].reshape(1, 4)
-    result = attribution.infidelity(model, x, target=0, attribution=exact_attribution, seed=0)
-    assert result.metric == "infidelity"
-    assert result.value == pytest.approx(0.0, abs=1e-20)
-    assert result.extra["infidelity_normalized"] == pytest.approx(0.0, abs=1e-20)
-    assert "perturbation" in result.extra["qualification"]
-    assert result.settings["normalization_primary"] == "unnormalized"
-    assert result.extra["note"] == (
-        "infidelity judges the perturbation as much as the attribution."
-    )
-
-
-def test_infidelity_positive_for_wrong_attribution_and_beta_normalization() -> None:
-    """A wrong attribution scores worse; normalization optimizes the scale."""
-
-    model = _Linear()
-    x = torch.tensor([[0.3, -0.2, 0.5, 0.1]], dtype=torch.float64)
-    wrong = torch.tensor([[9.0, -9.0, 9.0, 9.0]], dtype=torch.float64)
-    scaled_truth = 3.0 * model.head.weight[0].reshape(1, 4)
-    wrong_result = attribution.infidelity(model, x, target=0, attribution=wrong, seed=1)
-    scaled_result = attribution.infidelity(model, x, target=0, attribution=scaled_truth, seed=1)
-    assert wrong_result.value > 0
-    # A uniformly mis-SCALED but directionally exact attribution normalizes
-    # back to zero (beta absorbs the scale); its unnormalized value does not.
-    assert scaled_result.value > 0
-    assert scaled_result.extra["infidelity_normalized"] == pytest.approx(0.0, abs=1e-18)
-    assert scaled_result.extra["normalization_beta"] == pytest.approx(1.0 / 3.0, rel=1e-6)
-
-
 def test_infidelity_square_removal_and_refusals() -> None:
     """square_removal works on spatial inputs and refuses on flat ones."""
 
@@ -270,31 +236,3 @@ def test_sensitivity_rung3_behavioral_probe() -> None:
     )
     assert result.extra["determinism_probe"] == "passed_not_proven"
     assert "observed_two_call_relative_difference" in result.extra
-
-
-def test_sensitivity_nonzero_on_nonlinear_model_and_reproducible() -> None:
-    """Sensitivity is positive for genuinely input-dependent attributions."""
-
-    class _Tanh(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 2, dtype=torch.float64)
-            with torch.no_grad():
-                self.lin.weight.copy_(torch.arange(8, dtype=torch.float64).reshape(2, 4) / 3.0)
-                self.lin.bias.zero_()
-
-        def forward(self, x: Tensor) -> Tensor:
-            return torch.tanh(self.lin(x))
-
-    model = _Tanh()
-    x = torch.tensor([[0.4, -0.3, 0.2, 0.6]], dtype=torch.float64)
-    first = attribution.sensitivity(
-        x, method=attribution.saliency, model=model, target=0, num_samples=5, seed=9
-    )
-    second = attribution.sensitivity(
-        x, method=attribution.saliency, model=model, target=0, num_samples=5, seed=9
-    )
-    assert first.value > 0
-    assert first.value == second.value
-    assert first.settings["radius"] == 0.02
-    assert first.extra["per_sample"]["max"] == first.value

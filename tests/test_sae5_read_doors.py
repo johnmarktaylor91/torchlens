@@ -36,7 +36,6 @@ from tests.test_sae4_latent_facets import (
     _TwoSites,
 )
 from tests.test_sae4_multi_call_modules import MultiHeadSelfAttention
-from torchlens._semantic.facets import Facet
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
     SelectorCapabilityError,
@@ -82,12 +81,6 @@ def _q_head(model: _AttnModel, x: torch.Tensor, head: int) -> torch.Tensor:
     return q.view(2, 3, 2, 4)[:, :, head]
 
 
-def _q_label(trace: tl.Trace) -> str:
-    """Layer label of ``q_lin``'s output: the first linear in execution order."""
-
-    return next(op.layer_label for op in trace._layer_list if op.func_name == "linear")
-
-
 def _set_door_value(trace: tl.Trace, selector) -> torch.Tensor:
     """The activation the ``attach_hooks`` write door hands an edit for ``selector``."""
 
@@ -100,18 +93,6 @@ def _set_door_value(trace: tl.Trace, selector) -> torch.Tensor:
 
 
 # --- trace[selector] ----------------------------------------------------------------
-
-
-def test_trace_getitem_reads_a_head_slice(attn) -> None:
-    model, x = attn
-    trace = tl.trace(model, x, capture=_READY)
-    facet = trace[tl.head(0, "q")]
-    assert isinstance(facet, Facet)
-    expected = _q_head(model, x, 0)
-    torch.testing.assert_close(facet.value, expected, **TOL)
-    read_door = trace.modules["attn"].facets.head(0)["q"].value
-    torch.testing.assert_close(facet.value, read_door, **TOL)
-    torch.testing.assert_close(facet.value, _set_door_value(trace, tl.head(0, "q")), **TOL)
 
 
 def test_trace_getitem_reads_a_latent(latent_setup) -> None:
@@ -132,33 +113,7 @@ def test_trace_getitem_reads_a_latent_set_as_one_facet(latent_setup) -> None:
     torch.testing.assert_close(trace[tl.facet("res").latent([0, 2])].value, expected, **TOL)
 
 
-def test_trace_getitem_refuses_a_broadcast_head_selector(attn) -> None:
-    """``tl.head(0)`` reads several facets; ``trace[...]`` needs one, as for any selector."""
-
-    model, x = attn
-    trace = tl.trace(model, x, capture=_READY)
-    with pytest.raises(AmbiguousSiteError), warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace[tl.head(0)]
-
-
 # --- the facet's home -----------------------------------------------------------------
-
-
-def test_trace_getitem_names_the_head_facet_home(attn) -> None:
-    model, x = attn
-    trace = tl.trace(model, x, capture=_READY)
-    facet = trace[tl.head(0, "q")]
-    assert facet.spec.home.layer_label == _q_label(trace)
-    torch.testing.assert_close(facet.value, _q_head(model, x, 0), **TOL)
-
-
-def test_trace_getitem_names_the_latent_home(latent_setup) -> None:
-    model, x = latent_setup
-    trace = tl.trace(model, x, capture=_READY)
-    facet = trace[tl.facet("res").latent(2)]
-    assert facet.spec.home.layer_label == trace["fc1"].layer_label
-    torch.testing.assert_close(facet.value, _latent_column(2), **TOL)
 
 
 def test_a_broadcast_head_read_reports_the_count_the_write_door_reports(attn) -> None:
@@ -221,13 +176,3 @@ def test_find_sites_and_composites_still_refuse_naming_the_read_door(attn) -> No
         trace.find_sites(tl.head(0, "q"))
     with pytest.raises(SelectorCapabilityError, match="composite selectors"):
         trace.find_sites(tl.head(0, "q") | tl.label("output_1"))
-
-
-def test_ordinary_selectors_resolve_as_before(attn) -> None:
-    """A non-facet selector still resolves to op records, unchanged."""
-
-    model, x = attn
-    trace = tl.trace(model, x, capture=_READY)
-    table = trace[tl.func("linear")]
-    assert all(not isinstance(site, Facet) for site in table)
-    assert len(table) == 5

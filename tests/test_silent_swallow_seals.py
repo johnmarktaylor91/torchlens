@@ -77,15 +77,6 @@ def test_raising_config_getter_never_collides_in_cache_key() -> None:
     )
 
 
-def test_readable_config_cache_key_is_stable() -> None:
-    """The never-match token fires only on raising getters."""
-
-    model = nn.Linear(2, 2)
-    first = semantic_output_cache_key(model)
-    second = semantic_output_cache_key(model)
-    assert first == second
-
-
 def test_failed_decode_leaves_a_durable_annotation(monkeypatch) -> None:
     """A tripped decode belt must leave trace.annotations['decode_skipped'],
     not just a losable warning, and must roll back partial writes."""

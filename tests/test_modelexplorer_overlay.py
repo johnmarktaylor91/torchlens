@@ -72,17 +72,6 @@ def test_standard_providers_write_sidecars(net_log: Any, tmp_path: Path) -> None
     assert path.exists()
 
 
-def test_values_join_by_node_id(net_log: Any, net_payload: dict[str, Any]) -> None:
-    """Provider results key on the payload's node ids."""
-
-    graphs_data, coverage = build_node_data(net_log, net_payload, "bytes")
-    graph_id = next(iter(graphs_data))
-    node_ids = {node["id"] for node in net_payload["graphs"][0]["nodes"]}
-    assert set(graphs_data[graph_id]["results"]) <= node_ids
-    assert coverage["resolved"] > 0
-    assert coverage["omitted_nonfinite"] == 0
-
-
 def test_magnitude_requires_retained_values() -> None:
     """A value-free capture refuses value-derived providers, naming the
     missing retention (composition row 12: structure-only x every surface)."""

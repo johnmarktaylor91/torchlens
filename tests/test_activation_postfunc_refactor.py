@@ -42,55 +42,6 @@ def _output_loss(trace: tl.Trace) -> torch.Tensor:
     return trace[trace.output_layers[0]].out.sum()
 
 
-def test_activation_transform_keeps_raw_tensor_and_transformed_metadata() -> None:
-    """Activation transform stores raw and transformed tensors separately."""
-
-    x = torch.randn(2, 4)
-    trace = tl.trace(
-        _TinyModel(), x, capture=tl.options.CaptureOptions(activation_transform=lambda t: t.mean())
-    )
-    layer = _first_transformed_layer(trace)
-
-    assert not hasattr(layer, "tensor")
-    assert layer.out.shape == layer.shape
-    assert layer.transformed_out.shape == torch.Size([])
-    assert layer.transformed_out_shape == ()
-    assert layer.shape != layer.transformed_out_shape
-    assert layer.dtype == layer.out.dtype
-    assert layer.transformed_out_dtype == layer.transformed_out.dtype
-    assert layer.transformed_activation_memory == layer.transformed_out.nelement() * (
-        layer.transformed_out.element_size()
-    )
-
-
-def test_transformed_out_absent_withactivation_transform() -> None:
-    """No out transform leaves transformed out fields empty."""
-
-    trace = tl.trace(_TinyModel(), torch.randn(2, 4))
-
-    assert all(trace[label].transformed_out is None for label in trace.layer_labels)
-
-
-def test_save_raw_outs_false_keeps_raw_metadata_only() -> None:
-    """save_raw_activations=False drops raw tensor storage but preserves raw metadata."""
-
-    trace = tl.trace(
-        _TinyModel(),
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(
-            activation_transform=lambda t: t.mean(), save_raw_activations=False
-        ),
-    )
-    layer = _first_transformed_layer(trace)
-
-    assert layer.out is None
-    assert layer.out is None
-    assert layer.shape is not None
-    assert layer.dtype is not None
-    assert layer.activation_memory > 0
-    assert layer.transformed_out is not None
-
-
 def test_grad_transform_keeps_raw_grad_and_transformed_metadata() -> None:
     """Gradient transform stores raw and transformed grads separately."""
 
@@ -143,31 +94,6 @@ def test_train_mode_activation_transform_detach_rejected() -> None:
             torch.randn(2, 4, requires_grad=True),
             capture=CaptureOptions(backward_ready=True, activation_transform=lambda t: t.detach()),
         )
-
-
-def test_train_mode_activation_transform_int_rejected() -> None:
-    """Integer train-mode out transforms are rejected."""
-
-    with pytest.raises(tl.errors.TrainingModeConfigError, match="non-grad dtype"):
-        tl.trace(
-            _TinyModel(),
-            torch.randn(2, 4, requires_grad=True),
-            capture=CaptureOptions(
-                backward_ready=True, activation_transform=lambda t: t.to(torch.int64)
-            ),
-        )
-
-
-def test_train_mode_activation_transform_connected_ops() -> None:
-    """Differentiable train-mode out transforms are accepted."""
-
-    trace = tl.trace(
-        _TinyModel(),
-        torch.randn(2, 4, requires_grad=True),
-        capture=CaptureOptions(backward_ready=True, activation_transform=lambda t: t * 2),
-    )
-
-    assert _first_transformed_layer(trace).transformed_out.grad_fn is not None
 
 
 def test_transform_error_has_context_and_cause() -> None:

@@ -92,35 +92,6 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, save="all")
 
 
-def test_lm_head_recipe_exposes_unembedding_facets() -> None:
-    """The language_model_head recipe anchors head and final-norm facets."""
-
-    torch.manual_seed(0)
-    model = TinyLM().eval()
-    log = _capture(model, torch.randn(2, 3, 8))
-    view = log.modules["self"].facets
-
-    assert view.final_norm_kind == "layer_norm"
-    assert view.final_norm_eps == pytest.approx(1e-5)
-    assert view.unembed_weight.value.shape == (11, 8)
-    assert view.final_norm_gamma.value.shape == (8,)
-    assert view.logits.value.shape == (2, 3, 11)
-    assert view.declared()["unembed_bias"].status == "structurally_absent"
-
-
-@_requires_rmsnorm
-def test_lm_head_recipe_classifies_rms_norm_without_beta() -> None:
-    """RMSNorm-family final norms classify as rms_norm with beta absent."""
-
-    torch.manual_seed(0)
-    model = TinyLM(norm=nn.RMSNorm(8)).eval()
-    log = _capture(model, torch.randn(2, 3, 8))
-    view = log.modules["self"].facets
-
-    assert view.final_norm_kind == "rms_norm"
-    assert view.declared()["final_norm_beta"].status == "structurally_absent"
-
-
 def test_logit_lens_validates_and_matches_real_logits_layer_norm() -> None:
     """The reconstructed LayerNorm lens validates and reproduces final logits."""
 

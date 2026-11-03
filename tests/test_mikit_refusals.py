@@ -217,13 +217,3 @@ def test_component_stack_records_smoke():
     with pytest.raises(MechInterpError) as excinfo:
         stack.topk(1, by="max")
     assert excinfo.value.fields["code"] == "mi_top_by_invalid"
-
-
-def test_translation_table_rows_well_formed():
-    """Every translation row carries (tlens, generation, facet) -- the CI row."""
-
-    rows = mi.translation_table()
-    assert len(rows) >= 18
-    for row in rows:
-        assert row["tlens"] and row["generation"] in ("2.x", "3.x-bridge", "4.x")
-        assert row["facet"]

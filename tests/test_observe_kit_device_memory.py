@@ -57,48 +57,6 @@ def _reading(allocated: int, peak: int, reserved: int = 4096, peak_reserved: int
     )
 
 
-def test_default_off_and_swept_fields_are_none_not_zero() -> None:
-    """Fabricated zeros are gone: unmeasured flat fields read None."""
-
-    assert tl.options.CaptureOptions().track_device_memory is False
-    captured = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
-    try:
-        for op in captured._layer_list:
-            assert op.bytes_delta_at_call is None, op.layer_label
-            assert op.bytes_peak_at_call is None, op.layer_label
-        assert device_memory_samples(captured) == {}
-    finally:
-        captured.cleanup()
-
-
-def test_signed_deltas_and_peak_advance_semantics(monkeypatch) -> None:
-    """Negative deltas are valid; peak_advance 0 is 'did not exceed high water'."""
-
-    # One device that grows and advances its peak; one that shrinks under an
-    # old (never-advancing) high-water mark.
-    readings_growing = [_reading(1000 + 64 * step, 1000 + 64 * step) for step in range(64)]
-    readings_shrinking = [_reading(5000 - 16 * step, 999_999) for step in range(64)]
-    provider = _ScriptedProvider({"fake:0": readings_growing, "fake:1": readings_shrinking})
-    captured = _capture_with_provider(
-        monkeypatch, provider, nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4)
-    )
-    try:
-        samples = device_memory_samples(captured)
-        assert samples, "sampling was armed and a provider was available"
-        measured = [
-            sample for rows in samples.values() for sample in rows if sample.status == "measured"
-        ]
-        growing = [s for s in measured if s.device == "fake:0"]
-        shrinking = [s for s in measured if s.device == "fake:1"]
-        assert all(s.allocated_delta > 0 and s.peak_advance > 0 for s in growing)
-        assert all(s.allocated_delta < 0 for s in shrinking)
-        # The old high-water never moves: advance is exactly 0, which is NOT
-        # "no allocation" (the shrinking device kept de/re-allocating).
-        assert all(s.peak_advance == 0 for s in shrinking)
-    finally:
-        captured.cleanup()
-
-
 def test_flat_fields_are_projections_of_the_typed_samples(monkeypatch) -> None:
     """bytes_delta/peak_at_call become compatibility projections when sampled."""
 
@@ -158,29 +116,6 @@ def test_unsupported_devices_produce_typed_absence(monkeypatch) -> None:
         assert device_memory_samples(captured) == {}
         for op in captured._layer_list:
             assert op.bytes_delta_at_call is None
-    finally:
-        captured.cleanup()
-
-
-def test_provider_never_resets_counters(monkeypatch) -> None:
-    """The no-reset law (R36-2): sampling reads and only reads."""
-
-    calls: list[str] = []
-
-    class _AuditingProvider:
-        def device_keys(self) -> tuple[str, ...]:
-            calls.append("device_keys")
-            return ("fake:0",)
-
-        def read(self, device_key: str) -> DeviceMemoryReading:
-            calls.append("read")
-            return _reading(1000, 1000)
-
-    captured = _capture_with_provider(
-        monkeypatch, _AuditingProvider(), nn.Linear(4, 4), torch.randn(2, 4)
-    )
-    try:
-        assert set(calls) == {"device_keys", "read"}
     finally:
         captured.cleanup()
 

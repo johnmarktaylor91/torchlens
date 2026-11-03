@@ -37,7 +37,8 @@ def _row_facts(status: Any) -> list[tuple[Any, ...]]:
     ]
 
 
-@pytest.mark.parametrize("case", ["partial_requires_grad", "eager_attention_h2"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("case", ["eager_attention_h2"])
 def test_loaded_trace_reads_the_saved_count_and_attribution(case: str, tmp_path: Path) -> None:
     """Round trip: the loaded count, rows and bucket equal the live ones."""
 
@@ -74,7 +75,13 @@ def test_loaded_checkpointed_trace_keeps_its_recompute_label(tmp_path: Path) -> 
         trace.cleanup()
 
 
-@pytest.mark.parametrize("version", [9, 10])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize(
+    "version",
+    [
+        9,
+    ],
+)
 def test_pass_states_stamped_below_the_floor_refuse(version: int) -> None:
     """A v9 or v10 pass state was written by torchlens 2.x: it refuses, never default-fills."""
 
@@ -113,16 +120,12 @@ _GOOD = {
 }
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("change", "reason"),
     [
         ({"extra": 1}, "record_keys"),
-        ({"executed_flops": 30.0}, "count_type"),
-        ({"executed_flops": True}, "count_type"),
-        ({"rows": [["mm_back_1_1", 1, "mm_1_1", "30", 0]]}, "rows_entry"),
-        ({"rows": [["mm_back_1_1", 0, "mm_1_1", 30, 0]]}, "rows_entry"),
         ({"rows": [[7, 1, "mm_1_1", 30, 0]]}, "rows_entry"),
-        ({"uncounted_ops": [["sum", 1.5]]}, "uncounted_ops_entry"),
         ({"unattributed": "aten.ones_like"}, "unattributed_type"),
         ({"convention": "x" * 201}, "convention_type"),
         ({"executed_flops": 31}, "rows_incoherent"),

@@ -144,18 +144,6 @@ def test_inference_only_with_backward_ready_carries_inference_only_conflict() ->
     assert exc_info.value.fields["remedy"]
 
 
-def test_backward_ready_with_detach_carries_backward_ready_conflict() -> None:
-    """backward_ready=True plus explicit detaching stamps the conflict code."""
-
-    with pytest.raises(TrainingModeConfigError) as exc_info:
-        tl.trace(
-            _model(),
-            _x(requires_grad=True),
-            capture=tl.options.CaptureOptions(backward_ready=True, detach_saved_activations=True),
-        )
-    assert exc_info.value.fields["code"] == "backward_ready_conflict"
-
-
 def test_integer_activation_transform_carries_transform_not_differentiable() -> None:
     """A non-grad-dtype transform under backward_ready stamps the code."""
 

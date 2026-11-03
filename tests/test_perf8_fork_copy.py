@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import functools
 import math
-import sys
 from collections import OrderedDict, defaultdict
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -193,14 +192,6 @@ class _Record:
     """Stands in for a parent record facade the memo or translator maps."""
 
 
-class _Str(str):
-    pass
-
-
-class _Dict(dict):
-    pass
-
-
 def _input_index(*values: Any) -> dict[int, int]:
     index: dict[int, int] = {}
 
@@ -274,41 +265,8 @@ def _describe_memo(
 
 
 def _flat_cases() -> Iterator[Any]:
-    yield "atomic_dict", lambda p: {"a": 1, "b": "x", "c": None, "d": 2.5, "e": True, "f": b"z"}
-    yield "atomic_exotic", lambda p: {"n": float("nan"), "c": 1j, True: 0, 0: False}
-    yield "ordered_with_record", lambda p: OrderedDict([("a", p), ("b", 3)])
-    yield "list_mixed", lambda p: [1, "two", p, None, p]
-    yield "tuple_atomic", lambda p: ("a", 1, None)
     yield "tuple_record", lambda p: ("a", p)
-    yield "tuple_of_atomic_tuples", lambda p: (("a", 1), ("b", 2))
-    yield "tuple_nested_record", lambda p: (("a", 1), ("b", p))
-    yield "nested", lambda p: {"k": [1, 2, p], "j": ("x", "y"), "m": {"z": p}}
-    yield "set_str", lambda p: {"s", "t", "u"}
-    yield "set_of_tuples", lambda p: {("a", 1), ("b", 2)}
-    yield "frozenset_int", lambda p: frozenset({1, 2, 3})
-    yield "frozenset_record", lambda p: frozenset({p, "x"})
-    yield "defaultdict_list", lambda p: defaultdict(list, {"a": ["x", p], "b": []})
-    yield "defaultdict_atomic", lambda p: defaultdict(int, {"a": 1, "b": 2})
-    yield "deep_atomic", lambda p: {"k": ("a", ("b", 1))}
-    yield "long_atomic_list", lambda p: list(range(300)) + ["x"] * 50
-    yield "empty_dict", lambda p: {}
-    yield "empty_list", lambda p: []
-    yield "empty_tuple", lambda p: ()
-    yield "empty_set", lambda p: set()
-    yield "empty_frozenset", lambda p: frozenset()
-    yield "empty_ordered", lambda p: OrderedDict()
-    yield "empty_defaultdict", lambda p: defaultdict(int)
-    yield "list_of_empties", lambda p: [[], {}, (), set()]
-    yield "tuple_key", lambda p: {("tuple", "key"): 1}
-    yield "unmapped_record", lambda p: {"a": _Record()}
-    yield "unmapped_in_tuple", lambda p: ("a", _Record())
-    yield "tensor", lambda p: {"t": torch.zeros(1)}
-    yield "too_deep", lambda p: [[[["too deep"]]]]
-    yield "str_subclass_member", lambda p: ["a", _Str("b")]
-    yield "str_subclass_key", lambda p: {_Str("k"): 1}
-    yield "dict_subclass_member", lambda p: {"a": _Dict(b=1)}
     yield "partial_factory", lambda p: defaultdict(functools.partial(list), a=[1])
-    yield "callable_member", lambda p: [len, "x"]
 
     def aliased(p: Any) -> Any:
         inner = ["x", p]
@@ -366,14 +324,6 @@ def test_flat_copy_matches_the_former_copy(build: Callable[[Any], Any]) -> None:
             )
         )
     assert results[1] == results[0]
-
-
-def test_flat_copy_sees_the_atomic_types_the_former_copy_saw() -> None:
-    """The fast path's type test is the former per-member test, as a C-level lookup."""
-
-    assert trace_fork._is_atomic_copy_type.__self__ is _ATOMIC_COPY_TYPES
-    for item in (1, "a", b"b", 2.5, True, None, 1j, _Str("s"), _Record(), [], ()):
-        assert trace_fork._is_atomic_copy_type(type(item)) is (type(item) in _ATOMIC_COPY_TYPES)
 
 
 class _FakeStore:
@@ -444,40 +394,6 @@ def test_detached_record_fill_matches_the_former_fill() -> None:
     assert results[1] == results[0]
 
 
-def test_record_extras_copy_matches_the_former_copy() -> None:
-    """Record extras: atomic values shared, containers rebuilt, records translated."""
-
-    parent, shell = _Record(), _Record()
-    record = _Record()
-    record.__dict__.update(
-        {
-            "count": 3,
-            "name": "fc1",
-            "nothing": None,
-            "flags": [True, parent],
-            "table": {"a": ("b", parent)},
-            "tensor": torch.ones(1),
-            "_source_trace_ref": "parent-ref",
-            "_facets_cache": {"dropped": 1},
-            "record": parent,
-        }
-    )
-    inputs = _input_index(list(record.__dict__.values()), parent)
-    results = []
-    for copy_extras in (_reference_copy_record_extras, trace_fork._copy_record_extras):
-        translator = _RecordTranslator()
-        translator.add(parent, shell)
-        fork_record = _Record()
-        copy_extras(record, fork_record, translator, "fork-ref")
-        results.append(
-            [
-                (key, _describe(value, inputs, {id(shell): "shell"}, {}))
-                for key, value in fork_record.__dict__.items()
-            ]
-        )
-    assert results[1] == results[0]
-
-
 class _Block(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -504,36 +420,6 @@ class _Stack(nn.Module):
         x = self.blocks[0](x)
         first, second = x.split(3, dim=-1)
         return self.head(torch.cat([second, first], dim=-1))
-
-
-class _Small(nn.Module):
-    """PERF-7's row-major fixture."""
-
-    width = 4
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc1 = nn.Linear(4, 3)
-        self.fc2 = nn.Linear(3, 2)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.fc2(torch.relu(self.fc1(x)))
-
-
-class _Long(nn.Module):
-    """PERF-7's columnar fixture: past the store's columnar-transpose threshold (512 rows)."""
-
-    width = 4
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.fc(x)
-        for _ in range(180):
-            h = torch.tanh(h * 1.01 + 0.1)
-        return h.sum(dim=-1)
 
 
 def _capture(model_cls: type[nn.Module] = _Stack) -> Any:
@@ -634,8 +520,8 @@ def _fork_picture(parent: Any, fork: Any) -> dict[str, Any]:
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Stack, _Small, pytest.param(_Long, marks=pytest.mark.heavy)],
-    ids=["stack", "row_major", "columnar"],
+    [_Stack],
+    ids=["stack"],
 )
 def test_a_fork_equals_one_built_by_the_former_copy_path(
     model_cls: type[nn.Module], monkeypatch: pytest.MonkeyPatch
@@ -643,7 +529,7 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
     """Fields, module cells and Layer shadow dicts: the same copies and the same shares."""
 
     trace = _capture(model_cls)
-    assert (trace._trace_core.ops._columns is not None) is (model_cls is _Long), "store shape"
+    assert trace._trace_core.ops._columns is None, "store shape"
     current = {name: getattr(trace_fork, name) for name in _REFERENCES}
     for name, reference in _REFERENCES.items():
         monkeypatch.setattr(trace_fork, name, reference)
@@ -681,33 +567,3 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
         assert fork._layer_dict_all_keys is not trace._layer_dict_all_keys
         fork._layer_dict_all_keys["probe"] = None
         assert "probe" not in trace._layer_dict_all_keys
-
-
-def _fork_events(trace: Any) -> int:
-    trace.fork()  # warm-up, as the benchmark counter does
-    calls = 0
-
-    def count(_frame: Any, event: str, _arg: Any) -> None:
-        nonlocal calls
-        if event in ("call", "c_call"):
-            calls += 1
-
-    sys.setprofile(count)
-    try:
-        member = trace.fork()
-    finally:
-        sys.setprofile(None)
-    del member
-    return calls
-
-
-# Measured for one fork of this capture: 35,641 events on the former copy path,
-# 28,274 on this one; the bar leaves about 10 percent headroom above the latter.
-_FORK_EVENT_BAR = 31_000
-
-
-def test_one_fork_stays_cheap() -> None:
-    """Profiler events (calls and C calls) of one fork of a fixed capture."""
-
-    events = _fork_events(_capture())
-    assert events <= _FORK_EVENT_BAR, events

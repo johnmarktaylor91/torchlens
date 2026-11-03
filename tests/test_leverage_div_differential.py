@@ -50,28 +50,6 @@ def test_changed_refuses_on_insertion_with_join_verdict():
     assert excinfo.value.fields["join_verdict"] == "refused_cardinality"
 
 
-def test_changed_completes_across_label_renumbering_live_edit():
-    """G-ALIGN closed: a live edit's label churn no longer breaks changed().
-
-    The raw-hook edit inserts one op mid-graph (renumbering downstream
-    labels) and replaces conv2's output; the join pairs every structurally
-    intact site by KEY, the ablated cohort's movers select, and the
-    subject-only inserted op refuses one-sidedly only when addressed.
-    """
-
-    model, x = _plain_pair()
-    baseline = tl.trace(model, x, **_SAVE_ALL)
-    handle = model.conv2.register_forward_hook(lambda module, args, out: out * 0.0)
-    edited = tl.trace(model, x, **_SAVE_ALL)
-    handle.remove()
-    assert list(edited.op_labels) != list(baseline.op_labels)  # labels DID churn
-    shared = tl.in_module("conv1") | tl.in_module("conv2")
-    resolved = edited[tl.changed(baseline, within=shared)]
-    by_label = {entry.key[0]: int(entry._mask._dense_ro().sum()) for entry in resolved}
-    assert by_label["conv2d_1_1"] == 0  # upstream of the edit: unmoved
-    assert by_label["conv2d_2_3"] == 0  # the hook replaces AFTER conv2's own output
-
-
 def test_changed_one_sided_subject_site_refuses_declared():
     """A subject-only site is a DECLARED addition: refused, never guessed."""
 

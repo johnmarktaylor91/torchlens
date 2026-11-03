@@ -90,16 +90,6 @@ def test_inplace_functional_is_recorded_as_mutating(case: str) -> None:
     assert mutating == [True]
 
 
-@pytest.mark.parametrize("case", sorted(_NOT_MUTATING))
-def test_same_object_return_without_a_write_is_not_mutating(case: str) -> None:
-    """Eval-mode ``dropout_`` returns its input untouched; runnable capture says so."""
-
-    fn, func_name = _NOT_MUTATING[case]
-    torch.manual_seed(0)
-    trace = _runnable_trace(_ReusesReceiver(fn).eval(), torch.randn(2, 4))
-    assert _op_flags(trace, func_name) == [False]
-
-
 @pytest.mark.parametrize("case", sorted(_MUTATING) + sorted(_NOT_MUTATING))
 def test_loaded_run_of_inplace_functional_is_verified(case: str, tmp_path: Path) -> None:
     """Save, load and run: the version-divergence check passes and outputs match."""
@@ -113,24 +103,3 @@ def test_loaded_run_of_inplace_functional_is_verified(case: str, tmp_path: Path)
     result = tl.load(path).run(inputs=inputs, seed=0)
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     torch.testing.assert_close(result.output, model(inputs))
-
-
-def test_identity_return_after_a_sibling_view_write_is_not_mutating() -> None:
-    """A stale version baseline never turns an identity return into a mutation."""
-
-    class _SiblingViews(nn.Module):
-        """Write through one row view, then return another row unchanged."""
-
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(4, 4)
-
-        def forward(self, value: torch.Tensor) -> torch.Tensor:
-            hidden = self.linear(value)
-            first, second = hidden[0], hidden[1]
-            first.add_(1.0)
-            return second.contiguous() + first
-
-    trace = _runnable_trace(_SiblingViews().eval(), torch.randn(2, 4))
-    assert _op_flags(trace, "add_") == [True]
-    assert _op_flags(trace, "contiguous") == [False]

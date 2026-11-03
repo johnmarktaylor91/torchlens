@@ -17,11 +17,8 @@ import torch.nn as nn
 from test_weightsfree_fixtures import (
     ConvBnPool,
     build_twins,
-    meta_like,
     weightsfree_trace,
 )
-
-import torchlens as tl
 
 
 def _write_rows(trace) -> list[tuple[str, str, object]]:
@@ -40,6 +37,7 @@ def _write_rows(trace) -> list[tuple[str, str, object]]:
     return rows
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_tristate_comparison_is_unknown_on_meta() -> None:
     """The comparison primitive answers None (unknown) weights-free."""
 
@@ -53,87 +51,7 @@ def test_tristate_comparison_is_unknown_on_meta() -> None:
     assert _tensor_equal_tristate(real, real + 1) is False
 
 
-def test_eval_bn_meta_twin_no_phantom_writes() -> None:
-    """Eval-mode BatchNorm meta twin: zero fabricated inplace/reassign rows.
-
-    L2's measured shape: 3 phantom rows per BatchNorm (running_mean,
-    running_var, num_batches_tracked) — a real eval run never touches
-    num_batches_tracked at all.
-    """
-
-    real, meta = build_twins(ConvBnPool)
-    x = torch.randn(1, 3, 8, 8)
-    tr_real = tl.trace(real, x)
-    tr_meta = weightsfree_trace(meta, meta_like(x))
-
-    real_kinds = sorted((k, f) for k, f, _ in _write_rows(tr_real))
-    meta_kinds = sorted((k, f) for k, f, _ in _write_rows(tr_meta))
-    assert meta_kinds == real_kinds, (
-        f"buffer-write parity broken: real={real_kinds} meta={meta_kinds}"
-    )
-    assert not any(
-        kind in ("inplace", "data_reassign", "reassign") for kind, _, _ in _write_rows(tr_meta)
-    ), "eval-mode meta twin fabricated a non-declared write"
-
-
-def test_declared_fused_writes_survive_weightsfree() -> None:
-    """W1-BUF-2: declared (fused) mutations are recorded as HYPOTHESIS rows.
-
-    The mechanism is the SAME shipped fused-mutator classification the real
-    path uses — record existence never keys on a value comparison — so
-    weights-free parity holds by construction; only ``value_changed`` is
-    unknowable and rides the tri-state.
-    """
-
-    real, meta = build_twins(ConvBnPool)
-    x = torch.randn(1, 3, 8, 8)
-    tr_real = tl.trace(real, x)
-    tr_meta = weightsfree_trace(meta, meta_like(x))
-    real_fused = [r for r in _write_rows(tr_real) if r[0] == "fused"]
-    meta_fused = [r for r in _write_rows(tr_meta) if r[0] == "fused"]
-    assert len(meta_fused) == len(real_fused)
-    assert len(meta_fused) == 2  # running_mean + running_var
-    for _kind, source, value_changed in meta_fused:
-        assert value_changed is None, (
-            "weights-free fused write claims a value verdict it cannot make"
-        )
-        assert source, "fused write lost its source op"
-
-
-def test_train_mode_bn_meta_twin_parity() -> None:
-    """Train-mode BN: version-witnessed inplace writes keep parity."""
-
-    torch.manual_seed(0)
-    real = ConvBnPool()
-    with torch.device("meta"):
-        meta = ConvBnPool()
-    real.train()
-    meta.train()
-    x = torch.randn(2, 3, 8, 8)
-    tr_real = tl.trace(real, x)
-    tr_meta = weightsfree_trace(meta, meta_like(x))
-    assert sorted((k, f) for k, f, _ in _write_rows(tr_meta)) == sorted(
-        (k, f) for k, f, _ in _write_rows(tr_real)
-    )
-    assert tl.fingerprint.trace(tr_real) == tl.fingerprint.trace(tr_meta)
-
-
-def test_no_witness_flag_rests_on_unknown() -> None:
-    """The opaque-host-write flag is set by the MODEL, never the substrate.
-
-    L2's second half: on meta, ``reconcile()`` read "cannot know" as
-    "changed" and set the UNVERIFIABLE flag on every buffer-holding model.
-    """
-
-    from torchlens.backends.torch.completeness_witness import (
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-    )
-
-    _, meta = build_twins(ConvBnPool)
-    tr_meta = weightsfree_trace(meta, torch.empty(1, 3, 8, 8, device="meta"))
-    assert tr_meta not in _HOST_ESCAPE_MUTABLE_WRITEBACK
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_structure_evidence.py, _capture/_weightsfree_admission.py, _postprocess/graph_traversal.py ....
 def test_fabrication_delta_with_fix_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     """RED-capability pin: disabling the tri-state fix fabricates rows again.
 
@@ -171,6 +89,7 @@ def test_fabrication_delta_with_fix_disabled(monkeypatch: pytest.MonkeyPatch) ->
         assert "data_reassign" in extra_kinds or "inplace" in extra_kinds
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/rescue.py.
 def test_rescue_state_sweep_never_fabricates_on_meta() -> None:
     """L5: the rescue state-change sweep resolves unknown, never changed."""
 

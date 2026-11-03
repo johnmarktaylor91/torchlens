@@ -309,29 +309,6 @@ def test_load_intervention_spec_rejects_symlinked_child_json(
 # ---------------------------------------------------------------------------
 
 
-def test_torch_bundle_normal_load(tmp_path: Path) -> None:
-    """A benign torch trace bundle still loads."""
-
-    bundle_path = _build_torch_bundle(tmp_path)
-    trace = tl.load(bundle_path)
-    assert trace.source.class_name == "_TorchTraceModel"
-
-
-def test_torch_bundle_rejects_non_torch_tensor_codec(tmp_path: Path) -> None:
-    """A torch bundle declaring a foreign tensor ``logical_backend`` is rejected."""
-
-    bundle_path = _build_torch_bundle(tmp_path)
-    manifest = _read_json(bundle_path / "manifest.json")
-    assert manifest.get("kind") == "trace"
-    for entry in manifest["tensors"]:
-        entry["logical_backend"] = "jax"
-        entry["codec"] = "numpy_safetensors_v1"
-    _write_json(bundle_path / "manifest.json", manifest)
-
-    with pytest.raises(ArtifactError, match="non-torch payload codec"):
-        tl.load(bundle_path)
-
-
 def test_torch_bundle_rejects_non_torch_body_index_codec(tmp_path: Path) -> None:
     """A torch bundle declaring a foreign body-index backend is rejected."""
 

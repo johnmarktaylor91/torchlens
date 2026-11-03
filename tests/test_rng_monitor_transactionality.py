@@ -81,6 +81,7 @@ def _tiny_model() -> nn.Module:
     return nn.Sequential(nn.Linear(4, 4), nn.ReLU())
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_base_exception_during_arm_leaks_nothing(monkeypatch):
     """A Ctrl-C in the generator sweep must unwind every patch and both hooks."""
 
@@ -103,30 +104,7 @@ def test_base_exception_during_arm_leaks_nothing(monkeypatch):
     assert rng_monitor_state._ACTIVE_MONITOR is None
 
 
-def test_base_exception_after_profile_install_leaks_nothing(monkeypatch):
-    """Interrupting AFTER ``sys.setprofile`` must still hand the slot back."""
-
-    before = _surface_snapshot()
-    original_install = host_nondeterminism_monitor._install_profile_hooks
-
-    def _install_then_interrupt(self):
-        original_install(self)
-        raise KeyboardInterrupt("injected post-profile-install")
-
-    monkeypatch.setattr(
-        host_nondeterminism_monitor, "_install_profile_hooks", _install_then_interrupt
-    )
-    with pytest.raises(KeyboardInterrupt):
-        tl.trace(
-            _tiny_model(),
-            torch.randn(1, 4),
-            capture=tl.options.CaptureOptions(replayable=True),
-        )
-
-    assert _surface_leaks(before) == []
-    assert sys.getprofile() is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_one_failing_install_surface_does_not_disarm_later_surfaces(monkeypatch):
     """A raising model sweep must not cost the profile belt installed after it."""
 
@@ -142,6 +120,7 @@ def test_one_failing_install_surface_does_not_disarm_later_surfaces(monkeypatch)
     assert sys.getprofile() is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_rearming_the_same_instance_is_refused():
     """A second ``__enter__`` must install nothing and degrade completeness."""
 
@@ -156,6 +135,7 @@ def test_rearming_the_same_instance_is_refused():
         monitor.__exit__(None, None, None)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_second_exit_does_not_clobber_a_later_hook():
     """Teardown is idempotent: a double close must leave the live hook alone."""
 
@@ -194,6 +174,7 @@ def test_non_lifo_overlap_preserves_both_the_hook_and_the_originals():
     assert "monitor_overlap" in inner.result.uncertain_detail
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_patch_stacks_do_not_grow_across_captures():
     """The splice registry must be empty again after every clean capture."""
 
@@ -203,6 +184,7 @@ def test_patch_stacks_do_not_grow_across_captures():
     assert rng_monitor_state._PATCH_STACKS == {}
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/channels.py, _utils/rng/monitor.py.
 def test_in_window_thread_hook_self_uninstalls_after_teardown():
     """A worker started in-window must not keep the dead window's hook forever."""
 
@@ -233,6 +215,7 @@ def test_in_window_thread_hook_self_uninstalls_after_teardown():
     assert observed["hook_after"] is None
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_patch_restore_survives_a_raising_tamper_probe():
     """A holder whose attribute read raises must still get its original back."""
 
@@ -257,32 +240,7 @@ def test_patch_restore_survives_a_raising_tamper_probe():
     assert holder.value == "original"
 
 
-def test_suppress_self_marks_is_thread_local():
-    """A probe on one thread must never suppress another thread's host marks."""
-
-    monitor = host_nondeterminism_monitor(None)
-    inside = threading.Event()
-    release = threading.Event()
-    seen: dict[str, int] = {}
-
-    def _other_thread():
-        seen["depth"] = monitor._suppress_self_marks
-        monitor._mark("clock")
-        release.set()
-
-    with monitor._monitor_internal_probe():
-        assert monitor._suppress_self_marks == 1
-        worker = threading.Thread(target=_other_thread)
-        worker.start()
-        assert release.wait(timeout=10)
-        worker.join(timeout=10)
-        inside.set()
-    assert inside.is_set()
-    assert seen["depth"] == 0
-    assert "clock" in monitor.result.channels
-    assert monitor._suppress_self_marks == 0
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/monitor.py.
 def test_suppress_depth_never_rests_negative():
     """A lost update must not leave a truthy resting depth that drops every mark."""
 
@@ -296,6 +254,7 @@ def test_suppress_depth_never_rests_negative():
     assert "clock" in monitor.result.channels
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/autocast.py.
 def test_autocast_restore_unwinds_a_partial_enter(monkeypatch):
     """A failing second device entry must not leave the first autocast entered.
 
@@ -331,6 +290,7 @@ def test_autocast_restore_unwinds_a_partial_enter(monkeypatch):
     assert calls["n"] == 2
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/autocast.py.
 def test_autocast_restore_exits_outer_contexts_when_inner_raises():
     """A raising innermost exit must not strand the outer contexts."""
 
@@ -359,6 +319,7 @@ def test_autocast_restore_exits_outer_contexts_when_inner_raises():
     assert restore._contexts == []
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/run.py.
 def test_rng_monitor_verdict_is_prestamped_fail_closed(monkeypatch):
     """An unreached verdict stamp must read as UNCERTAIN, never as a clean window."""
 

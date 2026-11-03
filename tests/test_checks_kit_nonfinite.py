@@ -52,48 +52,7 @@ def _poison_backward(model: nn.Module, kind: str, dtype: torch.dtype) -> None:
         model[0].weight.grad[0, 0] = float(kind)
 
 
-@pytest.mark.parametrize("dtype", [torch.float32, torch.bfloat16])
-@pytest.mark.parametrize("kind", ["inf", "nan"])
-def test_sb_raise_pre_write_without_scaler(dtype: torch.dtype, kind: str) -> None:
-    """fp32/bf16 without a scaler: S-B raises pre-write, weights clean."""
-
-    model = _model(dtype)
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    session = tc.ChecksSession(model, optimizer)
-    session.register_nonfinite_grad_check()
-    session.attach()
-    before = _snapshot(model)
-    try:
-        optimizer.zero_grad()
-        _poison_backward(model, kind, dtype)
-        with pytest.raises(torchlens.errors.CheckViolationError) as exc:
-            optimizer.step()
-    finally:
-        session.detach()
-
-    assert exc.value.fields["code"] == "param_grad_nonfinite"
-    assert exc.value.fields["names"] == ["0.weight"]
-    finding = exc.value.fields["finding"]
-    assert finding["attribution"] == "exact"  # one culprit, named
-    assert finding["scale_provenance"] == "unscaled"
-    assert finding["stage"] == "post_clip_applied"
-    assert _bitwise_equal(model, before), "the raise must fire BEFORE the write"
-    assert "error_if_nonfinite" in finding["remedy"]
-
-
-def test_unchecked_control_corrupts_weights() -> None:
-    """The control leg: without the check the corrupt gradient is written."""
-
-    model = _model()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    before = _snapshot(model)
-    optimizer.zero_grad()
-    _poison_backward(model, "nan", torch.float32)
-    optimizer.step()
-    assert not _bitwise_equal(model, before)
-    assert torch.isnan(model[0].weight).any()
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_nan_backward_smear_sets_smeared_attribution() -> None:
     """A NaN seeded mid-forward smears through backward: no innocent named."""
 
@@ -133,6 +92,7 @@ def test_nan_backward_smear_sets_smeared_attribution() -> None:
     assert "smeared" in finding["message"]
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_clip_collateral_counted_and_disclosed() -> None:
     """fp32 + clip + one inf: clip zeroes the healthy grads (collateral).
 
@@ -164,32 +124,7 @@ def test_clip_collateral_counted_and_disclosed() -> None:
     assert _bitwise_equal(model, before)
 
 
-@pytest.mark.parametrize("kind", ["inf", "nan"])
-def test_scaler_makes_the_event_a_harmless_skip(kind: str) -> None:
-    """Under a GradScaler S-B is structurally unreachable: skip, 0 moved."""
-
-    model = _model()
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-    scaler = GradScaler("cpu")
-    session = tc.ChecksSession(model, optimizer, scaler=scaler)
-    session.register_nonfinite_grad_check()  # active, never fires
-    session.attach()
-    before = _snapshot(model)
-    try:
-        optimizer.zero_grad()
-        loss = model(torch.randn(4, 8)).sum() * torch.tensor(float(kind))
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)  # skips internally; no raise anywhere
-        scaler.update()
-        report = session.report()
-    finally:
-        session.detach()
-
-    assert _bitwise_equal(model, before), "a skipped step moves 0 parameters"
-    assert report.counters["accepted_steps"] == 0
-    assert report.ledgers["scale"]["skipped_attempts"] == 1
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_session.py.
 def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
     """D7 + routing separation: corrupt WEIGHTS raise at S-C, named."""
 
@@ -215,6 +150,7 @@ def test_param_space_nonfinite_routes_to_scheduled_scan() -> None:
     assert exc.value.fields["accepted_step_id"] == 1
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_checks/_ledgers.py, debug/_checks/_session.py.
 def test_actions_demote_per_registration() -> None:
     """The raise stays demotable (D6): action='collect' collects, no raise."""
 

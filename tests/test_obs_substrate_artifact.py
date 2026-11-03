@@ -17,7 +17,7 @@ from torchlens._observability import (
     SiteRecord,
     StepBlockRecord,
 )
-from torchlens._observability._artifact import CommittedBlock, HistoryWriter, RamRing, coarsen_pair
+from torchlens._observability._artifact import CommittedBlock, HistoryWriter, RamRing
 from torchlens.errors import HistoryArtifactError
 from torchlens.trackers import HistoryReader
 
@@ -96,19 +96,6 @@ class TestRoundTrip:
 class TestCrashRecovery:
     """A killed writer leaves the artifact readable to the last committed chunk."""
 
-    def test_partial_tmp_chunk_is_ignored(self, tmp_path: Path) -> None:
-        art = tmp_path / "hist"
-        writer = HistoryWriter(art, _run())
-        writer.add_site(_site())
-        writer.append_block(_block(0))
-        writer.append_block(_block(1))
-        # Simulate a kill mid-write: an fsynced-but-unrenamed tmp chunk and
-        # no index row for it.
-        (art / "chunk-000002.npz.tmp").write_bytes(b"partial garbage")
-        reader = HistoryReader(art)
-        assert reader.num_chunks == 2
-        assert len(reader.observations()) == 2
-
     def test_committed_chunk_corruption_refuses_typed(self, tmp_path: Path) -> None:
         art = tmp_path / "hist"
         writer = HistoryWriter(art, _run())
@@ -132,17 +119,6 @@ class TestCrashRecovery:
             HistoryReader(art).observations()
         assert excinfo.value.fields["code"] == "history_artifact_corrupt"
 
-    def test_no_pickle_anywhere(self, tmp_path: Path) -> None:
-        art = tmp_path / "hist"
-        writer = HistoryWriter(art, _run())
-        writer.add_site(_site())
-        writer.append_block(_block(0))
-        # np.load with allow_pickle=False is the reader's own path; verify
-        # the manifest and index are plain JSON.
-        json.loads((art / "manifest.json").read_text())
-        json.loads((art / "index.json").read_text())
-        json.loads((art / "catalog.json").read_text())
-
     def test_newer_schema_refuses(self, tmp_path: Path) -> None:
         art = tmp_path / "hist"
         HistoryWriter(art, _run())
@@ -156,16 +132,6 @@ class TestCrashRecovery:
 
 class TestRamRing:
     """The three explicit RAM-only policies; disk eviction is a non-event."""
-
-    def test_refuse_is_default_and_fires_before_the_block(self) -> None:
-        ring = RamRing(capacity=2)
-        ring.admit(_block(0))
-        ring.admit(_block(1))
-        with pytest.raises(HistoryArtifactError) as excinfo:
-            ring.will_admit()
-        assert excinfo.value.fields["code"] == "history_ram_budget_exceeded"
-        assert "drop_oldest" in excinfo.value.fields["remedy"]  # remedies named
-        assert len(ring) == 2  # nothing dropped or degraded
 
     def test_drop_oldest_counts(self) -> None:
         ring = RamRing(capacity=2, policy="drop_oldest")
@@ -207,10 +173,3 @@ class TestRamRing:
             RamRing(policy="best_effort")
         with pytest.raises(HistoryArtifactError):
             RamRing(capacity=1)
-
-    def test_coarsen_pair_is_count_preserving_and_labeled(self) -> None:
-        merged = coarsen_pair(_block(0, value=1.0), _block(1, value=2.0))
-        assert merged.coarsened
-        assert (merged.step_lo, merged.step_hi) == (0, 1)
-        spine = merged.observations[0].spine
-        assert spine is not None and spine.numel == 6

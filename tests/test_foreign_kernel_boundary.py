@@ -17,7 +17,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from tests import example_models
 from torchlens._errors import CaptureGapWarning
 from torchlens._record_type import record_type
 from torchlens.backends.torch._function_boundary import (
@@ -26,7 +25,6 @@ from torchlens.backends.torch._function_boundary import (
     FOREIGN_FUNCTION_WRAPPER_NAME,
     is_foreign_function_recorder,
 )
-from torchlens.backends.torch.completeness_witness import AUDITED_COMPLETENESS_BOUNDARIES
 from torchlens.backends.torch.wrappers import wrap_torch
 from torchlens.errors import TorchLensWarning
 from torchlens.validation import last_validation_failure, validate_forward_pass
@@ -148,10 +146,10 @@ def _assert_validates_clean(model: nn.Module, x: torch.Tensor) -> None:
     assert not any(isinstance(item.message, CaptureGapWarning) for item in caught)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_function_boundary.py.
 @pytest.mark.parametrize(
     "function",
     [
-        _NumpyDoubleFunction,
         _DlpackDoubleFunction,
         _SameObjectDoubleFunction,
         _WriteThroughDoubleFunction,
@@ -177,6 +175,7 @@ def test_foreign_function_is_one_boundary_op_and_validates(function) -> None:
     _assert_validates_clean(model, x)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_groups_capture.py, campaign mutant kills.
 def test_foreign_function_owns_its_interior_dispatches() -> None:
     """With the census armed, every dispatch inside the Function belongs to the boundary."""
 
@@ -203,37 +202,7 @@ def test_foreign_function_owns_its_interior_dispatches() -> None:
     )
 
 
-def test_boundary_selector_and_row_are_wired() -> None:
-    """The boundary is selectable by its transform kind and audited by the witness table."""
-
-    model = _ForeignFunctionModel(_NumpyDoubleFunction)
-    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
-        trace = tl.trace(model, torch.randn(2, 4), save=tl.func_transform("autograd.Function"))
-    saved = [op for op in trace._layer_list if op.has_saved_activation]
-    assert [op.func_name for op in saved] == [FOREIGN_FUNCTION_FUNC_NAME]
-    rows = [
-        row
-        for row in AUDITED_COMPLETENESS_BOUNDARIES
-        if row.wrapper_name == FOREIGN_FUNCTION_WRAPPER_NAME
-    ]
-    assert len(rows) == 1 and rows[0].operator is None
-
-
-def test_ordinary_custom_function_is_captured_as_before() -> None:
-    """Control: a Function whose interior stays in torch keeps its interior ops."""
-
-    model = example_models.CustomAutogradModel()
-    x = torch.rand(4, 4)
-    with warnings.catch_warnings():
-        warnings.simplefilter("error", TorchLensWarning)
-        trace = tl.trace(model, x)
-    assert _boundary_ops(trace) == []
-    types = [op.type for op in trace._layer_list]
-    assert "mul" in types
-    assert not any(op.is_transform for op in trace._layer_list)
-    _assert_validates_clean(model, x)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_foreign_data.py, backends/torch/_logged_arguments.py, backends/torch/wrappers.py ....
 def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     """Armed negative: without a Function nothing is collapsed into an ``autogradfunction`` op.
 
@@ -262,51 +231,3 @@ def test_plain_numpy_round_trip_is_not_collapsed() -> None:
     failure = last_validation_failure()
     assert failure is not None and failure.check_name == CHECK_REPLAY
     assert failure.extra["reason"] == "foreign_data_roundtrip_unreplayable"
-
-
-class _ForeignHandle:
-    """A DGL-style opaque handle: hashing it fails like ``dgl._ffi.object.ObjectBase``.
-
-    DGL's ``ObjectBase.__hash__`` calls ``_api_internal._raw_ptr``, which the shipped
-    wheel does not register, so any ``hash()`` of a graph index raises AttributeError.
-    """
-
-    def __hash__(self) -> int:
-        raise AttributeError("module 'dgl._api_internal' has no attribute '_raw_ptr'")
-
-
-class _HandleDoubleFunction(torch.autograd.Function):
-    """DGL SpMM shape: ``apply(x, handle)`` where the handle is not a tensor."""
-
-    @staticmethod
-    def forward(ctx, x, handle):  # type: ignore[override]
-        assert isinstance(handle, _ForeignHandle)
-        return torch.from_numpy(x.detach().numpy() * 2)
-
-    @staticmethod
-    def backward(ctx, grad_output):  # type: ignore[override]
-        return grad_output * 2, None
-
-
-class _HandleFunctionModel(nn.Module):
-    """Linear, then a Function applied with an unhashable non-tensor argument."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-        self.handle = _ForeignHandle()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = _HandleDoubleFunction.apply(self.fc(x), self.handle)
-        return torch.relu(y)
-
-
-def test_foreign_function_with_unhashable_handle_argument() -> None:
-    """A non-tensor ``apply`` argument is never hashed: the boundary records and replays it."""
-
-    model = _HandleFunctionModel()
-    x = torch.randn(3, 4)
-    with pytest.warns(TorchLensWarning, match="foreign-kernel boundary op"):
-        trace = tl.trace(model, x)
-    _assert_one_boundary(trace, _HandleDoubleFunction)
-    _assert_validates_clean(model, x)

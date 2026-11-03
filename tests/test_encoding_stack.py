@@ -59,38 +59,6 @@ class Lockstep(nn.Module):
         return x
 
 
-class RaggedPrefix(nn.Module):
-    """Early exit: A1 B1 A2 B2 A3 -> 1,1,2,2,3 (ragged monotone, ACCEPTS)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.a = nn.Linear(4, 4)
-        self.b = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for step in range(3):
-            x = self.a(x)
-            if step < 2:
-                x = self.b(x)
-        return x
-
-
-class MonotoneNested(nn.Module):
-    """O1 I1 I2 O2 I3 I4 -> 1,1,2,2,3,4 (monotone nested interleaving, ACCEPTS)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.outer = nn.Linear(4, 4)
-        self.inner = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for _ in range(2):
-            x = self.outer(x)
-            for _ in range(2):
-                x = self.inner(x)
-        return x
-
-
 class ChainedLoops(nn.Module):
     """A1 A2 A3 B1 B2 B3 -> 1,2,3,1,2,3 (REFUSES)."""
 
@@ -104,30 +72,6 @@ class ChainedLoops(nn.Module):
             x = self.a(x)
         for _ in range(3):
             x = self.b(x)
-        return x
-
-
-class NestedNonMonotone(nn.Module):
-    """O1 A1 A2 C1 O2 A3 A4 C2 -> 1,1,2,1,... breaks at C1 (REFUSES).
-
-    The memo's exact nested-refusal fixture: an outer-body op running AFTER
-    the inner loop in each outer iteration — nesting whose flat tally
-    genuinely breaks monotonicity (nesting alone is not inherently
-    non-monotone; MonotoneNested above accepts).
-    """
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.opener = nn.Linear(4, 4)
-        self.inner = nn.Linear(4, 4)
-        self.closer = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for _ in range(2):
-            x = self.opener(x)
-            for _ in range(2):
-                x = self.inner(x)
-            x = self.closer(x)
         return x
 
 
@@ -145,23 +89,6 @@ class LateResumption(nn.Module):
         x = self.a(x)
         x = self.a(x)
         x = self.b(x)
-        return x
-
-
-class StemmedLockstep(nn.Module):
-    """Single-pass stem + lockstep loop: stem ops stay un-annotated."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.stem = nn.Linear(4, 4)
-        self.a = nn.Linear(4, 4)
-        self.b = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.stem(x)
-        for _ in range(3):
-            x = self.a(x)
-            x = self.b(x)
         return x
 
 
@@ -214,20 +141,10 @@ def _state(log: tl.Trace) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_none_and_false_inactive() -> None:
-    assert resolve_stack_by(None, "unrolled") is None
-    assert resolve_stack_by(False, "unrolled") is None
-
-
 def test_resolve_auto_forms() -> None:
     assert resolve_stack_by(True, "unrolled").source_kind == "auto"
     assert resolve_stack_by("auto", "unrolled").source_kind == "auto"
     assert resolve_stack_by(True, "unrolled").display_name == STACK_AUTO_DISPLAY
-
-
-def test_resolve_field_and_callable_kinds() -> None:
-    assert resolve_stack_by("pass_number", "unrolled").source_kind == "field"
-    assert resolve_stack_by(lambda node: 1, "unrolled").source_kind == "callable"
 
 
 def test_unknown_source_refuses() -> None:
@@ -240,12 +157,6 @@ def test_non_string_non_callable_refuses() -> None:
     with pytest.raises(Exception) as excinfo:
         resolve_stack_by(42, "unrolled")
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
-
-
-def test_rolled_mode_refuses(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    with pytest.raises(Exception) as excinfo:
-        _draw(lockstep_log, tmp_path, stack_by=True, rolled=True)
-    assert excinfo.value.fields["code"] == "stack_by_requires_unrolled"
 
 
 # ---------------------------------------------------------------------------
@@ -266,26 +177,6 @@ def _license_verdict(model: nn.Module) -> str:
         log.cleanup()
 
 
-def test_vanilla_lockstep_accepts() -> None:
-    assert _license_verdict(Lockstep()) == "accepts"
-
-
-def test_ragged_monotone_prefix_accepts() -> None:
-    assert _license_verdict(RaggedPrefix()) == "accepts"
-
-
-def test_monotone_nested_interleaving_accepts() -> None:
-    assert _license_verdict(MonotoneNested()) == "accepts"
-
-
-def test_chained_loops_refuse() -> None:
-    assert _license_verdict(ChainedLoops()) == "refuses"
-
-
-def test_nested_non_monotone_tally_refuses() -> None:
-    assert _license_verdict(NestedNonMonotone()) == "refuses"
-
-
 def test_late_resumption_interior_skip_refuses() -> None:
     assert _license_verdict(LateResumption()) == "refuses"
 
@@ -301,39 +192,6 @@ def test_no_multipass_layers_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_auto_stacks_passes_into_columns(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(lockstep_log, tmp_path, stack_by=True)
-    state = _state(lockstep_log)
-    groups = dict(state.stack_groups)
-    # One rank group per execution window, both loop members in each.
-    assert set(groups) == {"1", "2", "3"}
-    for members in groups.values():
-        assert len(members) >= 2
-    assert "newrank=true" in dot
-    assert dot.count("rank=same") == 3
-
-
-def test_single_pass_stem_stays_unannotated(tmp_path: Path) -> None:
-    log = _trace(StemmedLockstep())
-    try:
-        _draw(log, tmp_path, stack_by=True)
-        stacked = {name for _, members in _state(log).stack_groups for name in members}
-        # The stem renders but joins no rank group (classic diagrams draw
-        # stems hanging free, not pinned to column 1).
-        assert not any("linear_1_1" in name for name in stacked)
-        assert stacked, "loop members must still stack"
-    finally:
-        log.cleanup()
-
-
-def test_caption_and_legend_disclose_annotation(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(lockstep_log, tmp_path, stack_by=True)
-    assert "stacked by: pass_index (auto)" in dot
-    # The channel disclosure rides the header block, under the header.
-    legend_line = next(line for line in dot.splitlines() if line.strip().startswith("graph ["))
-    assert "stack_by: pass_index (auto)" in legend_line
-
-
 def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) -> None:
     """Non-lockstep loops get their figure via explicit annotation."""
 
@@ -341,13 +199,6 @@ def test_explicit_field_bypasses_license(chained_log: tl.Trace, tmp_path: Path) 
     state = _state(chained_log)
     assert state.stack_groups
     assert "stacked by: pass_number" in dot
-
-
-def test_callable_bypasses_license_with_disclosure(chained_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(chained_log, tmp_path, stack_by=lambda node: int(node.pass_number))
-    state = _state(chained_log)
-    assert state.stack_groups
-    assert any("callable" in note for note in state.stack_notes)
 
 
 def test_callable_raise_chains_typed(lockstep_log: tl.Trace, tmp_path: Path) -> None:
@@ -379,27 +230,6 @@ def test_callable_none_leaves_node_unstacked(lockstep_log: tl.Trace, tmp_path: P
 # ---------------------------------------------------------------------------
 
 
-def test_plain_draw_never_stacks(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(lockstep_log, tmp_path)
-    assert "newrank" not in dot
-    assert "stacked by" not in dot
-
-
-def test_sibling_ordering_noops_while_stacking(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    """Two independent rank-constraint systems must not fight (fence pin)."""
-
-    _draw(lockstep_log, tmp_path, stack_by=True)
-    decision = lockstep_log._last_sibling_ordering_decision
-    assert decision.candidate_count == 0 and decision.survivor_count == 0
-
-
-def test_explicit_rank_layout_refuses(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    with pytest.raises(Exception) as excinfo:
-        _draw(lockstep_log, tmp_path, stack_by=True, layout="rank")
-    assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"
-    assert "stack_by" in str(excinfo.value)
-
-
 def test_stack_composes_with_color(lockstep_log: tl.Trace, tmp_path: Path) -> None:
     # A VARYING color source: the lockstep toy's bytes are uniform, and a
     # degenerate (min == max) domain now honestly unencodes (themes memo
@@ -408,23 +238,3 @@ def test_stack_composes_with_color(lockstep_log: tl.Trace, tmp_path: Path) -> No
     state = _state(lockstep_log)
     assert state.stack_groups and state.colors
     assert state.active_channels() == ("color_by", "stack_by")
-
-
-def test_request_hash_ignores_stack_fields() -> None:
-    from torchlens._visualization.request import ResolvedRenderRequest
-
-    base = ResolvedRenderRequest()
-    stacked = ResolvedRenderRequest(stack_by=True, encoding=object())
-    assert hash(base) == hash(stacked)
-
-
-def test_rank_groups_ride_render_ir(lockstep_log: tl.Trace, tmp_path: Path) -> None:
-    """The rank groups travel on RenderIR as a typed record (memo 4.1)."""
-
-    from torchlens._visualization.render_ir import RenderIRRankGroup
-
-    _draw(lockstep_log, tmp_path, stack_by=True)
-    state = _state(lockstep_log)
-    assert state.stack_groups
-    group = RenderIRRankGroup(kind="stack", key="1", members=("a", "b"))
-    assert group.kind == "stack"

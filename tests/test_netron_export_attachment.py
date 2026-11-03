@@ -12,7 +12,6 @@ schema changes.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
@@ -67,40 +66,6 @@ def log() -> Any:
         trace.cleanup()
 
 
-def test_companion_lands_beside_the_artifact(log: Any, tmp_path: Path) -> None:
-    """attachment=True writes <stem>.attachment.json with the vendor signature."""
-
-    path = tl.export.netron(log, tmp_path / "m.json", attachment=True)
-    companion = tmp_path / "m.attachment.json"
-    assert companion.exists()
-    payload = json.loads(companion.read_text(encoding="utf-8"))
-    assert payload["signature"] == "netron:attachment"
-    assert payload["metadata"] and payload["metrics"]
-    artifact = json.loads(path.read_text(encoding="utf-8"))
-    known = {node["name"] for node in artifact["graph"]["node"]}
-    for fn in artifact.get("functions", []):
-        known.update(node["name"] for node in fn["node"])
-    known.update(row["name"] for row in artifact["graph"]["input"])
-    for container in ("metadata", "metrics"):
-        for item in payload[container]:
-            if item["kind"] in ("model", "graph"):
-                assert item["target"] == "", "model/graph rows require target=''"
-            else:
-                assert item["target"] in known, f"unresolvable target {item['target']}"
-            assert "\n" not in item["name"] and "\n" not in item["target"]
-
-
-def test_targets_resolve_in_the_module_projection(log: Any, tmp_path: Path) -> None:
-    """Compo row C11: function-body node targets resolve in the module view."""
-
-    tl.export.netron(log, tmp_path / "mod.json", granularity="module", attachment=True)
-    companion = json.loads((tmp_path / "mod.attachment.json").read_text(encoding="utf-8"))
-    node_targets = {item["target"] for item in companion["metrics"] if item["kind"] == "node"}
-    assert any(target.startswith("linear") for target in node_targets), (
-        "function-body ops keep their metric rows in the module projection"
-    )
-
-
 def test_per_target_unique_names_guard(log: Any, tmp_path: Path) -> None:
     """Duplicate metric names for one target refuse typed (last-write-wins trap)."""
 
@@ -140,18 +105,6 @@ def test_vendor_drop_rules_refuse_typed(
         write_attachment(projection, tmp_path / "m.json", stats_fn=lambda _p: [row])
     assert excinfo.value.fields["code"] == "netron_attachment_invalid"
     assert problem in str(excinfo.value)
-
-
-def test_key_fn_seam_maps_targets(log: Any, tmp_path: Path) -> None:
-    """The pluggable key function (real-ONNX overlay plumbing) maps every target."""
-
-    projection = project_op(log, "meaningful")
-    companion = write_attachment(
-        projection, tmp_path / "m.json", key_fn=lambda name: f"onnx::{name}"
-    )
-    payload = json.loads(companion.read_text(encoding="utf-8"))
-    node_rows = [item for item in payload["metrics"] if item["kind"] == "node"]
-    assert node_rows and all(item["target"].startswith("onnx::") for item in node_rows)
 
 
 def test_attachment_without_path_refuses(log: Any) -> None:

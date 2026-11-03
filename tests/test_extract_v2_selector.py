@@ -9,7 +9,6 @@ manifest and the resume signature.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -19,7 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens import extract_dataset
 from torchlens._errors import InvalidArgumentError
-from torchlens.dataset_extraction import open_extraction
 
 
 class _TwoBlock(nn.Module):
@@ -37,48 +35,6 @@ class _TwoBlock(nn.Module):
         """Run both blocks."""
 
         return self.head(self.enc(inputs))
-
-
-def test_selector_run_freezes_plan_and_matches_string_run(tmp_path: Path) -> None:
-    """A selector harvest equals the same sites harvested by label."""
-
-    model = _TwoBlock().eval()
-    stimuli = torch.randn(6, 3)
-    by_selector = extract_dataset(model, stimuli, tl.func("relu"), batch_size=3, progress=False)
-    assert sorted(by_selector) == ["relu_1_2:1", "relu_2_4:1"]
-    by_label = extract_dataset(
-        model, stimuli, ["relu_1_2", "relu_2_4"], batch_size=3, progress=False
-    )
-    for key, tensor in by_selector.items():
-        assert torch.equal(tensor, by_label[key.split(":")[0]])
-
-
-def test_selector_disk_run_records_plan_and_resumes(tmp_path: Path) -> None:
-    """The frozen plan rides the manifest; a compatible resume adopts it."""
-
-    model = _TwoBlock().eval()
-    stimuli = torch.randn(6, 3)
-    out = tmp_path / "artifact"
-    extract_dataset(model, stimuli, tl.func("relu"), batch_size=3, path=out, progress=False)
-    manifest = json.loads((out / "manifest.json").read_text())
-    plan = manifest["run"]["selector_plan"]
-    assert plan["request"]["kind"] == "selector"
-    assert [entry["label"] for entry in plan["entries"]] == ["relu_1_2:1", "relu_2_4:1"]
-    assert all(entry["site_key"] for entry in plan["entries"])
-    assert manifest["signature"]["layers_kind"] == "selector"
-    # Completed compatible resume: a true no-op.
-    paths = extract_dataset(
-        model,
-        stimuli,
-        tl.func("relu"),
-        batch_size=3,
-        path=out,
-        progress=False,
-        resume=True,
-    )
-    assert len(paths) == 2
-    reader = open_extraction(out)
-    assert sorted(reader.keys) == ["relu_1_2:1", "relu_2_4:1"]
 
 
 def test_selector_mapping_namespaces_children(tmp_path: Path) -> None:

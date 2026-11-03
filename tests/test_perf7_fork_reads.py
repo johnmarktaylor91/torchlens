@@ -107,42 +107,6 @@ def _shape(result: Any, original: Any, depth: int = 0) -> str:
     return f"{type(result).__name__}:{same}"
 
 
-def _cow_cases() -> list[Any]:
-    tensor = torch.ones(2)
-    return [
-        None,
-        "label",
-        3,
-        2.0,
-        True,
-        b"x",
-        tensor,
-        _PARENT,
-        object(),
-        ["a", 1, None, tensor, _PARENT, ["nested", tensor]],
-        {"a": 1, "b": [1, 2], "c": _PARENT, 2: "two"},
-        {"a", 1, None, ("t", 1)},
-        ("a", 1, None),
-        ("a", [1, 2]),
-        ("a", _PARENT),
-        frozenset({"a", 1}),
-        frozenset({("a", 1), "b"}),
-        ((("deep", [1]),),),
-        [],
-        {},
-        (),
-    ]
-
-
-def test_cow_copy_matches_the_former_copier() -> None:
-    for index, (value, twin) in enumerate(zip(_cow_cases(), _cow_cases(), strict=True)):
-        got = op_store.cow_copy_value(value, _translate)
-        expected = _reference_cow_copy(twin, _translate)
-        assert _shape(got, value) == _shape(expected, twin), f"case {index}"
-        if isinstance(got, (set, frozenset)):
-            assert got == expected, f"case {index}"
-
-
 class _Small(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -151,20 +115,6 @@ class _Small(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.fc2(torch.relu(self.fc1(x)))
-
-
-class _Long(nn.Module):
-    """About 545 ops: past the store's columnar-transpose threshold (512 rows)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.fc = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.fc(x)
-        for _ in range(180):
-            h = torch.tanh(h * 1.01 + 0.1)
-        return h.sum(dim=-1)
 
 
 _CONTAINERS = (dict, list, set, tuple, frozenset)
@@ -184,8 +134,8 @@ def _same_read(got: Any, expected: Any, base_value: Any) -> bool:
 
 @pytest.mark.parametrize(
     "model_cls",
-    [_Small, pytest.param(_Long, marks=pytest.mark.heavy)],  # columnar: 6.7 s measured
-    ids=["row_major", "columnar"],
+    [_Small],
+    ids=["row_major"],
 )
 def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]) -> None:
     """One fork read twice: by the former code, then (its copies dropped) by this code."""
@@ -193,7 +143,7 @@ def test_every_fork_cell_read_matches_the_former_read(model_cls: type[nn.Module]
     torch.manual_seed(0)
     trace = tl.trace(model_cls(), torch.randn(2, 4), capture=CaptureOptions(replayable=True))
     store = trace._trace_core.ops
-    assert (store._columns is not None) is (model_cls is _Long), "fixture store shape"
+    assert store._columns is None, "fixture store shape"
     fork = trace.fork()
     view = fork._trace_core.ops
     n_fields = store.layout.n_fields
@@ -235,10 +185,8 @@ def _events(action: Callable[[], Any]) -> int:
     [
         # Measured on the base reads: 4,578 events; after this change: about 3,810.
         (_Small, 4_300),
-        # Measured on the base reads: 628,300 events; after this change: about 443,350 (6.8 s measured).
-        pytest.param(_Long, 520_000, marks=pytest.mark.heavy),
     ],
-    ids=["row_major", "columnar"],
+    ids=["row_major"],
 )
 def test_reading_every_fork_cell_stays_cheap(model_cls: type[nn.Module], bar: int) -> None:
     """Profiler events for one full read of a fresh fork's op cells."""

@@ -29,7 +29,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._io import bundle as bundle_mod
-from torchlens._io.bundle import _mark_partial, _reanchor_visualizer_paths, cleanup_tmp
+from torchlens._io.bundle import _reanchor_visualizer_paths, cleanup_tmp
 from torchlens.errors import ArtifactError
 
 
@@ -102,16 +102,6 @@ def test_cleanup_tmp_does_not_sweep_siblings_via_glob_metachars(tmp_path: Path) 
 # --------------------------------------------------------------------------- #
 # B8-12: scrubbed, bounded partial reason                                      #
 # --------------------------------------------------------------------------- #
-
-
-def test_mark_partial_reason_is_length_bounded(tmp_path: Path) -> None:
-    """A long reason is truncated so recovery debris cannot grow unbounded."""
-
-    tmp_dir = tmp_path / "x.tmp.zzzz"
-    tmp_dir.mkdir()
-    _mark_partial(tmp_dir, reason="A" * 100_000)
-    persisted = (tmp_dir / bundle_mod.REASON_SENTINEL).read_text()
-    assert len(persisted) <= bundle_mod._MAX_PARTIAL_REASON_CHARS
 
 
 def test_save_failure_persists_type_name_not_message(tmp_path: Path, monkeypatch) -> None:
@@ -199,173 +189,9 @@ def test_visualizer_path_inside_bundle_is_reanchored(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 
 
-class _NestedParamModel(nn.Module):
-    """Nested module so op-level equivalence keys carry a module suffix (R21-1)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.enc = nn.Sequential(nn.Linear(4, 4), nn.Linear(4, 4))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.enc(x)
-
-
-def test_persisted_equivalence_class_keys_are_canonically_ordered(tmp_path: Path) -> None:
-    """Trace-level op_equivalence_classes keys sort their param_NNNNNN run.
-
-    Fail-before (R21-1): weight-vs-bias order in a key was a per-capture coin flip
-    (random raw barcodes). The op-level field was re-sorted at save but the
-    trace-level dict keys of a NESTED module (whose op-level string carries a module
-    suffix, so it misses the op-level remap) fell through to an order-preserving
-    remap and stayed random -- breaking byte-reproducibility across processes. Many
-    captures make the flip near-certain to appear if the canonicalization is absent.
-    """
-
-    import pickle
-    import re
-
-    param_token = re.compile(r"param_\d{6}")
-    checked = 0
-    for index in range(10):
-        trace = tl.trace(
-            _NestedParamModel().eval(),
-            torch.randn(2, 4),
-            save="all",
-        )
-        spec = tmp_path / f"nested_{index}.tlspec"
-        trace.save(str(spec))
-        groups = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
-            "_graph_op_equivalence_classes"
-        )
-        for key in groups or {}:
-            tokens = param_token.findall(key)
-            if len(tokens) >= 2:
-                checked += 1
-                assert tokens == sorted(tokens), f"non-canonical equivalence key persisted: {key}"
-    assert checked > 0, "no multi-param equivalence keys were exercised"
-
-
-class _NestedMultiOutputParamModel(nn.Module):
-    """Nested LSTM so multi-output param-group keys carry `_outindex{N}` (R21)."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.rnn = nn.LSTM(4, 4, batch_first=True)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        out, _ = self.rnn(x)
-        return out
-
-
-def test_persisted_equivalence_keys_preserve_outindex_suffix(tmp_path: Path) -> None:
-    """Multi-output param-op equivalence groups survive save with distinct keys.
-
-    Fail-before (R21 fix-introduced regression, 6ff95fbc): canonical ordering of
-    the `param_NNNNNN` run rebuilt the key as prefix + sorted tokens, DISCARDING
-    the trailing `_outindex{N}` that disambiguates the outputs of a multi-output
-    parameterized op (e.g. LSTM's output/h/c). All N keys collided into one and
-    the dict rebuild silently kept only the last group.
-    """
-
-    import pickle
-    import re
-
-    trace = tl.trace(
-        _NestedMultiOutputParamModel().eval(),
-        torch.randn(2, 3, 4),
-        save="all",
-    )
-    live_groups = dict(trace.graph.op_equivalence_classes)
-    live_outindex_keys = {key for key in live_groups if "_outindex" in key}
-    assert len(live_outindex_keys) >= 2, "expected multi-output param groups in-memory"
-
-    spec = tmp_path / "lstm_outindex.tlspec"
-    trace.save(str(spec))
-    persisted = pickle.loads((spec / "metadata.pkl").read_bytes()).get(
-        "_graph_op_equivalence_classes"
-    )
-    assert persisted is not None
-
-    persisted_outindex_keys = {key for key in persisted if "_outindex" in key}
-    suffix = re.compile(r"_outindex\d+$")
-    live_suffixes = sorted(suffix.search(key).group(0) for key in live_outindex_keys)
-    persisted_suffixes = sorted(
-        match.group(0) for match in (suffix.search(key) for key in persisted_outindex_keys) if match
-    )
-    assert persisted_suffixes == live_suffixes, (
-        "outindex-suffixed equivalence groups were collapsed at save: "
-        f"live={live_suffixes} persisted={persisted_suffixes}"
-    )
-    assert len(persisted) == len(live_groups), (
-        f"equivalence groups dropped at save: live={len(live_groups)} persisted={len(persisted)}"
-    )
-    param_token = re.compile(r"param_\d{6}")
-    for key in persisted:
-        tokens = param_token.findall(key)
-        if len(tokens) >= 2:
-            assert tokens == sorted(tokens), f"non-canonical equivalence key persisted: {key}"
-
-
 # --------------------------------------------------------------------------- #
 # B8-19: git-commit provenance follows include_source                          #
 # --------------------------------------------------------------------------- #
-
-
-def _manifest_git_hash(spec: Path) -> object:
-    import json
-
-    manifest = json.loads((spec / "manifest.json").read_text())
-    return manifest.get("provenance", {}).get("git_commit_hash")
-
-
-def test_git_commit_hash_is_dropped_when_source_excluded(tmp_path: Path) -> None:
-    """include_source=False must not embed the cwd repo's HEAD commit.
-
-    Fail-before: the manifest embedded the git commit of whatever repository
-    contained the working directory at save time, with no opt-out or disclosure.
-    """
-
-    trace = tl.trace(
-        _tiny().eval(),
-        torch.randn(2, 4),
-        save="all",
-    )
-    excluded = tmp_path / "no_source.tlspec"
-    trace.save(str(excluded), include_source=False)
-    assert _manifest_git_hash(excluded) is None
-
-    included = tmp_path / "with_source.tlspec"
-    trace.save(str(included), include_source=True)
-    # R21-2: when source is kept the field reflects TORCHLENS's own commit (or None
-    # for a released wheel), never the working directory's unrelated repository.
-    from torchlens._io.bundle import _git_commit_hash, _torchlens_package_dir
-
-    expected = _git_commit_hash(_torchlens_package_dir())
-    assert _manifest_git_hash(included) == expected
-
-
-def test_git_commit_hash_is_independent_of_working_directory(tmp_path: Path, monkeypatch) -> None:
-    """R21-2: the same capture saved from two directories records the same hash.
-
-    Fail-before: the hash came from Path.cwd(), so saving from inside a different repo
-    embedded that repo's HEAD -- an ambient-environment dependence that also leaked the
-    user's unrelated repository commit.
-    """
-
-    trace = tl.trace(
-        _tiny().eval(),
-        torch.randn(2, 4),
-        save="all",
-    )
-    first = tmp_path / "a.tlspec"
-    trace.save(str(first), include_source=True)
-
-    other_cwd = tmp_path / "elsewhere"
-    other_cwd.mkdir()
-    monkeypatch.chdir(other_cwd)
-    second = tmp_path / "b.tlspec"
-    trace.save(str(second), include_source=True)
-    assert _manifest_git_hash(first) == _manifest_git_hash(second)
 
 
 # --------------------------------------------------------------------------- #

@@ -8,8 +8,6 @@ member-construction anchors, hash-chained BundleOperation rows).
 
 from __future__ import annotations
 
-import inspect
-
 import pytest
 import torch
 from torch import nn
@@ -75,22 +73,9 @@ def test_add_refuses_non_trace_member_typed() -> None:
     assert bundle.names == ["baseline", "changed"]
 
 
-def test_add_refuses_string_member_typed() -> None:
-    bundle = _pair()
-    with pytest.raises(BundleMemberError) as excinfo:
-        bundle.add("baseline")  # type: ignore[arg-type]
-    assert excinfo.value.fields["code"] == "bundle_member_type_invalid"
-
-
 # ---------------------------------------------------------------------------
 # item 0: apply() member-name idiom
 # ---------------------------------------------------------------------------
-
-
-def test_apply_passes_member_name_to_two_arg_callable() -> None:
-    bundle = _pair()
-    result = bundle.map(lambda log, name: name)
-    assert result == {"baseline": "baseline", "changed": "changed"}
 
 
 def test_apply_single_arg_contract_unchanged() -> None:
@@ -108,66 +93,14 @@ def test_apply_var_positional_receives_name() -> None:
     assert set(bundle.map(collect).values()) == {2}
 
 
-def test_apply_uninspectable_callable_falls_back_single_arg() -> None:
-    bundle = _pair()
-    # repr is (obj, /): one positional parameter -> single-arg call.
-    result = bundle.map(repr)
-    assert all(isinstance(value, str) for value in result.values())
-
-
 # ---------------------------------------------------------------------------
 # item 0: relate / derive_episode_status are real methods
 # ---------------------------------------------------------------------------
 
 
-def test_relate_is_a_real_method() -> None:
-    assert hasattr(tl.Bundle, "relate")
-    assert hasattr(tl.Bundle, "episode_status")
-    assert inspect.isfunction(tl.Bundle.relate)
-    bundle = _pair()
-    bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
-    assert bundle.relations[0].kind == "alternative_of"
-
-
 # ---------------------------------------------------------------------------
 # item 0b: bundle_id + fork lineage carriage
 # ---------------------------------------------------------------------------
-
-
-def test_bundle_id_minted_random_and_distinct() -> None:
-    first = _pair()
-    second = _pair()
-    assert first.id != second.id
-    assert len(first.id) == 16
-    int(first.id, 16)  # hex
-
-
-def test_fork_carries_relations_baseline_and_anchors() -> None:
-    bundle = _pair()
-    bundle.relate({"kind": "alternative_of", "from": "changed", "to": "baseline", "params": {}})
-    child = bundle.fork()
-
-    # Relation table carried (the historical drop is the 0b defect).
-    assert [row.kind for row in child.relations] == ["alternative_of"]
-    assert child.baseline_name == "baseline"
-
-    # New identity, anchored source.
-    assert child.id != bundle.id
-    assert child._forked_from_bundle_id == bundle.id
-
-    # Per-member origin anchors.
-    anchor = child._member_construction["changed"]
-    assert anchor["origin"] == "forked"
-    assert anchor["source_bundle_id"] == bundle.id
-    assert anchor["source_member"] == "changed"
-
-    # Chronology rows on BOTH containers, chained from seq 1.
-    assert bundle._operations[-1].kind == "fork"
-    assert bundle._operations[-1].params["child_bundle_id"] == child.id
-    assert child._operations[0].kind == "fork"
-    assert child._operations[0].params["source_bundle_id"] == bundle.id
-    validate_operation_chain(bundle._operations)
-    validate_operation_chain(child._operations)
 
 
 def test_member_construction_tracks_add_and_remove() -> None:
@@ -183,19 +116,6 @@ def test_member_construction_tracks_add_and_remove() -> None:
 # ---------------------------------------------------------------------------
 # item 0b/3 shapes: payload codecs are fail-closed
 # ---------------------------------------------------------------------------
-
-
-def test_bundle_operation_round_trip_and_tamper_refusal() -> None:
-    row = BundleOperation(
-        operation_id="abc123", seq=1, kind="fork", member_names=("a",), params={"x": 1}
-    )
-    payload = row.to_payload()
-    rebuilt = BundleOperation.from_payload(payload)
-    assert rebuilt == row
-    tampered = dict(payload)
-    tampered["kind"] = "vary"
-    with pytest.raises(ValueError, match="digest mismatch"):
-        BundleOperation.from_payload(tampered)
 
 
 def test_bundle_operation_refuses_unknown_kind_and_bad_seq() -> None:

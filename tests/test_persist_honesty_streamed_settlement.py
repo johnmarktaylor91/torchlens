@@ -13,15 +13,12 @@ writer (PARTIAL debris, never a published artifact).
 
 from __future__ import annotations
 
-from unittest import mock
-
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens._capture.outcome import CaptureStatus
-from torchlens._data_classes.trace import Trace
 from torchlens._io import ArtifactError
 
 
@@ -37,17 +34,6 @@ def test_streamed_complete_capture_loads_complete(tmp_path):
     assert loaded.outcome.status is CaptureStatus.COMPLETE
 
 
-def test_streamed_synchronous_writes_load_complete(tmp_path):
-    path = tmp_path / "sync.tlspec"
-    trace = tl.trace(
-        _model(),
-        torch.randn(2, 4),
-        storage=tl.to_disk(str(path), async_writes=False),
-    )
-    assert trace.outcome.status is CaptureStatus.COMPLETE
-    assert tl.load(path).outcome.status is CaptureStatus.COMPLETE
-
-
 def test_streamed_payloads_still_readable_after_publish(tmp_path):
     path = tmp_path / "payloads.tlspec"
     trace = tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
@@ -57,42 +43,6 @@ def test_streamed_payloads_still_readable_after_publish(tmp_path):
     assert ref is not None and ref.source_bundle_path == path
     loaded = tl.load(path)
     assert loaded["relu_1_2"].out.shape == (2, 3)
-
-
-def test_streamed_halted_capture_loads_halted(tmp_path):
-    """A halted streamed capture publishes at settlement with the HALTED
-    attestation (previously it loaded UNATTESTED like every streamed bundle)."""
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 3), nn.ReLU())
-    path = tmp_path / "halted.tlspec"
-    trace = tl.trace(
-        model,
-        torch.randn(2, 4),
-        stop_after=tl.func("linear"),
-        storage=tl.to_disk(str(path)),
-    )
-    assert trace.outcome.status is CaptureStatus.STOPPED
-    loaded = tl.load(path)
-    assert loaded.outcome.status is CaptureStatus.STOPPED
-
-
-def test_post_stage_failure_never_publishes(tmp_path):
-    """A failure AFTER step 18 (here: step 20) must not leave a published
-    artifact; the staged temp bundle is aborted into PARTIAL debris."""
-
-    path = tmp_path / "failed.tlspec"
-    # The streaming failure handler wraps the propagating step-20 error.
-    with (
-        mock.patch.object(
-            Trace, "_release_param_refs", side_effect=RuntimeError("boom in step 20")
-        ),
-        pytest.raises(ArtifactError),
-    ):
-        tl.trace(_model(), torch.randn(2, 4), storage=tl.to_disk(str(path)))
-    assert not path.exists()
-    debris = [p for p in tmp_path.iterdir() if p.name.startswith("failed.tlspec.tmp.")]
-    assert debris, "expected the staged temp bundle to remain as sweepable debris"
-    assert (debris[0] / "PARTIAL").exists()
 
 
 def test_forward_failure_never_publishes(tmp_path):

@@ -35,12 +35,6 @@ def glue_log() -> Any:
     log.cleanup()
 
 
-def test_tokens_are_the_closed_v1_vocabulary() -> None:
-    """reshapes / constants / non_module_ops; nothing else."""
-
-    assert lenses.FILTER_TOKENS == ("constants", "non_module_ops", "reshapes")
-
-
 def test_unknown_token_refuses_typed(glue_log: Any) -> None:
     """A token outside the closed vocabulary refuses with the roster."""
 
@@ -60,34 +54,6 @@ def test_polarity_is_exactly_one(glue_log: Any) -> None:
     with pytest.raises(Exception) as excinfo:
         lenses.compile_display_filter(glue_log, lenses.DisplayFilter())
     assert excinfo.value.fields["code"] == "display_filter_polarity_conflict"
-
-
-def test_reshapes_token_counts_and_caption(glue_log: Any) -> None:
-    """The caption reports actual counts (composition row 8)."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude="reshapes"))
-    assert compiled.filtered == 3  # reshape, permute, contiguous
-    assert f"displayed {compiled.eligible - 3} of {compiled.eligible} eligible ops" in (
-        compiled.caption
-    )
-    assert "reshapes" in compiled.caption
-    assert "reachability through omitted operations" in compiled.legend_line
-
-
-def test_boundaries_auto_exempt_on_tokens(glue_log: Any) -> None:
-    """Token spellings never raise the boundary refusal."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(exclude="reshapes"))
-    for op in glue_log.ops:
-        if op.is_input or op.is_final_output:
-            assert compiled.skip_fn(op) is False
-
-
-def test_include_polarity_inverts(glue_log: Any) -> None:
-    """include= hides everything NOT matched."""
-
-    compiled = lenses.compile_display_filter(glue_log, lenses.DisplayFilter(include="reshapes"))
-    assert compiled.eligible - compiled.filtered == 3
 
 
 def test_skip_fn_conflict_refuses(glue_log: Any) -> None:

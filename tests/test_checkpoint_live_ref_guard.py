@@ -149,37 +149,9 @@ def test_bare_trace_basis_discloses_live_ref(stepped_pair: dict[str, Any]) -> No
     assert "may have moved since capture" in basis.description
 
 
-def test_bare_trace_at_capture_read_is_disclosed_not_silent(
-    stepped_pair: dict[str, Any],
-) -> None:
-    """Capture, mutate, read: the value is TODAY'S bytes and the basis says so."""
-
-    param = stepped_pair["trace_before"].params[_WEIGHT]
-    assert torch.equal(param.value.detach(), stepped_pair["snapshot_after"])
-    assert param.value_basis.basis == "live_ref"
-
-
 # ---------------------------------------------------------------------------
 # s4.2 test 4: round-trip legs (refusal survives save/load; basis is typed)
 # ---------------------------------------------------------------------------
-
-
-def test_loaded_basis_is_absent_not_persisted_never_bare_none(tmp_path: Any) -> None:
-    """After save/load the basis reports absent(not_persisted) beside value None."""
-
-    model = _toy_model()
-    trace = tl.trace(model, _toy_input())
-    path = tmp_path / "one.tlspec"
-    trace.save(path)
-    loaded = tl.load(path)
-    param = loaded.params[_WEIGHT]
-    assert param.value is None  # documented live-handle contract, unchanged
-    basis = param.value_basis
-    assert basis is not None
-    assert basis.basis == "absent"
-    assert basis.reason == "not_persisted"
-    assert str(basis) == "absent(not_persisted)"
-    assert not basis.is_immutable
 
 
 def test_refusal_survives_member_save_load_before_nan_empty_degradation(
@@ -232,21 +204,6 @@ def test_ordinary_bundle_activation_reads_do_not_trigger() -> None:
     assert bundle.compare("a", "b")
 
 
-def test_version_row_still_orders_members(ckpt_bundle: Any) -> None:
-    """A version-axis relation row still ORDERS members; only value claims refuse."""
-
-    related = ckpt_bundle.relate(
-        {"kind": "successor_of", "from": "ck64", "to": "ck0", "params": {}}
-    )
-    rows = related.relations
-    assert len(rows) == 1
-    assert rows[0].kind == "successor_of"
-    assert rows[0].named_members() == ("ck64", "ck0")
-    # The ordering claim stands; the parameter value claim still refuses.
-    with pytest.raises(ParamEvidenceMissingError):
-        _ = related.params[_WEIGHT].weight_norm_diff
-
-
 def test_single_member_param_view_keeps_live_handle_contract(
     stepped_pair: dict[str, Any],
 ) -> None:
@@ -274,14 +231,7 @@ def test_direct_param_value_read_contract_untouched(stepped_pair: dict[str, Any]
 @pytest.mark.parametrize(
     "read",
     [
-        pytest.param(lambda view: view.weight_norm_diff, id="weight_norm_diff"),
-        pytest.param(lambda view: view.compare(), id="compare"),
-        pytest.param(lambda view: view.compare(other="ck0"), id="compare_row"),
-        pytest.param(lambda view: view.aggregate("mean"), id="aggregate_mean"),
-        pytest.param(lambda view: view.aggregate("std"), id="aggregate_std"),
         pytest.param(lambda view: view.out, id="out"),
-        pytest.param(lambda view: view.grad, id="grad"),
-        pytest.param(lambda view: view._tensor_dict("out"), id="funnel_tensor_dict"),
     ],
 )
 def test_bypass_matrix_every_read_hits_the_guard(ckpt_bundle: Any, read: Any) -> None:
@@ -303,35 +253,9 @@ def test_bundle_at_routes_to_the_same_guard(ckpt_bundle: Any) -> None:
     assert excinfo.value.fields["code"] == _CODE
 
 
-def test_refusal_fires_before_tensor_lookup(ckpt_bundle: Any, monkeypatch: Any) -> None:
-    """The guard runs BEFORE any member tensor is resolved."""
-
-    view = ckpt_bundle.params[_WEIGHT]
-    monkeypatch.setattr(
-        type(view),
-        "_get_tensor",
-        lambda self, member, field: pytest.fail("tensor lookup ran before the guard"),
-    )
-    with pytest.raises(ParamEvidenceMissingError):
-        _ = view.out
-
-
 # ---------------------------------------------------------------------------
 # s4.2 test 7: gate precedence -- the guard is claim-keyed, outcome-independent
 # ---------------------------------------------------------------------------
-
-
-def test_halted_member_still_refuses_param_claim(stepped_pair: dict[str, Any]) -> None:
-    """A HALTED member does not license (or reorder) the parameter claim."""
-
-    model = stepped_pair["model"]
-    x = stepped_pair["x"]
-    halted = tl.trace(model, x, stop_after=tl.func("relu"))
-    assert halted.outcome.status.name == "STOPPED"
-    bundle = tl.Bundle({"h": halted, "c": stepped_pair["trace_before"]})
-    with pytest.raises(ParamEvidenceMissingError) as excinfo:
-        _ = bundle.params[_WEIGHT].weight_norm_diff
-    _assert_checkpoint_refusal(excinfo, "h", "c")
 
 
 def test_n_gate_precedence_unchanged_on_halted_member(

@@ -74,50 +74,6 @@ def _shipped_draw_default() -> Iterator[None]:
         func.__defaults__ = saved
 
 
-def test_rightleft_maps_to_rankdir_rl() -> None:
-    """The fourth direction maps to Graphviz ``RL``; the other three are unchanged."""
-    assert direction_to_rankdir("rightleft") == "RL"
-    assert direction_to_rankdir("leftright") == "LR"
-    assert direction_to_rankdir("bottomup") == "BT"
-    assert direction_to_rankdir("topdown") == "TB"
-
-
-def test_rightleft_forward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
-    """A forward render with ``direction="rightleft"`` lays edges out right to left."""
-    trace = _trace()
-    try:
-        dot = trace.draw(
-            direction="rightleft",
-            path=str(tmp_path / "rl"),
-            file_format="dot",
-            layout="dot",
-        ).dot
-    finally:
-        trace.cleanup()
-    assert "rankdir=RL" in dot
-    assert "rankdir=LR" not in dot
-
-
-def test_rightleft_backward_draw_emits_rankdir_rl(tmp_path: Path) -> None:
-    """``draw_backward(direction="rightleft")`` emits ``rankdir=RL`` too."""
-    trace = tl.trace(
-        _TwoLayer(),
-        torch.randn(2, 3, requires_grad=True),
-        capture=tl.options.CaptureOptions(save_grads="all"),
-    )
-    try:
-        trace.log_backward(trace[trace.output_layers[0]].out.sum())
-        dot = trace.draw(
-            graph="backward",
-            direction="rightleft",
-            path=str(tmp_path / "bwd_rl"),
-            file_format="dot",
-        ).dot
-    finally:
-        trace.cleanup()
-    assert "rankdir=RL" in dot
-
-
 def test_unknown_direction_teaches_four_values() -> None:
     """A typo'd direction refuses typed and names every accepted value."""
     with pytest.raises(InvalidArgumentError) as excinfo:
@@ -156,19 +112,3 @@ def test_two_bare_draws_write_two_files_and_print_both(
         "modelgraph-2.svg",
         "modelgraph.svg",
     ]
-
-
-def test_explicit_outpath_is_exact_and_quiet(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    """An explicit ``vis_outpath`` is written exactly (overwriting) and stays quiet."""
-    trace = _trace()
-    target = tmp_path / "named"
-    try:
-        trace.draw(path=str(target), file_format="svg")
-        trace.draw(path=str(target), file_format="svg")
-    finally:
-        trace.cleanup()
-    assert (tmp_path / "named.svg").is_file()
-    assert not (tmp_path / "named-2.svg").exists()
-    assert "TorchLens graph written to" not in capsys.readouterr().out

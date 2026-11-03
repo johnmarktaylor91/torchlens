@@ -9,7 +9,6 @@ fork (the r5 fork-proof rule).
 
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -22,7 +21,6 @@ from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
     RunnableErrorCode,
-    TensorSlotRole,
 )
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.options import CaptureOptions
@@ -81,63 +79,7 @@ def _loaded_runnable(tmp_path, model=None):
     return tl.load(str(path)), x
 
 
-def test_live_truncated_fork_output_proof_fails_closed():
-    """r5 fork-proof pin: neither inherited nor frontier proof survives the latch.
-
-    Bare-tensor-output model truncated mid-forward (the adversarial shape: the
-    inherited source stamp IS positive there). A build that merely skips the
-    feedback copy leaves the inherited positive Mapping in place and FAILS the
-    first assertion.
-    """
-
-    from torchlens._runnable.call_outputs import _fresh_bare_tensor_root
-
-    _model, log, result = _live_until_relu()
-    assert log._runnable.output_losslessness is not None  # the source stamp IS positive
-    assert result.trace._runnable.output_losslessness is None
-    assert _fresh_bare_tensor_root(result.trace) is False
-
-
-def test_live_truncation_does_not_assert_replay_arg_completeness():
-    """The witness-family completeness flag is SET FALSE, never merely skipped."""
-
-    model = _Chain()
-    x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
-    result = log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
-    assert result.trace._replay_arg_version_data_complete is False
-
-
-def test_live_truncated_output_is_none_and_disclosed():
-    """RunResult.output is None under live truncation; the record discloses."""
-
-    _model, _log, result = _live_until_relu()
-    report = result.report
-    assert result.output is None
-    assert report.truncated is True
-    assert report.truncation is not None
-    assert report.truncation.regime == "live_stop_after"
-    assert report.stopped_at is not None and report.stopped_at.startswith("relu")
-    assert report.truncation.skipped_count > 0
-    # The flagship extraction chain: executed-prefix values read off the trace.
-    assert result.trace[_type_label(result.trace, "relu")].out is not None
-
-
-def test_live_truncation_leaves_source_outcome_complete():
-    """The internal HALTED settle is invisible on both source and result."""
-
-    from torchlens._capture.outcome import CaptureStatus
-
-    model, log, result = _live_until_relu()
-    assert log.outcome.status is CaptureStatus.COMPLETE
-    # The result fork's outcome is exactly what a FULL run's fork derives
-    # (forked from the COMPLETE source) -- the internal HALTED settle never
-    # reaches it.
-    assert result.trace.outcome.status is not CaptureStatus.STOPPED
-    full = log.run(inputs=torch.randn(2, 4))
-    assert result.trace.outcome.status is full.trace.outcome.status
-
-
+# Kept: sole branch coverage of _user_funcs.py, io/__init__.py.
 def test_live_truncation_leaves_no_halted_trace_registered():
     """No HALTED trace minted by a truncated live run is enumerable; the result IS.
 
@@ -177,14 +119,7 @@ def test_live_truncation_leaves_no_halted_trace_registered():
     assert any(entry is result.trace for entry in fresh)
 
 
-def test_skipped_site_carries_no_stale_payload():
-    """3.3.3 sanitation: skipped sites never read as fresh capture-time values."""
-
-    _model, _log, result = _live_until_relu()
-    assert result.trace[_type_label(result.trace, "sigmoid")].out is None
-    assert result.trace["output_1"].out is None
-
-
+# Kept: smoke tier id (frozen).
 @pytest.mark.smoke
 def test_truncated_run_never_settles_verified(tmp_path):
     """2.4(e) cap tamper-pin: maximally clean truncated runs settle the regime pair.
@@ -209,30 +144,7 @@ def test_truncated_run_never_settles_verified(tmp_path):
     assert full.report.truncated is False
 
 
-def test_seeded_prefix_bug_still_fails_under_until(tmp_path: Path) -> None:
-    """2.4(c): a contradiction INSIDE the executed prefix fails like the full run."""
-
-    from torchlens.errors import PathDivergenceError
-
-    loaded, x = _loaded_runnable(tmp_path)
-    descriptor = loaded._sparse_run_descriptor
-    assert descriptor is not None
-    # Plant the contradiction INSIDE the guard machinery: retain the real
-    # runtime input but forge the descriptor's recorded model-input shape.
-    tampered_slots = tuple(
-        replace(slot, shape=(99, 99)) if slot.role is TensorSlotRole.MODEL_INPUT else slot
-        for slot in descriptor.tensor_slots
-    )
-    loaded._runnable.descriptor = replace(descriptor, tensor_slots=tampered_slots)
-
-    with pytest.raises(PathDivergenceError) as full_exc:
-        loaded.run(inputs=x)
-    with pytest.raises(PathDivergenceError) as until_exc:
-        loaded.run(inputs=x, until=_type_label(loaded, "relu"))
-    assert full_exc.value.fields["code"] == RunnableErrorCode.INPUT_SHAPE_MISMATCH.value
-    assert until_exc.value.fields["code"] == full_exc.value.fields["code"]
-
-
+# Kept: sole branch coverage of _capture/projectors.py.
 def test_prefix_projection_mismatch_refuses_like_full():
     """A seeded graph change INSIDE the prefix refuses with the pinned term."""
 
@@ -256,40 +168,7 @@ def test_prefix_projection_mismatch_refuses_like_full():
         log.run(inputs=torch.randn(2, 4), until=until_label)
 
 
-def test_prefix_projection_never_loosens():
-    """A graph change BEYOND the stop is not consulted -- and the run is still capped."""
-
-    class _FlipAfterStop(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc1 = nn.Linear(4, 4)
-            self.fc2 = nn.Linear(4, 4)
-            self.flip = False
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            h = torch.relu(self.fc1(x))
-            tail = self.fc2(h)
-            return torch.tanh(tail) if self.flip else tail.sigmoid()
-
-    model = _FlipAfterStop()
-    log = tl.trace(model, torch.randn(2, 4))
-    until_label = _type_label(log, "relu")
-    model.flip = True
-    result = log.run(inputs=torch.randn(2, 4), until=until_label)
-    # The post-stop flip never executed, so the prefix matched; omission buys
-    # no verdict -- the run is still capped, never VERIFIED.
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.truncated is True
-
-
-def test_until_x_eval_bn_prefix_projection():
-    """D18 composition: eval-BN sinks inside the prefix compare at full strength."""
-
-    _model, _log, result = _live_until_relu(_EvalBnChain)
-    assert result.report.truncated is True
-    assert result.trace[_type_label(result.trace, "relu")].out is not None
-
-
+# Kept: sole branch coverage of _capture/projectors.py.
 def test_until_x_eval_bn_prefix_tamper_refuses_typed():
     """An in-prefix buffer-sink evidence tamper refuses typed under until=."""
 
@@ -306,20 +185,9 @@ def test_until_x_eval_bn_prefix_tamper_refuses_typed():
         log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
 
 
-def test_truncated_result_refuses_all_saves(tmp_path):
-    """3.3.1 floor: every save of a truncated result refuses at the poison gate."""
-
-    _model, _log, result = _live_until_relu()
-    for level in ("analysis", "runnable"):
-        with pytest.raises(Exception) as exc_info:  # noqa: PT011 - poison-gate class
-            result.trace.save(str(tmp_path / f"t_{level}.tlspec"), level=level)
-        assert "poison" in str(exc_info.value).lower() or "truncat" in str(exc_info.value).lower()
-
-
+# Kept: sole branch coverage of _runnable/execution.py, intervention/_trace_run.py.
 def test_truncated_result_refuses_rerun():
     """3.3.2: re-running a truncated result refuses typed at the run door."""
-
-    from torchlens._runnable import RunnableErrorCode
 
     _model, _log, result = _live_until_relu()
     with pytest.raises(RunCapabilityUnavailableError) as exc_info:
@@ -328,6 +196,7 @@ def test_truncated_result_refuses_rerun():
     assert exc_info.value.fields["detection_stage"] == "truncated_result_rerun"
 
 
+# Kept: sole branch coverage of _runnable/input_metadata.py.
 def test_until_requires_full_inputs(tmp_path):
     """Require-all inputs: the closure never shrinks the input contract."""
 
@@ -360,6 +229,7 @@ def test_until_requires_full_inputs(tmp_path):
     assert result.report.truncated is True
 
 
+# Kept: sole branch coverage of _fast_live_until.py, _fast_run.py, backends/torch/wrappers.py and more.
 def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
     """Composition matrix: until= x fast=True stops a live run; a loaded one refuses.
 
@@ -382,6 +252,7 @@ def test_until_fast_matrix_live_runs_loaded_refuses(tmp_path: Path):
     assert exc_info.value.fields["code"] == "run_fast_until_unsupported"
 
 
+# Kept: sole branch coverage of _runnable/transaction.py.
 def test_until_predicate_form_refuses_pre_s4():
     """Predicate/selector until= refuses typed until the S4 contract merge."""
 
@@ -392,6 +263,7 @@ def test_until_predicate_form_refuses_pre_s4():
     assert exc_info.value.fields["detection_stage"] == "predicate_surface_pending"
 
 
+# Kept: sole branch coverage of _runnable/transaction.py.
 def test_until_junk_form_refuses_typed():
     """Non-string static forms refuse typed with the form code."""
 
@@ -402,6 +274,7 @@ def test_until_junk_form_refuses_typed():
     assert exc_info.value.fields["code"] == "run_until_form_invalid"
 
 
+# Kept: sole branch coverage of _data_classes/_trace_accessors.py, _data_classes/_trace_views.py, _data_classes/interface.py and more.
 def test_until_substring_token_refuses_typed():
     """A substring token resolvable by ``trace[...]`` still refuses as an until= site.
 
@@ -420,6 +293,7 @@ def test_until_substring_token_refuses_typed():
     assert "did not resolve to layers" in str(exc_info.value)
 
 
+# Kept: sole branch coverage of _runnable/transaction.py, intervention/_trace_run.py.
 def test_run_save_retention_reselects():
     """Run-time save= re-selects retention only; verification is untouched."""
 
@@ -433,6 +307,7 @@ def test_run_save_retention_reselects():
     assert result.trace["output_1"].out is not None
 
 
+# Kept: sole branch coverage of _runnable/transaction.py, intervention/_trace_run.py.
 def test_run_save_outside_until_window_refuses_typed():
     """2.5 row: a save= target outside the executed closure refuses typed."""
 

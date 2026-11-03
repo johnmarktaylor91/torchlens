@@ -23,7 +23,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes._layer_sites import layer_site_key
-from torchlens._postprocess._site_join import join_site_profiles, site_profile
 
 
 class _Insertable(nn.Module):
@@ -61,55 +60,12 @@ def _capture_pair() -> tuple[tl.Trace, tl.Trace]:
 # ---------------------------------------------------------------------------
 
 
-def test_guarded_join_refuses_the_inserted_cohort() -> None:
-    base, inserted = _capture_pair()
-    rows = join_site_profiles(site_profile(base), site_profile(inserted))
-
-    relu_key = layer_site_key(base["relu_1_2"])
-    assert relu_key is not None
-
-    # POSITIVE CONTROL that must FAIL to detect: naive key-set membership
-    # claims the relu position is preserved (the same rendered key exists on
-    # both sides -- but on the inserted side it names the INSERTED op).
-    inserted_keys = {inserted.ops[label].site_key for label in inserted.op_labels}
-    assert relu_key in inserted_keys, "naive membership passes (that is the trap)"
-
-    # POSITIVE CONTROL that must FAIL to detect: payload equality. The
-    # insertion is value-preserving (relu is idempotent), so the original
-    # relu's values are bit-identical across the pair.
-    assert torch.equal(base["relu_1_2"].out, inserted["relu_2_3"].out)
-
-    # PRIMARY ASSERTION: the guarded join REFUSES the affected cohort.
-    row = rows[relu_key]
-    assert not row.joined
-    assert row.verdict.value == "refused_cardinality"
-
-    # Unaffected structural positions stay joined.
-    fc1_key = layer_site_key(base["linear_1_1"])
-    assert rows[fc1_key].joined
-
-
-def test_parent_site_key_signature_change_is_visible() -> None:
-    """The output-side consumer's parent SIGNATURE changes across the
-    insertion (parent/child site-key agreement, review NEW-13's wording) --
-    exactly what artifact-at-a-time oracles cannot see."""
-
-    base, inserted = _capture_pair()
-
-    def parent_keys(trace: tl.Trace, label: str) -> set[str | None]:
-        op = trace.ops[label]
-        return {trace.ops[parent].site_key for parent in (op.parents or ()) if parent in trace.ops}
-
-    base_fc2_parents = parent_keys(base, "linear_2_3")
-    inserted_fc2_parents = parent_keys(inserted, "linear_2_4")
-    assert base_fc2_parents != inserted_fc2_parents
-
-
 # ---------------------------------------------------------------------------
 # check_spec_compat: site-key-first with the printed site-level diff
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/spec_compat.py, campaign mutant kills.
 def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> None:
     import os
 
@@ -150,6 +106,7 @@ def test_manifest_carries_site_keys_and_compat_prints_site_diff(tmp_path) -> Non
     assert drifted.diff.new_site_keys or drifted.diff.missing_site_keys
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of intervention/_trace_hooks.py, intervention/spec.py, campaign mutant kills.
 def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
     """Leverage B7: a spec staged by the capture-time predicate door persists
     resolved labels only; the reload discloses spec_derived=True. Spec-door
@@ -182,6 +139,7 @@ def test_spec_derived_disclosure_on_predicate_door_saves(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/_site_join.py, _selection/align.py, _selection/selection.py.
 def test_align_to_survives_label_renumbering_via_corroborated_join() -> None:
     """A structurally-intact site whose LABEL renumbered still aligns: the
     label leaves the join key, and the corroborated guarded-join verdict

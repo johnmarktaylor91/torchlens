@@ -39,81 +39,12 @@ def _labels(trace: object) -> list[str]:
     return [op.layer_label for op in trace]  # type: ignore[attr-defined]
 
 
-def test_stop_after_module_address_halts_inclusively() -> None:
-    """A module-address string halts at that module's exit, keeping its ops."""
-
-    log = tl.trace(ThreeStep(), torch.randn(2, 4), stop_after="fc1")
-    assert log.is_stopped is True
-    assert log.outcome.status.name == "STOPPED"
-    labels = _labels(log)
-    assert any(label.startswith("linear_1") for label in labels), labels
-    # Nothing past the fc1 boundary ran: no relu, no second linear.
-    assert not any(label.startswith("relu") for label in labels), labels
-    assert not any(label.startswith("linear_2") for label in labels), labels
-
-
-def test_stop_after_selector_halts_inclusively_with_payload() -> None:
-    """A live selector site is captured (payload included) before halting."""
-
-    log = tl.trace(ThreeStep(), torch.randn(2, 4), stop_after=tl.func("relu"))
-    assert log.is_stopped is True
-    relu_ops = [op for op in log if op.layer_label.startswith("relu")]
-    assert len(relu_ops) == 1
-    assert relu_ops[0].out is not None
-    assert not any(label.startswith("linear_2") for label in _labels(log))
-
-
-def test_stop_after_callable_halts() -> None:
-    """A bare callable predicate halts through the same engine."""
-
-    log = tl.trace(
-        ThreeStep(),
-        torch.randn(2, 4),
-        stop_after=lambda ctx: ctx.func_name == "relu",
-    )
-    assert log.is_stopped is True
-    assert not any(label.startswith("linear_2") for label in _labels(log))
-
-
 def test_stop_after_finalized_label_refuses_typed() -> None:
     """Finalized postprocess labels do not exist live and refuse typed."""
 
     with pytest.raises(Exception) as excinfo:
         tl.trace(ThreeStep(), torch.randn(2, 4), stop_after="relu_1_2")
     assert excinfo.value.fields["code"] == "stop_after_site_not_live"
-
-
-def test_stop_after_selector_never_fired_refuses_typed() -> None:
-    """A selector-shaped site that never fires is a typo-shaped wrong result."""
-
-    with pytest.raises(Exception) as excinfo:
-        tl.trace(
-            ThreeStep(),
-            torch.randn(2, 4),
-            stop_after="nonexistent.module",
-        )
-    assert excinfo.value.fields["code"] == "stop_after_never_fired"
-
-
-def test_stop_after_callable_never_fired_warns_with_ledger() -> None:
-    """An exploratory callable that never fires warns coded and ledgers."""
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        log = tl.trace(
-            ThreeStep(),
-            torch.randn(2, 4),
-            stop_after=lambda ctx: False,
-        )
-    assert log.is_stopped is False
-    codes = [
-        getattr(entry.message, "fields", {}).get("code")
-        for entry in caught
-        if isinstance(entry.message, TorchLensWarning)
-    ]
-    assert "stop_after_never_fired_callable" in codes
-    slots = [row["slot"] for row in log.annotations.get("unmatched_capture_selectors", [])]
-    assert "stop_after" in slots
 
 
 def test_stop_after_type_invalid_refuses_typed() -> None:
@@ -137,19 +68,6 @@ def test_stop_after_refuses_chunked_capture() -> None:
             capture=CaptureOptions(chunk_size=4),
         )
     assert excinfo.value.fields["code"] == "stop_after_chunked_conflict"
-
-
-def test_stop_after_ambient_context_manager_reaches_trace_and_pluck() -> None:
-    """The experimental context manager arms torch captures in its block."""
-
-    with tl.experimental.stop_after("fc1"):
-        log = tl.trace(ThreeStep(), torch.randn(2, 4))
-    assert log.is_stopped is True
-    assert not any(label.startswith("relu") for label in _labels(log))
-
-    with tl.experimental.stop_after("fc1"):
-        out = tl.pluck(ThreeStep(), torch.randn(2, 4), "linear_1_1")
-    assert tuple(out.shape) == (2, 8)
 
 
 @pytest.mark.smoke

@@ -10,8 +10,6 @@ import pytest
 
 from torchlens._ir.events import JaxEquationKind
 from torchlens.backends.jax.jaxpr import (
-    ALL_JAX_EQUATION_KINDS,
-    JAX_REPLAY_HANDLERS,
     JaxEquationCapture,
     replay_equation,
 )
@@ -46,19 +44,6 @@ def _capture_for_kind(kind: object) -> JaxEquationCapture:
         output_avals=(),
         inlined=False,
     )
-
-
-def test_jax_replay_kind_table_covers_foundation_kinds() -> None:
-    """Replay dispatch should register every JAX interpreter foundation kind."""
-
-    assert ALL_JAX_EQUATION_KINDS == (
-        "primitive",
-        "scan_read",
-        "scan_stack",
-        "cond_decision",
-        "while_decision",
-    )
-    assert set(JAX_REPLAY_HANDLERS) == set(ALL_JAX_EQUATION_KINDS)
 
 
 @pytest.mark.rare

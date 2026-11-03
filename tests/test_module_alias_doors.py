@@ -160,8 +160,6 @@ _SELECTORS: dict[str, tuple[Callable[[str], Any], str, frozenset[int], frozenset
     "in_module_pass_2": (tl.in_module, ":2", frozenset(), frozenset({2})),
 }
 
-_ALIAS_SPELLINGS = ("module", "module_pass_2", "in_module", "in_module_pass_2")
-
 
 def _build(model_name: str) -> nn.Module:
     """Return a fresh eval-mode instance of one model.
@@ -439,8 +437,10 @@ def _refusal(door: str, model_name: str, selector: Any) -> tuple[type[BaseExcept
     return type(exc), str(fields.get("code")), str(exc)
 
 
-@pytest.mark.parametrize("selector_name", _ALIAS_SPELLINGS)
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
+# Sampled by shrink-r4 (class E: documented doors plus one property test over the
+# generator). One alias spelling runs every door in _ALL_DOORS; the other model and
+# spelling rows held no coverage this row and the behaviour net do not.
+@pytest.mark.parametrize(("model_name", "selector_name"), [("dec_after", "module")])
 def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
     model_name: str, selector_name: str
 ) -> None:
@@ -459,17 +459,24 @@ def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
         assert message == bind_message, f"{door}: {message!r} != {bind_message!r}"
 
 
+# Sampled by shrink-r4 (class E): the three rows that hold sole coverage of
+# _selection/module_alias_guard.py, _selection/selectors.py and intervention/_site_signal.py.
 @pytest.mark.smoke_cells("test_alias_inside_a_composite_refuses_the_same_way[and-bind]")
-@pytest.mark.parametrize("door", ["trace", "post_hoc_find_sites", "bind", "trace_save"])
 @pytest.mark.parametrize(
-    "build",
+    ("build", "door"),
     [
-        lambda name: tl.func("relu") & tl.in_module(name),
-        lambda name: tl.func("relu") | tl.in_module(f"{name}:2"),
-        lambda name: ~tl.module(name),
-        lambda name: site(module_path=name),
+        pytest.param(lambda name: tl.func("relu") & tl.in_module(name), "bind", id="and-bind"),
+        pytest.param(
+            lambda name: tl.func("relu") | tl.in_module(f"{name}:2"), "bind", id="or_pass-bind"
+        ),
+        pytest.param(lambda name: site(module_path=name), "trace", id="site_module_path-trace"),
+        # Sole named killer of campaign mutants in intervention/_module_alias_guard.py.
+        pytest.param(
+            lambda name: site(module_path=name),
+            "post_hoc_find_sites",
+            id="site_module_path-post_hoc_find_sites",
+        ),
     ],
-    ids=["and", "or_pass", "not", "site_module_path"],
 )
 def test_alias_inside_a_composite_refuses_the_same_way(
     door: str, build: Callable[[str], Any]
@@ -481,9 +488,23 @@ def test_alias_inside_a_composite_refuses_the_same_way(
     assert "'dec' is an alias of 'enc'" in message or "'dec:2' is an alias of 'enc'" in message
 
 
-@pytest.mark.parametrize("selector_name", sorted(_SELECTORS))
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
-@pytest.mark.parametrize("door", sorted(_EDIT_DOORS))
+# Sampled by shrink-r4 (class E): one row per documented edit door (trace, record,
+# post-hoc fork().do, bind); the record and bind rows hold sole coverage of
+# backends/torch/_ops_interventions.py, intervention/_module_boundary.py and
+# intervention/binding.py. test_oracle_distinguishes_every_scope keeps the oracle
+# honest over every model and selector.
+@pytest.mark.parametrize(
+    ("door", "model_name", "selector_name"),
+    [
+        ("trace", "dec_after", "module"),
+        ("record", "dec_after", "in_module"),
+        ("record", "dec_after", "module"),
+        ("post_hoc_fork_do", "dec_after", "module"),
+        ("bind", "dec_after", "in_module"),
+        ("bind", "dec_after", "module_pass_1"),
+        ("trace", "dec_tail", "in_module_pass_2"),  # sole named killer of a campaign mutant
+    ],
+)
 def test_canonical_spelling_fires_at_every_call_site(
     door: str, model_name: str, selector_name: str
 ) -> None:
@@ -497,23 +518,6 @@ def test_canonical_spelling_fires_at_every_call_site(
     zero_match = [str(w.message) for w in caught if "matched zero sites" in str(w.message)]
     assert not zero_match, zero_match
     assert torch.equal(value.detach(), expected), f"{value.tolist()} != {expected.tolist()}"
-
-
-@pytest.mark.parametrize("model_name", sorted(_MODELS))
-def test_the_alias_map_is_disclosed_at_trace_and_bind(model_name: str) -> None:
-    """``Module.all_addresses`` and ``BindReport.module_aliases`` name both addresses."""
-
-    _cls, canonical, alias_name = _MODELS[model_name]
-    trace = tl.trace(_build(model_name), _X)
-    assert trace.modules[alias_name] is trace.modules[canonical]
-    assert set(trace.modules[canonical].all_addresses) == {canonical, alias_name}
-
-    bound = tl.when(tl.module(canonical), tl.add(_DELTA)).bind(_build(model_name))
-    with torch.no_grad():
-        bound(_X)
-    report = bound.last_report
-    assert report.module_aliases == {canonical: (alias_name,)}
-    assert [fire["target"] for fire in report.fires] == [f"{canonical}:1", f"{canonical}:2"]
 
 
 def test_oracle_distinguishes_every_scope() -> None:

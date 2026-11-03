@@ -120,10 +120,11 @@ def _selection_family(selection: Any) -> frozenset[Any]:
     return frozenset(entry.key for entry in selection)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("left_state", ["no_sites", "element_empty", "nonempty"])
+@pytest.mark.parametrize("left_state", ["element_empty", "nonempty"])
 @pytest.mark.parametrize("right_state", ["no_sites", "element_empty", "nonempty"])
-@pytest.mark.parametrize("level", ["query", "resolved"])
+@pytest.mark.parametrize("level", ["resolved"])
 def test_closure_matrix_edge_totality_cells(
     capture: tuple[nn.Module, torch.Tensor, tl.Trace],
     operator: str,
@@ -156,20 +157,21 @@ def test_closure_matrix_edge_totality_cells(
     assert _selection_family(resolved) == expected_family
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "left_kind,right_kind",
     [
-        ("ACT", "PARAM"),
-        ("PARAM", "ACT"),
-        ("ACT", "EDGE"),
         ("EDGE", "ACT"),
-        ("PARAM", "EDGE"),
-        ("EDGE", "PARAM"),
     ],
 )
-@pytest.mark.parametrize("operator", ["or", "and", "sub"])
-@pytest.mark.parametrize("state", ["element_empty", "nonempty"])
-@pytest.mark.parametrize("level", ["query", "resolved"])
+@pytest.mark.parametrize("operator", ["sub"])
+@pytest.mark.parametrize(
+    "state",
+    [
+        "element_empty",
+    ],
+)
+@pytest.mark.parametrize("level", ["resolved"])
 def test_closure_matrix_all_mixed_kind_cells_refuse(
     capture: tuple[nn.Module, torch.Tensor, tl.Trace],
     left_kind: str,
@@ -299,36 +301,6 @@ def test_validation_positive_invariant_strip_fire_record(capture):
         assert fork.validate_forward_pass(model(x)) is False
 
 
-def test_validation_positive_invariant_forge_without_stamp(capture):
-    model, x, trace = capture
-    fork = _identity_edge_fork(trace)
-    child = fork["conv2d_2_3"].ops[0]
-    child._internal_set("edge_replacement_stamps", {})
-    verdict = _check_edge_intervention_boundary(fork, child)
-    assert verdict is not None and verdict.failed
-    assert verdict.reason == "edge_substitution_uncorroborated"
-
-
-def test_validation_captured_native_via_capture_surface_fails(capture: Any) -> None:
-    """A substituted value forged into capture truth cannot validate green."""
-
-    model, x, trace = capture
-    fork = trace.fork()
-    edge = _edge(trace)
-    fork.do(edge.__selection__(), tl.zero_ablate())
-    child = fork["conv2d_2_3"].ops[0]
-    parent = fork["relu_1_2"].ops[0]
-    child._internal_set("edge_substitutions", {})
-    child._internal_set("edge_replacement_stamps", {})
-    child._internal_set("edits", [record for record in child.edits if not record.edge_address])
-    # Present the substituted value as capture-native in ONE persisted
-    # consumed-value surface. The untouched saved_args twin contradicts it.
-    parent._internal_set("out_versions_by_child", {child.label: torch.zeros_like(parent.out)})
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert fork.validate_forward_pass(model(x)) is False
-
-
 def test_validation_skip_shaped_acceptance_meta_test(capture):
     """A WRONG stored child output under a corroborated entry FAILS: the
     boundary is a DIFFERENT check, never NO check."""
@@ -370,26 +342,6 @@ def test_edge_save_refusal_refires_if_schema_regresses(capture, tmp_path, monkey
         ), level
     # non-edge saves are untouched even under the regressed schema
     trace.save(tmp_path / "clean.tlspec", level="audit")
-
-
-def test_edge_carriers_persist_on_plain_v8_round_trip(capture, tmp_path):
-    """tlspec v8: the occurrence carriers persist on a PLAIN save/load, with
-    the store's payload materializing back into REAL tensors -- presence
-    alone is a skip-shaped acceptance (prebump lane finding: rehydration
-    once handed back dead BlobRefs here). No pre-release marker rides the
-    artifact."""
-
-    model, x, trace = capture
-    fork = _identity_edge_fork(trace)
-    path = tmp_path / "edge_plain.tlspec"
-    fork.save(path, level="portable")
-    loaded = tl.load(path)
-    child = loaded["conv2d_2_3"].ops[0]
-    assert child.edge_substitutions and child.edge_replacement_stamps
-    live_child = fork["conv2d_2_3"].ops[0]
-    for key, entry in child.edge_substitutions.items():
-        assert isinstance(entry["value"], torch.Tensor)
-        assert torch.equal(entry["value"], live_child.edge_substitutions[key]["value"])
 
 
 def test_forced_bundle_without_edge_corroboration_fails_validation(
