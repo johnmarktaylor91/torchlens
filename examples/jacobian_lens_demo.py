@@ -70,7 +70,7 @@ def fit_jacobian_lens(model, blocks, prompts, *, skip_first, chunk):
                 is_grads_batched=True,
                 retain_graph=True,
             )
-            for address, grad in zip(blocks[:-1], grads):
+            for address, grad in zip(blocks[:-1], grads, strict=True):
                 rows[address].append(grad[:, 0, valid].sum(1) / len(valid))
         for address in blocks[:-1]:
             total[address] += torch.cat(rows[address])
@@ -116,7 +116,7 @@ def readout(model, tokenizer, blocks, lenses, ids, *, top):
         states = residual_states(model, blocks, ids)
         print(f"prompt: {tokenizer.decode(ids[0])!r}")
         print(f"{'block':<16} {'jacobian lens':<40} logit lens")
-        for address, state in zip(blocks, states):
+        for address, state in zip(blocks, states, strict=True):
             if address not in lenses:
                 continue
             last = state[0, -1]
