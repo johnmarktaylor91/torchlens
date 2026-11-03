@@ -49,7 +49,7 @@ Replace the names with your model's.
 - Change what goes INTO a module (for example one attention head before
   the output projection): tl.splice_module(fn, input_route="in").
 - Change an op that has no module of its own (an inline softmax or add):
-  find it in a trace, then tr.do(op_label, edit, model=..., inputs=...).
+  find it in a trace, then tr.fork().do(op_label, edit, model=..., inputs=...).
 
 ## Module outputs
 
@@ -160,8 +160,9 @@ head h before the attention output projection:
 
 ## Edit any op you found in a trace
 
-tr.do reruns the model with an edit on one op label and returns a new
-trace. Labels such as "softmax_1_9" come from a finished trace; for an
+tr.fork().do reruns the model with an edit on one op label and returns
+the edited trace, leaving tr as it was (a bare tr.do edits tr in place and
+warns). Labels such as "softmax_1_9" come from a finished trace; for an
 edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
 
     import torchlens as tl
@@ -169,7 +170,7 @@ edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
     op = next(op for op in tr.layers if op.func_name == "softmax")
     def flat(t, *, ctx):
         return t * 0 + 1.0 / t.shape[-1]
-    edited = tr.do(op.label, flat, model=model, inputs=x).output
+    edited = tr.fork().do(op.label, flat, model=model, inputs=x).output
 
 ## Gradients
 
@@ -194,7 +195,8 @@ edit inside tl.trace(intervene=...) use selectors (tl.module, tl.func).
   layer_list), .parents and .children (not parent_layers or child_layers),
   .address (not containing_module).
 - Capture-time selectors are tl.module, tl.func, tl.in_module; a label from
-  a finished trace works with tr[label] and tr.do, not inside intervene=.
+  a finished trace works with tr[label] and tr.fork().do, not inside
+  intervene=.
 - Same output edit over many forwards (a loop, generate()): arm it once on
   the live model with tl.when(site, edit).bind(model); no tracing cost. A
   bound model does not pass call inputs, so input_route="in" splices raise

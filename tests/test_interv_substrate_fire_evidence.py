@@ -181,7 +181,7 @@ def test_two_user_callables_name_only_the_unfired_one() -> None:
         return t
 
     model = _TinyModel()
-    firing = tl.when(tl.module("fc1"), halve)
+    firing = tl.when(tl.func("relu"), halve)
     misfiring = tl.when(tl.func("softmax"), never)  # no softmax in the model
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
