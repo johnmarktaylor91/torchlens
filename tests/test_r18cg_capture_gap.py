@@ -15,7 +15,7 @@ torch 2.13:
   them recorded the output as an unattributed literal (the r45 ``.mH`` capture-gap class). The fix
   adds the three factories to ``IGNORED_FUNCS`` so they decorate and capture; their arg-specs
   already existed (``_FACTORY_SOURCE_SPEC`` / the ``randintlike`` entry).
-* ``Tensor.to_sparse_{coo,csr,csc,bsr,bsc}``: the same class (ignored by torch, unlike
+* ``Tensor.to_sparse_{csr,csc,bsr,bsc}``: the same class (ignored by torch, unlike
   ``to_sparse``); see the section at the end of this file.
 """
 
@@ -104,8 +104,10 @@ def test_random_like_factory_output_is_captured_not_literal(factory_name: str) -
 # ---------------------------------------------------------------------------
 # Layout-specific sparse conversions (``Tensor.to_sparse_{coo,csr,csc,bsr,bsc}``)
 # ---------------------------------------------------------------------------
-# These five methods are in torch's ``get_ignored_functions()`` (``to_sparse`` itself is
-# overridable), so before they were re-added to ``IGNORED_FUNCS`` a sparse tensor built in
+# All five are in torch's ``get_ignored_functions()`` (``to_sparse`` itself is overridable).
+# ``to_sparse_coo`` is a Python wrapper that calls ``self.to_sparse()``, so it records as a
+# ``to_sparse`` op and needs no row. The four compressed ones are C methods: before they
+# were re-added to ``IGNORED_FUNCS`` a sparse tensor built in
 # forward with ``x.to_sparse_csr()`` reached its consumer as an unattributed literal: the
 # "no graph/source provenance" UserWarning (an error under the suite's filter) and an
 # unattributed arg0 on ``sparse.mm`` / ``sampled_addmm``. ``to_sparse(layout=...)`` recorded
@@ -141,7 +143,16 @@ def _sparse_input() -> torch.Tensor:
     return torch.randn(4, 4)
 
 
-@pytest.mark.parametrize("method", tuple(_SPARSE_CONVERSIONS))
+_COMPRESSED_CONVERSIONS = tuple(name for name in _SPARSE_CONVERSIONS if name != "to_sparse_coo")
+
+
+def _recorded_conversion_name(method: str) -> str:
+    """``to_sparse_coo`` delegates to ``to_sparse``, which is the op it records as."""
+
+    return "to_sparse" if method == "to_sparse_coo" else method
+
+
+@pytest.mark.parametrize("method", _COMPRESSED_CONVERSIONS)
 def test_sparse_conversion_is_decorated_with_static_spec(method: str) -> None:
     """Each conversion is in the decorated set and has a static self-only arg-spec."""
 
@@ -156,7 +167,7 @@ def test_sparse_conversion_captured_with_provenance(method: str) -> None:
     """The conversion is a recorded op whose parent is the dense tensor it converted."""
 
     log = tl.trace(_SparseConvertModel(method), _sparse_input())
-    converted = [op for op in log.ops if op.func_name == method]
+    converted = [op for op in log.ops if op.func_name == _recorded_conversion_name(method)]
     assert len(converted) == 1, f"{method} not captured as an op"
     (op,) = converted
     relu = [candidate for candidate in log.ops if candidate.func_name == "relu"]

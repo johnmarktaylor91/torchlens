@@ -279,7 +279,7 @@ ZERO_FLOPS_OPS = {
     "refine_names",
     "has_names",
     # Quantization / sparse (layout, not compute)
-    *(f"to_sparse{layout}" for layout in ("", "_coo", "_csr", "_csc", "_bsr", "_bsc")),
+    *(f"to_sparse{layout}" for layout in ("", "_csr", "_csc", "_bsr", "_bsc")),
     "to_dense",
     "to_mkldnn",
     "coalesce",

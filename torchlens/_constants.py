@@ -1239,9 +1239,9 @@ IGNORED_FUNCS = [
     # result as an unattributed literal and the runnable artifact cannot save/run (the r44
     # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
     ("torch.Tensor", "mH"),
-    # The layout-specific sparse conversions (``to_sparse`` itself is overridable): unwrapped,
-    # a forward's ``x.to_sparse_csr()`` reached its consumer with no provenance.
-    *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("coo", "csr", "csc", "bsr", "bsc")),
+    # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
+    # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
+    *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
 ]
 
 
