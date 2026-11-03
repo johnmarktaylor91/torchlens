@@ -47,8 +47,12 @@ def test_has_saved_forward_args_survives_a_resave(tmp_path: Path) -> None:
     first = tmp_path / "first"
     live = save_tiny(first, "portable")
     loaded = tl.load(first)
-    live_flags = [call.has_saved_forward_args for module in live.modules for call in module.ops]
-    loaded_flags = [call.has_saved_forward_args for module in loaded.modules for call in module.ops]
+    live_flags = [
+        call.has_saved_forward_args for module in live.modules for call in module.calls.values()
+    ]
+    loaded_flags = [
+        call.has_saved_forward_args for module in loaded.modules for call in module.calls.values()
+    ]
     assert loaded_flags == live_flags
     assert all(flag is False for flag in live_flags)
     second = resave(loaded, tmp_path / "second", "portable")
@@ -70,9 +74,11 @@ def test_module_templates_survive_a_resave(tmp_path: Path) -> None:
 def test_null_buffer_persistence_stays_none(tmp_path: Path) -> None:
     first = tmp_path / "first"
     live = save_tiny(first, "portable")
-    assert _column(first, "trace", "_buffer_persistence") == [live._buffer_persistence]
+    # A trace that never set the slot saves ``null``; the loaded trace must not grow a ``{}``.
+    live_value = getattr(live, "_buffer_persistence", None)
+    assert _column(first, "trace", "_buffer_persistence") == [live_value]
     loaded = tl.load(first)
-    assert loaded._buffer_persistence == live._buffer_persistence
+    assert getattr(loaded, "_buffer_persistence", None) == live_value
     second = resave(loaded, tmp_path / "second", "portable")
     assert _column(second, "trace", "_buffer_persistence") == _column(
         first, "trace", "_buffer_persistence"

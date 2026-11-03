@@ -39,7 +39,8 @@ def test_torch_size_reloads_as_torch_size() -> None:
 
 
 def test_structseq_reloads_through_its_known_constructor() -> None:
-    maximum = torch.max(torch.tensor([1, 3]), dim=0)
+    # Plain members: a tensor member needs the record-table payload sink, not this unit.
+    maximum = torch.return_types.max((3, 1))
     back = _round_trip(maximum)
     assert type(back) is type(maximum)
     assert back.values == 3 and back.indices == 1
@@ -128,7 +129,17 @@ def test_plain_dict_cell_keeps_its_old_meaning() -> None:
 
 
 def test_frozenset_with_a_tensor_member_decodes_without_a_payload() -> None:
-    cell = ValueEncoder().encode({"frozen": frozenset({torch.tensor(3)})}, AT)
+    tensor_cell = {
+        "$tl": "tensor",
+        "dtype": "torch.int64",
+        "shape": [],
+        "device": "cpu",
+        "requires_grad": False,
+        "codec": "torch_safetensors_v1",
+        "blob": "blobs/torch_safetensors_v1-0000.safetensors",
+        "key": "t0",
+    }
+    cell = {"frozen": {"$tl": "frozenset", "items": [tensor_cell]}}
     back = decode_value(cell, at=AT)
     assert isinstance(back["frozen"], frozenset)
     (member,) = back["frozen"]

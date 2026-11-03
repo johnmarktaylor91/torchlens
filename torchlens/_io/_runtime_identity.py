@@ -21,7 +21,7 @@ import warnings
 import torch
 from packaging.version import InvalidVersion, Version
 
-from .. import __version__ as TORCHLENS_VERSION
+from .._vocab._package_version import __version__ as TORCHLENS_VERSION
 from ..errors._base import TorchLensWarning
 from .format_errors import ArtifactError, ArtifactRuntimeIncompatibleError
 
