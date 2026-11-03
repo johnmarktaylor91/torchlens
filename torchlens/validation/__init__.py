@@ -14,6 +14,7 @@ from .._user_funcs import (
     validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
+from ._descriptor_versions import validate_descriptor_versions, validate_format3
 from .diagnostics import (
     get_validation_diagnostics,
     get_validation_failure,
@@ -52,7 +53,7 @@ def validate_tlspec(
         If the artifact carries a recognized TorchLens 2.x marker.
     """
 
-    from ..io import _pre3_observed, _validate_format3_artifact, detect_tlspec_format
+    from ..io import _pre3_observed, detect_tlspec_format
 
     tlspec_path = Path(path)
     if not tlspec_path.exists():
@@ -89,7 +90,7 @@ def validate_tlspec(
             code="artifact_version_below_floor",
         )
     if tlspec_format == "v3":
-        _validate_format3_artifact(tlspec_path)  # the manifest, version window and digests
+        validate_format3(tlspec_path, allow_unsupported_runnable_versions)
         return
     raise ValueError(f"Unrecognized TorchLens .tlspec format at {tlspec_path}.")
 
@@ -312,10 +313,6 @@ def _validate_sparse_run_descriptor(
     from .._runnable import (
         LEGACY_RUNNABLE_TLSPEC_SCHEMA_VERSIONS,
         RUNNABLE_ACTIVATION_PAYLOAD_SCHEMA_VERSION,
-        RUNNABLE_CALL_RECIPE_VERSION,
-        RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-        RUNNABLE_INITIALIZER_POLICY_VERSION,
-        RUNNABLE_TLSPEC_SCHEMA_VERSION,
     )
 
     if not isinstance(value, dict):
@@ -359,22 +356,8 @@ def _validate_sparse_run_descriptor(
         raise ValueError(
             f"Runnable run descriptor fields mismatch; missing={missing}, extra={extra}."
         )
-    expected_versions = {
-        "capability": RUNNABLE_TLSPEC_SCHEMA_VERSION,
-        "call_recipe": RUNNABLE_CALL_RECIPE_VERSION,
-        "callable_ref_schema": RUNNABLE_CALLABLE_REF_SCHEMA_VERSION,
-        "initializer_policy_version": RUNNABLE_INITIALIZER_POLICY_VERSION,
-        "state_binding": "module_path_role_v1",
-        "input_binding": "model_site_io_role_v1",
-        "control_witness": "scalar_bool_and_arm_entry_v1",
-    }
-    for field_name, expected in expected_versions.items():
-        if allow_unsupported_versions:
-            continue
-        if value[field_name] != expected:
-            raise ValueError(
-                f"Runnable descriptor {field_name} must be {expected!r}; got {value[field_name]!r}."
-            )
+    if not allow_unsupported_versions:
+        validate_descriptor_versions(value)
     for field_name in ("callable_registry", "calls", "tensor_slots", "control_witnesses"):
         if not isinstance(value[field_name], list):
             raise ValueError(f"Runnable descriptor {field_name} must be an array.")

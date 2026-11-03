@@ -1418,12 +1418,12 @@ torchlens/transforms/_srp.py::_srp_normalize	75
 torchlens/transforms/_srp.py::srp	69
 torchlens/transforms/_srp.py::srp_verify_matrix	77
 torchlens/transforms/_srp_hash.py::generate_fixed_columns	85
-torchlens/validation/__init__.py	1305
+torchlens/validation/__init__.py	1288
 torchlens/validation/__init__.py::_validate_body_index	70
 torchlens/validation/__init__.py::_validate_manifest_against_schema	95
 torchlens/validation/__init__.py::_validate_runnable_payload_entries	170
 torchlens/validation/__init__.py::_validate_schema_properties	92
-torchlens/validation/__init__.py::_validate_sparse_run_descriptor	150
+torchlens/validation/__init__.py::_validate_sparse_run_descriptor	132
 torchlens/validation/__init__.py::_validate_v2_backend_fields	70
 torchlens/validation/__init__.py::validate_tlspec	66
 torchlens/validation/_completeness_backstop.py::completeness_backstop_counts	196
