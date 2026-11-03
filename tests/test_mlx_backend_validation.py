@@ -427,3 +427,74 @@ def test_mlx_validation_failure_names_op_and_reason() -> None:
     assert failed[0]["reason"] in VALIDATION_REASONS
     assert failed[0]["op_label"] in status.message
     assert all(d["reason"] is None or d["reason"] in VALIDATION_REASONS for d in status.decisions)
+
+
+def _failed_reasons(status: ValidationStatus) -> set[str]:
+    return {str(d["reason"]) for d in status.decisions if d["decision"] == "failed" and d["reason"]}
+
+
+class _PlusOne(nn.Module):
+    def __call__(self, x: mx.array) -> mx.array:
+        return mx.add(x, 1.0)
+
+
+class _Vanishing(nn.Module):
+    def __call__(self, x: mx.array) -> mx.array:
+        return mx.multiply(x, 0.0)
+
+
+def test_mlx_validation_fails_saved_output_dtype_drift_with_equal_values() -> None:
+    """A saved payload whose dtype drifted fails replay even when its values are exact."""
+
+    trace = tl.trace(_PlusOne(), mx.ones((1, 4)), backend="mlx")
+    victim = next(op for op in trace._layer_list if not op.is_input)
+    narrowed = victim.out.astype(mx.float16)
+    assert bool(mx.all(narrowed.astype(mx.float32) == victim.out))
+    with pytest.warns(UserWarning):
+        victim.out = narrowed
+
+    status = MLXBackend().validate_trace(trace)
+    assert status.state == "failed"
+    assert "value_mismatch" in _failed_reasons(status)
+
+
+def test_mlx_validation_fails_when_output_ignores_its_parent() -> None:
+    """An op whose output does not depend on its parent reads UNPROVED and fails."""
+
+    trace = tl.trace(_Vanishing(), mx.ones((1, 4)), backend="mlx")
+
+    status = MLXBackend().validate_trace(trace)
+    assert status.state == "failed"
+    assert "perturbation_unproved" in _failed_reasons(status)
+
+
+def test_mlx_validation_incoherent_parent_attribution_names_structural_reason() -> None:
+    """Rewiring only the declared parents fails on the structural cross-check by name."""
+
+    trace, add_index, relu_label, sigmoid_label = _branch_trace_and_add_tamper_material()
+    add_label = trace._mlx_op_captures[add_index].labels_raw[0]
+    add_op = next(op for op in trace._layer_list if op._label_raw == add_label)
+    relu_final = trace[relu_label].layer_label
+    sigmoid_final = trace[sigmoid_label].layer_label
+    add_op.parents = [sigmoid_final if p == relu_final else p for p in add_op.parents]
+
+    status = MLXBackend().validate_trace(trace)
+    assert status.state == "failed"
+    assert "parents_inconsistent" in _failed_reasons(status)
+
+
+def test_mlx_validation_fails_uninventoried_trace_op() -> None:
+    """A trace op with neither a capture nor an inventory row is a coverage failure."""
+
+    trace = _healthy_trace()
+    captures = trace._mlx_op_captures
+    victim = captures[-1]
+    inventory = tuple(trace._mlx_replay_inventory)
+    kept = tuple(row for row in inventory if tuple(row[1]) != tuple(victim.labels_raw))
+    assert len(kept) == len(inventory) - 1
+    trace._mlx_replay_inventory = kept
+    del captures[-1]
+    assert any(op._label_raw == victim.labels_raw[0] for op in trace._layer_list)
+
+    status = MLXBackend().validate_trace(trace)
+    assert status.state == "failed"

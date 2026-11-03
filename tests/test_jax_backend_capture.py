@@ -1846,3 +1846,92 @@ def test_jax_capture_options_does_not_reject_the_whole_object() -> None:
 
     assert trace.provenance.backend == "jax"
     assert trace._num_ops > 0
+
+
+def _failed_reasons(trace: Any) -> set[str]:
+    """Return the reasons of every failed decision on the trace's replay status.
+
+    Parameters
+    ----------
+    trace
+        Validated JAX trace.
+
+    Returns
+    -------
+    set[str]
+        Closed-list reasons recorded with ``decision == "failed"``.
+    """
+
+    status = trace.validation_replay_status
+    return {
+        str(record["reason"])
+        for record in status.decisions
+        if record["decision"] == "failed" and record.get("reason") is not None
+    }
+
+
+def test_jax_validation_fails_when_saved_output_dtype_drifts_with_equal_values() -> None:
+    """A saved payload whose dtype drifted is a replay mismatch even when values agree."""
+
+    def plus_one(_: None, x: Any) -> Any:
+        """Return ``x + 1`` so every value is exact in a narrower float dtype."""
+
+        return x + 1.0
+
+    trace = _trace_jax(plus_one, (None, jnp.ones((2, 3), dtype=jnp.float32)))
+    add_op = _jax_equation_op(trace, "add")
+    narrowed = add_op.out.astype(jnp.float16)
+    assert bool(jnp.all(narrowed.astype(jnp.float32) == add_op.out))
+
+    add_op._internal_set("out", narrowed)
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert "replay_mismatch" in _failed_reasons(trace)
+
+
+def test_jax_validation_fails_when_output_ignores_its_parent() -> None:
+    """An equation whose output does not depend on its graph parent fails perturbation."""
+
+    def vanishing(_: None, x: Any) -> Any:
+        """Return an output that is zero for every input."""
+
+        return x * 0.0
+
+    trace = _trace_jax(vanishing, (None, jnp.ones((2, 3), dtype=jnp.float32)))
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert "perturbation_insensitive" in _failed_reasons(trace)
+
+
+def test_jax_validation_reports_capture_count_drift_as_inconsistent() -> None:
+    """Dropping one equation capture is named ``capture_inconsistent``, not a crash."""
+
+    trace = _trace_jax(_mlp, (_params(), jnp.ones((2, 3))))
+    captures = tuple(trace.jax_equation_captures)
+    assert len(captures) > 1
+    trace.jax_equation_captures = captures[:-1]
+
+    assert trace.validate_forward_pass([], validate_metadata=False) is False
+    assert "capture_inconsistent" in _failed_reasons(trace)
+    assert "metadata_invariant_exception" not in _failed_reasons(trace)
+
+
+def test_jax_validation_runs_metadata_invariants_before_replay() -> None:
+    """The validation entry runs the backend-neutral invariants and reports their failure."""
+
+    def uses_scan(params: dict[str, Any], x: Any) -> Any:
+        """Return an over-cap scan output."""
+
+        del params
+        return lax.scan(lambda carry, item: (carry + item, carry), x[0], x)[1]
+
+    trace = _trace_jax(
+        uses_scan,
+        ({}, jnp.ones((5,), dtype=jnp.float32)),
+        jax_max_control_flow_unroll=2,
+    )
+    trace.annotations.pop(REGION_REPLAY_PROVENANCE_KEY, None)
+
+    assert trace.validate_forward_pass([]) is False
+    assert trace.validation_replay_status.state == "failed"
+    assert "metadata_invariant_exception" in _failed_reasons(trace)
