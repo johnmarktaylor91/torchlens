@@ -24,7 +24,7 @@ from typing import Any, Final
 from .._artifact_anchors import check_manifest_metadata_anchors
 from .._extra_files import _warn_extra_files
 from .._json import loads_bounded, read_bytes_bounded
-from .._runtime_identity import check_runtime_identity
+from .._runtime_identity import check_runtime_identity, parse_pep440
 from ..format_contract import TLSPEC_VERSION, above_ceiling_error, below_floor_error
 from ..format_errors import ArtifactError, ArtifactTooOldError
 from ..paths import reject_symlink_path
@@ -282,9 +282,14 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+#: Writer stamps the runtime policy compares as versions; the writer's own stamp is judged by
+#: that policy (``bundle_producer_unverifiable``), these two by the manifest table.
+_PEP440_STAMPS: Final = ("python_version", "torch_version")
+
+
 def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
     """The format name, the two version stamps, the writer-contract digest, the writer
-    identity strings and the artifact kind."""
+    identity strings (the python and torch stamps parse under PEP 440) and the artifact kind."""
 
     errors: list[str] = []
     if manifest["format"] != contract.FORMAT_NAME:
@@ -298,8 +303,13 @@ def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
     elif manifest[TLSPEC_KEY] == TLSPEC_VERSION and digest != _current_contract_digest():
         errors.append("contract_digest does not name this runtime's writer contract")
     for key, pattern in contract.IDENTITY_FIELD_PATTERNS.items():
-        if not isinstance(manifest[key], str) or re.fullmatch(pattern, manifest[key]) is None:
+        value = manifest[key]
+        if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
             errors.append(f"{key} must be a string matching the identity grammar {pattern!r}")
+        elif (
+            key in _PEP440_STAMPS and parse_pep440(value, label=key, warn_on_failure=False) is None
+        ):
+            errors.append(f"{key} must be a PEP 440 version string")
     if manifest["kind"] not in contract.ARTIFACT_KINDS:
         errors.append(f"kind {manifest['kind']!r} is not one of {contract.ARTIFACT_KINDS}")
     return errors

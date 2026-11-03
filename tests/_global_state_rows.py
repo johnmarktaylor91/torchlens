@@ -1062,6 +1062,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/_safe_unpickle.py", "__all__"),
         ("torchlens/_io/_torch_symbols.py", "__all__"),
         ("torchlens/_io/format3/__init__.py", "__all__"),
+        ("torchlens/_io/format3/_carriers.py", "__all__"),
         ("torchlens/_io/_runtime_identity.py", "__all__"),
         ("torchlens/_io/format3/codec_policy.py", "__all__"),
         ("torchlens/_io/format3/reader.py", "__all__"),

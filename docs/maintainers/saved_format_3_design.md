@@ -563,7 +563,7 @@ map is the binding list; this table says when each fires in the 3.0 reader and w
 | Situation | Code | Where |
 | --- | --- | --- |
 | no `manifest.json` | `manifest_missing` | reader, before any other file |
-| manifest not UTF-8 JSON / not an object / fails the manifest schema | `manifest_unreadable` / `manifest_not_json_object` / `manifest_schema_invalid` | reader |
+| manifest not UTF-8 JSON / not an object / fails the manifest schema (a missing field, a wrong type, an unparsable `python_version` or `torch_version`) | `manifest_unreadable` / `manifest_not_json_object` / `manifest_schema_invalid` | reader |
 | `manifest.json` without `format`, or a `metadata.pkl` or `bundle.json` at the root, or `tlspec_version` below 11 | `artifact_version_below_floor` (`ArtifactTooOldError`), one error, remedy: re-save with TorchLens 2.36.x | reader (replaces `_pre3_module_paths`) |
 | a `torchlens_version` older than the first TorchLens that writes format 3 (an impossible pairing) | `artifact_version_below_floor`, before the runtime identity advisories | reader |
 | `torchlens_version` not parseable under PEP 440 | `bundle_producer_unverifiable` | reader |
