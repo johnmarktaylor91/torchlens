@@ -38,12 +38,12 @@ from ..options import CaptureOptions, StorageOptions
 from ._capture_door import _unfold_capture_options
 from ._halt import StopSignal
 from ._recorder_config import _configure_predicate_capture
-from ._recorder_entry import (
+from ._run_cores import retain_run_core
+from ._validation import (
     _unwrap_ddp_for_fastlog,
     _warn_zero_match_capture_selectors,
+    validate_recording_options,
 )
-from ._run_cores import retain_run_core
-from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
     ForwardErrorMode,

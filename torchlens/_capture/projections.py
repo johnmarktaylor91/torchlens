@@ -43,7 +43,7 @@ from ..recording.types import (
     Recording,
     StorageIntent,
 )
-from ._record_module_frames import (
+from ._forward_helpers import (
     _module_frames_from_record_context,
     _normalize_module_stack,
 )

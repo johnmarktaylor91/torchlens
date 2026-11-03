@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 from .._io import FieldPolicy
-from .module import HookInfo
+
+if TYPE_CHECKING:
+    # Annotation-only: a runtime import put this leaf module inside the
+    # capture import cycle through ``module``.
+    from .module import HookInfo
 
 TypedInputPath = tuple[Any, ...]
 PreHookOutcome = Literal["none", "returned", "invalid_return", "raised"]

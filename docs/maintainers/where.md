@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1428 modules, 633751 lines, 0 modules without a docstring.
+83 packages, 1426 modules, 633748 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -15,10 +15,10 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1238 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
-| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25114 |
+| `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 45 | 25111 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1493 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4588 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 37835 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 37839 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12495 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1389 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 22 | 6045 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 21 | 6041 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13676 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -209,7 +209,7 @@ Output auto-routing registry namespace. (1 modules, 27 lines)
 
 ### `torchlens._capture`
 
-Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (46 modules, 25114 lines)
+Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. (45 modules, 25111 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -222,14 +222,13 @@ Real-time tensor operation capture: logging source/output tensors, tracking fami
 | `_episode_ledger` | Episode ledger: per-step status disclosure for ''capture_kind=episode''. | 1986 |
 | `_episode_ledger_anchors` | Load-time anchors: does a grammatically valid episode ledger describe THIS product? | 188 |
 | `_flops_shape_rules` | Shape helpers and the shape-derived FLOP rules for weighted, recurrent and chained calls. | 298 |
-| `_forward_helpers` | Forward-pass helpers for the RUN stage: memory bracket, backend lookup and predicate forward. | 595 |
+| `_forward_helpers` | Forward-pass helpers for the RUN stage: memory bracket, backend lookup and predicate forward. | 657 |
 | `_fused_attention_hold` | Hold torch's fused attention fast path off for one captured forward. | 102 |
 | `_input_records` | Input and label record helpers for the RUN stage. | 463 |
 | `_nonfinite_prefix` | Failure-safe prefix finalization + the ONE raw-to-public label resolver. | 379 |
 | `_outcome_payload` | Persisted-attestation codec and load-time outcome resolution. | 422 |
 | `_outcome_types` | Leaf vocabulary, capability table and sidecar readers of the outcome authority. | 401 |
 | `_plan_check` | The audit-only plan checker (weightsfree , face 4). | 283 |
-| `_record_module_frames` | Module-stack frames for capture-time record contexts (split out of ''projections''). | 65 |
 | `_record_stores` | Record-store building blocks for fastlog projections. | 118 |
 | `_retention` | Selector classification for deferred capture retention. | 67 |
 | `_run_setup` | Request resolution and Trace setup for the RUN stage entry. | 439 |
@@ -288,7 +287,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 37835 lines)
+Core data structures for representing a logged forward pass. (90 modules, 37839 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -380,7 +379,7 @@ Core data structures for representing a logged forward pass. (90 modules, 37835 
 | `module` | Structured per-module metadata: ModuleCall, Module, ModuleAccessor. | 2623 |
 | `op` | Op: per-operation metadata for a single invocation of a layer. | 3577 |
 | `param` | Param and ParamAccessor: per-parameter metadata and dict-like accessor for model parameters. | 1083 |
-| `prehook` | Public value objects for module forward-pre-hook input provenance. | 189 |
+| `prehook` | Public value objects for module forward-pre-hook input provenance. | 193 |
 | `trace` | Trace: the top-level container for a fully logged forward pass. | 3524 |
 
 ### `torchlens._data_substrate`
@@ -1829,7 +1828,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 13
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (22 modules, 6045 lines)
+Lightweight predicate-recording namespace for TorchLens. (21 modules, 6041 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1841,12 +1840,11 @@ Lightweight predicate-recording namespace for TorchLens. (22 modules, 6045 lines
 | `_record_one_shot` | One-shot public fastlog recording API. | 233 |
 | `_recorder` | Public Recorder context manager for fastlog sessions. | 772 |
 | `_recorder_config` | Resolved stop and capture configuration for one predicate recording pass. | 32 |
-| `_recorder_entry` | Forward-entry helpers for the Recorder (split out of ''_recorder''). | 102 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
 | `_run_cores` | Retention of sealed run cores across the passes of one Recorder. | 56 |
 | `_storage_resolver` | Storage resolution for fastlog tensor payloads. | 410 |
 | `_types_ancestry` | Ancestry backfill for cook-owned recording replay projections. | 103 |
-| `_validation` | Validation helpers for public fastlog APIs. | 98 |
+| `_validation` | Validation and entry helpers for public fastlog APIs. | 196 |
 | `cleanup` | Cleanup helpers for partial fastlog bundles. | 61 |
 | `dry_run` | Dry-run tracing API for fastlog predicates. | 73 |
 | `exceptions` | Exception types for fastlog predicate recording. | 96 |

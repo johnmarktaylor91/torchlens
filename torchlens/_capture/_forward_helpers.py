@@ -7,7 +7,7 @@ import contextlib
 import sys
 import time
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from torchlens import _state
@@ -15,6 +15,7 @@ from torchlens._capture import peak_memory
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_honesty import ADVISORY_FUSED_ATTENTION_FASTPATH_HELD, append_capture_advisory
+from .._ir.events import ModuleFrame
 from .._quantities import Bytes
 from ..backends.registry import (
     BackendName,
@@ -22,6 +23,7 @@ from ..backends.registry import (
     resolve_backend_spec,
 )
 from ..recording._halt import StopSignal
+from ..recording.types import ModuleStackFrame, RecordContext
 from .peak_memory import process_rss_bytes, record_forward_peak, reset_peak_rss
 from .session import (
     CaptureSession,
@@ -593,3 +595,63 @@ def _stamp_host_rng_verdict(self: "Trace", global_advanced: bool, channels: Any)
         self._runnable.host_rng_consumed = global_advanced
         self._runnable.rng_monitor_uncertain = True
         self._runnable.rng_monitor_uncertain_detail = ("monitor_not_armed",)
+
+
+# Module-stack frames for capture-time record contexts (hosted here, inside the
+# capture import cycle, so the layering ratchet does not grow by a module).
+
+
+def _normalize_module_stack(
+    module_stack: Iterable[ModuleStackFrame | Mapping[str, Any]] | None,
+) -> tuple[ModuleStackFrame, ...]:
+    """Normalize module stack input to ModuleStackFrame instances."""
+
+    if module_stack is None:
+        return ()
+    frames: list[ModuleStackFrame] = []
+    for frame in module_stack:
+        if isinstance(frame, ModuleStackFrame):
+            frames.append(frame)
+            continue
+        frames.append(
+            ModuleStackFrame(
+                address=str(frame.get("address", "")),
+                module_type=str(frame.get("module_type", "")),
+                module_id=int(frame.get("module_id", 0)),
+                pass_number=int(frame.get("pass_number", 0)),
+            )
+        )
+    return tuple(frames)
+
+
+def _module_frames_from_record_context(ctx: RecordContext) -> tuple[ModuleFrame, ...]:
+    """Convert fastlog module-stack frames to IR module frames."""
+
+    return tuple(
+        ModuleFrame(
+            address=_module_frame_address(frame),
+            address_normalized=None,
+            module_type=frame.module_type,
+            call_index=frame.pass_number,
+            fx_qualpath=None,
+            entry_argnames=(),
+        )
+        for frame in ctx.module_stack
+    )
+
+
+def _module_frame_address(frame: ModuleStackFrame) -> str:
+    """Return the Trace-facing address for a predicate module-stack frame.
+
+    Parameters
+    ----------
+    frame
+        Predicate module frame from a capture-time ``RecordContext``.
+
+    Returns
+    -------
+    str
+        Public module address used by postprocess.
+    """
+
+    return frame.address or "self"
