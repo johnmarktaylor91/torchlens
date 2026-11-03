@@ -122,7 +122,7 @@ and unembedding, so the two lenses differ only in the transport step.
 # recipe-test: tool=transformers expected=(['transformer.h.0', 'transformer.h.1'], (1, 16, 512))
 final_norm, unembed = model.transformer.ln_f, model.lm_head
 lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in lenses.items()}
-trace = tl.trace(model, corpus[:1], capture=tl.options.CaptureOptions(layers_to_save="all"))
+trace = tl.trace(model, corpus[:1], save="all")
 result = logit_lens(trace, lens=lens, layers=list(lens), verify=False)
 RESULT = ([entry.address for entry in result.entries], tuple(result.entries[-1].logits.shape))
 ```

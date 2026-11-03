@@ -122,7 +122,7 @@ def readout(model, tokenizer, blocks, lenses, ids, *, top):
     """Print the Jacobian lens and the logit lens top tokens at the last position per block."""
     final_norm, unembed = model.transformer.ln_f, model.lm_head
     lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in lenses.items()}
-    trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, ids, save="all")
     jacobian = logit_lens(trace, lens=lens, layers=list(lens), verify=False)
     plain = logit_lens(trace, layers=list(lens), verify=False)
     print(f"prompt: {tokenizer.decode(ids[0])!r}")
