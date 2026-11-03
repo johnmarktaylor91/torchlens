@@ -79,6 +79,15 @@ def test_unencodable_value_loads_back_as_the_public_stand_in() -> None:
         {"$tl": "tuple"},
         {"$tl": "tuple", "items": 3},
         {"$tl": "dtype", "name": "float99"},
+        {"$tl": "tuple", "items": [], "subtype": "unlisted.Tuple"},
+        {"$tl": "tuple", "items": ["bad-dimension"], "subtype": "torch.Size"},
+        {"$tl": "dict", "items": [], "subtype": "unlisted.Mapping"},
+        {
+            "$tl": "dict",
+            "items": [],
+            "subtype": "collections.defaultdict",
+            "default_factory": "eval",
+        },
     ],
 )
 def test_cell_failing_its_type_check_refuses_record_schema_invalid(cell: dict) -> None:
