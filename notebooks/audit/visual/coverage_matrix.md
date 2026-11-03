@@ -42,7 +42,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | `containers:nodes` | show_containers='nodes' container overlay nodes (renderer-internal) | p15 |
 | `container_max_inline` | container_max_inline threshold | p16 |
 | `module_focus` | module= submodule focus with boundary stubs | p17 |
-| `vis_call_depth` | vis_call_depth module-box nesting cutoff | p18 |
+| `vis_call_depth` | depth= module-box nesting cutoff | p18 |
 | `skip_fn` | skip_fn layer-hiding predicate (edges chain through) | p19 |
 | `collapse_fn` | collapse_fn custom module-collapse predicate | p20 |
 | `node_spec_fn` | node_spec_fn per-node customization callback | p21 |
@@ -130,7 +130,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 
 | Axis | Rationale |
 |------|-----------|
-| `vis_mode:none` | vis_mode='none' renders nothing by definition. |
+| `vis_mode:none` | a trace with no picture requested draws nothing by definition. |
 | `vis_renderer:dagua` | Experimental opt-in backend (torchlens.experimental.dagua); not part of the stable visual language. |
 | `placement:auto` | 'auto' just selects dot or rank by cost estimate; both concrete engines are shown on the placement page. |
 | `code_panel:forward_class` | code_panel='forward' and 'class' use the same panel machinery as True / 'init+forward' (shown); only the excerpt differs. |
@@ -160,7 +160,7 @@ one page or carry an explicit N/A rationale; anything else is a defect.
 | 15 | C | `c1_containers` | show_containers: labels / collapsed / nodes | `dict_input`, `dict_output`, `nested_containers`, `tuple_output` | 5 |
 | 16 | C | `c2_container_max_inline` | container_max_inline: when 'collapsed' stops inlining | `tuple_output` | 2 |
 | 17 | C | `c3_module_focus` | module=: focus on one submodule | `demo_model` | 1 |
-| 18 | C | `c4_call_depth` | vis_call_depth: limiting module-box nesting | `demo_model` | 2 |
+| 18 | C | `c4_call_depth` | depth=: limiting module-box nesting | `demo_model` | 2 |
 | 19 | C | `c5_skip_fn` | skip_fn: hiding layers while chaining edges through | `tiny_mlp` | 2 |
 | 20 | C | `c6_collapse_fn` | collapse_fn: custom module collapse + remainder labels | `block_stack` | 1 |
 | 21 | C | `c7_node_spec_fn` | node_spec_fn / collapsed_node_spec_fn: per-node customization | `block_stack`, `tiny_mlp` | 2 |
