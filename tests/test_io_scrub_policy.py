@@ -367,7 +367,6 @@ _TRACE_METHOD_EXCLUSIONS: dict[str, str] = {
     "save_intervention": "save boundary (intervention spec artifact)",
     "validate_forward_pass": "full replay validation; execution-tier compute",
     "discharge_against": "requires a second real capture as input",
-    "to_dagua_graph": "optional external dagua renderer dependency",
 }
 
 _OP_METHOD_EXCLUSIONS: dict[str, str] = {

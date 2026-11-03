@@ -101,7 +101,7 @@ validation, and core data-class names for the current 2.x surface.
 | `torchlens/stats/` | Streaming stats and `aggregate()` | Dataset-scale activation summaries |
 | `torchlens/callbacks/` | Lightning callback integration | Training-loop adapters |
 | `torchlens/_partial/` | Partial capture wrapper for failed forwards | Debugging failed captures |
-| `torchlens/experimental/` | Unstable helpers, Dagua opt-in, node styles | Experimental APIs |
+| `torchlens/experimental/` | Unstable helpers, node styles | Experimental APIs |
 | `torchlens/viz/` | Convenience visual namespace | Bundle diff and heatmap helpers |
 | `torchlens/appliances/` | Moved accessor aliases | Non-top-level public accessor imports |
 | `torchlens/types.py` | Moved type aliases | Public types not in top-level `__all__` |

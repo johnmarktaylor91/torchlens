@@ -341,11 +341,6 @@ def preview_fastlog(
         Graphviz DOT source.
     """
 
-    # Graphviz DOT only: the experimental dagua renderer emits no DOT and takes no overlays.
-    if render_kwargs.get("vis_renderer") == "dagua":
-        raise NotImplementedError(
-            "fastlog preview renders Graphviz DOT only; vis_renderer='dagua' is not supported."
-        )
     resolved_predicate = _select_predicate(predicate, keep_op)
     preview_nodes = _build_preview_nodes(trace, resolved_predicate)
     node_spec_fn = _make_node_spec_fn(

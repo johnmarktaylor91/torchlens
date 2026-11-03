@@ -341,27 +341,6 @@ def last_run_records(trace: Trace) -> tuple[FireRecord, ...]:
     return tuple(records)
 
 
-def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.to_dagua_graph
-    trace: Trace,
-    rolled: bool = False,
-    depth: int = 1000,
-    show_buffers: bool = False,
-    direction: str = "bottomup",
-    include_grad_edges: bool | None = None,
-) -> Any:
-    """Body of ``Trace.to_dagua_graph``; the method docstring is the contract."""
-    from ..experimental.dagua import trace_to_dagua_graph as _impl
-
-    return _impl(
-        trace,
-        rolled=rolled,
-        depth=depth,
-        show_buffers=show_buffers,
-        direction=direction,
-        include_grad_edges=include_grad_edges,
-    )
-
-
 __all__ = [
     "animate",
     "draw",
@@ -369,5 +348,4 @@ __all__ = [
     "partial_drawing",
     "preview_fastlog",
     "show",
-    "to_dagua_graph",
 ]
