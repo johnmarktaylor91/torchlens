@@ -1666,7 +1666,7 @@ class TestVisualizationBugfixes:
         log.do(
             func("relu"),
             torch.zeros(2, 3),
-            intervention=tl.options.InterventionOptions(engine="set_only"),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
         )
         try:
             node_mark = log.draw(

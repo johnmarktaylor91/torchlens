@@ -26,7 +26,7 @@ def _interventions() -> tl.Trace:
     log.do(
         tl.func("relu"),
         torch.zeros(2, 3),
-        intervention=tl.options.InterventionOptions(engine="set_only"),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     return log
 

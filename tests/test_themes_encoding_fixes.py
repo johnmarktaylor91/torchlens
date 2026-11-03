@@ -193,5 +193,5 @@ def test_pass_number_is_the_per_pass_color_source() -> None:
 
     assert resolve_color_by("pass_number") is not None
     assert LAYER_SOURCE_ROWS["pass_index"] == ROW_PER_PASS  # classifies Layer.pass_index
-    with pytest.raises(InvalidArgumentError, match="was renamed 'pass_number'"):
+    with pytest.raises(InvalidArgumentError, match="not a known record field"):
         resolve_color_by("pass_index")

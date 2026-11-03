@@ -81,7 +81,9 @@ def test_set_tensor_marks_spec_stale_and_returns_self() -> None:
     replacement = torch.zeros(2, 3)
 
     result = log.do(
-        tl.func("relu"), replacement, intervention=tl.options.InterventionOptions(engine="set_only")
+        tl.func("relu"),
+        replacement,
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
 
     assert result is log
@@ -119,7 +121,7 @@ def test_set_callable_tags_one_shot_metadata() -> None:
     log.do(
         tl.func("relu"),
         replacement_fn,
-        intervention=tl.options.InterventionOptions(engine="set_only"),
+        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
     )
 
     value_spec = log._intervention_spec.target_value_specs[-1]
