@@ -22,7 +22,7 @@ import sys
 import uuid
 import warnings
 import weakref
-from collections.abc import Collection, Iterable, Mapping, Set
+from collections.abc import Collection, Mapping, Set
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -70,6 +70,9 @@ from ._pickle_prescan import OpcodeCeilingExceeded
 from ._root_manifest import NOT_ROUTED, load_by_root_manifest
 from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
+    _RUNNABLE_ACTIVATION_KIND,
+    _RUNNABLE_NONPERSISTENT_BUFFER_KIND,
+    _RUNNABLE_WEIGHT_KIND,
     _refuse_edge_intervened_save,
     _refuse_shard_local_erasure,
     _runnable_write_context,
@@ -120,12 +123,6 @@ from .tensor_policy import FailReason, Ok
 from .tlspec import _TlSpecWriter, coerce_tlspec_save_level
 
 if TYPE_CHECKING:
-    from .._runnable import (
-        ActivationPayloadMember,
-        SlotByteDigest,
-        SparseRunDescriptor,
-        StateByteDigest,
-    )
     from ..bundle import Bundle
     from ..intervention.types import InterventionSpec
 
@@ -179,9 +176,6 @@ _METADATA_PKL_PRESCAN_BYTES = 8 * 1024**2
 # Belt bound on the persisted PARTIAL failure-reason sentinel (B8-12).
 _MAX_PARTIAL_REASON_CHARS = 200
 _BLOB_TENSOR_KEY = "data"
-_RUNNABLE_WEIGHT_KIND = "runnable_weight"
-_RUNNABLE_NONPERSISTENT_BUFFER_KIND = "runnable_nonpersistent_buffer"
-_RUNNABLE_ACTIVATION_KIND = "runnable_activation"
 
 
 class _RenameAwareUnpickler(SafeBundleUnpickler):
@@ -897,293 +891,6 @@ def save(
         raise
 
 
-def _require_canonical_runnable_labels(names: Iterable[object], *, family: str) -> None:
-    """Refuse a runnable payload family whose entry labels load would reject.
-
-    r79 (r78 free LOW): ``self._parameters[""] = nn.Parameter(...)`` bypasses
-    ``register_parameter``'s empty-name validation, captures, and SAVED an
-    artifact whose weight tensor entry carried label ``""`` -- which
-    ``validate_tlspec`` categorically refuses at load ("requires a canonical
-    label"). A save door must never produce a stillborn artifact, so this
-    preflight mirrors the load-side canonical-label predicate exactly
-    (non-``str`` or empty refuses; nothing wider).
-
-    Parameters
-    ----------
-    names:
-        Candidate canonical entry labels for one payload family.
-    family:
-        Human-readable payload family name for the refusal message.
-
-    Raises
-    ------
-    RunnablePreflightError
-        Typed save refusal for any label the load door would refuse.
-    """
-
-    from .._runnable import RunnableErrorCode
-
-    for name in names:
-        if not isinstance(name, str) or name == "":
-            raise RunnablePreflightError(
-                f"Runnable {family} entry requires a canonical label; got {name!r}. "
-                "An artifact with this label would be refused wholesale at load "
-                "(empty state names bypass register_parameter/register_buffer "
-                "validation and have no canonical state_dict identity).",
-                code=RunnableErrorCode.SPARSE_PREFLIGHT_FAILED.value,
-            )
-
-
-def _capture_weight_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> list[BlobSpec]:
-    """Collect one full source-model state dict as runnable weight blobs.
-
-    Parameters
-    ----------
-    trace:
-        Live capture Trace retaining a weak reference to its source model.
-    descriptor:
-        Sparse descriptor whose canonical names, roles, and aliases define the
-        strict state contract.
-
-    Returns
-    -------
-    list[BlobSpec]
-        Separately named state-only blobs ordered by canonical state name.
-
-    Raises
-    ------
-    ArtifactError
-        If the live source model or its state mapping is unavailable.
-    StateBindingError
-        If the full state dict disagrees with the descriptor contract.
-    RunnablePreflightError
-        If a state name is not a canonical (non-empty) label (r79 save-side
-        mirror of the load door's canonical-label check).
-    """
-
-    from .._runnable.state import validate_state_mapping_for_descriptor
-
-    state = _capture_source_state(trace, option_name="include_weights")
-    validate_state_mapping_for_descriptor(descriptor, state)
-    _require_canonical_runnable_labels(
-        cast(Mapping[str, torch.Tensor], state).keys(), family="weight tensor"
-    )
-    return [
-        BlobSpec(
-            blob_id=f"runnable_weight_{index:05d}",
-            value=state[name].detach().clone(),
-            kind=_RUNNABLE_WEIGHT_KIND,
-            label=name,
-            logical_backend="torch",
-        )
-        for index, name in enumerate(sorted(cast(Mapping[str, torch.Tensor], state)))
-    ]
-
-
-def _capture_nonpersistent_buffer_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> list[BlobSpec]:
-    """Collect used non-persistent buffers as mandatory runnable payloads.
-
-    Parameters
-    ----------
-    trace:
-        Live capture Trace retaining the captured initial buffer values.
-    descriptor:
-        Sparse descriptor identifying buffer bindings excluded from ``state_dict``.
-
-    Returns
-    -------
-    list[BlobSpec]
-        One separately stored value blob per used non-persistent buffer name.
-
-    Raises
-    ------
-    StateBindingError
-        If a required captured value is missing or violates its slot contract.
-    RunnablePreflightError
-        If a buffer name is not a canonical (non-empty) label (r79 save-side
-        mirror of the load door's canonical-label check).
-    """
-
-    from .._runnable.state import validate_nonpersistent_buffer_mapping_for_descriptor
-
-    names = sorted(
-        {
-            slot.state_binding.state_dict_name
-            for slot in descriptor.tensor_slots
-            if slot.role.value == "buffer"
-            and slot.state_binding is not None
-            and not slot.state_binding.persistent
-        }
-    )
-    _require_canonical_runnable_labels(names, family="non-persistent buffer")
-    captured_values = getattr(trace, "_buffer_initial_values", {}) or {}
-    values = {name: captured_values[name] for name in names if name in captured_values}
-    validate_nonpersistent_buffer_mapping_for_descriptor(descriptor, values)
-    return [
-        BlobSpec(
-            blob_id=f"runnable_nonpersistent_buffer_{index:05d}",
-            value=cast(torch.Tensor, values[name]).detach().clone(),
-            kind=_RUNNABLE_NONPERSISTENT_BUFFER_KIND,
-            label=name,
-            logical_backend="torch",
-        )
-        for index, name in enumerate(names)
-    ]
-
-
-def _capture_activation_blob_specs(
-    trace: Trace,
-    descriptor: SparseRunDescriptor,
-) -> tuple[
-    list[BlobSpec],
-    tuple[ActivationPayloadMember, ...],
-    tuple[SlotByteDigest, ...],
-    tuple[StateByteDigest, ...],
-    tuple[Any, ...],
-]:
-    """Collect capture-selected activation blobs and attestation eligibility digests.
-
-    Parameters
-    ----------
-    trace:
-        Completed capture retaining the existing ``save=`` payload decisions.
-    descriptor:
-        Sparse descriptor whose slots and calls identify archived membership.
-
-    Returns
-    -------
-    tuple
-        Blob specs, exact activation membership, original-input digests available
-        from selected input payloads, and capture-state digests.
-
-    Raises
-    ------
-    ArtifactError
-        If a selected payload is unavailable or is not a dense torch tensor.
-    """
-
-    from .._runnable import ActivationPayloadMember, SlotByteDigest, StateByteDigest
-    from .._runnable.input_aliases import build_input_attestation_fingerprint
-    from .._runnable.state import runnable_tensor_byte_digest
-
-    slot_ids = {slot.slot_id for slot in descriptor.tensor_slots}
-    call_id_by_label = {
-        op_label: call.call_id for call in descriptor.calls for op_label in call.op_labels
-    }
-    blob_specs: list[BlobSpec] = []
-    members: list[ActivationPayloadMember] = []
-    input_digests: list[SlotByteDigest] = []
-    input_fingerprints: list[Any] = []
-    for op in trace._layer_list:
-        op_label = str(op.label)
-        slot_id = f"slot:{op_label}"
-        if slot_id not in slot_ids:
-            continue
-        out = _physical_op_payload(op, "out")
-        if bool(getattr(op, "is_input", False)) and isinstance(out, torch.Tensor):
-            digest = runnable_tensor_byte_digest(out)
-            input_digests.append(SlotByteDigest(slot_id=slot_id, byte_digest=digest))
-            # hon1_3 (H-a): the physical fingerprint is built from the LIVE retained
-            # in-memory input value that seeded the captured forward (never from the
-            # serialized payload, which contiguifies strides). The run side
-            # fingerprints the executed clone on the same basis.
-            input_fingerprints.append(
-                build_input_attestation_fingerprint(slot_id, out, byte_digest=digest)
-            )
-        if not bool(getattr(op, "has_saved_activation", False)):
-            continue
-        found_payload = False
-        for field_name in ("out", "transformed_out"):
-            payload = _physical_op_payload(op, field_name)
-            if payload is None:
-                continue
-            found_payload = True
-            if not isinstance(payload, torch.Tensor) or payload.layout is not torch.strided:
-                raise ArtifactError(
-                    "include_activations=True requires every selected out/transformed_out "
-                    f"payload to be a dense torch.Tensor; {op_label}.{field_name} is "
-                    f"{type(payload).__name__}."
-                )
-            blob_id = f"runnable_activation_{len(blob_specs):05d}"
-            digest = runnable_tensor_byte_digest(payload)
-            blob_specs.append(
-                BlobSpec(
-                    blob_id=blob_id,
-                    value=payload,
-                    kind=_RUNNABLE_ACTIVATION_KIND,
-                    label=op_label,
-                    logical_backend="torch",
-                )
-            )
-            members.append(
-                ActivationPayloadMember(
-                    blob_id=blob_id,
-                    slot_id=slot_id,
-                    call_id=call_id_by_label.get(op_label),
-                    op_label=op_label,
-                    field=cast(Any, field_name),
-                    byte_digest=digest,
-                )
-            )
-        if not found_payload:
-            raise ArtifactError(
-                "include_activations=True found a capture-selected activation without a "
-                f"materialized out/transformed_out payload at {op_label!r}."
-            )
-
-    state = _capture_source_state(trace, option_name="include_activations")
-    state_digests = tuple(
-        StateByteDigest(
-            state_dict_name=name,
-            byte_digest=runnable_tensor_byte_digest(value),
-        )
-        for name, value in sorted(cast(Mapping[str, torch.Tensor], state).items())
-    )
-    return (
-        blob_specs,
-        tuple(members),
-        tuple(input_digests),
-        state_digests,
-        tuple(input_fingerprints),
-    )
-
-
-def _physical_op_payload(op: Any, field_name: str) -> Any:
-    """Read one stored Op payload without invoking missing-payload access errors."""
-
-    slot = getattr(op, "_slot", None)
-    if callable(slot):
-        return slot(field_name)
-    return getattr(op, field_name, None)
-
-
-def _capture_source_state(trace: Trace, *, option_name: str) -> Mapping[str, torch.Tensor]:
-    """Return the snapshot of the model state used by the captured forward pass.
-
-    The snapshot is taken at the runnable capture boundary, before user model
-    execution. It must never be replaced with a save-time read of the live
-    model because that could embed a drifted state under the capture-state
-    label.
-    """
-
-    state = trace._runnable.capture_state
-    if not isinstance(state, Mapping) or any(
-        not isinstance(name, str) or not isinstance(value, torch.Tensor)
-        for name, value in state.items()
-    ):
-        raise ArtifactError(
-            f"{option_name}=True requires a tensor-only capture-time state snapshot. "
-            "This Trace cannot embed state as embedded_capture_state."
-        )
-    return cast(Mapping[str, torch.Tensor], state)
-
-
 def _reject_audit_only_materialized_payload_save(
     *,
     backend_name: str,
@@ -1794,69 +1501,6 @@ def _load_trace_payload(
         resolved_blobs_dir=resolved_blobs_dir,
     )
     return trace
-
-
-_NONPERSISTENT_DISCLOSURE_WARNED = False
-"""One-time process flag for the non-persistent buffer save disclosure."""
-
-_UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = False
-"""One-time process flag for the unattestable-activation-archive save disclosure (r6 H2)."""
-
-
-def _warn_nonpersistent_buffer_disclosure_once() -> None:
-    """Emit the one-time REQUIRED-family privacy disclosure (contract section 5).
-
-    A default runnable save of a model with used non-persistent buffers carries
-    their capture-time tensor values in the required
-    ``runnable_nonpersistent_buffer_v1`` family even with both include flags
-    false -- declared state without which the artifact cannot replay. The family
-    is manifest-visible; this warning makes the disclosure active.
-    """
-
-    global _NONPERSISTENT_DISCLOSURE_WARNED
-    if _NONPERSISTENT_DISCLOSURE_WARNED:
-        return
-    _NONPERSISTENT_DISCLOSURE_WARNED = True
-    warnings.warn(
-        "This runnable save includes capture-time values of used NON-persistent "
-        "buffers (the required runnable_nonpersistent_buffer_v1 family): they are "
-        "declared state the artifact cannot replay without, and they are written "
-        "even with include_weights/include_activations false. Review the buffers "
-        "before sharing the artifact if they may hold sensitive data.",
-        TorchLensWarning,
-        stacklevel=3,
-    )
-
-
-def _warn_unattestable_activation_archive_once() -> None:
-    """Disclose an activation archive saved without any original-input eligibility (r6 H2).
-
-    ``_capture_activation_blob_specs`` can only record ``original_input_digests`` /
-    ``input_fingerprints`` for a model input that the capture actually SELECTED. With a
-    ``save=`` selector -- the recommended idiom -- the input op is usually unselected, so
-    the archive ships blobs and digests but ZERO input eligibility, and numeric attestation
-    is permanently ``NOT_APPLICABLE`` no matter what the caller later passes to ``.run()``.
-    Left silent that is indistinguishable from "you changed the input", so disclose it at
-    SAVE time. The run report carries the matching named
-    ``numeric_attestation:not_applicable:no_recorded_original_input_eligibility`` entry.
-
-    This is the behavior-preserving half only: the status itself is deliberately NOT
-    promoted to ``ATTESTED``.
-    """
-
-    global _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED
-    if _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED:
-        return
-    _UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = True
-    warnings.warn(
-        "This runnable save archives activations but records no original-input "
-        "digests/fingerprints, because the capture selection did not include the model "
-        "input. Numeric attestation on a later .run() will report not_applicable for that "
-        "reason -- not because the inputs changed. Capture the model input alongside the "
-        "selected activations if byte-exact attestation is wanted.",
-        TorchLensWarning,
-        stacklevel=3,
-    )
 
 
 def _runnable_payload_disposition(trace: Trace, entries: tuple[Any, ...]) -> str:

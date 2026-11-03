@@ -114,7 +114,7 @@ def _preserve_disclosure_flags() -> Any:
     cross-file failure. Snapshot and restore both flags around every test here.
     """
 
-    import torchlens._io.bundle as bundle_module
+    import torchlens._io._save_gates as bundle_module
 
     before = (
         bundle_module._NONPERSISTENT_DISCLOSURE_WARNED,

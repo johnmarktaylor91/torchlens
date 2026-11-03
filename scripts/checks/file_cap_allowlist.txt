@@ -187,7 +187,7 @@ torchlens/_io/bundle.py::_bind_archived_activation_payload	111
 torchlens/_io/bundle.py::_bind_embedded_nonpersistent_buffer_payload	87
 torchlens/_io/bundle.py::_bind_embedded_weight_payload	81
 torchlens/_io/bundle.py::_build_manifest	61
-torchlens/_io/bundle.py::_capture_activation_blob_specs	115
+torchlens/_io/_save_gates.py::_capture_activation_blob_specs	115
 torchlens/_io/bundle.py::_collect_provenance	96
 torchlens/_io/bundle.py::_contains_nested_blob_refs	69
 torchlens/_io/bundle.py::_fast_copy_tensor_blob	66
