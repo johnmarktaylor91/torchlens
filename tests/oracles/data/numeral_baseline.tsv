@@ -1222,6 +1222,7 @@ docs-md	docs/maintainers/where.md	1562
 docs-md	docs/maintainers/where.md	1569
 docs-md	docs/maintainers/where.md	157
 docs-md	docs/maintainers/where.md	158
+docs-md	docs/maintainers/where.md	1581
 docs-md	docs/maintainers/where.md	159
 docs-md	docs/maintainers/where.md	1592
 docs-md	docs/maintainers/where.md	16
@@ -1751,6 +1752,7 @@ docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
+docs-md	docs/maintainers/where.md	630116
 docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
@@ -6519,6 +6521,7 @@ package-docstrings	torchlens/receptive_field/_validation.py	74
 package-docstrings	torchlens/receptive_field/_validation.py	75
 package-docstrings	torchlens/receptive_field/rules/interpolation.py	64
 package-docstrings	torchlens/receptive_field/rules/interpolation.py	64,
+package-docstrings	torchlens/receptive_field/rules/norms.py	11
 package-docstrings	torchlens/receptive_field/rules/transforms.py	20
 package-docstrings	torchlens/recording/_storage_resolver.py	25
 package-docstrings	torchlens/recording/exceptions.py	65
@@ -8781,6 +8784,7 @@ test-docstrings	tests/test_rf_attribution_hardening.py	100
 test-docstrings	tests/test_rf_attribution_hardening.py	12.
 test-docstrings	tests/test_rf_attribution_hardening.py	2.7.1
 test-docstrings	tests/test_rf_axis_permutation.py	20
+test-docstrings	tests/test_rf_channel_mixing_rules.py	64
 test-docstrings	tests/test_rf_crossval.py	13
 test-docstrings	tests/test_rf_ext_integration.py	18
 test-docstrings	tests/test_rf_ext_integration.py	56
