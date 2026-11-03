@@ -1303,7 +1303,7 @@ jobs:
           # save/load round-trip plus a draw() puts both on the floor path.
           with tempfile.TemporaryDirectory() as tmp:
               bundle = Path(tmp) / "floor.tlspec"
-              tl.save(trace, str(bundle))
+              trace.save(str(bundle))
               loaded = tl.load(str(bundle))
               assert len(loaded.ops) == len(trace.ops)
               loaded.draw(path=str(Path(tmp) / "floor_graph"))
@@ -1410,7 +1410,7 @@ jobs:
       - name: Round-trip packaged tlspec
         working-directory: ${{ runner.temp }}
         run: |
-          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), capture=tl.options.CaptureOptions(layers_to_save='none')); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
+          wheel-venv/bin/python -c "import torch, torchlens as tl; from torch import nn; from torchlens.validation import validate_tlspec; path='wheel-smoke.tlspec'; trace=tl.trace(nn.Linear(2, 1), torch.randn(1, 2), save='none'); trace.save(path); validate_tlspec(path); loaded=tl.load(path); assert loaded.num_ops == trace.num_ops"
 
       - name: PEP 561 consumer smoke (installed wheel exposes its types)
         # Red-capable in BOTH directions (grind r3, R84 LOW: py.typed shipped
@@ -1496,7 +1496,7 @@ jobs:
 
           with tempfile.TemporaryDirectory() as tmp:
               path = os.path.join(tmp, "canary.tlspec")
-              tl.save(trace, path)
+              trace.save(path)
               loaded = tl.load(path)
               assert loaded.layer_labels == trace.layer_labels
 
@@ -1520,7 +1520,7 @@ jobs:
               assert mps_trace["relu_1_2"].out.device.type == "mps"
               with tempfile.TemporaryDirectory() as tmp:
                   mps_path = os.path.join(tmp, "canary-mps.tlspec")
-                  tl.save(mps_trace, mps_path)
+                  mps_trace.save(mps_path)
                   mps_loaded = tl.load(mps_path)
                   assert mps_loaded.layer_labels == mps_trace.layer_labels
               print("mps canary OK")
