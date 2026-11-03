@@ -99,7 +99,6 @@ def test_repeat_fires_get_independent_spans_and_monotone_wall_stamps() -> None:
     assert all(span is not None for span in timings.values())
 
 
-@pytest.mark.smoke
 def test_higher_order_backward_pairs_lifo_correctly() -> None:
     torch.manual_seed(0)
     trace = tl.trace(
@@ -201,7 +200,6 @@ def test_timing_registration_failure_degrades_to_untimed_not_coverage_gap() -> N
     assert trace.grad_fn_timing_provenance == "unmeasured"
 
 
-@pytest.mark.smoke
 def test_register_fire_timing_prehook_own_try_except() -> None:
     class _RefusesPrehooks:
         def register_prehook(self, hook):

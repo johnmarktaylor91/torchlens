@@ -64,7 +64,6 @@ _SEVEN_ROWS = [
 ]
 
 
-@pytest.mark.smoke_cells("test_omission_count_after_final_selection[8-8-200-False]")
 @pytest.mark.parametrize(
     ("n_labels", "max_axis_items", "plot_extent", "expect_all_drawn"), _SEVEN_ROWS
 )
@@ -162,7 +161,6 @@ def test_row_col_labels_override_axis_labels() -> None:
     assert image.size == (160, 160)
 
 
-@pytest.mark.smoke
 def test_label_count_mismatch_is_not_silent_growth() -> None:
     """Labels shorter than the axis simply stop; no invented labels."""
 

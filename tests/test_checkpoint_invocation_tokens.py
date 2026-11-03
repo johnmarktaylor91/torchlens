@@ -106,7 +106,6 @@ def test_forward_only_capture_has_token_with_zero_unpack_evidence() -> None:
     assert record["site_key_candidates"] == []
 
 
-@pytest.mark.smoke
 def test_backward_derived_site_candidates_resolve_under_armed_brackets() -> None:
     torch.manual_seed(0)
     trace = tl.trace(
@@ -187,7 +186,6 @@ class _PausedCheckpoint(nn.Module):
         return self.c(h)
 
 
-@pytest.mark.smoke
 def test_unwitnessed_enter_sets_d6_instead_of_staying_silent() -> None:
     torch.manual_seed(0)
     # The paused-region output enters module c without graph provenance;
@@ -214,7 +212,6 @@ def test_classifier_unavailable_sets_d1_and_no_tokens(monkeypatch) -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
-@pytest.mark.smoke
 def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     torch.manual_seed(0)
     trace = tl.trace(
@@ -234,7 +231,6 @@ def test_unmatched_backward_warn_sets_d4_and_warn_once_preserved() -> None:
     assert witness["verdict"] == "evidence_incomplete"
 
 
-@pytest.mark.smoke
 def test_carry_foreign_hook_attrs_preserves_non_tl_state() -> None:
     """The attribute-carry helper copies foreign state, never TorchLens's own.
 
@@ -260,7 +256,6 @@ def test_carry_foreign_hook_attrs_preserves_non_tl_state() -> None:
     assert not hasattr(new_hook, "__tl_saved_tensors_hook_scoped__")
 
 
-@pytest.mark.smoke
 def test_hook_identity_attrs_preserved_when_simulated_in_play(monkeypatch) -> None:
     """Forcing the torch-2.14 attribute-carry path engaged mints a token normally.
 
@@ -278,7 +273,6 @@ def test_hook_identity_attrs_preserved_when_simulated_in_play(monkeypatch) -> No
     assert witness["verdict"] == "checkpoint_invocations_observed"
 
 
-@pytest.mark.smoke
 def test_failed_hook_identity_preserve_sets_d7_and_does_not_leak(monkeypatch) -> None:
     """A forced attribute-carry failure degrades D7 and never leaks into later captures.
 
@@ -353,6 +347,7 @@ def test_token_wrappers_unwrap_prior_layer_instead_of_stacking() -> None:
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_witness_rides_ordinary_save_at_v8(tmp_path) -> None:
     """tlspec v8: the checkpoint witness persists on a plain save/load."""
 

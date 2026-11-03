@@ -38,7 +38,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 import torch
 from torch import nn
 
@@ -121,7 +120,6 @@ def test_invisible_param_write_include_activations_is_unverifiable(tmp_path: Pat
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
 
 
-@pytest.mark.smoke
 def test_invisible_buffer_write_twin_is_unverifiable(tmp_path: Path) -> None:
     """The buffer twin was already correct; assert parity so a regression on either is caught."""
     model = InitAcquiredBufferAliasWrite()

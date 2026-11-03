@@ -76,7 +76,6 @@ def test_gaussian_metric_analytic_literal_pin() -> None:
     np.testing.assert_allclose(ours, expected, rtol=0, atol=1e-12)
 
 
-@pytest.mark.smoke
 def test_gaussian_metric_refuses_identical_stimuli() -> None:
     """A zero data-derived bandwidth refuses typed, never NaN."""
 
@@ -85,7 +84,6 @@ def test_gaussian_metric_refuses_identical_stimuli() -> None:
         rdm(features, metric="gaussian")
 
 
-@pytest.mark.smoke
 def test_rank_transform_percentile_and_ties() -> None:
     """Item 13: average ranks for ties; percentile max is exactly 100."""
 
@@ -123,7 +121,6 @@ def test_rank_transform_refusals() -> None:
         rank_transform_rdm(np.zeros((1, 1)))
 
 
-@pytest.mark.smoke
 def test_rdm_node_spec_display_vocabulary() -> None:
     """The render kwarg accepts raw/rank/percentile and refuses others."""
 
@@ -135,7 +132,6 @@ def test_rdm_node_spec_display_vocabulary() -> None:
         rdm_node(display="log")
 
 
-@pytest.mark.smoke
 def test_cka_method_contract_pins() -> None:
     """Item 14: linear/biased/CPU-f64 contract with literal reference values.
 

@@ -207,7 +207,6 @@ def test_view_identity_stability_and_new_version(tiny_trace: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_remove_refuses_then_cascades_exactly(tiny_trace: Any) -> None:
     """remove() refuses typed BEFORE removal; cascade drops only rows naming it."""
 
@@ -229,7 +228,6 @@ def test_remove_refuses_then_cascades_exactly(tiny_trace: Any) -> None:
     assert remaining[0].member == "c"
 
 
-@pytest.mark.smoke
 def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     """clear()/remove_except() refuse typed, then cascade rows of removed members."""
 
@@ -259,7 +257,6 @@ def test_clear_and_remove_except_guards(tiny_trace: Any) -> None:
     assert bundle.relations == ()
 
 
-@pytest.mark.smoke
 def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
     """LRU eviction of a related member refuses typed, never silently orphans."""
 
@@ -280,7 +277,6 @@ def test_capacity_eviction_refuses_typed(tiny_trace: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_fold_arm2_episode_complete_via_bundle_ledger(tiny_trace: Any) -> None:
     """All-COMPLETE members matching the ledger-declared N fold complete."""
 
@@ -387,7 +383,6 @@ def test_fold_min_provenance_tier() -> None:
     assert result.provenance_tier == "ledger_only"
 
 
-@pytest.mark.smoke
 def test_fold_integration_real_failed_partial_member(tiny_trace: Any) -> None:
     """A real mid-forward failure folds via the failed member's real outcome."""
 
@@ -430,7 +425,6 @@ def _relation_bundle(tiny_trace: Any) -> Any:
     )
 
 
-@pytest.mark.smoke
 def test_persistence_empty_table_omits_the_key(tiny_trace: Any, tmp_path: Path) -> None:
     """A relation-free bundle writes no key and reloads plain (S6 R7)."""
 

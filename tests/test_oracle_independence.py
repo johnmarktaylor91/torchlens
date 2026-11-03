@@ -297,7 +297,6 @@ def test_symmetric_edge_drop_is_caught_on_a_live_trace():
         log.cleanup()
 
 
-@pytest.mark.smoke
 def test_symmetric_edge_drop_is_caught_by_value_rooted_replay():
     """The replay pipeline also goes red on the same plant, from saved VALUES.
 

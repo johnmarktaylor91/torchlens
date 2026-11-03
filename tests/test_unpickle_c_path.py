@@ -514,7 +514,6 @@ def test_the_fast_path_unpickler_retains_nothing_after_load() -> None:
         del loaded
 
 
-@pytest.mark.smoke
 def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
     """The whole corpus, as the file's one smoke item: every mismatch in one report.
 
@@ -536,6 +535,7 @@ def test_corpus_decisions_match_the_interpreter_in_one_pass() -> None:
     assert not admitted, f"hostile streams the fast path admitted: {admitted}"
 
 
+@pytest.mark.smoke
 def test_generated_variants_match_the_interpreter() -> None:
     """Every generated variant gets the same decision on both machines (one report)."""
 

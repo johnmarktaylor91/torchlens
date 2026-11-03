@@ -71,7 +71,6 @@ def test_summary_carries_the_structure_only_banner() -> None:
     assert "structure-only" not in plain
 
 
-@pytest.mark.smoke
 def test_profile_repr_carries_the_banner() -> None:
     log = _structure_trace()
     profile = log.profile()
@@ -111,7 +110,6 @@ def _meta_model() -> nn.Module:
         return nn.Linear(4, 4)
 
 
-@pytest.mark.smoke
 def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> None:
     """Baseline pin (becomes the D8 carve-through test): the DEFAULT path and
     the D8-default flag-on path both refuse meta state unchanged, now naming
@@ -129,7 +127,6 @@ def test_meta_init_model_still_refuses_at_the_gate_with_enriched_teaching() -> N
     assert f"{__file__}:" in str(err)
 
 
-@pytest.mark.smoke
 def test_meta_model_real_input_mixed_cell_refuses_post_flip() -> None:
     """Entry-matrix E-3 under the D8 GRANT: structure_only=True admits meta
     only with a UNIFORM substrate — a meta model with a REAL input is a mixed
@@ -157,7 +154,6 @@ def test_real_model_meta_input_mixed_cell_refuses_post_flip() -> None:
     assert excinfo.value.fields["code"] == "structure_only_substrate_mismatch"
 
 
-@pytest.mark.smoke
 def test_fake_tensor_still_refuses_under_the_flag() -> None:
     """Tamper pin t2 (D8-default form): the flag narrows NOTHING at the
     variant gate — FakeTensor offenses refuse under structure_only=True."""

@@ -163,21 +163,18 @@ def branchy_trace():
         trace.cleanup()
 
 
-@pytest.mark.smoke_cells("test_parity_reused_block[auto-unrolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_reused_block(reused_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(reused_trace, vis_mode, mode)
 
 
-@pytest.mark.smoke_cells("test_parity_separate_blocks[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_separate_blocks(separate_trace: tl.Trace, vis_mode: str, mode: str) -> None:
     assert_three_way_parity(separate_trace, vis_mode, mode)
 
 
-@pytest.mark.smoke_cells("test_parity_branchy_cat[auto-rolled]")
 @pytest.mark.parametrize("vis_mode", ["unrolled", "rolled"])
 @pytest.mark.parametrize("mode", ["auto", "max"])
 def test_parity_branchy_cat(branchy_trace: tl.Trace, vis_mode: str, mode: str) -> None:

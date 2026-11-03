@@ -170,7 +170,6 @@ def test_text_input_invalid_provoked() -> None:
     assert excinfo.value.fields["code"] == "text_input_invalid"
 
 
-@pytest.mark.smoke
 def test_text_model_unsupported_provoked() -> None:
     """A model whose output carries no logits tensor refuses typed."""
 

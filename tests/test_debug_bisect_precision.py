@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -119,7 +118,6 @@ def test_bisect_precision_flags_stochastic_first_divergence() -> None:
         assert "eval mode" in result.message
 
 
-@pytest.mark.smoke
 def test_bisect_precision_explicit_tolerances_override_dtype_defaults() -> None:
     """Explicit rtol/atol replace per-dtype derivation on every row."""
 

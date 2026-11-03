@@ -32,6 +32,8 @@ from torch import nn
 import torchlens as tl
 from torchlens._utils.display import tensor_stats_summary
 
+pytestmark = pytest.mark.rare
+
 
 class _FakeArray:
     """Minimal duck-typed non-torch array: exposes only ``.shape``/``.dtype``.

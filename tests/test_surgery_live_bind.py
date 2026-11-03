@@ -188,7 +188,6 @@ def test_bind_report_contents(toy) -> None:
     assert report.resolved_static_targets == {spec.rules[0].rule_id: ("op-level",)}
 
 
-@pytest.mark.smoke
 def test_bind_pass_qualified_boundary_target() -> None:
     """A pass-qualified boundary target (``block:2``) fires only on that pass."""
 
@@ -236,7 +235,6 @@ def test_bind_zero_fire_disclose_policy(toy) -> None:
     assert len(bound.last_report.zero_fire_rule_ids) == 1
 
 
-@pytest.mark.smoke
 def test_bind_two_edit_misfire_names_only_the_unfired_rule(toy) -> None:
     """GATE row: two edits, one misfires -- the refusal names the unfired rule."""
 
@@ -263,7 +261,6 @@ def test_bind_two_edit_misfire_names_only_the_unfired_rule(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_preflight_refusals(toy) -> None:
     """Empty specs, bad policies, bad models, stale anchors refuse typed."""
 
@@ -314,7 +311,6 @@ def test_bind_rule_unsupported_composite_boundary(toy) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_binding_is_not_a_module_and_teaches(toy) -> None:
     """Training-surface access refuses with the wrapper-module teaching."""
 
@@ -330,7 +326,6 @@ def test_binding_is_not_a_module_and_teaches(toy) -> None:
         _ = bound.definitely_not_an_attr
 
 
-@pytest.mark.smoke
 def test_binding_read_only_surface_and_serialization_refusal(toy) -> None:
     """``.spec``/``.model`` are read-only; pickle refuses typed."""
 
@@ -445,7 +440,6 @@ def test_model_door_policy_switch_is_closed_and_scoped() -> None:
     assert model_door_policy() == "refuse"
 
 
-@pytest.mark.smoke
 def test_model_door_funnel_coverage_inventory(toy) -> None:
     """Every door the inventory marks wired actually routes through the funnel."""
 
@@ -531,7 +525,6 @@ def test_bind_generate_unavailable_refuses(toy) -> None:
     assert excinfo.value.fields["code"] == "bind_generate_unavailable"
 
 
-@pytest.mark.smoke
 def test_bound_generate_toy_composition() -> None:
     """Bound generation returns model outputs and settles its out-of-band ledger."""
 
@@ -632,7 +625,6 @@ def test_bind_real_generate_llama_68m() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_bind_rule_runtime_error_is_typed(toy) -> None:
     """A WHERE predicate that raises at a live op refuses typed, chained."""
 
@@ -650,7 +642,6 @@ def test_bind_rule_runtime_error_is_typed(toy) -> None:
     assert isinstance(excinfo.value.__cause__, ValueError)
 
 
-@pytest.mark.smoke
 def test_bind_cleanup_failure_is_typed(toy) -> None:
     """A teardown that cannot remove runtime state raises bind_cleanup_failed."""
 

@@ -97,7 +97,6 @@ def test_tf_curated_chain_admits_no_new_family_name() -> None:
     assert not (compared & _NEW_FAMILY_NAMES)
 
 
-@pytest.mark.smoke
 def test_construction_and_identity_are_backend_free() -> None:
     """D36: construction, repr, equality, and pickle identity need no backend."""
 
@@ -120,6 +119,7 @@ def test_construction_and_identity_are_backend_free() -> None:
         assert pickle.loads(pickle.dumps(spec)) == spec
 
 
+@pytest.mark.rare
 def test_mlx_live_leg_refuses_new_family() -> None:
     """Live A6 leg (runs only where MLX is installed): typed refusal, no forward."""
 

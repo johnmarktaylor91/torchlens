@@ -274,7 +274,6 @@ _FAMILY_FIXTURES: dict[
 # ======================================================================================
 
 
-@pytest.mark.smoke
 def test_r71_registry_closure_meta() -> None:
     """Registry keys == direct kinds | shape prefixes | claim families; every row
     carries a non-empty independent anchor AND a named runtime consumer; the gap
@@ -460,6 +459,7 @@ _THIRD_LEG_FAMILIES = frozenset(
 )
 
 
+@pytest.mark.smoke_cells("test_r71_strip_matrix_never_verified[conditional_arm_entry]")
 @pytest.mark.parametrize("family", sorted(_VERDICT_STEERING_WITNESS_FAMILIES))
 def test_r71_strip_matrix_never_verified(family: str, tmp_path: Path) -> None:
     """(a) single witness strip, (b) lockstep witness+member, (c) 3-way lockstep with
@@ -744,6 +744,7 @@ class _OpaqueLeaf(nn.Module):
         return x * 2.0
 
 
+@pytest.mark.smoke
 def test_r71_completeness_forgery_never_strengthens(tmp_path: Path) -> None:
     """Per gap class: forcing "complete" refuses (floor mismatch); stripping the gap
     (keeping the summary) refuses; stripping gap+summary leaves the surviving

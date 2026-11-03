@@ -243,7 +243,6 @@ def test_lrp0_self_oracle_bias_free_relu() -> None:
     assert leftovers == {}
 
 
-@pytest.mark.smoke
 def test_epsilon_absorption_is_disclosed_not_hidden() -> None:
     """With epsilon > 0 the ledger discloses absorption; nothing pretends exactness."""
 

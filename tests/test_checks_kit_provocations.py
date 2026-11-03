@@ -62,7 +62,6 @@ def test_grad_magnitude_flagged_provoked() -> None:
     assert all(f.stage is not None and f.scale_provenance is not None for f in flagged)
 
 
-@pytest.mark.smoke
 def test_param_bounds_violated_provoked() -> None:
     """Declared bounds catch an out-of-range parameter value."""
 
