@@ -223,6 +223,22 @@ def test_run_carry_state_advances_train_stats_like_a_plain_forward():
         assert torch.equal(got, expected), name
 
 
+def test_train_mode_run_backward_matches_eager_gradients():
+    """Default train-mode run(): backward works and equals the eager model's gradients."""
+
+    model = _train_bn_stack()
+    log = tl.trace(model, torch.randn(2, 3, 8, 8))
+    reference = copy.deepcopy(model)
+    x2 = torch.randn(2, 3, 8, 8)
+    log.run(inputs=x2).output.pow(2).mean().backward()
+    reference(x2).pow(2).mean().backward()
+    got = {name: p.grad for name, p in model.named_parameters()}
+    expected = {name: p.grad for name, p in reference.named_parameters()}
+    assert len(expected) == 10 and all(grad is not None for grad in expected.values())
+    for name, grad in expected.items():
+        torch.testing.assert_close(got[name], grad, rtol=0, atol=0, msg=name)
+
+
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/projectors.py.
 def test_d18_still_refuses_unproven_train_mode_evidence():
     """Unproven (None) buffer-write evidence still refuses typed in train mode."""
@@ -256,6 +272,23 @@ def test_d18_still_refuses_a_non_norm_buffer_writer():
     assert float(model.steps) == 0.0
     with pytest.raises(BufferSinkRoutingError, match="not proven train-mode"):
         log.run(inputs=torch.randn(2, 3))
+
+
+def test_carry_state_does_not_change_the_trace():
+    """carry_state changes only the model's post-capture state, never the trace."""
+
+    torch.manual_seed(0)
+    model = _Stateful().train()
+    twin = copy.deepcopy(model)
+    x = torch.randn(2, 3, 8, 8)
+    pure = tl.trace(model, x, capture=CaptureOptions(seed=3))
+    carried = tl.trace(twin, x, capture=CaptureOptions(seed=3, carry_state=True))
+    assert [op.layer_label for op in pure._layer_list] == [
+        op.layer_label for op in carried._layer_list
+    ]
+    for left, right in zip(pure._layer_list, carried._layer_list, strict=True):
+        if isinstance(left.out, torch.Tensor):
+            assert torch.equal(left.out, right.out), left.layer_label
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/state_live.py, _utils/rng/streams.py.

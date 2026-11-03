@@ -412,12 +412,39 @@ class ManyBufferWrites(nn.Module):
         return out
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_ops_emission.py, backends/torch/_view_writeback.py, backends/torch/buffer_writes.py ....
 @pytest.mark.parametrize(
     ("model_factory", "input_factory", "expected_overwrites"),
     [
+        (lambda: RecurrentReassign(), lambda: torch.ones(2), {"h": 4}),
+        (lambda: InplaceOps(), lambda: torch.ones(2), {"b": 2}),
+        (lambda: CopyWrite(), lambda: torch.ones(2), {"b": 1}),
         (lambda: DataCopyWrite(), lambda: torch.ones(2), {"b": 1}),
+        (lambda: SliceWrite(), lambda: torch.ones(2), {"b": 1}),
+        (lambda: SetItemWrite(), lambda: torch.ones(2), {"b": 1}),
         (lambda: DirectBuffersWrite(), lambda: torch.ones(2), {"b": 1}),
+        (lambda: TwoLoops(), lambda: torch.ones(2), {"h": 4}),
+        (lambda: DualRoleInplace(), lambda: torch.ones(2), {"b": 1}),
+        (lambda: StaticReadOnly(), lambda: torch.ones(2), {"b": 0}),
+        (lambda: DataSetter(), lambda: torch.ones(2), {"b": 1}),
+        (lambda: AliasWrite(), lambda: torch.ones(2), {"c": 1}),
+        (
+            lambda: nn.BatchNorm1d(3).train(),
+            lambda: torch.randn(4, 3),
+            {
+                "num_batches_tracked": 1,
+                "running_mean": 1,
+                "running_var": 1,
+            },
+        ),
+        (
+            lambda: nn.BatchNorm2d(3).train(),
+            lambda: torch.randn(2, 3, 4, 4),
+            {
+                "num_batches_tracked": 1,
+                "running_mean": 1,
+                "running_var": 1,
+            },
+        ),
         (
             lambda: nn.InstanceNorm1d(3, track_running_stats=True).train(),
             lambda: torch.randn(2, 3, 4),
@@ -610,6 +637,19 @@ class RecurrentCell(nn.Module):
         for _ in range(self.steps):
             self.h = torch.tanh(self.cell(x) + self.h)
         return self.h
+
+
+def test_recurrent_cell_reassignment_does_not_break_loop_detection() -> None:
+    """An RNN cell reassigning its state buffer must trace and validate."""
+
+    model = RecurrentCell()
+    x = torch.randn(1, 8)
+    assert tl.validation.validate_forward_pass(
+        RecurrentCell(), x.clone(), seed=7, validate_metadata=True
+    )
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(save_args=True))
+    assert "h" in trace.buffers
+    assert trace.buffers["h"].num_overwrites == 5  # one reset + four loop steps
 
 
 class GradRecurrent(nn.Module):

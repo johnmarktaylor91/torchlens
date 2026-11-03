@@ -9330,6 +9330,7 @@ test-docstrings	tests/test_tvscope_preprocessing.py	232
 test-docstrings	tests/test_tvscope_preprocessing.py	50
 test-docstrings	tests/test_two_pass_inplace_fix.py	27.1
 test-docstrings	tests/test_two_pass_inplace_fix.py	50
+test-docstrings	tests/test_utility_validation_runner_regressions.py	17
 test-docstrings	tests/test_validate_consolidated.py	180
 test-docstrings	tests/test_validate_consolidated.py	225
 test-docstrings	tests/test_validate_consolidated.py	33

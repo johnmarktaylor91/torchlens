@@ -19,6 +19,7 @@ stability only; they do not alter what validation checks.
 
 from __future__ import annotations
 
+import gc
 import os
 import pickle
 import subprocess
@@ -31,9 +32,10 @@ import pytest
 import torch
 import torch.nn as nn
 
+import torchlens as tl
 import torchlens._utils.hashing as tl_hashing
 from torchlens._data_classes.func_call_location import FuncCallLocation
-from torchlens._utils.hashing import make_short_barcode_from_input
+from torchlens._utils.hashing import compute_graph_shape_hash, make_short_barcode_from_input
 from torchlens.errors import TraceCaptureError
 from torchlens.validation import validate_forward_pass
 
@@ -66,7 +68,66 @@ def _make_victim_func() -> tuple:
     return _victim, weakref.ref(_victim), line_number
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
+def test_func_call_location_releases_function_object_with_source_loading() -> None:
+    """No strong ref to the frame func obj survives construction (lazy path)."""
+
+    victim, victim_ref, line_number = _make_victim_func()
+    loc = FuncCallLocation(
+        file=__file__,
+        line_number=line_number,
+        func_name="_victim",
+        num_context_lines_requested=2,
+        _frame_func_obj=victim,
+        source_loading_enabled=True,
+    )
+
+    del victim
+    gc.collect()
+
+    # The leak regression: pre-fix, _frame_func_obj kept the function (and
+    # its closure/payload) alive until _load_source() ran — which normal
+    # usage (accessing only .file) never triggered.
+    assert victim_ref() is None
+    assert loc._frame_func_obj is None
+
+    # Metadata snapshot still captured at construction. (Under
+    # ``from __future__ import annotations`` the signature renders with
+    # quoted annotations, so match leniently.)
+    assert "x:" in (loc.func_signature or "")
+    assert "int" in (loc.func_signature or "")
+    assert "Victim docstring" in (loc.func_docstring or "")
+
+
+def test_func_call_location_lazy_source_contract_preserved() -> None:
+    """Non-lazy ``.file`` does not trigger loading; lazy props still work."""
+
+    victim, victim_ref, line_number = _make_victim_func()
+    loc = FuncCallLocation(
+        file=__file__,
+        line_number=line_number,
+        func_name="_victim",
+        num_context_lines_requested=2,
+        _frame_func_obj=victim,
+        source_loading_enabled=True,
+    )
+    del victim
+    gc.collect()
+    assert victim_ref() is None
+
+    # Normal usage path: plain attribute access must NOT trigger source load.
+    assert loc.file == __file__
+    assert loc.line_number == line_number
+    assert loc._source_loaded is False
+
+    # Lazy source load still works correctly AFTER the function obj is gone.
+    assert "TL-LAZY-SOURCE-MARKER" in loc.call_line
+    assert loc._source_loaded is True
+    assert "TL-LAZY-SOURCE-MARKER" in loc.source_context
+    assert loc.code_context is not None
+    assert loc.num_context_lines == len(loc.code_context)
+    assert "--->" in loc.code_context_labeled
+
+
 def test_func_call_location_pickles_before_and_after_lazy_load() -> None:
     """Pickle round-trips work pre- and post-load and never carry the func."""
 
@@ -91,6 +152,30 @@ def test_func_call_location_pickles_before_and_after_lazy_load() -> None:
     late_clone = pickle.loads(pickle.dumps(loc))
     assert late_clone._frame_func_obj is None
     assert late_clone.source_context == loc.source_context
+
+
+def test_func_call_location_source_loading_disabled_unchanged() -> None:
+    """``source_loading_enabled=False`` keeps the no-source contract (D17)."""
+
+    victim, victim_ref, line_number = _make_victim_func()
+    loc = FuncCallLocation(
+        file=__file__,
+        line_number=line_number,
+        func_name="_victim",
+        num_context_lines_requested=2,
+        _frame_func_obj=victim,
+        source_loading_enabled=False,
+    )
+    del victim
+    gc.collect()
+
+    assert victim_ref() is None
+    assert loc._frame_func_obj is None
+    assert loc._source_loaded is True
+    assert loc.code_context is None
+    assert loc.source_context == "None"
+    assert loc.func_signature is None
+    assert loc.func_docstring is None
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +225,26 @@ def _barcode_in_subprocess(hash_seed: str) -> str:
     return result.stdout
 
 
+def test_short_barcode_deterministic_across_calls() -> None:
+    """Repeated calls with identical input return identical barcodes."""
+
+    payload = ["layer_type", 7, (1, 2, 3), "kw_stride_2"]
+    assert make_short_barcode_from_input(payload) == make_short_barcode_from_input(list(payload))
+
+
+def test_graph_shape_hashes_deterministic_across_calls() -> None:
+    """Independently traced equivalent graphs return identical hashes."""
+
+    x = torch.randn(2, 3)
+    trace = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), x.clone())
+    twin = tl.trace(nn.Sequential(nn.Linear(3, 3), nn.ReLU()), x.clone())
+
+    assert compute_graph_shape_hash(trace) == compute_graph_shape_hash(twin)
+    assert compute_graph_shape_hash(
+        trace, include_module_address=False
+    ) == compute_graph_shape_hash(twin, include_module_address=False)
+
+
 def test_short_barcode_deterministic_across_processes() -> None:
     """Barcodes are PYTHONHASHSEED-independent (pre-fix ``hash()`` was salted)."""
 
@@ -149,6 +254,34 @@ def test_short_barcode_deterministic_across_processes() -> None:
 
     assert seed_zero == in_process
     assert seed_other == in_process
+
+
+def test_short_barcode_separator_prevents_concatenation_collisions() -> None:
+    """Adjacent-element concatenations must not collide."""
+
+    assert make_short_barcode_from_input(["ab", "c"]) != make_short_barcode_from_input(["a", "bc"])
+    assert make_short_barcode_from_input(["1", 2]) != make_short_barcode_from_input([12])
+    assert make_short_barcode_from_input([""]) != make_short_barcode_from_input(["", ""])
+
+
+def test_short_barcode_no_collisions_at_scale() -> None:
+    """Tens of thousands of distinct structured inputs yield distinct barcodes."""
+
+    barcodes = {
+        make_short_barcode_from_input([f"pos{i % 7}_tensortorch.Size([{i}, {j}])", i * 31 + j])
+        for i in range(200)
+        for j in range(200)
+    }
+    assert len(barcodes) == 200 * 200
+
+
+def test_short_barcode_length_and_alphabet() -> None:
+    """Barcodes honor ``barcode_len`` and stay within the hex alphabet."""
+
+    for barcode_len in (8, 16, 32):
+        barcode = make_short_barcode_from_input(["abc", 1], barcode_len=barcode_len)
+        assert len(barcode) == barcode_len
+        assert all(ch in "0123456789abcdef" for ch in barcode)
 
 
 # ---------------------------------------------------------------------------
@@ -230,10 +363,9 @@ class _BufferMutatingFailModel(nn.Module):
         return x * 2.0
 
 
-# Kept by shrink-r4 (per-id subset rule): sole coverage of _plain_attr_fidelity.py, _validation_argument_references.py.
 @pytest.mark.parametrize(
     ("failure_site", "expected_original_calls"),
-    [("traced", 0)],
+    [("ground_truth", 0), ("traced", 0)],
 )
 def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     failure_site: ValidationFailureSite,
@@ -269,3 +401,25 @@ def test_validate_forward_pass_restores_buffer_bit_exact_on_exception(
     for name, expected in pre_call_state.items():
         assert torch.equal(post_call_state[name], expected), name
     assert torch.equal(model.running_total, _INITIAL_BUFFER)
+
+
+def test_validate_forward_pass_snapshot_is_isolated_from_inplace_mutation() -> None:
+    """The pre-call snapshot must be clones, not live references.
+
+    Pre-fix, ``validate_forward_pass`` snapshotted ``model.state_dict()``
+    directly; ``state_dict`` values are references, so in-place mutation
+    during the forward also mutated the snapshot, making any later restore a
+    no-op. The clone requirement is what makes the bit-exact restore in the
+    exception test meaningful; this test asserts it directly via the
+    module-level helper.
+    """
+
+    from torchlens._capture_state_helpers import _clone_state_dict_with_metadata
+
+    model = _BufferMutatingFailModel(fail_during="never")
+    snapshot = _clone_state_dict_with_metadata(model)
+
+    model.running_total.add_(100.0)
+
+    assert torch.equal(snapshot["running_total"], _INITIAL_BUFFER)
+    assert not torch.equal(snapshot["running_total"], model.running_total)

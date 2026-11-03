@@ -92,6 +92,20 @@ def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
     assert len(trace._layer_list) > 0
 
 
+def test_compiled_callable_refusal_names_depyf_and_the_remedy_runs() -> None:
+    """U53.3: the plain compiled-callable refusal points at tl.bridge.depyf."""
+
+    model = _Tiny().eval()
+    compiled_fn = torch.compile(lambda t: model(t))
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.trace(compiled_fn, torch.randn(2, 4))
+    assert info.value.fields["code"] == "compiled_callable_unsupported"
+    assert "tl.bridge.depyf.dump" in info.value.fields["remedy"]
+    assert callable(tl.bridge.depyf.dump)
+
+    assert len(tl.trace(model, torch.randn(2, 4))._layer_list) > 0
+
+
 def test_jax_two_positional_remedy_runs() -> None:
     """U11.2 JAX leg: the refusal, then the tuple spelling the remedy names, both run."""
 

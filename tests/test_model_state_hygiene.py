@@ -334,6 +334,8 @@ _FAILURES: dict[str, type[BaseException] | None] = {
     [
         pytest.param("trace_intervene", "normal", id="trace_intervene-normal"),
         pytest.param("trace_bound_method", "normal", id="trace_bound_method-normal"),
+        # The validate door keeps every row: validation-named ids wait for a reviewer pass.
+        *(pytest.param("validate", f, id=f"validate-{f}") for f in _FAILURES),
     ],
 )
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
