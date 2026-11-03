@@ -23,7 +23,7 @@ tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
 
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _tiny_block(x: Any) -> Any:
@@ -548,6 +548,54 @@ def test_tinygrad_multi_output_marks_outputs() -> None:
     assert trace.validate_forward_pass(list(_multi_output(x))) is True
 
 
+def _broadcast_relu(value: Any) -> Any:
+    """Add a broadcast scalar, multiply by the input and rectify."""
+
+    return ((value + 1.0) * value).relu()
+
+
+def test_tinygrad_records_only_values_that_reach_an_output() -> None:
+    """Every recorded non-output op has a consumer; nothing dangles.
+
+    A broadcast builds its target shape from scalar ``CONST`` UOps and an
+    ``ndarray`` input sits on a storage ``BUFFER`` UOp. Both are UOp-graph
+    ancestors of the output but carry no tensor value into it, so recording
+    them left parentless ops with no consumer (constants nothing reads).
+    """
+
+    x = Tensor(np.asarray([[-1.0, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32))
+    trace = tl.trace(_broadcast_relu, x, backend="tinygrad")
+
+    dangling = [
+        f"{op.label} ({op.func_name})"
+        for op in trace._layer_list
+        if not op.is_output_parent and not tuple(op.children or ())
+    ]
+    assert dangling == []
+    assert [op.func_name for op in trace._layer_list if op.func_name == "buffer"] == []
+    assert trace.validate_forward_pass(_broadcast_relu(x)) is True
+
+
+def test_tinygrad_func_names_do_not_depend_on_earlier_captures() -> None:
+    """The recorded op kinds of one forward are the same in a fresh and a used process.
+
+    Op kinds are looked up by UOp ``id()``; a UOp tinygrad dropped mid-forward
+    freed its id for a later UOp, which then took the dropped one's name, so
+    the kinds varied with whatever ran before. The capture now holds every
+    observed UOp until it has read the names.
+    """
+
+    def kinds() -> list[str]:
+        x = Tensor(np.asarray([[-1.0, -0.5, 0.25, 1.0], [0.5, 1.5, -2.0, 0.75]], dtype=np.float32))
+        trace = tl.trace(_broadcast_relu, x, backend="tinygrad")
+        return [str(op.func_name) for op in trace._layer_list]
+
+    first = kinds()
+    for _ in range(3):
+        tl.trace(_tiny_block, Tensor([1.0, -2.0, 3.0]), backend="tinygrad")
+        assert kinds() == first
+
+
 def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     """Capture representative tinygrad conv, matmul, reduce, and elementwise ops."""
 
@@ -664,7 +712,7 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
             {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
             "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("relu")}, "can_intervene=False.*halt"),
+        ({"stop_after": tl.func("relu")}, "can_intervene=False.*stop_after"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )

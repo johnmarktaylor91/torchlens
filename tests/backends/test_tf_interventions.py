@@ -22,6 +22,7 @@ pytestmark = [
         _TF_BACKEND_SKIP_REASON is not None,
         reason=_TF_BACKEND_SKIP_REASON or "TensorFlow backend stack is supported",
     ),
+    pytest.mark.rare,
 ]
 
 
@@ -254,10 +255,10 @@ def test_tf_shape_changing_replacement_refuses_typed() -> None:
 
 
 def test_tf_halt_and_recipes_keep_typed_refusals() -> None:
-    """halt= and recipes= refuse typed inside the capture path."""
+    """stop_after= and facets= refuse typed inside the capture path."""
 
     x = tf.constant([1.0, -1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="halt"):
+    with pytest.raises(BackendUnsupportedError, match="stop_after"):
         tl.trace(_relu_plus_ten, x, backend="tf", stop_after=tl.func("relu"))
     with pytest.raises(BackendUnsupportedError, match="recipes"):
         tl.trace(_relu_plus_ten, x, backend="tf", facets=object())

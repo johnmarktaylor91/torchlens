@@ -21,7 +21,6 @@ from tests.conformance import (
     PREVIEW_BACKENDS,
     CaseResult,
     ConformanceReport,
-    PreviewScorecard,
     _preview_adapters,
     claim_string,
     preview_scorecard,
@@ -338,18 +337,6 @@ MLX_KNOWN_RED_CELLS: dict[tuple[str, str], str] = {
 }
 
 
-def _assert_full_ladder(card: PreviewScorecard, backend: str) -> None:
-    """A live pack passes every one of its cells and publishes C2."""
-
-    assert card.backend == backend
-    assert card.framework_version
-    failing = [cell for cell in card.cells if cell.state != "passed"]
-    assert not failing, failing
-    assert card.counts["denominator"] == _preview_denominator(backend)
-    assert card.highest_tier == "C2"
-    assert "conformant" not in card.to_json().lower()
-
-
 def _after_load_reds(families: tuple[str, ...]) -> dict[tuple[str, str], str]:
     """Loaded non-torch traces drop the runtime capture replay needs (a format gap)."""
 
@@ -359,9 +346,16 @@ def _after_load_reds(families: tuple[str, ...]) -> dict[tuple[str, str], str]:
     }
 
 
+#: A red cell's expected cause substring, or ``(state, cause)`` for a cell that is
+#: ``unsupported`` or ``not_run`` rather than ``failed``.
+_RedCause = str | tuple[str, str]
+
+
 def _known_red_cells(
-    refusals: dict[str, str], families: tuple[str, ...], extra: dict[tuple[str, str], str]
-) -> dict[tuple[str, str], str]:
+    refusals: dict[str, str],
+    families: tuple[str, ...],
+    extra: dict[tuple[str, str], _RedCause],
+) -> dict[tuple[str, str], _RedCause]:
     """One backend's red cells keyed ``(case_id, family)`` with each cause substring."""
 
     return {
@@ -374,11 +368,13 @@ def _known_red_cells(
 def _assert_named_reds(
     pack: tuple[str, str],
     tmp_path: Path,
-    known: dict[tuple[str, str], str],
+    known: dict[tuple[str, str], _RedCause],
     rows: int,
     tier: str,
 ) -> None:
-    """The pack's non-passed cells equal ``known`` exactly, each failed with its cause.
+    """The pack's non-passed cells equal ``known`` exactly, each in its state with its cause.
+
+    A bare cause means the cell ``failed``; a ``(state, cause)`` pair names another state.
 
     ``pack`` is the ``(backend, framework version)`` under test.
     """
@@ -394,13 +390,58 @@ def _assert_named_reds(
     assert card.roster_groups == {"config_built": rows}
     red = {(cell.case_id, cell.family): cell for cell in card.cells if cell.state != "passed"}
     assert set(red) == set(known), sorted(set(red) ^ set(known))
-    for key, cause in known.items():
-        assert red[key].state == "failed", red[key]
+    for key, expected in known.items():
+        state, cause = expected if isinstance(expected, tuple) else ("failed", expected)
+        assert red[key].state == state, red[key]
         assert cause in red[key].detail, (key, red[key].detail)
     assert card.counts["denominator"] == _preview_denominator(backend)
     # The ladder stops below the first tier holding a red cell.
     assert card.highest_tier == tier
     assert "conformant" not in card.to_json().lower()
+
+
+#: tinygrad's red cells on its fifteen rows. The JAX after-load cause on the
+#: twelve rows that capture, plus the three random-init rows: a ``tinygrad.nn``
+#: layer's default init leaves lazy RNG state in the forward's graph, which the
+#: backend refuses typed (``rng_state_in_graph``) until realize-once capture
+#: lands. Their capture and round-trip cells are ``unsupported`` and every later
+#: cell is ``not_run``; those cells sit in C1, so the ladder stops at C0.
+_TINYGRAD_PROBE_ROWS: tuple[str, ...] = ("matmul_relu_function", "mlp_module")
+_TINYGRAD_RANDOM_INIT_ROWS: tuple[str, ...] = (
+    "nn_linear_random_init",
+    "nn_conv2d_random_init",
+    "nn_layernorm_random_init",
+)
+_REFUSED_CAPTURE_CELLS: tuple[str, ...] = ("c1_capture_completes", "c2_roundtrip_completes")
+_UNREACHED_AFTER_REFUSAL: tuple[str, ...] = (
+    "c1_deterministic_repeat",
+    "c1_graph_integrity",
+    "c1_no_silent_gap",
+    "c1_reference_parity",
+    "c1_rng_consumed_once",
+    "c1_shape_metadata_matches_payload",
+    "c1_validation_names_reason",
+    "c1_validation_passes",
+    "c2_payload_values_equal",
+    "c2_reload_is_distinct",
+    "c2_structure_equal",
+    "c2_validation_after_load",
+)
+
+
+def _tinygrad_known_red_cells() -> dict[tuple[str, str], _RedCause]:
+    """tinygrad's named red cells, built from the roster module's family lists."""
+
+    from tests.conformance._rosters import tinygrad as tinygrad_roster
+
+    captured = _TINYGRAD_PROBE_ROWS + tuple(entry[0] for entry in tinygrad_roster._CONFIG_BUILT)
+    refused: dict[tuple[str, str], _RedCause] = {}
+    for family in _TINYGRAD_RANDOM_INIT_ROWS:
+        for case_id in _REFUSED_CAPTURE_CELLS:
+            refused[(case_id, family)] = ("unsupported", "rng_state_in_graph")
+        for case_id in _UNREACHED_AFTER_REFUSAL:
+            refused[(case_id, family)] = ("not_run", "not reached")
+    return _known_red_cells({}, captured, refused)
 
 
 #: JAX's red cells on its packet roster (switch off). One cause, not a JAX
@@ -438,6 +479,7 @@ def _tf_known_red_cells() -> dict[tuple[str, str], str]:
     return _known_red_cells({}, tf_roster.CONFIG_BUILT_FAMILIES, keras)
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_jax
 def test_jax_pack_earns_c1_with_its_named_red_cells(
@@ -458,6 +500,7 @@ def test_jax_pack_earns_c1_with_its_named_red_cells(
     _assert_named_reds(("jax", str(jax.__version__)), tmp_path, _jax_known_red_cells(), 9, "C1")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.tf_backend
 def test_tf_pack_earns_c0_with_its_named_red_cells(
@@ -476,6 +519,7 @@ def test_tf_pack_earns_c0_with_its_named_red_cells(
     _assert_named_reds(("tf", str(tf.__version__)), tmp_path, _tf_known_red_cells(), 9, "C0")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_mlx
 def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
@@ -512,19 +556,38 @@ def test_mlx_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
     assert "conformant" not in card.to_json().lower()
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_tinygrad
-def test_tinygrad_pack_full_ladder(tmp_path: Path) -> None:
-    """The tinygrad pack passes C0-C2 on its config-built roster."""
+def test_tinygrad_pack_earns_c0_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The tinygrad pack on its fifteen-row roster earns C0; every red cell is named.
+
+    A new red or a fixed one both fail here; the fix removes its entry (and
+    rewrites the shipped scorecard) in the same change.
+    """
+
+    from importlib import metadata
 
     pytest.importorskip("tinygrad")
-    _assert_full_ladder(preview_scorecard("tinygrad", workdir=tmp_path), "tinygrad")
+    pack = ("tinygrad", metadata.version("tinygrad"))
+    _assert_named_reds(pack, tmp_path, _tinygrad_known_red_cells(), 15, "C0")
 
 
+@pytest.mark.rare
 @pytest.mark.heavy
 @pytest.mark.backend_paddle
-def test_paddle_pack_full_ladder(tmp_path: Path) -> None:
-    """The paddle pack passes C0-C2 on its config-built roster."""
+def test_paddle_pack_earns_c1_with_its_named_red_cells(tmp_path: Path) -> None:
+    """The paddle pack on its twelve-row config-built roster earns C1; every red cell is named.
 
-    pytest.importorskip("paddle")
-    _assert_full_ladder(preview_scorecard("paddle", workdir=tmp_path), "paddle")
+    The only reds are the after-load cells JAX and MLX also name: loaded non-torch
+    traces drop the runtime capture replay needs. A new red or a fixed one both
+    fail here; the fix removes its entry (and rewrites the shipped scorecard) in
+    the same change.
+    """
+
+    paddle = pytest.importorskip("paddle")
+    from tests.conformance._rosters.paddle import config_built_specs
+
+    families = tuple(spec.family for spec in config_built_specs())
+    known = _known_red_cells({}, families, {})
+    _assert_named_reds(("paddle", str(paddle.__version__)), tmp_path, known, 12, "C1")

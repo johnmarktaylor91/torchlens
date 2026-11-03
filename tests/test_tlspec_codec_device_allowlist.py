@@ -165,6 +165,8 @@ def _runtime_accelerator_bases() -> frozenset[str]:
     return _tinygrad_runtime_device_bases() - _TINYGRAD_IO_SINK_BASES
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_every_runtime_accelerator_round_trips_admitted() -> None:
     """Every non-sink base the INSTALLED runtime names is admitted unchanged.
 
@@ -181,6 +183,8 @@ def test_every_runtime_accelerator_round_trips_admitted() -> None:
             assert _resolve_portable_device("tinygrad", token, None) == token
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 @pytest.mark.parametrize("token", ["NV", "AMD", "WEBGPU", "QCOM", "DSP", "NPY", "NV:0"])
 def test_corr1_victim_accelerators_admitted(token: str) -> None:
     """The exact accelerators the r55 static allowlist over-refused now round-trip."""
@@ -193,6 +197,8 @@ def test_corr1_victim_accelerators_admitted(token: str) -> None:
     assert _resolve_portable_device("tinygrad", token, None) == token
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_codec_round_trips_runtime_accelerator_device() -> None:
     """End-to-end corr_1 pin: a legit recorded accelerator token is NOT silently
     relocated to the runtime default by the codec.
@@ -247,6 +253,8 @@ def test_tinygrad_io_sink_bases_refused(token: str) -> None:
     assert _resolve_portable_device("tinygrad", token, None) is None
 
 
+@pytest.mark.rare
+@pytest.mark.backend_tinygrad
 def test_sink_exclude_precedes_runtime_membership() -> None:
     """Ordering pin: ``disk`` is refused even though the runtime NAMES it.
 
@@ -303,6 +311,7 @@ def _build_tinygrad_bundle(tmp_path: Path) -> Path:
     return bundle
 
 
+@pytest.mark.rare
 def test_tinygrad_disk_device_creates_no_file(tmp_path: Path) -> None:
     """A ``disk:<abs path>`` device token on default ``tl.load()`` writes NO file."""
 

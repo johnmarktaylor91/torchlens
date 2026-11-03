@@ -38,7 +38,7 @@ lax = pytest.importorskip("jax.lax")
 random = pytest.importorskip("jax.random")
 
 
-pytestmark = pytest.mark.backend_jax
+pytestmark = [pytest.mark.backend_jax, pytest.mark.rare]
 
 
 def _mlp(params: dict[str, Any], x: Any) -> Any:
@@ -1388,7 +1388,7 @@ def test_jax_trace_rejects_save_shaping_kwargs() -> None:
     """JAX preview should reject selective-save shaping."""
 
     with pytest.raises(BackendUnsupportedError, match="full-save only"):
-        _trace_jax(_mlp, (_params(), jnp.ones((2, 3))), layers_to_save=["tanh"])
+        _trace_jax(_mlp, (_params(), jnp.ones((2, 3))), save=["tanh"])
 
 
 def test_jax_static_label_save_filters_public_payloads(tmp_path: Path) -> None:

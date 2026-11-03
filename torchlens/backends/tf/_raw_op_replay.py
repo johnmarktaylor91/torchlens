@@ -46,6 +46,7 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "AvgPool": _replay_pool,
         "BatchMatMulV2": _replay_batch_matmul_v2,
         "BiasAdd": _replay_bias_add,
+        "BroadcastTo": lambda item, args: _raw(item).BroadcastTo(input=args[0], shape=args[1]),
         "Cast": _replay_cast,
         "ConcatV2": _replay_concat_v2,
         "Conv2D": _replay_conv2d,
@@ -55,8 +56,9 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "Erf": lambda item, args: _raw(item).Erf(x=args[0]),
         "Erfc": lambda item, args: _raw(item).Erfc(x=args[0]),
         "Exp": lambda item, args: _raw(item).Exp(x=args[0]),
-        "ExpandDims": lambda item, args: _raw(item).ExpandDims(input=args[0], dim=args[1]),
+        "ExpandDims": lambda item, args: _raw(item).ExpandDims(input=args[0], axis=args[1]),
         "Fill": lambda item, args: _raw(item).Fill(dims=args[0], value=args[1]),
+        "GatherV2": _replay_gather_v2,
         "Greater": lambda item, args: _raw(item).Greater(x=args[0], y=args[1]),
         "Less": lambda item, args: _raw(item).Less(x=args[0], y=args[1]),
         "Log": lambda item, args: _raw(item).Log(x=args[0]),
@@ -65,8 +67,10 @@ def _raw_op_dispatch() -> dict[str, Callable[[TFOpCapture, Sequence[Any]], Any]]
         "Minimum": lambda item, args: _raw(item).Minimum(x=args[0], y=args[1]),
         "Pow": lambda item, args: _raw(item).Pow(x=args[0], y=args[1]),
         "Prod": lambda item, args: _replay_reduction(item, args, "Prod"),
+        "SelectV2": lambda item, args: _raw(item).SelectV2(condition=args[0], t=args[1], e=args[2]),
         "Sigmoid": lambda item, args: _raw(item).Sigmoid(x=args[0]),
         "Sin": lambda item, args: _raw(item).Sin(x=args[0]),
+        "Slice": lambda item, args: _raw(item).Slice(input=args[0], begin=args[1], size=args[2]),
         "Sum": lambda item, args: _replay_reduction(item, args, "Sum"),
         "Tile": lambda item, args: _raw(item).Tile(input=args[0], multiples=args[1]),
         "MaxPool": _replay_pool,
@@ -324,6 +328,30 @@ def _replay_reduction(capture: TFOpCapture, inputs: Sequence[Any], op_name: str)
         input=inputs[0],
         axis=inputs[1],
         keep_dims=bool(capture.attrs.get("keep_dims", False)),
+    )
+
+
+def _replay_gather_v2(capture: TFOpCapture, inputs: Sequence[Any]) -> Any:
+    """Replay ``GatherV2`` (``tf.gather``; an embedding lookup).
+
+    Parameters
+    ----------
+    capture
+        Callback capture.
+    inputs
+        Rebuilt inputs: params, indices and axis.
+
+    Returns
+    -------
+    Any
+        Replayed output.
+    """
+
+    return _raw(capture).GatherV2(
+        params=inputs[0],
+        indices=inputs[1],
+        axis=inputs[2],
+        batch_dims=int(capture.attrs.get("batch_dims", 0)),
     )
 
 

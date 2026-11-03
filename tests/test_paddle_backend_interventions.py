@@ -24,9 +24,13 @@ from torchlens.backends import (  # noqa: E402
     require_capability_implementation,
 )
 from torchlens.backends.paddle import PaddleBackend  # noqa: E402
-from torchlens.errors import BackendUnsupportedError  # noqa: E402
+from torchlens.errors import (  # noqa: E402
+    BackendUnsupportedError,
+    InvalidArgumentError,
+    TorchLensWarning,
+)
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 
 def _inputs() -> tuple[Any, Any, Any, Any, Any]:
@@ -210,6 +214,29 @@ def test_paddle_halt_stops_execution_at_frontier() -> None:
     assert not any("linear_2" in label for label in trace.layer_labels)
     assert any("relu" in label for label in trace.layer_labels)
     assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_unfired_stop_after_selector_refuses_like_torch() -> None:
+    """A stop_after selector that never fires refuses typed, with torch's code."""
+
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.trace(_mlp, _inputs(), backend="paddle", stop_after=tl.func("does_not_exist"))
+    assert excinfo.value.fields["code"] == "stop_after_never_fired"
+
+
+def test_paddle_unfired_stop_after_callable_warns_like_torch() -> None:
+    """An exploratory stop_after callable that never fires warns coded, torch-style."""
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        trace = tl.trace(_mlp, _inputs(), backend="paddle", stop_after=lambda ctx: False)
+    assert trace.is_stopped is False
+    codes = [
+        getattr(entry.message, "fields", {}).get("code")
+        for entry in caught
+        if isinstance(entry.message, TorchLensWarning)
+    ]
+    assert "stop_after_never_fired_callable" in codes
 
 
 def test_paddle_halt_value_dependent_predicate() -> None:

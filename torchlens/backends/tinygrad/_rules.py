@@ -300,8 +300,8 @@ class ReplayVerdict:
             return ()
         return (
             {
-                "label": self.failed_label,
-                "verdict": "failed",
+                "op_label": self.failed_label,
+                "decision": "failed",
                 "reason": self.reason,
                 "detail": self.detail,
             },

@@ -37,7 +37,7 @@ torchlens/_capture/prepare/cache.py::_store_authenticated_capture_cache	85
 torchlens/_capture/prepare/chunked.py::_append_chunk_trace_state	73
 torchlens/_capture/prepare/chunked.py::plan_chunks	76
 torchlens/_capture/prepare/dispatch.py::_trace_mlx_model	175
-torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	125
+torchlens/_capture/prepare/dispatch.py::_trace_mlx_model_from_public_kwargs	124
 torchlens/_capture/prepare/door.py	1122
 torchlens/_capture/prepare/resolve.py::_record_capture_intervention_event	63
 torchlens/_capture/prepare/resolve.py::_warn_zero_match_capture_selectors	132
@@ -210,7 +210,7 @@ torchlens/_io/manifest.py::Manifest.from_dict	180
 torchlens/_io/manifest.py::TensorEntry.from_dict	94
 torchlens/_io/manifest.py::enforce_version_policy	112
 torchlens/_io/paths.py::resolve_bundle_blob_path	61
-torchlens/_io/payload_codec.py	1935
+torchlens/_io/payload_codec.py	1932
 torchlens/_io/payload_codec.py::JaxPayloadCodec.from_numpy	82
 torchlens/_io/payload_codec.py::materialize_transport_tensor	73
 torchlens/_io/rehydrate.py	1510
@@ -793,7 +793,7 @@ torchlens/backends/paddle/backend.py::PaddleBackend._attach_derived_grads	135
 torchlens/backends/paddle/backend.py::PaddleBackend._build_event	136
 torchlens/backends/paddle/backend.py::PaddleBackend._build_op_capture	78
 torchlens/backends/paddle/backend.py::PaddleBackend._records_for_intermediate_paddle_grads	85
-torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	310
+torchlens/backends/paddle/backend.py::PaddleBackend.capture_trace	309
 torchlens/backends/paddle/backend.py::PaddleBackend.emit_paddle_operation	156
 torchlens/backends/paddle/backend.py::PaddleBackend.validate_trace	68
 torchlens/backends/paddle/backend.py::_PaddleIntermediateTapObserver.call	62
@@ -826,14 +826,14 @@ torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._emit_source
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._event_for_output	159
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._parents_for_inputs	86
 torchlens/backends/tf/op_callback_capture.py::TFEagerCaptureSession._record_context	75
-torchlens/backends/tf/validation.py	1101
-torchlens/backends/tf/validation.py::_validate_self_consistency	86
+torchlens/backends/tf/validation.py	1077
+torchlens/backends/tf/validation.py::_validate_self_consistency	85
 torchlens/backends/tf/validation.py::validate_tf_trace_detailed	80
-torchlens/backends/tinygrad/backend.py	3176
+torchlens/backends/tinygrad/backend.py	3122
 torchlens/backends/tinygrad/backend.py::TinygradBackend._append_event	176
 torchlens/backends/tinygrad/backend.py::TinygradBackend._attach_derived_grads	90
 torchlens/backends/tinygrad/backend.py::TinygradBackend._derive_intermediate_grads_no_realize	74
-torchlens/backends/tinygrad/backend.py::TinygradBackend._emit_uop_graph	83
+torchlens/backends/tinygrad/backend.py::TinygradBackend._emit_uop_graph	81
 torchlens/backends/tinygrad/backend.py::TinygradBackend._mark_output_events	61
 torchlens/backends/tinygrad/backend.py::TinygradBackend._replay_uop_from_trace_graph	80
 torchlens/backends/tinygrad/backend.py::TinygradBackend.capture_trace	289

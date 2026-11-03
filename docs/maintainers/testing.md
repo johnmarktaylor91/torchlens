@@ -48,7 +48,7 @@ coordinating host.
 | --- | --- | --- | --- |
 | `inner` | the files mapped to the changed path, or one named test | your worktree | 300 s, one CPU |
 | `worker_lane` | one targeted file with `-x` | a worker | 300 s, one CPU |
-| smoke (commit gate) | `-m smoke`, about 1,400 coverage-chosen tests under the `SMOKE_TIER_SIZE_CEILING` of 1,500 | `python scripts/smoke_ci_parity.py -n 4`, in CI's pinned environment | about 3 minutes serial |
+| smoke (commit gate) | `-m smoke`, about 1,470 coverage-chosen tests under the `SMOKE_TIER_SIZE_CEILING` of 1,477 | `python scripts/smoke_ci_parity.py -n 4`, in CI's pinned environment | about 3 minutes serial |
 | mid backstop | `-m "not rare and not slow and not heavy"` | a worker | minutes |
 | `pre_merge` (phase boundary) | `-m "not rare and not slow"`, 8 shards by least duration, one seed | a worker, 8 shards | 12,000 s |
 | full | `pytest tests/` (`rare` stays excluded by `addopts`) | nightly and weekly CI | per workflow budget |
@@ -65,6 +65,17 @@ cost against its tier budget (load-scaled, on the smaller of wall and CPU time) 
 session that ran an offender. Run `-n N` with `N` equal to the cores you declared, with one
 torch thread per worker; every worker collects the whole suite first, so the gain shrinks
 below four workers.
+
+Preview-backend tests (TensorFlow, JAX, MLX, Paddle and tinygrad) carry `rare` alongside
+their backend marker (`tf_backend`, `backend_jax`, `backend_mlx`, `backend_paddle`,
+`backend_tinygrad`). Without the framework they only skip, so the pull-request tiers leave
+them out. The nightly `preview-backends` legs install each framework and select its tests
+with `-m "<marker> and not slow"`; a command-line `-m` replaces the `addopts` exclusion, so
+the `rare` mark does not hide them there, and the weekly rare leg collects them as well. The
+MLX and TensorFlow legs also install `mlx-lm` and `keras-hub` for the ecosystem roster rows.
+Those two pins live on the nightly legs only, never in a package extra; the declared ranges
+are `MLX_ECOSYSTEM_TEST_REQUIREMENTS` and `TF_ECOSYSTEM_TEST_REQUIREMENTS`, and
+`tests/test_backend_framework_pins.py` keeps them in step with `nightly.yml`.
 
 ```bash
 pytest tests/test_toy_models.py -x --tb=short                 # per-step: the files for the code you touched
