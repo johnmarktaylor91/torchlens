@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1438 modules, 647136 lines, 0 modules without a docstring.
+83 packages, 1438 modules, 647133 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -49,7 +49,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._vocab` | Relocated cross-layer vocabulary closures (L0 BASIS; private home). | 3 | 192 |
 | `torchlens.agent` | torchlens.agent -- the read-only agent inspection surface (agent ). | 15 | 5249 |
 | `torchlens.appliances` | The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.names''. | 2 | 253 |
-| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15088 |
+| `torchlens.attribution` | Input-attribution methods for TorchLens. | 31 | 15087 |
 | `torchlens.attribution.graph` | Attribution graphs: direct linear effects between transcoder features, errors, tokens and logits. | 7 | 2527 |
 | `torchlens.attribution.onebackward` | One-backward attribution reads (M(reads) memo). | 11 | 3863 |
 | `torchlens.backends` | Backend Protocol and public registry exports for TorchLens adapters. | 17 | 6756 |
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8475 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 9 | 4474 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54222 |
-| `torchlens.bridge` | External-tool bridge namespace. | 26 | 8461 |
+| `torchlens.bridge` | External-tool bridge namespace. | 26 | 8460 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2722 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 26 | 9016 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -75,7 +75,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 3 | 972 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 14 | 5524 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3046 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 74 | 35950 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 74 | 35951 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1929 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 798 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 425 |
@@ -88,7 +88,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
-| `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7122 |
+| `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7120 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
@@ -1041,7 +1041,7 @@ The appliance door registry: ''tl.appliances.register'' and ''tl.appliances.name
 
 ### `torchlens.attribution`
 
-Input-attribution methods for TorchLens. (31 modules, 15088 lines)
+Input-attribution methods for TorchLens. (31 modules, 15087 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1058,7 +1058,7 @@ Input-attribution methods for TorchLens. (31 modules, 15088 lines)
 | `_causal_audit` | The causal audit of an internal attribution: ablate what it ranks, measure the effect. | 609 |
 | `_core` | Native input-attribution methods for TorchLens. | 1518 |
 | `_curve_settings` | Settings of the deletion and insertion curves: feature grouping, baselines, steps. | 230 |
-| `_curves` | Deletion and insertion curves with AOPC. | 717 |
+| `_curves` | Deletion and insertion curves with AOPC. | 716 |
 | `_entry` | Integer inputs for the layer methods: the input path starts where the integers become floats. | 324 |
 | `_eval_maps` | Shared helpers for the attribution evaluation battery. | 328 |
 | `_gradient_shap` | GradientShap: expected gradients over a baseline pool (attrib ). | 593 |
@@ -1364,7 +1364,7 @@ Torch backend implementation package for TorchLens capture. (109 modules, 54222 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (26 modules, 8461 lines)
+External-tool bridge namespace. (26 modules, 8460 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1387,7 +1387,7 @@ External-tool bridge namespace. (26 modules, 8461 lines)
 | `pytorch_grad_cam` | pytorch-grad-cam bridge helpers. | 197 |
 | `repeng` | repeng converter. | 75 |
 | `rsatoolbox` | rsatoolbox bridge: the single-Dataset special case (neuro ). | 77 |
-| `sae` | SAE splice-experiment helper (SAE-library-agnostic). | 825 |
+| `sae` | SAE splice-experiment helper (SAE-library-agnostic). | 824 |
 | `sae_lens` | SAE Lens bridge helpers. | 117 |
 | `shap` | SHAP bridge helpers. | 90 |
 | `steering_vectors` | steering-vectors converter. | 63 |
@@ -1622,7 +1622,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3046 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (74 modules, 35950 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (74 modules, 35951 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1653,7 +1653,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_position_edits` | Token-position editing. | 205 |
 | `_replay_cone` | Cone-of-effect membership and site labelling for saved-DAG replay. | 288 |
 | `_replay_context` | Replay run-context store: pass-qualified site keys and the capture-truth digest ledger. | 332 |
-| `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 445 |
+| `_replay_sites` | Site-level replay decisions: source records, stochastic draws, buffer threading. | 446 |
 | `_replay_values` | Value-shape helpers for replay: in-place mutation detection, tensor cloning and template checks. | 181 |
 | `_rerun_ledger` | Ledger-record assembly for rerun captures. | 77 |
 | `_rerun_predicate` | Rerun support for interventions staged through the capture predicate door. | 338 |
@@ -1940,7 +1940,7 @@ Extras-gated notebook namespace with no public objects yet. (10 modules, 2470 li
 
 ### `torchlens.stats`
 
-Streaming statistics for out aggregation (real subpackage; item 18). (17 modules, 7122 lines)
+Streaming statistics for out aggregation (real subpackage; item 18). (17 modules, 7120 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1953,7 +1953,7 @@ Streaming statistics for out aggregation (real subpackage; item 18). (17 modules
 | `_fitted` | Fitted-PCA payload + digest-checked persisted sidecar (transforms ). | 358 |
 | `_glance` | glance: the stats line as a function on arbitrary tensors (FORK-C). | 78 |
 | `_per_unit` | Quantile and top-k accumulators, pooled or per unit (DOCUMENTED-UNSTABLE). | 712 |
-| `_seams` | Seam adapters: cell density + echo observer (lovely item 10). | 232 |
+| `_seams` | Seam adapters: cell density + echo observer (lovely item 10). | 230 |
 | `_state_io` | Save and reload streaming-accumulator state (DOCUMENTED-UNSTABLE). | 494 |
 | `_stats_kernel` | The sound tensor-stats kernel (lovely memo section 5). | 611 |
 | `_stats_render` | Stats-line renderers: the core grammar over TensorStats (lovely 4). | 297 |
