@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 import io
 import os
+import pathlib
 import shutil
 from collections.abc import Callable
 from dataclasses import replace
@@ -150,7 +151,7 @@ def test_load_rejects_manifest_absolute_blob_path(tmp_path: Path) -> None:
     shutil.copy2(listed / blob_rel, outside_blob_path)
     _rekey_files_entry(listed, blob_rel, str(outside_blob_path.resolve()))
     error = _load_refusal(listed)
-    assert error.code == "manifest_schema_invalid"
+    assert error.fields.get("code") == "manifest_schema_invalid"
     assert "is not a plain relative path" in str(error)
 
     referenced = _build_bundle(tmp_path, name="referenced.tl")
@@ -165,7 +166,7 @@ def test_load_rejects_manifest_parent_segments_that_resolve_back_inside(tmp_path
     blob_name = _first_blob_path(listed).name
     _rekey_files_entry(listed, f"blobs/{blob_name}", f"blobs/../blobs/{blob_name}")
     error = _load_refusal(listed)
-    assert error.code == "manifest_schema_invalid"
+    assert error.fields.get("code") == "manifest_schema_invalid"
     assert "is not a plain relative path" in str(error)
 
     referenced = _build_bundle(tmp_path, name="referenced.tl")
@@ -193,10 +194,14 @@ def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None
 
 
 def _opened_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
-    """Record every path the process opens through ``open``, ``io.open`` or ``os.open``."""
+    """Record every path opened through ``open``, ``io.open``, ``os.open`` or ``Path.open``.
+
+    ``Path.open`` is patched on its own because some Pythons bind it to ``io.open`` at
+    import time, so patching ``io.open`` alone misses ``Path.read_bytes``.
+    """
 
     opened: list[str] = []
-    real_open, real_os_open = builtins.open, os.open
+    real_open, real_os_open, real_path_open = builtins.open, os.open, pathlib.Path.open
 
     def recording_open(file: Any, *args: Any, **kwargs: Any) -> Any:
         opened.append(os.fspath(file) if isinstance(file, (str, os.PathLike)) else repr(file))
@@ -206,7 +211,12 @@ def _opened_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
         opened.append(os.fspath(path))
         return real_os_open(path, *args, **kwargs)
 
+    def recording_path_open(self: pathlib.Path, *args: Any, **kwargs: Any) -> Any:
+        opened.append(os.fspath(self))
+        return real_path_open(self, *args, **kwargs)
+
     monkeypatch.setattr(builtins, "open", recording_open)
+    monkeypatch.setattr(pathlib.Path, "open", recording_path_open)
     monkeypatch.setattr(io, "open", recording_open)
     monkeypatch.setattr(os, "open", recording_os_open)
     return opened
