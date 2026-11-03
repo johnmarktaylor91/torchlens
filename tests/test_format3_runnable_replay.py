@@ -38,6 +38,8 @@ from torch import nn
 
 import torchlens as tl
 from tests.classics_corpus._loader import CorpusEntry, build_entry, corpus_entries
+from torchlens._io import _format3_runnable_bind as runnable_bind
+from torchlens._io._save_gates import _runnable_write_context, _stamped_descriptor
 from torchlens._io.format3 import (
     runnable as runnable3,
     runnable_families,
@@ -98,6 +100,24 @@ class _TiedModel(nn.Module):
         """Embed the ids and project back onto the vocabulary."""
 
         return self.head(self.embed(value))
+
+
+def _write_component(
+    trace: Any,
+    path: Path,
+    *,
+    include_weights: bool = True,
+    include_activations: bool = False,
+    counter: list[int] | None = None,
+) -> Any:
+    """Prepare a live save at its gate, then write through the pure wire carrier."""
+
+    prepared = _stamped_descriptor(
+        trace, include_weights=include_weights, include_activations=include_activations
+    )
+    return runnable3.write_runnable(
+        path, context=_runnable_write_context(prepared, counter if counter is not None else [0])
+    )
 
 
 def _quiet_save(trace: Any, path: Path, **kwargs: Any) -> None:
@@ -232,7 +252,7 @@ def test_descriptor_and_families_preserve_the_frozen_run_contract(tmp_path: Path
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        written = runnable3.write_runnable(trace, artifact, include_weights=True)
+        written = _write_component(trace, artifact, include_weights=True)
 
     manifest = json.loads((old / "manifest.json").read_text(encoding="utf-8"))
     descriptor = json.loads((artifact / "runnable" / "descriptor.json").read_text("utf-8"))
@@ -339,7 +359,7 @@ def test_intervened_capture_refuses_the_runnable_component(tmp_path: Path) -> No
         capture=_CAP,
     )
     with pytest.raises(RunnablePreflightError) as info:
-        runnable3.write_runnable(trace, tmp_path, include_weights=True)
+        _write_component(trace, tmp_path, include_weights=True)
     assert info.value.fields.get("code") == "sparse_preflight_failed"
     assert not (tmp_path / "runnable").exists()
 
@@ -391,7 +411,7 @@ def _component(tmp_path: Path) -> tuple[Path, runnable3.RunnableWrite]:
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        written = runnable3.write_runnable(trace, artifact, include_weights=True)
+        written = _write_component(trace, artifact, include_weights=True)
     return artifact, written
 
 
@@ -549,7 +569,7 @@ def test_missing_state_key_refuses_at_bind(tmp_path: Path) -> None:
     artifact.mkdir()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        written = runnable3.write_runnable(trace, artifact, include_weights=True)
+        written = _write_component(trace, artifact, include_weights=True)
     relative = "runnable/state_dict-0001.safetensors"
     references = dict(written.manifest["state_dict_tensors"])
     dropped = references.pop("fc.bias")
@@ -563,7 +583,7 @@ def test_missing_state_key_refuses_at_bind(tmp_path: Path) -> None:
     }
     manifest = {**written.manifest, "state_dict_tensors": references}
     with pytest.raises(StateBindingError):
-        runnable3.attach_runnable(tl.load(records), artifact, manifest, files)
+        runnable_bind.attach_runnable(tl.load(records), artifact, manifest, files)
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlinks need privileges on Windows")
@@ -590,7 +610,7 @@ def test_family_present_against_descriptor_refuses(tmp_path: Path) -> None:
     stray = {"fc.weight": torch.zeros(4, 3)}
     buffers = {"scale": torch.full((4,), 0.5)}
     with pytest.raises(ArtifactError) as info:
-        runnable3.bind_runnable_families(
+        runnable_bind.bind_runnable_families(
             loaded, {"nonpersistent_buffers": buffers, "state_dict": stray}
         )
     assert info.value.fields["code"] == "bundle_metadata_integrity_refused"
@@ -602,7 +622,7 @@ def test_component_directory_is_written_once(tmp_path: Path) -> None:
     artifact, _written = _component(tmp_path)
     trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
     with pytest.raises(ArtifactError) as info:
-        runnable3.write_runnable(trace, artifact)
+        _write_component(trace, artifact)
     assert info.value.fields["code"] == "bundle_save_failed"
 
 
@@ -635,9 +655,7 @@ def test_runnable_and_record_payloads_share_one_tensor_key_counter(tmp_path: Pat
     trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
     try:
         with pytest.warns(UserWarning, match="NON-persistent buffers"):
-            written = runnable3.write_runnable(
-                trace, tmp_path, context=runnable3._WriteContext(counter)
-            )
+            written = _write_component(trace, tmp_path, counter=counter)
         assert written.manifest["descriptor"] == "runnable/descriptor.json"
         all_keys = []
         for path in sorted(tmp_path.rglob("*.safetensors")):
