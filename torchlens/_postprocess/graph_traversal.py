@@ -960,7 +960,6 @@ def _log_internally_terminated_tensor(
     (hunt-6 R52-2).
     """
     layer_entry = self[tensor_label]
-    # An Op row: is_internal_sink stays flat on Op (A.13 moves it only on Layer).
     layer_entry._internal_set("is_internal_sink", True)
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
