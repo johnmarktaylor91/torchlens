@@ -66,15 +66,13 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_quantities": "L0",
     "_architecture": "L0",
     "_deprecations": "L0",
-    # The options family and the process state flags are basis vocabulary:
-    # every layer reads them and they read nothing above the basis.
-    "options": "L0",
+    # The options validators, the receipt and the process state flags are basis
+    # vocabulary: every layer reads them and they read nothing above the basis.
     "_options_validation": "L0",
     "_option_receipt": "L0",
     "_state": "L0",
     "_deploy_env": "L0",
     "_episode_spec": "L0",
-    "_extract_refusals": "L0",
     "_memory_probes": "L0",
     "_mutate_warnings": "L0",
     "_plain_attr_fidelity": "L0",
@@ -140,6 +138,11 @@ PACKAGE_LAYERS: dict[str, str] = {
     "_validation_state_snapshot": "L2",
     "_validation_status": "L0",
     "_utils": "L1",
+    # options reads _utils.facade (removed-member refusals) and the
+    # _utils.tensor_utils save-mode vocabulary at import, so it sits beside
+    # _utils; _extract_refusals reads options.
+    "options": "L1",
+    "_extract_refusals": "L1",
     # -- L3 SETTLE ----------------------------------------------------------
     "_postprocess": "L3",
     "_data_substrate": "L3",
