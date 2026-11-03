@@ -543,6 +543,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "recipes/seeded_subsample.md": _RECIPE_PAGES_EXECUTED,
     "recipes/training_ribbon.md": _RECIPE_PAGES_EXECUTED,
     "recipes/tcav.md": _RECIPE_PAGES_EXECUTED,
+    "recipes/linear_probes.md": _RECIPE_PAGES_EXECUTED,
     "recipes/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
     "recipes/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "recipes/tuned_lens.md": _RECIPE_PAGES_EXECUTED,

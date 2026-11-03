@@ -32,7 +32,7 @@ from .._capture.predicates import _save_selector_matches
 from .._errors import InvalidArgumentError
 from .._selection.selector_base import BaseSelector
 from ._generation_options import GenerationOptions
-from ._generation_stream import TokenSeries, _StepSink, site_predicate
+from ._generation_stream import TokenSeries, _SiteMatcher, _StepSink
 from ._recorder import Recorder
 from .types import ActivationRecord, Recording
 
@@ -517,10 +517,9 @@ def _steps(
     return tuple(steps)
 
 
-def _save_with_sites(save: Any, sites: tuple[str, ...]) -> Any:
+def _save_with_sites(save: Any, keep_sites: Callable[[Any], bool]) -> Any:
     """Return ``save`` widened so the declared reducer sites are always kept."""
 
-    keep_sites = site_predicate(sites)
     if save is None:
         return keep_sites
     if isinstance(save, BaseSelector):
@@ -614,14 +613,14 @@ def record_generation(
     )
     settings = _seeded_settings(settings, recorder_kwargs)
     windows: list[tuple[int, range]] = []
+    matcher: _SiteMatcher | None = None
     if generation is not None and generation.reducers:
-        recorder_kwargs["save"] = _save_with_sites(
-            recorder_kwargs.get("save"), tuple(generation.reducers)
-        )
+        matcher = _SiteMatcher(tuple(generation.reducers))
+        recorder_kwargs["save"] = _save_with_sites(recorder_kwargs.get("save"), matcher)
     sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
         if generation is not None:
-            sink = _StepSink(generation, recorder, partial(_max_new_tokens, settings))
+            sink = _StepSink(generation, recorder, partial(_max_new_tokens, settings), matcher)
         with _forwards_through(model, recorder, windows, sink):
             generate = cast("Callable[..., Any]", model.generate)
             output = generate(*_positional(input_args), **prompt_kwargs, **generate_kwargs)
