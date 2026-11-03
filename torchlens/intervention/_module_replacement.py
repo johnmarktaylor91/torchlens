@@ -197,7 +197,7 @@ def _mint_replacement(trace: Trace, site: Op, before: dict[str, Any], moved_call
     fields: dict[str, Any] = {
         **_identity_fields(trace, site, before),
         **_callable_free_fields(site),
-        **_wiring_fields(site, before, moved_calls, modules),
+        **_wiring_fields(site, moved_calls, modules),
         "site_key": _replacement_site_key(trace, modules),
     }
     for name, value in fields.items():
@@ -296,9 +296,7 @@ def _callable_free_fields(site: Op) -> dict[str, Any]:
     }
 
 
-def _wiring_fields(
-    site: Op, before: dict[str, Any], moved_calls: list[str], modules: list[str]
-) -> dict[str, Any]:
+def _wiring_fields(site: Op, moved_calls: list[str], modules: list[str]) -> dict[str, Any]:
     """Graph edges and module membership: parent is the last op, children are its consumers."""
 
     return {
@@ -308,10 +306,6 @@ def _wiring_fields(
         "children": tuple(site.children or ()),
         "has_children": bool(site.children),
         "out_versions_by_child": dict(site.out_versions_by_child or {}),
-        "num_inputs": 1,
-        "input_shapes": [before["shape"]],
-        "input_dtypes": [before["dtype"]],
-        "input_memory": [before["activation_memory"]],
         "module": modules[-1] if modules else None,
         "modules": modules,
         "module_call_stack": [
