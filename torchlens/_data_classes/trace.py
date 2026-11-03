@@ -229,11 +229,9 @@ class ResolvedPostprocessing:
     source:
         Resolver source that selected the postprocessing transform.
     resolved_for:
-        Name of the model weights, label bank or default policy this
-        postprocessing was resolved for.
+        Model weights, label bank or default policy this postprocessing was resolved for.
     is_model_specific:
-        Whether the postprocessing is specific to this model (from its own
-        metadata or the caller's choice) rather than a generic default.
+        Whether the postprocessing is specific to this model rather than a generic default.
     config:
         Best-effort serializable postprocessing configuration.
     description:
