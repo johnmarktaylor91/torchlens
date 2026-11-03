@@ -1331,10 +1331,10 @@ torchlens/recording/_recorder.py::Recorder._run_unified_capture	150
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70
-torchlens/recording/types.py	1249
+torchlens/recording/types.py	1247
 torchlens/recording/types.py::Recording.backward	102
 torchlens/recording/types.py::Recording.outcome	72
-torchlens/recording/types.py::Recording.to_trace	141
+torchlens/recording/types.py::Recording.to_trace	140
 torchlens/repgeom/_annotation_gate.py::_commit_annotation_tensors	66
 torchlens/repgeom/_geometry.py	1208
 torchlens/repgeom/_geometry.py::classical_mds	117

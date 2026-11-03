@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._capture.outcome import stamp_cooked
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -24,8 +26,6 @@ def _settle_cooked_trace(self: Any, trace: Trace) -> None:
     # cooked trace is HALTED (so the runnable/live-replay gates see it),
     # never a silently-blessed complete. The frontier label is read back
     # post-postprocess so it is the FINAL remapped label.
-    from .._capture.outcome import stamp_cooked
-
     cooked_frontier = None
     cooked_reason = None
     cooked_boundary = None

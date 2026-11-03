@@ -17,7 +17,6 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
 from .._ir import predicate as _predicate
 from .._utils.tensor_utils import SaveMode as SaveMode
-from ._cook_settle import _settle_cooked_trace
 
 __all__ = [
     "ActivationRecord",
@@ -998,11 +997,9 @@ class Recording(TraceLike):
             a halted multi-pass recording, or if it is halted but retained no
             raw activation payload to bind as the output frontier.
 
-        A multi-pass recording (several ``Recorder(...)`` passes) cooks into
-        one multi-pass Trace: the passes are numbered the way ``tl.trace``
-        numbers repeated calls of the same module, so ``trace["linear_1_1:2"]``
-        is the second pass's op and ``trace.layers["linear_1_1"].num_passes``
-        is the pass count.
+        A multi-pass recording (several ``Recorder(...)`` passes) cooks into one
+        multi-pass Trace numbered the way ``tl.trace`` numbers repeated calls of a
+        module: ``trace["linear_1_1:2"]`` is the second pass's op.
         """
 
         if self.is_failed:
@@ -1023,8 +1020,7 @@ class Recording(TraceLike):
         if self.num_passes > 1 and self.is_stopped:
             raise CaptureNotActiveError(
                 "Recording.to_trace() cannot convert this multi-pass Recording: it was "
-                "halted, and a halt frontier is defined for one forward pass; every "
-                "completed multi-pass Recording converts",
+                "halted, and a halt frontier is defined for one forward pass",
                 code="recording_multipass_not_convertible",
                 remedy="record one pass per Recording before converting",
             )
@@ -1091,6 +1087,8 @@ class Recording(TraceLike):
             halt_output_tensors,
             halt_output_addresses,
         )
+
+        from ._cook_settle import _settle_cooked_trace
 
         _settle_cooked_trace(self, trace)
         return trace
