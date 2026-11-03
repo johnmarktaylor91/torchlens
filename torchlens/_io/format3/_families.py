@@ -21,20 +21,77 @@ from .schema import FAMILIES
 _CELL_POSITION = re.compile(r"(\w+)\[\d+\]\.(\w+)")
 
 
-def apply_bound_families(value: Any, at: str) -> None:
-    """Apply every grammar bound to one decoded record column.
+class _FamilyContext:
+    """Keep conditional grammar bindings independent of record-table decode order.
 
-    Parameters
-    ----------
-    value, at:
-        Decoded value and its record, row and column path.
+    A binding may require a singleton trace cell to be present. Its grammar
+    waits for that cell to decode; an absent or None guard preserves the old
+    validator's early return. No foreign-key or cross-record relation is checked.
     """
 
-    position = _CELL_POSITION.fullmatch(at)
-    if position is not None:
-        for node in _bound_families(*position.groups()):
-            for selected, selected_at in _family_targets(value, node.get("path", ()), at):
-                _apply_family(node, selected, selected_at)
+    def __init__(self) -> None:
+        """Initialize the decoded guard facts and waiting cell grammars."""
+
+        self._facts: dict[tuple[str, str], Any] = {}
+        self._pending: list[tuple[dict[str, Any], Any, str]] = []
+
+    def check(self, value: Any, at: str) -> None:
+        """Apply bound cell grammars and settle any newly available guard.
+
+        Parameters
+        ----------
+        value, at:
+            Decoded value and its record, row and column path.
+        """
+
+        position = _CELL_POSITION.fullmatch(at)
+        if position is None:
+            return
+        key = position.groups()
+        if key in _guard_cells():
+            self._facts[key] = value
+            waiting, self._pending = self._pending, []
+            for node, candidate, candidate_at in waiting:
+                self._check(node, candidate, candidate_at)
+        for node in _bound_families(*key):
+            self._check(node, value, at)
+
+    def _check(self, node: dict[str, Any], value: Any, at: str) -> None:
+        """Apply one binding when its declared presence guard is settled.
+
+        Parameters
+        ----------
+        node, value, at:
+            Bound schema, decoded candidate and diagnostic path.
+        """
+
+        guard = node.get("requires")
+        if guard is not None:
+            key = (guard[0], guard[1])
+            if key not in self._facts:
+                self._pending.append((node, value, at))
+                return
+            if not _family_condition(self._facts[key], guard[2]):
+                return
+        for selected, selected_at in _family_targets(value, node.get("path", ()), at):
+            _apply_family(node, selected, selected_at)
+
+
+@cache
+def _guard_cells() -> frozenset[tuple[str, str]]:
+    """Return singleton cell identities used as conditional binding guards.
+
+    Returns
+    -------
+    frozenset[tuple[str, str]]
+        Code-owned record and column pairs, independent of artifact contents.
+    """
+
+    return frozenset(
+        (node["requires"][0], node["requires"][1])
+        for node in FAMILIES.values()
+        if "requires" in node
+    )
 
 
 @cache

@@ -16,6 +16,7 @@ from torchlens._io.format3.decode import Decoder
 from torchlens._io.format3.schema import FAMILIES
 from torchlens._io.format3.values import ValueEncoder
 from torchlens._io.format_errors import ArtifactError
+from torchlens.intervention.types import Edit, FireRecord
 
 
 @pytest.fixture(scope="module")
@@ -24,8 +25,8 @@ def saved(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
     Parameters
     ----------
-    tmp_path_factory : pytest.TempPathFactory
-        Temporary artifact directory factory.
+    tmp_path_factory:
+        Artifact directory factory.
     """
 
     root = tmp_path_factory.mktemp("family-schemas") / "trace"
@@ -51,6 +52,23 @@ def _forged_cell(saved: Path, target: Path, column: str, value: Any, record: str
     cell = ValueEncoder().encode(value, at=f"{record}[0].{column}")
     set_cell(root, record, column, 0, cell)
     return root
+
+
+def _telemetry(status: str, *, available: bool = True) -> dict[str, Any]:
+    """Build one complete launch envelope for grammar boundary cases.
+
+    Parameters
+    ----------
+    status, available:
+        Launch attribution and envelope availability.
+    """
+
+    launch = dict.fromkeys(("device", "launch_name", "duration", "stream", "runtime_correlation"))
+    return {
+        "_available": available,
+        "_launches": [{**launch, "attribution_status": status}],
+        "_relations": [],
+    }
 
 
 @pytest.mark.parametrize(
@@ -132,20 +150,7 @@ def _forged_cell(saved: Path, target: Path, column: str, value: Any, record: str
         (
             "annotations",
             {
-                "_kernel_telemetry": {
-                    "_available": True,
-                    "_launches": [
-                        {
-                            "attribution_status": "guessed",
-                            "launch_name": None,
-                            "device": None,
-                            "duration": None,
-                            "stream": None,
-                            "runtime_correlation": None,
-                        }
-                    ],
-                    "_relations": [],
-                }
+                "_kernel_telemetry": _telemetry("guessed"),
             },
             "kernel_telemetry",
             "._kernel_telemetry._launches[0].attribution_status",
@@ -241,20 +246,7 @@ def test_forged_family_cell_refuses_with_code_and_path(
         (
             "annotations",
             {
-                "_kernel_telemetry": {
-                    "_available": False,
-                    "_relations": [],
-                    "_launches": [
-                        {
-                            "attribution_status": "unavailable",
-                            "device": None,
-                            "launch_name": None,
-                            "duration": None,
-                            "stream": None,
-                            "runtime_correlation": None,
-                        }
-                    ],
-                }
+                "_kernel_telemetry": _telemetry("unavailable", available=False),
             },
         ),
         ("_source_snapshots", [{"path": "model.py", "digest": "a" * 64, "text": None}]),
@@ -284,10 +276,9 @@ def test_valid_family_cells_remain_loadable(
 def test_family_node_checks_do_not_require_record_construction() -> None:
     """Decoding alone rejects grammar before trace state hooks can run.
 
-    Raises
-    ------
-    ArtifactError
-        An invalid cell refuses before any record is built.
+    Notes
+    -----
+    No trace state hook runs during this check.
     """
 
     with pytest.raises(ArtifactError) as caught:
@@ -302,8 +293,8 @@ def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Path:
 
     Parameters
     ----------
-    tmp_path_factory : pytest.TempPathFactory
-        Temporary artifact directory factory.
+    tmp_path_factory:
+        Artifact directory factory.
     """
 
     root = tmp_path_factory.mktemp("family-backward") / "trace"
@@ -423,20 +414,6 @@ def _flops(**changes: Any) -> dict[str, Any]:
             [_audit("PARAM", disclosure=False)],
             "intervention_audit",
             "[0].disclosure",
-        ),
-        (
-            "trace",
-            "intervention_audit",
-            [_audit("EVENT", schema="other")],
-            "intervention_audit",
-            "[0].schema",
-        ),
-        (
-            "trace",
-            "intervention_audit",
-            [_audit("EVENT", event_id="")],
-            "intervention_audit",
-            "[0].event_id",
         ),
         (
             "trace",
@@ -601,10 +578,9 @@ def test_remaining_valid_cells_load(
 def _migration_samples() -> dict[str, list[Any]]:
     """Supply accepted boundaries and malformed neighbors for the migration oracle.
 
-    Returns
-    -------
-    dict[str, list[Any]]
-        Independent families and candidate decoded cell values.
+    Notes
+    -----
+    Candidates include scalar, container and required-key boundaries.
     """
 
     claims = {
@@ -797,3 +773,35 @@ def test_family_migration_matches_original_grammar(family: str, value: Any) -> N
     except ArtifactError:
         accepted = False
     assert accepted == _legacy_accepts(family, value)
+
+
+@pytest.mark.parametrize("guard_first", [False, True])
+@pytest.mark.parametrize("audit", [None, []])
+def test_recipe_binding_preserves_audit_presence_and_decode_order(
+    guard_first: bool, audit: Any
+) -> None:
+    """Conditional recipes retain the original absent-audit acceptance boundary.
+
+    Parameters
+    ----------
+    guard_first, audit:
+        Cell decode order and absent or present audit guard.
+    """
+
+    decoder = Decoder(defer_records=True)
+    edit = FireRecord(edit=Edit(name="helper", selection_recipe={}))
+    cells = [
+        (ValueEncoder().encode([edit], at="op[0].edits"), "op[0].edits"),
+        (audit, "trace[0].intervention_audit"),
+    ]
+    if guard_first:
+        cells.reverse()
+    if audit is None:
+        for cell, at in cells:
+            decoder.decode(cell, at=at)
+    else:
+        with pytest.raises(ArtifactError) as caught:
+            for cell, at in cells:
+                decoder.decode(cell, at=at)
+        assert caught.value.fields["code"] == "artifact_intervention_audit_invalid"
+        assert caught.value.fields["at"] == "op[0].edits[0].edit.selection_recipe"

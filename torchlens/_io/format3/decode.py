@@ -146,7 +146,7 @@ def cell_error(at: str, detail: str, *, code: str = CELL_CODE) -> ArtifactError:
     field = _FAMILY_FIELDS.get(code)
     if code == "artifact_annotations_invalid":
         prefix = "Op" if at.startswith("op[") else "Trace"
-        key = at.partition(".annotations.")[2].split(".", 1)[0].split("[", 1)[0]
+        key = re.split(r"[.\[<]", at.partition(".annotations.")[2], maxsplit=1)[0]
         field = f'{prefix}.annotations["{key}"]' if key else f"{prefix}.annotations"
     if field is not None:
         fields.update(field=field, reason="not_a_string" if "peak_memory" in code else "schema")
@@ -223,6 +223,7 @@ class Decoder:
     ) -> None:
         self.tensor_ref = tensor_ref
         self.defer_records = defer_records
+        self._family_context: Any = None
 
     def decode(self, data: Any, *, at: str, depth: int = 0) -> Any:
         """Decode one cell and apply its bound grammar before building records.
@@ -239,9 +240,11 @@ class Decoder:
 
         value = self._decode(data, at=at, depth=depth)
         if depth == 0:
-            from ._families import apply_bound_families
+            from ._families import _FamilyContext
 
-            apply_bound_families(value, at)
+            if self._family_context is None:
+                self._family_context = _FamilyContext()
+            self._family_context.check(value, at)
         return value
 
     def _decode(self, data: Any, *, at: str, depth: int) -> Any:

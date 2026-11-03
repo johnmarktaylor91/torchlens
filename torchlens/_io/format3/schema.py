@@ -535,8 +535,8 @@ FAMILIES.update(
         },
         "selection_recipes": {
             "requires": ("trace", "intervention_audit", "present"),
-            "target_record": "op",
-            "target_column": "edits",
+            "record": "op",
+            "column": "edits",
             "path": ("*", "@edit"),
             "kind": "object",
             "attributes": True,
