@@ -305,6 +305,14 @@ def settle_selection_do(
         quarantine_episode_after_perturbed_replay(trace)
 
 
+def detach_last_do_hooks(trace: Trace) -> None:
+    """Detach the sticky hooks the last ``do()`` staged (the scoped ``with`` exit body)."""
+
+    for handle_id in trace._last_hook_handle_ids:
+        clear_edits(trace, handle=handle_id, confirm_mutation=True)
+    trace._last_hook_handle_ids = ()
+
+
 def _detach_failed_do_hooks(
     trace: Trace, handle_ids: tuple[str, ...], pre_state: tuple[Any, bool]
 ) -> None:

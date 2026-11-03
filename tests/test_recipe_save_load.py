@@ -83,7 +83,7 @@ def test_predicate_rule_is_not_portable_and_audit_record_is_not_loadable(tmp_pat
     assert spec_json["executable"] is False
     with pytest.raises(ReplayPreconditionError) as excinfo:
         tl.load(audit_path)
-    assert excinfo.value.code == "recipe_audit_only"
+    assert excinfo.value.fields["code"] == "recipe_audit_only"
 
 
 @pytest.mark.parametrize(
@@ -111,6 +111,6 @@ def test_hand_edited_recipe_record_refuses_typed(
     target.write_text(json.dumps(data), encoding="utf-8")
     with pytest.raises(ReplayPreconditionError) as excinfo:
         tl.load(path)
-    assert excinfo.value.code == "recipe_record_malformed"
+    assert excinfo.value.fields["code"] == "recipe_record_malformed"
     assert excinfo.value.fields["remedy"]
     assert file_name in str(excinfo.value)

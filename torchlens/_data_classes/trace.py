@@ -2757,7 +2757,7 @@ class Trace(TraceOutputMixin, TraceLike):
     def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
         """Leave the scope: detach the sticky hooks the last ``do()`` inside it staged."""
 
-        _doors.intervention()._trace_edits.remove(self)
+        _doors.intervention()._trace_edits.detach_last_do_hooks(self)
 
     def clear_edits(
         self,

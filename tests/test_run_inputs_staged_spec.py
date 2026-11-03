@@ -11,6 +11,7 @@ upstream ``do`` propagates through it.
 from __future__ import annotations
 
 import warnings
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -21,7 +22,8 @@ import torchlens as tl
 from torchlens._runnable import PathFaithfulness, RunnableErrorCode
 from torchlens._selection.errors import SiteResolutionError
 from torchlens._trace_state import TraceState
-from torchlens.errors import TorchLensWarning
+from torchlens.errors import EngineDispatchError, TorchLensWarning
+from torchlens.options import InterventionOptions
 
 _DIM = 8
 
@@ -208,3 +210,32 @@ def test_do_hook_downstream_fires_when_an_upstream_do_propagates() -> None:
     # The source trace is untouched.
     with torch.no_grad():
         assert torch.allclose(trace["linear_3_5"].out, model(x), atol=1e-6)
+
+
+def test_loaded_artifact_run_inputs_refuses_a_staged_user_hook(tmp_path: Path) -> None:
+    """A loaded artifact has no model to install the staged spec on: refuse typed.
+
+    The live door applies the spec; a loaded sparse artifact cannot, and silently
+    returning an un-intervened run was a measured silent wrong answer, so the
+    refusal carries ``run_staged_spec_unapplied`` and the detach remedy.
+    """
+
+    torch.manual_seed(0)
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2)).eval()
+    x = torch.randn(2, 4)
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    path = tmp_path / "staged.tlspec"
+    trace.save(path, level="runnable", include_weights=True)
+    loaded = tl.load(path)
+    loaded.do(
+        {tl.func("relu"): tl.zero_ablate()},
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
+    with pytest.raises(EngineDispatchError) as refused:
+        loaded.run(inputs=x)
+    assert refused.value.fields["code"] == "run_staged_spec_unapplied"
+    assert "detach" in refused.value.fields["remedy"]
+    # Detaching the staged hook reopens the loaded run door.
+    loaded.clear_hooks(confirm_mutation=True)
+    rerun = loaded.run(inputs=x)
+    assert rerun is not None
