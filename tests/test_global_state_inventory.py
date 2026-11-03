@@ -18,7 +18,8 @@ from torch import nn
 import torchlens as tl
 from torchlens import _state
 from torchlens._capture import projections, trace as capture_trace
-from torchlens._utils import _tensor_label as torch_tl, completeness_witness, rescue
+from torchlens._utils import _tensor_label as torch_tl
+from torchlens.backends.torch import completeness_witness, rescue
 from torchlens.errors import TraceCaptureError
 
 MUTATING_METHODS = frozenset(

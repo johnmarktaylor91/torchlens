@@ -205,7 +205,7 @@ PACKAGE_LAYERS: dict[str, str] = {
     "callbacks": "L8",
     "trackers": "L8",
     "_ecosystem": "L8",
-    "agent": "L8",
+    "agent": "FACADE",  # the agent inspection surface; a facade over every layer
     # -- L9 RECIPES -------------------------------------------------------------------
     "examples": "L9",
     "conformance": "L9",
