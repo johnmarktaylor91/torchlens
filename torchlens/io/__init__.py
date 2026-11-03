@@ -89,6 +89,8 @@ def _pre3_observed(path: Path) -> str | None:
 
     from .._io.format3.validate import legacy_stamp
 
+    _reject_symlinked_metadata_path(path)
+    _reject_symlinked_metadata_path(path / "manifest.json")
     stamp = legacy_stamp(path / "manifest.json")
     if stamp is not None:
         return f"tlspec_version={stamp}"

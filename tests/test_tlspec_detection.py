@@ -138,3 +138,27 @@ def test_pre3_marker_refuses_at_load_and_validation(tmp_path: Path, marker: str)
     assert errors[0].fields["code"] == "artifact_version_below_floor"
     assert errors[0].fields["path"] == str(tmp_path)
     assert errors[0].fields["observed"]
+
+
+@pytest.mark.parametrize("marker", ["metadata.pkl", "bundle.json", "spec.json"])
+def test_detect_rejects_symlinked_2x_markers(tmp_path: Path, marker: str) -> None:
+    """A 2.x marker cannot cause detection to follow a metadata symlink.
+
+    Parameters
+    ----------
+    tmp_path:
+        Temporary parent of the artifact and external file.
+    marker:
+        Metadata member to replace with a symlink.
+    """
+
+    from torchlens.errors import ArtifactError
+
+    outside = tmp_path / "outside.json"
+    outside.write_text('{"format_version": "1"}', encoding="utf-8")
+    root = tmp_path / "artifact"
+    root.mkdir()
+    (root / marker).symlink_to(outside)
+    with pytest.raises(ArtifactError) as excinfo:
+        detect_tlspec_format(root)
+    assert excinfo.value.fields["code"] == "load_path_symlink_rejected"
