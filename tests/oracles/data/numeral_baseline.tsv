@@ -2150,7 +2150,6 @@ docs-md	docs/maintainers/where.md	3767
 docs-md	docs/maintainers/where.md	378
 docs-md	docs/maintainers/where.md	3785
 docs-md	docs/maintainers/where.md	379
-docs-md	docs/maintainers/where.md	37982
 docs-md	docs/maintainers/where.md	38
 docs-md	docs/maintainers/where.md	380
 docs-md	docs/maintainers/where.md	381
@@ -2332,8 +2331,6 @@ docs-md	docs/maintainers/where.md	630
 docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	6363
-docs-md	docs/maintainers/where.md	637
-docs-md	docs/maintainers/where.md	637207
 docs-md	docs/maintainers/where.md	639
 docs-md	docs/maintainers/where.md	64
 docs-md	docs/maintainers/where.md	640
@@ -9461,7 +9458,6 @@ test-names	tests/test_conditional_invariants.py	14_
 test-names	tests/test_conditional_invariants.py	15_
 test-names	tests/test_distributed_c0_core.py	10
 test-names	tests/test_distributed_census_topologies.py	10
-test-names	tests/test_distributed_funcol_boundaries.py	10
 test-names	tests/test_draw_header_focus_key.py	1024_
 test-names	tests/test_dtype_range_audit.py	16_
 test-names	tests/test_explorer_watch_p1_summary_role.py	64_
