@@ -320,10 +320,19 @@ inserted edit op still meets its counterpart. A site that only some members have
 
 Relationship gates are intentional, and they check two predicates separately:
 a model-axis floor (`node` needs `same_param_shapes`; comparison reads need
-`shared_graph`) and, for comparison reads, VALUE-LEVEL input identity derived
-from retained input payloads. An identity relationship is never accepted as
-proof of input equality, unprovable input identity refuses fail-closed
-(`bundle_gate_input_identity_unproven`), and members joined by an ordering
+`shared_graph`) and, for comparison reads, SITE LINE-UP. Runs on different
+inputs or checkpoints compare (clean vs. patched, two prompts, two weight
+states) whenever their graphs line up: the pair either captured the same input
+VALUES (derived from retained input payloads) or has equal graph-shape hashes.
+A pair on different inputs whose graphs differ (data-dependent control flow
+took another branch) refuses `bundle_gate_input_values_differ`; with no input
+payloads to prove identity and graphs that differ it refuses
+`bundle_gate_input_identity_unproven`. An identity relationship is never
+accepted as proof of input equality or of line-up. Inputs of different shapes
+(prompts of different token counts) refuse one of two ways: when their graphs
+still line up, at the first site whose shapes differ (`metric_shape_mismatch`,
+naming the site); when the length changed the graph (GPT-2 does), with
+`bundle_gate_input_values_differ`, whose message names both input shapes. Members joined by an ordering
 relation (`successor_of`/`forked_from`/`escalates`) are not comparison
 operands regardless of rank (`bundle_gate_ordering_topology`). Pair-scoped
 reads (`compare(a, b)`, `most_changed` baseline pairs) gate only the

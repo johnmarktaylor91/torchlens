@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 
 
-def skip_unless_hf_checkpoint_cached(name: str) -> None:
+def skip_unless_hf_checkpoint_cached(name: str, revision: str | None = None) -> None:
     """Skip the calling test when checkpoint ``name`` is not in the local HF cache.
 
     Parameters
@@ -22,9 +22,13 @@ def skip_unless_hf_checkpoint_cached(name: str) -> None:
         Hub repository id, for example
         ``"hf-internal-testing/tiny-random-gpt2"``. The checkpoint counts as
         cached when its ``config.json`` resolves to a file in the local cache.
+    revision:
+        Optional pinned Hub revision (a commit hash). When given, that
+        revision's snapshot must be cached; ``None`` checks the default ref.
     """
 
     from huggingface_hub import try_to_load_from_cache
 
-    if not isinstance(try_to_load_from_cache(name, "config.json"), str):
-        pytest.skip(f"checkpoint {name} not cached")
+    if not isinstance(try_to_load_from_cache(name, "config.json", revision=revision), str):
+        pinned = f"@{revision[:8]}" if revision else ""
+        pytest.skip(f"checkpoint {name}{pinned} not cached")
