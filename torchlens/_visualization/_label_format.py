@@ -13,7 +13,7 @@ from .._errors import InvalidArgumentError
 from .._quantities import Duration
 from .._record_type import record_type
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
-from ._pass_marks import marked_layer_label, pass_rows
+from ._pass_marks import pass_rows
 
 PARAM_SEPARATOR: Final[str] = " · "
 
@@ -457,6 +457,7 @@ def compute_selected_node_lines(
     node_address: str,
     vis_mode: str,
     node_label_fields: list[str],
+    pass_mark: str = "",
 ) -> list[str]:
     """Build node-label rows from an explicit field picker.
 
@@ -470,6 +471,8 @@ def compute_selected_node_lines(
         ``"unrolled"`` or ``"rolled"``.
     node_label_fields:
         Requested field names.
+    pass_mark:
+        The default title's pass mark (``:2``, `` (x3)``) the ``"label"`` row keeps.
 
     Returns
     -------
@@ -485,7 +488,7 @@ def compute_selected_node_lines(
     rows: list[str] = []
     for field_name in node_label_fields:
         if field_name in {"label", "name"}:
-            rows.append(marked_layer_label(layer_log, node_address, vis_mode, node_label_fields))
+            rows.append(f"{getattr(layer_log, 'layer_label', '')}{pass_mark}")
         elif field_name in {"type", "op", "operation"}:
             rows.append(str(getattr(layer_log, "func_name", None) or record_type(layer_log)))
         elif field_name == "shape":

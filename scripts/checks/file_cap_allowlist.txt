@@ -559,7 +559,7 @@ torchlens/_visualization/_encoding.py::resolve_size_by	72
 torchlens/_visualization/_geometry_audit.py	974
 torchlens/_visualization/_geometry_audit.py::audit_layout	64
 torchlens/_visualization/_geometry_audit.py::parse_layout_json	72
-torchlens/_visualization/_label_format.py::compute_selected_node_lines	90
+torchlens/_visualization/_label_format.py::compute_selected_node_lines	93
 torchlens/_visualization/_mutated_params.py::add_mutated_parameter_nodes	61
 torchlens/_visualization/_rank_layout_internal/layout.py	1144
 torchlens/_visualization/_rank_layout_internal/layout.py::_compute_topological_layout	159
@@ -595,14 +595,14 @@ torchlens/_visualization/_render_leaf.py::_add_grad_edge	61
 torchlens/_visualization/_render_leaf.py::_collapse_address_for_node	63
 torchlens/_visualization/_render_leaf.py::_same_layer_dependency_components	86
 torchlens/_visualization/_render_module_scope.py::_get_lowest_module_for_two_nodes	77
-torchlens/_visualization/_render_nodes.py	2079
+torchlens/_visualization/_render_nodes.py	2086
 torchlens/_visualization/_render_nodes.py::_add_node_to_graphviz	157
 torchlens/_visualization/_render_nodes.py::_build_collapsed_module_node	236
 torchlens/_visualization/_render_nodes.py::_build_layer_node	168
 torchlens/_visualization/_render_nodes.py::_get_node_address_shape_color	66
 torchlens/_visualization/_render_nodes.py::_render_raw_input	63
 torchlens/_visualization/_render_nodes.py::_render_raw_input_image_batch	61
-torchlens/_visualization/_render_nodes.py::compute_default_node_lines	91
+torchlens/_visualization/_render_nodes.py::compute_default_node_lines	92
 torchlens/_visualization/_render_regions.py::_setup_subgraphs	78
 torchlens/_visualization/_render_regions.py::_setup_subgraphs_recurse	136
 torchlens/_visualization/_render_utils.py::_open_file_quietly	66

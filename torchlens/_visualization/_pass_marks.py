@@ -12,13 +12,12 @@ layout space for, instead of floating at the endpoint over arrows and other labe
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from .._utils._multipass_access import get_multipass_attr
 
 __all__ = (
-    "marked_layer_label",
     "pass_label_fits",
     "pass_mark_suffix",
     "pass_rows",
@@ -37,20 +36,21 @@ def _num_passes(layer_log: Any) -> int:
 
 
 def pass_mark_suffix(
-    layer_log: Any, node_address: str, vis_mode: str, *, module_row: bool = True
+    layer_log: Any,
+    node_address: str,
+    vis_mode: str,
+    rolled_mark: Callable[[Any, str], str],
+    *,
+    module_row: bool = True,
 ) -> str:
     """Return the pass mark the default node title appends to the node's name.
 
     ``":2"`` on an unrolled pass of a multi-pass layer; on a rolled multi-pass
-    layer the rolling call-group suffix (``":1-2,4"``) or the ``" (x3)"`` count;
-    ``""`` on single-pass nodes. A rolled atomic module whose ``@module`` row
-    carries the call range keeps its title clean while that row is shown
-    (``module_row``).
+    layer ``rolled_mark(layer_log, vis_mode)`` (the renderer's call-group suffix
+    ``":1-2,4"`` or ``" (x3)"`` count); ``""`` on single-pass nodes. A rolled
+    atomic module whose ``@module`` row carries the call range keeps its title
+    clean while that row is shown (``module_row``).
     """
-
-    # Lazy: both renderer modules import this one at module load.
-    from ._render_leaf import _rolled_visual_num_passes
-    from ._render_nodes import _format_rolling_suffix, _rolling_annotation
 
     if _num_passes(layer_log) <= 1:
         return ""
@@ -60,17 +60,7 @@ def pass_mark_suffix(
         return ""
     if module_row and getattr(layer_log, "is_atomic_module", False) and ":" in node_address:
         return ""
-    rolling_suffix = _format_rolling_suffix(_rolling_annotation(layer_log, vis_mode))
-    return rolling_suffix or f" (x{_rolled_visual_num_passes(layer_log)})"
-
-
-def marked_layer_label(
-    layer_log: Any, node_address: str, vis_mode: str, fields: Sequence[str]
-) -> str:
-    """Return the ``"label"`` token row: the layer label with the default's pass mark."""
-
-    suffix = pass_mark_suffix(layer_log, node_address, vis_mode, module_row="module" in fields)
-    return f"{getattr(layer_log, 'layer_label', '')}{suffix}"
+    return rolled_mark(layer_log, vis_mode)
 
 
 def pass_rows(layer_log: Any, vis_mode: str) -> list[str]:

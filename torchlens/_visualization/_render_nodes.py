@@ -1689,6 +1689,12 @@ def _rolling_annotation(layer_log: GraphNode, vis_mode: str) -> RollingAnnotatio
     return RollingAnnotation(call_groups=call_groups, buffer_versions=buffer_versions)
 
 
+def _rolled_mark(layer_log: GraphNode, vis_mode: str) -> str:
+    """Return a rolled multi-pass title mark: the ``:1-2,4`` call range or `` (x3)``."""
+    suffix = _format_rolling_suffix(_rolling_annotation(layer_log, vis_mode))
+    return suffix or f" (x{_rolled_visual_num_passes(layer_log)})"
+
+
 def _format_rolling_suffix(annotation: RollingAnnotation | None) -> str:
     """Return the face suffix for a rolled annotation.
 
@@ -1983,16 +1989,17 @@ def compute_default_node_lines(
     if isinstance(layer_log, BoundaryNode):
         return [layer_log.display_label]
 
+    # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; the "label" token keeps it too.
+    module_row = node_label_fields is None or "module" in node_label_fields
+    call_label = pass_mark_suffix(
+        layer_log, node_address, vis_mode, _rolled_mark, module_row=module_row
+    )
     if node_label_fields is not None:
         selected_lines = _compute_selected_node_lines(
-            layer_log, node_address, vis_mode, node_label_fields
+            layer_log, node_address, vis_mode, node_label_fields, call_label
         )
         append_overlay_lines(selected_lines, layer_log, node_overlay)
         return selected_lines
-
-    # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; an atomic module whose
-    # ``@module`` marking carries the split call range keeps its title clean.
-    call_label = pass_mark_suffix(layer_log, node_address, vis_mode)
 
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         # F2: show the RESOLVABLE trace identity ``layer_label:pass`` (== op.label,
