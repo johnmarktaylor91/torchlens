@@ -71,7 +71,6 @@ def test_step5_did_you_mean_stays_a_plain_attributeerror() -> None:
     assert "Did you mean" not in str(dunder_exc.value)
 
 
-@pytest.mark.smoke
 def test_hf_entry_recovery_is_typed_and_teaching() -> None:
     """tl.trace(model, input_ids=...) refuses typed, naming both remedies."""
 
@@ -149,7 +148,6 @@ def test_guide_snippets_run_verbatim(tmp_path: Path) -> None:
     assert ran >= 3, "the snippet lint stopped covering the guide"
 
 
-@pytest.mark.smoke
 def test_api_map_rows_resolve_where_declared() -> None:
     """Every api_map compact row's spelling resolves through the live facade."""
 

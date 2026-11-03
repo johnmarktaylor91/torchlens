@@ -81,7 +81,6 @@ class TestHookLifecycle:
             raise RuntimeError("training crashed")
         assert _hook_census(model) == baseline
 
-    @pytest.mark.smoke
     def test_exception_inside_step_still_commits_and_detaches(self) -> None:
         model = _model()
         collector = HistoryCollector(model)
@@ -156,7 +155,6 @@ class TestCaptureComposition:
         collector.detach()
         assert list(observed.layer_labels) == clean_labels
 
-    @pytest.mark.smoke
     def test_region_rides_the_shipped_record_span_surface(self) -> None:
         """Regions during a capture land on trace.provenance.observer_spans through the
         SHIPPED observers.span surface -- one span vocabulary (label
@@ -205,7 +203,6 @@ class TestSessionStatePurity:
         with region("fresh") as record:
             assert record.parent_name is None
 
-    @pytest.mark.smoke
     def test_global_rng_untouched_by_session_and_region(self) -> None:
         torch.manual_seed(77)
         before = torch.get_rng_state().clone()

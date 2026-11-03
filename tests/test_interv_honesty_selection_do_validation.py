@@ -60,7 +60,6 @@ def test_act_selection_scalar_refuses_typed(capture, bad_value) -> None:
     assert torch.equal(fork["relu_1_2"].out, capture["relu_1_2"].out)
 
 
-@pytest.mark.smoke
 def test_edge_selection_scalar_refuses_typed(capture) -> None:
     """EDGE lane: same refusal, same teaching."""
 

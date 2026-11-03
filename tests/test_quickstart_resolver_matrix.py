@@ -76,7 +76,6 @@ class TestInferredReuse:
         assert result.provenance.origin == "inferred"
         assert result.provenance.strategy
 
-    @pytest.mark.smoke
     def test_zero_arg_trace_returns_the_verified_trace(self) -> None:
         """tl.trace(model) with default kwargs serves the verified capture."""
 
@@ -135,7 +134,6 @@ class TestRenderFacade:
         )
         assert result.policy["collapse"] == "none"
 
-    @pytest.mark.smoke
     def test_result_is_detached_and_resaves_without_the_trace(self, tmp_path) -> None:
         """Drawing.save() re-renders from the stored DOT source."""
 
@@ -156,7 +154,6 @@ class TestRenderFacade:
         assert second.path is not None and second.path.exists()
         assert first.path != second.path
 
-    @pytest.mark.smoke
     def test_value_channel_refuses_on_synthesized_input(self, tmp_path) -> None:
         """Memo D7: value-driven render channels hard-refuse on non-gold."""
 

@@ -144,7 +144,6 @@ def test_held_alias_localtime_bound_variable_stays_a_transform() -> None:
     assert not result.uncertain
 
 
-@pytest.mark.smoke
 def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -199,7 +198,6 @@ def test_call_site_time_arg_proof_skips_interposed_call_bookkeeping(
     )
 
 
-@pytest.mark.smoke
 def test_skip_retired_hooks_follows_the_dead_links_own_chain() -> None:
     """A dead THREADING hook found while restoring the sys slot must resolve
     through the dead owner's threading predecessor, not the sys one."""
@@ -332,7 +330,6 @@ def test_torch_generator_draw_changes_state_digest() -> None:
     assert before != after, "torch.Generator draw left the state digest unchanged"
 
 
-@pytest.mark.smoke
 def test_model_held_torch_generator_pre_existing_thread_draw_is_witnessed() -> None:
     """The exact sol scenario: pre-existing thread draws from a model-held
     ``torch.Generator`` mid-window -- the window must NOT settle clean."""

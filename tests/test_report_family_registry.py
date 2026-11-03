@@ -104,7 +104,6 @@ def test_registry_vocabularies_are_closed() -> None:
         assert entry.refuses_when
 
 
-@pytest.mark.smoke
 def test_registry_unknown_key_refuses_typed() -> None:
     """Lookups teach the roster."""
 
@@ -126,7 +125,6 @@ def test_every_registry_spelling_executes(family_trace) -> None:
         assert result is not None, entry.key
 
 
-@pytest.mark.smoke
 def test_which_do_i_use_docs_page_is_lockstepped() -> None:
     """Item 20: the docs page IS the generator output (no rot possible)."""
 
@@ -168,7 +166,6 @@ def test_capability_card_on_partial_names_remedies(partial_trace) -> None:
 # PartialTrace typed refusals (D25 / item 15)
 
 
-@pytest.mark.smoke
 def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> None:
     """D25: the five bare AttributeErrors are gone; refusals teach."""
 
@@ -180,7 +177,6 @@ def test_partial_members_refuse_typed_never_attributeerror(partial_trace) -> Non
         assert "audit" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
     """The two remedies the refusal names actually work."""
 
@@ -194,7 +190,6 @@ def test_partial_explain_and_audit_still_answer(partial_trace) -> None:
 # Machine-core parity (item 14 / D17)
 
 
-@pytest.mark.smoke
 def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     """One machine core (D17; defaults.7): explain is prose only, and the
     agent JSON counts read the same FactCore the summary family reads (the
@@ -213,7 +208,6 @@ def test_agent_json_is_the_one_machine_projection(family_trace) -> None:
     assert agent_json["capture"]["model_class"] == family_trace.source.class_name
 
 
-@pytest.mark.smoke
 def test_bom_is_a_factcore_projection(family_trace) -> None:
     """Item 14/D16: BOM counts come from FactCore, both grains named."""
 
@@ -249,7 +243,6 @@ def test_count_vocabulary_one_value_per_grain(family_trace) -> None:
     assert agent_json["counts"]["modules"] == bom["graph"]["num_modules"]
 
 
-@pytest.mark.smoke
 def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> None:
     """D4 work-metric (composition row 6): no metadata_only member pays for
     a payload scan -- explain, profile, BOM, agent_json, summary included."""
@@ -274,7 +267,6 @@ def test_metadata_only_members_trigger_no_scan(family_trace, monkeypatch) -> Non
     assert calls == [], f"metadata-only members scanned: {calls}"
 
 
-@pytest.mark.smoke
 def test_family_non_mutation(family_trace) -> None:
     """Composition row 10: no family member mutates params or RNG."""
 

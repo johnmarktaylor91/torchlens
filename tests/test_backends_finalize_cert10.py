@@ -62,6 +62,8 @@ import mlx.nn as nn  # noqa: E402
 tinygrad = pytest.importorskip("tinygrad")
 from tinygrad import Tensor as TinygradTensor  # noqa: E402
 
+pytestmark = pytest.mark.rare
+
 
 class _MlxMlp(nn.Module):
     """Small MLX MLP used to exercise object-module param attribution."""

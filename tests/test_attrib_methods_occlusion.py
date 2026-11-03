@@ -101,7 +101,6 @@ def test_map_values_match_analytic_deltas_average_and_sum() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_per_example_int_target_deltas() -> None:
     """Int targets produce per-example maps; callable targets aggregate to batch 1."""
 
@@ -123,7 +122,6 @@ def test_per_example_int_target_deltas() -> None:
     assert aggregate.extra["per_example_deltas"] is False
 
 
-@pytest.mark.smoke
 def test_replacement_policy_seam() -> None:
     """zeros/mean/scalar/tensor replacement policies resolve and disclose."""
 
@@ -142,7 +140,6 @@ def test_replacement_policy_seam() -> None:
     assert excinfo.value.fields["code"] == "occlusion_geometry_invalid"
 
 
-@pytest.mark.smoke
 def test_pass_budget_refusal_carries_the_arithmetic() -> None:
     """D9: exceeding max_passes refuses with count, one-pass time, projection."""
 
@@ -160,7 +157,6 @@ def test_pass_budget_refusal_carries_the_arithmetic() -> None:
     assert "16" in message and "8" in message and "s total" in message
 
 
-@pytest.mark.smoke
 def test_geometry_refusals() -> None:
     """Oversized windows, bad specs, and bad leaf indexes refuse typed."""
 

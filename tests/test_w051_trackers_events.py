@@ -7,7 +7,6 @@ step 0 landed in an orphaned list and was never serialized.
 
 from __future__ import annotations
 
-import pytest
 import torch
 
 import torchlens.trackers as trk
@@ -56,7 +55,6 @@ def test_verdicts_after_the_first_drain_serialize_at_their_step() -> None:
     assert session._pending_events == []
 
 
-@pytest.mark.smoke
 def test_verdicts_pending_at_close_are_flushed_not_dropped() -> None:
     """A verdict published after the last step still reaches the sink."""
 

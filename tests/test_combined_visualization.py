@@ -128,7 +128,6 @@ def test_draw_combined_tinymlp_smoke(tmp_path: Path) -> None:
     assert (tmp_path / "combined.svg").stat().st_size > 0
 
 
-@pytest.mark.smoke
 def test_draw_combined_top_level_function(tmp_path: Path) -> None:
     """``graph="combined"`` with an explicit path renders a Trace."""
     trace = _log_backward_model(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))
@@ -260,6 +259,7 @@ def test_draw_combined_correspondence_edge_constraint_false(tmp_path: Path) -> N
     assert "style=dashed" in dot
 
 
+@pytest.mark.smoke
 def test_draw_combined_bwd_filter_keeps_selected_grad_fns(tmp_path: Path) -> None:
     """Combined rendering accepts a one-based backward pass filter."""
     trace = _log_two_backward_passes(_LinearReluModel(), torch.randn(2, 3, requires_grad=True))

@@ -93,7 +93,6 @@ def _model_and_input() -> tuple[nn.Module, torch.Tensor]:
     return _ConvNet().eval(), torch.randn(1, 3, 8, 8)
 
 
-@pytest.mark.smoke
 @pytest.mark.parametrize("scenario", sorted(_SCENARIOS))
 def test_unrepresentable_policy_captures_and_refuses_runnable_save(
     scenario: str, tmp_path: Path
@@ -137,7 +136,6 @@ def test_legacy_set_policy_stays_representable_and_verified(tmp_path: Path) -> N
     assert report.path_faithfulness is PathFaithfulness.VERIFIED
 
 
-@pytest.mark.smoke
 def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     model, x = _model_and_input()
     path = tmp_path / "clean.tlspec"
@@ -155,7 +153,6 @@ def test_replay_restores_the_callers_exact_mixed_policy(tmp_path: Path) -> None:
     assert tc.snapshot_fp32_precision_controls() == caller_policy
 
 
-@pytest.mark.smoke
 def test_check_determinism_runs_under_mixed_policy() -> None:
     _set("cudnn.conv", "tf32")
     _set("cudnn.rnn", "ieee")

@@ -19,7 +19,6 @@ legitimately carry session state); the DROP row governs the portable artifact.
 
 from __future__ import annotations
 
-import pytest
 import torch
 from torch import nn
 
@@ -140,7 +139,6 @@ def test_side_channel_survives_plain_pickle_like_fast_run_session() -> None:
     assert TRACE_FAILURE_ATTR in restored.__dict__
 
 
-@pytest.mark.smoke
 def test_validate_fail_emits_one_summarizing_warning() -> None:
     """R67: a validate() FAIL points at the structured diagnosis.
 

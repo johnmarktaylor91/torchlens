@@ -160,7 +160,6 @@ def test_discover_unknown_group_refuses_typed(on_path: Path) -> None:
     assert "approved groups" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_plugin_status_reads_without_importing(on_path: Path) -> None:
     """The four-state listing starts every candidate at 'installed'."""
 
@@ -175,7 +174,6 @@ def test_plugin_status_reads_without_importing(on_path: Path) -> None:
         assert module not in sys.modules, module
 
 
-@pytest.mark.smoke
 def test_metadata_parse_failure_warns_never_raises(
     on_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -273,7 +271,6 @@ def test_wrong_export_row_shape_refuses(on_path: Path) -> None:
     assert cause.fields["code"] == "plugin_activation_invalid"
 
 
-@pytest.mark.smoke
 def test_wrong_backend_result_refuses(on_path: Path) -> None:
     """The backend door rejects a non-BackendSpec factory result."""
 
@@ -341,7 +338,6 @@ def test_activate_configured_reports_declaration_digest(on_path: Path) -> None:
         export_registry.unregister_target("eco_rt_demo_target")
 
 
-@pytest.mark.smoke
 def test_activate_configured_consumes_env_declaration(
     on_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -358,7 +354,6 @@ def test_activate_configured_consumes_env_declaration(
         export_registry.unregister_target("eco_rt_demo_target")
 
 
-@pytest.mark.smoke
 def test_activate_configured_none_declaration_refuses_with_digest(
     on_path: Path,
 ) -> None:

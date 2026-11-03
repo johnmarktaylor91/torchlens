@@ -124,7 +124,6 @@ class TestAttentionView:
 class TestCrop:
     """crop_to: cropping never renormalizes (D5)."""
 
-    @pytest.mark.smoke
     def test_crop_reports_omitted_mass_and_never_renormalizes(self) -> None:
         """Cropped values are the original values; omitted mass is exact."""
 
@@ -166,7 +165,6 @@ class TestMaskInfo:
 class TestGqa:
     """GQA disclosure arithmetic (D15)."""
 
-    @pytest.mark.smoke
     def test_group_header_wording(self) -> None:
         """Shared-heads wording names the group and its query-head span."""
 
@@ -210,7 +208,6 @@ class TestAnnotationKinds:
             annotation = tviz.Annotation(kind=kind, heads=(0, 1), values=(0.5, None), source="s")
             assert annotation.values[1] is None  # unmeasured stays blank
 
-    @pytest.mark.smoke
     def test_from_receipt_mints_intervention_effect(self) -> None:
         """The receipt door mints the causal kind with its evidence."""
 
@@ -339,7 +336,6 @@ class TestEpisodeCoordinates:
         assert view.episode is not None
         assert view.episode.step == 3
 
-    @pytest.mark.smoke
     def test_role_vocabulary_closed(self) -> None:
         """Unknown roles refuse."""
 
@@ -361,7 +357,6 @@ class _Modules(dict):
 class TestExtractionRefusals:
     """Trace-facing refusals on duck-typed traces (no capture needed)."""
 
-    @pytest.mark.smoke
     def test_missing_pattern_facet_refuses(self) -> None:
         """A pattern-less trace refuses tv_facet_missing with the remedy."""
 
@@ -375,7 +370,6 @@ class TestExtractionRefusals:
             tviz.attention_views(trace)
         assert _code(excinfo) == "tv_facet_missing"
 
-    @pytest.mark.smoke
     def test_missing_payload_refuses(self) -> None:
         """A facet without a captured tensor payload refuses tv_payload_missing."""
 

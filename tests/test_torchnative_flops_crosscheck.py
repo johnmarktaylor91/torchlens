@@ -181,7 +181,6 @@ def test_witness_divergence_refuses_typed() -> None:
     assert excinfo.value.fields["remedy"]
 
 
-@pytest.mark.smoke
 def test_native_never_fills_torchlens_unknowns() -> None:
     """Unknown TorchLens cells stay unknown; native values never leak in."""
 
