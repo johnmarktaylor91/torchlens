@@ -371,8 +371,29 @@ def build_sparse_run_descriptor(trace: Any) -> SparseRunDescriptor:
     # -- so the producer refuses with a named diagnostic instead of shipping a
     # permanently-unverifiable artifact whose cause is unfindable from the report.
     # Zero-fire selectors leave every op unreplaced and stay runnable.
+    # A patch from another run (``tl.patch_from``) binds the patched values to the
+    # DONOR run's inputs: no function of this run's inputs produces them, so the
+    # refusal names the analysis save that keeps the patched fork as data.
+    patched_labels = tuple(str(op.label) for op in ops if _op_carries_patch_from(op))
+    if patched_labels:
+        diagnostics.append(
+            _diagnostic(
+                RunnableErrorCode.USER_INTERVENTION_NOT_REPLAYABLE,
+                f"This capture carries {len(patched_labels)} op(s) patched from another "
+                "run (tl.patch_from); the patched values belong to the donor run's "
+                "inputs, not to a function of this run's inputs, so no runnable "
+                "artifact can recompute them. Runnable save is refused; keep the "
+                "patched fork with the analysis save, trace.save(path) at level "
+                "'portable' (the default) or 'audit', which stores the patched "
+                "activations as data.",
+                affected_ops=patched_labels,
+                detection_stage="producer_patch_source_bound",
+            )
+        )
     intervention_replaced_labels = tuple(
-        str(op.label) for op in ops if bool(getattr(op, "is_edited", False))
+        str(op.label)
+        for op in ops
+        if bool(getattr(op, "is_edited", False)) and str(op.label) not in patched_labels
     )
     if intervention_replaced_labels:
         diagnostics.append(
@@ -2759,6 +2780,21 @@ def _has_data_alias_mutation(trace: Any) -> bool:
     from ..backends.torch._completeness_escape_state import data_alias_mutation_detected
 
     return data_alias_mutation_detected(trace)
+
+
+def _op_carries_patch_from(op: Any) -> bool:
+    """Return whether an edited op's fire records include a ``patch_from`` edit."""
+
+    if not getattr(op, "is_edited", False):
+        return False
+    for record in getattr(op, "edits", ()) or ():
+        names = str(getattr(record, "edit_name", None) or "").split(",")
+        if "patch_from" in names:
+            return True
+        edit = getattr(record, "edit", None)
+        if getattr(edit, "name", None) == "patch_from":
+            return True
+    return False
 
 
 def _has_forward_value_override_intervention(trace: Any) -> bool:
