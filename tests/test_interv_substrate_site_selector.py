@@ -73,7 +73,6 @@ def _ready(model: nn.Module) -> tl.Trace:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_site_selector_construction_refusals() -> None:
     with pytest.raises(ArgumentTypeError) as excinfo:
         site()
@@ -149,7 +148,6 @@ def test_live_site_intervention_fires_at_the_right_site() -> None:
     assert events[-1]["site_keys"] == [layer_site_key(log.layers["relu_1_2"])]
 
 
-@pytest.mark.smoke
 def test_live_minted_keys_match_posthoc_keys() -> None:
     """PARITY PIN (surgery risk 1): live-minted key == postprocess key."""
 
@@ -211,7 +209,7 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
             model,
             torch.randn(2, 4),
             save=site(func="relu"),
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
     assert "site" in str(excinfo.value)
 
@@ -230,6 +228,6 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     model = _TinyModel()
     log = _ready(model)
     fork = log.fork()
-    fork.attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
+    fork._attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))

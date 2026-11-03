@@ -187,7 +187,7 @@ def test_activation_patch_head_cell_matches_manual_patch() -> None:
         return clean_head
 
     manual = corrupted_log.fork("manual_head_patch")
-    manual.attach_hooks(tl.facet("result").head(0).in_module("block.attn"), _manual_patch)
+    manual._attach_hooks(tl.facet("result").head(0).in_module("block.attn"), _manual_patch)
     manual.run(model, corrupted)
 
     assert torch.equal(scores[0, 0], _metric(manual).detach())

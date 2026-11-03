@@ -129,7 +129,6 @@ def _unedited(model: nn.Module) -> tuple[tl.Trace, dict[str, torch.Tensor]]:
     return trace, grads
 
 
-@pytest.mark.smoke
 def test_a9_edit_applies_to_the_output_gradient() -> None:
     """A9: clamp on tl.grad(y) clamps dL/dy (1.0 -> 0.5), so dL/dh = 2 * 0.5 = 1.0.
 
@@ -155,7 +154,6 @@ def test_a9_edit_applies_to_the_output_gradient() -> None:
     assert {record.site_label for record in fires} == {y_site.split(":")[0]}
 
 
-@pytest.mark.smoke
 def test_a10_zero_gradient_disconnects_only_the_relu_path() -> None:
     """A10: scale(0) at relu zeroes fc_a's grads, keeps fc_out's, leaves forward values."""
 
@@ -175,7 +173,6 @@ def test_a10_zero_gradient_disconnects_only_the_relu_path() -> None:
         assert torch.equal(result[label].out, baseline[label].out), label
 
 
-@pytest.mark.smoke
 def test_a11_saved_grad_is_the_edited_gradient() -> None:
     """A11: after scale(0.25) fires, result[relu].grad is 0.25 times the unedited one."""
 
@@ -188,7 +185,6 @@ def test_a11_saved_grad_is_the_edited_gradient() -> None:
     assert torch.allclose(result[relu].grad, 0.25 * baseline[relu].grad)
 
 
-@pytest.mark.smoke
 def test_a19_do_returns_an_armed_trace_and_leaves_the_source_alone() -> None:
     """A19: without a backward the result is ARMED, not a completed intervention."""
 
@@ -211,7 +207,6 @@ def test_a19_do_returns_an_armed_trace_and_leaves_the_source_alone() -> None:
     assert re.search(r"\b1 gradient edits? armed; call trace\.backward\(loss\)", repr(result))
 
 
-@pytest.mark.smoke
 def test_a20_each_backward_writes_its_own_settle_row() -> None:
     """A20: one settle row per pass, parented on the arming row; pass 1 is never rewritten."""
 
@@ -241,7 +236,6 @@ def test_a20_each_backward_writes_its_own_settle_row() -> None:
     assert rows[1]["status"] == "fired"
 
 
-@pytest.mark.smoke
 def test_a21_loss_callable_runs_the_backward_inside_do() -> None:
     """A21: loss= performs the backward in the same call and settles it."""
 
@@ -366,7 +360,6 @@ def test_a24_mixed_plan_edits_the_activation_and_the_gradient() -> None:
     assert row["armed_edits"] == 1
 
 
-@pytest.mark.smoke
 def test_a27_unreached_gradient_settles_no_fire_without_a_zero_tensor() -> None:
     """A27: a matched site the loss never reaches settles no_fire; no zero grad appears."""
 
@@ -381,7 +374,6 @@ def test_a27_unreached_gradient_settles_no_fire_without_a_zero_tensor() -> None:
     assert result[side].has_grad is False
 
 
-@pytest.mark.smoke
 def test_a27_pass_qualifier_settles_pass_filtered() -> None:
     """A27: tl.grad(s) & tl.in_backward_pass(2) on pass 1 settles no_fire, pass_filtered."""
 

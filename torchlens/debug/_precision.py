@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import torch
 
-from .._debug_report import FoundReport, rows_of
+from .._debug_report import FoundReport, at_source, rows_of
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
 from ._common import _compute_ops, _op_label, _safe_out, _source_line, _tensor_unavailable_reason
 
@@ -110,7 +110,9 @@ class BisectPrecisionReport(FoundReport):
 
         findings = [self.message] if self.message else []
         findings.extend(
-            f"{row.label}: max_abs_err={row.max_abs_err:.4g}" for row in self.rows if row.diverged
+            f"{row.label}: max_abs_err={row.max_abs_err:.4g}{at_source(row.source_line)}"
+            for row in self.rows
+            if row.diverged
         )
         return findings
 

@@ -131,7 +131,6 @@ def test_runner_fastlog_zero_operation_executes_on_current_api() -> None:
     assert "save=" in str(state["fastlog_zero_policy"])
 
 
-@pytest.mark.smoke
 def test_runner_fastlog_selectivity_operations_execute_on_current_api() -> None:
     """Selectivity cells (dry_run + record) run against the ``save=`` API."""
 

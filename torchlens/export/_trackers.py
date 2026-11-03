@@ -431,9 +431,25 @@ def _tracker_dataframe(log: Any) -> Any:
         Pandas dataframe suitable for strict tracker table types.
     """
 
+    import pandas as pd
+
     dataframe = log.to_pandas()
-    # ``apply`` builds a new frame, which does not reliably propagate attrs.
-    return attach_dataframe_honesty(dataframe.apply(lambda column: column.map(_tracker_cell)), log)
+    # Build every column as an ``object`` series from the scalarized cells.
+    # ``Series.map`` keeps a nullable extension dtype (pandas 3), which turns the
+    # ``None`` a missing cell maps to back into ``pd.NA``: not a primitive, and
+    # strict tracker tables reject it. A new frame also drops attrs, so the
+    # honesty facts are attached afterwards.
+    columns = [
+        pd.Series(
+            [_tracker_cell(cell) for cell in dataframe.iloc[:, position].tolist()],
+            index=dataframe.index,
+            dtype=object,
+        )
+        for position in range(dataframe.shape[1])
+    ]
+    tracker = pd.concat(columns, axis=1, ignore_index=True) if columns else dataframe.astype(object)
+    tracker.columns = dataframe.columns
+    return attach_dataframe_honesty(tracker, log)
 
 
 def _tracker_cell(value: Any) -> Any:

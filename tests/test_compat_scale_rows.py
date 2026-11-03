@@ -1,4 +1,4 @@
-"""Scale-honesty compat rows: GPTQ/AWQ, CUDA graphs, serving engines (R2-22).
+"""Scale-honesty compat rows: GPTQ/AWQ, CUDA graphs, serving engines.
 
 Each row must fire on its condition and stay quiet on a plain model. The
 GPTQ/AWQ and serving-engine kernels cannot run on the CPU venue, so the

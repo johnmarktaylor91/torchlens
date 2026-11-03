@@ -1,6 +1,6 @@
 """tlspec v10 coordinated schema write: the contract pins and the v10 field registry.
 
-v10 is ONE bump for every new saved field of its window (R2-05 with R2-38).
+v10 is ONE bump for every new saved field of its window.
 This module is the field registry of record for that window:
 ``V10_FIELD_ADMISSIONS`` lists every persisted field a lane added over the
 v9 contract, with its registered ``FieldPolicy``. A persisted-name
@@ -10,8 +10,8 @@ yet is simply absent from the live contract.
 
 The module also pins the rest of the v10 write: the v10 contract states the true
 floor release (2.31.0, the first tlspec-6 writer), the generation step-score names
-are reserved and credited to inseq (U22.3), the facet snapshot stays a DROP
-field (R2-36), and the floor, ceiling and 2.x refusal doors hold. The v9 and v8
+are reserved and credited to inseq, the facet snapshot stays a DROP
+field, and the floor, ceiling and 2.x refusal doors hold. The v9 and v8
 contracts left with the 2.x readers, so the diff of admitted fields over v9 is gone;
 the next window diffs against the v10 contract of record.
 """
@@ -55,7 +55,7 @@ V10_CONTRACT_SHA256 = (
 #: in ``V10_FIELD_RETYPES`` (removals stay alias-or-fail, see
 #: ``tests/test_tlspec_envelope_contract.py``).
 V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
-    # SCHEMA-REQUESTS row 2 (RUN-B, R2-37): the byte disclosure for the
+    # SCHEMA-REQUESTS row 2 (RUN-B): the byte disclosure for the
     # autograd graph the attached saved activations keep alive. DROP: a loaded
     # or unpickled trace pins nothing, so a persisted capture-time number
     # would read as current; it loads as None ("not measured").
@@ -78,7 +78,7 @@ V10_FIELD_ADMISSIONS: dict[str, dict[str, str]] = {
     # attributes a forward wrote (arbitrary user objects). DROP, both the public
     # property and its slot: a loaded, unpickled or deep-copied trace reads None.
     "module": {"attribute_writes": "drop", "_attribute_writes": "drop"},
-    # SCHEMA-REQUESTS row 15 (FLOPS-2, U05.4): the counted executed backward
+    # SCHEMA-REQUESTS row 15 (FLOPS-2): the counted executed backward
     # and its attribution, a closed dict of ints, None and short strings
     # written at save. KEEP: a loaded trace reads the counted answer; v9 and
     # earlier v10 artifacts default-fill None and read unknown.
@@ -126,7 +126,7 @@ def _record_contracts(path: Path) -> dict:
 
 
 def test_step_score_names_are_reserved_and_credited() -> None:
-    """U22.3: inseq's step-score names are reserved in the v10 contract of record."""
+    """Inseq's step-score names are reserved in the v10 contract of record."""
 
     assert RESERVED_STEP_SCORE_NAMES == _INSEQ_STEP_SCORES_MAP_KEYS
     reserved = _load(V10_CONTRACT)["contract"]["reserved_vocabularies"]["step_scores"]
@@ -137,7 +137,7 @@ def test_step_score_names_are_reserved_and_credited() -> None:
 
 
 def test_facet_snapshot_stays_a_drop_field() -> None:
-    """R2-36: the facet snapshot never persists (pickle round-trip: test_fw2b_*)."""
+    """The facet snapshot never persists (pickle round-trip: test_fw2b_*)."""
 
     trace_contract = _record_contracts(V11_CONTRACT)["trace"]
     assert trace_contract["field_policies"]["facet_functions"] == "drop"

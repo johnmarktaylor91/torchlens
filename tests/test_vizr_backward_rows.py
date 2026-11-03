@@ -1,4 +1,4 @@
-"""Opt-in backward-node rows on ``draw_backward`` (U08.5).
+"""Opt-in backward-node rows on ``draw_backward``.
 
 Module-path labels and gradient values appear on backward nodes only when the
 caller asks for them (``show_module_paths=True`` / ``show_grad_values=True``);

@@ -88,7 +88,6 @@ def _tuple_stimuli(ids: torch.Tensor, mask: torch.Tensor) -> list[tuple[torch.Te
     return [(ids[i], mask[i]) for i in range(ids.shape[0])]
 
 
-@pytest.mark.smoke
 def test_load_extraction_passes_mmap_and_weights_only(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -132,7 +131,6 @@ def test_load_extraction_passes_mmap_and_weights_only(
         assert torch.equal(loaded.activations[key], torch.cat(tensors, dim=0))
 
 
-@pytest.mark.smoke
 def test_pt_shard_reader_mmaps_a_path_object(tmp_path: Path) -> None:
     """The lazy ``.pt`` shard reader also mmaps from a ``Path``, not just a ``str``.
 
@@ -177,7 +175,6 @@ def test_stimulus_ids_in_memory_refuses_typed() -> None:
     assert "requires path=" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_left_padded_batch_derives_position_ids_and_matches_reference() -> None:
     """Non-right-aligned masks get derived position_ids: bit-exact fix (D5.1)."""
 
@@ -293,7 +290,6 @@ def test_inference_guard_restores_mixed_train_eval_flags_and_buffers() -> None:
     assert not any(tensor.requires_grad for tensor in out.values())
 
 
-@pytest.mark.smoke
 def test_inference_guard_restores_flags_on_refusal_mid_run() -> None:
     """The exact-restore covers exception paths, including typed refusals."""
 

@@ -169,7 +169,7 @@ def test_resnet18_incompatible_add_crash_trio() -> None:
                 torch.randn(1, 3, 224, 224),
                 save=tl.func("linear"),
                 narrate=NarrationOptions(sites=True, sink=sink),
-                on_forward_error="attach_partial",
+                recording=tl.options.RecordingOptions(on_forward_error="attach_partial"),
             )
         assert isinstance(excinfo.value.__cause__, RuntimeError)
     transcript = sink.getvalue()
@@ -250,7 +250,7 @@ def test_cuda_metadata_echo_is_zero_sync() -> None:
     sink = io.StringIO()
     torch.cuda.set_sync_debug_mode("error")
     try:
-        tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, stats="off"))
+        tl.record(model, x, narrate=NarrationOptions(sites=True, sink=sink, value_stats="off"))
     finally:
         torch.cuda.set_sync_debug_mode("default")
     assert "relu" in sink.getvalue()

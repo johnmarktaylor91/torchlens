@@ -1,4 +1,4 @@
-"""U26.3 fix 3: the until= prefix projection's per-op overhead, and its equivalence.
+"""The until= prefix projection's per-op overhead, and its equivalence.
 
 ``run(until=...)`` skips the cut-off ops, but each executed op used to pay a full
 refresh copy: every recorded field of the refreshed op was deep-copied onto the

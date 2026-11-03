@@ -1,4 +1,4 @@
-"""Op-grain watching (U32.1) behind consent and attach-time calibration (U34.1).
+"""Op-grain watching behind consent and attach-time calibration.
 
 ``watch(grain="op")`` drives the Route-B op-tier collector from an ordinary
 training loop through a disclosed root-forward wrap. These tests pin: the
@@ -108,7 +108,7 @@ class TestConsent:
 
 class TestOpValues:
     def test_records_per_op_values_equal_to_the_op_output(self) -> None:
-        """Acceptance U32.1: the series value is the ReLU op output's L2 norm."""
+        """Acceptance: the series value is the ReLU op output's L2 norm."""
 
         model, opt = _mlp()
         seen: dict[int, float] = {}
@@ -214,7 +214,7 @@ class TestOpValues:
 
 class TestCalibrationDisclosure:
     def test_attach_calibrates_and_discloses_the_cost(self) -> None:
-        """Acceptance U34.1: consent -> calibration -> disclosed cost."""
+        """Acceptance: consent -> calibration -> disclosed cost."""
 
         torch.manual_seed(0)
         model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8), nn.ReLU(), nn.Dropout(0.5))

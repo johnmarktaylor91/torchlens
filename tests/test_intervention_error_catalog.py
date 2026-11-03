@@ -316,7 +316,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
 
     log = _capture()
     log.set(tl.func("relu"), torch.zeros(1, 3), confirm_mutation=True)
-    log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     replay_result = log.push()
     assert replay_result is log
     assert log.state is TraceState.REPLAY_PROPAGATED
@@ -356,7 +356,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
         ),
         (
             "attach_hooks",
-            lambda log: log.attach_hooks(tl.func("missing"), _zero_hook, confirm_mutation=True),
+            lambda log: log._attach_hooks(tl.func("missing"), _zero_hook, confirm_mutation=True),
             terrors.SiteResolutionError,
         ),
         (
@@ -405,8 +405,8 @@ def test_axis_b_replay_and_rerun_match_for_graph_stable_hook() -> None:
     replay_log = _capture(_ReluAdd(), x)
     rerun_log = _capture(_ReluAdd(), x)
 
-    replay_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
-    rerun_log.attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    replay_log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
+    rerun_log._attach_hooks(tl.func("relu"), _zero_hook, confirm_mutation=True)
     replay_log.push()
     rerun_log.run(_ReluAdd(), x)
 
@@ -504,7 +504,7 @@ def test_graph_shape_mismatch_error_raised_for_executable_spec(
 
     x = torch.randn(1, 3)
     log = _capture(_ReluAdd(), x)
-    log.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
     path = tmp_path / "graph_shape_mismatch.tlspec"
     log.save_intervention(path, level="portable")
     spec = load_intervention_spec(path)

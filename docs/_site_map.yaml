@@ -160,6 +160,9 @@ pages:
     moved_from: [recipes/generation_step_attribution.md]
   - path: field-guide/intervene.md
     section: field-guide
+  - path: field-guide/jacobian_lens.md
+    section: field-guide
+    moved_from: [recipes/jacobian_lens.md]
   - path: field-guide/lrp_epsilon_litmus.md
     section: field-guide
     moved_from: [recipes/lrp_epsilon_litmus.md]
@@ -270,6 +273,8 @@ pages:
   - path: migration/coming_from_torchsnooper.md
     section: relation
   - path: migration/comparison.md
+    section: relation
+  - path: migration/cross_engine.md
     section: relation
   - path: migration/from_bertviz_ecco.md
     section: relation

@@ -24,7 +24,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
-from .._debug_report import FoundReport, rows_of
+from .._debug_report import FoundReport, at_source, rows_of
 from ._first_bad import FirstBadThing, amp_scaled_grads_hint
 
 if TYPE_CHECKING:
@@ -151,6 +151,13 @@ class BackwardNanReport(FoundReport):
         """One-line findings for the card, most severe first."""
 
         findings = [self.message] if self.message else []
+        birth = self.birth
+        if birth is not None:
+            forward = f" from forward op {birth.op_label}" if birth.op_label else ""
+            findings.append(
+                f"birth: {birth.grad_fn_label} ({birth.grad_fn_class}){forward}"
+                f"{at_source(birth.source_line)}"
+            )
         findings.extend(f"healed: {label}" for label in self.healed)
         return findings
 

@@ -27,8 +27,8 @@ edited_model = pz.select(model).at_instances_of(pz.nn.Linear).apply(rewrite)
 
 ### In TorchLens
 
-TorchLens edits a recorded run instead of the model definition: capture with
-`replayable=True`, fork the trace, apply the edit at a site, and read both runs.
+TorchLens edits a recorded run instead of the model definition: capture a trace, fork
+it, apply the edit at a site, and read both runs.
 
 ```python
 # migration-test: tool=torchlens expected=([[2.5, 2.5]], [[0.0, 0.0]])
@@ -49,11 +49,7 @@ class Tiny(nn.Module):
         return torch.relu(self.proj(x))
 
 
-trace = tl.trace(
-    Tiny(),
-    torch.tensor([[2.0, 3.0]]),
-    capture=tl.options.CaptureOptions(replayable=True),
-)
+trace = tl.trace(Tiny(), torch.tensor([[2.0, 3.0]]))
 edited = trace.fork("zeroed")
 edited.do(tl.module("proj"), tl.zero_ablate())
 RESULT = (
@@ -67,9 +63,9 @@ RESULT = (
 | Penzai operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
 | Name and select model subtrees | `tl.in_module("path")`, `tl.module("path")`, and exact labels after discovery | Similar goal; TorchLens uses PyTorch module addresses and op labels. |
-| Functional model surgery | Capture with `capture=tl.options.CaptureOptions(replayable=True)`; `trace.fork()`, then `.do(site, edit)` (replays the recorded graph from the edited value) or `.do(site, edit, model=model, inputs=x)` (runs the model again); `.attach_hooks(site, helper)` stages a sticky hook instead | TorchLens edits a recorded run, not the model definition. |
+| Functional model surgery | Capture with `tl.trace(model, x)`; `trace.fork()`, then `.do(site, edit)` (replays the recorded graph from the edited value) or `.do(site, edit, model=model, inputs=x)` (runs the model again) | TorchLens edits a recorded run, not the model definition. |
 | Inspect intermediate values | `trace.find_sites(selector).first().out`, or `trace[label].out` | Equivalent for captured tensors. |
-| Patch or replace a value | `.do(site, edit)` or `.attach_hooks(site, helper)` on a forked trace | Equivalent for visible activations. |
+| Patch or replace a value | `.do(site, edit)` on a forked trace | Equivalent for visible activations. |
 | Declarative named axes | Explicit tensor shapes, plus `dim=` where a helper needs it | No named-axis system. |
 | Transformer-specific layer abstractions | `torchlens.mechinterp` (TransformerLens-style names through `resolve_alias`) and attention facets | Different vocabulary; no penzai layer classes. |
 | Save a modified computation | `trace.save_intervention(path, level="portable")` writes a `.tlspec/` recipe | TorchLens saves recipes, not rewritten model trees. |

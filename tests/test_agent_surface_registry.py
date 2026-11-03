@@ -97,7 +97,6 @@ def test_no_absolute_path_in_machine_payloads(artifact: Path) -> None:
     assert envelope["artifact"]["basename"] == artifact.name
 
 
-@pytest.mark.smoke
 def test_error_envelope_exposes_typed_fields() -> None:
     """The error envelope carries class/code/remedy/severity, no traceback."""
 
@@ -201,7 +200,6 @@ def test_registry_annotations_and_verbs_are_complete() -> None:
     assert {declaration["name"] for declaration in list_tools()} == {spec.name for spec in specs}
 
 
-@pytest.mark.smoke
 def test_python_facade_reaches_the_agent_surface() -> None:
     """tl.agent resolves on a cold facade and serves the same call_tool."""
 

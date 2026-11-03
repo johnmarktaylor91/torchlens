@@ -130,8 +130,11 @@ def _assign_grad_fn_orders(grad_fn_logs: dict[int, GradFn]) -> None:
     """Populate resolved GradFn order values from creators and known topology.
 
     A creator-attributed node sits one order above its creator. A creator-less
-    node with no paired op (a forward op applied to a ``create_graph``
-    gradient, say) is inferred into the highest order among the nodes it feeds.
+    node is inferred into the highest order among the nodes it feeds, whether
+    or not a forward op is paired with it: only a node created after a
+    ``create_graph`` gradient can feed a higher-order node (an op applied to
+    that gradient, captured when the gradient is taken inside forward), and
+    ordinary forward nodes, which feed only order-1 nodes, stay at 1.
     The two rules run to a fixed point: inferring a node upward re-derives the
     orders of the nodes its own differentiation created, so every
     creator-attributed order stays ``creator.order + 1`` even when the
@@ -165,8 +168,6 @@ def _raise_grad_fn_orders_once(grad_fn_logs: dict[int, GradFn]) -> bool:
             if resolved_order is not None and grad_fn_record.order != resolved_order:
                 grad_fn_record.order = resolved_order
                 changed = True
-            continue
-        if grad_fn_record.has_op:
             continue
         child_orders: list[int] = []
         for child_id in grad_fn_record.next_grad_fn_ids:

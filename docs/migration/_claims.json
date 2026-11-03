@@ -26,12 +26,12 @@
       "verified_at": "2026-09-02 (D05 release gate: P tier on the release commit and on the venv-installed wheel)"
     },
     "gate-fork-run-silent-unedited": {
-      "statement": "fork.attach_hooks(...) followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
+      "statement": "A sticky hook staged on a fork followed by fork.run(inputs=x) returns the UNEDITED output with zero warnings. Blocks every 'never silently inert' formulation.",
       "status": "closed",
       "fix_lane": "phase 1 (intervention honesty cluster)",
-      "closed_by": "A04 (intervention honesty cluster) + the run/attach contract: fork.run(inputs=...) after attach_hooks now REFUSES typed",
+      "closed_by": "A04 (intervention honesty cluster) + the run/stage contract: fork.run(inputs=...) after a staged sticky hook now REFUSES typed",
       "closure_evidence": [
-        "probe 2026-09-02 at 0537becb799d: fork.attach_hooks(zero_ablate relu) then fork.run(inputs=x) raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
+        "probe 2026-09-02 at 0537becb799d: a sticky zero_ablate hook staged on relu of a fork, then fork.run(inputs=x), raises EngineDispatchError code=run_staged_spec_unapplied naming the staged hook count and the intervened-rerun spelling; no un-intervened result is ever returned",
         "tests/test_interv_honesty_failed_do_cleanup.py::test_explicit_attach_hooks_stays_sticky_by_contract",
         "tests/test_intervention_phase7.py::test_rerun_warns_when_value_dependent_sticky_hook_stops_matching"
       ],
@@ -60,7 +60,7 @@
   },
   "cross_cutting_rules": [
     "Never say \"nobody has X\" where X is a family word (replay, safety checks, blocks). Say the precise thing TL uniquely has: replay ENGINE with cone recompute + divergence check; DERIVED admissibility; per-firing AUDIT; unfired-hook DISCLOSURE; region ALGEBRA. Precision is also better copy.",
-    "Three TL-side gates before the strongest claims ship: (a) the D1 replay/push crash on HF causal LMs (blocks claim-1 LLM copy and region advertising); (b) the fork.attach_hooks+run silent-unedited bug (blocks \"never silently inert\"); (c) the appliance replaced=False check (same).",
+    "Three TL-side gates before the strongest claims ship: (a) the D1 replay/push crash on HF causal LMs (blocks claim-1 LLM copy and region advertising); (b) the staged-sticky-hook fork + run silent-unedited bug (blocks \"never silently inert\"); (c) the appliance replaced=False check (same).",
     "The exact-vs-approximate frame (edge substitution vs linear attribution patching) is the durable cost story; \"they must pay a full forward\" is not.",
     "Credit competitors by name for what they own (nnsight generation ergonomics + ~1x; pyvene intervention-as-artifact + trainable interventions; TLens cache kit). The concessions strengthen the switch pitch, not weaken it."
   ],

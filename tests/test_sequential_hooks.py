@@ -75,7 +75,7 @@ def test_sequential_hooks_run_in_order_during_rerun() -> None:
     model = ReluModel()
     x = torch.tensor([[-1.0, 2.0]])
     log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    log.attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
+    log._attach_hooks(tl.func("relu"), add_one, times_two, confirm_mutation=True)
 
     rerun_log = log.run(model, x)
 
@@ -111,11 +111,12 @@ def test_hook_handle_remove_and_context_manager_cleanup() -> None:
         del ctx
         return out
 
-    handle = log.attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
+    handle = log._attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
     assert len(log._intervention_spec.hook_specs) == 1
-    handle.remove()
+    log.clear_edits(handle=handle, confirm_mutation=True)
     assert log._intervention_spec.hook_specs == []
 
-    with log.attach_hooks(tl.func("relu"), identity, confirm_mutation=True):
-        assert len(log._intervention_spec.hook_specs) == 1
+    handle = log._attach_hooks(tl.func("relu"), identity, confirm_mutation=True)
+    assert len(log._intervention_spec.hook_specs) == 1
+    log.clear_edits(handle=handle[0], confirm_mutation=True)
     assert log._intervention_spec.hook_specs == []

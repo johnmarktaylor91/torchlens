@@ -25,7 +25,7 @@ def test_glance_is_the_core_grammar() -> None:
     """glance renders exactly the record's core line (one grammar)."""
 
     tensor = torch.arange(24, dtype=torch.float32).reshape(4, 6)
-    stats = tensor_stats(tensor, identity=f"glance:{tuple(tensor.shape)}:{tensor.dtype}")
+    stats = tensor_stats(tensor, _identity=f"glance:{tuple(tensor.shape)}:{tensor.dtype}")
     assert glance(tensor) == render_core_line(stats)
 
 
@@ -36,7 +36,6 @@ def test_glance_refuses_non_tensors_teaching() -> None:
         glance([1.0, 2.0])  # type: ignore[arg-type]
 
 
-@pytest.mark.smoke
 def test_glance_width_ladder_keeps_extrema_and_health() -> None:
     """D14: degradation drops bytes/n/sparkline, never extrema or health."""
 
@@ -54,7 +53,6 @@ def test_summary_cell_matches_line_renderer() -> None:
     assert summary_cell(stats, max_width=40) == render_core_line(stats, max_width=40)
 
 
-@pytest.mark.smoke
 def test_treescope_fields_carry_no_invented_numbers() -> None:
     """The HTML fixture is a projection of the record, both encodings."""
 
@@ -78,7 +76,6 @@ class _EchoModel(nn.Module):
         return torch.relu(self.fc(x))
 
 
-@pytest.mark.smoke
 def test_echo_mounts_and_stays_pure() -> None:
     """The echo fires per site AND adds ZERO ops to the captured graph."""
 

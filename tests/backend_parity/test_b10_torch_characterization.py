@@ -338,7 +338,7 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     assert buffer_versions[1].buffer_write_kind == "inplace"
     assert str(buffer_versions[1].buffer_source).startswith("add_2_")
     assert buffer_versions[1].parents == ("add_2_2",)
-    # A default capture is a pure observer (U40.1): the live buffer is restored.
+    # A default capture is a pure observer: the live buffer is restored.
     assert torch.equal(model.offset, torch.zeros(2, 2))
 
 

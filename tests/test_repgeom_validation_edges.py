@@ -18,7 +18,6 @@ def _distances(n: int = 8) -> np.ndarray:
     return np.sqrt((deltas**2).sum(axis=-1))
 
 
-@pytest.mark.smoke
 def test_rdm_refuses_nonfinite_empty_and_unknown_metric_inputs() -> None:
     """rdm() rejects NaN activations, empty stimulus axes, and bad metrics."""
 
@@ -32,7 +31,6 @@ def test_rdm_refuses_nonfinite_empty_and_unknown_metric_inputs() -> None:
         tl.repgeom.rdm(np.ones((4, 2)), metric="mahalanobis")
 
 
-@pytest.mark.smoke
 def test_rdm_metrics_produce_valid_distance_matrices() -> None:
     """cosine/correlation metrics return symmetric zero-diagonal matrices."""
 
@@ -46,7 +44,6 @@ def test_rdm_metrics_produce_valid_distance_matrices() -> None:
         assert np.all(matrix >= -1e-8)
 
 
-@pytest.mark.smoke
 def test_classical_mds_refuses_malformed_distance_matrices() -> None:
     """Explicit distances must be square, symmetric, zero-diagonal, non-negative."""
 
@@ -71,7 +68,6 @@ def test_classical_mds_refuses_malformed_distance_matrices() -> None:
         tl.repgeom.classical_mds(negative, input_kind="distances")
 
 
-@pytest.mark.smoke
 def test_classical_mds_validates_option_values_and_stimulus_counts() -> None:
     """n_components, min_stimuli, input_kind, and stimulus floors are all enforced."""
 
@@ -118,7 +114,6 @@ def test_symmetry_gate_is_relative_to_matrix_scale(scale: float) -> None:
     _check_square_distances(noisy)  # float64 round-off passes at every scale.
 
 
-@pytest.mark.smoke
 def test_classical_mds_accepts_float64_noise_at_large_scale_end_to_end() -> None:
     """Round-off-level asymmetry on a large-scale matrix embeds successfully.
 
@@ -138,7 +133,6 @@ def test_classical_mds_accepts_float64_noise_at_large_scale_end_to_end() -> None
     assert info["input_kind"] == "distances"
 
 
-@pytest.mark.smoke
 def test_classical_mds_refuses_rank_deficient_input() -> None:
     """Collinear points cannot support a 2-d embedding."""
 
@@ -147,7 +141,6 @@ def test_classical_mds_refuses_rank_deficient_input() -> None:
         tl.repgeom.classical_mds(line, 2, input_kind="features")
 
 
-@pytest.mark.smoke
 def test_scree_and_effective_dimensionality_validate_options() -> None:
     """scree min_stimuli floor and variance_threshold bounds are enforced."""
 
@@ -163,7 +156,6 @@ def test_scree_and_effective_dimensionality_validate_options() -> None:
     assert np.isfinite(info["participation_ratio"])
 
 
-@pytest.mark.smoke
 def test_procrustes_align_validates_point_clouds() -> None:
     """Procrustes inputs must be finite [N>=3, 2] clouds of matching shape and rank."""
 

@@ -37,6 +37,7 @@ from torchlens._io import (
     TLSPEC_VERSION,
     UnknownPersistedFieldError,
 )
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._io.state_contract import governed_artifact_load
 
 pytestmark = [pytest.mark.heavy]
@@ -169,7 +170,7 @@ def tampered_main_bundle(tiny_trace: object, tmp_path: Path) -> Path:
     assert isinstance(scrubbed_state, dict)
     scrubbed_state[UNKNOWN_KEY] = 1
     with metadata_path.open("wb") as fh:
-        pickle.dump(scrubbed_state, fh)
+        dump_canonical_metadata(scrubbed_state, fh)
     return bundle
 
 

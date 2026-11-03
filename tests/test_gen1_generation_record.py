@@ -313,7 +313,7 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
     [
         ({"stop_after": lambda ctx: False}, {}, "stopped forward"),
         (
-            {"on_forward_error": "return_partial"},
+            {"recording": tl.options.RecordingOptions(on_forward_error="return_partial")},
             {},
             "partial forward-error modes",
         ),

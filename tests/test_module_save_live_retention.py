@@ -219,7 +219,6 @@ def test_module_exit_path_equals_per_op_escrow_path(name: str, monkeypatch: pyte
         assert torch.equal(op.out, escrowed_saved[label].out), f"{name}: {label} differs"
 
 
-@pytest.mark.smoke
 def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
     """The elicit spelling: save and steer the same module; the replacement is saved."""
 
@@ -242,6 +241,7 @@ def test_module_save_with_module_intervention_keeps_replacement(monkeypatch):
     assert counts["copies"] < len(log._layer_list) - 2
 
 
+@pytest.mark.smoke_cells("test_forced_spill_writes_only_ops_inside_matching_passes[block-4]")
 @pytest.mark.parametrize(("address", "spills"), [("shared", 2), ("block", 4)])
 def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, monkeypatch):
     """Past the RAM budget only ops inside matching passes reach temporary files.
@@ -269,7 +269,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
     model, x = _model_and_input()
     selector = tl.module(address)
     # The default save keeps payloads attached; a spilled one comes back
-    # detached, and the capture discloses it (U27.1).
+    # detached, and the capture discloses it.
     with _counting(monkeypatch) as counts, pytest.warns(TorchLensWarning) as caught:
         log = tl.trace(model, x, save=selector)
     assert counts["spills"] == spills, counts
@@ -286,6 +286,7 @@ def test_forced_spill_writes_only_ops_inside_matching_passes(address, spills, mo
         assert torch.equal(op.out, full[label].out)
 
 
+@pytest.mark.smoke_cells("test_mixed_module_selectors_keep_per_op_escrow[module_or_func]")
 @pytest.mark.parametrize(
     "selector_factory",
     [

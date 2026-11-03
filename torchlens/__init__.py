@@ -222,6 +222,7 @@ _REDIRECTS: dict[str, str] = {
     "draw_backward": "use torchlens.Trace.draw (trace.draw(graph='backward'))",
     "draw_combined": "use torchlens.Trace.draw (trace.draw(graph='combined'))",
     "draw_model_graph": "use torchlens.Trace.draw (trace.draw())",
+    "show_bundle_graph": "use torchlens.Bundle.draw (bundle.draw(path)): the merged bundle graph",
     "FuncCallLocation": "use torchlens.types.FuncCallLocation",
     "get_model_metadata": "use torchlens.trace(model, x, save='none') -- a metadata-only capture is a trace that saves no payloads",
     "get_model_structure": "use torchlens.summary(model, x) for the module tree, or torchlens.trace(model, x).modules",
@@ -280,7 +281,7 @@ _REDIRECTS: dict[str, str] = {
     "tviz": "renamed; use torchlens.transformer (import torchlens.transformer) for the kit; the transformer renderers are torchlens.viz names (torchlens.viz.logit_lens, torchlens.viz.attention)",
     "unwrap_torch": "use torchlens.backends.torch.wrappers.unwrap_torch",
     "validate_backward_pass": "use torchlens.validation.validate_backward_pass",
-    "validate_batch_of_models_and_inputs": "use torchlens.validation.validate_batch_of_models_and_inputs",
+    "validate_batch_of_models_and_inputs": "removed: the batch CSV harness has no successor; use torchlens.validate once per model (torchlens.validate(model, x))",
     "validate_forward_pass": "use torchlens.validation.validate_forward_pass",
     "validate_model_activations": "use torchlens.validate(scope='forward')",
     "validate_saved_activations": "use torchlens.validate(scope='saved')",
@@ -347,6 +348,14 @@ def __dir__() -> list[str]:
     return facade_dir(globals(), _LAZY_ATTRS)
 
 
+def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
+    """Return the did-you-mean layer labels for a failed lookup (empty for non-traces)."""
+
+    if not isinstance(trace, _resolve_top_level("Trace")):
+        return []
+    return list(trace._suggest_layer_labels(str(query)))
+
+
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """Build a short suggestion suffix for lookup failures.
 
@@ -405,7 +414,7 @@ def _out_from_log(trace: Trace, layer: str) -> _torch.Tensor:
         # condition; a "not found" would hide it.
         raise
     except (KeyError, ValueError) as exc:
-        suggestions = trace.find_layers(layer) if hasattr(trace, "find_layers") else []
+        suggestions = _suggest_layer_labels(trace, layer)
         refuse_lookup_not_found(_did_you_mean_message(layer, suggestions), layer, cause=exc)
 
     import torch
@@ -630,7 +639,7 @@ def _extract_layers_with_trace(
     for pattern in layer_plan.values():
         matches = _matching_saved_layer_labels(trace, pattern)
         if not matches:
-            suggestions = trace.find_layers(pattern)
+            suggestions = _suggest_layer_labels(trace, pattern)
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)

@@ -459,6 +459,7 @@ def test_alias_spelling_refuses_with_one_code_and_message_at_every_door(
         assert message == bind_message, f"{door}: {message!r} != {bind_message!r}"
 
 
+@pytest.mark.smoke_cells("test_alias_inside_a_composite_refuses_the_same_way[and-bind]")
 @pytest.mark.parametrize("door", ["trace", "post_hoc_find_sites", "bind", "trace_save"])
 @pytest.mark.parametrize(
     "build",

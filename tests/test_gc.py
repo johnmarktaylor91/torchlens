@@ -162,14 +162,14 @@ class TestTraceGC:
         trace = tl.trace(model, x, save=None)
 
         # Warm up
-        trace.save_new_outs(model, torch.randn(1, 5), save="all")
+        trace._save_new_outs(model, torch.randn(1, 5), save="all")
         gc.collect()
 
         tracemalloc.start()
         baseline = tracemalloc.take_snapshot()
 
         for _ in range(5):
-            trace.save_new_outs(model, torch.randn(1, 5), save="all")
+            trace._save_new_outs(model, torch.randn(1, 5), save="all")
             gc.collect()
 
         after = tracemalloc.take_snapshot()
@@ -436,7 +436,6 @@ class TestTraceGC:
             "(eviction still waits for an unrelated later backward)"
         )
 
-    @pytest.mark.smoke
     def test_live_run_after_model_collection_refuses_typed_and_names_the_weak_ref(self):
         """A collected source model refuses run() typed AND discloses why (R37).
 
@@ -669,7 +668,6 @@ def test_delattr_capture_events_releases_the_working_projection():
     assert not stream.module_prep_events
 
 
-@pytest.mark.smoke
 def test_cleaned_trace_refuses_typed_and_settles_unknown():
     """A husked Trace refuses public reads TYPED and settles outcome UNKNOWN.
 

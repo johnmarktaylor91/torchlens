@@ -1390,6 +1390,7 @@ def test_raw_thread_captured_escape_ceilings(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE
 
 
+@pytest.mark.smoke
 def test_owner_derived_alias_foreign_escape_ceilings(
     preexisting_worker: Any, tmp_path: Path
 ) -> None:
@@ -1911,6 +1912,7 @@ _R53_INERT_SHAPES: tuple[str, ...] = (
 )
 
 
+@pytest.mark.smoke_cells("test_r53_inert_reach_generator_swept[weakmethod]")
 @pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
 def test_r53_inert_reach_generator_swept(shape: str) -> None:
     """REACHABILITY: the sweep snapshots the EXACT generator through the inert edge alone
@@ -1945,7 +1947,6 @@ def test_r53_inert_reach_generator_drawn_is_witnessed(
     assert _R53_FIRED == []
 
 
-@pytest.mark.smoke_cells("test_r53_inert_reach_undrawn_stays_clean[weakmethod]")
 @pytest.mark.parametrize("shape", _R53_INERT_SHAPES)
 def test_r53_inert_reach_undrawn_stays_clean(shape: str) -> None:
     """Over-trigger pin: every holder shape PRESENT but UNDRAWN records no channel and no

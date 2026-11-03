@@ -72,7 +72,7 @@ def test_transform_replaces_transformed_payload_with_raw_kept() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
@@ -97,7 +97,7 @@ def test_activation_transform_canonical_name_matches_transform_alias() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
@@ -118,7 +118,7 @@ def test_save_raw_outs_false_drops_raw_payload() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(
             activation_transform=lambda t: t.float() * 0.5, save_raw_activations=False
         ),
@@ -140,7 +140,7 @@ def test_no_transform_leaves_transformed_payload_unset() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
     )
 
     assert recording.options.activation_transform is None
@@ -157,7 +157,7 @@ def test_disk_only_mode_persists_transformed_blob(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 
@@ -195,7 +195,7 @@ def test_ram_disk_mirror_populates_both_transformed_payloads(tmp_path: Path) -> 
         _PostfuncModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 3),
     )
 
@@ -254,7 +254,7 @@ def test_train_mode_well_behaved_transform_keeps_graph_connected_payload() -> No
     recording = tl.record(
         model,
         torch.ones(1, 3),
-        default_op=CaptureSpec(save_grad=True),
+        recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t * 2),
     )
 
@@ -276,7 +276,7 @@ def test_train_mode_detaching_transform_rejected() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
             capture=tl.options.CaptureOptions(activation_transform=lambda t: t.detach()),
         )
 
@@ -288,7 +288,7 @@ def test_train_mode_integer_transform_rejected() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=CaptureSpec(save_grad=True),
+            recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_grad=True)),
             capture=tl.options.CaptureOptions(activation_transform=lambda t: t.to(torch.int64)),
         )
 
@@ -299,8 +299,7 @@ def test_source_events_receive_transform_outputs() -> None:
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
-        include_source_events=True,
+        recording=tl.options.RecordingOptions(default_op=True, include_source_events=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 4),
     )
 
@@ -379,7 +378,7 @@ def test_transform_error_wrapped_with_event_context() -> None:
         tl.record(
             _PostfuncModel(),
             torch.ones(1, 3),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
             capture=tl.options.CaptureOptions(activation_transform=boom),
         )
 
@@ -393,6 +392,7 @@ def test_transform_error_wrapped_with_event_context() -> None:
     assert "custom failure" in str(exc_info.value.__cause__)
 
 
+@pytest.mark.smoke
 def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> None:
     """``Recording.options`` returns the live transform; a bundle keeps a scrubbed repr.
 
@@ -409,7 +409,7 @@ def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> No
     recording = tl.record(
         _PostfuncModel(),
         torch.ones(1, 3),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
     assert recording.options.activation_transform is named_transform
@@ -420,8 +420,7 @@ def test_activation_transform_readback_and_persisted_audit(tmp_path: Path) -> No
         _PostfuncModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        default_op=True,
-        history_size=3,
+        recording=tl.options.RecordingOptions(default_op=True, history_size=3),
         capture=tl.options.CaptureOptions(activation_transform=named_transform),
     )
     metadata = json.loads((bundle_path / "metadata.json").read_text(encoding="utf-8"))
@@ -443,7 +442,7 @@ def test_transform_roundtrips_via_disk_recovery(tmp_path: Path) -> None:
         _PostfuncModel(),
         torch.ones(1, 3),
         storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-        default_op=True,
+        recording=tl.options.RecordingOptions(default_op=True),
         capture=tl.options.CaptureOptions(activation_transform=lambda t: t.float() * 2),
     )
 

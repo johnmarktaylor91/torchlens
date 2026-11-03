@@ -1,4 +1,4 @@
-"""U34.2: explicit watch callbacks read configuration from the environment.
+"""Explicit watch callbacks read configuration from the environment.
 
 An explicitly constructed callback may take signals / select / every /
 hist_every from ``TORCHLENS_WATCH_*`` variables and prints where each setting
@@ -42,7 +42,7 @@ def _lightning_attach(callback: trk.LightningWatchCallback) -> None:
 def test_env_configured_lightning_callback_prints_each_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Acceptance U34.2: env values are used and every setting names its source."""
+    """Acceptance: env values are used and every setting names its source."""
 
     pytest.importorskip("lightning")
     monkeypatch.setenv("TORCHLENS_WATCH_SIGNALS", "gradients,parameters")

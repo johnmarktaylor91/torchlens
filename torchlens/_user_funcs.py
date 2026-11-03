@@ -5,7 +5,6 @@ This module contains every user-facing function:
   - ``validate_forward_pass`` - replay-based correctness check
   - ``show_model_graph`` - visualization convenience wrapper
   - ``log_model_metadata`` - metadata-only convenience wrapper
-  - ``validate_batch_of_models_and_inputs`` - bulk validation harness
 
 **Selective save strategy**:
 Predicate ``save=`` and most string/substring ``save=`` label requests are
@@ -486,12 +485,6 @@ def show_model_graph(*args: Any, **kwargs: Any) -> None:
     return cast(None, _public_impls_module().show_model_graph(*args, **kwargs))
 
 
-def show_bundle_graph(*args: Any, **kwargs: Any) -> str | None:
-    """Forward to the bundle graph rendering implementation."""
-
-    return cast(str | None, _public_impls_module().show_bundle_graph(*args, **kwargs))
-
-
 def validate_forward_pass(*args: Any, **kwargs: Any) -> bool:
     """Forward to the backend-dispatched forward validation implementation."""
 
@@ -510,18 +503,10 @@ def validate_backward_pass(*args: Any, **kwargs: Any) -> bool:
     return cast(bool, _public_impls_module().validate_backward_pass(*args, **kwargs))
 
 
-def validate_batch_of_models_and_inputs(*args: Any, **kwargs: Any) -> Any:
-    """Forward to the batch validation implementation."""
-
-    return _public_impls_module().validate_batch_of_models_and_inputs(*args, **kwargs)
-
-
 _PUBLIC_IMPL_WRAPPER_NAMES = (
     "show_model_graph",
-    "show_bundle_graph",
     "validate_forward_pass",
     "validate_backward_pass",
-    "validate_batch_of_models_and_inputs",
 )
 
 _public_impl_metadata_synced = False

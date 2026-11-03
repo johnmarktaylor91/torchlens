@@ -233,6 +233,9 @@ def test_cross_kind_batch_equals_the_doors_one_at_a_time(order: tuple[str, ...])
     assert kinds == list(order), "one audit row per pair, in pair order"
 
 
+@pytest.mark.smoke_cells(
+    "test_cross_kind_batch_with_a_refusing_pair_leaves_the_fork_as_before[ACT]"
+)
 @pytest.mark.parametrize("bad", ["ACT", "PARAM", "EDGE"])
 def test_cross_kind_batch_with_a_refusing_pair_leaves_the_fork_as_before(bad: str) -> None:
     """Atomicity: the refusing pair runs last, after the other doors changed values."""
@@ -322,7 +325,6 @@ def test_abort_leaves_pre_call_state_with_one_error_record() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_batch_failure_mid_attach_detaches_earlier_pairs() -> None:
     """Atomicity at the attach seam: a refused later pair unhooks earlier ones."""
 

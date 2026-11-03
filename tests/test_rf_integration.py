@@ -122,10 +122,10 @@ def _last_op(trace: Any, func_name: str, *, field: str = "func_name") -> Any:
     """Return the last operation with an exact captured function or layer-type name.
 
     ``func_name`` is the backend's raw captured call name, which is NOT
-    always the canonical op name: tinygrad elementwise ops are reconstructed
-    from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
-    as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``type`` instead. Pass ``field="type"`` for those.
+    always the canonical op name: tinygrad ops are reconstructed from the UOp
+    DAG and carry the tinygrad API name observed for them (else the lowercase
+    UOp op name) as ``func_name``, while the semantic op name (``"add"``,
+    ``"mul"``, ...) is on ``type``. Pass ``field="type"`` for those.
     """
 
     matches = [op for op in trace._layer_list if getattr(op, field) == func_name]
@@ -315,6 +315,7 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     assert set(merge_rows["input_role"]) == {"input.left", "input.right"}
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
     """Keep geometry backend-neutral while rejecting non-torch gradient probes."""

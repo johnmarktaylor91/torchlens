@@ -321,6 +321,7 @@ def test_r7_reconstructable_class_output_round_trips_verified(kind: str, tmp_pat
     assert torch.equal(result.output.value, live.value)
 
 
+@pytest.mark.smoke
 def test_f7_custom_mapping_input_preflight_accepted(tmp_path: Path) -> None:
     """F7: a custom Mapping model INPUT with tensor leaves passes producer preflight."""
 
@@ -391,7 +392,6 @@ class _FloatScalarOutput(nn.Module):
         return float(self.lin(x).sum().detach())
 
 
-@pytest.mark.smoke_cells("test_r26_host_escaped_scalar_output_refuses_at_save[_IntScalarOutput-x0]")
 @pytest.mark.parametrize(
     ("model_factory", "x"),
     [
@@ -578,10 +578,6 @@ _R35_LOSSY_OUTPUT_BUILDERS = {
 }
 
 
-@pytest.mark.smoke_cells(
-    "test_r35_lossy_output_refuses_runnable_save_uniformly[one_tensor_set_with_flag]",
-    "test_r35_lossy_output_refuses_runnable_save_uniformly[set_subclass]",
-)
 @pytest.mark.filterwarnings("ignore:TorchLens intervention-ready output traversal:UserWarning")
 @pytest.mark.parametrize("kind", sorted(_R35_LOSSY_OUTPUT_BUILDERS))
 def test_r35_lossy_output_refuses_runnable_save_uniformly(tmp_path: Path, kind: str) -> None:
