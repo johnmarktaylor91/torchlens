@@ -74,7 +74,6 @@ def test_capture_options_have_no_decode_fields() -> None:
         tl.options.CaptureOptions(no_such_option=1)
 
 
-@pytest.mark.smoke
 def test_trace_door_names_the_read_time_call_for_removed_decode_keywords() -> None:
     """A removed decode keyword at the trace door is never routed to the model: it names the new call."""
 
