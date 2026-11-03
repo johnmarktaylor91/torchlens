@@ -103,10 +103,9 @@ from ..intervention.types import (
     EdgeUseRecord,
     FunctionRegistryKey,
 )
-from . import _doors, _labels, _op_cost, _op_relations, _op_save
+from . import _doors, _familiar_names, _labels, _op_cost, _op_relations, _op_save
 from ._accessor_base import Accessor
 from ._backend_capability_guards import raise_if_no_backward_capture
-from ._familiar_names import FAMILIAR_OP_NAMES as _FAMILIAR_OP_NAMES, missing_attribute_error
 from ._layer_accessors import OpAccessor
 from ._op_aten import OpAtenMixin
 from ._op_dedup import (  # noqa: F401  (re-exported for backends.torch importers)
@@ -1651,13 +1650,8 @@ class Op(OpAtenMixin, _SelectionOperand):
         if name not in _lazy_fields:
             try:
                 return _getattribute(self, name)
-            except AttributeError as exc:
-                # A guessed name (``op.activation``) names the real field. Only an
-                # exact AttributeError for a hinted name is rewritten; typed
-                # AttributeError subclasses raised by properties pass untouched.
-                if type(exc) is AttributeError and name in _FAMILIAR_OP_NAMES:
-                    raise missing_attribute_error("Op", name) from None
-                raise
+            except AttributeError as exc:  # a guessed name (op.activation) names the real field
+                _familiar_names.reraise_with_hint(exc, "Op", name)
         if name == "grad":
             slot = _object_getattribute(self, "_slot")
             records = slot("_grad_records")

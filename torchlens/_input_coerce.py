@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
+import difflib
+from collections.abc import Mapping
 from typing import Any
 
 from ._errors import ArgumentTypeError
@@ -60,7 +63,9 @@ def _coerce_input(model: Any, x: Any, *, whole_input: bool = True) -> Any:
     return x
 
 
-def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
+def _reject_unrouted_forward_kwargs(
+    forward_kwargs: dict[str, Any], option_classes: Mapping[str, type] | None = None
+) -> None:
     """Refuse unknown ``trace()`` keywords with a typed routing remedy.
 
     Typed recovery on the natural HF spelling (agent memo 3.10 item 5):
@@ -74,6 +79,9 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
     forward_kwargs:
         The unknown keyword arguments ``trace()`` collected. Empty means
         nothing to refuse and the function returns silently.
+    option_classes:
+        ``trace() parameter -> options class`` whose fields a keyword may name
+        (``{"capture": CaptureOptions, ...}``); a match names its home.
 
     Raises
     ------
@@ -86,7 +94,7 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
         return
 
     keys = sorted(forward_kwargs)
-    homes = _option_homes(keys)
+    homes = _option_homes(keys, option_classes or {})
     model_inputs = [key for key in keys if key not in homes]
     remedies = [
         f"{key} is a {class_name} field: tl.trace(model, x, "
@@ -110,21 +118,17 @@ def _reject_unrouted_forward_kwargs(forward_kwargs: dict[str, Any]) -> None:
     )
 
 
-#: ``trace()`` parameters that take a grouped options object, by class name.
-_GROUPED_OPTION_PARAMS: tuple[tuple[str, str], ...] = (
-    ("capture", "CaptureOptions"),
-    ("storage", "StorageOptions"),
-    ("episode", "EpisodeOptions"),
-)
-
-
-def _option_homes(keys: list[str]) -> dict[str, tuple[str, str, str]]:
+def _option_homes(
+    keys: list[str], option_classes: Mapping[str, type]
+) -> dict[str, tuple[str, str, str]]:
     """Map each unknown keyword that names (or nearly names) an option field to its home.
 
     Parameters
     ----------
     keys:
         Unknown ``trace()`` keywords.
+    option_classes:
+        ``trace() parameter -> options dataclass`` to search.
 
     Returns
     -------
@@ -133,19 +137,13 @@ def _option_homes(keys: list[str]) -> dict[str, tuple[str, str, str]]:
         keywords that match an option field exactly or by a close spelling.
     """
 
-    import dataclasses
-    import difflib
-
-    from . import options as options_module
-
     fields: dict[str, tuple[str, str]] = {}
-    for param, class_name in _GROUPED_OPTION_PARAMS:
-        option_class = getattr(options_module, class_name, None)
-        if option_class is None or not dataclasses.is_dataclass(option_class):
+    for param, option_class in option_classes.items():
+        if not dataclasses.is_dataclass(option_class):
             continue
         for option_field in dataclasses.fields(option_class):
             if not option_field.name.startswith("_"):
-                fields.setdefault(option_field.name, (param, class_name))
+                fields.setdefault(option_field.name, (param, option_class.__name__))
     homes: dict[str, tuple[str, str, str]] = {}
     for key in keys:
         match = key if key in fields else None

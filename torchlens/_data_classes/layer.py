@@ -56,7 +56,7 @@ from .._quantities import Bytes, Duration, Flops, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
-from . import _doors
+from . import _doors, _familiar_names
 
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
@@ -1476,9 +1476,7 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
-        from ._familiar_names import missing_attribute_error
-
-        raise missing_attribute_error(type(self).__name__, name)
+        raise _familiar_names.missing_attribute_error(type(self).__name__, name)
 
     # ********************************************
     # ************ User-facing custom_methods ***********

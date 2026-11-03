@@ -11,6 +11,8 @@ nearest spelling, which for these names is often a different field
 
 from __future__ import annotations
 
+from typing import NoReturn
+
 _OUT = "use .out (the saved output tensor)"
 _PARENTS = "use .parents (labels of the ops feeding this one; .get_parents() returns objects)"
 _CHILDREN = "use .children (labels of the ops this one feeds; .get_children() returns objects)"
@@ -64,10 +66,6 @@ _HINTS_BY_OWNER: dict[str, dict[str, str]] = {
 }
 
 
-#: The op-level names with a hint (``Op.__getattribute__`` checks membership on a miss).
-FAMILIAR_OP_NAMES: frozenset[str] = frozenset(_ENTRY_HINTS)
-
-
 def familiar_name_hint(owner: str, name: str) -> str | None:
     """Return the hint for a guessed attribute name, or None when there is none.
 
@@ -111,3 +109,30 @@ def missing_attribute_error(owner: str, name: str) -> AttributeError:
     return AttributeError(
         f"'{owner}' object has no attribute '{name}'; {hint}", name=name, obj=None
     )
+
+
+def reraise_with_hint(exc: AttributeError, owner: str, name: str) -> NoReturn:
+    """Re-raise a failed attribute lookup, naming the real field for a guessed name.
+
+    Only an exact ``AttributeError`` for a hinted name is replaced; typed
+    ``AttributeError`` subclasses raised by properties (cleaned-up trace,
+    missing dependency) propagate unchanged.
+
+    Parameters
+    ----------
+    exc:
+        The exception the lookup raised.
+    owner:
+        Public class name used in the message.
+    name:
+        The attribute name that was looked up.
+
+    Raises
+    ------
+    AttributeError
+        The hinted error, or ``exc`` itself.
+    """
+
+    if type(exc) is AttributeError and familiar_name_hint(owner, name) is not None:
+        raise missing_attribute_error(owner, name) from None
+    raise exc
