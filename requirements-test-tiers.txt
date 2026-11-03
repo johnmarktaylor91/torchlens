@@ -1,3 +1,0 @@
-# Test planner tools for test-tiers.json pre_merge shards; production and test
-# dependencies stay in pyproject.toml.
-pytest-split==0.10.0
