@@ -27,6 +27,9 @@ from ..._ir.refs import TensorRef
 from ..._selection.selectors import (
     BaseSelector,
 )
+from ..._utils._tensor_label import (
+    mark_detached_saved_activation,
+)
 from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     safe_copy,
@@ -42,9 +45,6 @@ from ...recording.types import (
 )
 from ._ops_arguments import _copy_saved_arg_tree, _copy_saved_call_args, _iter_tree_tensors
 from ._ops_payload_stream import _stream_predicate_payloads
-from ._tl import (
-    mark_detached_saved_activation,
-)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ..._capture.stages import InstrumentedModel
-from ._tl import active_label_session_token
+from ..._utils._tensor_label import active_label_session_token
 
 if TYPE_CHECKING:
     from torch import nn

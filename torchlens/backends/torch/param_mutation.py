@@ -34,11 +34,11 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._data_classes._trace_missing_attrs import is_live_trace
 from ..._data_classes.param import Param, ParamAccessor
 from ..._quantities import Bytes
+from ..._utils._tensor_label import get_param_meta, set_param_meta
 from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import get_memory_amount, safe_copy
-from ._tl import get_param_meta, set_param_meta
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 

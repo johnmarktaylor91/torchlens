@@ -903,7 +903,7 @@ class RecordingProjection:
         trace._options_seed = self.trace_facts["random_seed"]
         trace._raw_graph_ws.layer_counter = cast(int, self.trace_facts["layer_counter"])
 
-        from ..backends.torch._tl import get_tensor_label, set_tensor_label
+        from .._utils._tensor_label import get_tensor_label, set_tensor_label
 
         for tensor, label in zip(self.output_tensors, self.output_labels, strict=False):
             if label is not None and get_tensor_label(tensor) is None:
@@ -920,7 +920,7 @@ class RecordingProjection:
             Authoritative raw event label for that tensor.
         """
 
-        from ..backends.torch._tl import get_tensor_label, set_tensor_label
+        from .._utils._tensor_label import get_tensor_label, set_tensor_label
 
         if get_tensor_label(tensor) is None:
             set_tensor_label(tensor, label)

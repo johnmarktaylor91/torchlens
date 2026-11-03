@@ -61,6 +61,18 @@ from ... import _state
 from ..._errors import CaptureGapWarning
 from ..._utils import _exception_notes, _torch_compat
 from ..._utils._callable_safety import private_c_forward_op_module_names
+from ..._utils._dispatch_modes import _TorchLensDispatchMode
+from ..._utils._internal_read import (
+    _internal_read_state,  # noqa: F401  (one per-thread counter, re-exported)
+)
+from ..._utils._tensor_label import (
+    DescriptorCompatProperty,
+    get_buffer_address,
+    get_tensor_label,
+    get_tensor_meta,
+    is_tensor_data_alias,
+    session_meta_is_anchored,
+)
 from ..._utils._torch_compat import (
     get_tensorbase_class,
     tensor_version_or_none,
@@ -80,18 +92,6 @@ from ._completeness_types import (
     _StorageOriginRegistry,
     _TensorOriginRegistry,
     _WitnessState,
-)
-from ._internal_read import (
-    _internal_read_state,  # noqa: F401  (one per-thread counter, re-exported)
-)
-from ._modes import _TorchLensDispatchMode
-from ._tl import (
-    DescriptorCompatProperty,
-    get_buffer_address,
-    get_tensor_label,
-    get_tensor_meta,
-    is_tensor_data_alias,
-    session_meta_is_anchored,
 )
 from ._torch_ops_calls import enter_suppressed_region, exit_suppressed_region
 from .buffer_writes import peek_buffer_write_tracker, session_validated_buffer_address

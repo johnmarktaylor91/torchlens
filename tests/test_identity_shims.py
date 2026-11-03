@@ -421,7 +421,7 @@ class TestSubclassCtorUnderWitness:
 
     def test_all_top_contiguous_torchlens_modes_are_restored(self) -> None:
         """The constructor bracket exits and restores every removable owned mode."""
-        from torchlens.backends.torch._modes import (
+        from torchlens._utils._dispatch_modes import (
             _TorchLensDispatchMode,
             pause_own_dispatch_modes,
         )
@@ -458,7 +458,7 @@ class TestSubclassCtorUnderWitness:
         """A foreign top mode and every owned mode below it remain untouched."""
         from torch.utils._python_dispatch import TorchDispatchMode
 
-        from torchlens.backends.torch._modes import (
+        from torchlens._utils._dispatch_modes import (
             _TorchLensDispatchMode,
             pause_own_dispatch_modes,
         )
@@ -477,7 +477,7 @@ class TestSubclassCtorUnderWitness:
     @pytest.mark.smoke
     def test_owned_modes_restore_when_paused_call_raises(self) -> None:
         """The pause bracket restores owned modes before propagating an exception."""
-        from torchlens.backends.torch._modes import (
+        from torchlens._utils._dispatch_modes import (
             _TorchLensDispatchMode,
             pause_own_dispatch_modes,
         )
@@ -535,7 +535,7 @@ class TestAsSubclassOpIdentity:
         if not _flag("HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE"):
             # Floor-torch capability gap (torch 2.1/2.2): see
             # TensorSubclassUnsupportedError.
-            from torchlens.backends.torch._modes import (
+            from torchlens._utils._dispatch_modes import (
                 TensorSubclassUnsupportedError,
             )
 

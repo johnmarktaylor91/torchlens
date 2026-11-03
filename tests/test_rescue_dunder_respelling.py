@@ -25,7 +25,7 @@ from torch.overrides import TorchFunctionMode
 
 import torchlens as tl
 from torchlens._utils._callable_safety import _ALLOWED_FORWARD_DUNDERS
-from torchlens.backends.torch._tl import is_decorated_function
+from torchlens._utils._tensor_label import is_decorated_function
 from torchlens.backends.torch.rescue import (
     _MODE_RESPELLED_DUNDERS,
     _canonical_op_name,

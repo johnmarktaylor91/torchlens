@@ -24,7 +24,11 @@ from torch import nn
 
 from ... import _state
 from ..._utils._module_call_dispatch import forward_entered_through_module_call
-from ._tl import get_module_meta, is_forward_call_decorated, mark_forward_call_decorated
+from ..._utils._tensor_label import (
+    get_module_meta,
+    is_forward_call_decorated,
+    mark_forward_call_decorated,
+)
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

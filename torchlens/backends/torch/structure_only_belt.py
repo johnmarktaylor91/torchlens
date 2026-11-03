@@ -53,10 +53,10 @@ import torch
 
 from ... import _state
 from ..._utils._exception_notes import defer_failure_note
+from ..._utils._tensor_label import DescriptorCompatProperty, get_tensor_label
 from ..._utils._torch_symbols import torch_attr
 from ...errors._base import TorchLensError
 from ._completeness_cross_thread import _internal_read_active
-from ._tl import DescriptorCompatProperty, get_tensor_label
 from .completeness_witness import (
     _TORCHLENS_ROOT,
     HOST_VALUE_ESCAPE_METHODS,

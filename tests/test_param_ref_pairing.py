@@ -27,8 +27,8 @@ def _fields_dict_for(params: list[nn.Parameter]) -> dict:
 
 
 def test_tied_param_occurrences_each_get_their_own_ref() -> None:
+    from torchlens._utils._tensor_label import get_param_meta
     from torchlens.backends.torch._ops_capture_records import _param_refs_from_fields
-    from torchlens.backends.torch._tl import get_param_meta
 
     param_a = nn.Parameter(torch.randn(2, 3))
     param_b = nn.Parameter(torch.randn(4))

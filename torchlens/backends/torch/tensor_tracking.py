@@ -20,18 +20,18 @@ from ..._data_classes.op import Op
 from ..._ir.events import BackwardPassStart, OpGradObserved
 from ..._selection.selectors import BaseSelector
 from ..._state import pause_logging
-from ..._utils._torch_compat import get_current_graph_task_id_fn
-from ..._utils.display import _record_phase_timing
-from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
-from ..._utils.tensor_utils import SaveMode, safe_copy
-from ...recording.types import CaptureSpec
-from ._tl import (
+from ..._utils._tensor_label import (
     get_param_meta,
     get_tensor_label,
     increment_param_call_index,
     mutated_parameter_label,
     set_param_meta,
 )
+from ..._utils._torch_compat import get_current_graph_task_id_fn
+from ..._utils.display import _record_phase_timing
+from ..._utils.hashing import make_random_barcode, make_short_barcode_from_input
+from ..._utils.tensor_utils import SaveMode, safe_copy
+from ...recording.types import CaptureSpec
 
 if TYPE_CHECKING:
     from ..._capture.session import LiveGradientReference

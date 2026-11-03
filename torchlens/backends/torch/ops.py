@@ -122,6 +122,24 @@ from ..._utils._call_site import (
     CALL_SITE_CLASS_MARKER,  # noqa: F401 (re-exported to the split modules)
 )
 from ..._utils._callable_safety import _PURE_TENSOR_PROPERTY_NAMES
+from ..._utils._tensor_label import (
+    active_label_session_token,
+    get_label_list,
+    get_live_label_list,
+    get_live_tensor_label,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    is_tensor_data_alias,
+    mark_detached_saved_activation,
+    mutated_parameter_label,
+    pop_same_object_mutation,
+    promote_mutated_parameters,
+    session_label_storage_intact,
+    session_meta_is_anchored,
+    set_same_object_mutation,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
     tensor_version_or_none,
@@ -171,24 +189,6 @@ from . import module_stack as _mstack
 from ._completeness_escape_state import record_alias_mutation_candidate
 from ._completeness_origins import internal_scalar_read
 from ._param_fingerprint import param_fingerprint
-from ._tl import (
-    active_label_session_token,
-    get_label_list,
-    get_live_label_list,
-    get_live_tensor_label,
-    get_param_meta,
-    get_tensor_label,
-    get_tensor_meta,
-    is_tensor_data_alias,
-    mark_detached_saved_activation,
-    mutated_parameter_label,
-    pop_same_object_mutation,
-    promote_mutated_parameters,
-    session_label_storage_intact,
-    session_meta_is_anchored,
-    set_same_object_mutation,
-    set_tensor_label,
-)
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,

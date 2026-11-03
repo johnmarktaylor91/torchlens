@@ -246,7 +246,7 @@ def test_buffer_sole_output_traces_with_output_layer() -> None:
 def test_buffer_sole_output_does_not_leak_labels_onto_model_state() -> None:
     """Late buffer logging must not leave capture labels on the live buffer."""
 
-    from torchlens.backends.torch._tl import get_tensor_label
+    from torchlens._utils._tensor_label import get_tensor_label
 
     model = BufferOnlyOutputModel()
     log = trace_fn(model, torch.rand(3), capture=CaptureOptions(layers_to_save="all"))

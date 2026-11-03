@@ -35,6 +35,23 @@ from ..._ir.op_record import (
     amend_raw_hook_intervention,
 )
 from ..._quantities import Bytes
+from ..._utils._tensor_label import (
+    begin_label_session,
+    clear_meta,
+    clear_param_meta,
+    end_label_session,
+    get_buffer_address,
+    get_live_tensor_label,
+    get_module_meta,
+    get_tensor_label,
+    is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
+    mark_tensor_replacement_wrapped,
+    promote_label_to_buffer_source_and_clear_label,
+    restore_param_requires_grad,
+    set_module_meta,
+    set_param_meta,
+    set_tensor_label,
+)
 from ..._utils.hashing import make_random_barcode
 from ..._utils.introspection import (
     _get_code_context,
@@ -74,23 +91,6 @@ from ._session_forwards import (
     install_session_forward_wrappers as _install_session_forward_wrappers,
     restore_session_forward_wrappers as _restore_session_forward_wrappers,
     restore_undecorated_forward as _restore_undecorated_forward,
-)
-from ._tl import (
-    begin_label_session,
-    clear_meta,
-    clear_param_meta,
-    end_label_session,
-    get_buffer_address,
-    get_live_tensor_label,
-    get_module_meta,
-    get_tensor_label,
-    is_forward_call_decorated,  # noqa: F401  (re-exported for tests)
-    mark_tensor_replacement_wrapped,
-    promote_label_to_buffer_source_and_clear_label,
-    restore_param_requires_grad,
-    set_module_meta,
-    set_param_meta,
-    set_tensor_label,
 )
 from .escape_detection import (
     expected_original_call,

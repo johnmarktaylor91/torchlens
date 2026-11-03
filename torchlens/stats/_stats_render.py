@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 
+from .._utils._sig_format import format_sig
 from ._tensor_stats import TensorStats
 
 #: The package glyph table IS the ramp and nothing else (D4): nine ASCII
@@ -37,29 +38,6 @@ def degrade(text: str) -> str:
     """Degrade a unicode render to its ASCII form through the glyph table."""
 
     return "".join(DEGRADE_TABLE.get(char, char) for char in text)
-
-
-def format_sig(value: float, digits: int = 4) -> str:
-    """Precision-law scalar formatter (D7).
-
-    4 significant digits with trailing zeros KEPT (``%.4g`` strips them, so
-    ``0.99997`` printed ``1`` and no column aligned -- the live bug this
-    replaces); scientific notation outside ``[1e-4, 1e4)``; integral floats
-    keep the digit budget rather than gaining a spurious wide tail.
-    """
-
-    if value != value or value in (float("inf"), float("-inf")):
-        return str(value)
-    if value == 0:
-        return "0.000"[: digits + 1] if digits > 1 else "0"
-    magnitude = abs(value)
-    if magnitude < 1e-4 or magnitude >= 1e4:
-        text = f"{value:.{max(digits - 1, 0)}e}"
-        mantissa, exponent = text.split("e")
-        return f"{mantissa}e{int(exponent):+03d}"
-    decimals = digits - 1 - int(math.floor(math.log10(magnitude)))
-    decimals = max(decimals, 0)
-    return f"{value:.{decimals}f}"
 
 
 def format_sampled(value: float, se: float | None, digits: int = 4) -> str:

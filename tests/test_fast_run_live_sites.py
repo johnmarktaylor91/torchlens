@@ -16,7 +16,7 @@ from torch.nn import functional as F
 
 import torchlens as tl
 from torchlens._fast_run import _FastLiveSession
-from torchlens.backends.torch._tl import get_module_meta
+from torchlens._utils._tensor_label import get_module_meta
 from torchlens.errors import RunCapabilityUnavailableError
 
 

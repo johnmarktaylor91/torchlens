@@ -18,8 +18,8 @@ from .._errors import InvalidArgumentError
 from .._ir.intervention import FireResult
 from .._record_type import record_type
 from .._state import pause_logging
+from .._utils._tensor_label import copy_replacement_meta
 from .._utils.arg_handling import copy_arg_tree
-from ..backends.torch._tl import copy_replacement_meta
 from ._hooks_support import gradient_inner
 from ._module_boundary import (
     _apply_module_boundary_live_hooks as _apply_module_boundary_live_hooks,
@@ -384,7 +384,7 @@ def _copy_reused_live_hook_result(out: torch.Tensor, result: torch.Tensor) -> to
 
     if result is out:
         return result
-    from torchlens.backends.torch import _tl as _tl_meta
+    from torchlens._utils import _tensor_label as _tl_meta
 
     if _tl_meta.get(result) is None:
         return result

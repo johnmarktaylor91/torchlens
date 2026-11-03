@@ -10,8 +10,8 @@ from typing import Any, cast
 
 import torch.nn as nn
 
+from ..._utils._tensor_label import get_module_meta
 from ...recording.types import ModuleStackFrame
-from ._tl import get_module_meta
 
 
 def push_frame(trace: Any, stack: list[ModuleStackFrame], module: nn.Module) -> ModuleStackFrame:

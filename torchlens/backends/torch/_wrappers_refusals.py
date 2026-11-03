@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
+from ..._utils._dispatch_modes import TensorSubclassUnsupportedError
 from ..._utils._torch_compat import HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-from ._modes import TensorSubclassUnsupportedError
 
 
 def _raise_if_subclass_ctor_under_dispatch_mode(

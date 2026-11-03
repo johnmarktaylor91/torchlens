@@ -524,10 +524,10 @@ def _emit_boundary_op(
 
     from ... import _state
     from ..._data_classes.internal_types import FuncExecutionContext
+    from ..._utils._tensor_label import get_tensor_label, set_tensor_label
     from ..._utils.tensor_utils import safe_copy
     from ._ops_capture_records import _record_label_version_snapshot
     from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
-    from ._tl import get_tensor_label, set_tensor_label
     from .wrappers import (
         _propagate_mutation_label_to_storage_aliases,
         _register_inplace_live_grad_hook,

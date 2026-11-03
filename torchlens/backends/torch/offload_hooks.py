@@ -42,7 +42,7 @@ from typing import TYPE_CHECKING, Any
 import torch.nn as nn
 
 from ..._state import pause_logging
-from ._tl import get_param_meta, set_param_meta
+from ..._utils._tensor_label import get_param_meta, set_param_meta
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

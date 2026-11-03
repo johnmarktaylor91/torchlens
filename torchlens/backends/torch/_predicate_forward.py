@@ -21,11 +21,11 @@ from torch import nn
 from ... import _state
 from ..._ir import ModuleExitEvent
 from ..._ir.op_record import amend_module_boundary_retention
+from ..._utils._tensor_label import get_tensor_label
 from ...recording._halt import StopSignal
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._predicate_boundary_replacements import log_predicate_boundary_replacements
-from ._tl import get_tensor_label
 from .escape_detection import expected_original_call
 from .prehook_provenance import bind_invocation
 

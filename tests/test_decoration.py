@@ -21,7 +21,7 @@ from torch import nn
 import torchlens as tl
 import torchlens.backends.torch.wrappers as torch_funcs_module
 from torchlens import _state, trace as trace_fn
-from torchlens.backends.torch._tl import get_module_meta, get_tensor_label, is_decorated_function
+from torchlens._utils._tensor_label import get_module_meta, get_tensor_label, is_decorated_function
 from torchlens.backends.torch.wrappers import (
     decorate_all_once,
     get_arg_names,

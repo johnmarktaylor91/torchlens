@@ -24,7 +24,7 @@ from typing import Any, Literal, cast, get_args
 
 import torch
 
-from ..backends.torch._tl import get_tensor_label, set_tensor_label
+from ._tensor_label import get_tensor_label, set_tensor_label
 from ._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     get_fp8_dtypes,
@@ -891,7 +891,7 @@ def _pause_dispatch_modes_for_subclass_clone(x: Any) -> Iterator[None]:
     # Deferred: backends.torch is upward of utils in the layer map (C01 item
     # 1); this branch is the floor-only (torch 2.1/2.2) fallback, so a plain
     # `import torchlens` never pays for it.
-    from ..backends.torch._modes import pause_own_dispatch_modes
+    from ._dispatch_modes import pause_own_dispatch_modes
 
     with pause_own_dispatch_modes():
         yield
@@ -1043,7 +1043,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
     from .._state import pause_logging
-    from ..backends.torch._internal_read import internal_scalar_read
+    from ._internal_read import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1151,7 +1151,7 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch._internal_read import internal_scalar_read
+    from ._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)

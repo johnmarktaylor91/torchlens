@@ -5891,7 +5891,7 @@ def test_edge_use_invariant_allows_buffer_source_edge_without_record() -> None:
 def test_stale_internal_source_label_is_relogged_not_reused() -> None:
     """A stale tensor label must not become a missing live-index parent."""
 
-    from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
+    from torchlens._utils._tensor_label import get_tensor_label, set_tensor_label
 
     model = _StaleLabelConstantModel()
     set_tensor_label(model.constant, "internalsource_1_2_raw")

@@ -133,11 +133,11 @@ from ._runnable.witness_contracts import (
     _unbound_state_escape_stale,
 )
 from ._utils._module_call_dispatch import forward_entered_through_module_call
+from ._utils._tensor_label import get_module_meta
 from ._utils.arg_handling import normalize_input_args
 from ._utils.rng import restore_host_rng, set_random_seed, snapshot_host_rng
 from .backends.torch._ops_container_base import _try_build_container_spec
 from .backends.torch._session_forwards import _NO_INSTANCE_FORWARD, _SessionForward
-from .backends.torch._tl import get_module_meta
 from .errors import RunCapabilityUnavailableError, RuntimeSignatureDriftError
 
 

@@ -25,7 +25,7 @@ import torch
 from .. import _state
 from .._ir.intervention import FireResult
 from .._state import pause_logging
-from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+from .._utils._tensor_label import clear_tensor_label, get_tensor_label
 from .hooks import make_live_site_proxy
 
 

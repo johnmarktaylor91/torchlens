@@ -17,12 +17,12 @@ from torch import nn
 
 from torchlens._capture.stages import InstrumentedModel
 from torchlens._capture_state_helpers import CompiledCapturePrep
-from torchlens.backends.torch import instrument
-from torchlens.backends.torch._tl import (
+from torchlens._utils._tensor_label import (
     active_label_session_token,
     begin_label_session,
     end_label_session,
 )
+from torchlens.backends.torch import instrument
 from torchlens.backends.torch.instrument import WrapPolicy
 
 

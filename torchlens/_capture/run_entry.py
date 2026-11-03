@@ -35,8 +35,8 @@ from .._literals import (
     _GradientPostfunc,
 )
 from .._save_budget import SaveBudgetExceededError, SaveBudgetOption
+from .._utils._tensor_label import get_tensor_label
 from .._utils.tensor_utils import SaveMode
-from ..backends.torch._tl import get_tensor_label
 from ..backends.torch.bound_root import (
     TLBoundMethodRoot,
 )

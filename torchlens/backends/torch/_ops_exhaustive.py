@@ -15,6 +15,10 @@ from ..._ir.events import (
     FunctionCallRef,
 )
 from ..._ir.intervention import FunctionEventInput
+from ..._utils._tensor_label import (
+    get_tensor_label,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     saved_tensors_default_hooks_active,
 )
@@ -24,10 +28,6 @@ from ..._utils.tensor_utils import (
     safe_copy,
 )
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_tensor_label,
-    set_tensor_label,
-)
 from .aliasing import (
     detect_torch_alias_contract,
     detect_torch_output_alias_contract,

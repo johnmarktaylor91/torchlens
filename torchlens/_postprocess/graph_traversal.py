@@ -98,7 +98,7 @@ def _resolve_output_parent_labels(
     """
     from collections import deque
 
-    from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+    from .._utils._tensor_label import clear_tensor_label, get_tensor_label
     from ..backends.torch.sources import log_source_tensor
 
     # Common case: capture attributed every output -- the existing positional

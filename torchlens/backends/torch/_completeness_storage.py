@@ -16,11 +16,11 @@ import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is
 
 from ... import _state
 from ..._utils import _exception_notes
-from ...errors import ScalarEscapeWarning
-from ._tl import (
+from ..._utils._tensor_label import (
     DescriptorCompatProperty,
     get_tensor_label,
 )
+from ...errors import ScalarEscapeWarning
 
 __all__ = (
     "_nonowner_storage_observe",

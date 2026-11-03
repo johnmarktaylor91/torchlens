@@ -18,6 +18,11 @@ from ..._data_classes.op import (
 from ..._ir.events import (
     OutputVersionEvent,
 )
+from ..._utils._tensor_label import (
+    get_live_label_list,
+    get_tensor_label,
+    set_tensor_label,
+)
 from ..._utils.introspection import (
     _get_code_context,
     get_arg_tensors_for_resolution,
@@ -26,11 +31,6 @@ from ..._utils.tensor_utils import (
     tensor_nanequal,
 )
 from ._completeness_origins import internal_scalar_read
-from ._tl import (
-    get_live_label_list,
-    get_tensor_label,
-    set_tensor_label,
-)
 from .aliasing import (
     get_parent_contents_for_contract_position,
     parent_label_has_alias_contract,

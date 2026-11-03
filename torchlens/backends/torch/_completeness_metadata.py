@@ -9,10 +9,10 @@ import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
-from ._completeness_types import _WitnessState
-from ._tl import (
+from ..._utils._tensor_label import (
     get_tensor_label,
 )
+from ._completeness_types import _WitnessState
 from .buffer_writes import session_validated_buffer_address
 
 __all__ = (

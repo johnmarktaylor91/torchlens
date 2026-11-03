@@ -19,6 +19,7 @@ from ..._capture.projections import (
 from ..._errors import UserTransformError
 from ..._ir.predicate import RetroactiveCaptureDecision
 from ..._training_validation import TrainingModeConfigError
+from ..._utils._tensor_label import get_tensor_meta, set_tensor_label
 from ..._utils.arg_handling import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import _get_code_context
 from ..._utils.rng import log_current_rng_states
@@ -28,7 +29,6 @@ from ...recording.exceptions import PredicateError
 from ...recording.types import ActivationRecord, CaptureSpec
 from . import module_stack as _mstack
 from ._completeness_origins import internal_scalar_read
-from ._tl import get_tensor_meta, set_tensor_label
 from .buffer_writes import buffer_version_key
 from .tensor_tracking import _add_tensor_backward_hook, _append_module_suffix_to_equivalence_class
 

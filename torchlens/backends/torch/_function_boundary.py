@@ -392,8 +392,8 @@ def _snapshot_arg_labels(
 ) -> list[tuple[Any, str | None]]:
     """Record each tensor argument's live label before the forward runs."""
 
+    from ..._utils._tensor_label import get_tensor_label
     from ..._utils.introspection import get_vars_of_type_from_obj
-    from ._tl import get_tensor_label
 
     tensors = get_vars_of_type_from_obj(
         (args, kwargs), torch.Tensor, subclass_exceptions=[torch.nn.Parameter], search_depth=4
@@ -410,7 +410,7 @@ def _restore_arg_labels(snapshot: list[tuple[Any, str | None]], interior_labels:
     for that argument must come from the label the object carried before the forward.
     """
 
-    from ._tl import clear_tensor_label, get_tensor_label, set_tensor_label
+    from ..._utils._tensor_label import clear_tensor_label, get_tensor_label, set_tensor_label
 
     for tensor, label in snapshot:
         current = get_tensor_label(tensor)

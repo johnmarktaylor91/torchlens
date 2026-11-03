@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ._tl import get_tensor_label, set_tensor_label
+from ..._utils._tensor_label import get_tensor_label, set_tensor_label
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace

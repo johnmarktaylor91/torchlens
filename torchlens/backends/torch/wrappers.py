@@ -35,6 +35,19 @@ from ..._capture_state_helpers import _is_uninitialized_param
 from ..._constants import _get_torchvision_funcs, get_orig_torch_funcs
 from ..._data_classes.internal_types import FuncExecutionContext
 from ..._errors import CaptureNotActiveError
+from ..._utils._dispatch_modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
+from ..._utils._tensor_label import (
+    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
+    DescriptorCompatProperty,
+    get_tensor_label,
+    has_detached_saved_activations,
+    is_decorated_function,
+    is_tensor_data_alias,
+    mark_decorated_function,
+    mark_tensor_data_alias,
+    propagate_detached_saved_activation,
+    set_tensor_label,
+)
 from ..._utils._torch_compat import (
     HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE,
     dynamo_is_compiling,
@@ -79,7 +92,6 @@ from ._function_boundary import (
     note_function_export,
     print_funcs,
 )
-from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
 from ._ops_autograd import register_call_input_container_snapshots
 from ._ops_capture_records import (
@@ -94,18 +106,6 @@ from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
     _storage_overlap_byte_interval,
     _strided_views_share_storage_elements,
-)
-from ._tl import (
-    _DETACHED_ACTIVATION_PROPAGATION_FUNCS,
-    DescriptorCompatProperty,
-    get_tensor_label,
-    has_detached_saved_activations,
-    is_decorated_function,
-    is_tensor_data_alias,
-    mark_decorated_function,
-    mark_tensor_data_alias,
-    propagate_detached_saved_activation,
-    set_tensor_label,
 )
 from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
     DIRECT_TRANSFORM_SITES,
@@ -740,8 +740,8 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
+    from ..._utils._tensor_label import session_storage_alias_candidates, storage_alias_index_key
     from ._ops_capture_records import _record_label_version_snapshot
-    from ._tl import session_storage_alias_candidates, storage_alias_index_key
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER

@@ -53,6 +53,7 @@ from ..._ir.events import (
 from ..._quantities import Bytes, Duration
 from ..._state import pause_logging
 from ..._utils._package_frames import is_torchlens_code
+from ..._utils._tensor_label import detached_saved_activation_label, get_tensor_label
 from ..._utils._torch_compat import (
     HAS_SAVED_TENSORS_HOOKS_PATCHABLE,
     get_accumulate_grad_class,
@@ -85,7 +86,6 @@ from ._gradfn_markers import (
     _exit_gradfn_marker,
     _gradfn_marker_list,
 )
-from ._tl import detached_saved_activation_label, get_tensor_label
 from .escape_detection import expected_original_call
 from .tensor_tracking import (
     _STATE_BOUNDARY_GRAD_FNS,

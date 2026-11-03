@@ -27,6 +27,7 @@ from torchlens._constants import (
     MODULE_PASS_LOG_FIELD_ORDER,
     PARAM_LOG_FIELD_ORDER,
 )
+from torchlens._utils._tensor_label import get_tensor_label, set_tensor_label
 from torchlens._utils.arg_handling import _safe_copy_arg
 from torchlens._utils.tensor_utils import (
     get_memory_amount,
@@ -35,7 +36,6 @@ from torchlens._utils.tensor_utils import (
     safe_copy,
     safe_to,
 )
-from torchlens.backends.torch._tl import get_tensor_label, set_tensor_label
 from torchlens.errors import TraceCaptureError
 
 
@@ -966,7 +966,7 @@ class TestStorageAliasBucketLayout:
 
         from torch.utils.weak import WeakIdKeyDictionary
 
-        from torchlens.backends.torch import _tl
+        from torchlens._utils import _tensor_label as _tl
 
         session = _tl._LabelSession(token=1)
         t1 = torch.randn(4)

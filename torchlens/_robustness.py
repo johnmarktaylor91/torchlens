@@ -41,7 +41,6 @@ import torch
 from torch import nn
 
 from ._distributed import check_distributed_capture
-from ._input_walk import INPUT_TREE_MAX_DEPTH
 from ._robustness_offenses import (
     _docs_pointer,
     _first_user_frame,
@@ -49,6 +48,7 @@ from ._robustness_offenses import (
     _offense_entry,
     _sparse_state_offense,
 )
+from ._utils._input_tree import INPUT_TREE_MAX_DEPTH
 from ._utils._torch_compat import get_tracing_tensor_types
 from .errors._base import CompatibilityError, TorchLensWarning
 

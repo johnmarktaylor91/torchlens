@@ -11,7 +11,7 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens.backends.torch._tl import (
+from torchlens._utils._tensor_label import (
     DecorationTag,
     ModuleMeta,
     ParamMeta,
@@ -264,7 +264,7 @@ def test_module_param_metadata_is_registry_backed_not_attribute() -> None:
     import copy
     import gc
 
-    from torchlens.backends.torch._tl import _MODULE_REGISTRY
+    from torchlens._utils._tensor_label import _MODULE_REGISTRY
 
     m = nn.Linear(2, 2)
     set_module_meta(m, address="enc.lin", module_type="Linear")

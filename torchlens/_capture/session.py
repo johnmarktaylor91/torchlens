@@ -541,7 +541,7 @@ class CaptureSession:
             self._activation_escrow_spill_index += 1
             import torch
 
-            from ..backends.torch._tl import clear_meta
+            from .._utils._tensor_label import clear_meta
 
             with _state.pause_logging():
                 # Spill the payload WITHOUT its TorchLens sidecar: a captured

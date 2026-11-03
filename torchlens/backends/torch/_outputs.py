@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 import torch
 
-from torchlens.backends.torch import _tl
+from torchlens._utils import _tensor_label as _tl
 
 from ..._errors import OutputAttributionError
 from ..._io import BlobRef as PortableBlobRef

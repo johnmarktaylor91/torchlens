@@ -96,7 +96,7 @@ _SCOPED_CAPTURE_STATE = frozenset(
         # cleared in its finally -- a survivor past the capture is exactly the
         # leaked-interposition class the session's teardown exists to prevent.
         ("torchlens/backends/torch/funcol.py", "_ACTIVE_FUNCOL_SESSION"),
-        ("torchlens/backends/torch/_tl.py", "_ACTIVE_LABEL_SESSION"),
+        ("torchlens/_utils/_tensor_label.py", "_ACTIVE_LABEL_SESSION"),
         ("torchlens/backends/torch/buffer_writes.py", "_WITNESS_MARKER_STATE"),
         ("torchlens/backends/torch/completeness_witness.py", "_CAPTURED_STORAGE_PTRS"),
         ("torchlens/backends/torch/completeness_witness.py", "_DISPATCH_TENSOR_ORIGINS"),
@@ -201,7 +201,7 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         ("torchlens/_state.py", "_prepared_models"),
         ("torchlens/_state.py", "_prepared_root_by_module"),
         ("torchlens/_state.py", "_stale_prepared_roots"),
-        ("torchlens/backends/torch/_tl.py", "_RETIRED_LABEL_SESSION"),
+        ("torchlens/_utils/_tensor_label.py", "_RETIRED_LABEL_SESSION"),
         # F3b's lazy public-impl metadata sync (3c7ed93e): a one-way
         # synced-yet? sentinel flipped on first successful wrap, install-class.
         ("torchlens/_user_funcs.py", "_public_impl_metadata_synced"),
@@ -1130,7 +1130,7 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/backends/torch/_op_markers.py", "__all__"),
         ("torchlens/backends/torch/_pinned_graph.py", "__all__"),
         ("torchlens/backends/torch/_protocol_redispatch.py", "__all__"),
-        ("torchlens/backends/torch/_tl.py", "__all__"),
+        ("torchlens/_utils/_tensor_label.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_ctx.py", "__all__"),
         ("torchlens/backends/torch/_weightsfree_transparency.py", "__all__"),
         ("torchlens/backends/torch/backend.py", "__all__"),

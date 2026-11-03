@@ -467,7 +467,7 @@ def _simple_leaves(
     """
 
     if isinstance(value, dict | tuple | list):
-        from .._input_walk import (
+        from .._utils._input_tree import (
             INPUT_TREE_MAX_DEPTH,
             raise_input_tree_cycle_refusal,
             raise_input_tree_depth_refusal,

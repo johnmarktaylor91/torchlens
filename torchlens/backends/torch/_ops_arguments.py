@@ -11,6 +11,15 @@ from ..._ir.container import (
 from ..._save_budget import _retained_storage_identities
 from ..._state import pause_logging
 from ..._storage_bindings import STORAGE_CONTEXT_RECEIVER_FUNCS, copy_with_storage_context
+from ..._utils._tensor_label import (
+    get_live_tensor_label,
+    get_param_meta,
+    get_tensor_label,
+    get_tensor_meta,
+    mutated_parameter_label,
+    session_label_storage_intact,
+    session_meta_is_anchored,
+)
 from ..._utils.arg_handling import copy_arg_tree
 from ..._utils.tensor_utils import (
     safe_copy,
@@ -27,15 +36,6 @@ from ...intervention.types import (
     Unsupported,
 )
 from ._param_fingerprint import param_fingerprint
-from ._tl import (
-    get_live_tensor_label,
-    get_param_meta,
-    get_tensor_label,
-    get_tensor_meta,
-    mutated_parameter_label,
-    session_label_storage_intact,
-    session_meta_is_anchored,
-)
 from .buffer_writes import session_validated_buffer_address
 
 if TYPE_CHECKING:
@@ -407,7 +407,7 @@ def _tensor_has_known_provenance(trace: "Trace", value: torch.Tensor) -> bool:
 
     if isinstance(value, torch.nn.Parameter) and _session_validated_parameter(trace, value):
         return True
-    from ._tl_collective import _async_collective_elem
+    from ..._utils._tl_collective import _async_collective_elem
 
     act_inner = _async_collective_elem(value)
     if act_inner is not None:

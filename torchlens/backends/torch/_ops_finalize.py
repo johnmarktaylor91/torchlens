@@ -482,7 +482,7 @@ def _raise_if_nonfinite_requested(self: Any, tensor: torch.Tensor, entry: Any) -
     # the frontier. Popped by the finalizer or, on paths that never finalize,
     # by the failed-capture scrub.
     if isinstance(raw_label, str) and raw_label:
-        from ._tl import set_tensor_label
+        from ..._utils._tensor_label import set_tensor_label
 
         set_tensor_label(tensor, raw_label)
     self.__dict__["_nonfinite_frontier_out"] = tensor

@@ -44,13 +44,13 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._utils.hashing import make_random_barcode
-from torchlens.backends.torch._tl import (
+from torchlens._utils._tensor_label import (
     get_buffer_address,
     get_param_meta,
     get_tensor_meta,
     set_param_meta,
 )
+from torchlens._utils.hashing import make_random_barcode
 from torchlens.errors import RunnablePreflightError
 from torchlens.options import CaptureOptions
 

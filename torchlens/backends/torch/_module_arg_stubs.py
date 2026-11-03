@@ -17,7 +17,7 @@ from typing import Any, cast
 import torch
 
 from ..._ir.workspaces import ReleasedTensorStub
-from ._tl import get_tensor_label
+from ..._utils._tensor_label import get_tensor_label
 
 _MODULE_ARG_STUB_MAX_DEPTH = 5
 
