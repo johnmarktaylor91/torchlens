@@ -52,7 +52,8 @@ not an independent rerun of the model or all interpolation captures.
 The plotting helpers write `ioi_roc.png` / `.svg` and `ioi_circuit.png` / `.svg` from
 the saved scores. The graph shows the 20 strongest absolute head-to-head q/k/v edges,
 with Wang's head classes colored and all other heads grey. Arrow width encodes absolute
-attribution, without asserting that an edge is necessary. The ROC uses all 144 heads
+attribution, without asserting that an edge is necessary. Edges for different q/k/v
+channels can share endpoints and overlap; the saved table retains each channel identity. The ROC uses all 144 heads
 against the 26-head membership set. These are single-run diagnostics, with no uncertainty
 intervals; they do not replace the oracle or controls.
 
