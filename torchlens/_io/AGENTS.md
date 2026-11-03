@@ -55,6 +55,8 @@ hostile input, and every load path here is fail-closed.
 - `_TlSpecWriter` writes unified bundles; `coerce_tlspec_save_level()` validates save levels.
 
 ## scrub.py / rehydrate.py / accessor_rebuild.py
+
+`_scrub_identities.py` holds the pure metadata identity normalization and record joins used by `scrub.py`.
 - `scrub_for_save()` turns live trace state into portable state (tensor blobification via
   `BlobSpec`, policy-driven per-field handling).
 - `rehydrate_trace()` / `rehydrate_nested()` rebuild loaded state; `rebuild_trace_accessors()`
