@@ -1,4 +1,5 @@
 # TorchLens Removed-Spellings Ledger
+<!-- # record-groups: keep-flat (this page lists the former flat spellings) -->
 
 Every warning-producing compatibility shim listed below was REMOVED outright in
 the 2026-08 shim-removal pass (interim-phase ruling: deprecation shims are not
@@ -162,39 +163,74 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | --- | --- | --- |
 | `Op.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
 | `AtenOp.gpu_kernels` | none in this release (a kernel-recording switch is planned later; artifacts keep the kernel annotation) | removed |
-| `Op.cost.activation_memory` | `Op.cost.activation_memory` | removed |
-| `Op.cost.arithmetic_intensity` | `Op.cost.arithmetic_intensity` | removed |
-| `Op.cost.autograd_memory` | `Op.cost.autograd_memory` | removed |
-| `Op.cost.bytes_delta_at_call` | `Op.cost.bytes_delta_at_call` | removed |
-| `Op.cost.bytes_peak_at_call` | `Op.cost.bytes_peak_at_call` | removed |
-| `Op.cost.bytes_read` | `Op.cost.bytes_read` | removed |
-| `Op.cost.bytes_written` | `Op.cost.bytes_written` | removed |
-| `Op.cost.compute_record` | `Op.cost.compute_record` | removed |
-| `Op.cost.flops_backward` | `Op.cost.flops_backward` | removed |
-| `Op.cost.flops_forward` | `Op.cost.flops_forward` | removed |
-| `Op.cost.flops_total` | `Op.cost.flops_total` | removed |
-| `Op.cost.duration` | `Op.cost.duration` | removed |
-| `Op.cost.input_memory` | `Op.cost.input_memory` | removed |
-| `Op.cost.macs_forward` | `Op.cost.macs_forward` | removed |
-| `Op.cost.param_memory` | `Op.cost.param_memory` | removed |
-| `Op.cost.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
-| `Layer.cost.activation_memory` | `Layer.cost.activation_memory` | removed |
-| `Layer.cost.autograd_memory` | `Layer.cost.autograd_memory` | removed |
-| `Layer.cost.flops_backward` | `Layer.cost.flops_backward` | removed |
-| `Layer.cost.flops_forward` | `Layer.cost.flops_forward` | removed |
-| `Layer.cost.flops_total` | `Layer.cost.flops_total` | removed |
-| `Layer.cost.duration` | `Layer.cost.duration` | removed |
-| `Layer.cost.macs_forward` | `Layer.cost.macs_forward` | removed |
-| `Layer.cost.total_activation_memory` | `Layer.cost.total_activation_memory` | removed |
-| `Layer.cost.total_autograd_memory` | `Layer.cost.total_autograd_memory` | removed |
-| `Layer.cost.total_flops_backward` | `Layer.cost.total_flops_backward` | removed |
-| `Layer.cost.total_flops_forward` | `Layer.cost.total_flops_forward` | removed |
-| `Layer.cost.total_flops` | `Layer.cost.total_flops` | removed |
-| `Layer.cost.total_func_duration` | `Layer.cost.total_func_duration` | removed |
-| `Layer.cost.total_macs_forward` | `Layer.cost.total_macs_forward` | removed |
-| `Layer.cost.total_macs` | `Layer.cost.total_macs` | removed |
-| `Layer.cost.total_param_memory` | `Layer.cost.total_param_memory` | removed |
-| `Layer.cost.transformed_activation_memory` | `Layer.cost.transformed_activation_memory` | removed |
+| `Op.activation_memory` | `Op.cost.activation_memory` | removed |
+| `Op.arithmetic_intensity` | `Op.cost.arithmetic_intensity` | removed |
+| `Op.autograd_memory` | `Op.cost.autograd_memory` | removed |
+| `Op.bool_value` | `Op.control_flow.bool_value` | removed |
+| `Op.bytes_delta_at_call` | `Op.cost.bytes_delta_at_call` | removed |
+| `Op.bytes_peak_at_call` | `Op.cost.bytes_peak_at_call` | removed |
+| `Op.bytes_read` | `Op.cost.bytes_read` | removed |
+| `Op.bytes_written` | `Op.cost.bytes_written` | removed |
+| `Op.compute_record` | `Op.cost.compute_record` | removed |
+| `Op.conditional_arm_children` | `Op.control_flow.arm_children` | removed |
+| `Op.conditional_branch_depth` | `Op.control_flow.branch_depth` | removed |
+| `Op.conditional_branch_stack` | `Op.control_flow.branch_stack` | removed |
+| `Op.conditional_context_kind` | `Op.control_flow.context_kind` | removed |
+| `Op.conditional_depth` | `Op.control_flow.depth` | removed |
+| `Op.conditional_elif_children` | `Op.control_flow.elif_children` | removed |
+| `Op.conditional_else_children` | `Op.control_flow.else_children` | removed |
+| `Op.conditional_entry_children` | `Op.control_flow.entry_children` | removed |
+| `Op.conditional_then_children` | `Op.control_flow.then_children` | removed |
+| `Op.conditional_wrapper_kind` | `Op.control_flow.wrapper_kind` | removed |
+| `Op.flops_backward` | `Op.cost.flops_backward` | removed |
+| `Op.flops_forward` | `Op.cost.flops_forward` | removed |
+| `Op.flops_total` | `Op.cost.flops_total` | removed |
+| `Op.func_duration` | `Op.cost.duration` | removed |
+| `Op.in_conditionals` | `Op.control_flow.in_conditionals` | removed |
+| `Op.input_memory` | `Op.cost.input_memory` | removed |
+| `Op.is_in_conditional` | `Op.control_flow.is_in_conditional` | removed |
+| `Op.is_in_conditional_body` | `Op.control_flow.is_in_conditional_body` | removed |
+| `Op.is_in_conditional_evaluation` | `Op.control_flow.is_in_conditional_evaluation` | removed |
+| `Op.is_scalar_bool` | `Op.control_flow.is_scalar_bool` | removed |
+| `Op.is_terminal_bool` | `Op.control_flow.is_terminal_bool` | removed |
+| `Op.is_terminal_conditional_bool` | `Op.control_flow.is_terminal_conditional_bool` | removed |
+| `Op.macs_forward` | `Op.cost.macs_forward` | removed |
+| `Op.param_memory` | `Op.cost.param_memory` | removed |
+| `Op.terminal_bool_for` | `Op.control_flow.terminal_bool_for` | removed |
+| `Op.transformed_activation_memory` | `Op.cost.transformed_activation_memory` | removed |
+| `Layer.activation_memory` | `Layer.cost.activation_memory` | removed |
+| `Layer.autograd_memory` | `Layer.cost.autograd_memory` | removed |
+| `Layer.bool_value` | `Layer.control_flow.bool_value` | removed |
+| `Layer.conditional_arm_children` | `Layer.control_flow.arm_children` | removed |
+| `Layer.conditional_branch_stack_ops` | `Layer.control_flow.branch_stack_ops` | removed |
+| `Layer.conditional_depth` | `Layer.control_flow.depth` | removed |
+| `Layer.conditional_elif_children` | `Layer.control_flow.elif_children` | removed |
+| `Layer.conditional_else_children` | `Layer.control_flow.else_children` | removed |
+| `Layer.conditional_entry_children` | `Layer.control_flow.entry_children` | removed |
+| `Layer.conditional_role_stacks` | `Layer.control_flow.role_stacks` | removed |
+| `Layer.conditional_then_children` | `Layer.control_flow.then_children` | removed |
+| `Layer.flops_backward` | `Layer.cost.flops_backward` | removed |
+| `Layer.flops_forward` | `Layer.cost.flops_forward` | removed |
+| `Layer.flops_total` | `Layer.cost.flops_total` | removed |
+| `Layer.func_duration` | `Layer.cost.duration` | removed |
+| `Layer.in_conditionals` | `Layer.control_flow.in_conditionals` | removed |
+| `Layer.is_in_conditional` | `Layer.control_flow.is_in_conditional` | removed |
+| `Layer.is_in_conditional_body` | `Layer.control_flow.is_in_conditional_body` | removed |
+| `Layer.is_in_conditional_evaluation` | `Layer.control_flow.is_in_conditional_evaluation` | removed |
+| `Layer.is_scalar_bool` | `Layer.control_flow.is_scalar_bool` | removed |
+| `Layer.is_terminal_bool` | `Layer.control_flow.is_terminal_bool` | removed |
+| `Layer.macs_forward` | `Layer.cost.macs_forward` | removed |
+| `Layer.terminal_bool_for` | `Layer.control_flow.terminal_bool_for` | removed |
+| `Layer.total_activation_memory` | `Layer.cost.total_activation_memory` | removed |
+| `Layer.total_autograd_memory` | `Layer.cost.total_autograd_memory` | removed |
+| `Layer.total_flops_backward` | `Layer.cost.total_flops_backward` | removed |
+| `Layer.total_flops_forward` | `Layer.cost.total_flops_forward` | removed |
+| `Layer.total_flops_total` | `Layer.cost.total_flops` | removed |
+| `Layer.total_func_duration` | `Layer.cost.total_func_duration` | removed |
+| `Layer.total_macs_forward` | `Layer.cost.total_macs_forward` | removed |
+| `Layer.total_macs_total` | `Layer.cost.total_macs` | removed |
+| `Layer.total_param_memory` | `Layer.cost.total_param_memory` | removed |
+| `Layer.transformed_activation_memory` | `Layer.cost.transformed_activation_memory` | removed |
 
 ## Intervention, Sweep, And Observer Aliases
 

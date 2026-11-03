@@ -84,4 +84,4 @@ def bind_layer_conditional_roles(trace: Trace, roles_by_label: Mapping[str, Sequ
     """
 
     for layer_label, layer in (trace._layer_logs or {}).items():
-        layer.in_conditionals = list(roles_by_label.get(layer_label, []))
+        layer._control_flow_in_conditionals = list(roles_by_label.get(layer_label, []))

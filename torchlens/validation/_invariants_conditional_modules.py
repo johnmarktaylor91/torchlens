@@ -100,28 +100,30 @@ def _check_conditional_branch_membership_records(
     stack_entries_by_layer_label: dict[str, set[tuple[int, str]]] = {}
     for layer in ml._layer_list:
         stack_entries_by_layer_label.setdefault(layer.layer_label, set()).update(
-            layer.conditional_branch_stack
+            layer.control_flow.branch_stack
         )
 
     for layer in ml._layer_list:
-        if layer.conditional_branch_depth != len(layer.conditional_branch_stack):
+        if layer.control_flow.branch_depth != len(layer.control_flow.branch_stack):
             _fail_conditional_invariant(
                 name,
                 15,
                 f"{layer.label} has conditional_branch_depth="
-                f"{layer.conditional_branch_depth} but len(conditional_branch_stack)="
-                f"{len(layer.conditional_branch_stack)}",
+                f"{layer.control_flow.branch_depth} but len(conditional_branch_stack)="
+                f"{len(layer.control_flow.branch_stack)}",
             )
-        has_body_role = any(role.role == "body" for role in (layer.in_conditionals or []))
-        if has_body_role and not layer.conditional_branch_stack:
+        has_body_role = any(
+            role.role == "body" for role in (layer.control_flow.in_conditionals or [])
+        )
+        if has_body_role and not layer.control_flow.branch_stack:
             _fail_conditional_invariant(
                 name,
                 15,
                 f"{layer.label} has a 'body' conditional role in in_conditionals but an "
                 f"empty conditional_branch_stack",
             )
-        stack_entries = set(layer.conditional_branch_stack)
-        for role in layer.in_conditionals or []:
+        stack_entries = set(layer.control_flow.branch_stack)
+        for role in layer.control_flow.in_conditionals or []:
             if role.role != "body":
                 continue
             expected_event_id = event_id_by_conditional_id.get(role.conditional_id)
@@ -146,7 +148,7 @@ def _check_conditional_branch_membership_records(
                     15,
                     f"{layer.label} has body role conditional_id={role.conditional_id!r} "
                     f"arm_kind={role.arm_kind!r} but conditional_branch_stack="
-                    f"{layer.conditional_branch_stack}; expected entry {expected_stack_entry}",
+                    f"{layer.control_flow.branch_stack}; expected entry {expected_stack_entry}",
                 )
 
 

@@ -321,7 +321,7 @@ def test_loop_repeated_if_condition_entries_remain_if() -> None:
         event = trace.graph.conditional_records[0]
         assert len(event.bool_layers) == 4
         assert all(
-            {op.conditional_context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
+            {op.control_flow.context_kind for op in trace[bool_label].ops.values()} == {"if_test"}
             for bool_label in event.bool_layers
         )
         edge_lines = [

@@ -218,7 +218,7 @@ def roles_held_by_pass(
 
     if not layer_roles:
         return []
-    pass_stack = set(op.conditional_branch_stack or ())
+    pass_stack = set(op.control_flow.branch_stack or ())
     return [
         role
         for role in layer_roles

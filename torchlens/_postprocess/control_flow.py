@@ -122,12 +122,12 @@ def _seed_proven_bool_consumers(self: Trace) -> None:
         if label not in proven_labels:
             continue
         layer = self[label]
-        if not layer.is_scalar_bool or getattr(layer, "is_orphan", False):
+        if not layer.control_flow.is_scalar_bool or getattr(layer, "is_orphan", False):
             continue
         if label not in seen_terminated_bool_labels:
             seen_terminated_bool_labels.add(label)
             self.internally_terminated_bool_ops.append(label)
-        layer.is_terminal_bool = True
+        layer._control_flow_is_terminal_bool = True
 
 
 def _can_fast_skip_step5(self: Trace) -> bool:
@@ -277,9 +277,9 @@ def _classify_bool_layers(
         else:
             primary = ast_branches.BoolClassification("unknown", None, None, None)
 
-        bool_layer.conditional_context_kind = primary.kind
-        bool_layer.conditional_wrapper_kind = primary.wrapper_kind
-        bool_layer.is_terminal_conditional_bool = bool(branch_classifications)
+        bool_layer._control_flow_context_kind = primary.kind
+        bool_layer._control_flow_wrapper_kind = primary.wrapper_kind
+        bool_layer._control_flow_is_terminal_conditional_bool = bool(branch_classifications)
         bool_layer.terminal_conditional_id = None
         bool_classifications[bool_label] = branch_classifications
 
@@ -484,13 +484,14 @@ def _mark_conditional_branches_if_backward_flood(
     for layer in self:
         if getattr(layer, "is_orphan", False):
             continue
-        layer.conditional_entry_children = []
-        layer.is_in_conditional_body = False
+        layer._control_flow_entry_children = []
+        layer._control_flow_is_in_conditional_body = False
 
     branch_bool_labels = [
         bool_label
         for bool_label in _iter_terminal_scalar_bool_labels(self)
-        if bool_classifications[bool_label] and self[bool_label].is_terminal_conditional_bool
+        if bool_classifications[bool_label]
+        and self[bool_label].control_flow.is_terminal_conditional_bool
     ]
 
     nodes_seen: set[str] = set()
@@ -503,14 +504,14 @@ def _mark_conditional_branches_if_backward_flood(
         for parent_label in node.parents:
             parent_layer = self[parent_label]
             if parent_layer.has_output_descendant:
-                parent_layer.conditional_entry_children.append(node_label)
-                parent_layer.is_in_conditional_body = False
+                parent_layer.control_flow.entry_children.append(node_label)
+                parent_layer._control_flow_is_in_conditional_body = False
                 nodes_seen.add(parent_label)
                 self._graph_conditional_branch_edges.append((parent_label, node_label))
             else:
                 if parent_label in nodes_seen:
                     continue
-                parent_layer.is_in_conditional_body = True
+                parent_layer._control_flow_is_in_conditional_body = True
                 node_stack.append(parent_label)
 
         nodes_seen.add(node_label)
@@ -537,12 +538,12 @@ def _attribute_branches_forward(
         layer = self[layer_label]
         if getattr(layer, "is_orphan", False):
             continue
-        layer.conditional_branch_stack = _translate_conditional_stack(
+        layer._control_flow_branch_stack = _translate_conditional_stack(
             layer.code_context,
             events_by_key,
         )
-        layer.conditional_branch_depth = len(layer.conditional_branch_stack)
-        layer.conditional_arm_children = {}
+        layer._control_flow_branch_depth = len(layer.control_flow.branch_stack)
+        layer._control_flow_arm_children = {}
 
     for parent_label in self._raw_graph_ws.raw_layer_labels_list:
         parent_layer = self[parent_label]
@@ -553,11 +554,11 @@ def _attribute_branches_forward(
             if getattr(child_layer, "is_orphan", False):
                 continue
             gained_entries = _get_gained_branch_entries(
-                parent_layer.conditional_branch_stack,
-                child_layer.conditional_branch_stack,
+                parent_layer.control_flow.branch_stack,
+                child_layer.control_flow.branch_stack,
             )
             for conditional_id, branch_kind in gained_entries:
-                parent_layer.conditional_arm_children.setdefault(conditional_id, {}).setdefault(
+                parent_layer.control_flow.arm_children.setdefault(conditional_id, {}).setdefault(
                     branch_kind, []
                 ).append(child_label)
                 conditional_arm_entry_edges[(conditional_id, branch_kind)].append(
@@ -594,32 +595,32 @@ def _materialize_derived_views(self: Trace) -> None:
         layer = self[layer_label]
         if getattr(layer, "is_orphan", False):
             continue
-        layer.conditional_then_children = sorted(
+        layer._control_flow_then_children = sorted(
             set(
                 chain.from_iterable(
                     branch_children.get("then", [])
-                    for branch_children in layer.conditional_arm_children.values()
+                    for branch_children in layer.control_flow.arm_children.values()
                 )
             )
         )
 
         elif_children: dict[int, set[str]] = defaultdict(set)
-        for branch_children in layer.conditional_arm_children.values():
+        for branch_children in layer.control_flow.arm_children.values():
             for branch_kind, child_labels in branch_children.items():
                 if not branch_kind.startswith("elif_"):
                     continue
                 elif_index = int(branch_kind.split("_", 1)[1])
                 elif_children[elif_index].update(child_labels)
-        layer.conditional_elif_children = {
+        layer._control_flow_elif_children = {
             elif_index: sorted(child_labels)
             for elif_index, child_labels in sorted(elif_children.items())
         }
 
-        layer.conditional_else_children = sorted(
+        layer._control_flow_else_children = sorted(
             set(
                 chain.from_iterable(
                     branch_children.get("else", [])
-                    for branch_children in layer.conditional_arm_children.values()
+                    for branch_children in layer.control_flow.arm_children.values()
                 )
             )
         )
@@ -645,7 +646,7 @@ def _iter_terminal_scalar_bool_labels(self: Trace) -> list[str]:
         layer_label
         for layer_label in self._raw_graph_ws.raw_layer_labels_list
         if layer_label in terminal_bool_labels
-        and self[layer_label].is_scalar_bool
+        and self[layer_label].control_flow.is_scalar_bool
         and not getattr(self[layer_label], "is_orphan", False)
     ]
 
@@ -1198,7 +1199,7 @@ def _merge_buffer_entries(
             "children": set(source_buffer.children),
             "parents": set(source_buffer.parents),
             "internal_source_parents": set(source_buffer.internal_source_parents),
-            "conditional_entry_children": set(source_buffer.conditional_entry_children),
+            "conditional_entry_children": set(source_buffer.control_flow.entry_children),
         }
         survivor_edge_shadows[source_buffer._label_raw] = shadow
     # The removed duplicate can never be a survivor again.
@@ -1275,12 +1276,12 @@ def _merge_buffer_entries(
     # trace-level edges (conditional_branch_edges, conditional_arm_entry_edges,
     # conditional_edge_call_indices) repoint via ``replacement_labels`` in the
     # closing reference scrub (deep-hunt C3).
-    for entry_child in buffer_to_remove.conditional_entry_children:
+    for entry_child in buffer_to_remove.control_flow.entry_children:
         if entry_child not in shadow["conditional_entry_children"]:
             shadow["conditional_entry_children"].add(entry_child)
-            source_buffer.conditional_entry_children.append(entry_child)
-    for cond_id, branch_children in buffer_to_remove.conditional_arm_children.items():
-        survivor_branches = source_buffer.conditional_arm_children.setdefault(cond_id, {})
+            source_buffer.control_flow.entry_children.append(entry_child)
+    for cond_id, branch_children in buffer_to_remove.control_flow.arm_children.items():
+        survivor_branches = source_buffer.control_flow.arm_children.setdefault(cond_id, {})
         for branch_kind, child_labels in branch_children.items():
             survivor_children = survivor_branches.setdefault(branch_kind, [])
             for child_label in child_labels:

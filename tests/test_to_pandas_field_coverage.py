@@ -316,7 +316,7 @@ def test_layer_to_pandas_covers_field_order(coverage_trace: Any) -> None:
     """Layer.to_pandas() must export every LAYER_LOG_FIELD_ORDER field."""
 
     conditional_layer = next(
-        layer for layer in coverage_trace.layers if layer.is_in_conditional_body
+        layer for layer in coverage_trace.layers if layer.control_flow.is_in_conditional_body
     )
     df = conditional_layer.to_pandas()
 
@@ -418,7 +418,7 @@ def test_backward_pass_to_pandas_covers_field_order(coverage_trace: Any) -> None
 def test_op_to_pandas_covers_field_order(coverage_trace: Any) -> None:
     """Op.to_pandas() must export every LAYER_PASS_LOG_FIELD_ORDER field."""
 
-    conditional_op = next(op for op in coverage_trace.ops if op.is_in_conditional_body)
+    conditional_op = next(op for op in coverage_trace.ops if op.control_flow.is_in_conditional_body)
     df = conditional_op.to_pandas()
 
     assert list(df.columns) == LAYER_PASS_LOG_FIELD_ORDER

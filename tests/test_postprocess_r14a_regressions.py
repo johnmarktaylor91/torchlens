@@ -266,12 +266,12 @@ def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None
         "cond_gt_1_3__event_0",
         "cond_gt_1_3__event_1",
     ]
-    assert trace._layer_list[0].terminal_bool_for == ("cond_gt_1_3__event_0", 0)
-    assert trace._layer_list[2].terminal_bool_for == ("cond_gt_1_3__event_1", 0)
-    assert {role.conditional_id for role in trace._layer_list[1].in_conditionals} == {
+    assert trace._layer_list[0].control_flow.terminal_bool_for == ("cond_gt_1_3__event_0", 0)
+    assert trace._layer_list[2].control_flow.terminal_bool_for == ("cond_gt_1_3__event_1", 0)
+    assert {role.conditional_id for role in trace._layer_list[1].control_flow.in_conditionals} == {
         "cond_gt_1_3__event_0"
     }
-    assert {role.conditional_id for role in trace._layer_list[3].in_conditionals} == {
+    assert {role.conditional_id for role in trace._layer_list[3].control_flow.in_conditionals} == {
         "cond_gt_1_3__event_1"
     }
 
@@ -434,4 +434,4 @@ def test_internal_sink_logging_never_rescans_the_sink_ledgers() -> None:
     ]
     for i, label in enumerate(layers):
         assert layers[label].is_internal_sink is True
-        assert layers[label].is_terminal_bool is (i % 2 == 0)
+        assert layers[label].control_flow.is_terminal_bool is (i % 2 == 0)

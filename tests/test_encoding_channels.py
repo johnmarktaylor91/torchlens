@@ -24,6 +24,7 @@ import torchlens as tl
 from torchlens._data_classes._layer_spec import _LAYER_MIRROR_SPEC, _LAYER_STATE_ORDER
 from torchlens._data_classes.layer import Layer
 from torchlens._record_type import record_type
+from torchlens._utils._record_group_table import LAYER_MOVED_MEMBERS
 from torchlens._visualization._encoding import (
     DARK_RAMP,
     LAYER_SOURCE_ROWS,
@@ -657,7 +658,10 @@ def test_classification_completeness_pin() -> None:
         for name, value in vars(Layer).items()
         if isinstance(value, property) and not name.startswith("_")
     }
-    walked = set(_LAYER_STATE_ORDER) | set(_LAYER_MIRROR_SPEC) | properties
+    # Former flat spellings of concern-group members stay readable channel names.
+    walked = (
+        set(_LAYER_STATE_ORDER) | set(_LAYER_MIRROR_SPEC) | properties | set(LAYER_MOVED_MEMBERS)
+    )
     classified = set(LAYER_SOURCE_ROWS)
     missing = sorted(walked - classified)
     stale = sorted(classified - walked)

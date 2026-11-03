@@ -1841,7 +1841,7 @@ def _get_node_bg_color(self: "Trace", node: GraphNode) -> str:
         bg_color = INPUT_COLOR
     elif node.is_output:
         bg_color = OUTPUT_COLOR
-    elif node.is_terminal_bool:
+    elif node.control_flow.is_terminal_bool:
         bg_color = BOOL_NODE_COLOR
     elif node.is_buffer:
         bg_color = BUFFER_NODE_COLOR
@@ -2027,8 +2027,8 @@ def compute_default_node_lines(
         title = f"{layer_type}_{layer_log.type_index}_{layer_log.step_index}{call_label}"
 
     lines: list[str] = []
-    if layer_log.is_terminal_bool:
-        lines.append(str(layer_log.bool_value).upper())
+    if layer_log.control_flow.is_terminal_bool:
+        lines.append(str(layer_log.control_flow.bool_value).upper())
     lines.append(title)
     # L1's across-pass shape summary (rolled multi-pass Layers only; plain
     # data, escaped like every row by the S5 choke point).

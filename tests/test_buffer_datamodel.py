@@ -99,16 +99,16 @@ def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None
     assert op.output_descendants == {"output_1_raw"}
     assert op.internal_source_parents == []
     assert op.internal_source_ancestors == set()
-    assert op.conditional_entry_children == []
-    assert op.conditional_then_children == []
+    assert op.control_flow.entry_children == []
+    assert op.control_flow.then_children == []
     # NOTE: op_equivalence_classes is a Trace-level dict, never a per-op field;
     # the dead per-op scrub for it was removed by the cert round-1 data-model fix.
     assert op.equivalent_ops == ["add_1_raw"]
     assert op.recurrent_ops == []
     assert op.parent_arg_positions == {"args": {1: "add_1_raw"}, "kwargs": {}}
     assert set(op.out_versions_by_child) == {"add_1_raw"}
-    assert op.conditional_elif_children == {}
-    assert op.conditional_arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
+    assert op.control_flow.elif_children == {}
+    assert op.control_flow.arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
 
 
 def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
@@ -142,8 +142,8 @@ def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
 
     _replace_layer_names_for_layer_entry(trace, layer_entry)
 
-    assert layer_entry.conditional_arm_children == {1: {"then": ["child_a", "child_b"]}}
-    assert layer_entry.conditional_then_children == ["child_a", "child_b"]
+    assert layer_entry.control_flow.arm_children == {1: {"then": ["child_a", "child_b"]}}
+    assert layer_entry.control_flow.then_children == ["child_a", "child_b"]
 
 
 def test_cleanup_rebuilds_conditional_child_views_from_primary_structure() -> None:
@@ -159,8 +159,8 @@ def test_cleanup_rebuilds_conditional_child_views_from_primary_structure() -> No
 
     _scrub_layer_entry_conditional_fields(layer_entry, {"drop_me"})
 
-    assert layer_entry.conditional_arm_children == {1: {"then": ["child_a", "child_b"]}}
-    assert layer_entry.conditional_then_children == ["child_a", "child_b"]
+    assert layer_entry.control_flow.arm_children == {1: {"then": ["child_a", "child_b"]}}
+    assert layer_entry.control_flow.then_children == ["child_a", "child_b"]
 
 
 class RecurrentReassign(nn.Module):

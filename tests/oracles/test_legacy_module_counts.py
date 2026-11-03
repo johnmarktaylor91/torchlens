@@ -264,12 +264,12 @@ def test_conditional_counts() -> None:
     try:
         assert len(trace.graph.conditionals) == 2
         for op in trace.ops:
-            assert op.conditional_depth == COND_DEPTH.get(op.layer_label, 0), op.label
+            assert op.control_flow.depth == COND_DEPTH.get(op.layer_label, 0), op.label
             expected = COND_BRANCH_DEPTH.get(op.layer_label, 0)
-            assert op.conditional_branch_depth == expected, op.label
+            assert op.control_flow.branch_depth == expected, op.label
         for layer in trace.layers:
             expected = COND_DEPTH.get(layer.layer_label, 0)
-            assert layer.conditional_depth == expected, layer.layer_label
+            assert layer.control_flow.depth == expected, layer.layer_label
     finally:
         trace.cleanup()
 

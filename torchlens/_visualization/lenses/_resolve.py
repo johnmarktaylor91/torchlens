@@ -252,7 +252,7 @@ def _resolve_perf_source(
 
     values: dict[str, float] = {}
     for record in records_for_member(trace, source.member):
-        value = scalar_or_none(getattr(record, source.member, None))
+        value = scalar_or_none(record_member(record, source.member, None))
         if value is not None:
             values[safe_label(record)] = value
     return source, values

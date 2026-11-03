@@ -430,8 +430,8 @@ def _build_node_label(entry: Any, vis_mode: str) -> str:
     """
 
     lines: list[str] = []
-    if getattr(entry, "is_terminal_bool", False):
-        val = getattr(entry, "bool_value", None)
+    if record_member(entry, "is_terminal_bool", False):
+        val = record_member(entry, "bool_value", None)
         if val is not None:
             lines.append("TRUE" if bool(val) else "FALSE")
     lines.append(_display_label(entry, vis_mode))
@@ -483,7 +483,7 @@ def _base_node_type(entry: Any) -> str:
         return "output"
     if getattr(entry, "is_buffer", False):
         return "buffer"
-    if getattr(entry, "is_terminal_bool", False):
+    if record_member(entry, "is_terminal_bool", False):
         return "bool"
     trainable = int(getattr(entry, "num_params_trainable", 0) or 0)
     frozen = int(getattr(entry, "num_params_frozen", 0) or 0)
@@ -644,9 +644,9 @@ def _classify_forward_edge(parent: Any, child: Any) -> str:
     """
 
     child_label = getattr(child, "layer_label", "")
-    if child_label in (getattr(parent, "conditional_then_children", None) or []):
+    if child_label in (record_member(parent, "conditional_then_children", None) or []):
         return "then"
-    if child_label in (getattr(parent, "conditional_entry_children", None) or []):
+    if child_label in (record_member(parent, "conditional_entry_children", None) or []):
         return "if"
     if getattr(parent, "is_buffer", False):
         return "buffer"

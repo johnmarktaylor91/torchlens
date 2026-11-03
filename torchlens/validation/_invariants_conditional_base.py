@@ -286,7 +286,7 @@ def _expected_layer_log_child_union(
 
     expected_children_by_cond: dict[int, dict[str, list[str]]] = {}
     for call_index, pass_log in sorted(layer_log.ops.items()):
-        for conditional_id, branch_children in pass_log.conditional_arm_children.items():
+        for conditional_id, branch_children in pass_log.control_flow.arm_children.items():
             merged_branch_children = expected_children_by_cond.setdefault(conditional_id, {})
             for branch_kind, child_labels in branch_children.items():
                 merged_child_labels = merged_branch_children.setdefault(branch_kind, [])
@@ -377,7 +377,7 @@ def _check_conditional_arm_entry_child_symmetry(
                     f"missing parent layer {parent_label!r}",
                 )
             parent_layer = ml._layer_logs[parent_label]
-            branch_children = parent_layer.conditional_arm_children.get(conditional_id, {}).get(
+            branch_children = parent_layer.control_flow.arm_children.get(conditional_id, {}).get(
                 branch_kind, []
             )
             if child_label not in branch_children:
@@ -391,7 +391,7 @@ def _check_conditional_arm_entry_child_symmetry(
                 )
 
     for parent_layer in ml._layer_logs.values():
-        for conditional_id, branch_map in parent_layer.conditional_arm_children.items():
+        for conditional_id, branch_map in parent_layer.control_flow.arm_children.items():
             for branch_kind, child_labels in branch_map.items():
                 model_edges = ml._graph_conditional_arm_entry_edges.get(
                     (conditional_id, branch_kind), []
@@ -424,56 +424,56 @@ def _check_conditional_derived_child_views(
     # Invariant 2: per-layer derived views are exact projections of the primary structures.
     for layer in ml._layer_list:
         expected_then_children, expected_elif_children, expected_else_children = (
-            _expected_layer_pass_child_views(layer.conditional_arm_children)
+            _expected_layer_pass_child_views(layer.control_flow.arm_children)
         )
-        if list(layer.conditional_then_children) != expected_then_children:
+        if list(layer.control_flow.then_children) != expected_then_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.conditional_then_children={layer.conditional_then_children} != "
+                f"{layer.layer_label}.conditional_then_children={layer.control_flow.then_children} != "
                 f"expected projection {expected_then_children}",
             )
-        if layer.conditional_elif_children != expected_elif_children:
+        if layer.control_flow.elif_children != expected_elif_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.conditional_elif_children={layer.conditional_elif_children} != "
+                f"{layer.layer_label}.conditional_elif_children={layer.control_flow.elif_children} != "
                 f"expected projection {expected_elif_children}",
             )
-        if list(layer.conditional_else_children) != expected_else_children:
+        if list(layer.control_flow.else_children) != expected_else_children:
             _fail_conditional_invariant(
                 name,
                 2,
-                f"{layer.layer_label}.conditional_else_children={layer.conditional_else_children} != "
+                f"{layer.layer_label}.conditional_else_children={layer.control_flow.else_children} != "
                 f"expected projection {expected_else_children}",
             )
 
     for layer_log in ml._layer_logs.values():
         expected_then_children, expected_elif_children, expected_else_children = (
-            _expected_layer_log_child_views(layer_log.conditional_arm_children)
+            _expected_layer_log_child_views(layer_log.control_flow.arm_children)
         )
-        if list(layer_log.conditional_then_children) != expected_then_children:
+        if list(layer_log.control_flow.then_children) != expected_then_children:
             _fail_conditional_invariant(
                 name,
                 2,
                 f"Layer {layer_log.layer_label}.conditional_then_children="
-                f"{layer_log.conditional_then_children} != expected projection "
+                f"{layer_log.control_flow.then_children} != expected projection "
                 f"{expected_then_children}",
             )
-        if layer_log.conditional_elif_children != expected_elif_children:
+        if layer_log.control_flow.elif_children != expected_elif_children:
             _fail_conditional_invariant(
                 name,
                 2,
                 f"Layer {layer_log.layer_label}.conditional_elif_children="
-                f"{layer_log.conditional_elif_children} != expected projection "
+                f"{layer_log.control_flow.elif_children} != expected projection "
                 f"{expected_elif_children}",
             )
-        if list(layer_log.conditional_else_children) != expected_else_children:
+        if list(layer_log.control_flow.else_children) != expected_else_children:
             _fail_conditional_invariant(
                 name,
                 2,
                 f"Layer {layer_log.layer_label}.conditional_else_children="
-                f"{layer_log.conditional_else_children} != expected projection "
+                f"{layer_log.control_flow.else_children} != expected projection "
                 f"{expected_else_children}",
             )
 

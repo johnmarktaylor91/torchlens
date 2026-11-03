@@ -1752,7 +1752,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   whose model is gone), never 0.
 
 **Conditional depth**
-: `Op.conditional_depth` and `Layer.conditional_depth` count the distinct conditionals the record
+: `Op.control_flow.depth` and `Layer.control_flow.depth` count the distinct conditionals the record
   takes a direct role in, as listed in `in_conditionals`: the `evaluation` role marks the bool an
   arm's test consumed, and the `body` role marks an op an arm's entry edge feeds (an op whose
   input was computed outside that arm), not every op inside the arm. An op nested in two `if`
@@ -4634,7 +4634,7 @@ alphabetical order.
 | `Op.atomic_module_call` | Stored `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.atomic_module_call_label` | Stable `ModuleCall` label for an atomic-module output Op, or `None` |
 | `Op.backend_address` | The Op's locator in the backend's own graph, such as `jaxpr:<label>` |
-| `Op.bool_value` | The Python value of this Op's output when it is a scalar bool |
+| `Op.control_flow.bool_value` | The Python value of this Op's output when it is a scalar bool |
 | `Op.buffer_pass` | Pass number of this Op's buffer, as used in the `address:pass` lookup key |
 | `Op.buffer_replay_validated` | Whether replaying this buffer write as an identity from its source matched the recorded value |
 | `Op.buffer_sink_ops` | Accessor over the buffer-write Ops that directly consume this Op |
@@ -4646,17 +4646,21 @@ alphabetical order.
 | `Op.children` | Labels of the Ops that directly consume this Op's output |
 | `Op.co_parents` | Labels of other Ops that share at least one child with this Op |
 | `Op.code_context` | Call-stack frames showing where this Op ran |
-| `Op.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm |
-| `Op.conditional_branch_depth` | Number of conditional branches this Op is nested inside; 0 when it is not in a conditional body |
-| `Op.conditional_context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
-| `Op.conditional_elif_children` | Dict mapping each elif arm index to the labels of this Op's children in that arm |
-| `Op.conditional_else_children` | Labels of this Op's children that sit in an else arm of a conditional |
-| `Op.conditional_entry_children` | Labels of this Op's children whose edge from it enters a conditional arm |
-| `Op.conditional_then_children` | Labels of this Op's children that sit in a then arm of a conditional |
-| `Op.conditional_wrapper_kind` | Wrapper kind of the conditional that owns this terminal bool, or `None` |
+| `Op.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm |
+| `Op.control_flow.branch_depth` | Number of conditional branches this Op is nested inside; 0 when it is not in a conditional body |
+| `Op.control_flow.branch_stack` | Stack of `(conditional_id, arm_kind)` pairs for the conditional branches this Op is nested inside, outermost first |
+| `Op.control_flow.depth` | Number of distinct conditionals this Op takes part in, derived on read from `in_conditionals` |
+| `Op.control_flow.in_conditionals` | Ids of the conditionals this Op takes part in, as a test or inside an arm |
+| `Op.control_flow.context_kind` | Kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None` |
+| `Op.control_flow.elif_children` | Dict mapping each elif arm index to the labels of this Op's children in that arm |
+| `Op.control_flow.else_children` | Labels of this Op's children that sit in an else arm of a conditional |
+| `Op.control_flow.entry_children` | Labels of this Op's children whose edge from it enters a conditional arm |
+| `Op.control_flow.then_children` | Labels of this Op's children that sit in a then arm of a conditional |
+| `Op.control_flow.wrapper_kind` | Wrapper kind of the conditional that owns this terminal bool, or `None` |
 | `Op.container` | Runtime container view for this Op, when available |
 | `Op.container_spec` | Rebuildable description of the container that holds this Op's output |
 | `Op.containers` | All input and output container views associated with this Op |
+| `Op.control_flow` | Conditional-branch facts of this Op: branch membership, terminal bools and arm children (`tl.types.OpControlFlow`) |
 | `Op.cost` | Compute, memory and timing facts of this Op (`tl.types.OpCost`) |
 | `Op.cost.activation_memory` | Bytes of this Op's output activation |
 | `Op.cost.arithmetic_intensity` | Theoretical forward FLOPs per byte of ideal memory traffic, or `None` |
@@ -4730,9 +4734,9 @@ alphabetical order.
 | `Op.is_buffer_source` | Whether this Op represents a buffer boundary (overwrites a buffer) |
 | `Op.is_compute_op` | Whether this Op executed a torch function rather than being a boundary sentinel |
 | `Op.is_final_output` | Whether this Op is a final model output |
-| `Op.is_in_conditional` | Whether this Op participates in any conditional role |
-| `Op.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |
-| `Op.is_in_conditional_evaluation` | Whether this Op computes a conditional arm's condition |
+| `Op.control_flow.is_in_conditional` | Whether this Op participates in any conditional role |
+| `Op.control_flow.is_in_conditional_body` | Whether this Op sits inside the body of a conditional arm |
+| `Op.control_flow.is_in_conditional_evaluation` | Whether this Op computes a conditional arm's condition |
 | `Op.is_inplace` | Whether the underlying operation was in-place |
 | `Op.is_input` | Whether this Op is a model input |
 | `Op.is_internal_sink` | Whether this Op's result ends inside the model without reaching an output |
@@ -4743,9 +4747,9 @@ alphabetical order.
 | `Op.is_orphan` | Whether this Op is disconnected from both the input and output flows |
 | `Op.is_output` | Whether this Op is a model output |
 | `Op.is_output_parent` | Whether this Op is directly returned from `forward` |
-| `Op.is_scalar_bool` | Whether this Op's output is a scalar bool |
-| `Op.is_terminal_bool` | Whether this Op is a scalar bool that ends a chain of operations and decides control flow |
-| `Op.is_terminal_conditional_bool` | Whether this terminal bool is the test of a recorded conditional |
+| `Op.control_flow.is_scalar_bool` | Whether this Op's output is a scalar bool |
+| `Op.control_flow.is_terminal_bool` | Whether this Op is a scalar bool that ends a chain of operations and decides control flow |
+| `Op.control_flow.is_terminal_conditional_bool` | Whether this terminal bool is the test of a recorded conditional |
 | `Op.is_transform` | Whether this Op is a function-transform boundary node |
 | `Op.kwargs_summary` | Human-readable summary of this Op's keyword arguments |
 | `Op.kwargs_template` | Structural template of this Op's keyword arguments, used to rebuild the call |
@@ -4794,7 +4798,7 @@ alphabetical order.
 | `Op.save_activation` | Save the output tensor, and optionally the call arguments, for this Op |
 | `Op.saved_kwargs` | Keyword argument values saved for this Op's call, or `None` when not saved |
 | `Op.siblings` | Labels of other Ops that share at least one parent with this Op |
-| `Op.terminal_bool_for` | `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm |
+| `Op.control_flow.terminal_bool_for` | `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm |
 | `Op.terminal_conditional_id` | Id of the conditional whose test this terminal bool decides, or `None` |
 | `Op.transform_chain` | Tuple of transform tags applied to the function this Op ran |
 | `Op.transform_config` | Configuration of the function transform for this transform-boundary Op |
@@ -4817,7 +4821,7 @@ alphabetical order.
 | `Layer.activation_transform` | The callable applied to saved activations before they are stored, or `None` when no transform was set |
 | `Layer.arg_names` | Parameter names from the signature of the function this layer calls |
 | `Layer.backend_address` | Backend-native address of the op or state this layer stands for, as the capturing backend names it, or `None` |
-| `Layer.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
+| `Layer.control_flow.bool_value` | The Python `bool` value of a scalar boolean layer, or `None` otherwise |
 | `Layer.buffer_overwrite_index` | Which overwrite of its buffer this layer represents |
 | `Layer.buffer_pass` | Sequential number of this buffer write among the writes to the same buffer address, starting at 1, or `None` for non-writes |
 | `Layer.buffer_replay_validated` | Whether replaying this buffer write from its source layer reproduced the saved value, or `None` when not a buffer write |
@@ -4831,13 +4835,16 @@ alphabetical order.
 | `Layer.children_per_pass` | Mapping from pass number to the child layer labels (without pass suffixes) of that pass |
 | `Layer.co_parents` | Union across ops of the co-parent layer labels, without pass suffixes |
 | `Layer.code_context` | The captured call stack of the user code that ran this layer's function, for single-pass layers |
-| `Layer.conditional_arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm |
-| `Layer.conditional_branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
-| `Layer.conditional_elif_children` | Dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm |
-| `Layer.conditional_else_children` | List of labels of this layer's child ops that sit in an `else` arm of a conditional |
-| `Layer.conditional_entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
-| `Layer.conditional_role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
-| `Layer.conditional_then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.control_flow.arm_children` | Dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm |
+| `Layer.control_flow.branch_stack_ops` | Dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it |
+| `Layer.control_flow.depth` | Number of distinct conditionals this layer takes part in, derived on read from `in_conditionals` |
+| `Layer.control_flow.in_conditionals` | Ids of the conditionals this layer takes part in, as a test or inside an arm |
+| `Layer.control_flow.elif_children` | Dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm |
+| `Layer.control_flow.else_children` | List of labels of this layer's child ops that sit in an `else` arm of a conditional |
+| `Layer.control_flow.entry_children` | List of labels of this layer's child ops whose edge from it enters a conditional arm |
+| `Layer.control_flow.role_stacks` | List of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under |
+| `Layer.control_flow.then_children` | List of labels of this layer's child ops that sit in a `then` arm of a conditional |
+| `Layer.control_flow` | Conditional-branch facts of this layer: branch membership, terminal bools and arm children (`tl.types.LayerControlFlow`) |
 | `Layer.cost` | Compute, memory and timing facts of this Layer (`tl.types.LayerCost`) |
 | `Layer.cost.activation_memory` | Bytes of the representative pass's output activation |
 | `Layer.cost.autograd_memory` | Bytes autograd saved for backward at the representative pass |
@@ -4891,9 +4898,9 @@ alphabetical order.
 | `Layer.is_buffer_source` | Whether this layer represents a buffer overwrite boundary |
 | `Layer.is_compute_layer` | Whether this layer's representative op is a compute op |
 | `Layer.is_final_output` | Whether this layer is one of the model's final outputs |
-| `Layer.is_in_conditional` | Whether this layer takes part in any conditional role |
-| `Layer.is_in_conditional_body` | Whether this layer sits in the body of a conditional arm |
-| `Layer.is_in_conditional_evaluation` | Whether this layer computes the condition of a conditional arm |
+| `Layer.control_flow.is_in_conditional` | Whether this layer takes part in any conditional role |
+| `Layer.control_flow.is_in_conditional_body` | Whether this layer sits in the body of a conditional arm |
+| `Layer.control_flow.is_in_conditional_evaluation` | Whether this layer computes the condition of a conditional arm |
 | `Layer.is_inplace` | Whether this layer's function operates in place |
 | `Layer.is_input` | Whether this layer is a model input |
 | `Layer.is_internal_sink` | Whether this layer's value ends inside the model without reaching any output |
@@ -4901,8 +4908,8 @@ alphabetical order.
 | `Layer.is_module_input` | Whether this layer's representative op feeds into at least one `ModuleCall`, for single-op layers |
 | `Layer.is_orphan` | Whether any op in this layer is disconnected from the main graph |
 | `Layer.is_output` | Whether this layer is a model output |
-| `Layer.is_scalar_bool` | Whether this layer's value is a scalar boolean |
-| `Layer.is_terminal_bool` | Whether this layer is a scalar boolean that ends inside the model, such as a branch condition |
+| `Layer.control_flow.is_scalar_bool` | Whether this layer's value is a scalar boolean |
+| `Layer.control_flow.is_terminal_bool` | Whether this layer is a scalar boolean that ends inside the model, such as a branch condition |
 | `Layer.short_label` | The short label of a single-pass layer with its pass suffix, such as `conv2d_1:1` |
 | `Layer.short_layer_label` | The short layer label without a pass suffix, built from the layer type and its type index, such as `conv2d_1` |
 | `Layer.leaf_module_ops` | Set of atomic module calls whose single op belongs to this layer |
@@ -4935,7 +4942,7 @@ alphabetical order.
 | `Layer.resolver_status` | Whether the backend address resolves to a live object, as a string such as `resolved` or `metadata_only` |
 | `Layer.saved_kwargs` | Keyword arguments captured for this layer's function call, for single-pass layers |
 | `Layer.siblings` | Union across ops of the sibling layer labels, without pass suffixes |
-| `Layer.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
+| `Layer.control_flow.terminal_bool_for` | The conditional that this terminal boolean decides, or `None` |
 | `Layer.total_gradient_memory` | Sum of gradient memory in bytes across all ops of this layer |
 | `Layer.total_macs_backward` | Always `None`, because backward MACs are not derivable |
 | `Layer.transformed_grad_dtype` | Dtype of the saved transformed gradient, or `None` |
@@ -5350,6 +5357,12 @@ alphabetical order.
 <!-- end trace group views -->
 
 <!-- record group views: Op and Layer concern groups -->
+**`tl.types.LayerControlFlow`**
+: Conditional-branch facts of one Layer; `layer.control_flow` is the instance a Layer serves. `LayerControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (`then`, `elif_N`, `else`) and the labels of this layer's child ops inside each arm; `LayerControlFlow.bool_value`: the Python `bool` value of a scalar boolean layer, or `None` otherwise; `LayerControlFlow.branch_stack_ops`: dict mapping each distinct conditional branch stack to the sorted pass numbers of this layer that ran under it; `LayerControlFlow.depth`: number of distinct conditionals this layer takes part in, derived on read from `in_conditionals`; `LayerControlFlow.elif_children`: dict mapping each `elif` arm index to the labels of this layer's children that sit in that arm; `LayerControlFlow.else_children`: list of labels of this layer's child ops that sit in an `else` arm of a conditional; `LayerControlFlow.entry_children`: list of labels of this layer's child ops whose edge from it enters a conditional arm; `LayerControlFlow.in_conditionals`: ids of the conditionals this layer takes part in, as a test or inside an arm; `LayerControlFlow.is_in_conditional`: whether this layer takes part in any conditional role; `LayerControlFlow.is_in_conditional_body`: whether this layer sits in the body of a conditional arm; `LayerControlFlow.is_in_conditional_evaluation`: whether this layer computes the condition of a conditional arm; `LayerControlFlow.is_scalar_bool`: whether this layer's value is a scalar boolean; `LayerControlFlow.is_terminal_bool`: whether this layer is a scalar boolean that ends inside the model, such as a branch condition; `LayerControlFlow.role_stacks`: list of the distinct conditional branch stacks, one per different nesting, that this layer's passes ran under; `LayerControlFlow.terminal_bool_for`: the conditional that this terminal boolean decides, or `None`; `LayerControlFlow.then_children`: list of labels of this layer's child ops that sit in a `then` arm of a conditional.
+
+**`tl.types.OpControlFlow`**
+: Conditional-branch facts of one Op; `op.control_flow` is the instance an Op serves. `OpControlFlow.arm_children`: dict mapping each conditional's id to its arm kinds (then, elif_N, else) and the labels of this Op's children inside each arm; `OpControlFlow.bool_value`: the Python value of this Op's output when it is a scalar bool; `OpControlFlow.branch_depth`: number of conditional branches this Op is nested inside; 0 when it is not in a conditional body; `OpControlFlow.branch_stack`: stack of `(conditional_id, arm_kind)` pairs for the conditional branches this Op is nested inside, outermost first; `OpControlFlow.context_kind`: kind of context (`"if"` or `"while"`) of the conditional that owns this terminal bool, or `None`; `OpControlFlow.depth`: number of distinct conditionals this Op takes part in, derived on read from `in_conditionals`; `OpControlFlow.elif_children`: dict mapping each elif arm index to the labels of this Op's children in that arm; `OpControlFlow.else_children`: labels of this Op's children that sit in an else arm of a conditional; `OpControlFlow.entry_children`: labels of this Op's children whose edge from it enters a conditional arm; `OpControlFlow.in_conditionals`: ids of the conditionals this Op takes part in, as a test or inside an arm; `OpControlFlow.is_in_conditional`: whether this Op participates in any conditional role; `OpControlFlow.is_in_conditional_body`: whether this Op sits inside the body of a conditional arm; `OpControlFlow.is_in_conditional_evaluation`: whether this Op computes a conditional arm's condition; `OpControlFlow.is_scalar_bool`: whether this Op's output is a scalar bool; `OpControlFlow.is_terminal_bool`: whether this Op is a scalar bool that ends a chain of operations and decides control flow; `OpControlFlow.is_terminal_conditional_bool`: whether this terminal bool is the test of a recorded conditional; `OpControlFlow.terminal_bool_for`: `(conditional_id, arm_index)` when this Op is the terminal bool of a conditional arm; `OpControlFlow.then_children`: labels of this Op's children that sit in a then arm of a conditional; `OpControlFlow.wrapper_kind`: wrapper kind of the conditional that owns this terminal bool, or `None`.
+
 **`tl.types.OpCost`**
 : Compute, memory and timing facts of one Op; `op.cost` is the instance an Op serves. `OpCost.activation_memory`: bytes of this Op's output activation; `OpCost.arithmetic_intensity`: theoretical forward FLOPs per byte of ideal memory traffic, or `None`; `OpCost.autograd_memory`: bytes of the tensors autograd saved for backward at this Op; `OpCost.bytes_delta_at_call`: change in allocated bytes at the time of this Op's function call; `OpCost.bytes_peak_at_call`: peak allocated bytes at the time of this Op's function call; `OpCost.bytes_read`: theoretical ideal read-once memory traffic for this operation, in bytes; `OpCost.bytes_written`: theoretical ideal write-once memory traffic for this operation, in bytes; `OpCost.compute_record`: two-term compute record (`fma_macs` and `other_flops`), derived on read; `OpCost.duration`: time spent in this Op's function call, as a `Duration`; `OpCost.flops_backward`: approximate backward FLOPs for this Op; `OpCost.flops_forward`: approximate forward FLOPs for this Op; `OpCost.flops_total`: approximate total FLOPs for this Op; `OpCost.input_memory`: sum of saved activation bytes across this Op's parent Ops; `OpCost.macs_forward`: true forward multiply-accumulate count for this Op, or `None`; `OpCost.param_memory`: bytes used by the parameters consumed by this Op; `OpCost.transformed_activation_memory`: bytes of this Op's transformed output activation, if one was kept.
 

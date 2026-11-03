@@ -29,6 +29,7 @@ from .._data_classes.op import Op
 from .._errors import AmbiguousOpLookupError
 from .._quantities import Bytes
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 from ..intervention.types import ParentRef
 
 if TYPE_CHECKING:
@@ -519,7 +520,7 @@ def _replace_layer_names_for_layer_entry(
             else:  # legacy non-list value: preserve type, no sharing
                 set_entry_field(field, type(orig)(op_mapping[raw] for raw in orig))
             continue
-        orig = getattr(layer_entry, field, None)
+        orig = record_member(layer_entry, field, None)
         if not orig:
             continue
         if field.startswith("conditional_"):
@@ -539,7 +540,7 @@ def _replace_layer_names_for_layer_entry(
     # key, and persisted that dead label into ``.tlspec`` artifacts. The buffer-merge
     # path only ever repointed it to ANOTHER raw label.
     for scalar_field in _SCALAR_LABEL_FIELDS_TO_RENAME:
-        raw_value = getattr(layer_entry, scalar_field, None)
+        raw_value = record_member(layer_entry, scalar_field, None)
         if isinstance(raw_value, str) and raw_value in mapping:
             set_entry_field(scalar_field, mapping[raw_value])
 
@@ -559,7 +560,7 @@ def _replace_layer_names_for_layer_entry(
             {mapping[child_label]: tensor_version for child_label, tensor_version in ctv.items()},
         )
 
-    children_by_cond = getattr(layer_entry, "conditional_arm_children", None)
+    children_by_cond = record_member(layer_entry, "conditional_arm_children", None)
     if children_by_cond is not None:
         renamed_children_by_cond = _rename_children_by_cond(children_by_cond, layer_mapping)
         set_entry_field("conditional_arm_children", renamed_children_by_cond)
@@ -572,19 +573,23 @@ def _replace_layer_names_for_layer_entry(
         set_entry_field("conditional_elif_children", conditional_elif_children)
         set_entry_field("conditional_else_children", conditional_else_children)
     else:
-        elif_children = getattr(layer_entry, "conditional_elif_children", None)
+        elif_children = record_member(layer_entry, "conditional_elif_children", None)
         if elif_children:
             set_entry_field(
                 "conditional_elif_children",
                 _rename_elif_children(elif_children, layer_mapping),
             )
-        conditional_then_children_value = getattr(layer_entry, "conditional_then_children", None)
+        conditional_then_children_value = record_member(
+            layer_entry, "conditional_then_children", None
+        )
         if conditional_then_children_value:
             set_entry_field(
                 "conditional_then_children",
                 [layer_mapping[layer_label] for layer_label in conditional_then_children_value],
             )
-        conditional_else_children_value = getattr(layer_entry, "conditional_else_children", None)
+        conditional_else_children_value = record_member(
+            layer_entry, "conditional_else_children", None
+        )
         if conditional_else_children_value:
             set_entry_field(
                 "conditional_else_children",

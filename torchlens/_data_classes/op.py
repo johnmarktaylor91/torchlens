@@ -126,7 +126,7 @@ from ._op_transforms import (  # noqa: F401  (re-exported for backends.torch imp
     validate_streaming_transform_output,
     validate_train_mode_transform_output,
 )
-from ._record_groups import OpCost
+from ._record_groups import OpControlFlow, OpCost
 from ._state_adapter import state_items, state_restore
 from .container import (
     container_from_op,
@@ -1957,6 +1957,12 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return OpCost(self)
 
     @property
+    def control_flow(self) -> OpControlFlow:
+        """Conditional and branch facts of this Op (``op.control_flow.depth``)."""
+
+        return OpControlFlow(self)
+
+    @property
     def macs_backward(self) -> Macs | None:
         """Backward MACs are not derivable and always ``None``."""
 
@@ -2289,47 +2295,29 @@ class Op(OpAtenMixin, _SelectionOperand, _removed_members.RemovedMemberMixin):
         return len(self.co_parents) > 0
 
     @property
-    def is_in_conditional(self) -> bool:
-        """Whether this op participates in any conditional role."""
-
-        return bool(self.in_conditionals)
-
-    @property
-    def is_in_conditional_evaluation(self) -> bool:
-        """Whether this op computes a conditional arm condition."""
-
-        return any(role.role == "evaluation" for role in self.in_conditionals or [])
-
-    @property
-    def is_in_conditional_body(self) -> bool:
+    def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this op is in a conditional arm body."""
 
-        if self.has_output_descendant and not self.conditional_entry_children:
+        if self.has_output_descendant and not self.control_flow.entry_children:
             return False
         return bool(self._slot("_is_in_conditional_body", False)) or any(
-            role.role == "body" for role in self.in_conditionals or []
+            role.role == "body" for role in self.control_flow.in_conditionals or []
         )
 
-    @is_in_conditional_body.setter
-    def is_in_conditional_body(self, value: bool) -> None:
+    @_control_flow_is_in_conditional_body.setter
+    def _control_flow_is_in_conditional_body(self, value: bool) -> None:
         """Set the cached conditional-body predicate used during postprocessing."""
 
         object.__setattr__(self, "_is_in_conditional_body", value)
 
-    @is_in_conditional_body.deleter
-    def is_in_conditional_body(self) -> None:
+    @_control_flow_is_in_conditional_body.deleter
+    def _control_flow_is_in_conditional_body(self) -> None:
         """Delete the cached conditional-body predicate during cleanup."""
 
         try:
             object.__delattr__(self, "_is_in_conditional_body")
         except AttributeError:
             pass
-
-    @property
-    def conditional_depth(self) -> int:
-        """Number of distinct conditionals this op participates in."""
-
-        return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
     def has_params(self) -> bool:

@@ -441,7 +441,7 @@ def to_pandas(trace: "Trace", include_decoded_output_summary: bool = False) -> "
         for field_name in fields_for_df:
             if field_name == "conditional_branch_stack":
                 layer_dict[field_name] = _format_conditional_branch_stack(
-                    layer_entry.conditional_branch_stack
+                    layer_entry.control_flow.branch_stack
                 )
             elif field_name == "layer_type":
                 # The table keeps its layer_type column; an Op names it type.

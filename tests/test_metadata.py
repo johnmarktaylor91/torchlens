@@ -509,7 +509,7 @@ def test_conditional_fields():
     found = False
     for label in mh.layer_labels:
         entry = mh[label]
-        if entry.is_in_conditional_body:
+        if entry.control_flow.is_in_conditional_body:
             found = True
             break
     assert found, "ConditionalBranching should have layers in cond branches"
@@ -1657,7 +1657,7 @@ class TestConditionalBranchDetection:
         """ConditionalBranching has is_in_conditional_body=True nodes."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
+        found = any(mh[label].control_flow.is_in_conditional_body for label in mh.layer_labels)
         assert found, "Should detect conditional branch nodes"
 
     def test_then_branch_detected(self):
@@ -1667,7 +1667,7 @@ class TestConditionalBranchDetection:
         """
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._pos_input(), save_source_context=True)
-        found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
+        found = any(len(mh[label].control_flow.then_children) > 0 for label in mh.layer_labels)
         assert found, "Should detect THEN branch children with save_code_context"
 
     def test_branch_start_has_both_if_and_then(self):
@@ -1676,8 +1676,8 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._pos_input(), save_source_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
-            if entry.conditional_entry_children:
-                assert len(entry.conditional_then_children) > 0, (
+            if entry.control_flow.entry_children:
+                assert len(entry.control_flow.then_children) > 0, (
                     f"Branch start {label} has IF children but no THEN children"
                 )
 
@@ -1687,8 +1687,8 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._pos_input(), save_source_context=True)
         for label in mh.layer_labels:
             entry = mh[label]
-            if_set = set(entry.conditional_entry_children)
-            then_set = set(entry.conditional_then_children)
+            if_set = set(entry.control_flow.entry_children)
+            then_set = set(entry.control_flow.then_children)
             overlap = if_set & then_set
             assert len(overlap) == 0, f"IF and THEN overlap at {label}: {overlap}"
 
@@ -1696,7 +1696,7 @@ class TestConditionalBranchDetection:
         """At least one is_terminal_bool=True node."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
-        found = any(mh[label].is_terminal_bool for label in mh.layer_labels)
+        found = any(mh[label].control_flow.is_terminal_bool for label in mh.layer_labels)
         assert found, "Should have at least one terminal bool layer"
 
     # --- False positive tests (Bug #88) ---
@@ -1706,7 +1706,9 @@ class TestConditionalBranchDetection:
         model = example_models.SimpleFF()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x)
-        cond_nodes = [label for label in mh.layer_labels if mh[label].is_in_conditional_body]
+        cond_nodes = [
+            label for label in mh.layer_labels if mh[label].control_flow.is_in_conditional_body
+        ]
         assert len(cond_nodes) == 0, f"SimpleFF should have no cond nodes: {cond_nodes}"
 
     def test_non_conditional_layers_not_marked(self):
@@ -1715,8 +1717,8 @@ class TestConditionalBranchDetection:
         mh = self._log(model, self._cond_input())
         for label in mh.layer_labels:
             entry = mh[label]
-            if not entry.conditional_role_stacks and not entry.conditional_entry_children:
-                assert entry.is_in_conditional_body is False, (
+            if not entry.control_flow.role_stacks and not entry.control_flow.entry_children:
+                assert entry.control_flow.is_in_conditional_body is False, (
                     f"Output ancestor {label} falsely marked is_in_conditional_body"
                 )
 
@@ -1728,8 +1730,8 @@ class TestConditionalBranchDetection:
         for label in mh.layer_labels:
             entry = mh[label]
             # Output-ancestor nodes that are NOT branch-starts should not be marked
-            if not entry.conditional_role_stacks and not entry.conditional_entry_children:
-                assert entry.is_in_conditional_body is False, (
+            if not entry.control_flow.role_stacks and not entry.control_flow.entry_children:
+                assert entry.control_flow.is_in_conditional_body is False, (
                     f"Node {label} falsely marked is_in_conditional_body (Bug #88)"
                 )
 
@@ -1775,7 +1777,7 @@ class TestConditionalBranchDetection:
         mh = self._log(model, x, save_source_context=True)
         # After post-validation, if no ast.If found, IF markings cleared
         branch_starts = [
-            label for label in mh.layer_labels if len(mh[label].conditional_entry_children) > 0
+            label for label in mh.layer_labels if len(mh[label].control_flow.entry_children) > 0
         ]
         assert len(branch_starts) == 0, (
             f"ConditionalNoBranch should have no branch starts after post-validation: {branch_starts}"
@@ -1786,7 +1788,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalAlwaysTrue()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x, save_source_context=True)
-        found = any(len(mh[label].conditional_then_children) > 0 for label in mh.layer_labels)
+        found = any(len(mh[label].control_flow.then_children) > 0 for label in mh.layer_labels)
         assert found, "ConditionalAlwaysTrue should detect THEN branch"
 
     # --- Complex scenario tests ---
@@ -1804,7 +1806,7 @@ class TestConditionalBranchDetection:
         x = torch.ones(2, 3, 32, 32)
         mh = self._log(model, x)
         branch_starts = [
-            label for label in mh.layer_labels if len(mh[label].conditional_entry_children) > 0
+            label for label in mh.layer_labels if len(mh[label].control_flow.entry_children) > 0
         ]
         assert len(branch_starts) >= 2, (
             f"Expected >= 2 branch starts, got {len(branch_starts)}: {branch_starts}"
@@ -1883,8 +1885,8 @@ class TestConditionalBranchDetection:
         assert mh2.graph.conditional_branch_edges == mh.graph.conditional_branch_edges
         assert mh2.graph.conditional_arm_entry_edges == mh.graph.conditional_arm_entry_edges
         for label in mh.layer_labels:
-            assert mh2[label].conditional_entry_children == mh[label].conditional_entry_children
-            assert mh2[label].conditional_then_children == mh[label].conditional_then_children
+            assert mh2[label].control_flow.entry_children == mh[label].control_flow.entry_children
+            assert mh2[label].control_flow.then_children == mh[label].control_flow.then_children
 
     # --- Fallback tests (without source context) ---
 
@@ -1892,7 +1894,7 @@ class TestConditionalBranchDetection:
         """Bug #88 fix works without save_code_context."""
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input(), save_source_context=False)
-        found = any(mh[label].is_in_conditional_body for label in mh.layer_labels)
+        found = any(mh[label].control_flow.is_in_conditional_body for label in mh.layer_labels)
         assert found, "IF detection should work without source context"
 
     def test_then_empty_without_source_context(self):
@@ -1900,7 +1902,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input(), save_source_context=False)
         for label in mh.layer_labels:
-            assert len(mh[label].conditional_then_children) == 0, (
+            assert len(mh[label].control_flow.then_children) == 0, (
                 f"THEN children should be empty without source context: {label}"
             )
 

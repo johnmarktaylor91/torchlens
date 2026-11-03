@@ -843,7 +843,11 @@ def _get_terminal_bool_layers(trace: Trace) -> list[Op]:
     list[Op]
         Terminal scalar bool layers in execution order.
     """
-    return [layer for layer in trace._layer_list if layer.is_terminal_bool and layer.is_scalar_bool]
+    return [
+        layer
+        for layer in trace._layer_list
+        if layer.control_flow.is_terminal_bool and layer.control_flow.is_scalar_bool
+    ]
 
 
 def _find_only_layer(
@@ -872,7 +876,7 @@ def _find_only_layer(
         matching_layers = [
             layer
             for layer in matching_layers
-            if list(layer.conditional_branch_stack) == list(branch_stack)
+            if list(layer.control_flow.branch_stack) == list(branch_stack)
         ]
     assert len(matching_layers) == 1, (
         f"Expected one {func_name!r} layer for stack {branch_stack}, found {len(matching_layers)}"
@@ -1052,8 +1056,8 @@ def test_nested_if_then_if_model_materializes_nested_branch_stack() -> None:
     assert root_event.kind == "if_chain"
     assert inner_event.kind == "if_chain"
     assert inner_event.parent_branch_kind == "then"
-    assert relu_layer.conditional_branch_stack == ((root_event.id, "then"),)
-    assert sigmoid_layer.conditional_branch_stack == (
+    assert relu_layer.control_flow.branch_stack == ((root_event.id, "then"),)
+    assert sigmoid_layer.control_flow.branch_stack == (
         (root_event.id, "then"),
         (inner_event.id, "then"),
     )
@@ -1070,8 +1074,8 @@ def test_nested_in_else_model_materializes_else_to_inner_then_stack() -> None:
 
     assert len(trace.graph.conditional_records) == 2
     assert inner_event.parent_branch_kind == "else"
-    assert neg_layer.conditional_branch_stack == ((root_event.id, "else"),)
-    assert sigmoid_layer.conditional_branch_stack == (
+    assert neg_layer.control_flow.branch_stack == ((root_event.id, "else"),)
+    assert sigmoid_layer.control_flow.branch_stack == (
         (root_event.id, "else"),
         (inner_event.id, "then"),
     )
@@ -1090,9 +1094,9 @@ def test_multiline_predicate_model_tracks_one_if_chain_event() -> None:
     assert event.kind == "if_chain"
     assert set(event.branch_ranges) == {"then", "else"}
     assert len(bool_layers) == 2
-    assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is True for layer in bool_layers)
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert all(layer.control_flow.context_kind == "if_test" for layer in bool_layers)
+    assert all(layer.control_flow.is_terminal_conditional_bool is True for layer in bool_layers)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_public_conditionals_materialize_else_arm_fired_status() -> None:
@@ -1124,8 +1128,8 @@ def test_branch_uses_only_parameter_model_records_parameter_entry_edge() -> None
 
     assert len(then_edges) == 1
     parent_label, child_label = then_edges[0]
-    assert trace[parent_label].conditional_branch_stack == ()
-    assert trace[child_label].conditional_branch_stack == ((event.id, "then"),)
+    assert trace[parent_label].control_flow.branch_stack == ()
+    assert trace[child_label].control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_branch_uses_only_constant_model_records_constant_entry_edge() -> None:
@@ -1137,8 +1141,8 @@ def test_branch_uses_only_constant_model_records_constant_entry_edge() -> None:
 
     assert len(then_edges) == 1
     parent_label, child_label = then_edges[0]
-    assert trace[parent_label].conditional_branch_stack == ()
-    assert trace[child_label].conditional_branch_stack == ((event.id, "then"),)
+    assert trace[parent_label].control_flow.branch_stack == ()
+    assert trace[child_label].control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() -> None:
@@ -1155,9 +1159,9 @@ def test_multi_arm_entry_nested_model_duplicates_entry_edge_per_conditional() ->
     parent_label, child_label = next(iter(shared_edges))
 
     parent_layer = trace[parent_label]
-    assert parent_layer.conditional_arm_children[outer_event.id]["then"] == [child_label]
-    assert parent_layer.conditional_arm_children[inner_event.id]["then"] == [child_label]
-    assert parent_layer.conditional_then_children == (child_label,)
+    assert parent_layer.control_flow.arm_children[outer_event.id]["then"] == [child_label]
+    assert parent_layer.control_flow.arm_children[inner_event.id]["then"] == [child_label]
+    assert parent_layer.control_flow.then_children == (child_label,)
 
 
 def test_if_bool_cast_model_marks_wrapper_kind_without_losing_branch_attribution() -> None:
@@ -1168,11 +1172,11 @@ def test_if_bool_cast_model_marks_wrapper_kind_without_losing_branch_attribution
     bool_layer = _get_terminal_bool_layers(trace)[0]
     relu_layer = _find_only_layer(trace, "relu")
 
-    assert bool_layer.conditional_context_kind == "if_test"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert bool_layer.conditional_wrapper_kind == "bool_cast"
+    assert bool_layer.control_flow.context_kind == "if_test"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert bool_layer.control_flow.wrapper_kind == "bool_cast"
     assert bool_layer.terminal_conditional_id == event.id
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_reconverging_branches_model_clears_branch_stack_after_merge() -> None:
@@ -1185,10 +1189,10 @@ def test_reconverging_branches_model_clears_branch_stack_after_merge() -> None:
     positive_parent = positive_log[positive_add.parents[0]]
     negative_parent = negative_log[negative_add.parents[0]]
 
-    assert positive_add.conditional_branch_stack == ()
-    assert negative_add.conditional_branch_stack == ()
-    assert positive_parent.conditional_branch_stack != []
-    assert negative_parent.conditional_branch_stack != []
+    assert positive_add.control_flow.branch_stack == ()
+    assert negative_add.control_flow.branch_stack == ()
+    assert positive_parent.control_flow.branch_stack != []
+    assert negative_parent.control_flow.branch_stack != []
 
 
 def test_nested_helper_same_name_model_distinguishes_helpers_by_scope() -> None:
@@ -1201,10 +1205,10 @@ def test_nested_helper_same_name_model_distinguishes_helpers_by_scope() -> None:
 
     assert len(trace.graph.conditional_records) == 2
     assert len({layer.terminal_conditional_id for layer in bool_layers}) == 2
-    assert list(relu_layer.conditional_branch_stack) == [
+    assert list(relu_layer.control_flow.branch_stack) == [
         (bool_layers[0].terminal_conditional_id, "then")
     ]
-    assert list(tanh_layer.conditional_branch_stack) == [
+    assert list(tanh_layer.control_flow.branch_stack) == [
         (bool_layers[1].terminal_conditional_id, "then")
     ]
 
@@ -1226,8 +1230,8 @@ def test_nested_qualname_model_distinguishes_method_and_nested_helper() -> None:
         event for event in root_events if "<locals>.helper" in event.function_qualname
     )
     method_event = next(event for event in root_events if "<locals>" not in event.function_qualname)
-    assert relu_layer.conditional_branch_stack == ((nested_event.id, "then"),)
-    assert tanh_layer.conditional_branch_stack == ((method_event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((nested_event.id, "then"),)
+    assert tanh_layer.control_flow.branch_stack == ((method_event.id, "then"),)
 
 
 def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambiguous(
@@ -1271,7 +1275,7 @@ def test_same_line_nested_def_model_fails_closed_when_scope_resolution_is_ambigu
     trace = _log_model(SameLineNestedDefModel(), torch.ones(2, 2))
     relu_layer = _find_only_layer(trace, "relu")
 
-    assert relu_layer.conditional_branch_stack == ()
+    assert relu_layer.control_flow.branch_stack == ()
     assert trace.graph.conditional_arm_entry_edges == {}
 
 
@@ -1280,8 +1284,8 @@ def test_bool_cast_only_model_is_not_treated_as_branch() -> None:
     trace = _log_model(BoolCastOnlyModel(), torch.ones(2, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert bool_layer.conditional_context_kind == "bool_cast"
-    assert bool_layer.is_terminal_conditional_bool is False
+    assert bool_layer.control_flow.context_kind == "bool_cast"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is False
     assert bool_layer.terminal_conditional_id is None
     _assert_branchless_log(trace)
 
@@ -1297,9 +1301,9 @@ def test_ternary_ifexp_model_attributes_then_arm_as_ifexp() -> None:
 
     assert event.kind == "ifexp"
     assert set(event.branch_ranges) == {"then", "else"}
-    assert bool_layer.conditional_context_kind == "ifexp"
-    assert bool_layer.is_terminal_conditional_bool is True
-    assert linear_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert bool_layer.control_flow.context_kind == "ifexp"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is True
+    assert linear_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_comprehension_if_model_classifies_bool_without_materialising_branch_metadata() -> None:
@@ -1308,8 +1312,8 @@ def test_comprehension_if_model_classifies_bool_without_materialising_branch_met
     bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) == 2
-    assert all(layer.conditional_context_kind == "comprehension_filter" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is False for layer in bool_layers)
+    assert all(layer.control_flow.context_kind == "comprehension_filter" for layer in bool_layers)
+    assert all(layer.control_flow.is_terminal_conditional_bool is False for layer in bool_layers)
     _assert_branchless_log(trace)
 
 
@@ -1319,8 +1323,8 @@ def test_while_loop_model_classifies_bool_without_materialising_branch_metadata(
     bool_layers = _get_terminal_bool_layers(trace)
 
     assert len(bool_layers) >= 1
-    assert all(layer.conditional_context_kind == "while" for layer in bool_layers)
-    assert all(layer.is_terminal_conditional_bool is False for layer in bool_layers)
+    assert all(layer.control_flow.context_kind == "while" for layer in bool_layers)
+    assert all(layer.control_flow.is_terminal_conditional_bool is False for layer in bool_layers)
     _assert_branchless_log(trace)
 
 
@@ -1358,8 +1362,8 @@ def test_match_guard_model_classifies_bool_without_materialising_branch_metadata
     trace = _log_model(model, torch.ones(2, 2))
     bool_layer = _get_terminal_bool_layers(trace)[0]
 
-    assert bool_layer.conditional_context_kind == "match_guard"
-    assert bool_layer.is_terminal_conditional_bool is False
+    assert bool_layer.control_flow.context_kind == "match_guard"
+    assert bool_layer.control_flow.is_terminal_conditional_bool is False
     _assert_branchless_log(trace)
 
 
@@ -1371,7 +1375,7 @@ def test_not_if_model_attributes_branch_despite_boolean_negation() -> None:
     relu_layer = _find_only_layer(trace, "relu")
 
     assert event.kind == "if_chain"
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_and_or_if_model_keeps_all_branching_bools_on_one_event() -> None:
@@ -1384,9 +1388,9 @@ def test_and_or_if_model_keeps_all_branching_bools_on_one_event() -> None:
     relu_layer = _find_only_layer(trace, "relu")
 
     assert len(bool_layers) >= 2
-    assert all(layer.conditional_context_kind == "if_test" for layer in bool_layers)
+    assert all(layer.control_flow.context_kind == "if_test" for layer in bool_layers)
     assert {layer.terminal_conditional_id for layer in bool_layers} == {event.id}
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 def test_walrus_if_model_attributes_branch_normally() -> None:
@@ -1397,7 +1401,7 @@ def test_walrus_if_model_attributes_branch_normally() -> None:
     relu_layer = _find_only_layer(trace, "relu")
 
     assert event.kind == "if_chain"
-    assert relu_layer.conditional_branch_stack == ((event.id, "then"),)
+    assert relu_layer.control_flow.branch_stack == ((event.id, "then"),)
 
 
 @pytest.mark.skipif(
@@ -1412,7 +1416,7 @@ def test_ternary_py310_fail_closed_model_drops_same_line_arm_attribution() -> No
 
     assert len(trace.graph.conditional_records) == 1
     assert trace.graph.conditional_arm_entry_edges == {}
-    assert all(layer.conditional_branch_stack == () for layer in linear_layers)
+    assert all(layer.control_flow.branch_stack == () for layer in linear_layers)
 
 
 @pytest.mark.skipif(
@@ -1441,10 +1445,10 @@ def test_ternary_multi_op_one_line_model_attributes_each_arm_by_column_offset() 
     negative_div = _find_only_layer_any_name(negative_log, ("div", "__truediv__"))
     negative_sub = _find_only_layer_any_name(negative_log, ("sub", "__sub__"))
 
-    assert positive_mul.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert positive_add.conditional_branch_stack == ((positive_event.id, "then"),)
-    assert negative_div.conditional_branch_stack == ((negative_event.id, "else"),)
-    assert negative_sub.conditional_branch_stack == ((negative_event.id, "else"),)
+    assert positive_mul.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert positive_add.control_flow.branch_stack == ((positive_event.id, "then"),)
+    assert negative_div.control_flow.branch_stack == ((negative_event.id, "else"),)
+    assert negative_sub.control_flow.branch_stack == ((negative_event.id, "else"),)
 
 
 @pytest.mark.parametrize(
@@ -1468,7 +1472,7 @@ def test_documented_false_negative_scalar_predicates_do_not_materialise_events(
     )
 
     _assert_branchless_log(trace)
-    assert branch_layer.conditional_branch_stack == ()
+    assert branch_layer.control_flow.branch_stack == ()
 
 
 def test_torch_where_model_stays_outside_branch_attribution() -> None:

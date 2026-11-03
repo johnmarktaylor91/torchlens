@@ -9,6 +9,7 @@ and after a pickle round trip.
 
 from __future__ import annotations
 
+# record-groups: keep-flat
 import pickle
 from collections.abc import Iterator
 
@@ -29,6 +30,8 @@ from torchlens._utils._record_group_table import (
 
 _OP_COST_ROWS = [row for row in OP_MEMBER_MOVES if row[1] == "cost"]
 _LAYER_COST_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] == "cost"]
+_OP_ACTIVE_ROWS = [row for row in OP_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
+_LAYER_ACTIVE_ROWS = [row for row in LAYER_MEMBER_MOVES if row[1] in ACTIVE_GROUPS]
 
 
 @pytest.fixture(scope="module")
@@ -45,7 +48,7 @@ def trace() -> Iterator[tl.Trace]:
 def test_cost_group_is_applied() -> None:
     """The cost rows are live in the refusal tables of both records."""
 
-    assert "cost" in ACTIVE_GROUPS
+    assert {"cost", "control_flow"} <= ACTIVE_GROUPS
     assert len(_OP_COST_ROWS) == 16
     assert len(_LAYER_COST_ROWS) == 17
     assert {old for old, _, _ in _OP_COST_ROWS} <= set(OP_MOVED_MEMBERS)
@@ -59,34 +62,39 @@ def test_group_classes_are_the_public_types(trace: tl.Trace) -> None:
     layer = trace.layers["linear_1"]
     assert type(op.cost) is tl.types.OpCost
     assert type(layer.cost) is tl.types.LayerCost
+    assert type(op.control_flow) is tl.types.OpControlFlow
+    assert type(layer.control_flow) is tl.types.LayerControlFlow
     assert "flops_forward" in dir(op.cost)
     assert "total_flops_forward" in dir(layer.cost)
     assert "OpCost" in repr(op.cost)
 
 
-@pytest.mark.parametrize(("old", "leaf"), [(old, leaf) for old, _, leaf in _OP_COST_ROWS])
-def test_op_flat_spelling_refuses_typed(trace: tl.Trace, old: str, leaf: str) -> None:
-    """Each former flat Op cost spelling refuses typed, naming ``op.cost.<leaf>``."""
+@pytest.mark.parametrize(("old", "group", "leaf"), _OP_ACTIVE_ROWS)
+def test_op_flat_spelling_refuses_typed(trace: tl.Trace, old: str, group: str, leaf: str) -> None:
+    """Each former flat Op spelling refuses typed, naming ``op.<group>.<leaf>``."""
 
     op = trace.ops["linear_1_1"]
     with pytest.raises(FacadeTeachingError) as excinfo:
         getattr(op, old)
     assert excinfo.value.fields["code"] == "facade_redirect"
-    assert f"op.cost.{leaf}" in str(excinfo.value)
+    assert f"op.{group}.{leaf}" in str(excinfo.value)
     assert not hasattr(op, old)
-    getattr(op.cost, leaf)
+    getattr(getattr(op, group), leaf)
 
 
-@pytest.mark.parametrize(("old", "leaf"), [(old, leaf) for old, _, leaf in _LAYER_COST_ROWS])
-def test_layer_flat_spelling_refuses_typed(trace: tl.Trace, old: str, leaf: str) -> None:
-    """Each former flat Layer cost spelling refuses typed, naming ``layer.cost.<leaf>``."""
+@pytest.mark.parametrize(("old", "group", "leaf"), _LAYER_ACTIVE_ROWS)
+def test_layer_flat_spelling_refuses_typed(
+    trace: tl.Trace, old: str, group: str, leaf: str
+) -> None:
+    """Each former flat Layer spelling refuses typed, naming ``layer.<group>.<leaf>``."""
 
     layer = trace.layers["linear_1"]
     with pytest.raises(FacadeTeachingError) as excinfo:
         getattr(layer, old)
     assert excinfo.value.fields["code"] == "facade_redirect"
-    assert f"layer.cost.{leaf}" in str(excinfo.value)
+    assert f"layer.{group}.{leaf}" in str(excinfo.value)
     assert not hasattr(layer, old)
+    getattr(getattr(layer, group), leaf)
 
 
 def test_layer_flat_spelling_refuses_writes(trace: tl.Trace) -> None:
@@ -94,9 +102,11 @@ def test_layer_flat_spelling_refuses_writes(trace: tl.Trace) -> None:
 
     layer = trace.layers["linear_1"]
     with pytest.raises(FacadeTeachingError):
-        layer._cost_flops_forward = 1
+        layer.flops_forward = 1
     with pytest.raises(FacadeTeachingError):
-        del layer._cost_flops_forward
+        del layer.flops_forward
+    with pytest.raises(FacadeTeachingError):
+        layer.is_terminal_bool = True
     assert layer.cost.flops_forward == trace.ops["linear_1_1"].cost.flops_forward
 
 
@@ -138,9 +148,11 @@ def test_groups_survive_a_pickle_round_trip(trace: tl.Trace) -> None:
         assert layer.cost.flops_forward == trace.layers["linear_1"].cost.flops_forward
         assert layer.cost.activation_memory == trace.layers["linear_1"].cost.activation_memory
         with pytest.raises(FacadeTeachingError):
-            layer.cost.flops_forward
+            layer.flops_forward
         with pytest.raises(FacadeTeachingError):
-            loaded.ops["linear_1_1"].cost.flops_forward
+            loaded.ops["linear_1_1"].flops_forward
+        with pytest.raises(FacadeTeachingError):
+            loaded.ops["linear_1_1"].conditional_depth
     finally:
         loaded.cleanup()
 
@@ -159,3 +171,42 @@ def test_record_member_follows_moves(trace: tl.Trace) -> None:
 
     assert record_member(_Other(), "flops_forward") == 7
     assert record_member(object(), "flops_forward", None) is None
+
+
+class _Branchy(nn.Module):
+    """One data-dependent ``if`` so control-flow members carry values."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.fc = nn.Linear(3, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        y = self.fc(x)
+        if y.sum() > 0:
+            return torch.relu(y)
+        return -y
+
+
+def test_control_flow_group_reads_the_branch() -> None:
+    """The control-flow group serves the terminal bool and the arm members of a branch."""
+
+    torch.manual_seed(0)
+    captured = tl.trace(_Branchy(), torch.ones(1, 3))
+    try:
+        bools = [op for op in captured.ops if op.control_flow.is_terminal_bool]
+        assert len(bools) == 1
+        flow = bools[0].control_flow
+        assert flow.is_scalar_bool is True
+        assert flow.bool_value is bool(flow.bool_value)
+        assert flow.is_terminal_conditional_bool is True
+        assert flow.is_in_conditional_evaluation is True
+        assert flow.depth == 1
+        layer = captured.layers[bools[0].layer_label]
+        assert layer.control_flow.terminal_bool_for == bools[0].control_flow.terminal_bool_for
+        body = [op for op in captured.ops if op.control_flow.is_in_conditional_body]
+        assert body
+        assert all(op.control_flow.is_in_conditional for op in body)
+        with pytest.raises(FacadeTeachingError):
+            bools[0].is_terminal_bool
+    finally:
+        captured.cleanup()

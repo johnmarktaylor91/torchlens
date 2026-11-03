@@ -59,6 +59,7 @@ from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPL
 from .._utils._record_group_table import (
     LAYER_MOVED_MEMBERS,
     LAYER_STORAGE_ATTRS,
+    OP_MOVED_MEMBERS,
     op_attr,
     op_spelling,
 )
@@ -88,7 +89,7 @@ from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-expo
     layer_total_macs_forward,
     materialize_layer_mirrors,
 )
-from ._record_groups import LayerCost, MovedMemberField
+from ._record_groups import LayerControlFlow, LayerCost, MovedMemberField
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
@@ -542,11 +543,11 @@ class Layer(_SelectionOperand):
         # (end of step 15.5) rebinds these two fields on the OPS after the
         # aggregate Layers are built, and the public Layer contract keeps the
         # pre-rebind values (the dict-era copies never saw the update).
-        self.in_conditionals = first_pass.in_conditionals
-        self.terminal_bool_for = first_pass.terminal_bool_for
+        self._control_flow_in_conditionals = first_pass.control_flow.in_conditionals
+        self._control_flow_terminal_bool_for = first_pass.control_flow.terminal_bool_for
         # Cached conditional-body predicate (the ``is_in_conditional_body``
         # property's storage slot; multi-pass merge ORs into it).
-        self.is_in_conditional_body = first_pass.is_in_conditional_body
+        self._control_flow_is_in_conditional_body = first_pass.control_flow.is_in_conditional_body
         # Raw ``__dict__`` writes by contract: these are BUILD-PHASE staging
         # containers the multi-pass merge mutates in place, so they must
         # never pass through the finished-layer view normalization (a
@@ -556,7 +557,7 @@ class Layer(_SelectionOperand):
         self.__dict__["conditional_branch_stack_ops"] = cast(
             "dict[tuple[tuple[int, str], ...], list[int]]", {}
         )
-        self.conditional_arm_children: dict[int, dict[str, list[str]]] = {}
+        self._control_flow_arm_children: dict[int, dict[str, list[str]]] = {}
         # Genuinely per-layer USER-owned state, never a mirror: the dict era
         # initialized a fresh empty dict here rather than copying from the
         # first pass, so layer annotations must not alias ``ops[0]``'s dict
@@ -581,6 +582,12 @@ class Layer(_SelectionOperand):
         """Compute, memory and timing facts of this Layer (``layer.cost.total_flops``)."""
 
         return LayerCost(self)
+
+    @property
+    def control_flow(self) -> LayerControlFlow:
+        """Conditional and branch facts of this Layer (``layer.control_flow.depth``)."""
+
+        return LayerControlFlow(self)
 
     @property
     def macs_backward(self) -> Macs | None:
@@ -1267,42 +1274,24 @@ class Layer(_SelectionOperand):
         return len(self.co_parents) > 0
 
     @property
-    def is_in_conditional(self) -> bool:
-        """Whether this layer participates in any conditional role."""
-
-        return bool(self.in_conditionals)
-
-    @property
-    def is_in_conditional_evaluation(self) -> bool:
-        """Whether this layer computes a conditional arm condition."""
-
-        return any(role.role == "evaluation" for role in self.in_conditionals or [])
-
-    @property
-    def is_in_conditional_body(self) -> bool:
+    def _control_flow_is_in_conditional_body(self) -> bool:
         """Whether this layer is in a conditional arm body."""
 
         return bool(self.__dict__.get("_is_in_conditional_body", False)) or any(
-            role.role == "body" for role in self.in_conditionals or []
+            role.role == "body" for role in self.control_flow.in_conditionals or []
         )
 
-    @is_in_conditional_body.setter
-    def is_in_conditional_body(self, value: bool) -> None:
+    @_control_flow_is_in_conditional_body.setter
+    def _control_flow_is_in_conditional_body(self, value: bool) -> None:
         """Set the cached conditional-body predicate used during aggregation."""
 
         self.__dict__["_is_in_conditional_body"] = value
 
-    @is_in_conditional_body.deleter
-    def is_in_conditional_body(self) -> None:
+    @_control_flow_is_in_conditional_body.deleter
+    def _control_flow_is_in_conditional_body(self) -> None:
         """Delete the cached conditional-body predicate during cleanup."""
 
         self.__dict__.pop("_is_in_conditional_body", None)
-
-    @property
-    def conditional_depth(self) -> int:
-        """Number of distinct conditionals this layer participates in."""
-
-        return len({role.conditional_id for role in self.in_conditionals or []})
 
     @property
     def _tracing_finished(self) -> bool:
@@ -1411,6 +1400,9 @@ class Layer(_SelectionOperand):
         }:
             raise AttributeError(name)
         ops = self.__dict__.get("ops")
+        # A former flat Op spelling refuses here, typed, instead of being lost to
+        # the plain miss below when the delegated Op read refuses it.
+        refuse_removed_member(type(self).__name__, name, OP_MOVED_MEMBERS)
         if ops and len(ops) == 1:
             try:
                 return getattr(ops[0], name)
@@ -1780,11 +1772,12 @@ def _install_layer_view_descriptors() -> None:
     for name in _LAYER_RELATION_VIEW_TYPES:
         if name == "equivalent_ops" or name in _LAYER_MIRROR_SPEC:
             continue
-        if name in vars(Layer):
+        attr = LAYER_STORAGE_ATTRS.get(name, name)
+        if attr in vars(Layer):
             raise RuntimeError(
-                f"Layer view field {name!r} collides with an existing class attribute"
+                f"Layer view field {attr!r} collides with an existing class attribute"
             )
-        setattr(Layer, name, _LayerViewField(name))
+        setattr(Layer, attr, _LayerViewField(name))
 
 
 def _install_layer_moved_member_refusals() -> None:
@@ -1795,7 +1788,12 @@ def _install_layer_moved_member_refusals() -> None:
     still names its replacement instead of reading the shadow.
     """
 
+    stored = frozenset(LAYER_LOG_FIELD_ORDER)
     for name, remedy in LAYER_MOVED_MEMBERS.items():
+        attr = LAYER_STORAGE_ATTRS[name]
+        if name in stored and attr not in vars(Layer):
+            # A plain ``__dict__`` field: its storage attribute reads the persisted key.
+            setattr(Layer, attr, _LayerViewField(name))
         if name not in vars(Layer):
             setattr(Layer, name, MovedMemberField("Layer", name, remedy))
 

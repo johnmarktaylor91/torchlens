@@ -951,7 +951,9 @@ def _log_internally_terminated_tensor(
     if tensor_label not in seen_sink_labels:
         seen_sink_labels.add(tensor_label)
         self.internal_sink_ops.append(tensor_label)
-        if layer_entry.is_scalar_bool and (tensor_label not in seen_terminated_bool_labels):
+        if layer_entry.control_flow.is_scalar_bool and (
+            tensor_label not in seen_terminated_bool_labels
+        ):
             seen_terminated_bool_labels.add(tensor_label)
             self.internally_terminated_bool_ops.append(tensor_label)
-            layer_entry.is_terminal_bool = True
+            layer_entry._control_flow_is_terminal_bool = True

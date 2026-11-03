@@ -25,7 +25,10 @@ Usage::
 
 ``GROUPS`` is a comma list (``cost,graph``; ``rename`` and ``removed`` select
 the flat renames and removals). ``--check`` exits 1 when a rewrite is
-pending (idempotence check); ``--report`` prints skipped sites.
+pending (idempotence check); ``--report`` prints skipped sites. A file that
+contains the line ``# record-groups: keep-flat`` is left alone (tests that
+exercise the refusal of the former spellings), and names bound by an import
+(``from . import _op_cost``) are never treated as records.
 """
 
 from __future__ import annotations
@@ -50,6 +53,7 @@ RECORD_TOKENS = frozenset(
     {"op", "ops", "layer", "layers", "lyr", "pass", "rep", "node", "parent", "child", "sibling"}
 )
 #: Subscripted containers whose items are Op or Layer records.
+KEEP_FLAT = "# record-groups: keep-flat"
 RECORD_CONTAINERS = re.compile(
     r"(^|\.)(trace|log|model_log|tl_log|tlog|ops|layers|layer_list|_layer_list|ops_list)$"
 )
@@ -141,12 +145,27 @@ def _class_body_names(node: ast.ClassDef) -> Iterator[str]:
                     yield target.id
 
 
-def _receiver_is_record(node: ast.expr, class_name: str | None) -> bool | None:
+def _imported_names(tree: ast.AST) -> frozenset[str]:
+    """Return the names an import statement binds anywhere in ``tree``."""
+
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            for alias in node.names:
+                names.add((alias.asname or alias.name).split(".")[0])
+    return frozenset(names)
+
+
+def _receiver_is_record(
+    node: ast.expr, class_name: str | None, imported: frozenset[str] = frozenset()
+) -> bool | None:
     """Return True/False when the receiver shape decides, None when unknown."""
 
     if isinstance(node, ast.Attribute) and node.attr in GROUP_NAMES:
         return False
     if isinstance(node, ast.Name):
+        if node.id in imported:
+            return False
         if node.id == "self":
             return class_name in RECORD_CLASSES
         if node.id in RECORD_CLASSES:
@@ -163,8 +182,14 @@ def _receiver_is_record(node: ast.expr, class_name: str | None) -> bool | None:
 class _Finder(ast.NodeVisitor):
     """Collect rewrite edits and skipped sites for one module."""
 
-    def __init__(self, moves: dict[str, tuple[str, str]], shared: set[str]) -> None:
+    def __init__(
+        self,
+        moves: dict[str, tuple[str, str]],
+        shared: set[str],
+        imported: frozenset[str] = frozenset(),
+    ) -> None:
         self.moves = moves
+        self.imported = imported
         self.shared = shared
         self.edits: list[tuple[int, int, str, str]] = []
         self.skipped: list[tuple[int, str]] = []
@@ -181,7 +206,9 @@ class _Finder(ast.NodeVisitor):
         move = self.moves.get(node.attr)
         if move is None or node.end_lineno is None or node.end_col_offset is None:
             return
-        verdict = _receiver_is_record(node.value, self._class[-1] if self._class else None)
+        verdict = _receiver_is_record(
+            node.value, self._class[-1] if self._class else None, self.imported
+        )
         if verdict is False or (verdict is None and node.attr in self.shared):
             self.skipped.append((node.lineno, ast.unparse(node)[:80]))
             return
@@ -222,7 +249,9 @@ def rewrite_python(
     """Return the rewritten module text and its skipped sites."""
 
     tree = ast.parse(text)
-    finder = _Finder(moves, shared)
+    if KEEP_FLAT in text:
+        return text, []
+    finder = _Finder(moves, shared, _imported_names(tree))
     finder.visit(tree)
     lines = text.splitlines(keepends=True)
     if finder.uses_helper and path is not None and f"import {HELPER}" not in text:
@@ -246,7 +275,7 @@ _TEXT_RECEIVER = r"(?P<recv>\b(?:Op|Layer|op|layer|first_op|last_op|lyr|[a-z_]*_
 def rewrite_text(text: str, moves: dict) -> str:
     """Rewrite record member spellings in Markdown or notebook source text."""
 
-    if not moves:
+    if not moves or KEEP_FLAT in text:
         return text
     names = "|".join(sorted(map(re.escape, moves), key=len, reverse=True))
     pattern = re.compile(_TEXT_RECEIVER + r"\.(?P<name>" + names + r")\b(?!\s*=[^=])")

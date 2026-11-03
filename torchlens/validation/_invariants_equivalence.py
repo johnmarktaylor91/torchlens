@@ -7,6 +7,7 @@ from collections import defaultdict
 from typing import TYPE_CHECKING, Any, cast
 
 from .._record_type import record_type
+from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
     from .._data_classes.op import Op
@@ -324,21 +325,21 @@ def _check_graph_ordering(ml: Trace) -> None:
             raise MetadataInvariantError(name, f"Raw label '{label}' survived postprocessing")
     for lpl in ml._layer_list:
         for field in _RAW_LABEL_BEARING_LIST_FIELDS:
-            for item in getattr(lpl, field, ()) or ():
+            for item in record_member(lpl, field, ()) or ():
                 if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
                     raise MetadataInvariantError(
                         name,
                         f"Raw label {item!r} survived postprocessing in {lpl.layer_label}.{field}",
                     )
         for field in _RAW_LABEL_BEARING_SCALAR_FIELDS:
-            item = getattr(lpl, field, None)
+            item = record_member(lpl, field, None)
             if isinstance(item, str) and _RAW_LABEL_PATTERN.search(item):
                 raise MetadataInvariantError(
                     name,
                     f"Raw label {item!r} survived postprocessing in {lpl.layer_label}.{field}",
                 )
         for field in _RAW_LABEL_BEARING_DICT_FIELDS:
-            mapping = getattr(lpl, field, None) or {}
+            mapping = record_member(lpl, field, None) or {}
             for key, values in mapping.items():
                 candidates = [key]
                 if isinstance(values, str):

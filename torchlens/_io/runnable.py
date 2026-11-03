@@ -84,6 +84,7 @@ from .._runnable import (
 )
 from .._runnable.state import runnable_tensor_byte_digest
 from .._utils._callable_safety import _STORAGE_UNSAFE_NAMES
+from .._utils._record_group_table import record_member
 from ..backends.registry import BackendRegistryError, get_backend_spec
 from ..errors import RunnablePreflightError
 from ..errors.runnable import SparseCorePayloadError
@@ -2479,10 +2480,10 @@ def _build_control_witnesses(
     dependencies_by_call: dict[str, list[ControlDependencyEdge]] = {}
     known_call_ids = {call.call_id for call in calls}
     for op in ops:
-        if not bool(getattr(op, "is_scalar_bool", False)):
+        if not bool(record_member(op, "is_scalar_bool", False)):
             continue
-        bool_value = getattr(op, "bool_value", None)
-        context_kind = getattr(op, "conditional_context_kind", None)
+        bool_value = record_member(op, "bool_value", None)
+        context_kind = record_member(op, "conditional_context_kind", None)
         if bool_value is None:
             diagnostics.append(
                 _diagnostic(
@@ -2494,7 +2495,7 @@ def _build_control_witnesses(
             )
             gap(WitnessGapKind.UNOBSERVED_PREDICATE, f"slot:{op.label}")
             continue
-        if context_kind in {None, "unknown"} and bool(getattr(op, "is_terminal_bool", False)):
+        if context_kind in {None, "unknown"} and bool(record_member(op, "is_terminal_bool", False)):
             diagnostics.append(
                 _diagnostic(
                     RunnableErrorCode.MISSING_CONTROL_CLASSIFICATION,
@@ -3251,8 +3252,8 @@ def _escape_witnesses(
         # present output/un-escaped input would falsely downgrade every changed run).
         if (is_input or is_output) and not is_escape:
             continue
-        if bool(getattr(op, "is_scalar_bool", False)) or bool(
-            getattr(op, "is_terminal_bool", False)
+        if bool(record_member(op, "is_scalar_bool", False)) or bool(
+            record_member(op, "is_terminal_bool", False)
         ):
             continue
         slot_id = f"slot:{op.label}"

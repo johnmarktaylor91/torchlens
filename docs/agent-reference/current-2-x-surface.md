@@ -1709,8 +1709,10 @@
   `trace.health`, `trace.graph`, `trace.autograd`); callers read them, never construct them. Op and
   Layer group their fields by concern the same way: `op.cost` (`tl.types.OpCost`) and `layer.cost`
   (`tl.types.LayerCost`) hold compute, memory and timing facts (`op.cost.flops_forward`,
-  `op.cost.duration`, `layer.cost.total_flops_forward`); a former flat spelling such as
-  `op.cost.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
+  `op.cost.duration`, `layer.cost.total_flops_forward`), and `op.control_flow`
+  (`tl.types.OpControlFlow`) and `layer.control_flow` (`tl.types.LayerControlFlow`) hold
+  conditional-branch facts (`op.control_flow.is_terminal_bool`, `layer.control_flow.depth`); a former
+  flat spelling such as `op.flops_forward` refuses typed (`facade_redirect`) and names the new one. The backend registry
   reads `tl.backends.spec(name)`, `tl.backends.specs()`, `tl.backends.register(spec)`,
   `tl.backends.unregister(name)` and `tl.backends.resolve(...)`. Admin helpers:
   `tl.clear_cache()` (`torchlens._user_funcs.clear_cache`), `tl.observers.register_tensor_connection`

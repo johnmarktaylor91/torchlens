@@ -8,6 +8,7 @@ from contextvars import ContextVar
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr, is_multipass_layer
+from .._utils._record_group_table import record_member
 from ._backward_inventory import (
     BackwardStyleInventory,
     _backward_dot_call_node_name,
@@ -2024,9 +2025,9 @@ def _conditional_branch_edge_kind(child_node: Union["Op", "Layer"], trace: "Trac
             bool_layer = trace[bool_label]
             bool_ops = tuple(getattr(bool_layer, "ops", {}).values())
             context_kinds = (
-                {getattr(op, "conditional_context_kind", None) for op in bool_ops}
+                {record_member(op, "conditional_context_kind", None) for op in bool_ops}
                 if bool_ops
-                else {getattr(bool_layer, "conditional_context_kind", None)}
+                else {record_member(bool_layer, "conditional_context_kind", None)}
             )
             kind = "ELIF" if context_kinds == {"elif_test"} else "IF"
             bool_kind[bool_label.split(":", 1)[0]] = kind

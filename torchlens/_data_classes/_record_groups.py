@@ -1,4 +1,4 @@
-"""Concern-group views of an ``Op`` or ``Layer``: ``op.cost``, ``layer.cost``, ...
+"""Concern-group views of an ``Op`` or ``Layer``: ``op.cost``, ``layer.control_flow``, ...
 
 Each group is a light read-only view bound to one record, the way
 ``trace.cost`` is bound to a Trace. Stored members read the record's private
@@ -169,19 +169,19 @@ class OpCost(_RecordGroup):
     def compute_record(self) -> Any | None:
         """Two-term compute record (``fma_macs`` and ``other_flops``), derived on read."""
 
-        return _op_cost.cost.compute_record(self._record)
+        return _op_cost.compute_record(self._record)
 
     @property
     def macs_forward(self) -> Macs | None:
         """True forward multiply-accumulate count for this Op, never ``flops // 2``."""
 
-        return _op_cost.cost.macs_forward(self._record)
+        return _op_cost.macs_forward(self._record)
 
     @property
     def flops_total(self) -> Flops:
         """Approximate total FLOPs for this Op."""
 
-        return _op_cost.cost.flops_total(self._record)
+        return _op_cost.flops_total(self._record)
 
     @property
     def bytes_read(self) -> Bytes | None:
@@ -199,7 +199,7 @@ class OpCost(_RecordGroup):
     def arithmetic_intensity(self) -> float | None:
         """Theoretical forward FLOPs per byte of ideal memory traffic, or ``None``."""
 
-        return _op_cost.cost.arithmetic_intensity(self._record)
+        return _op_cost.arithmetic_intensity(self._record)
 
 
 class LayerCost(_RecordGroup):
@@ -326,9 +326,260 @@ class LayerCost(_RecordGroup):
         return None
 
 
+class OpControlFlow(_RecordGroup):
+    """Conditional and branch facts of one Op.
+
+    Examples
+    --------
+    >>> import torch, torchlens as tl
+    >>> trace = tl.trace(torch.nn.Linear(3, 2), torch.randn(1, 3))
+    >>> trace.ops["linear_1_1"].control_flow.is_in_conditional
+    False
+    """
+
+    __slots__ = ()
+    _record: Op
+
+    @property
+    def arm_children(self) -> Any:
+        """Each conditional's arm kinds (then, elif_N, else) mapped to this Op's children inside each arm."""
+
+        return self._record._control_flow_arm_children
+
+    @property
+    def bool_value(self) -> bool | None:
+        """The Python value of this Op's output when it is a scalar bool."""
+
+        return self._record._control_flow_bool_value
+
+    @property
+    def branch_depth(self) -> int:
+        """Number of conditional branches this Op is nested inside; 0 outside a conditional body."""
+
+        return self._record._control_flow_branch_depth
+
+    @property
+    def branch_stack(self) -> Any:
+        """Stack of the conditional branches this Op runs under, outermost first."""
+
+        return self._record._control_flow_branch_stack
+
+    @property
+    def context_kind(self) -> str | None:
+        """Kind of context (``"if"`` or ``"while"``) of the conditional this terminal bool decides."""
+
+        return self._record._control_flow_context_kind
+
+    @property
+    def elif_children(self) -> Any:
+        """Each elif arm index mapped to the labels of this Op's children in that arm."""
+
+        return self._record._control_flow_elif_children
+
+    @property
+    def else_children(self) -> Any:
+        """Labels of this Op's children that sit in an else arm of a conditional."""
+
+        return self._record._control_flow_else_children
+
+    @property
+    def entry_children(self) -> Any:
+        """Labels of this Op's children whose edge from it enters a conditional arm."""
+
+        return self._record._control_flow_entry_children
+
+    @property
+    def in_conditionals(self) -> Any:
+        """The conditional roles (evaluation or body) this Op takes part in."""
+
+        return self._record._control_flow_in_conditionals
+
+    @property
+    def is_in_conditional_body(self) -> bool:
+        """Whether this Op sits inside the body of a conditional arm."""
+
+        return self._record._control_flow_is_in_conditional_body
+
+    @property
+    def is_scalar_bool(self) -> bool:
+        """Whether this Op's output is a scalar bool."""
+
+        return self._record._control_flow_is_scalar_bool
+
+    @property
+    def is_terminal_bool(self) -> bool:
+        """Whether this Op is a scalar bool that ends a chain of operations and decides control flow."""
+
+        return self._record._control_flow_is_terminal_bool
+
+    @property
+    def is_terminal_conditional_bool(self) -> bool:
+        """Whether this terminal bool is the test of a recorded conditional."""
+
+        return self._record._control_flow_is_terminal_conditional_bool
+
+    @property
+    def terminal_bool_for(self) -> Any:
+        """``(conditional_id, arm_index)`` when this Op is the terminal bool of a conditional arm."""
+
+        return self._record._control_flow_terminal_bool_for
+
+    @property
+    def then_children(self) -> Any:
+        """Labels of this Op's children that sit in a then arm of a conditional."""
+
+        return self._record._control_flow_then_children
+
+    @property
+    def wrapper_kind(self) -> str | None:
+        """Wrapper kind of the conditional this terminal bool decides, or ``None``."""
+
+        return self._record._control_flow_wrapper_kind
+
+    @property
+    def depth(self) -> int:
+        """Number of distinct conditionals this Op takes part in."""
+
+        return len({role.conditional_id for role in self.in_conditionals or []})
+
+    @property
+    def is_in_conditional(self) -> bool:
+        """Whether this Op takes part in any conditional role."""
+
+        return bool(self.in_conditionals)
+
+    @property
+    def is_in_conditional_evaluation(self) -> bool:
+        """Whether this Op computes the condition of a conditional arm."""
+
+        return any(role.role == "evaluation" for role in self.in_conditionals or [])
+
+
+class LayerControlFlow(_RecordGroup):
+    """Conditional and branch facts of one Layer.
+
+    Examples
+    --------
+    >>> import torch, torchlens as tl
+    >>> trace = tl.trace(torch.nn.Linear(3, 2), torch.randn(1, 3))
+    >>> trace.layers["linear_1"].control_flow.depth
+    0
+    """
+
+    __slots__ = ()
+    _record: Layer
+
+    @property
+    def arm_children(self) -> Any:
+        """Each conditional's arm kinds mapped to this layer's child ops inside each arm."""
+
+        return self._record._control_flow_arm_children
+
+    @property
+    def bool_value(self) -> bool | None:
+        """The Python ``bool`` value of a scalar boolean layer, or ``None``."""
+
+        return self._record._control_flow_bool_value
+
+    @property
+    def branch_stack_ops(self) -> Any:
+        """Each distinct conditional branch stack mapped to the pass numbers that ran under it."""
+
+        return self._record._control_flow_branch_stack_ops
+
+    @property
+    def elif_children(self) -> Any:
+        """Each elif arm index mapped to the labels of this layer's children in that arm."""
+
+        return self._record._control_flow_elif_children
+
+    @property
+    def else_children(self) -> Any:
+        """Labels of this layer's child ops that sit in an else arm of a conditional."""
+
+        return self._record._control_flow_else_children
+
+    @property
+    def entry_children(self) -> Any:
+        """Labels of this layer's child ops whose edge from it enters a conditional arm."""
+
+        return self._record._control_flow_entry_children
+
+    @property
+    def in_conditionals(self) -> Any:
+        """The conditional roles (evaluation or body) this layer takes part in."""
+
+        return self._record._control_flow_in_conditionals
+
+    @property
+    def is_in_conditional_body(self) -> bool:
+        """Whether this layer sits in the body of a conditional arm."""
+
+        return self._record._control_flow_is_in_conditional_body
+
+    @property
+    def is_scalar_bool(self) -> bool:
+        """Whether this layer's value is a scalar boolean."""
+
+        return self._record._control_flow_is_scalar_bool
+
+    @property
+    def is_terminal_bool(self) -> bool:
+        """Whether this layer is a scalar boolean that ends inside the model, such as a branch condition."""
+
+        return self._record._control_flow_is_terminal_bool
+
+    @property
+    def role_stacks(self) -> Any:
+        """The distinct conditional branch stacks this layer's passes ran under."""
+
+        return self._record._control_flow_role_stacks
+
+    @property
+    def terminal_bool_for(self) -> Any:
+        """The conditional this terminal boolean decides, or ``None``."""
+
+        return self._record._control_flow_terminal_bool_for
+
+    @property
+    def then_children(self) -> Any:
+        """Labels of this layer's child ops that sit in a then arm of a conditional."""
+
+        return self._record._control_flow_then_children
+
+    @property
+    def depth(self) -> int:
+        """Number of distinct conditionals this layer takes part in."""
+
+        return len({role.conditional_id for role in self.in_conditionals or []})
+
+    @property
+    def is_in_conditional(self) -> bool:
+        """Whether this layer takes part in any conditional role."""
+
+        return bool(self.in_conditionals)
+
+    @property
+    def is_in_conditional_evaluation(self) -> bool:
+        """Whether this layer computes the condition of a conditional arm."""
+
+        return any(role.role == "evaluation" for role in self.in_conditionals or [])
+
+
 #: Group property name -> group class, per record class.
-OP_GROUP_CLASSES: dict[str, type[_RecordGroup]] = {"cost": OpCost}
-LAYER_GROUP_CLASSES: dict[str, type[_RecordGroup]] = {"cost": LayerCost}
+OP_GROUP_CLASSES: dict[str, type[_RecordGroup]] = {"cost": OpCost, "control_flow": OpControlFlow}
+LAYER_GROUP_CLASSES: dict[str, type[_RecordGroup]] = {
+    "cost": LayerCost,
+    "control_flow": LayerControlFlow,
+}
 
 
-__all__ = ["LAYER_GROUP_CLASSES", "OP_GROUP_CLASSES", "LayerCost", "MovedMemberField", "OpCost"]
+__all__ = [
+    "LAYER_GROUP_CLASSES",
+    "OP_GROUP_CLASSES",
+    "LayerControlFlow",
+    "LayerCost",
+    "MovedMemberField",
+    "OpControlFlow",
+    "OpCost",
+]

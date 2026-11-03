@@ -62,7 +62,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -70,6 +69,37 @@
      []
     ],
     "conditional_then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
      "sigmoid_1_5"
     ],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
@@ -138,9 +168,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -317,7 +345,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -325,6 +352,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -393,9 +445,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -564,7 +614,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -574,6 +623,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -640,9 +714,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -793,7 +865,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -801,6 +872,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -867,9 +961,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -1069,7 +1161,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -1077,6 +1168,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -1143,9 +1257,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -1309,7 +1421,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -1322,6 +1433,36 @@
      ]
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[[0, \"then\"]]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     [
+      [
+       0,
+       "then"
+      ]
+     ]
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -1390,9 +1531,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -1572,7 +1711,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -1580,6 +1718,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -1646,9 +1807,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -2175,7 +2334,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -2187,6 +2345,34 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.1111111111111111",
@@ -2339,9 +2525,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -2555,7 +2739,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": "if_test",
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -2565,6 +2748,31 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": "if_test",
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.is_terminal_conditional_bool": true,
+    "control_flow.terminal_bool_for": [
+     "cond_gt_1_4",
+     0
+    ],
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": "bool_cast",
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -2704,9 +2912,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -2906,7 +3112,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -2918,6 +3123,28 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.0",
@@ -3024,9 +3251,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -3221,7 +3446,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -3231,6 +3455,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -3371,9 +3615,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -3607,7 +3849,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -3617,6 +3858,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -3741,9 +4002,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -3956,7 +4215,6 @@
      ]
     ],
     "conditional_context_kind": null,
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -3966,6 +4224,33 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 1,
+    "control_flow.branch_stack": [
+     [
+      0,
+      "then"
+     ]
+    ],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.5",
@@ -4110,9 +4395,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -4327,7 +4610,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -4337,6 +4619,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -4475,9 +4777,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -5703,7 +6003,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -5711,6 +6010,37 @@
      []
     ],
     "conditional_then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
      "sigmoid_1_5"
     ],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
@@ -5779,9 +6109,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -5958,7 +6286,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -5966,6 +6293,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -6034,9 +6386,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -6205,7 +6555,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -6215,6 +6564,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -6281,9 +6655,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -6434,7 +6806,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -6442,6 +6813,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -6508,9 +6902,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -6710,7 +7102,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -6718,6 +7109,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -6784,9 +7198,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -6950,7 +7362,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -6963,6 +7374,36 @@
      ]
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[[0, \"then\"]]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     [
+      [
+       0,
+       "then"
+      ]
+     ]
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -7031,9 +7472,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -7213,7 +7652,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -7221,6 +7659,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -7287,9 +7748,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -7816,7 +8275,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -7828,6 +8286,34 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.1111111111111111",
@@ -7980,9 +8466,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -8196,7 +8680,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": "if_test",
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -8206,6 +8689,31 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": "if_test",
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.is_terminal_conditional_bool": true,
+    "control_flow.terminal_bool_for": [
+     "cond_gt_1_4",
+     0
+    ],
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": "bool_cast",
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -8345,9 +8853,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -8547,7 +9053,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -8559,6 +9064,28 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.0",
@@ -8665,9 +9192,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -8862,7 +9387,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -8872,6 +9396,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -9012,9 +9556,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -9248,7 +9790,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -9258,6 +9799,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -9382,9 +9943,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -9597,7 +10156,6 @@
      ]
     ],
     "conditional_context_kind": null,
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -9607,6 +10165,33 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 1,
+    "control_flow.branch_stack": [
+     [
+      0,
+      "then"
+     ]
+    ],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.5",
@@ -9751,9 +10336,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -9968,7 +10551,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -9978,6 +10560,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -10116,9 +10718,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -11345,7 +11945,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -11353,6 +11952,37 @@
      []
     ],
     "conditional_then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
      "sigmoid_1_5"
     ],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
@@ -11421,9 +12051,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -11600,7 +12228,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -11608,6 +12235,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -11676,9 +12328,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -11847,7 +12497,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -11857,6 +12506,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -11923,9 +12597,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -12076,7 +12748,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -12084,6 +12755,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -12150,9 +12844,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -12352,7 +13044,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -12360,6 +13051,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -12426,9 +13140,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -12592,7 +13304,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -12605,6 +13316,36 @@
      ]
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[[0, \"then\"]]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     [
+      [
+       0,
+       "then"
+      ]
+     ]
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -12673,9 +13414,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -12855,7 +13594,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -12863,6 +13601,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -12929,9 +13690,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -13458,7 +14217,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -13470,6 +14228,34 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.1111111111111111",
@@ -13622,9 +14408,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -13838,7 +14622,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": "if_test",
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -13848,6 +14631,31 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": "if_test",
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.is_terminal_conditional_bool": true,
+    "control_flow.terminal_bool_for": [
+     "cond_gt_1_4",
+     0
+    ],
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": "bool_cast",
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -13987,9 +14795,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -14189,7 +14995,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -14201,6 +15006,28 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.0",
@@ -14307,9 +15134,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -14504,7 +15329,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -14514,6 +15338,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -14654,9 +15498,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -14890,7 +15732,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -14900,6 +15741,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -15024,9 +15885,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -15239,7 +16098,6 @@
      ]
     ],
     "conditional_context_kind": null,
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -15249,6 +16107,33 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 1,
+    "control_flow.branch_stack": [
+     [
+      0,
+      "then"
+     ]
+    ],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.5",
@@ -15393,9 +16278,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -15610,7 +16493,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -15620,6 +16502,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -15758,9 +16660,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -16980,7 +17880,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -16988,6 +17887,37 @@
      []
     ],
     "conditional_then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
      "sigmoid_1_5"
     ],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
@@ -17056,9 +17986,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -17235,7 +18163,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -17243,6 +18170,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -17311,9 +18263,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -17482,7 +18432,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -17492,6 +18441,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -17558,9 +18532,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -17711,7 +18683,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -17719,6 +18690,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -17785,9 +18779,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -17987,7 +18979,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -17995,6 +18986,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -18061,9 +19075,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -18227,7 +19239,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -18240,6 +19251,36 @@
      ]
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[[0, \"then\"]]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     [
+      [
+       0,
+       "then"
+      ]
+     ]
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -18308,9 +19349,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -18490,7 +19529,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -18498,6 +19536,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -18564,9 +19625,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -19093,7 +20152,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -19105,6 +20163,34 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.1111111111111111",
@@ -19257,9 +20343,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -19473,7 +20557,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": "if_test",
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -19483,6 +20566,31 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": "if_test",
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.is_terminal_conditional_bool": true,
+    "control_flow.terminal_bool_for": [
+     "cond_gt_1_4",
+     0
+    ],
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": "bool_cast",
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -19622,9 +20730,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -19824,7 +20930,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -19836,6 +20941,28 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.0",
@@ -19942,9 +21069,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -20139,7 +21264,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -20149,6 +21273,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -20289,9 +21433,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -20525,7 +21667,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -20535,6 +21676,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -20659,9 +21820,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -20874,7 +22033,6 @@
      ]
     ],
     "conditional_context_kind": null,
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -20884,6 +22042,33 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 1,
+    "control_flow.branch_stack": [
+     [
+      0,
+      "then"
+     ]
+    ],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.5",
@@ -21028,9 +22213,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -21245,7 +22428,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -21255,6 +22437,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": "0.2",
@@ -21393,9 +22595,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -22638,7 +23838,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -22646,6 +23845,37 @@
      []
     ],
     "conditional_then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
      "sigmoid_1_5"
     ],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
@@ -22714,9 +23944,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -22893,7 +24121,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -22901,6 +24128,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -22969,9 +24221,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -23140,7 +24390,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -23150,6 +24399,31 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -23216,9 +24490,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -23369,7 +24641,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -23377,6 +24648,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -23443,9 +24737,7 @@
     "is_compute_layer": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -23634,7 +24926,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -23642,6 +24933,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -23708,9 +25022,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -23874,7 +25186,6 @@
       1
      ]
     },
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -23887,6 +25198,36 @@
      ]
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[[0, \"then\"]]": [
+      1
+     ]
+    },
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     [
+      [
+       0,
+       "then"
+      ]
+     ]
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -23955,9 +25296,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -24137,7 +25476,6 @@
       1
      ]
     },
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -24145,6 +25483,29 @@
      []
     ],
     "conditional_then_children": [],
+    "control_flow": "<torchlens._data_classes._record_groups.LayerControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_stack_ops": {
+     "[]": [
+      1
+     ]
+    },
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.role_stacks": [
+     []
+    ],
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
     "cost": "<torchlens._data_classes._record_groups.LayerCost>",
     "cost.activation_memory": "<measured>",
     "cost.autograd_memory": "<measured>",
@@ -24211,9 +25572,7 @@
     "is_compute_layer": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -24740,7 +26099,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -24752,6 +26110,34 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {
+     "0": {
+      "\"then\"": [
+       "sigmoid_1_5"
+      ]
+     }
+    },
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [
+     "sigmoid_1_5"
+    ],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -24880,9 +26266,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -25093,7 +26477,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": "if_test",
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -25103,6 +26486,31 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": true,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": "if_test",
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": true,
+    "control_flow.is_scalar_bool": true,
+    "control_flow.is_terminal_bool": true,
+    "control_flow.is_terminal_conditional_bool": true,
+    "control_flow.terminal_bool_for": [
+     "cond_gt_1_4",
+     0
+    ],
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": "bool_cast",
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -25230,9 +26638,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": true,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": true,
@@ -25429,7 +26835,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [
@@ -25441,6 +26846,28 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [
+     "sum_1_3"
+    ],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -25547,9 +26974,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": true,
     "is_internal_sink": false,
@@ -25741,7 +27166,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -25751,6 +27175,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -25876,9 +27320,7 @@
     "is_compute_op": false,
     "is_edited": false,
     "is_final_output": true,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -26095,7 +27537,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -26105,6 +27546,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -26229,9 +27690,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -26439,7 +27898,6 @@
      ]
     ],
     "conditional_context_kind": null,
-    "conditional_depth": 1,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -26449,6 +27907,33 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 1,
+    "control_flow.branch_stack": [
+     [
+      0,
+      "then"
+     ]
+    ],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 1,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [
+     "<torchlens._data_classes.trace.ConditionalRoleRef>"
+    ],
+    "control_flow.is_in_conditional": true,
+    "control_flow.is_in_conditional_body": false,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -26578,9 +28063,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": true,
     "is_in_conditional_body": false,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,
@@ -26792,7 +28275,6 @@
     "conditional_branch_depth": 0,
     "conditional_branch_stack": [],
     "conditional_context_kind": null,
-    "conditional_depth": 0,
     "conditional_elif_children": {},
     "conditional_else_children": [],
     "conditional_entry_children": [],
@@ -26802,6 +28284,26 @@
     "container_path": [],
     "container_spec": null,
     "containers": [],
+    "control_flow": "<torchlens._data_classes._record_groups.OpControlFlow>",
+    "control_flow.arm_children": {},
+    "control_flow.bool_value": null,
+    "control_flow.branch_depth": 0,
+    "control_flow.branch_stack": [],
+    "control_flow.context_kind": null,
+    "control_flow.depth": 0,
+    "control_flow.elif_children": {},
+    "control_flow.else_children": [],
+    "control_flow.entry_children": [],
+    "control_flow.in_conditionals": [],
+    "control_flow.is_in_conditional": false,
+    "control_flow.is_in_conditional_body": true,
+    "control_flow.is_in_conditional_evaluation": false,
+    "control_flow.is_scalar_bool": false,
+    "control_flow.is_terminal_bool": false,
+    "control_flow.is_terminal_conditional_bool": false,
+    "control_flow.terminal_bool_for": null,
+    "control_flow.then_children": [],
+    "control_flow.wrapper_kind": null,
     "cost": "<torchlens._data_classes._record_groups.OpCost>",
     "cost.activation_memory": "<measured>",
     "cost.arithmetic_intensity": null,
@@ -26925,9 +28427,7 @@
     "is_compute_op": true,
     "is_edited": false,
     "is_final_output": false,
-    "is_in_conditional": false,
     "is_in_conditional_body": true,
-    "is_in_conditional_evaluation": false,
     "is_inplace": false,
     "is_input": false,
     "is_internal_sink": false,

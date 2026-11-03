@@ -6962,7 +6962,7 @@ def test_corruption_raw_label_in_elif_children_dict():
     from torchlens.validation._invariants_equivalence import _check_graph_ordering
 
     log = _make_clean_log()
-    log._layer_list[1].conditional_elif_children = {0: ["relu_1_1_raw"]}
+    log._layer_list[1]._control_flow_elif_children = {0: ["relu_1_1_raw"]}
     with pytest.raises(MetadataInvariantError, match="Raw label"):
         _check_graph_ordering(log)
     with pytest.raises(MetadataInvariantError):

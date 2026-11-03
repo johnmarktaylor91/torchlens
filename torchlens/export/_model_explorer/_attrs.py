@@ -48,7 +48,7 @@ def node_kind(entry: Any) -> str:
         return "output"
     if getattr(entry, "is_buffer", False):
         return "buffer"
-    if getattr(entry, "is_terminal_bool", False):
+    if record_member(entry, "is_terminal_bool", False):
         return "bool"
     if int(getattr(entry, "num_params", 0) or 0) > 0:
         return "parameterized"

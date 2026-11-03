@@ -537,21 +537,21 @@ def _merge_layer_log_conditional_fields(
     pass_log:
         Per-pass layer entry contributing conditional metadata.
     """
-    if pass_log.is_in_conditional_body:
-        layer_log.is_in_conditional_body = True
+    if pass_log.control_flow.is_in_conditional_body:
+        layer_log._control_flow_is_in_conditional_body = True
 
-    stack_signature = tuple(pass_log.conditional_branch_stack)
-    if stack_signature not in layer_log.conditional_branch_stack_ops:
-        layer_log.conditional_role_stacks.append(list(pass_log.conditional_branch_stack))
-        layer_log.conditional_branch_stack_ops[stack_signature] = []
+    stack_signature = tuple(pass_log.control_flow.branch_stack)
+    if stack_signature not in layer_log.control_flow.branch_stack_ops:
+        layer_log.control_flow.role_stacks.append(list(pass_log.control_flow.branch_stack))
+        layer_log.control_flow.branch_stack_ops[stack_signature] = []
 
-    signature_ops = layer_log.conditional_branch_stack_ops[stack_signature]
+    signature_ops = layer_log.control_flow.branch_stack_ops[stack_signature]
     if pass_log.pass_number not in signature_ops:
         signature_ops.append(pass_log.pass_number)
         signature_ops.sort()
 
-    for conditional_id, branch_children in pass_log.conditional_arm_children.items():
-        merged_branch_children = layer_log.conditional_arm_children.setdefault(
+    for conditional_id, branch_children in pass_log.control_flow.arm_children.items():
+        merged_branch_children = layer_log.control_flow.arm_children.setdefault(
             conditional_id,
             {},
         )
@@ -574,20 +574,20 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
     layer_log:
         Aggregate layer entry whose derived conditional fields are refreshed.
     """
-    layer_log.is_in_conditional_body = any(
-        len(branch_stack) > 0 for branch_stack in layer_log.conditional_role_stacks
+    layer_log._control_flow_is_in_conditional_body = any(
+        len(branch_stack) > 0 for branch_stack in layer_log.control_flow.role_stacks
     )
 
     conditional_entry_children: list[str] = []
     entry_seen: set[str] = set()
     for _, pass_log in sorted(layer_log.ops.items()):
-        for child_label in pass_log.conditional_entry_children:
+        for child_label in pass_log.control_flow.entry_children:
             _append_unique_child_label(
                 conditional_entry_children,
                 entry_seen,
                 _strip_pass_suffix(child_label),
             )
-    layer_log.conditional_entry_children = conditional_entry_children
+    layer_log._control_flow_entry_children = conditional_entry_children
 
     conditional_then_children: list[str] = []
     then_seen: set[str] = set()
@@ -595,7 +595,7 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
     elif_seen_by_index: dict[int, set[str]] = {}
     conditional_else_children: list[str] = []
     else_seen: set[str] = set()
-    for branch_children in layer_log.conditional_arm_children.values():
+    for branch_children in layer_log.control_flow.arm_children.values():
         for child_label in branch_children.get("then", []):
             _append_unique_child_label(conditional_then_children, then_seen, child_label)
         for branch_kind, child_labels in branch_children.items():
@@ -609,9 +609,9 @@ def _rebuild_layer_log_conditional_views(layer_log: "Layer") -> None:
         for child_label in branch_children.get("else", []):
             _append_unique_child_label(conditional_else_children, else_seen, child_label)
 
-    layer_log.conditional_then_children = conditional_then_children
-    layer_log.conditional_elif_children = conditional_elif_children
-    layer_log.conditional_else_children = conditional_else_children
+    layer_log._control_flow_then_children = conditional_then_children
+    layer_log._control_flow_elif_children = conditional_elif_children
+    layer_log._control_flow_else_children = conditional_else_children
 
 
 def _rebuild_conditional_edge_call_indices(self: "Trace") -> None:
@@ -1403,7 +1403,7 @@ def _build_conditional_records(self: "Trace") -> None:
                 value_op = _resolve_conditional_bool_op(
                     self, terminal_bool, witnessed_indices, bool_layers_raw
                 )
-                raw_bool_value = getattr(value_op, "bool_value", None)
+                raw_bool_value = record_member(value_op, "bool_value", None)
                 # ``bool_value_at_run`` must never contradict ``fired``: apply
                 # the test expression's statically-known polarity, and refuse a
                 # single-bool value for compound (``and``/``or``) tests where
@@ -1459,16 +1459,19 @@ def _build_conditional_records(self: "Trace") -> None:
 
     roles_by_label = _roles_by_label(conditionals, role_labels_by_cond_arm, ConditionalRoleRef)
     for layer in self._layer_list:
-        layer.in_conditionals = roles_held_by_pass(
+        layer._control_flow_in_conditionals = roles_held_by_pass(
             layer, roles_by_label.get(layer.layer_label, []), arm_stack_entries
         )
         if (
             layer.terminal_conditional_id is not None
             and layer.terminal_conditional_id in event_by_id
         ):
-            layer.terminal_bool_for = (conditional_id_by_event_id[layer.terminal_conditional_id], 0)
+            layer._control_flow_terminal_bool_for = (
+                conditional_id_by_event_id[layer.terminal_conditional_id],
+                0,
+            )
         else:
-            layer.terminal_bool_for = None
+            layer._control_flow_terminal_bool_for = None
     bind_layer_conditional_roles(self, roles_by_label)
 
     self._graph_conditionals = ConditionalAccessor(conditionals)
