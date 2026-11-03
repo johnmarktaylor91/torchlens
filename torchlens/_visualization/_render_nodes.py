@@ -13,6 +13,7 @@ from ._encoding_aggregate import (
     segment_encoding_attrs,
 )
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
+from ._pass_marks import pass_mark_suffix
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -1989,26 +1990,9 @@ def compute_default_node_lines(
         append_overlay_lines(selected_lines, layer_log, node_overlay)
         return selected_lines
 
-    annotation = _rolling_annotation(layer_log, vis_mode)
-    # An atomic module rectangle carries its split call range on the ``@module``
-    # marking (e.g. ``@shared:1-2,3-5``); keep the title's count clean and
-    # non-redundant in that case, and fall back to a plain ``(xN)`` count.
-    atomic_marking_has_range = getattr(layer_log, "is_atomic_module", False) and (
-        ":" in node_address
-    )
-    if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
-        call_label = f":{layer_log.pass_number}"
-    elif (layer_log.num_passes > 1) and (vis_mode == "rolled"):
-        if atomic_marking_has_range:
-            call_label = ""
-        else:
-            rolling_suffix = _format_rolling_suffix(annotation)
-            if rolling_suffix:
-                call_label = rolling_suffix
-            else:
-                call_label = f" (x{_rolled_visual_num_passes(layer_log)})"
-    else:
-        call_label = ""
+    # ``:2`` unrolled, ``:1-2,4`` or `` (x3)`` rolled; an atomic module whose
+    # ``@module`` marking carries the split call range keeps its title clean.
+    call_label = pass_mark_suffix(layer_log, node_address, vis_mode)
 
     if (layer_log.num_passes > 1) and (vis_mode == "unrolled"):
         # F2: show the RESOLVABLE trace identity ``layer_label:pass`` (== op.label,

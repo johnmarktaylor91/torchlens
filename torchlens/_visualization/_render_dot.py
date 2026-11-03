@@ -55,7 +55,7 @@ from ._svg_compose import (
     _render_graph_only_svg,
     _write_composed_code_panel,
 )
-from ._typography import DEFAULT_TYPOGRAPHY
+from ._typography import DEFAULT_TYPOGRAPHY, edge_typography_for_draw
 from .overlays import resolve_overlay_request
 from .render_execution import (
     atomic_render_target,
@@ -1469,10 +1469,10 @@ def draw(
         segment_lookup,
         site_labels,
     )
-    work = _populate_forward_ir(self, context)
-
-    forward_render_ir = _finalize_forward_ir(self, context, work)
-    rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
+    with edge_typography_for_draw(theme, request):
+        work = _populate_forward_ir(self, context)
+        forward_render_ir = _finalize_forward_ir(self, context, work)
+        rendered = _emit_and_finish_forward(self, context, work, forward_render_ir)
     _write_overview_expansion_manifest(self, request, target)
     return rendered
 
