@@ -81,13 +81,13 @@ from ._selector_nodes import (
     _preceded_by_matches,
 )
 from ._selector_universe import (
+    _grad_fn_boundary_aliases,
+    _grad_fn_forward_op,
     _is_module_scope_alias,
-    _layer_names,
     _module_containment_candidates,
     _module_output_candidates,
     _output_matches,
     _predicate_callable,
-    _shares_grad_fn_tensor,
     _site_label_spellings,
     _string_labels,
     live_label_error_message as live_label_error_message,
@@ -425,25 +425,37 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
         return SelectorCapabilityError(
             "tl.followed_by(...) is capture-time-only retroactive save sugar: "
             "trace(save=candidate & tl.followed_by(successor), lookback=N) saves matching "
-            f"candidates while the forward runs. {where} has no retroactive window."
+            f"candidates while the forward runs. {where} has no retroactive window.",
+            code="followed_by_selector_unsupported",
+            selector_kind=kind,
+            lifecycle=lifecycle,
         )
     if kind == "preceded_by":
         return SelectorCapabilityError(
             "tl.preceded_by(...) matches against the capture-time lookback window and is "
-            f"only supported in trace(save=...) / record(save=...) predicates, not {where}."
+            f"only supported in trace(save=...) / record(save=...) predicates, not {where}.",
+            code="preceded_by_selector_unsupported",
+            selector_kind=kind,
+            lifecycle=lifecycle,
         )
     if kind == "input_at":
         return SelectorCapabilityError(
             "tl.model_input(...) resolves saved input placeholders, but model inputs are not "
             "live hook application sites. Use trace(..., intervene=...) on downstream ops "
-            "or mutate the model input before capture."
+            "or mutate the model input before capture.",
+            code="model_input_selector_not_live",
+            selector_kind=kind,
+            lifecycle=lifecycle,
         )
     if kind == "facet":
         return SelectorCapabilityError(
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
             "(Trace.set, attach_hooks, do) and, on a finished trace, as a bare selector "
             "through trace[selector]; not through "
-            f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}."
+            f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}.",
+            code="facet_selector_unsupported",
+            selector_kind=kind,
+            lifecycle=lifecycle,
         )
     if kind == "site":
         return SelectorCapabilityError(
@@ -451,9 +463,17 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
             f"{where}: final structural numbering is absent mid-attach. Resolve "
             "the site on the finished trace (trace[selector] / do), or pass "
             "the site selector through trace(save=/intervene=), which arms the "
-            "live minter."
+            "live minter.",
+            code="site_selector_not_live",
+            selector_kind=kind,
+            lifecycle=lifecycle,
         )
-    return SelectorCapabilityError(f"Unsupported selector kind {kind!r} for {where}.")
+    return SelectorCapabilityError(
+        f"Unsupported selector kind {kind!r} for {where}.",
+        code="selector_kind_unsupported",
+        selector_kind=kind,
+        lifecycle=lifecycle,
+    )
 
 
 #: Kinds refused UPFRONT per lifecycle. The site set must stay in lockstep
@@ -1125,70 +1145,6 @@ def _occurrence_path_matches(
         if output_path_matches(tuple(occurrence.path), requested_path):
             return True
     return False
-
-
-def _grad_fn_forward_op(site: Any) -> Any:
-    """Return the forward op one GradFn site pairs with, at its own pass.
-
-    ``GradFn.op`` resolves the paired layer label, which on a multi-pass layer
-    is the multi-pass ``Layer`` itself; its per-pass fields (``label``) refuse
-    by design. A GradFn belongs to exactly one pass, so the pass whose
-    ``grad_fn_object_id`` is this GradFn's autograd identity is the subject
-    every forward selector kind evaluates against.
-    """
-
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
-
-    op = site.op
-    pass_op = _pass_op_for_grad_fn(op, site.grad_fn_object_id)
-    # No pass carries this autograd identity: keep the multi-pass Layer so its
-    # typed per-pass refusal fires rather than silently matching nothing.
-    return op if pass_op is None else pass_op
-
-
-def _grad_fn_boundary_aliases(site: Any) -> tuple[Any, ...]:
-    """Return every other op sharing a GradFn identity with ``site``.
-
-    One autograd node can back several captured ops: synthetic input/output
-    ops, and identity calls that return their input tensor itself (``dropout``
-    in eval mode, a no-op ``contiguous`` or ``to``), whose output IS the
-    paired op's output. A forward selector naming any of them names that
-    tensor's gradient, so each one is a matching subject (a module whose
-    output op is an eval-mode dropout matched no GradFn before, and its
-    gradient edit was a silent no-op).
-    """
-
-    from torchlens._data_classes.grad_fn import _pass_op_for_grad_fn
-
-    trace = site.trace
-    if trace is None:
-        return ()
-    paired_label = site.op_label
-    paired = _grad_fn_forward_op(site)
-    # Identity is proved, never assumed from a shared ``id()``: a recorded id
-    # could in principle be reused by an unrelated node after its first owner
-    # was freed. An identity call's input is alive while it runs, so a child
-    # of an already-accepted op that shares the node IS the same tensor.
-    # A pass-level subject (an Op, or a single-pass Layer) has a label and
-    # parents of its own; the multi-pass Layer kept when no pass carries this
-    # identity refuses both, so only its bare label is accepted.
-    pass_level = _pass_op_for_grad_fn(paired, site.grad_fn_object_id) is not None
-    accepted = {str(paired_label)}
-    if pass_level:
-        accepted.add(str(getattr(paired, "label", paired_label)))
-    paired_parents = (
-        {str(parent) for parent in getattr(paired, "parents", ()) or ()} if pass_level else set()
-    )
-    aliases: list[Any] = []
-    for layer in trace._layer_list:
-        if getattr(layer, "layer_label", None) == paired_label:
-            continue
-        if getattr(layer, "grad_fn_object_id", None) != site.grad_fn_object_id:
-            continue
-        if _shares_grad_fn_tensor(layer, accepted, paired_parents):
-            aliases.append(layer)
-            accepted.update(_layer_names(layer))
-    return tuple(aliases)
 
 
 #: Kinds every forward lane compiles the same way (lane differences live in
