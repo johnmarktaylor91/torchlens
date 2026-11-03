@@ -136,7 +136,7 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
 
     Replay recomputes forward values off the autograd graph, so a gradient
     rule could never fire there, whether the recipe arms it or the call
-    passes it as ``ReplayOptions(hooks={tl.grad(site): edit})``; refusing
+    passes it as an explicit ``{tl.grad(site): edit}`` hook mapping; refusing
     keeps a push from returning a result that silently dropped it.
 
     Parameters
@@ -144,7 +144,8 @@ def _refuse_armed_gradient_rules(trace: Trace, hooks: Any = None) -> None:
     trace:
         Trace about to be pushed.
     hooks:
-        The push's explicit ``ReplayOptions.hooks`` mapping, or ``None``.
+        An explicit mapping of sites to edits for the push, or ``None``
+        (``ReplayOptions`` carries no hooks; edits arrive through ``Trace.do``).
 
     Raises
     ------
