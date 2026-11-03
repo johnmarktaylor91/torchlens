@@ -60,7 +60,7 @@ class EmpiricalAdjointCheck:
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> checks = tl.receptive_field.verify(armed, units="center").empirical_adjoint
     >>> (len(checks) > 0, all(isinstance(check, EmpiricalAdjointCheck) for check in checks))
     (True, True)
@@ -84,7 +84,7 @@ class ReceptiveFieldVerification:
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> report = tl.receptive_field.verify(armed, units="center")
     >>> (isinstance(report, ReceptiveFieldVerification), len(report.containment) > 0)
     (True, True)
@@ -364,7 +364,7 @@ def verify(
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> report = verify(armed, units="center")
     >>> (report.verdict.value, report.passed)
     ('pass', True)

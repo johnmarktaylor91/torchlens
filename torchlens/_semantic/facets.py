@@ -62,7 +62,7 @@ class AbsenceReason:
 
     Examples
     --------
-    >>> reason = AbsenceReason("needs_capture", remedy="layers_to_save='all'")
+    >>> reason = AbsenceReason("needs_capture", remedy="save='all'")
     >>> reason.status
     'needs_capture'
     >>> reason.detail is None
@@ -813,14 +813,14 @@ class MissingFacet:
 
     Examples
     --------
-    >>> missing = MissingFacet("needs layers_to_save='all'")
+    >>> missing = MissingFacet("needs save='all'")
     >>> missing.reason
-    "needs layers_to_save='all'"
+    "needs save='all'"
     >>> try:
     ...     missing.shape
     ... except RuntimeError as err:
     ...     print(err)
-    needs layers_to_save='all'"""
+    needs save='all'"""
 
     def __init__(self, reason: str) -> None:
         """Initialize the missing-facet sentinel.
@@ -1093,8 +1093,7 @@ class AttentionHeadView:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> head = trace.modules["transformer.h.0.attn"].facets.head(1)
     >>> tuple(head["pattern"].shape)
     (1, 6, 6)"""

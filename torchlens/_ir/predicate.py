@@ -506,9 +506,9 @@ class GradRecordContext:
     Examples
     --------
     >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
-    >>> out, recording = tl.record(
-    ...     net, torch.randn(2, 4), save=tl.func("relu"), return_output=True, save_grads=True
-    ... )
+    >>> recording = tl.record(net, torch.randn(2, 4), save=tl.func("relu"),
+    ...                       capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True))
+    >>> out = recording.output
     >>> _ = recording.backward(out.sum(), save_grads=True)
     >>> context = recording.grad_records[0].ctx
     >>> type(context).__name__, context.grad_kind in ("grad_input", "grad_output")
@@ -549,9 +549,9 @@ class GradRecord:
     Examples
     --------
     >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
-    >>> out, recording = tl.record(
-    ...     net, torch.randn(2, 4), save=tl.func("relu"), return_output=True, save_grads=True
-    ... )
+    >>> recording = tl.record(net, torch.randn(2, 4), save=tl.func("relu"),
+    ...                       capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True))
+    >>> out = recording.output
     >>> _ = recording.backward(out.sum(), save_grads=True)
     >>> type(recording.grad_records[0]).__name__
     'GradRecord'

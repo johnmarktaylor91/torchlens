@@ -53,6 +53,12 @@ class Drawing:
     trace:
         A retained trace when the caller asked to keep one; ``close()`` (and
         leaving the ``with`` block) releases it.
+
+    Examples
+    --------
+    >>> drawing = Drawing(dot="digraph { a -> b }", file_format="gv")
+    >>> drawing.file_format, drawing.path is None, drawing.num_ops is None
+    ('gv', True, True)
     """
 
     dot: str

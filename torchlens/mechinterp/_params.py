@@ -114,8 +114,7 @@ class HeadWeightViews:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> views = tl.mechinterp.head_weight_views(trace, "transformer.h.0.attn")
     >>> isinstance(views, HeadWeightViews), views.num_q_heads, views.d_head
     (True, 2, 4)
@@ -445,8 +444,7 @@ def head_weight_views(trace: Any, attention: Any) -> HeadWeightViews:  # noqa: P
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> views = tl.mechinterp.head_weight_views(trace, "transformer.h.0.attn")
     >>> tuple(views.w_q.shape), tuple(views.w_o.shape)
     ((2, 8, 4), (2, 4, 8))
@@ -652,8 +650,7 @@ def qk_circuit(trace: Any, attention: Any) -> FactoredMatrix:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> tuple(tl.mechinterp.qk_circuit(trace, "transformer.h.0.attn").shape)
     (2, 8, 8)
     """
@@ -693,8 +690,7 @@ def ov_circuit(trace: Any, attention: Any) -> FactoredMatrix:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> tuple(tl.mechinterp.ov_circuit(trace, "transformer.h.0.attn").shape)
     (2, 8, 8)
     """

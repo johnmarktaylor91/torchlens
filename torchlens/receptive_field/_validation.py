@@ -1379,7 +1379,7 @@ def cross_validate(
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> results = cross_validate(armed, units="center")
     >>> (len(results) > 0, all(result.passed for result in results))
     (True, True)

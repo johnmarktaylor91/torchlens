@@ -297,6 +297,13 @@ class RecordingSettings:
     narrate:
         The live narration settings (a ``NarrationOptions``) that printed each captured
         event as the forward ran, from the door's ``narrate=``; ``None`` when off.
+
+    Examples
+    --------
+    >>> recording = tl.record(model, x, save=tl.func("relu"))
+    >>> settings = recording.options
+    >>> type(settings).__name__, settings.history_size
+    ('RecordingSettings', 8)
     """
 
     keep_op: PredicateFn | None

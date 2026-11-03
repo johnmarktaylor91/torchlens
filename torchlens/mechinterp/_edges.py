@@ -221,8 +221,7 @@ class ComponentGraph:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> graph = tl.mechinterp.component_graph(trace)
     >>> isinstance(graph, ComponentGraph), len(graph.edges) > 0
     (True, True)
@@ -574,8 +573,7 @@ def component_graph(trace: Any) -> ComponentGraph:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> graph = tl.mechinterp.component_graph(trace)
     >>> "logits" in graph.receivers, "input" in graph.nodes
     (True, True)

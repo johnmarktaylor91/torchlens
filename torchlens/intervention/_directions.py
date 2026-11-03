@@ -77,9 +77,8 @@ class Direction:
     Examples
     --------
     >>> lm = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
-    >>> capture = tl.options.CaptureOptions(layers_to_save="all")
-    >>> pos = tl.trace(lm, torch.randn(6, 4), capture=capture)
-    >>> neg = tl.trace(lm, torch.randn(6, 4), capture=capture)
+    >>> pos = tl.trace(lm, torch.randn(6, 4))
+    >>> neg = tl.trace(lm, torch.randn(6, 4))
     >>> direction = tl.intervention.fit_direction(pos, neg, "linear_1_1", read_token_index=None)
     >>> isinstance(direction, Direction), direction.site, direction.num_pairs
     (True, 'linear_1_1', 6)
@@ -344,9 +343,8 @@ def fit_direction(
     Examples
     --------
     >>> lm = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
-    >>> capture = tl.options.CaptureOptions(layers_to_save="all")
-    >>> pos = tl.trace(lm, torch.randn(6, 4), capture=capture)
-    >>> neg = tl.trace(lm, torch.randn(6, 4), capture=capture)
+    >>> pos = tl.trace(lm, torch.randn(6, 4))
+    >>> neg = tl.trace(lm, torch.randn(6, 4))
     >>> direction = tl.intervention.fit_direction(pos, neg, "linear_1_1", read_token_index=None)
     >>> tuple(direction.vector.shape), direction.method
     ((4,), 'mean_diff')

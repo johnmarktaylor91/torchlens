@@ -51,8 +51,7 @@ def apply_norm_scale(
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> dec = tl.mechinterp.residual_decomposition(trace)
     >>> len(tl.mechinterp.apply_norm_scale(trace, dec)) == len(dec)
     True
@@ -176,8 +175,7 @@ def stack_facet(trace: Any, name: str) -> ComponentStack:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> len(tl.mechinterp.stack_facet(trace, "q"))
     2
     """
@@ -246,8 +244,7 @@ def full_decomposition(
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> tuple(tl.mechinterp.full_decomposition(trace).sum().shape)
     (1, 6, 8)
     """

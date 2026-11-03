@@ -588,7 +588,7 @@ class GradReceptiveField(_SelectionOperand):
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> view = armed["conv2d_1_1"].receptive_field
     >>> grad_rf = next(iter(view.probe_grad(view.center_unit(batch_index=0)).values()))
     >>> (isinstance(grad_rf, GradReceptiveField), tuple(grad_rf.grad.shape))
@@ -729,7 +729,7 @@ class ReceptiveFieldValidation:
     --------
     >>> net = nn.Conv2d(1, 1, 3, padding=1)
     >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
-    ...     capture=tl.options.CaptureOptions(backward_ready=True), save_mode="reference")
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
     >>> view = armed["conv2d_1_1"].receptive_field
     >>> result = view.check(view.center_unit(batch_index=0))
     >>> (isinstance(result, ReceptiveFieldValidation), result.passed, result.violations)

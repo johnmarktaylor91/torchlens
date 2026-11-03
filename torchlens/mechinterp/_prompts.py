@@ -59,8 +59,7 @@ class PromptInspection:
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> report = tl.mechinterp.inspect_prompt(trace, answer=3)
     >>> isinstance(report, PromptInspection), len(report.input_ids)
     (True, 6)
@@ -196,8 +195,7 @@ def inspect_prompt(  # noqa: PLR0913 -- the memo-normative section-8 signature
     >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
-    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)),
-    ...                  capture=tl.options.CaptureOptions(layers_to_save="all"))
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
     >>> report = tl.mechinterp.inspect_prompt(trace, answer=3, k=3)
     >>> report.answers[0].token_id, len(report.k)
     (3, 3)

@@ -72,8 +72,8 @@ class BackwardTransition:
     >>> class SqrtNet(nn.Module):
     ...     def forward(self, t):
     ...         return torch.sqrt(torch.relu(t)).sum()
-    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
-    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts, save_mode="reference")
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
     >>> _ = run.log_backward(run.output_ops[0].out)
     >>> step = tl.debug.bisect_nan_backward(run).birth
     >>> isinstance(step, BackwardTransition), step.verdict
@@ -140,8 +140,8 @@ class BackwardNanReport(FoundReport):
     >>> class SqrtNet(nn.Module):
     ...     def forward(self, t):
     ...         return torch.sqrt(torch.relu(t)).sum()
-    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
-    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts, save_mode="reference")
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
     >>> _ = run.log_backward(run.output_ops[0].out)
     >>> report = tl.debug.bisect_nan_backward(run)
     >>> isinstance(report, BackwardNanReport), report.found, len(report.transitions) > 0
@@ -559,8 +559,8 @@ def bisect_nan_backward(
     >>> class SqrtNet(nn.Module):
     ...     def forward(self, t):
     ...         return torch.sqrt(torch.relu(t)).sum()
-    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
-    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts, save_mode="reference")
+    >>> opts = tl.options.CaptureOptions(backward_ready=True, save_grads="all", save_mode="reference")
+    >>> run = tl.trace(SqrtNet(), torch.tensor([[0.0, 1.0, 4.0]], requires_grad=True), capture=opts)
     >>> _ = run.log_backward(run.output_ops[0].out)
     >>> report = bisect_nan_backward(run)
     >>> report.found, report.birth.verdict, report.birth.emitted

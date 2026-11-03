@@ -1165,7 +1165,8 @@ def followed_by(selector: SelectorLike, /) -> FollowedBySelector:
     Examples
     --------
     >>> keep = tl.func("conv2d") & tl.followed_by(tl.func("relu"))
-    >>> trace = tl.trace(model, x, save=keep, lookback=4, lookback_payload_policy="detached_raw")
+    >>> trace = tl.trace(model, x, save=keep,
+    ...                  capture=tl.options.CaptureOptions(lookback=4, lookback_payload_policy="detached_raw"))
     >>> [op.label for op in trace.saved_ops]
     ['conv2d_1_1:1']
     """
@@ -1189,7 +1190,7 @@ def preceded_by(selector: SelectorLike, /) -> PrecededBySelector:
     Examples
     --------
     >>> keep = tl.func("conv2d") & tl.preceded_by(tl.func("relu"))
-    >>> trace = tl.trace(model, x, save=keep, lookback=4)
+    >>> trace = tl.trace(model, x, save=keep, capture=tl.options.CaptureOptions(lookback=4))
     >>> labels = [op.label for op in trace.saved_ops]
     >>> "conv2d_2_3:1" in labels, "conv2d_1_1:1" in labels
     (True, False)

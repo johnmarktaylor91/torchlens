@@ -1568,7 +1568,7 @@ def to_disk(
     Returns
     -------
     StorageOptions
-        Storage options for ``trace(..., storage=...)`` and ``record(..., streaming=...)``.
+        Storage options for ``trace(..., storage=...)`` and ``record(..., storage=...)``.
 
     Examples
     --------

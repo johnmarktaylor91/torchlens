@@ -172,6 +172,13 @@ def draw(*args: Any, **kwargs: Any) -> Any:
     (``Trace.draw`` keeps ``"none"``). Returns a detached
     :class:`torchlens.viz.Drawing`; never auto-opens a viewer.
     See :func:`torchlens._quickstart.draw` for the parameters.
+
+    Examples
+    --------
+    >>> # requires: graphviz
+    >>> drawing = tl.draw(model, x, file_format="svg")
+    >>> type(drawing).__name__, drawing.file_format, drawing.path is None
+    ('Drawing', 'svg', True)
     """
 
     from ._quickstart._render import draw as _draw_impl

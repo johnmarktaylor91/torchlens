@@ -70,9 +70,9 @@ class PublicSymbol:
 
     Examples
     --------
-    >>> symbol = PublicSymbol("tl.log_forward_pass", "torchlens.user_funcs", "function", print)
+    >>> symbol = PublicSymbol("tl.trace", "torchlens._user_funcs", "function", print)
     >>> symbol.package
-    'user_funcs'
+    '_user_funcs'
     """
 
     path: str

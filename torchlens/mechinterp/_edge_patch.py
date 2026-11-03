@@ -223,7 +223,7 @@ def patch_edges(trace: Any, edges: Iterable[Any], *, corrupted_graph: Any) -> An
     ...                                 n_positions=16, use_cache=False,
     ...                                 attn_implementation="eager")).eval()
     >>> clean, other = [tl.trace(lm, ids, capture=tl.options.CaptureOptions(
-    ...     layers_to_save="all", replayable=True)) for ids in torch.randint(0, 32, (2, 1, 6))]
+    ...     replayable=True)) for ids in torch.randint(0, 32, (2, 1, 6))]
     >>> edge = tl.mechinterp.component_graph(clean).edges["m0->logits"]
     >>> patch_edges(clean, [edge],
     ...             corrupted_graph=tl.mechinterp.component_graph(other)) is not clean

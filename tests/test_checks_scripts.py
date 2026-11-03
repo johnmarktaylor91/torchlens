@@ -250,6 +250,6 @@ def test_size_caps_count_prose_after_an_examples_section() -> None:
     lines = _NOTES_AFTER_EXAMPLES_MODULE.splitlines()
     excluded = _common.example_section_lines(_NOTES_AFTER_EXAMPLES_MODULE)
     assert sorted(excluded) == [8, 9, 10, 11, 12]
-    assert lines[14].strip() == "Notes" and 15 not in excluded
-    assert lines[16].strip() == "Counted prose too." and 17 not in excluded
-    assert lines[17].strip() == '"""' and 18 not in excluded
+    assert lines[13].strip() == "Notes" and 14 not in excluded
+    assert lines[15].strip() == "Counted prose too." and 16 not in excluded
+    assert lines[16].strip() == '"""' and 17 not in excluded
