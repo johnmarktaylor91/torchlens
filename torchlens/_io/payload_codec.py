@@ -19,6 +19,7 @@ import torch
 
 from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
+from ._numpy_payload_codec import NumpyPayloadCodec
 from ._payload_codec_paddle import _resolve_paddle_place
 from .manifest import _json_ready_codec_metadata_value
 from .tensor_policy import FailReason, Ok, SkipReason, TensorPolicyDecision, is_supported_for_save
@@ -1907,16 +1908,6 @@ def _unsupported_array_dtype_reason(array: np.ndarray) -> str | None:
 
     if array.dtype.kind in {"O", "S", "U", "V"}:
         return f"dtype {array.dtype} is not supported by the payload codec"
-    # ``complex128`` (16-byte complex) mirrors the torch-native gap in
-    # ``tensor_policy._SUPPORTED_DTYPES``: the shared transport eventually
-    # reaches ``safetensors.torch.save_file()``, whose dtype-size table has
-    # no entry for ``torch.complex128``, even though a non-torch backend's
-    # ``complex128`` array converts cleanly via ``torch.from_numpy`` and
-    # would otherwise sail straight through this codec-agnostic gate to the
-    # same unwrapped ``KeyError`` (cert round 8 BLOCKER). ``complex64``
-    # (8-byte complex) genuinely round-trips and stays allowed.
-    if array.dtype.kind == "c" and array.dtype.itemsize > 8:
-        return f"dtype {array.dtype} is not supported by the payload codec"
     return None
 
 
@@ -1933,3 +1924,7 @@ def _raise_for_unsupported_array_dtype(array: np.ndarray, *, backend_name: str) 
     reason = _unsupported_array_dtype_reason(array)
     if reason is not None:
         raise TypeError(f"{backend_name} payload {reason}.")
+
+
+# NumPy is a value carrier, not an additional model backend.
+_CODECS["numpy"] = NumpyPayloadCodec(EncodedArray, _manifest_fields)

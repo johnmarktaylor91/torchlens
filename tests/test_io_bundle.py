@@ -30,6 +30,7 @@ from torchlens._io.payload_codec import (
     _unsupported_array_dtype_reason,
 )
 from torchlens.io import cleanup_tmp, detect_tlspec_format
+from torchlens.types import UnencodableValue
 
 
 class _ConvBundleModel(nn.Module):
@@ -503,67 +504,27 @@ def test_bundle_save_strict_default_raises_on_sparse_tensor(tmp_path: Path) -> N
         trace.save(tmp_path / "sparse_bundle.tl")
 
 
-def test_bundle_save_strict_false_records_unsupported_tensors(tmp_path: Path) -> None:
-    """Best-effort save should skip unsupported tensors and record them in the manifest."""
+def test_bundle_save_strict_false_refuses_sparse_tensors(tmp_path: Path) -> None:
+    """Format 3 never silently skips an unsupported tensor, even with strict=False."""
 
     trace = _build_sparse_out_log()
-    bundle_path = tmp_path / "sparse_bundle.tl"
-
-    trace.save(bundle_path, strict=False)
-
-    manifest = _read_manifest(bundle_path)
-    assert manifest["unsupported_tensors"]
-    assert all(entry["kind"] == "out" for entry in manifest["unsupported_tensors"])
-    assert all("sparse" in entry["reason"] for entry in manifest["unsupported_tensors"])
+    with pytest.raises(ArtifactError) as caught:
+        trace.save(tmp_path / "sparse_bundle.tl", strict=False)
+    assert caught.value.fields["code"] == "metadata_value_unportable"
 
 
-def test_bundle_save_strict_default_raises_on_complex128_tensor(tmp_path: Path) -> None:
-    """Strict bundle save must reject ``complex128`` with a clean error, not a raw ``KeyError``.
-
-    Regression test for a data-loss BLOCKER (cert round 8): ``torch.complex128`` was
-    listed in ``tensor_policy._SUPPORTED_DTYPES`` even though the actual writer,
-    ``safetensors.torch.save_file()``, has no dtype-size-table entry for it. A
-    ``complex128`` tensor therefore sailed straight past the allow-list tripwire that
-    exists precisely to keep unsupported tensors out of ``save_file()`` and crashed with
-    a raw, unwrapped ``KeyError`` from deep inside the third-party library -- bypassing
-    every save-path hardening fix from cert rounds 3-7 entirely, since ``KeyError`` was
-    never in any of their except tuples. The fix drops ``complex128`` from the allow-list
-    so this now fails cleanly, before ``save_file()`` is ever reached.
-    """
+@pytest.mark.parametrize("strict", [True, False])
+def test_bundle_save_complex128_round_trips(tmp_path: Path, strict: bool) -> None:
+    """Complex128 persists as paired float64 values and reloads exactly."""
 
     trace = _build_complex_out_log(dtype=torch.complex128)
-    bundle_path = tmp_path / "complex128_bundle.tl"
-
-    with pytest.raises(ArtifactError, match="complex128"):
-        trace.save(bundle_path)
-
-    # The strict allow-list check fires before ``safetensors.torch.save_file()``
-    # is ever reached, so no raw ``KeyError`` escapes and ``bundle_path`` itself
-    # is never created. A leftover ``.tmp.*`` dir is expected (standard
-    # fresh-save failure contract) and must carry the PARTIAL sentinel so
-    # ``cleanup_tmp()`` can sweep it.
-    assert not bundle_path.exists()
-    tmp_dirs = [p for p in tmp_path.iterdir() if ".tmp." in p.name]
-    assert tmp_dirs
-    for tmp_dir in tmp_dirs:
-        assert (tmp_dir / "PARTIAL").exists()
-    removed = cleanup_tmp(bundle_path)
-    assert set(removed) == set(tmp_dirs)
-    assert not any(p.exists() for p in tmp_dirs)
-
-
-def test_bundle_save_strict_false_records_complex128_as_unsupported(tmp_path: Path) -> None:
-    """Best-effort save should skip ``complex128`` tensors and record them, not crash."""
-
-    trace = _build_complex_out_log(dtype=torch.complex128)
-    bundle_path = tmp_path / "complex128_bundle.tl"
-
-    trace.save(bundle_path, strict=False)
-
-    manifest = _read_manifest(bundle_path)
-    assert manifest["unsupported_tensors"]
-    assert all(entry["kind"] == "out" for entry in manifest["unsupported_tensors"])
-    assert all("complex128" in entry["reason"] for entry in manifest["unsupported_tensors"])
+    path = tmp_path / "complex128.tlspec"
+    trace.save(path, strict=strict)
+    loaded = load(path)
+    for original, restored in zip(trace.ops, loaded.ops, strict=True):
+        if isinstance(original.out, torch.Tensor):
+            assert torch.equal(restored.out, original.out)
+            assert restored.out.dtype == original.out.dtype
 
 
 def test_bundle_save_complex64_still_round_trips(tmp_path: Path) -> None:
@@ -1028,7 +989,9 @@ def test_bundle_save_raw_input_stringifies_unpicklable_value_keeps_tensors(
     loaded = load(bundle_path)
     assert isinstance(loaded.input["tensor"], torch.Tensor)
     assert torch.equal(loaded.input["tensor"], raw_input["tensor"])
-    assert loaded.input["meta"] == "<scrubbed:generator>"
+    assert isinstance(loaded.input["meta"], UnencodableValue)
+    assert loaded.input["meta"].type_name == "builtins.generator"
+    assert "input" in loaded.input["meta"].at
 
 
 def test_bundle_save_raw_input_large_tensor_skips_picklability_probe(
@@ -1154,7 +1117,9 @@ def test_bundle_save_raw_input_object_dtype_ndarray_stringifies_unpicklable_elem
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.input["array"] == "<scrubbed:ndarray>"
+    assert isinstance(loaded.input["array"], UnencodableValue)
+    assert loaded.input["array"].type_name == "numpy.ndarray"
+    assert "input" in loaded.input["array"].at
 
 
 def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpicklable_element(
@@ -1199,7 +1164,9 @@ def test_bundle_save_raw_input_structured_ndarray_object_field_stringifies_unpic
     trace.save(bundle_path)
 
     loaded = load(bundle_path)
-    assert loaded.input["array"] == "<scrubbed:ndarray>"
+    assert isinstance(loaded.input["array"], UnencodableValue)
+    assert loaded.input["array"].type_name == "numpy.ndarray"
+    assert "input" in loaded.input["array"].at
 
 
 def test_bundle_save_rejects_symlink_target(tmp_path: Path) -> None:
@@ -1532,29 +1499,10 @@ def _torch_minor_mismatch_version() -> str:
     return f"{major}.{minor + 1}.{patch}"
 
 
-def test_unsupported_array_dtype_reason_rejects_complex128_but_allows_complex64() -> None:
-    """Non-torch backends must reject ``complex128`` arrays before the shared transport.
+def test_array_transport_admits_both_complex_widths() -> None:
+    """Both complex widths have a physical real-view encoding in the format 3 carrier."""
 
-    Regression test for the non-torch half of the cert round 8 BLOCKER:
-    ``_raise_for_unsupported_array_dtype()``/``_unsupported_array_dtype_reason()`` gate
-    every JAX/TF/Paddle/tinygrad/MLX payload before it reaches
-    ``numpy_to_transport_tensor()`` -> ``torch.from_numpy()`` -> the same unguarded
-    ``safetensors.torch.save_file()`` call the torch-native path hits. Before this fix,
-    the guard only rejected numpy dtype *kinds* ``{"O", "S", "U", "V"}`` -- ``complex128``
-    has kind ``"c"`` (shared with the genuinely-supported ``complex64``), so it sailed
-    through unblocked. The fix distinguishes by itemsize (complex128 is 16 bytes,
-    complex64 is 8) so only the unsupported width is rejected.
-    """
-
-    complex128_array = np.array([1 + 2j], dtype=np.complex128)
-    complex64_array = np.array([1 + 2j], dtype=np.complex64)
-
-    reason = _unsupported_array_dtype_reason(complex128_array)
-    assert reason is not None
-    assert "complex128" in reason
-    assert _unsupported_array_dtype_reason(complex64_array) is None
-
-    with pytest.raises(TypeError, match="complex128"):
-        _raise_for_unsupported_array_dtype(complex128_array, backend_name="jax")
-
-    _raise_for_unsupported_array_dtype(complex64_array, backend_name="jax")
+    for dtype in (np.complex64, np.complex128):
+        array = np.array([1 + 2j], dtype=dtype)
+        assert _unsupported_array_dtype_reason(array) is None
+        _raise_for_unsupported_array_dtype(array, backend_name="numpy")

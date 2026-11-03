@@ -436,3 +436,9 @@ A trace loaded from a 3.0 artifact equals the live trace it was saved from, at e
 
 The proof is `tests/test_format3_loaded_equals_live.py`, written with the writer: a tiny CNN
 traced once, saved at each of the four levels, loaded, and compared record by record.
+
+Payload rule clarification (2026-11-02): an unsupported sparse payload refuses
+`metadata_value_unportable` regardless of `strict`. Complex64 and complex128 use their real
+views in chunks and round-trip exactly; neither is skipped. Raw inputs and transformed
+outputs retain numeric arrays and dense tensors through the same payload codecs. Values
+without a portable encoding retain the typed `UnencodableValue` disclosure.
