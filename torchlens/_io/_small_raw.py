@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import pickle
+from collections.abc import Callable
 from io import BytesIO
 from typing import Any
 
@@ -262,3 +263,87 @@ def _is_safely_picklable(value: Any) -> bool:
     except Exception:
         return False
     return True
+
+
+def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
+    """Decode one bounded raw-image sentinel, preserving all byte and dimension gates."""
+
+    data = value.get("data")
+    if not isinstance(data, bytes):
+        return value
+    # SECURITY (secF-1). ``data`` is attacker-controlled bytes on a plain
+    # ``tl.load()``: a hand-edited ``metadata.pkl`` is NOT bound by the
+    # save-time "small" policy, so this sink must re-impose the SAME canonical
+    # bounds the writer applies (never the attacker-echoed ``bytes_limit`` /
+    # ``max_edge`` fields sitting in ``value``) and fail CLOSED. Without this,
+    # a few-hundred-byte blob declaring huge dimensions forced a large
+    # ``Image.load()`` allocation (decompression-bomb DoS), and malformed
+    # bytes raised an UNCAUGHT Pillow error that crashed the whole load.
+    # 1) Byte cap: refuse to even hand oversized bytes to Pillow's C codecs.
+    if len(data) > _RAW_INPUT_IMAGE_BYTES_LIMIT:
+        return value
+    try:
+        from PIL import Image
+    except ImportError:
+        return value
+    # 2) Header-only dimension check BEFORE decode: ``Image.open`` reads the
+    #    format header (giving ``.size``) without allocating pixel buffers, so
+    #    an oversized *declared* image is rejected here -- before ``.load()``
+    #    can allocate -- and bounded to the documented save-time max edge.
+    # 3) Fail closed: any decoder error (malformed / truncated / unsupported
+    #    bytes, or an early decompression-bomb guard) degrades to the inert raw
+    #    sentinel dict instead of propagating out of ``tl.load()``.
+    try:
+        image = Image.open(BytesIO(data))
+        width, height = image.size
+        if (
+            width > _RAW_INPUT_IMAGE_MAX_EDGE
+            or height > _RAW_INPUT_IMAGE_MAX_EDGE
+            or width < 1
+            or height < 1
+        ):
+            return value
+        image.load()
+    except Exception:
+        return value
+    return image
+
+
+def _rehydrate_small_raw_images(value: Any) -> Any:
+    """Restore bounded raw-image sentinels to PIL images when possible.
+
+    Parameters
+    ----------
+    value:
+        Scrubbed raw input or output value.
+
+    Returns
+    -------
+    Any
+        Value with TorchLens small-image sentinels replaced by PIL images when
+        Pillow can decode them; otherwise the original sentinel is retained.
+    """
+
+    if isinstance(value, dict) and value.get(_RAW_IMAGE_SENTINEL) is True:
+        return _rehydrate_small_raw_image(value)
+    if isinstance(value, tuple) and type(value) is not tuple:
+        return value
+    if isinstance(value, list):
+        return [_rehydrate_small_raw_images(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_rehydrate_small_raw_images(item) for item in value)
+    if isinstance(value, frozenset):
+        return frozenset(_rehydrate_small_raw_images(item) for item in value)
+    if isinstance(value, dict):
+        restored = value.copy()
+        for key, item in value.items():
+            restored[key] = _rehydrate_small_raw_images(item)
+        return restored
+    return value
+
+
+def _rehydrate_trace_raw_values(trace: Any, materialize: Callable[[Any], Any]) -> None:
+    """Restore raw value payloads before the bounded image-sentinel decoder walks them."""
+
+    for name in ("input", "transformed_output"):
+        setattr(trace, name, _rehydrate_small_raw_images(materialize(getattr(trace, name, None))))

@@ -43,6 +43,7 @@ from torchlens._io.prerelease import (
     registered_prerelease_fields,
 )
 from torchlens._io.scrub import scrub_for_save
+from torchlens.intervention.errors import OpaqueCallableError
 
 # ---------------------------------------------------------------------------
 # Registry-driven completeness ledger (brief: enumerate from the registry,
@@ -526,7 +527,7 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
         if record.edit is not None
     )
     assert live_recipe["resolve_digest"]
-    with pytest.raises(ArtifactError) as caught:
+    with pytest.raises(OpaqueCallableError) as caught:
         fork.save(tmp_path / "nonportable_selection")
     assert caught.value.fields["code"] == "intervention_spec_not_portable"
     loaded = _plain_roundtrip(fork, tmp_path, "selection", level="audit")

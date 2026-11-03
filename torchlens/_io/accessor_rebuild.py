@@ -8,7 +8,7 @@ rehydrated object graph is ready for normal user access.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .._data_classes._trace_accessors import _invalidate_trace_module_call_accessor_cache
 from .._data_classes.buffer import Buffer, BufferAccessor
@@ -125,3 +125,34 @@ def rebuild_buffer_accessor(trace: Trace) -> None:
         ):
             buffer_store.freeze()
     trace._buffer_accessor = BufferAccessor(buffer_dict, source_trace=trace)  # type: ignore[assignment]
+
+
+def rebuild_saved_trace_accessors(trace: Trace, module_accessor_state: Any) -> None:
+    """Restore saved module accessors after their buffer payloads have materialized."""
+
+    # rebuild_trace_accessors() MUST run AFTER _rehydrate_object(), not before.
+    # accessor_rebuild.py bakes `trace._buffer_initial_values.get(address)`
+    # into each Buffer's `_initial_value` at construction time (Buffer.__init__
+    # stores it directly; `initial_value` is not a dynamically-recomputed
+    # property). `_buffer_initial_values` is a FieldPolicy.BLOB_RECURSIVE field
+    # that only _rehydrate_object() resolves from raw BlobRef placeholders into
+    # real tensors (for a default eager load; lazy=True/materialize_nested=False
+    # intentionally leaves it as BlobRef for the expert nested-materialization
+    # flow). Building accessors first captured the still-unresolved BlobRef
+    # permanently, so `Buffer.initial_value` returned a raw BlobRef forever
+    # after a plain `tl.load()` instead of a torch.Tensor. Nothing
+    # rebuild_trace_accessors() reads (trace._layer_list, module_accessor_state)
+    # depends on _rehydrate_object() having run first, so this reorder is safe.
+    if module_accessor_state is not None:
+        rebuild_trace_accessors(
+            trace,
+            module_accessor_state._dict,
+            module_accessor_state._list,
+            module_accessor_state._pass_dict,
+        )
+        # An artifact written before the root call counted among saved module
+        # calls stores a count without it; re-derive the stored scalar from the
+        # loaded records so it matches ``saved_module_calls``.
+        from .._postprocess.saved_summary import refresh_saved_module_call_count
+
+        refresh_saved_module_call_count(trace)
