@@ -254,9 +254,10 @@ def _canonicalize_param_links(
     for record in records:
         references = getattr(record, "_param_logs", None)
         if isinstance(references, (list, tuple)):
-            members = [
-                canonical.get(getattr(param, "barcode", None), param) for param in references
-            ]
+            members = []
+            for param in references:
+                barcode = getattr(param, "barcode", None)
+                members.append(canonical.get(barcode, param) if isinstance(barcode, str) else param)
             record._param_logs = tuple(members) if isinstance(references, tuple) else members
     for param in params:
         param.barcode = remap(getattr(param, "barcode", None))
