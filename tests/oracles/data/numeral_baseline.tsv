@@ -1054,7 +1054,6 @@ docs-md	docs/maintainers/where.md	10
 docs-md	docs/maintainers/where.md	10,
 docs-md	docs/maintainers/where.md	100
 docs-md	docs/maintainers/where.md	1003
-docs-md	docs/maintainers/where.md	101
 docs-md	docs/maintainers/where.md	1016
 docs-md	docs/maintainers/where.md	1018
 docs-md	docs/maintainers/where.md	102
@@ -1125,6 +1124,7 @@ docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	128
 docs-md	docs/maintainers/where.md	1283
 docs-md	docs/maintainers/where.md	1288
+docs-md	docs/maintainers/where.md	129
 docs-md	docs/maintainers/where.md	1291
 docs-md	docs/maintainers/where.md	1294
 docs-md	docs/maintainers/where.md	13
@@ -1140,7 +1140,7 @@ docs-md	docs/maintainers/where.md	133
 docs-md	docs/maintainers/where.md	134
 docs-md	docs/maintainers/where.md	1342
 docs-md	docs/maintainers/where.md	135
-docs-md	docs/maintainers/where.md	1355
+docs-md	docs/maintainers/where.md	1357
 docs-md	docs/maintainers/where.md	136
 docs-md	docs/maintainers/where.md	1361
 docs-md	docs/maintainers/where.md	137
@@ -1390,12 +1390,12 @@ docs-md	docs/maintainers/where.md	285
 docs-md	docs/maintainers/where.md	286
 docs-md	docs/maintainers/where.md	287
 docs-md	docs/maintainers/where.md	288
-docs-md	docs/maintainers/where.md	28881
 docs-md	docs/maintainers/where.md	289
+docs-md	docs/maintainers/where.md	28996
 docs-md	docs/maintainers/where.md	29
 docs-md	docs/maintainers/where.md	290
+docs-md	docs/maintainers/where.md	2909
 docs-md	docs/maintainers/where.md	291
-docs-md	docs/maintainers/where.md	2913
 docs-md	docs/maintainers/where.md	293
 docs-md	docs/maintainers/where.md	2937
 docs-md	docs/maintainers/where.md	294
@@ -1548,9 +1548,9 @@ docs-md	docs/maintainers/where.md	421
 docs-md	docs/maintainers/where.md	422
 docs-md	docs/maintainers/where.md	423
 docs-md	docs/maintainers/where.md	424
+docs-md	docs/maintainers/where.md	4249
 docs-md	docs/maintainers/where.md	425
 docs-md	docs/maintainers/where.md	426
-docs-md	docs/maintainers/where.md	4261
 docs-md	docs/maintainers/where.md	4269
 docs-md	docs/maintainers/where.md	427
 docs-md	docs/maintainers/where.md	428
@@ -1574,6 +1574,7 @@ docs-md	docs/maintainers/where.md	447
 docs-md	docs/maintainers/where.md	448
 docs-md	docs/maintainers/where.md	45
 docs-md	docs/maintainers/where.md	451
+docs-md	docs/maintainers/where.md	4515
 docs-md	docs/maintainers/where.md	452
 docs-md	docs/maintainers/where.md	454
 docs-md	docs/maintainers/where.md	4553
@@ -1587,7 +1588,6 @@ docs-md	docs/maintainers/where.md	463
 docs-md	docs/maintainers/where.md	464
 docs-md	docs/maintainers/where.md	465
 docs-md	docs/maintainers/where.md	467
-docs-md	docs/maintainers/where.md	4689
 docs-md	docs/maintainers/where.md	47
 docs-md	docs/maintainers/where.md	471
 docs-md	docs/maintainers/where.md	472
@@ -1637,11 +1637,11 @@ docs-md	docs/maintainers/where.md	515
 docs-md	docs/maintainers/where.md	516
 docs-md	docs/maintainers/where.md	519
 docs-md	docs/maintainers/where.md	52
-docs-md	docs/maintainers/where.md	52018
 docs-md	docs/maintainers/where.md	522
 docs-md	docs/maintainers/where.md	523
 docs-md	docs/maintainers/where.md	524
 docs-md	docs/maintainers/where.md	525
+docs-md	docs/maintainers/where.md	52595
 docs-md	docs/maintainers/where.md	528
 docs-md	docs/maintainers/where.md	529
 docs-md	docs/maintainers/where.md	53
@@ -1716,7 +1716,6 @@ docs-md	docs/maintainers/where.md	611
 docs-md	docs/maintainers/where.md	613
 docs-md	docs/maintainers/where.md	614
 docs-md	docs/maintainers/where.md	615
-docs-md	docs/maintainers/where.md	618
 docs-md	docs/maintainers/where.md	62
 docs-md	docs/maintainers/where.md	620
 docs-md	docs/maintainers/where.md	621
@@ -1724,10 +1723,10 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629378
 docs-md	docs/maintainers/where.md	6299
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
+docs-md	docs/maintainers/where.md	630070
 docs-md	docs/maintainers/where.md	6303
 docs-md	docs/maintainers/where.md	631
 docs-md	docs/maintainers/where.md	633
@@ -1783,6 +1782,7 @@ docs-md	docs/maintainers/where.md	699
 docs-md	docs/maintainers/where.md	70
 docs-md	docs/maintainers/where.md	700
 docs-md	docs/maintainers/where.md	701
+docs-md	docs/maintainers/where.md	702
 docs-md	docs/maintainers/where.md	705
 docs-md	docs/maintainers/where.md	708
 docs-md	docs/maintainers/where.md	71
@@ -5818,6 +5818,7 @@ package-docstrings	torchlens/backends/torch/_tl.py	85
 package-docstrings	torchlens/backends/torch/_torch_ops_calls.py	2.7
 package-docstrings	torchlens/backends/torch/_trace_backward.py	21
 package-docstrings	torchlens/backends/torch/_transform_wrappers.py	39
+package-docstrings	torchlens/backends/torch/_user_grad_fn.py	31
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	1.4
 package-docstrings	torchlens/backends/torch/_weightsfree_ctx.py	11
 package-docstrings	torchlens/backends/torch/_weightsfree_transparency.py	24,
@@ -5889,6 +5890,8 @@ package-docstrings	torchlens/backends/torch/model_prep.py	2026
 package-docstrings	torchlens/backends/torch/model_prep.py	79
 package-docstrings	torchlens/backends/torch/model_prep.py	81
 package-docstrings	torchlens/backends/torch/offload_hooks.py	37,
+package-docstrings	torchlens/backends/torch/param_mutation.py	31
+package-docstrings	torchlens/backends/torch/param_mutation.py	65
 package-docstrings	torchlens/backends/torch/rescue.py	12
 package-docstrings	torchlens/backends/torch/rescue.py	16
 package-docstrings	torchlens/backends/torch/rescue.py	2026

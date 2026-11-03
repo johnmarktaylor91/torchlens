@@ -16,7 +16,7 @@ during the pass.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from contextlib import AbstractContextManager, contextmanager, nullcontext, suppress
+from contextlib import AbstractContextManager, contextmanager, nullcontext
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -40,7 +40,6 @@ from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import get_memory_amount, safe_copy
 from ._completeness_origins import internal_scalar_read
 from ._tl import (
-    NO_USER_GRAD_FN,
     get_param_meta,
     get_tensor_label,
     mutated_parameter_label,
@@ -48,6 +47,7 @@ from ._tl import (
     set_tensor_label,
     storage_alias_index_key,
 )
+from ._user_grad_fn import stamp_user_grad_fn
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 
@@ -166,12 +166,7 @@ def same_object_logging_copy(out_orig: Any) -> Any:
         live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
     logged = safe_copy(out_orig)
     if isinstance(logged, torch.Tensor):
-        with suppress(AttributeError):
-            setattr(  # noqa: B010 -- TorchLens stamp on a Tensor, not a declared attribute
-                logged,
-                "tl_user_grad_fn",
-                NO_USER_GRAD_FN if live_user_grad_fn is None else live_user_grad_fn,
-            )
+        stamp_user_grad_fn(logged, live_user_grad_fn)
     return logged
 
 

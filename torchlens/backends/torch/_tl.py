@@ -15,7 +15,6 @@ from ... import _state
 from ._internal_read import internal_scalar_read
 
 __all__ = [
-    "NO_USER_GRAD_FN",
     "TorchLensMeta",
     "TensorMeta",
     "ParamMeta",
@@ -67,16 +66,6 @@ __all__ = [
     "detached_saved_activation_label",
     "DescriptorCompatProperty",
 ]
-
-NO_USER_GRAD_FN: object = object()
-"""Stamp for a same-object in-place return whose live receiver has no ``grad_fn``.
-
-The output of such an op (a leaf: ``x.detach().requires_grad_(True)``) is logged
-against a safe copy whose own ``grad_fn`` is TorchLens's ``CloneBackward``. The
-record reads ``tl_user_grad_fn`` for the user's live node; this sentinel says
-"the user's node is ``None``" so the copy's bookkeeping node is never recorded
-as the op's autograd handle.
-"""
 
 
 class TorchLensMeta:

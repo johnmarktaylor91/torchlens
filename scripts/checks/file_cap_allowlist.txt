@@ -887,7 +887,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	74
-torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	322
+torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
 torchlens/backends/torch/_ops_arguments.py::_build_edge_use_records	68
@@ -903,7 +903,7 @@ torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions	21
 torchlens/backends/torch/_ops_emission.py::_unattributed_tensor_arg_positions.visit	78
 torchlens/backends/torch/_ops_emission.py::apply_live_hooks_to_outputs	78
 torchlens/backends/torch/_ops_emission.py::log_function_output_tensors	68
-torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	297
+torchlens/backends/torch/_ops_exhaustive.py::_emit_exhaustive_operation_events	293
 torchlens/backends/torch/_ops_exhaustive.py::_iter_autograd_saved_candidates	62
 torchlens/backends/torch/_ops_exhaustive.py::_project_foreach_member_parent_fields	74
 torchlens/backends/torch/_ops_finalize.py::_make_layer_log_entry	126
@@ -1009,14 +1009,14 @@ torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook	137
 torchlens/backends/torch/tensor_tracking.py::_install_tensor_grad_hook.log_grad_to_model_history	74
 torchlens/backends/torch/tensor_tracking.py::_locate_parent_tensors_in_args	62
 torchlens/backends/torch/tensor_tracking.py::_log_tensor_grad	68
-torchlens/backends/torch/wrappers.py	2913
+torchlens/backends/torch/wrappers.py	2909
 torchlens/backends/torch/wrappers.py::_decorate_torch_func_pairs	115
 torchlens/backends/torch/wrappers.py::_propagate_mutation_label_to_storage_aliases	98
 torchlens/backends/torch/wrappers.py::_unwrap_torch_locked	129
 torchlens/backends/torch/wrappers.py::_wrap_torch_locked	102
 torchlens/backends/torch/wrappers.py::decorate_all_once	68
-torchlens/backends/torch/wrappers.py::torch_func_decorator	812
-torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	657
+torchlens/backends/torch/wrappers.py::torch_func_decorator	805
+torchlens/backends/torch/wrappers.py::torch_func_decorator.wrapped_func	650
 torchlens/bridge/_sae_export.py::write_delphi	93
 torchlens/bridge/_sae_export.py::write_sae_dashboard	112
 torchlens/bridge/_sae_latents.py::logged_splice_trace	86
