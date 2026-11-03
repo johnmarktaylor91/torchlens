@@ -19,7 +19,6 @@ from support.structural_grouper import legacy_structural_grouper  # noqa: F401
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization._trace_collapse import collapse_order as _collapse_order
 from torchlens.errors._base import TorchLensWarning
 
 
@@ -154,9 +153,9 @@ def test_collapse_order_declines_cheaply_above_ceiling(monkeypatch) -> None:
     monkeypatch.setattr(auto_collapse, "analyze_collapse", _analyze_should_not_run)
     with warnings.catch_warnings(record=True):
         warnings.simplefilter("always")
-        assert _collapse_order(auto_collapse, log) == []
+        assert auto_collapse.collapse_order(log) == []
     # Every consumer reads through .get(address, 0.0):
-    assert dict(_collapse_order(auto_collapse, log)).get("nonexistent", 0.0) == 0.0
+    assert dict(auto_collapse.collapse_order(log)).get("nonexistent", 0.0) == 0.0
 
 
 def test_fold_repeats_true_respects_collapse_ceiling(monkeypatch) -> None:

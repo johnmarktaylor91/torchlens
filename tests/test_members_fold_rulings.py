@@ -156,7 +156,7 @@ def test_recipe_with_set_only_stages_one_sticky_hook_without_running(log: Any) -
     before = log[_relu_label(log)].out.clone()
     log.do(
         tl.when(tl.func("relu"), _double_hook),
-        intervention=InterventionOptions(engine="set_only"),
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert len(log._intervention_spec.hook_specs) == 1
     assert log._spec_revision == revision + 1

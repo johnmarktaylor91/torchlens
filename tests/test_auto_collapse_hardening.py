@@ -742,6 +742,8 @@ _DETERMINISM_SNIPPET = textwrap.dedent(
 
     m = DC(3).eval()
     log = tl.trace(m, torch.randn(2, 8))
+    from torchlens._visualization._trace_collapse import collapse_plan as _collapse_plan
+    from torchlens._visualization._trace_collapse import collapse_schedule as _collapse_schedule
     pieces = [
         repr(_collapse_plan(log, mode="max")),
         repr(_collapse_plan(log, mode="auto")),

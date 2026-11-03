@@ -157,6 +157,13 @@ counts, and collapsed module addresses under that same context. Use these diagno
 rendering decision rather than inferring it from pixels.
 
 ```python
+import torch
+from torch import nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
+trace = tl.trace(model, torch.randn(2, 4))
 drawing = trace.draw(collapse="auto", file_format="dot")
 plan = drawing.collapse_plan
 schedule = drawing.collapse_schedule

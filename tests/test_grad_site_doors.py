@@ -75,12 +75,11 @@ def _events(trace: Any, **match: Any) -> list[dict[str, Any]]:
     "door",
     [
         lambda: tl.Trace.do,
-        lambda: tl.Trace.attach_hooks,
         lambda: tl.when,
         lambda: tl.observers.tap,
         lambda: tl.stats.narrate,
     ],
-    ids=["do", "attach_hooks", "when", "tap", "narrate"],
+    ids=["do", "when", "tap", "narrate"],
 )
 def test_site_doors_take_no_direction_keyword(door: Any) -> None:
     assert "direction" not in inspect.signature(door()).parameters
