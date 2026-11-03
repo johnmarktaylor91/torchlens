@@ -509,7 +509,6 @@ _MAX_LEDGER_SLACK = 100
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5100,
     "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,
