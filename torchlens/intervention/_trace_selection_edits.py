@@ -565,7 +565,7 @@ def push_from_handles(trace: Trace, handle_ids: Iterable[str], *, strict: bool) 
 def settle_edited_product(trace: Any) -> None:
     """Inherited evidence no longer describes an edited product.
 
-    Episode step evidence is quarantined (lane F42) and the decoded output
+    Episode step evidence is quarantined and the decoded output
     rows captured with the clean forward are dropped: ``decode_output`` then
     re-decodes the edited output on demand, so the fork names its own answer,
     and refuses (``decoded_output_unavailable``) when no output is retained
