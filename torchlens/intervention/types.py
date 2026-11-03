@@ -25,6 +25,7 @@ from .._selection.target import (
     TensorSliceSpec as TensorSliceSpec,
 )
 from .._utils._tensor_layout import CaptureLayout
+from ._display import edge_repr, frozen_spec_card, frozen_spec_repr, template_card, template_repr
 from ._hook_spec_match import _hook_spec_matches
 
 GraphShapeHash: TypeAlias = str
@@ -294,6 +295,9 @@ class CapturedArgTemplate:
     func_id: FunctionRegistryKey | None = None
     notes: tuple[str, ...] = ()
 
+    __repr__ = template_repr
+    __str__ = template_card
+
 
 #: The frozen replay-template records; a rerun refresh rebuilds these field by field.
 REPLAY_TEMPLATE_TYPES: frozenset[type] = frozenset(
@@ -424,19 +428,7 @@ class EdgeUseRecord(_SelectionOperand):
 
         return _selection_from_edge(self)
 
-    def __repr__(self) -> str:
-        """Designed per-edge line (F10): source -> target (arg k) + relations.
-
-        The storage relation prints only when POPULATED (``view``/``copy``);
-        the honest sentinel ``unknown`` stays silent rather than reading as
-        a fact (lovely bug 24's sentinel discipline).
-        """
-
-        path = ".".join(str(component) for component in self.arg_path) or "?"
-        line = f"edge {self.parent_label} -> {self.child_label} ({self.arg_kind} {path})"
-        if self.view_or_copy in ("view", "copy"):
-            line += f" [{self.view_or_copy}]"
-        return line
+    __repr__ = edge_repr
 
 
 @dataclass
@@ -676,6 +668,9 @@ class FrozenInterventionSpec:
     hook_specs: tuple[FrozenHookSpec, ...] = ()
     records: tuple[FireRecord, ...] = ()
     metadata: tuple[tuple[str, Any], ...] = ()
+
+    __repr__ = frozen_spec_repr
+    __str__ = frozen_spec_card
 
 
 class Relationship(str, Enum):

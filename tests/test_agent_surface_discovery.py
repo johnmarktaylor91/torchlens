@@ -62,13 +62,13 @@ def test_step5_did_you_mean_stays_a_plain_attributeerror() -> None:
     with pytest.raises(AttributeError) as exc:
         tl.trce  # noqa: B018 - the typo IS the test
     assert type(exc.value) is AttributeError
-    assert "Did you mean" in str(exc.value)
+    assert "  candidates" in str(exc.value)
     assert "trace" in str(exc.value)
     # hasattr must never explode, and underscore probes stay silent-plain.
     assert not hasattr(tl, "definitely_not_a_name")
     with pytest.raises(AttributeError) as dunder_exc:
         tl._not_a_private_name  # noqa: B018
-    assert "Did you mean" not in str(dunder_exc.value)
+    assert "  candidates" not in str(dunder_exc.value)
 
 
 def test_hf_entry_recovery_is_typed_and_teaching() -> None:

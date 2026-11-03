@@ -111,4 +111,4 @@ def test_did_you_mean_stays_plain_for_typos() -> None:
     with pytest.raises(AttributeError) as excinfo:
         tl.trce  # noqa: B018 - the typo IS the test
     assert type(excinfo.value) is AttributeError
-    assert "Did you mean" in str(excinfo.value)
+    assert "  candidates" in str(excinfo.value)

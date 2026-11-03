@@ -44,6 +44,7 @@ from ._content_identity import (
     render_value,
     tensor_version,
 )
+from ._display import recipe_card, recipe_repr, rule_card, rule_repr
 from ._rule_match import _match_rules, _rule_decision
 from ._site_signal import (
     _selector_children,
@@ -423,11 +424,12 @@ class Rule:
     def __repr__(self) -> str:
         """Render the clause with its current rule identity."""
 
-        return (
-            f"Rule(target={self.target!r}, edit={self.edit!r}, "
-            f"signal={self.signal!r}, rule_id={self.rule_id!r}, "
-            f"address_class={self.address_class!r})"
-        )
+        return rule_repr(self)
+
+    def __str__(self) -> str:
+        """Return the metadata-only rule card."""
+
+        return rule_card(self)
 
     @property
     def payload_fidelity(self) -> Literal["declared", "opaque"]:
@@ -457,6 +459,16 @@ class Recipe:
     """
 
     rules: tuple[Rule, ...] = ()
+
+    def __repr__(self) -> str:
+        """Return the rebuilding public spelling, or a bounded rule count."""
+
+        return recipe_repr(self, BaseSelector)
+
+    def __str__(self) -> str:
+        """Return a bounded card of intervention clauses."""
+
+        return recipe_card(self)
 
     def __post_init__(self) -> None:
         """Refuse duplicate rules typed at construction.

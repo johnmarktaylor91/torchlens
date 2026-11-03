@@ -28,6 +28,8 @@ from .._capture.flops import ZERO_ARITHMETIC_CONSTRUCTIONS, ZERO_FLOPS_OPS
 from .._errors import InvalidArgumentError
 from .._quantities import Flops, Macs
 from .._record_type import record_type
+from .._utils._display_card import render_card
+from .._utils._display_constructor import clipped
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -270,10 +272,20 @@ class ComputeAggregation:
     def __repr__(self) -> str:
         """Bounded identity card (F10/D31): rows point, never dump."""
 
-        return (
-            f"ComputeAggregation({len(self.rows)} rows, "
-            f"total={self.partition_total}, macs={self.macs_total}, "
-            f"convention={self.convention!r}, scope={self.scope!r}; read .rows)"
+        return clipped(f"ComputeAggregation {self.scope}: {len(self.rows)} rows")
+
+    def __str__(self) -> str:
+        """Show compute totals with their convention and scope."""
+
+        return render_card(
+            repr(self),
+            [
+                ("total", str(self.partition_total)),
+                ("macs", str(self.macs_total)),
+                ("convention", self.convention),
+                ("scope", self.scope),
+            ],
+            (".rows", ".coverage", ".by_dtype"),
         )
 
     def ratio(self, numerator_row_id: str, denominator: str = "partition_total") -> RatioFact:

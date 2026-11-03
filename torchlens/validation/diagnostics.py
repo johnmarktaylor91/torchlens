@@ -23,6 +23,9 @@ from typing import Any
 
 import torch
 
+from .._utils._display_constructor import clipped
+from ._display import failure_card, failure_repr
+
 # Attribute name used to stash the structured failure on a live Trace. Private,
 # best-effort, and cleared at the start of each validation run so a stale
 # failure from a prior run can never be reported.
@@ -126,8 +129,12 @@ class ValidationFailure:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the summary line leads, ``extra`` is counted."""
 
-        extra = f", {len(self.extra)} extra key(s)" if self.extra else ""
-        return f"ValidationFailure({self.summary()!r}{extra})"
+        return failure_repr(self)
+
+    def __str__(self) -> str:
+        """Show recorded failure details as a card."""
+
+        return failure_card(self)
 
     def summary(self) -> str:
         """Return a compact single-line human-readable summary.
@@ -228,11 +235,7 @@ class ValidationDiagnostic:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the check and a clipped message, ``extra`` counted."""
 
-        message = self.message if len(self.message) <= 160 else f"{self.message[:157]}..."
-        return (
-            f"ValidationDiagnostic({self.check_name!r}, message={message!r}, "
-            f"{len(self.extra)} extra key(s))"
-        )
+        return clipped(f"ValidationDiagnostic {self.check_name}: {self.message}")
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly representation of this diagnostic.

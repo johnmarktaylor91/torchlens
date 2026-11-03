@@ -48,6 +48,7 @@ import torch
 
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
+from ._display import selection_card, selection_repr, site_card, site_repr
 from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
 from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
@@ -148,13 +149,8 @@ class Site:
 
         return self._mask.count()
 
-    def __repr__(self) -> str:
-        """Return a compact disclosure row."""
-
-        return (
-            f"Site({self.key!r}, {self.num_selected}/{self._mask.numel()} "
-            f"elements, relation={self.provenance.relation})"
-        )
+    __repr__ = site_repr
+    __str__ = site_card
 
 
 def _canonical_entry_order(entries: Iterable[Site]) -> tuple[Site, ...]:
@@ -421,11 +417,8 @@ class Selection:
 
         return hash(self._digest)
 
-    def __repr__(self) -> str:
-        """Return a compact two-level summary."""
-
-        elements = sum(entry.num_selected for entry in self._entries)
-        return f"Selection[{self._kind}]({len(self._entries)} sites, {elements} elements)"
+    __repr__ = selection_repr
+    __str__ = selection_card
 
     def __selection__(self) -> Selection:
         """Pass anywhere a selection is expected."""

@@ -9,6 +9,7 @@ from typing import Any, ClassVar, Generic, TypeVar
 import torch
 
 from .._errors import InvalidArgumentError
+from .._utils._display_errors import candidate_keys, lookup_message
 
 T = TypeVar("T")
 
@@ -139,8 +140,13 @@ class Accessor(Generic[T]):
             return resolved
         suggestions = self._suggest(key)
         if suggestions:
-            suggestion_str = ", ".join(repr(item) for item in suggestions)
-            raise KeyError(f"{self._item_kind} '{key}' not found. Did you mean {suggestion_str}?")
+            raise KeyError(
+                lookup_message(
+                    f"{self._item_kind} {key!r} not found.",
+                    candidate_keys(suggestions, self._dict),
+                    "pass an in-range integer or a key from this accessor.",
+                )
+            )
         raise KeyError(f"{self._item_kind} '{key}' not found.")
 
     def __contains__(self, key: object) -> bool:

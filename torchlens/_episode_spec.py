@@ -12,11 +12,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
+from ._utils._display_options import _OptionsDisplay
+
 __all__ = ["EpisodeOptions"]
 
 
-@dataclass(frozen=True)
-class EpisodeOptions:
+@dataclass(frozen=True, repr=False)
+class EpisodeOptions(_OptionsDisplay):
     """Episode declaration for ``tl.trace(..., episode=EpisodeOptions(...))``.
 
     Declaring an episode makes ONE wrapped session capture the episode

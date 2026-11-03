@@ -17,6 +17,11 @@ from __future__ import annotations
 from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import TYPE_CHECKING as _TYPE_CHECKING, Any as _Any
 
+from ._utils._display_errors import (
+    candidate_keys as _candidate_keys,
+    lookup_message as _lookup_message,
+)
+
 if _TYPE_CHECKING:
     import torch as _torch
     from torch import nn as _nn
@@ -353,7 +358,9 @@ def _suggest_layer_labels(trace: _Any, query: str) -> list[str]:
 
     if not isinstance(trace, _resolve_top_level("Trace")):
         return []
-    return list(trace._suggest_layer_labels(str(query)))
+    return _candidate_keys(
+        list(trace._suggest_layer_labels(str(query))), trace._layer_dict_all_keys
+    )
 
 
 def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
@@ -373,8 +380,11 @@ def _did_you_mean_message(name: str, suggestions: list[str]) -> str:
     """
 
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {name!r} not found. Did you mean {suggestion_str}?"
+        return _lookup_message(
+            f"Layer {name!r} not found.",
+            suggestions,
+            "pass an in-range integer, a layer label, or a module address.",
+        )
     return f"Layer {name!r} not found."
 
 

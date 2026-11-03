@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .._errors import InvalidArgumentError
+from .._utils._display_card import card_row
+from .._utils._display_keys import candidates_text
 from ._stats_view import resolve_stats_columns
 from ._summary_ladder import DEFAULT_ROW_BUDGET
 
@@ -160,8 +162,8 @@ def _did_you_mean(name: str, valid: tuple[str, ...]) -> str:
     """A teaching suffix naming the nearest valid choice."""
 
     close = difflib.get_close_matches(name, valid, n=1)
-    hint = f" (did you mean {close[0]!r}?)" if close else ""
-    return f"{hint} Valid choices: {', '.join(valid)}."
+    candidates = [*close, *(item for item in valid if item not in close)]
+    return "\n" + card_row("candidates", candidates_text(candidates))
 
 
 def _refuse_choice(
@@ -183,7 +185,9 @@ def _refuse_choice(
     else:
         problem = f"summary() got invalid {axis}={value!r}.{_did_you_mean(str(value), valid)}"
         remedy = f"pass one of: {', '.join(valid)}"
-    raise InvalidArgumentError(problem, code=code, remedy=remedy)
+    raise InvalidArgumentError(
+        problem + "\n" + card_row("remedy", remedy), code=code, remedy=remedy
+    )
 
 
 def _insert_in_registry_order(names: list[str], name: str) -> None:

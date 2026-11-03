@@ -32,7 +32,7 @@ def test_tensor_arguments_print_by_shape_and_dtype() -> None:
     """A tensor argument prints as a readable placeholder, never its full values."""
 
     edit = tl.project_out(torch.ones(4))
-    assert repr(edit) == "tl.project_out(<tensor shape=(4,) dtype=torch.float32>)"
+    assert repr(edit) == "tl.project_out(<tensor float32 [4] on cpu>)"
 
 
 def test_session_bound_edit_prints_as_tl_edit() -> None:

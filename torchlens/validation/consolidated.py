@@ -14,6 +14,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._literals import OutputDeviceLiteral
 from .._save_budget import SaveBudgetOption
+from .._utils._display_card import render_card
 from .._utils.display import user_stacklevel
 from .._utils.rng import restores_rng_streams
 from ..backends.registry import BackendName, resolve_backend_spec
@@ -83,13 +84,31 @@ class InterventionValidationReport:
     def __repr__(self) -> str:
         """Bounded identity card (D31): the five verdicts lead, ``details`` is counted."""
 
-        verdicts = ", ".join(
-            f"{name}={getattr(self, name)}"
-            for name in ("is_invariant", "is_specific", "is_complete", "is_consistent", "is_local")
+        axes = (
+            self.is_invariant,
+            self.is_specific,
+            self.is_complete,
+            self.is_consistent,
+            self.is_local,
         )
-        return (
-            f"InterventionValidationReport(passed={self.passed}, {verdicts}; "
-            f"{len(self.details)} detail key(s) in .details)"
+        return f"InterventionValidationReport: {sum(axes)}/5 axes passed, passed={self.passed}"
+
+    def __str__(self) -> str:
+        """Show every recorded axis verdict without recomputing a check."""
+
+        return render_card(
+            repr(self),
+            [
+                (name.removeprefix("is_"), str(getattr(self, name)))
+                for name in (
+                    "is_invariant",
+                    "is_specific",
+                    "is_complete",
+                    "is_consistent",
+                    "is_local",
+                )
+            ],
+            (".details",),
         )
 
     @property

@@ -24,9 +24,6 @@ from ._summary_columns import ATTENTION_FULL_SQUARE_NOTE, OptimizerStateFacts
 from ._summary_config import ColumnSpec, SummaryConfig
 from ._summary_ladder import ResolvedView, ViewRow
 
-#: Micro-bar width in characters (%params emphasis; degrade-map covered).
-_BAR_WIDTH = 3
-
 #: Suffix on a FLOP cell whose count includes a full-square attention op.
 ATTENTION_MARK = "^"
 
@@ -139,13 +136,6 @@ def _format_number(value: int | None, units: str) -> str:
     return _human(value) if units == "human" else _commas(value)
 
 
-def _micro_bar(fraction: float) -> str:
-    """The %params micro-bar (unicode glyphs; ASCII via the degrade map)."""
-
-    filled = round(max(0.0, min(1.0, fraction)) * _BAR_WIDTH)
-    return "█" * filled + "░" * (_BAR_WIDTH - filled)
-
-
 def _name_cell(row: ViewRow) -> str:
     """The merged "name (Class)" cell with hierarchy indentation."""
 
@@ -251,14 +241,14 @@ def _params_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str
 
 
 def _percent_text(part: int, whole: int) -> str:
-    """The micro-bar percent text of one share of a whole-model total."""
+    """The numeric percent text of one share of a whole-model total."""
 
     fraction = part / whole
-    return f"{_micro_bar(fraction)} {fraction * 100:.1f}%"
+    return f"{fraction * 100:.1f}%"
 
 
 def _params_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
-    """The %params micro-bar cell over the whole-model total."""
+    """The %params cell over the whole-model total."""
 
     del config
     if row.params_display is None or not totals.params:
@@ -294,7 +284,7 @@ def _flops_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
 
 
 def _flops_pct_cell(row: ViewRow, config: SummaryConfig, totals: CellTotals) -> str:
-    """The %FLOPs micro-bar cell over the whole-model known-FLOP total."""
+    """The %FLOPs cell over the whole-model known-FLOP total."""
 
     whole = totals.flops_fma2 - (totals.macs if config.flop_convention == "fma1" else 0)
     if row.flops_display is None:
@@ -553,11 +543,7 @@ def render_summary_pair(
     health = f"health {facts.health_verdict.upper().replace('_', '-')}"
     capture_bits.append(f"{health} ({facts.health_hint})" if facts.health_hint else health)
     lines.append(f"Capture  {' | '.join(capture_bits)}")
-    if any(row.tied for row in rows):
-        lines.append("*        tied parameters (identity counted once; see Params)")
-    flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}
-    if flop_columns and any(row.attention_full_square for row in rows):
-        lines.append(f"{ATTENTION_MARK}        {ATTENTION_FULL_SQUARE_NOTE}")
+    lines.extend(_legend_lines(rows, columns))
     lines.append(
         "More:    result.details() | view='compute' for per-row MACs | docs/reference/summary.md"
     )
@@ -569,3 +555,22 @@ def _shape_str(shape: tuple[int, ...]) -> str:
     """Render one shape tuple."""
 
     return "(" + ", ".join(str(dim) for dim in shape) + ")"
+
+
+def _legend_lines(rows: tuple[ViewRow, ...], columns: tuple[ColumnSpec, ...]) -> list[str]:
+    """Explain every mark used by the table in one footer line."""
+
+    legend: list[str] = []
+    if any(row.tied for row in rows):
+        legend.append("* tied parameters (identity counted once; see Params)")
+    flop_columns = {"flops", "flops_pct"} & {column.name for column in columns}
+    if flop_columns and any(row.attention_full_square for row in rows):
+        legend.append(f"{ATTENTION_MARK} {ATTENTION_FULL_SQUARE_NOTE}")
+    if any(
+        row.fold_count > 1 or row.passes > 1 or "×" in _compact_shapes_text(row.output_shapes)
+        for row in rows
+    ):
+        legend.append("×N repeated modules, passes or shapes")
+    if legend:
+        return ["Legend   " + "; ".join(legend)]
+    return []

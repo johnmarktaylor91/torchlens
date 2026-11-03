@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from typing import Any, TypeVar, cast
 
 from .._errors import FacadeTeachingError, MissingDependencyError
+from ._display_errors import lookup_message
 
 __all__ = [
     "DependencyGate",
@@ -116,7 +117,9 @@ def _plain_missing(
 
         matches = get_close_matches(name, list(known), n=3, cutoff=0.6)
         if matches:
-            message += ". Did you mean: " + ", ".join(matches) + "?"
+            message = lookup_message(
+                message + ".", matches, "use an active name from dir() on this module."
+            )
     return AttributeError(message)
 
 

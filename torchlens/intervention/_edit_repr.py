@@ -10,9 +10,13 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable
+from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 import torch
+
+from .._utils._display_constructor import clipped, value_text
+from .._utils.fail_open import fail_open
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -39,11 +43,17 @@ def render_edit_repr(spec: Edit) -> str:
         ``tl.<constructor>(args)`` for a builtin edit, else ``tl.Edit(...)``.
     """
 
+    return fail_open(lambda: clipped(_edit_repr(spec)), lambda _error: "tl.Edit(...)")
+
+
+def _edit_repr(spec: Edit) -> str:
+    """Render known public constructors or the bounded identity fallback."""
+
     public = _public_constructor(spec)
     if public is not None:
         path, target = public
         parts = [_render_value(value) for value in spec.args]
-        order = list(inspect.signature(target).parameters)
+        order = list(_signature(target).parameters)
         keyed = sorted(
             spec.kwargs, key=lambda item: order.index(item[0]) if item[0] in order else len(order)
         )
@@ -125,7 +135,7 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
         ``True`` when printing the keyword would only restate its default.
     """
 
-    parameter = inspect.signature(target).parameters.get(key)
+    parameter = _signature(target).parameters.get(key)
     if parameter is None or parameter.default is inspect.Parameter.empty:
         return False
     default = parameter.default
@@ -134,31 +144,11 @@ def _is_signature_default(target: Callable[..., Any], key: str, value: Any) -> b
     return type(default) is type(value) and bool(default == value)
 
 
-def _render_value(value: Any) -> str:
-    """Render one constructor argument for the edit repr.
+@lru_cache(maxsize=128)
+def _signature(target: Callable[..., Any]) -> inspect.Signature:
+    """Inspect each helper signature once, including repeated default lookups."""
 
-    Parameters
-    ----------
-    value:
-        Stored constructor argument.
+    return inspect.signature(target)
 
-    Returns
-    -------
-    str
-        Readable rendering; tensors print by shape and dtype, functions by name.
-    """
 
-    if isinstance(value, torch.Tensor):
-        return f"<tensor shape={tuple(value.shape)} dtype={value.dtype}>"
-    if (
-        callable(value)
-        and not isinstance(value, type)
-        and type(value).__name__ in {"function", "builtin_function_or_method", "method"}
-    ):
-        return f"<function {value.__qualname__}>"
-    if isinstance(value, tuple):
-        inner = ", ".join(_render_value(item) for item in value)
-        return f"({inner},)" if len(value) == 1 else f"({inner})"
-    if isinstance(value, list):
-        return f"[{', '.join(_render_value(item) for item in value)}]"
-    return repr(value)
+_render_value = value_text

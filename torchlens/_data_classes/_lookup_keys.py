@@ -4,6 +4,7 @@ import random
 from typing import TYPE_CHECKING, cast
 
 from .._errors import InvalidArgumentError
+from .._utils._display_errors import candidate_keys, lookup_message
 
 if TYPE_CHECKING:
     from .module import Module
@@ -98,11 +99,11 @@ def _get_lookup_help_str(self: "Trace", layer_label: int | str, mode: str) -> st
     Parameters
     ----------
     self:
-        Model log being queried.
+        Queried trace.
     layer_label:
         Original key supplied by the user.
     mode:
-        Either ``"get_one_item"`` or ``"query_multiple"``.
+        ``"get_one_item"`` or ``"query_multiple"``.
 
     Returns
     -------
@@ -111,8 +112,7 @@ def _get_lookup_help_str(self: "Trace", layer_label: int | str, mode: str) -> st
     """
     suggestions = self._suggest_layer_labels(str(layer_label))
     if suggestions:
-        suggestion_str = ", ".join(repr(item) for item in suggestions)
-        return f"Layer {layer_label!r} not found. Did you mean {suggestion_str}?"
+        return _missing_layer_message(self, layer_label, suggestions)
 
     if not self.op_labels:
         sample_layer1 = "conv2d_1_1:1"
@@ -155,3 +155,13 @@ def _get_lookup_help_str(self: "Trace", layer_label: int | str, mode: str) -> st
         f"and fourth layer overall in the model.)"
     )
     return help_str
+
+
+def _missing_layer_message(trace: "Trace", label: int | str, suggestions: list[str]) -> str:
+    """Render a lookup miss through cached display keys."""
+
+    return lookup_message(
+        f"Layer {label!r} not found.",
+        candidate_keys(suggestions, trace._layer_dict_all_keys),
+        "pass an in-range integer, a layer label, or a module address.",
+    )
