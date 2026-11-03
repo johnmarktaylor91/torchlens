@@ -229,51 +229,6 @@ def test_cross_version_alias_fixture_and_bounds() -> None:
     assert resolve_runnable_torch_alias("Tensor.add", "2.13.0") is None
 
 
-def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Past the measured upper bound an alias holds only while source *is* target in this torch."""
-
-    from torchlens._utils import _torch_compat as tc
-
-    linear_alias = next(a for a in _RUNNABLE_TORCH_ALIASES if a.source == "torch._C._nn.linear")
-    assert linear_alias.recorded_max_version is not None
-    beyond = f"{linear_alias.recorded_max_version[0]}.{linear_alias.recorded_max_version[1] + 1}.0"
-    expected = ("torch.nn.functional", "linear", linear_alias.provenance)
-    # torch.nn.functional.linear is the torch._C._nn.linear binding on every torch measured.
-    assert torch.nn.functional.linear is torch._C._nn.linear
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == expected
-    assert resolve_runnable_torch_alias("_C._nn.linear", beyond) == expected
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.99.0") == expected
-    # cross_entropy is a Python wrapper, not the cross_entropy_loss binding: no identity,
-    # so beyond its bound the alias is refused while inside it still resolves.
-    assert torch.nn.functional.cross_entropy is not torch._C._nn.cross_entropy_loss
-    assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") is None
-    assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.10.0") is not None
-    # The identity probe is the only thing extending the bound.
-    monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: False)
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) is None
-    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.13.0") == expected
-
-
-def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
-    """The identity probe answers from live objects: same object True, distinct or absent False."""
-
-    from torchlens._utils._torch_compat import _runtime_alias_identity_holds
-
-    assert _runtime_alias_identity_holds("torch._C._nn.linear", "torch.nn.functional", "linear")
-    assert _runtime_alias_identity_holds("_C._nn.linear", "torch.nn.functional", "linear")
-    assert not _runtime_alias_identity_holds(
-        "torch._C._nn.cross_entropy_loss", "torch.nn.functional", "cross_entropy"
-    )
-    assert not _runtime_alias_identity_holds(
-        "torch._C._nn.no_such_op", "torch.nn.functional", "linear"
-    )
-    assert not _runtime_alias_identity_holds(
-        "torch._C._nn.linear", "torch.nn.functional", "no_such"
-    )
-
-
 def test_variable_functions_aliases_cover_running_torch_minor() -> None:
     """Lock VariableFunctionsClass aliases open across the running torch minor."""
 
@@ -595,3 +550,50 @@ def test_load_time_failure_taxonomy_and_execution_skeletons(
     assert RunnableErrorCode.WRAPPER_SHADOWED in _codes(descriptor)
     assert RunnableErrorCode.RUNTIME_SIGNATURE_DRIFT.value == "runtime_signature_mismatch"
     assert RunnableErrorCode.SEMANTIC_DRIFT.value == "semantic_mismatch"
+
+
+def test_alias_beyond_its_recorded_max_resolves_only_on_a_live_identity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Past the measured upper bound an alias holds only while source *is* target in this torch."""
+
+    from torchlens._utils import _torch_compat as tc
+
+    linear_alias = next(a for a in _RUNNABLE_TORCH_ALIASES if a.source == "torch._C._nn.linear")
+    assert linear_alias.recorded_max_version is not None
+    beyond = f"{linear_alias.recorded_max_version[0]}.{linear_alias.recorded_max_version[1] + 1}.0"
+    expected = ("torch.nn.functional", "linear", linear_alias.provenance)
+    # torch.nn.functional.linear is the torch._C._nn.linear binding on every torch measured.
+    assert torch.nn.functional.linear is torch._C._nn.linear
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) == expected
+    assert resolve_runnable_torch_alias("_C._nn.linear", beyond) == expected
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.99.0") == expected
+    # cross_entropy is a Python wrapper, not the cross_entropy_loss binding: no identity,
+    # so beyond its bound the alias is refused while inside it still resolves.
+    assert torch.nn.functional.cross_entropy is not torch._C._nn.cross_entropy_loss
+    assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.99.0") is None
+    assert resolve_runnable_torch_alias("torch._C._nn.cross_entropy_loss", "2.10.0") is not None
+    # The identity probe is the only thing extending the bound.
+    monkeypatch.setattr(tc, "_runtime_alias_identity_holds", lambda *args: False)
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", beyond) is None
+    assert resolve_runnable_torch_alias("torch._C._nn.linear", "2.13.0") == expected
+
+
+def test_runtime_alias_identity_probe_reads_the_running_torch() -> None:
+    """The identity probe answers from live objects: same object True, distinct or absent False."""
+
+    from torchlens._utils._torch_compat import _runtime_alias_identity_holds
+
+    assert _runtime_alias_identity_holds("torch._C._nn.linear", "torch.nn.functional", "linear")
+    assert _runtime_alias_identity_holds("_C._nn.linear", "torch.nn.functional", "linear")
+    assert not _runtime_alias_identity_holds(
+        "torch._C._nn.cross_entropy_loss", "torch.nn.functional", "cross_entropy"
+    )
+    assert not _runtime_alias_identity_holds(
+        "torch._C._nn.no_such_op", "torch.nn.functional", "linear"
+    )
+    # A spelling-drift row is trivially self-identical; that is no evidence.
+    assert not _runtime_alias_identity_holds("Tensor.add", "torch.Tensor", "add")
+    assert not _runtime_alias_identity_holds(
+        "torch._C._nn.linear", "torch.nn.functional", "no_such"
+    )

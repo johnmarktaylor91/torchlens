@@ -16,7 +16,6 @@ import torch
 from support.cairosvg_skip import require_cairosvg
 
 import torchlens as tl
-from torchlens._visualization._cairosvg import get_cairosvg_support
 from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 from torchlens.errors import MultiMatchWarning
 
@@ -193,6 +192,8 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
     # convert a real regression into a skip (b10 R78-4: cairosvg is installed
     # nowhere, so the mid-test importorskip made every byte regression green-
     # adjacent on every environment that exists).
+    from torchlens._visualization._cairosvg import get_cairosvg_support
+
     if not get_cairosvg_support():
         pytest.fail(
             "bundle-diff SVG bytes diverged from the committed golden and cairosvg is "

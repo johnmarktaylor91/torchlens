@@ -306,26 +306,20 @@ def _runtime_alias_identity_holds(
     that no longer resolves, or two distinct objects, answers ``False`` and the
     recorded bound stands.
 
-    Parameters
-    ----------
-    source_qualname:
-        Recorded callable path, with or without its ``torch.`` prefix.
-    target_namespace:
-        Public namespace of the alias target (always rooted at ``torch``).
-    target_qualname:
-        Attribute path of the alias target within ``target_namespace``.
-
-    Returns
-    -------
-    bool
-        True only when both paths resolve to the same non-``None`` object.
+    ``source_qualname`` may carry or omit its ``torch.`` prefix; the target is
+    ``target_namespace.target_qualname``. Identical paths (a spelling-drift row
+    such as ``Tensor.add`` to ``torch.Tensor.add``) are trivially one object and
+    prove nothing, so they answer ``False`` and the recorded bound stands.
     """
 
     source_path = (
         source_qualname if source_qualname.startswith("torch.") else f"torch.{source_qualname}"
     )
+    target_path = f"{target_namespace}.{target_qualname}"
+    if source_path == target_path:
+        return False
     source = _resolve_runtime_torch_path(source_path)
-    target = _resolve_runtime_torch_path(f"{target_namespace}.{target_qualname}")
+    target = _resolve_runtime_torch_path(target_path)
     return source is not None and source is target
 
 
