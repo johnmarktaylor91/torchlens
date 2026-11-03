@@ -393,6 +393,11 @@ def test_torch_capability_snapshot_contract() -> None:
         # (a pybind11 heap type). Without it a scripted call stays a census gap with
         # its advisory; mirror the live value.
         "HAS_SCRIPT_FUNCTION_CALL_HOOK": tc.HAS_SCRIPT_FUNCTION_CALL_HOOK,
+        # Whether the optional flash-attn-4 distribution is installed (a package probe, not
+        # a torch surface); mirror the live value.
+        "HAS_FLASH_ATTENTION_4_INTERFACE": tc.HAS_FLASH_ATTENTION_4_INTERFACE,
+        # Function.apply: a Python classmethod through torch 2.13, the C descriptor from 2.14.
+        "HAS_FUNCTION_APPLY_SLOT": True,
         "HAS_DYNAMO_OPTIMIZED_MODULE": True,
         "HAS_DYNAMO_ORIG_CALLABLE_MARKER": tc.HAS_DYNAMO_ORIG_CALLABLE_MARKER,
         "HAS_DYNAMO_EXPLAIN": tc.HAS_DYNAMO_EXPLAIN,

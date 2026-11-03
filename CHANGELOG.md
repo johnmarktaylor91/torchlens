@@ -179,6 +179,24 @@
 
 ### Features
 
+- **capture**: FlashAttention 4 calls (`attn_implementation="flash_attention_4"`, the
+  `flash_attn.cute` package) are captured as one `autogradfunction` boundary op per attention
+  call (`transform_kind="autograd.Function"`, exit `flash_attn.cute`) whose parents are q, k
+  and v and which replays through the Function's `apply`, so the armed completeness witness
+  verifies the trace and `tl.validate(scope="forward")` passes under `torch.no_grad()`;
+  before, the trace recorded the output allocation in place of the attention and validation
+  failed on `bfs_completeness`. With autograd enabled the kernel also returns its log-sum-exp
+  as a second output of the same call, which depends on q and k only, and forward validation
+  still reports that output's v edge as insensitive (a pinned, strict expected failure).
+  `tl.report.doctor()` reports the package as `HAS_FLASH_ATTENTION_4_INTERFACE`.
+- **capture**: the `autograd.Function` boundary hook installs on torch 2.14 and later, where
+  `Function.apply` is the C classmethod descriptor of `_C._FunctionBase` rather than a Python
+  classmethod; before, the hook silently stayed uninstalled there and a forward that left
+  torch (NumPy, DLPack, FlashAttention 4) was not collapsed into a boundary op, so the
+  completeness census reported its interior dispatches as unaccounted. The slot shape is the
+  capability `HAS_FUNCTION_APPLY_SLOT`; an unknown shape flips it with a
+  `TorchCapabilityWarning` instead of degrading silently.
+
 - **intervention**: `tl.direction_from_pairs(pos_traces, neg_traces, site, method=...)` is a
   root name (also `torchlens.intervention.direction_from_pairs`); `torchlens.__all__` has 116
   names.
