@@ -44,7 +44,7 @@
   "field": "module_stack",
   "file": "torchlens/_capture/_forward_helpers.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -428,7 +428,7 @@
   "field": "module_stack",
   "file": "torchlens/_capture/projections.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 3,
   "via_getattr": false
  },
  {
@@ -6553,6 +6553,14 @@
  },
  {
   "ambiguous": true,
+  "field": "output",
+  "file": "torchlens/backends/torch/_prehook_state.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/backends/torch/_protocol_redispatch.py",
   "has_default": false,
@@ -6893,14 +6901,6 @@
   "file": "torchlens/backends/torch/prehook_provenance.py",
   "has_default": false,
   "sites": 4,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
-  "field": "output",
-  "file": "torchlens/backends/torch/prehook_provenance.py",
-  "has_default": false,
-  "sites": 1,
   "via_getattr": false
  },
  {
