@@ -9,6 +9,11 @@ are 1.0, and the outside edit changes the unit by exactly 0. The geometric backg
 [Araujo, Norris and Sim (Distill, 2019)](https://distill.pub/2019/computing-receptive-fields/);
 gradient support is an additional empirical oracle, not a general equality theorem.
 
+![Two panels. Left: the 224 by 224 noise input shown faint, with the receptive field of one ResNet-18 layer3 unit (channel 0, row 7, column 7) as a vermilion outline from the geometry (pixels 7 to 217 on both axes) and the blue gradient-support mask filling the same box, overlap IoU 1.00; a green 4 by 4 patch inside the field is zeroed. Right: the 14 by 14 layer3 feature map, with the vermilion predicted reach of that patch (units 1 to 13) and in blue the units that actually changed, IoU 1.00; everything outside stays unchanged.](../images/gallery/cnn_fields.svg)
+
+The figure is drawn from the saved `cnn_fields.json` and `cnn_fields_figure.npz` by the shared
+gallery renderer; the script's `--figure-only` flag redraws it without rerunning the model.
+
 | Item | Recorded setup |
 | --- | --- |
 | Claim | Geometric CNN influence supports input interventions and predicts projective support. |
