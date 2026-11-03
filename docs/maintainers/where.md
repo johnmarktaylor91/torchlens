@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1448 modules, 649639 lines, 0 modules without a docstring.
+84 packages, 1448 modules, 649673 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -85,11 +85,11 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 9 | 2751 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12850 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7140 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 23 | 7156 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3902 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 14121 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
-| `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7174 |
+| `torchlens.stats` | Streaming statistics for out aggregation (real subpackage; item 18). | 17 | 7192 |
 | `torchlens.trackers` | Trackers: one engine, first-party sinks, measured relays. | 15 | 5269 |
 | `torchlens.transformer` | torchlens.transformer -- transformer pictures (tviz memo). | 14 | 5056 |
 | `torchlens.transforms` | Built-in activation transforms: one contract, declared not sniffed. | 13 | 6105 |
@@ -1855,15 +1855,15 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 15
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (23 modules, 7140 lines)
+Lightweight predicate-recording namespace for TorchLens. (23 modules, 7156 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Lightweight predicate-recording namespace for TorchLens. | 114 |
+| `__init__` | Lightweight predicate-recording namespace for TorchLens. | 113 |
 | `_capture_door` | The capture door shared by ''tl.record'' and ''Recorder''. | 94 |
 | `_generation` | Record chosen sites across one real Hugging Face ''generate'' call. | 668 |
 | `_generation_options` | Grouped options of the streaming generation recorder (DOCUMENTED-UNSTABLE spellings). | 121 |
-| `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 485 |
+| `_generation_stream` | Per-token series, ring buffer, disk spill and cost guard of the generation recorder. | 487 |
 | `_halt` | Fastlog early-abort control signal. | 90 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_record_one_shot` | One-shot public fastlog recording API. | 295 |
@@ -1878,7 +1878,7 @@ Lightweight predicate-recording namespace for TorchLens. (23 modules, 7140 lines
 | `exceptions` | Exception types for fastlog predicate recording. | 152 |
 | `options` | Grouped options for fastlog predicate recording. | 430 |
 | `recover` | Load and recover fastlog directory bundles. | 632 |
-| `reducers` | Per-token reducers for the generation recorder (DOCUMENTED-UNSTABLE spellings). | 241 |
+| `reducers` | Per-token reducers for the generation recorder (DOCUMENTED-UNSTABLE spellings). | 256 |
 | `storage_disk` | Synchronous disk storage backend for fastlog recordings. | 600 |
 | `storage_ram` | In-memory storage backend for fastlog recordings. | 128 |
 | `types` | Core dataclasses for fastlog predicate recording. | 1317 |
@@ -1958,7 +1958,7 @@ Extras-gated notebook namespace with no public objects yet. (10 modules, 2470 li
 
 ### `torchlens.stats`
 
-Streaming statistics for out aggregation (real subpackage; item 18). (17 modules, 7174 lines)
+Streaming statistics for out aggregation (real subpackage; item 18). (17 modules, 7192 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1977,7 +1977,7 @@ Streaming statistics for out aggregation (real subpackage; item 18). (17 modules
 | `_stats_render` | Stats-line renderers: the core grammar over TensorStats (lovely 4). | 297 |
 | `_streaming` | Streaming statistic kernels (stats/ promotion, item 18). | 835 |
 | `_tensor_stats` | The frozen TensorStats record (lovely memo item 2). | 393 |
-| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 654 |
+| `_trace_tables` | Trace tabular export and decoded-output functions (record rebuild destination). | 672 |
 | `_trajectory` | Logit-lens trajectory statistics in one call (''tl.mechinterp.measure_trajectory''). | 512 |
 
 ### `torchlens.trackers`
