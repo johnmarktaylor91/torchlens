@@ -210,6 +210,6 @@ class TestVisionTransformerPooledHead:
     def test_neuronpedia_export_refuses_idless_tokens(self) -> None:
         graph = _build(_model(), _transcoders())
         tokenizer = SimpleNamespace(decode=lambda ids: " ".join(str(i) for i in ids))
-        with pytest.raises(tl.attribution.AttributionError) as info:
+        with pytest.raises(tl.errors.AttributionError) as info:
             graph.to_neuronpedia(slug="vit", model_id="vit-test", tokenizer=tokenizer)
         assert info.value.code == "attribution_graph_export_unsupported"
