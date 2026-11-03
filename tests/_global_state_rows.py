@@ -169,6 +169,13 @@ _INSTALL_STATE_AND_CACHES = frozenset(
         # flag: activate_prerelease_fields refuses outside pytest and restores
         # it, and every switch-on write is marker-stamped so a leak cannot pass
         # as a real v7 artifact.
+        # 3.0 loader doors: the rehydration step of each door (trace, bundle, recipe) is
+        # installed once when torchlens._io.bundle imports (install_load_hooks); never
+        # rebound afterwards and read at every load.
+        ("torchlens/_io/format3/reader.py", "_LOAD_HOOKS"),
+        # 3.0 runnable binder: the bind-time helpers (digest, device, state universe) are
+        # installed once by torchlens._io.bundle at import (install_runnable_binders).
+        ("torchlens/_io/_format3_runnable_bind.py", "_BINDERS"),
         ("torchlens/_io/prerelease.py", "_ACTIVE"),
         ("torchlens/_io/prerelease.py", "_ANNOTATIONS_KEY_REGISTRY"),
         ("torchlens/_io/prerelease.py", "_REGISTRY"),
@@ -1048,6 +1055,8 @@ _STATIC_EXPORT_LISTS = frozenset(
         ("torchlens/_io/_safe_unpickle.py", "__all__"),
         ("torchlens/_io/_torch_symbols.py", "__all__"),
         ("torchlens/_io/format3/__init__.py", "__all__"),
+        ("torchlens/_io/format3/reader.py", "__all__"),
+        ("torchlens/_io/format3/validate.py", "__all__"),
         ("torchlens/_io/injection_codec.py", "__all__"),
         ("torchlens/_io/payload_reader.py", "__all__"),
         ("torchlens/_io/runnable.py", "__all__"),

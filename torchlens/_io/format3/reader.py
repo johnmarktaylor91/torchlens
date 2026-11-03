@@ -12,19 +12,18 @@ from __future__ import annotations
 import math
 import re
 import sys
-from collections.abc import Callable, Iterator, Mapping
-from functools import cache
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, Final
 
 import torch
 
-from ..._data_classes._state_adapter import state_new, state_restore
-from ..._data_classes.field_policy import StorageKind
+from ..._data_classes._state_adapter import state_new
 from ..format_contract import BlobRef
 from ..state_contract import governed_artifact_load
 from . import contract
-from .container import verify_member_reference
+from .codec_policy import codec_backend
+from .container import iter_members, read_member_index
 from .decode import (
     CELL_CODE,
     DEVICE_TEXT,
@@ -37,15 +36,15 @@ from .decode import (
     build_component,
     cell_error,
 )
-from .schema import record_schema
+from .restore import restore_record
 from .validate import (
     BELOW_FLOOR,
     TLSPEC_KEY,
     artifact_error,
     check_record_anchors,
     check_runnable_slots,
+    check_runtime_policy,
     check_version_window,
-    integrity_error,
     is_int,
     legacy_stamp,
     manifest_schema_errors,
@@ -63,6 +62,7 @@ from .values import RowRef, dtype_table
 __all__ = [
     "DecodedArtifact",
     "attach_disclosure_advisory",
+    "decode_checked",
     "install_load_hooks",
     "load_bundle",
     "load_intervention_recipe",
@@ -76,7 +76,6 @@ _CODES: Final = contract.REFUSAL_CODES
 _CORRUPT: Final = _CODES["record_file_corrupt"]
 #: Root entries that mark an artifact written by torchlens 2.x (pickle carrier).
 PRE3_ROOT_MARKERS: Final[tuple[str, ...]] = ("metadata.pkl", "bundle.json")
-_MEMBER_DIR = re.compile(r"^members/(\d+)-([A-Za-z0-9_.-]+)$")
 #: The column whose string identifies a row of each kind (a repeat refuses; ``ref`` cells link).
 IDENTITY_FIELDS: Final[dict[str, str]] = {
     "op": "label",
@@ -155,6 +154,7 @@ def read_manifest(path: str | Path) -> dict[str, Any]:
         raise pre3_error(root, "manifest.json without a format key", code=BELOW_FLOOR)
     _refuse_schema_errors(manifest_path, manifest_schema_errors(manifest))
     check_version_window(manifest, root)
+    check_runtime_policy(manifest)
     if manifest["save_level"] not in contract.SAVE_LEVELS:
         raise artifact_error(
             f"Artifact manifest {manifest_path} names save_level {manifest['save_level']!r}; "
@@ -182,8 +182,30 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
 
 
 def validate_artifact(path: str | Path) -> dict[str, Any]:
-    """Validate the manifest, every listed file (bytes, SHA-256, no unlisted file;
-    ``bundle_metadata_integrity_refused`` otherwise) and the runnable slot cross-check."""
+    """Validate an artifact as ``tl.load`` would, short of building its record objects.
+
+    The envelope first (manifest, every listed file's bytes and SHA-256, the runnable slot
+    cross-check), then the same bounded typed-record decode, reference resolution,
+    cross-record invariants and manifest anchor check the load doors run, on the artifact's
+    own tables and, for a bundle, on every member's. One code path with the doors
+    (``decode_checked``): what load refuses, validation refuses, with the same code.
+    """
+
+    root = Path(path)
+    manifest = _validate_envelope(root)
+    if manifest["kind"] == "bundle":
+        metadata = read_member_index(root, manifest)
+        for _name, member_root in iter_members(root, manifest, metadata):
+            decode_checked(member_root, _validate_envelope(member_root))
+    elif manifest["kind"] == "trace":
+        decode_checked(root, manifest)
+    return manifest
+
+
+def _validate_envelope(path: str | Path) -> dict[str, Any]:
+    """The envelope checks every door runs before it opens a record file: the manifest, every
+    listed file (bytes, SHA-256; an unlisted file is named in a warning, never read) and the
+    runnable slot cross-check."""
 
     root = Path(path)
     manifest = read_manifest(root)
@@ -200,11 +222,19 @@ class TensorRefSink:
     become the tensor index); a structure-only cell decodes to ``None``; codec, chunk and
     ``t<k>`` key are checked; repeats must agree."""
 
-    def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
+    def __init__(
+        self,
+        *,
+        codecs: tuple[str, ...],
+        files: Mapping[str, Mapping[str, Any]],
+        backend: str = "torch",
+    ) -> None:
         self.entries: dict[str, dict[str, Any]] = {}
         self.structure_only_refs = 0
         self._codecs = codecs
         self._files = files
+        #: The artifact's backend: the codec every payload cell must use.
+        self.backend = backend
 
     def add(self, ref: Mapping[str, Any], at: str) -> Any:
         """Check one tensor reference cell's geometry and return its placeholder."""
@@ -219,7 +249,10 @@ class TensorRefSink:
         if blob is None and key is None:
             self.structure_only_refs += 1
             return None
-        declared = numel * _element_size(dtype_name) * (2 if is_complex else 1)
+        backend = codec_backend(codec_id, codec_metadata, at, manifest_backend=self.backend)
+        # A complex dtype's element size already counts both parts; the real view on disk
+        # holds exactly numel * element_size bytes.
+        declared = numel * _element_size(dtype_name)
         listed = self._listed_chunk(blob, key, at, declared)
         blob_id = f"{blob}#{key}"
         declaration = (list(shape), dtype_name, device, ref["requires_grad"], codec_id)
@@ -242,7 +275,6 @@ class TensorRefSink:
                 )
             return BlobRef(blob_id, seen["kind"])
         kind = _tensor_kind(at)
-        backend = "torch" if codec_id == _TORCH_CODEC else "numpy"
         self.entries[blob_id] = {
             "blob_id": blob_id,
             "kind": kind,
@@ -466,9 +498,7 @@ class DecodedArtifact:
                     zip(self.objects.get(kind, ()), self.tables.get(kind, ()), strict=True)
                 ):
                     cells = self._rebuild_accessors(kind, row_number, row)
-                    _restore_record(
-                        obj, cells, version=self.version, computed=computed_columns(kind)
-                    )
+                    restore_record(obj, cells, version=self.version, kind=kind)
                     # After the hook: the state contract knows the column, not its slot.
                     for column, slot in _RESTORED_COMPUTED.get(kind, {}).items():
                         if cells.get(column) is not None:
@@ -488,7 +518,12 @@ class DecodedArtifact:
             self._calls_by_label = {row.get("label"): call for row, call in pairs}
         call = self._calls_by_label.get(labels[0])
         for column, slot in _TEMPLATE_SLOTS.items():
-            if call is not None and cells.get(column) is not None and slot not in call.__dict__:
+            # The call's state hook default-fills the slot with None; a None slot is unset.
+            if (
+                call is not None
+                and cells.get(column) is not None
+                and call.__dict__.get(slot) is None
+            ):
                 call.__dict__[slot] = cells[column]
 
     def _rebuild_accessors(
@@ -573,32 +608,6 @@ class DecodedArtifact:
         return manifest
 
 
-@cache
-def computed_columns(kind: str) -> frozenset[str]:
-    """Columns the writer fills from a read-only property; loaded objects recompute them."""
-
-    return frozenset(
-        name
-        for name, column in record_schema(kind).items()
-        if column.storage == StorageKind.COMPUTED.value
-    )
-
-
-def _restore_record(
-    obj: Any, row: Mapping[str, Any], *, version: int, computed: frozenset[str] = frozenset()
-) -> None:
-    """Run the record's state hook on its decoded row, computed columns dropped."""
-
-    state = {name: value for name, value in row.items() if name not in computed}
-    state[TLSPEC_KEY] = version
-    setstate = getattr(type(obj), "__setstate__", None)
-    if setstate is not None and setstate is not getattr(object, "__setstate__", None):
-        setstate(obj, state)
-        return
-    state.pop(TLSPEC_KEY)
-    state_restore(obj, state)
-
-
 # ---- Doors -----------------------------------------------------------------
 
 #: The rehydration step of each door, installed by ``torchlens._io.bundle`` (install_load_hooks).
@@ -651,16 +660,24 @@ def _require_kind(manifest: Mapping[str, Any], root: Path, expected: str) -> Non
         )
 
 
-def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
+def decode_checked(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     """Decode every table, resolve every reference, run the cross-record validators and the
-    manifest anchor check, then the state hooks. Nothing here touches the rehydrate path."""
+    manifest anchor check: the bounded checks shared by the load doors and ``validate_artifact``.
+    No record object is built and no tensor is read."""
 
     artifact = DecodedArtifact(root, manifest)
     artifact.decode_tables()
     artifact.resolve_references()
     validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
-    artifact.build_records()
     check_record_anchors(manifest, artifact.tables["trace"][0], root)
+    return artifact
+
+
+def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
+    """``decode_checked`` then the state hooks. Nothing here touches the rehydrate path."""
+
+    artifact = decode_checked(root, manifest)
+    artifact.build_records()
     return artifact
 
 
@@ -676,7 +693,7 @@ def load_trace(
     under the governed load, then the installed ``trace`` step (tensors, accessors, recipe)."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
+    manifest = _validate_envelope(root)
     _require_kind(manifest, root, "trace")
     artifact = read_tables(root, manifest)
     return _hook("trace", root)(
@@ -714,13 +731,13 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     """Load one ``kind: bundle`` artifact: ``members/<index>-<name>/`` plus ``relations.json``."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
+    manifest = _validate_envelope(root)
     _require_kind(manifest, root, "bundle")
-    metadata = _read_relations(root, manifest)
+    metadata = read_member_index(root, manifest)
     policy = options.pop("unknown_relations", "opaque")
     members = [
         (name, load_trace(member_root, **options))
-        for name, member_root in _iter_members(root, manifest, metadata)
+        for name, member_root in iter_members(root, manifest, metadata)
     ]
     return _hook("bundle", root)(
         members,
@@ -731,60 +748,12 @@ def load_bundle(path: str | Path, **options: Any) -> Any:
     )
 
 
-def _read_relations(root: Path, manifest: Mapping[str, Any]) -> dict[str, Any]:
-    """Read ``relations.json``: an object whose ``members`` list names each member's path."""
-
-    target = root / "relations.json"
-    if "relations.json" not in manifest["files"]:
-        raise integrity_error(target, "a bundle must list relations.json", code=_CORRUPT)
-    data, _ = read_json_file(target, code=_CORRUPT, what="relations")
-    members = data.get("members") if isinstance(data, dict) else None
-    if not isinstance(members, list) or not all(
-        isinstance(member, dict)
-        and isinstance(member.get("name"), str)
-        and isinstance(member.get("path"), str)
-        for member in members
-    ):
-        raise integrity_error(
-            target, "relations.json must be {members: [{name, path}, ...], ...}", code=_CORRUPT
-        )
-    return data
-
-
-def _iter_members(
-    root: Path, manifest: Mapping[str, Any], metadata: Mapping[str, Any]
-) -> Iterator[tuple[str, Path]]:
-    """Members in ``relations.json`` order; every ``members/`` file must belong to one."""
-
-    declared: dict[str, str] = {}
-    for member in metadata["members"]:
-        path, name = member["path"], member["name"]
-        if _MEMBER_DIR.match(path) is None or path in declared or name in declared.values():
-            raise integrity_error(
-                root / path,
-                "bundle members must be distinct members/<index>-<name>/ directories",
-                code=_CORRUPT,
-            )
-        declared[path] = name
-    for relpath in manifest["files"]:
-        parts = relpath.split("/")
-        if parts[0] == "members" and "/".join(parts[:2]) not in declared:
-            raise integrity_error(
-                root / relpath, "member files must belong to a declared member", code=_CORRUPT
-            )
-    for member in metadata["members"]:
-        member_root = root / member["path"]
-        symlink_guard(member_root, "bundle member")
-        verify_member_reference(member_root, member, required=True)
-        yield member["name"], member_root
-
-
 def load_intervention_recipe(path: str | Path) -> Any:
     """Load the recipe (``intervention.json``) of a trace or intervention artifact: built-in edits
     through the helper registry; a callable placeholder is an audit-only edit (rerun refuses)."""
 
     root = Path(path)
-    manifest = validate_artifact(root)
+    manifest = _validate_envelope(root)
     if manifest["kind"] not in ("trace", "intervention"):
         _require_kind(manifest, root, "intervention")
     if contract.INTERVENTION_FILE not in manifest["files"]:

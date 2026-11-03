@@ -53,9 +53,19 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 | `codecs` | array | the payload codec ids used; a subset of `torch_safetensors_v1`, `numpy_safetensors_v1` |
 | `records` | object | per record kind: `{"path": "records/op.json", "rows": N, "sha256": hex, "bytes": N}` |
 | `files` | object | every file in the directory except `manifest.json`, by relative path: `{"sha256": hex, "bytes": N}` |
-| `model_signature`, `model_fingerprint` | string | as the tlspec 11 manifest stamps them |
+| `model_signature` | string | as the tlspec 11 manifest stamps it |
+| `model_fingerprint` | object | optional; the closed 2.x shape: `parameter_meta_hash` and `buffer_meta_hash` (SHA-256 hex), `class_qualname` (non-empty), `extra_metadata` (object); or the backend shape `{"backend_fingerprint": {backend, model_signature, graph_digest, module_identity_mode, param_source}}`. A present summary that breaks its shape refuses `manifest_schema_invalid` |
+| `backward_summary` | object | optional; `has_backward_pass` (bool), the counters `num_backward_passes`, `num_grad_fns`, `num_grad_fn_calls`, `num_saved_grad_records`, `gradient_blob_count` (non-negative ints), `gradient_blob_kinds` (distinct entries from `grad`, `grad_fn_grad`, `transformed_grad`), `old_bundle_policy` (non-empty); null for a non-torch backend fingerprint. Checked when present |
 | `runnable`, `intervention` | object | present with the component; component schema versions and file paths |
 | `disclosures` | object | optional; `{"count": N, "first": [up to 16 field paths]}` when the artifact holds N > 0 unencodable disclosures (section 4), absent when none; when present the loader attaches the load advisory `unencodable_values_stringified` |
+
+The writer identity strings (`torchlens_version`, `python_version`, `torch_version`, `platform`,
+`created_at`) follow the code-owned grammar `contract.IDENTITY_FIELD_PATTERNS`: non-empty. No
+stricter version-string pattern applies until this contract states it. After the floor and
+ceiling checks the reader applies the shared runtime identity policy: a torch major mismatch
+refuses `bundle_torch_incompatible`, a torch minor mismatch, a newer TorchLens writer and a
+Python major mismatch warn, an unparsable TorchLens writer version refuses
+`bundle_producer_unverifiable`.
 
 ### Version floor and refusals
 
@@ -79,7 +89,8 @@ that is not a TorchLens save at all.
 Every file other than the manifest is listed in `files` with its SHA-256 and byte length. The
 reader verifies each file's digest before parsing it; a mismatch or a truncated file refuses
 `bundle_metadata_integrity_refused`. A file present in the directory but absent from `files` is
-ignored and never read (a `README.txt` is allowed there). The manifest itself carries no digest
+ignored and never read (a `README.txt` is allowed there); the loader names such files in one
+advisory warning, without opening them, and the load succeeds. The manifest itself carries no digest
 of its own; the save preflight (section 6) reloads the written directory once, so a manifest
 that does not describe its directory never publishes.
 
