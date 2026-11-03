@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-84 packages, 1355 modules, 629378 lines, 0 modules without a docstring.
+84 packages, 1354 modules, 629053 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -21,9 +21,9 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 77 | 36542 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 594 |
-| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10552 |
-| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35653 |
-| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 21 | 10969 |
+| `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10551 |
+| `torchlens._io` | Portable I/O primitives for TorchLens model logs (declared re-export FACADE). | 52 | 35668 |
+| `torchlens._ir` | Internal backend-neutral IR for TorchLens capture unification. | 20 | 10629 |
 | `torchlens._merged` | Cross-rank trace merging (merge-ranks tier (c), rung ). | 13 | 5849 |
 | `torchlens._notebook` | Extras-gated notebook namespace with no public objects yet. | 9 | 2412 |
 | `torchlens._observability` | Observability substrates. | 21 | 7920 |
@@ -77,7 +77,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.experimental.dagua` | Experimental Dagua rendering bridge exports. | 2 | 950 |
 | `torchlens.export` | Static export helpers for TorchLens logs. | 15 | 5828 |
 | `torchlens.export._model_explorer` | Google Model Explorer export family (modelexplorer -B12). | 16 | 3005 |
-| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34307 |
+| `torchlens.intervention` | Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. | 69 | 34308 |
 | `torchlens.intervention._super` | Aligned Super views for TorchLens intervention bundles. | 5 | 1857 |
 | `torchlens.intervention._topology` | Topology comparison and supergraph construction for intervention bundles. | 2 | 790 |
 | `torchlens.io` | Public I/O and administrative helpers for TorchLens. | 1 | 365 |
@@ -368,8 +368,8 @@ Extraction data substrates: digest primitives + artifact v2 + model identity. (4
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
-| `__init__` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 80 |
-| `artifact` | Extraction ARTIFACT v2: bounded manifest + append-only fsynced ledger (extract ). | 646 |
+| `__init__` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 78 |
+| `artifact` | Extraction ARTIFACT v2: bounded manifest + append-only fsynced ledger (extract ). | 648 |
 | `digests` | Digest primitives, built once, used everywhere (extract memo item 1). | 298 |
 | `model_identity` | Model identity for extraction artifacts (extract + item 6). | 186 |
 
@@ -384,7 +384,7 @@ TorchLens ecosystem runtime: provider discovery. (2 modules, 594 lines)
 
 ### `torchlens._extraction`
 
-Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
+Extraction v2 runtime (extract memo items 4-19). (19 modules, 10551 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -395,7 +395,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 | `dtype_policy` | Save-dtype routing: explicit, routed, disclosed (extract + item 9). | 211 |
 | `engine` | The extraction v2 store pipeline and run engines (extract + ). | 1847 |
 | `envelope` | The typed batch envelope and the collate door (extract + item 5). | 673 |
-| `export` | Read-only streaming exporters + the self-contained contract. | 745 |
+| `export` | Read-only streaming exporters + the self-contained contract. | 744 |
 | `harvest_schema` | Counterfactual-harvest schema (leverage B17 / ): fields land NOW. | 216 |
 | `intervened` | Intervened dataset extraction (spellings DOCUMENTED-UNSTABLE). | 412 |
 | `pool` | Pool presets: axis-explicit, mask-aware, refuse ambiguity (extract ). | 397 |
@@ -410,7 +410,7 @@ Extraction v2 runtime (extract memo items 4-19). (19 modules, 10552 lines)
 
 ### `torchlens._io`
 
-Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (52 modules, 35653 lines)
+Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (52 modules, 35668 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -428,10 +428,10 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `_payload_codec_paddle` | Paddle place resolution for the payload codec. | 36 |
 | `_pickle_prescan` | Pre-scan for the restricted bundle unpickler: the plan the C machine enforces. | 773 |
 | `_portability_preflight` | Save-side portability preflight for ''metadata.pkl'' (AUD-CODE 2.20 / 3.11g). | 332 |
-| `_pre3_module_paths` | The one refusal for a file saved by torchlens 2.x. | 183 |
+| `_pre3_module_paths` | The one refusal for a file saved by torchlens 2.x. | 193 |
 | `_rehydrate_lazy_names` | Pure naming helpers mapping manifest blob kinds to lazy-reference fields. | 53 |
 | `_root_manifest` | Route a ''.tlspec'' directory by its root manifest before trace-bundle parsing. | 110 |
-| `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1408 |
+| `_safe_unpickle` | Restricted unpickler for TorchLens portable-bundle metadata. | 1404 |
 | `_save_gates` | Save-entry gate helpers for ''torchlens._io.bundle.save''. | 185 |
 | `_small_raw` | Bounded portable previews of raw inputs and outputs under ''save_raw_input="small"''. | 183 |
 | `_source_privacy` | Source-embedding privacy policy for portable saves (split from scrub.py). | 479 |
@@ -443,7 +443,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 | `bundle_metadata` | Bundle-metadata (''bundle.json'') section + member-relation loading. | 314 |
 | `field_registry` | Persisted-field registry: the one queryable index of the tlspec envelope. | 275 |
 | `forgery_validation` | Load-boundary validation for persisted cross-record claim families. | 1996 |
-| `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 540 |
+| `format_contract` | The tlspec FORMAT CONTRACT: L1 product vocabulary + record-adjacent helpers. | 549 |
 | `format_errors` | Portable-I/O error vocabulary (logical L0; physically homed with _io). | 128 |
 | `injection_codec` | Injected-op persistence codec (''log_injections'' stage 2). | 798 |
 | `lazy` | Lazy out reference placeholders for portable TorchLens bundles. | 256 |
@@ -469,7 +469,7 @@ Portable I/O primitives for TorchLens model logs (declared re-export FACADE). (5
 
 ### `torchlens._ir`
 
-Internal backend-neutral IR for TorchLens capture unification. (21 modules, 10969 lines)
+Internal backend-neutral IR for TorchLens capture unification. (20 modules, 10629 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -488,7 +488,6 @@ Internal backend-neutral IR for TorchLens capture unification. (21 modules, 1096
 | `op_record_manifest` | GENERATED FILE — do not edit. CellSourceManifest v2. | 207 |
 | `op_record_scatter` | Record -> store-cell scatter and the cell-source classification (v1). | 524 |
 | `predicate` | Unified predicate context for capture filtering and selector adapters. | 293 |
-| `predicate_registry` | Frozen predicate runtime extension point (the seam contract). | 340 |
 | `refs` | Reference dataclasses for backend-neutral captured objects. | 154 |
 | `selector_eval` | The one selector interpreter for capture-time, post-hoc, and live matching. | 1696 |
 | `semantics` | Capture policy and backend semantics records. | 51 |
@@ -1587,7 +1586,7 @@ Google Model Explorer export family (modelexplorer -B12). (16 modules, 3005 line
 
 ### `torchlens.intervention`
 
-Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (69 modules, 34307 lines)
+Import surface for TorchLens intervention selectors, hooks, reruns, and bundles. (69 modules, 34308 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1622,7 +1621,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_runtime_probes` | Storage-mutation probes for live intervention hook outputs. | 199 |
 | `_runtime_sites` | Site-scope and provisional-site helpers for live intervention hooks. | 267 |
 | `_site_signal` | Site-signal classification: which pass a selector site lives in. | 106 |
-| `_spec_codec` | Codec of the ''.tlspec'' spec document (''spec.json''). | 634 |
+| `_spec_codec` | Codec of the ''.tlspec'' spec document (''spec.json''). | 635 |
 | `_spec_values` | Value grammar of the persisted intervention spec: the JSON wrapper tags | 756 |
 | `_subspace_edits` | k-dimensional subspace ablation and interchange edits (N-IV-6). | 264 |
 | `_subspace_projection` | Projection-valued subspace edits: ''do(subspace(...), edit)'' edits the component. | 529 |
