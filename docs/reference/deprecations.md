@@ -56,7 +56,7 @@ unaffected.
 | `save_intervention` | `torchlens.io.save_intervention` | removed |
 | `suppress_mutate_warnings` | `torchlens.io.suppress_mutate_warnings` | removed |
 | `unwrap_torch` | `torchlens.backends.torch.wrappers.unwrap_torch` | removed |
-| `validate_batch_of_models_and_inputs` | `torchlens.validation.validate_batch_of_models_and_inputs` | removed |
+| `validate_batch_of_models_and_inputs` | none: call `torchlens.validate(model, x)` per model | removed |
 | `wrap_torch` | `torchlens.backends.torch.wrappers.wrap_torch` | removed |
 | `wrapped` | `torchlens.backends.torch.wrappers.wrapped` | removed |
 

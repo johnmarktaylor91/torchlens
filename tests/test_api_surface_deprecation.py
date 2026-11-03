@@ -60,11 +60,6 @@ REMOVED_TOP_LEVEL_CASES = [
     ("save_intervention", "torchlens.io", "save_intervention"),
     ("suppress_mutate_warnings", "torchlens.io", "suppress_mutate_warnings"),
     ("unwrap_torch", "torchlens.backends.torch.wrappers", "unwrap_torch"),
-    (
-        "validate_batch_of_models_and_inputs",
-        "torchlens.validation",
-        "validate_batch_of_models_and_inputs",
-    ),
     ("wrap_torch", "torchlens.backends.torch.wrappers", "wrap_torch"),
     ("wrapped", "torchlens.backends.torch.wrappers", "wrapped"),
 ]
@@ -93,6 +88,7 @@ REMOVED_WRAPPER_NAMES = [
     "draw_backward",
     "draw_combined",
     "load_intervention_spec",
+    "validate_batch_of_models_and_inputs",
 ]
 
 #: Removed paper-era shim names.

@@ -502,7 +502,6 @@ torchlens/_user_public_impls.py::show_bundle_graph	92
 torchlens/_user_public_impls.py::show_model_graph	117
 torchlens/_user_public_impls.py::summary	151
 torchlens/_user_public_impls.py::validate_backward_pass	71
-torchlens/_user_public_impls.py::validate_batch_of_models_and_inputs	82
 torchlens/_user_public_impls.py::validate_forward_pass	83
 torchlens/_utils/_callable_safety.py	1562
 torchlens/_utils/_callable_safety.py::_pure_view	67
