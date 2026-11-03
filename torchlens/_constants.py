@@ -1040,14 +1040,11 @@ PRIMITIVE_OP_FIELD_ORDER = [
 # ---------------------------------------------------------------------------
 # Function discovery for decoration
 # ---------------------------------------------------------------------------
-# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer.  These are
-# functions that PyTorch's __torch_function__ override mechanism *ignores*
-# (i.e., they cannot be intercepted via __torch_function__), but TorchLens
-# still decorates most of them.  They are listed separately because
-# _get_torch_overridable_functions() intentionally skips them, so we must
-# add them back into ORIG_TORCH_FUNCS explicitly.
-#
-# Source: https://pytorch.org/docs/stable/_modules/torch/overrides.html#get_ignored_functions
+# IMPORTANT: The name "IGNORED_FUNCS" is a historical misnomer. These are functions that
+# PyTorch's __torch_function__ override mechanism *ignores* (they cannot be intercepted via
+# __torch_function__), but TorchLens still decorates most of them. They are listed separately
+# because _get_torch_overridable_functions() intentionally skips them, so we must add them back
+# into ORIG_TORCH_FUNCS explicitly. Source: torch.overrides.get_ignored_functions().
 IGNORED_FUNCS = [
     ("torch", "load"),
     ("torch", "empty"),
@@ -1242,6 +1239,9 @@ IGNORED_FUNCS = [
     # result as an unattributed literal and the runnable artifact cannot save/run (the r44
     # corr1_1 / secF_1 finding: ``.mH`` "not modeled as a property op at all").
     ("torch.Tensor", "mH"),
+    # Compressed sparse conversions (``to_sparse`` is overridable; ``to_sparse_coo`` is a Python
+    # wrapper over it): unwrapped, ``x.to_sparse_csr()`` reached its consumer with no provenance.
+    *(("torch.Tensor", f"to_sparse_{layout}") for layout in ("csr", "csc", "bsr", "bsc")),
 ]
 
 
