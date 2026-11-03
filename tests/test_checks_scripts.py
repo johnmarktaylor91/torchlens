@@ -19,6 +19,7 @@ sys.path.insert(0, str(REPO / "scripts" / "checks"))
 import file_cap  # noqa: E402
 import id_lint  # noqa: E402
 import layering  # noqa: E402
+import removed_spelling_lint  # noqa: E402
 import run_all  # noqa: E402
 import tier_durations  # noqa: E402
 
@@ -184,3 +185,14 @@ def test_tier_durations_check_skips_a_tree_without_the_file_and_judges_this_one(
     outcome = tier_durations.check(Path(__file__).resolve().parents[1])
     assert outcome.message.startswith("tier-durations:")
     assert all(detail.startswith("FAIL") for detail in outcome.details)
+
+
+def test_removed_spelling_lint_sweeps_workflow_and_config_files() -> None:
+    """The lint scans ``.yml``/``.yaml`` (a workflow kept a removed spelling invisible to it)."""
+
+    for rel in (".github/workflows/nightly.yml", ".pre-commit-config.yaml", "mkdocs.yml"):
+        assert removed_spelling_lint._in_scan_scope(rel), rel
+    removed = "layers_to_save"  # kept apart from the call so this file does not trip the lint
+    planted = f"run: python -c \"capture=tl.options.CaptureOptions({removed}='none')\"\n"
+    hits = removed_spelling_lint._scan_file(Path("planted.yml"), planted)
+    assert [group for group, _, _ in hits] == ["options_flat"]
