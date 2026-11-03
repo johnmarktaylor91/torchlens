@@ -141,7 +141,7 @@ def test_nested_container_stays_bounded(small_log) -> None:
 
     bridge.register()
     html = treescope.render_to_html({"before": small_log}, ignore_exceptions=True, compressed=False)
-    assert "TorchLens Trace" in html
+    assert f"Trace {small_log.name}:" in html
     assert len(html) < 500_000
 
 

@@ -223,10 +223,10 @@ def _state_tokens(trace: Any) -> list[str]:
         tokens.append("(edited)")
     if state != "PRISTINE":
         tokens.append(f"({state.lower()})")
-    if getattr(trace, "_options_structure_only", False):
+    if trace._options_structure_only:
         # Existing claim property is metadata-only; never execute a probe.
         tokens.append(f"(structure_only={claim_status_for(trace).value.upper()})")
-    if getattr(trace, "_provenance_verified", None) is False:
+    if trace._provenance_verified is False:
         tokens.append("(capture unverified; counts are lower bounds)")
     armed = fail_open(trace._armed_summary_line, lambda _error: None)
     if armed:
@@ -248,16 +248,14 @@ def _identity(trace: Any) -> str:
     if trace.__dict__.get("_tl_cleaned_up", False):
         return f"Trace {getattr(trace, 'name', None) or 'unnamed'}: (freed)"
     name = getattr(trace, "name", None) or "unnamed"
-    model = getattr(trace, "_source_class_name", None) or "model unknown"
-    layers = len(getattr(trace, "_layer_logs", {}) or {})
-    ops = getattr(trace, "_num_ops", 0)
+    model = trace._source_class_name or "model unknown"
     states = " ".join(_state_tokens(trace))
     identity = f"Trace {name}"
     health = _health_text(trace)
-    progress = "(capture in progress)" if not getattr(trace, "_tracing_finished", False) else ""
+    progress = "(capture in progress)" if not trace._tracing_finished else ""
     # Drop optional metadata in order, keeping every honesty marker visible.
     required = [progress, states, health]
-    counts = [f"{format_count(layers)} layers", f"{format_count(ops)} ops"]
+    counts = _count_facts(trace)
     for optional in ([model, *counts], counts, []):
         line = one_line(identity, [*optional, *required])
         if len(line) <= REPR_COLS or not optional:
@@ -265,17 +263,28 @@ def _identity(trace: Any) -> str:
     return identity
 
 
+def _count_facts(trace: Any) -> list[str]:
+    if not trace._tracing_finished:
+        return [plural(len(trace.event_stream.op_events), "op event")]
+    return [
+        f"{format_count(len(trace._layer_logs))} layers",
+        f"{format_count(trace._num_ops)} ops",
+    ]
+
+
 def _trace_rows(trace: Any) -> list[tuple[str, str]]:
     """The shared text/HTML rows; all reads are metadata-only."""
 
     if trace.__dict__.get("_tl_cleaned_up", False):
         return []
+    if not trace._tracing_finished:
+        return [("captured", f"{plural(len(trace.event_stream.op_events), 'op event')} so far")]
     exact = format_exact_count
-    modules = max(0, len(getattr(trace, "_module_logs", {}) or {}) - 1)
+    modules = max(0, len(trace._module_logs) - 1)
     params = exact(getattr(trace, "num_params", 0))
-    param_ops = exact(getattr(trace, "_num_layers_with_params", 0))
-    duration = float(getattr(trace, "_provenance_duration", 0))
-    compute = float(getattr(trace, "_cost_func_calls_duration", 0))
+    param_ops = exact(trace._num_layers_with_params)
+    duration = float(trace._provenance_duration)
+    compute = float(trace._cost_func_calls_duration)
     saved = sum(bool(getattr(op, "has_saved_activation", False)) for op in trace._layer_list)
     rows = [
         (
@@ -294,12 +303,12 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
         ("outputs", plural(len(trace.output_layers), "output site")),
         ("flops", "MACs reported as FLOPs // 2"),
     ]
-    if getattr(trace, "_provenance_verified", None) is False:
+    if trace._provenance_verified is False:
         rows.insert(
             0,
             (
                 "capture",
-                f"unverified: {getattr(trace, '_provenance_verification_reason', 'reason unavailable')}; counts are lower bounds",
+                f"unverified: {trace._provenance_verification_reason or 'reason unavailable'}; counts are lower bounds",
             ),
         )
     return rows
@@ -308,7 +317,7 @@ def _trace_rows(trace: Any) -> list[tuple[str, str]]:
 def _graph_text(trace: Any) -> str:
     graph = trace.graph
     topology = "recurrent" if graph.is_recurrent else "feedforward"
-    if getattr(trace, "_provenance_verified", None) is False:
+    if trace._provenance_verified is False:
         topology = "structure unverified"
     branching = "with branching" if graph.is_branching else "no branching"
     conditional = (
