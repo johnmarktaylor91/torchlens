@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.options import CaptureOptions
+from torchlens.options import CaptureOptions, InterventionOptions
 
 
 class _Mlp(nn.Module):
@@ -121,7 +121,10 @@ def test_fast_door_on_a_fork_applies_a_module_target_after_one_recapture() -> No
     model = _model()
     ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork.attach_hooks(tl.module("fc1"), tl.zero_ablate(), confirm_mutation=True)
+    fork.do(
+        {tl.module("fc1"): tl.zero_ablate()},
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
 
     with pytest.raises(RunCapabilityUnavailableError) as unsteered:
         fork.run(inputs=_inputs(1), fast=True)
@@ -138,7 +141,10 @@ def test_fast_door_refuses_a_function_target_typed() -> None:
     model = _model()
     ready = tl.trace(model, _inputs(0), capture=CaptureOptions(replayable=True))
     fork = ready.fork()
-    fork.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
+    fork.do(
+        {tl.func("relu"): tl.zero_ablate()},
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
+    )
 
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         fork.run(inputs=_inputs(1), fast=True)

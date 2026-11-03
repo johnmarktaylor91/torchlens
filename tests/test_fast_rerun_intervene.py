@@ -28,6 +28,7 @@ from torchlens._fast_run import close_fast_run_session
 from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
 from torchlens.intervention.errors import ControlFlowDivergenceWarning
+from torchlens.options import InterventionOptions
 
 _VOCAB = 64
 _DIM = 16
@@ -672,10 +673,9 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
 
     other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
     trace.clear_hooks(confirm_mutation=True)
-    trace.attach_hooks(
-        tl.module(_SITE),
-        tl.steer(other, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
+    trace.do(
+        {tl.module(_SITE): tl.steer(other, strength=_MAGNITUDE, dim=-1)},
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     restaged = trace.run(inputs=ids, fast=True)
     assert restaged.trace.last_run["engine"] == "guarded_fast"
@@ -712,10 +712,9 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     ids = _ids(_CAPTURE_LEN, seed=3)
     baseline = _module_hook_count(model)
     trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
-    trace.attach_hooks(
-        tl.module(_SITE),
-        tl.steer(direction, strength=_MAGNITUDE, dim=-1),
-        confirm_mutation=True,
+    trace.do(
+        {tl.module(_SITE): tl.steer(direction, strength=_MAGNITUDE, dim=-1)},
+        intervention=InterventionOptions(engine="set_only", confirm_mutation=True),
     )
     assert _SITE not in graph_fired_addresses(trace)
 
