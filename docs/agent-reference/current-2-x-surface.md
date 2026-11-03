@@ -1140,7 +1140,8 @@
   naming-session ratification): bare `trace.summary()` / `tl.summary(model, x)`
   render the AUTO VIEW LADDER (coalesced hybrid -> strictly folded module tree
   -> descending depth -> protected totals-conserving elision) under a derived
-  48-body-row budget, returning a `SummaryReport` (str subclass) whose text is
+  48-body-row budget, returning a `SummaryReport` (str subclass; a `view="stats"` report serves its typed
+  `StatsTable` as `report.table`) whose text is
   canonical byte-stable ASCII (unicode only at display boundaries through a 1:1
   glyph table; `ascii == degrade(unicode)` CI-pinned; detection fails toward
   ASCII, `TORCHLENS_SUMMARY_STYLE` overrides). The identity partition is law:

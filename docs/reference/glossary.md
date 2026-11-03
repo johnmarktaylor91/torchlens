@@ -3137,6 +3137,14 @@ deprecation shim owed*
   full-square attention op ends in `^` with a footer note. See
   [summary](summary.md).
 
+**SummaryReport.table (`trace.summary(view="stats").table`)** — *unstable — no deprecation shim owed*
+: The typed observation table (`StatsTable`) behind a `view="stats"` report: `rows`
+  (`StatsTableRow` records with `state`, `stats`, `reason`, `parent_mark`), `ok_rows`,
+  `sort_rows(by=..., descending=...)` (sorts on a sampled column are disclosed) and
+  `fold_same_as_parent()` (opt-in fold of `= parent` rows with an exact count). The report's
+  text is one rendering of it. A report built with any other view carries no table and
+  refuses `summary_table_unavailable`.
+
 **Summary Params footer extras** — *unstable — no deprecation shim owed*
 : The Params footer line carries `size` (unique parameter storage, dtype
   true), a `pruned:` note with raw and effective nonzero counts on models

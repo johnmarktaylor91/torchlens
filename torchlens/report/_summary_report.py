@@ -31,6 +31,7 @@ from ._summary_charset import degrade
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
+    from ._stats_table import StatsTable
 
 #: The five-value evidence enum (summary item 10 / costreport D2). Orthogonal
 #: to applicability; a mixed aggregate never upgrades past its weakest member.
@@ -333,6 +334,29 @@ class SummaryReport(str):
         if self._stats is not None:
             return tuple(self._stats.rows)
         return self._rows
+
+    @property
+    def table(self) -> StatsTable:
+        """The typed observation table behind a ``view="stats"`` report.
+
+        ``sort_rows``, ``fold_same_as_parent`` and ``ok_rows`` live on it; the
+        report's text is one rendering of it. A report built with any other
+        view carries no table and refuses typed.
+
+        Raises
+        ------
+        InvalidArgumentError
+            ``summary_table_unavailable`` when this report is not a stats view.
+        """
+
+        if self._stats is None:
+            raise InvalidArgumentError(
+                'report.table serves view="stats" summaries; this report carries no '
+                "observation table.",
+                code="summary_table_unavailable",
+                remedy='call trace.summary(view="stats") and read .table on that report',
+            )
+        return self._stats
 
     def _stats_html(self) -> str:
         """The stats table as an escaped preformatted block."""
