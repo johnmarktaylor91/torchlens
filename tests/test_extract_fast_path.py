@@ -15,7 +15,7 @@ from torch import nn
 
 import torchlens as _tl_pkg
 import torchlens as tl
-from torchlens.errors import InvalidArgumentError
+from torchlens.errors import AmbiguousOpLookupError, InvalidArgumentError
 
 
 class _Block(nn.Module):
@@ -135,11 +135,12 @@ def test_ineligible_requests_run_the_full_capture(
         model, layers = _Net().eval(), ["blocks.0"]
     inputs: Any = [x] if case == "kwargs_input" else x
     ran = _spy(monkeypatch)
-    if case in ("never_called", "called_twice"):  # the capture owns both refusals
+    if case in ("never_called", "called_twice", "tuple_output"):  # the capture's refusals
         with contextlib.ExitStack() as stack:
             if case == "never_called":  # the capture warns about the unmatched name first
                 stack.enter_context(pytest.warns(UserWarning, match="matched zero layers"))
-            stack.enter_context(pytest.raises(InvalidArgumentError))
+            error = AmbiguousOpLookupError if case == "tuple_output" else InvalidArgumentError
+            stack.enter_context(pytest.raises(error))
             tl.extract(model, inputs, layers)
         assert ran == [1]
         return
@@ -151,18 +152,25 @@ def test_ineligible_requests_run_the_full_capture(
 
 
 def test_a_fallback_restores_the_random_state() -> None:
+    """A fallback leaves the random state as if only the full capture had run."""
+
     torch.manual_seed(0)
     model, x = _NoisyPairNet().eval(), torch.randn(2, 6)
     torch.manual_seed(5)
-    got = tl.extract(model, x, ["pair"])  # hooked forward draws noise, sees a tuple, falls back
+    with pytest.raises(AmbiguousOpLookupError):  # hooked forward draws noise, sees a tuple
+        tl.extract(model, x, ["pair"])
+    after_extract = torch.rand(4)
     torch.manual_seed(5)
-    _same(got, _full(model, x, ["pair"]))
+    with pytest.raises(AmbiguousOpLookupError):
+        _full(model, x, ["pair"])
+    assert torch.equal(after_extract, torch.rand(4))
 
 
 def test_unknown_names_keep_the_capture_refusal() -> None:
     model, x = _Net().eval(), torch.randn(2, 6)
-    with pytest.raises(InvalidArgumentError):
-        tl.extract(model, x, ["blocks.0", "no_such_module"])
+    with pytest.warns(UserWarning, match="matched zero layers"):
+        with pytest.raises(InvalidArgumentError):
+            tl.extract(model, x, ["blocks.0", "no_such_module"])
 
 
 def test_op_labels_and_attached_outs_use_the_capture(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -20,9 +20,9 @@ or by operation, and you can edit tensors during the pass, without writing
 or removing hooks. Works on any nn.Module (HuggingFace included). The
 tensors are the model's own, from its real forward pass, so they equal what
 a forward hook on the same module would see. In eval mode, tl.extract on
-modules that return one tensor (a HuggingFace decoder layer, an MLP, a
-Linear) costs about one plain forward pass; other requests and tl.trace
-record every op and add about 1-3 s on a small model.
+modules that return one tensor (an MLP, a Linear, a decoder layer in
+transformers 5) costs about one plain forward pass; other requests and
+tl.trace record every op and add about 1-3 s on a small model.
 
 A plain forward hook is fine for ONE module output you already know by
 name. TorchLens saves the most code compared with hooks for ops that have
@@ -56,9 +56,10 @@ Replace the names with your model's.
 
 ## Module outputs
 
-tl.extract returns {module_name: output tensor}. A module that returns a
-tuple gives its first tensor (a HuggingFace decoder layer gives its hidden
-states).
+tl.extract returns {module_name: output tensor} for modules that return
+one tensor. A module that returns several tensors (a tuple) raises
+AmbiguousOpLookupError; trace instead and read the labels of its output
+ops, tr.modules[name].output_ops, then tr[label].out.
 
     import torchlens as tl
     acts = tl.extract(model, x, ["blocks.0", "blocks.1.mlp"])
