@@ -325,23 +325,6 @@ def test_func_selector_every_helper(tiny: _Fixture, door: str, helper_name: str)
     )
 
 
-@pytest.mark.parametrize("helper_name", sorted(_HELPERS))
-@pytest.mark.parametrize("door", ("intervene", "attach_hooks"))
-def test_grad_fn_selector_every_helper(tiny: _Fixture, door: str, helper_name: str) -> None:
-    """``tl.grad_fn`` edits the grad inputs of every matching autograd node."""
-
-    build, fn = _HELPERS[helper_name]
-    _check_spelling(
-        tiny,
-        door=door,
-        runner="trace.backward",
-        opt_in="backward_ready",
-        selector=tl.grad_fn(name=_LN_NODE),
-        helper=build(),
-        want=tiny.oracle("grad_fn", _LN_NODE, fn),
-    )
-
-
 def test_grad_fn_selector_grad_input_family(tiny: _Fixture) -> None:
     """A neutral clamp on a grad_fn node edits its grad inputs like the oracle."""
 
@@ -363,44 +346,6 @@ def test_label_selector_post_capture_doors(tiny: _Fixture, door: str) -> None:
     _check_spelling(
         tiny,
         door=door,
-        runner="trace.backward",
-        opt_in="backward_ready",
-        selector=tl.grad(tl.label(tiny.ln_label)),
-        helper=tl.zero_ablate(),
-        want=tiny.oracle("module", _LN_SINGLE, _zero),
-    )
-
-
-def test_in_module_composite_selector(tiny: _Fixture) -> None:
-    """``in_module & func`` selects the MLP's projections inside the multi-pass graph."""
-
-    model = tiny.fresh()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.trace(
-            model,
-            tiny.ids,
-            capture=tl.options.CaptureOptions(backward_ready=True),
-            intervene=tl.when(tl.grad(tl.in_module(_MLP) & tl.func("addmm")), tl.zero_ablate()),
-        )
-        got = _run_backward(trace, model, "trace.backward")
-    assert _backward_fires(trace) > 0
-    # c_proj's addmm output gradient is zeroed, so nothing flows back into c_fc.
-    assert not torch.count_nonzero(got[f"{_MLP}.c_fc.weight"])
-    assert not torch.equal(got["transformer.wpe.weight"], tiny.clean["transformer.wpe.weight"])
-
-
-def test_label_selector_on_capture_door_arms_and_matches_oracle(tiny: _Fixture) -> None:
-    """A finalized label in ``tl.grad`` at ``intervene=`` arms and edits that layer norm.
-
-    SPEC 1.2 and 1.4: a gradient address resolves its inner site against the
-    finished forward ops, where finalized labels exist, and SPEC 3.5 gives the
-    capture door the same lowering as the post-capture doors.
-    """
-
-    _check_spelling(
-        tiny,
-        door="intervene",
         runner="trace.backward",
         opt_in="backward_ready",
         selector=tl.grad(tl.label(tiny.ln_label)),

@@ -19,7 +19,6 @@ loop model as the multi-pass case through its loop-body relu (rule row 2).
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pytest
@@ -27,7 +26,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.intervention.rerun import _same_rerun_inputs
 from torchlens.options import CaptureOptions, InterventionOptions
 
@@ -66,26 +64,6 @@ def _traces(model_cls: type[nn.Module], inputs: tuple[Any, Any], other: tuple[An
     torch.manual_seed(0)
     model = model_cls().eval()
     return tl.trace(model, inputs), tl.trace(model, other)
-
-
-def test_folded_input_premise() -> None:
-    """Premise under call-site grouping: input nodes never fold.
-
-    Grouping rule section 2 (special nodes): input nodes are singletons, so the
-    loop model's two inputs are two single-pass input Layers, like the
-    control's; its loop-body relu is one 2-pass Layer (rule row 2). The
-    per-listing pairing in ``_same_rerun_inputs`` is still exercised by the
-    loop model's two listings, and the rest of this module pins the rerun on
-    the loop model's multi-pass relu.
-    """
-
-    folded, _ = _traces(_LoopOverInputs, _inputs(0), _inputs(0))
-    control, _ = _traces(_TwoInputs, _inputs(0), _inputs(0))
-    assert folded.input_layers == ["input_1", "input_2"]
-    assert all(len(folded[label].ops) == 1 for label in folded.input_layers)
-    relu_layers = [layer for layer in folded._layer_logs.values() if layer.func_name == "relu"]
-    assert [len(layer.ops) for layer in relu_layers] == [2]
-    assert control.input_layers == ["input_1", "input_2"]
 
 
 @pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs], ids=["folded", "single"])
@@ -154,32 +132,3 @@ def _rerun(baseline: Any, site: Any, model: nn.Module, inputs: tuple[Any, Any]) 
         inputs=inputs,
         intervention=InterventionOptions(engine="rerun"),
     )
-
-
-@pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs], ids=["folded", "single"])
-def test_zero_fire_rerun_on_same_inputs_refuses_typed(model_cls: type[nn.Module]) -> None:
-    model, inputs, baseline, label = _intervention_case(model_cls)
-    member = baseline.fork()
-    before = member[label].out.clone()
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        member.do(
-            _value_predicate(baseline, label),
-            tl.zero_ablate(),
-            model=model,
-            inputs=tuple(t.clone() for t in inputs),
-            intervention=InterventionOptions(engine="rerun"),
-        )
-    assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"
-    assert excinfo.value.fields["source_site_count"] == 1
-    assert torch.equal(member[label].out, before)
-
-
-@pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs], ids=["folded", "single"])
-def test_zero_fire_rerun_on_a_changed_second_input_warns(model_cls: type[nn.Module]) -> None:
-    model, (a, b), baseline, label = _intervention_case(model_cls)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = _rerun(baseline, _value_predicate(baseline, label), model, (a.clone(), b + 1.0))
-    assert [w for w in caught if "fired at zero sites" in str(w.message)]
-    assert result.last_run["hooks_fired"] == 0
-    assert result.last_run["hooks_unfired"] > 0

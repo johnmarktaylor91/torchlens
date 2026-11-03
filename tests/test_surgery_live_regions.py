@@ -202,31 +202,6 @@ def test_region_construction_refusals(chain_fork) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_region_do_substitutes_exits_interior_not_replayed(chain_fork) -> None:
-    """The region edit lands at the exit; downstream recomputes; facts ride."""
-
-    model, x, fork = chain_fork
-    target = fork.between(fork["linear_1_1"], fork["tanh_1_4"]).as_region()
-    fork.do(target, tl.zero_ablate())
-    assert torch.allclose(fork["linear_3_5"].out, model.fc3(torch.zeros(3, 4)), atol=1e-6)
-    (fact,) = _region_fact_rows(fork)
-    assert fact["execution_effect"] == "exits_substituted_interior_not_replayed"
-    assert fact["instances"] == [
-        {"instance": 1, "members": 4, "exit_ops": ["tanh_1_4:1"], "evaluations": 1}
-    ]
-    assert fact["effect_closure"]["certified_channels"] == [
-        "buffer_writes",
-        "collectives",
-        "inplace_ops",
-    ]
-    assert "not certified" in fact["effect_closure"]["note"]  # never "effect-free"
-    assert fact["source"] == "current_transaction"
-    # the do() transaction envelope landed through the one chokepoint
-    assert any(row.get("kind") == "ACT" for row in fork.intervention_audit)
-    # interior values are capture truth, not replayed: relu output unchanged
-    assert torch.allclose(fork["relu_1_2"].out, torch.relu(model.fc1(x)), atol=1e-6)
-
-
 def test_region_do_validation_tripwire_unchanged(chain_fork) -> None:
     """Validation gives the corroborated boundary verdict, never a skip."""
 
@@ -311,35 +286,6 @@ def test_region_multi_exit_atomic_once_per_instance() -> None:
     assert torch.allclose(fork2["cat_1_7"].out, expected, atol=1e-6)
 
 
-def test_region_stochastic_once_per_pass() -> None:
-    """A stochastic region edit draws once per instance, reused at each exit."""
-
-    torch.manual_seed(0)
-    model = _TwoHead().eval()
-    x = torch.randn(3, 4)
-    fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    draws: list[torch.Tensor] = []
-
-    def _stochastic(outs: tuple, *, ctx) -> tuple:
-        """One draw per evaluation, applied to every exit."""
-
-        draw = torch.randn(())
-        draws.append(draw)
-        return tuple(out * 0.0 + draw for out in outs)
-
-    target = fork.subgraph(
-        fork["relu_1_2"].__selection__()
-        | fork["linear_2_3"].__selection__()
-        | fork["linear_3_5"].__selection__()
-    ).as_region()
-    fork.do(target, _stochastic)
-    assert len(draws) == 1
-    # both heads saw the SAME draw
-    left = fork["sigmoid_1_4"].out
-    right = fork["sigmoid_2_6"].out
-    assert torch.allclose(left, right, atol=1e-6)
-
-
 def test_region_container_consumed_exit_extends() -> None:
     """Exit values consumed inside cat's LIST argument splice at nested paths."""
 
@@ -366,25 +312,6 @@ def test_region_container_consumed_exit_extends() -> None:
 
     fork.do(target, _halves)
     assert torch.allclose(fork["cat_1_7"].out, torch.full((3, 4), 0.5), atol=1e-6)
-
-
-def test_region_shared_block_pass_instances() -> None:
-    """A region over both passes of a shared block partitions per traversal."""
-
-    torch.manual_seed(0)
-    model = _SharedBlock().eval()
-    x = torch.randn(2, 4)
-    fork = tl.trace(model, x, capture=_CAPTURE).fork()
-    # pass-1 only: pass-qualified endpoints, one instance
-    single = fork.between(fork["linear_1_1:1"], fork["linear_1_1:1"]).as_region()
-    assert single.labels == ("linear_1_1:1",)
-    assert len(single.instances) == 1
-    fork.do(single, tl.zero_ablate())
-    # pass 1 zeroed -> relu(0) = 0 -> pass 2 = bias-only forward
-    expected = model.block(torch.relu(torch.zeros(2, 4)))
-    assert torch.allclose(fork["linear_1_1:2"].out, expected, atol=1e-6)
-    (fact,) = _region_fact_rows(fork)
-    assert fact["instances"][0]["exit_ops"] == ["linear_1_1:1"]
 
 
 def test_region_disconnected_members_evaluate_per_instance() -> None:

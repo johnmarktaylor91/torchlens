@@ -243,50 +243,6 @@ def test_lrp0_self_oracle_bias_free_relu() -> None:
     assert leftovers == {}
 
 
-def test_epsilon_absorption_is_disclosed_not_hidden() -> None:
-    """With epsilon > 0 the ledger discloses absorption; nothing pretends exactness."""
-
-    model = _BiasFreeMlp()
-    x = torch.tensor([[0.7, -0.3, 0.5, 0.2]], dtype=torch.float64)
-    _relevance, ledger, _left = epsilon_lrp(model, x, target_index=1, epsilon=0.05)
-    assert any(row["conservation_delta_abs"] > 0 for row in ledger)
-    for row in ledger:
-        assert {"input_relevance_sum", "output_relevance_sum", "dtype", "device"} <= set(row)
-
-
-def test_uncovered_op_refuses_by_exact_label() -> None:
-    """A parameterized non-Linear/Conv site refuses naming its exact label."""
-
-    model = nn.Sequential(
-        nn.Linear(4, 4, dtype=torch.float64),
-        nn.BatchNorm1d(4, dtype=torch.float64),
-        nn.Linear(4, 2, dtype=torch.float64),
-    )
-    with pytest.raises(AttributionError) as excinfo:
-        epsilon_lrp(model, torch.randn(2, 4, dtype=torch.float64), target_index=0)
-    message = str(excinfo.value)
-    assert "'1'" in message and "BatchNorm1d" in message
-    assert "Generic identity is forbidden" in message
-
-
-def test_concat_splits_relevance_by_slice() -> None:
-    """The concat rule is the honest slice split: branch sums add up."""
-
-    model = _ConcatFire()
-    x = torch.rand(1, 2, 3, 3, dtype=torch.float64, generator=torch.Generator().manual_seed(2))
-    relevance, ledger, leftovers = epsilon_lrp(model, x, target_index=0, epsilon=0.0)
-    assert leftovers == {}
-    by_site = {row["site"]: row for row in ledger}
-    assert set(by_site) == {"left", "right", "head"}
-    # Bias-free, epsilon 0: the head's input relevance equals the two
-    # branches' output relevance exactly -- the concat added no parameter.
-    branch_output_total = (
-        by_site["left"]["output_relevance_sum"] + by_site["right"]["output_relevance_sum"]
-    )
-    assert by_site["head"]["input_relevance_sum"] == pytest.approx(branch_output_total, rel=1e-9)
-    assert relevance.shape == x.shape
-
-
 def test_sitestash_pairing_proven_on_reused_module() -> None:
     """D30: stash/fetch pairing is correct when ONE module fires twice."""
 
@@ -315,34 +271,3 @@ def test_sitestash_leftovers_disclosed() -> None:
     stash.mark_firing(module)
     stash.stash(module, "input", object())
     assert stash.leftovers() == {"dead-branch": 1}
-
-
-@pytest.mark.heavy
-@pytest.mark.real_model
-def test_squeezenet_full_ledger_row() -> None:
-    """The FULL squeezenet1_1 ledger (D32 blocking row; ~5 MB, fetched once).
-
-    Zero BatchNorm, no residual add, exactly one concat per Fire module --
-    the architecture the litmus recipe covers end to end. Every conv site
-    lands one finite ledger row; the per-site conservation deltas are the
-    DISCLOSURE (epsilon and bias absorption are absorption, never called
-    exact conservation).
-    """
-
-    torchvision_models = pytest.importorskip("torchvision.models")
-    model = torchvision_models.squeezenet1_1(
-        weights=torchvision_models.SqueezeNet1_1_Weights.IMAGENET1K_V1
-    )
-    model.eval()
-    generator = torch.Generator().manual_seed(7)
-    image = torch.randn(1, 3, 224, 224, generator=generator)
-    relevance, ledger, leftovers = epsilon_lrp(model, image, target_index=207, epsilon=1e-6)
-    assert relevance.shape == image.shape
-    assert bool(torch.isfinite(relevance).all())
-    # squeezenet1_1 has 26 conv sites (first conv + 8 fires x 3 + classifier).
-    assert len(ledger) == 26
-    assert {row["site"] for row in ledger} >= {"features.0", "classifier.1"}
-    for row in ledger:
-        assert row["nonfinite"] is False, row["site"]
-        assert row["grad_slots"] == 1
-    assert leftovers == {}

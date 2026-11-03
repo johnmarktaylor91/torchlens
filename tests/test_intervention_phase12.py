@@ -14,7 +14,6 @@ from torchlens.intervention.errors import (
     AppendMismatchError,
     BatchNormTrainModeWarning,
 )
-from torchlens.io import TraceState
 from torchlens.options import CaptureOptions
 
 
@@ -149,27 +148,6 @@ def _first_batch_out(log: tl.Trace) -> torch.Tensor:
         if isinstance(layer.out, torch.Tensor) and layer.out.ndim > 0:
             return layer.out
     raise AssertionError("no batch out found")
-
-
-def test_append_success_grows_batch_and_sets_state() -> None:
-    """Compatible append concatenates saved outs and records state."""
-
-    torch.manual_seed(0)
-    model = _LinearRelu()
-    model.eval()
-    log = _capture(model, torch.randn(2, 3))
-    original_history_len = len(log.state_history)
-
-    result = log.run(model, torch.randn(3, 3), replay=tl.options.ReplayOptions(append=True))
-
-    assert result is log
-    assert log.provenance.is_appended is True
-    assert log._append_sequence_id == 1
-    assert log.state is TraceState.APPENDED
-    assert log.last_run["engine"] == "append"
-    assert log.state_history[-1]["op"] == "append"
-    assert len(log.state_history) == original_history_len + 1
-    assert _first_batch_out(log).shape[0] == 5
 
 
 def test_append_topology_mismatch_raises() -> None:

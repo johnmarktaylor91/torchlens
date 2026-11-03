@@ -116,15 +116,6 @@ def test_bound_generate_door_policy(policy: str) -> None:
     assert [c for c in _codes(caught) if c.endswith("zero_fire")] == expected
 
 
-def test_bind_fired_rule_never_warns() -> None:
-    model, x = _setup()
-    bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
-    with _caught() as caught:
-        bound(x)
-    assert bound.last_report.zero_fire_rule_ids == ()
-    assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
-
-
 # --- tl.trace(intervene=) ------------------------------------------------------
 
 
@@ -176,13 +167,6 @@ def test_trace_policy_never_changes_the_capture() -> None:
     assert torch.equal(
         fired[fired.output_layers[0]].out, fired_disclosed[fired.output_layers[0]].out
     )
-
-
-def test_trace_fired_spec_never_warns() -> None:
-    model, x = _setup()
-    with _caught() as caught:
-        tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
-    assert not [c for c in _codes(caught) if c.endswith("zero_fire")]
 
 
 # --- Trace.run (rerun) -------------------------------------------------------

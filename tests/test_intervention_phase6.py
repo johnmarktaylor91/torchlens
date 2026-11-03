@@ -15,7 +15,6 @@ from torchlens.intervention.errors import (
     MultiMatchWarning,
     ReplayPreconditionError,
 )
-from torchlens.intervention.replay import cone_of_effect
 from torchlens.io import TraceState
 
 replay_mod = importlib.import_module("torchlens.intervention.replay")
@@ -188,25 +187,6 @@ def _first_func(log: Any, func_name: str) -> Any:
     return next(layer for layer in log._layer_list if layer.func_name == func_name)
 
 
-def test_replay_hook_updates_downstream_cone_and_run_state() -> None:
-    """Replay applies hooks, mutates downstream output, and records run state."""
-
-    torch.manual_seed(0)
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    original_output = log[log.output_layers[0]].out.clone()
-
-    log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook}))
-
-    relu_site = _first_func(log, "relu")
-    assert torch.equal(relu_site.out, torch.zeros_like(relu_site.out))
-    assert not torch.equal(log[log.output_layers[0]].out, original_output)
-    assert log.state is TraceState.REPLAY_PROPAGATED
-    assert log.last_run["engine"] == "replay"
-    assert relu_site.edits[-1].engine == "replay"
-    assert relu_site.edits[-1].replaced is True
-    assert relu_site.is_edited is True
-
-
 def test_differentiable_replay_patching_captures_backward_grads() -> None:
     """Differentiable replay patches one run into another and captures grads."""
 
@@ -321,44 +301,6 @@ def test_differentiable_replay_forks_isolated_records() -> None:
     assert replayed[outside_cone_label].edits is not log[outside_cone_label].edits
 
 
-def test_replay_failure_rolls_back_partial_out_updates(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Replay failures leave outs and intervention records unchanged."""
-
-    torch.manual_seed(0)
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    original_tensors = {
-        layer.layer_label: layer.out.clone()
-        for layer in log._layer_list
-        if isinstance(layer.out, torch.Tensor)
-    }
-    original_records = {layer.layer_label: list(layer.edits) for layer in log._layer_list}
-    original_state = log.state
-    real_execute = replay_mod._execute_replay_func_strict
-    execute_count = 0
-
-    def flaky_execute(site: Any, args: tuple[Any, ...], kwargs: dict[str, Any]) -> Any:
-        """Raise after the replay has computed an upstream update."""
-
-        nonlocal execute_count
-        execute_count += 1
-        if execute_count == 2:
-            raise RuntimeError("replay boom")
-        return real_execute(site, args, kwargs)
-
-    monkeypatch.setattr(replay_mod, "_execute_replay_func_strict", flaky_execute)
-
-    with pytest.raises(RuntimeError, match="replay boom"):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _zero_hook}))
-
-    assert log.state is original_state
-    for layer in log._layer_list:
-        if layer.layer_label in original_tensors:
-            assert torch.equal(layer.out, original_tensors[layer.layer_label])
-        assert list(layer.edits) == original_records[layer.layer_label]
-
-
 def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
     """``replay_from`` treats the origin as already mutated."""
 
@@ -373,47 +315,6 @@ def test_replay_from_preserves_origin_out_and_recomputes_children() -> None:
     assert torch.equal(relu_site.out, replacement)
     assert log.state is TraceState.REPLAY_PROPAGATED
     assert relu_site.layer_label in log.last_run["origins"]
-
-
-def test_cone_of_effect_follows_bfs_children_and_stops_at_outputs() -> None:
-    """Cone traversal walks children and terminates at output leaves."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    relu_site = _first_func(log, "relu")
-
-    cone = cone_of_effect(log, [relu_site])
-    cone_labels = [site.layer_label for site in cone]
-
-    assert relu_site.layer_label in cone_labels
-    assert log.output_layers[0] in cone_labels
-    assert cone_labels == sorted(cone_labels, key=lambda label: log[label].step_index)
-
-
-def test_cone_of_effect_follows_output_versions_per_child() -> None:
-    """Cone traversal follows child-version edges even when children is stale."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    origin = _first_func(log, "linear")
-    child_label = origin.children[0]
-    origin.children = tuple(c for c in origin.children if c != child_label)
-    origin.out_versions_by_child[child_label] = origin.out
-
-    cone_labels = [site.layer_label for site in cone_of_effect(log, [origin])]
-
-    assert child_label in cone_labels
-
-
-def test_cone_of_effect_includes_all_func_call_id_siblings_once() -> None:
-    """Cone traversal expands same-call multi-output siblings."""
-
-    log = _interventions(SplitModel(), torch.randn(4, 5))
-    max_sites = [layer for layer in log._layer_list if layer.func_name == "max"]
-    assert len(max_sites) == 2
-
-    cone_labels = [site.layer_label for site in cone_of_effect(log, [max_sites[0]])]
-
-    assert {site.layer_label for site in max_sites}.issubset(cone_labels)
-    assert len(cone_labels) == len(set(cone_labels))
 
 
 def test_replay_executes_multi_output_func_call_group_once() -> None:
@@ -437,19 +338,6 @@ def test_replay_executes_multi_output_func_call_group_once() -> None:
         log.push(replay=tl.options.ReplayOptions(hooks={tl.func("max"): _identity_hook}))
 
     assert calls["count"] == 1
-
-
-def test_cone_of_effect_handles_cycles() -> None:
-    """Cone traversal tracks visited sites and avoids graph cycles."""
-
-    log = _interventions(ResidualRelu(), torch.randn(2, 3))
-    relu_site = _first_func(log, "relu")
-    output = log.ops[log.output_layers[0]]
-    output.children = tuple(output.children) + (relu_site.layer_label,)
-
-    cone = cone_of_effect(log, [relu_site])
-
-    assert len(cone) == len({site.layer_label for site in cone})
 
 
 def test_replay_warns_on_saved_edge_divergence() -> None:

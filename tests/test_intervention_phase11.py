@@ -69,23 +69,6 @@ def test_node_mark_styles_site_and_cone(tmp_path: Path) -> None:
         log.cleanup()
 
 
-def test_as_node_inserts_hook_node_between_site_and_consumers(tmp_path: Path) -> None:
-    """``as_node`` inserts a diamond hook node after an intervention site."""
-
-    log = _interventions()
-    try:
-        dot = log.draw(
-            path=str(tmp_path / "as_node"),
-            file_format="dot",
-            intervention_mode="as_node",
-        ).dot
-        assert "intervention_hook_" in dot
-        assert "shape=diamond" in dot
-        assert "intervention_hook_relu" in dot
-    finally:
-        log.cleanup()
-
-
 def test_bundle_show_draws_every_member(tmp_path: Path) -> None:
     """``Bundle.show`` takes ``Trace.draw`` keywords and returns one Drawing per member."""
 

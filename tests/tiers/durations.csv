@@ -604,7 +604,6 @@ tests/test_interv_honesty_dense_subspace_disclosure.py,3,0.62,0.23,smoke
 tests/test_interv_honesty_depth2_tripwire.py,4,0.44,0.32,unmarked
 tests/test_interv_honesty_donor_pass.py,6,12.97,5.84,heavy
 tests/test_interv_honesty_failed_do_cleanup.py,4,1.08,0.43,smoke
-tests/test_interv_honesty_fire_count.py,3,0.67,0.23,unmarked
 tests/test_interv_honesty_over_failclosed.py,15,1.59,1.16,unmarked
 tests/test_interv_honesty_rename.py,11,0.16,0.02,smoke
 tests/test_interv_honesty_selection_do_validation.py,8,0.99,0.49,smoke
