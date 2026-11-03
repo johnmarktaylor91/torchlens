@@ -52,6 +52,11 @@ import torch
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
+from ._kernel_probes import (
+    probe_cpu_float8_deterministic_fill as _probe_cpu_float8_deterministic_fill,
+    probe_cpu_half_kernels as _probe_cpu_half_kernels,
+    probe_sparse_spsolve_cuda as _probe_sparse_spsolve_cuda,
+)
 from ._module_call_dispatch import probe_module_call_dispatch_frame
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
@@ -142,6 +147,7 @@ __all__ = [
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
     "tensor_any_over_dims",
     "get_mha_fastpath_enabled",
@@ -176,6 +182,7 @@ __all__ = [
     "get_reduce_tuple_dim_support",
     "get_cpu_half_kernels_support",
     "get_cpu_float8_deterministic_fill_support",
+    "get_sparse_spsolve_cuda_support",
     "get_pipelining_module_types",
     "get_fp8_dtypes",
     "get_tracing_tensor_types",
@@ -1408,6 +1415,29 @@ def get_cpu_float8_deterministic_fill_support(*, force_probe: bool = False) -> b
     return HAS_CPU_FLOAT8_DETERMINISTIC_FILL
 
 
+def get_sparse_spsolve_cuda_support(*, force_probe: bool = False) -> bool:
+    """Return whether ``torch.sparse.spsolve`` runs on CUDA, lazily (see the probe).
+
+    Test-only today: diagnostic surfaces force it; nothing on import or capture pays it.
+    """
+
+    global HAS_SPARSE_SPSOLVE_CUDA, _SPARSE_SPSOLVE_CUDA_PROBED
+
+    if not _SPARSE_SPSOLVE_CUDA_PROBED or force_probe:
+        HAS_SPARSE_SPSOLVE_CUDA = _probe_sparse_spsolve_cuda()
+        _SPARSE_SPSOLVE_CUDA_PROBED = True
+    return HAS_SPARSE_SPSOLVE_CUDA
+
+
+def _force_real_op_probes() -> None:
+    """Run every lazily latched probe that executes a real tensor op (diagnostics only)."""
+
+    get_reduce_tuple_dim_support(force_probe=True)
+    get_cpu_half_kernels_support(force_probe=True)
+    get_cpu_float8_deterministic_fill_support(force_probe=True)
+    get_sparse_spsolve_cuda_support(force_probe=True)
+
+
 def get_meta_item_guard_support(*, force_probe: bool = False) -> bool:
     """Return whether meta-tensor scalar extraction raises torch's own guard, lazily.
 
@@ -1540,68 +1570,6 @@ def _probe_mha_fastpath_switch() -> bool:
     )
 
 
-def _probe_cpu_half_kernels() -> bool:
-    """Return whether common CPU kernels accept the ``torch.float16`` dtype.
-
-    Returns
-    -------
-    bool
-        ``True`` when CPU ``addmm``, ``layer_norm``, ``nextafter``, and
-        ``aminmax`` all accept float16 operands. torch 2.1-2.2's CPU backend
-        is missing these kernels for Half tensors (``addmm_impl_cpu_``,
-        ``LayerNormKernelImpl``, ``nextafter_cpu``, and ``aminmax_cpu`` all
-        raise ``"... not implemented for 'Half'"``); later torch ships them.
-        Absence is a genuine torch CPU limitation on the floor, not a
-        TorchLens degradation -- tests that exercise a half-precision CPU
-        forward, or TorchLens's own ULP-step validation machinery
-        (``torch.nextafter`` in ``validation/core.py`` and
-        ``validation/exemptions.py``) or dense tensor-stats kernel
-        (``torch.aminmax`` in ``stats/_stats_kernel.py``) on a Half-dtype
-        output, skip on it.
-    """
-
-    try:
-        half = torch.randn(2, 2, dtype=torch.float16)
-        torch.addmm(half, half, half)
-        torch.nn.functional.layer_norm(half, (2,))
-        torch.nextafter(half, half)
-        torch.aminmax(half)
-    except RuntimeError:
-        return False
-    return True
-
-
-def _probe_cpu_float8_deterministic_fill() -> bool:
-    """Return whether CPU tensor allocation fills Float8 dtypes under determinism.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``torch.empty(dtype=torch.float8_e4m3fn)`` succeeds with
-        ``torch.use_deterministic_algorithms(True)`` active. torch 2.1-2.2's
-        ``fill_empty_deterministic_`` CPU kernel does not cover Float8 dtypes,
-        so any empty-tensor allocation under deterministic mode (TorchLens's
-        own dtype-cast path included) raises
-        ``RuntimeError: "fill_empty_deterministic_" not implemented for
-        'Float8_e4m3fn'``. Absence is a genuine torch CPU limitation on the
-        floor, not a TorchLens degradation.
-    """
-
-    float8_dtype = getattr(torch, "float8_e4m3fn", None)
-    if float8_dtype is None:
-        return False
-    was_deterministic = torch.are_deterministic_algorithms_enabled()
-    was_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
-    try:
-        torch.use_deterministic_algorithms(True)
-        torch.empty((1,), dtype=float8_dtype)
-    except RuntimeError:
-        return False
-    finally:
-        torch.use_deterministic_algorithms(was_deterministic, warn_only=was_warn_only)
-    return True
-
-
 def _probe_reduce_tuple_dim() -> bool:
     """Return whether ``Tensor.any``/``Tensor.all`` accept a tuple ``dim``.
 
@@ -1720,6 +1688,8 @@ HAS_CPU_HALF_KERNELS: bool = False
 _CPU_HALF_KERNELS_PROBED: bool = False
 HAS_CPU_FLOAT8_DETERMINISTIC_FILL: bool = False
 _CPU_FLOAT8_DETERMINISTIC_FILL_PROBED: bool = False
+HAS_SPARSE_SPSOLVE_CUDA: bool = False
+_SPARSE_SPSOLVE_CUDA_PROBED: bool = False
 HAS_META_ITEM_GUARD: bool = False
 _META_ITEM_GUARD_PROBED: bool = False
 _DYNAMO_OPTIMIZED_MODULE_TYPE: type[Any] | None = None
@@ -1922,6 +1892,7 @@ _CAPABILITY_ATTRS: tuple[str, ...] = (
     "HAS_REDUCE_TUPLE_DIM",
     "HAS_CPU_HALF_KERNELS",
     "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+    "HAS_SPARSE_SPSOLVE_CUDA",
     "HAS_META_ITEM_GUARD",
 )
 
@@ -1949,6 +1920,7 @@ _LAZY_PROBE_FAMILIES: dict[str, tuple[str, ...]] = {
     "_REDUCE_TUPLE_DIM_PROBED": ("HAS_REDUCE_TUPLE_DIM",),
     "_CPU_HALF_KERNELS_PROBED": ("HAS_CPU_HALF_KERNELS",),
     "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED": ("HAS_CPU_FLOAT8_DETERMINISTIC_FILL",),
+    "_SPARSE_SPSOLVE_CUDA_PROBED": ("HAS_SPARSE_SPSOLVE_CUDA",),
     "_META_ITEM_GUARD_PROBED": ("HAS_META_ITEM_GUARD",),
     "_MHA_FASTPATH_SWITCH_PROBED": ("HAS_MHA_FASTPATH_SWITCH",),
     "_FUNCOL_GROUP_RESOLUTION_PROBED": (
@@ -2141,6 +2113,9 @@ OPTIONAL_CAPABILITY_FLAGS: frozenset[str] = frozenset(
         # degradations -- tests that need them skip on these flags.
         "HAS_CPU_HALF_KERNELS",
         "HAS_CPU_FLOAT8_DETERMINISTIC_FILL",
+        # torch.sparse.spsolve has only a CUDA kernel, which needs cuDSS (absent
+        # from official wheels): False is the normal CPU or stock-wheel install.
+        "HAS_SPARSE_SPSOLVE_CUDA",
         # torch's own "Tensor.item() cannot be called on meta tensors" guard
         # postdates the torch 2.1/2.2 floor: its absence means the identical
         # user situation (a value-dependent branch on a meta tensor) still
@@ -2245,9 +2220,7 @@ def get_torch_capability_snapshot() -> TorchCapabilitySnapshot:
     get_fsdp_wrapper_type(force_probe=True)
     get_dtensor_type(force_probe=True)
     get_gradient_edge_support(force_probe=True)
-    get_reduce_tuple_dim_support(force_probe=True)
-    get_cpu_half_kernels_support(force_probe=True)
-    get_cpu_float8_deterministic_fill_support(force_probe=True)
+    _force_real_op_probes()
     # Both getters document that diagnostic surfaces force them; without this
     # the doctor reported them "unprobed" on every install that had not yet
     # consumed them, hiding a real absence on torch 2.1-2.2.

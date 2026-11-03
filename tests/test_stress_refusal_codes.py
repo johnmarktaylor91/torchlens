@@ -27,6 +27,7 @@ from torchlens._constants import ORIG_TORCH_FUNCS
 from torchlens._ir.selector_eval import evaluate
 from torchlens._robustness import UnsupportedTensorVariantError
 from torchlens._utils._sparse_parts import sparse_component_tensors, sparse_with_values
+from torchlens._utils._torch_compat import get_sparse_spsolve_cuda_support
 from torchlens.backends.torch._state_bytes import _state_bytes_equal, _whole_storage_uint8
 from torchlens.errors import ArtifactError, TraceCaptureError
 from torchlens.intervention.errors import LiveModeLabelError
@@ -304,18 +305,14 @@ def test_sparse_spdiags_captures_diagonals_and_offsets_and_validates() -> None:
 
 
 @pytest.mark.skipif(
-    not (hasattr(torch.sparse, "spsolve") and torch.cuda.is_available()),
-    reason="torch.sparse.spsolve has only a CUDA kernel (torch>=2.5)",
+    not get_sparse_spsolve_cuda_support(),
+    reason="HAS_SPARSE_SPSOLVE_CUDA is False: torch.sparse.spsolve cannot run on CUDA here "
+    "(no op, no CUDA device, or a torch build without cuDSS)",
 )
 def test_sparse_spsolve_captures_both_operands_and_validates() -> None:
     torch.manual_seed(0)
     model = _Spsolve().cuda().eval()
     x = torch.randn(3, 4, device="cuda")
-    try:
-        with torch.no_grad():
-            model(x)
-    except RuntimeError as error:  # a CUDA build without the cuDSS solver backend
-        pytest.skip(f"this torch build cannot run spsolve: {error}")
     trace = tl.trace(model, [x])
     assert len(_single_op(trace, "spsolve").parents) == 2
     assert tl.validate(model, [x], scope="forward", seed=0)

@@ -487,6 +487,10 @@ _CAPABILITY_PROBE_STATE = frozenset(
         ("torchlens/_utils/_torch_compat.py", "_CPU_HALF_KERNELS_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_CPU_FLOAT8_DETERMINISTIC_FILL"),
         ("torchlens/_utils/_torch_compat.py", "_CPU_FLOAT8_DETERMINISTIC_FILL_PROBED"),
+        # torch.sparse.spsolve on CUDA (needs a cuDSS build): the same lazy
+        # real-op probe shape, latched once on first use.
+        ("torchlens/_utils/_torch_compat.py", "HAS_SPARSE_SPSOLVE_CUDA"),
+        ("torchlens/_utils/_torch_compat.py", "_SPARSE_SPSOLVE_CUDA_PROBED"),
         ("torchlens/_utils/_torch_compat.py", "HAS_META_ITEM_GUARD"),
         ("torchlens/_utils/_torch_compat.py", "_META_ITEM_GUARD_PROBED"),
         # ratchet2 ci-fix (2026-10-01): the MHA fastpath-switch probe joined
