@@ -157,7 +157,7 @@ def test_trace_getitem_names_the_latent_home(latent_setup) -> None:
     model, x = latent_setup
     trace = tl.trace(model, x, capture=_READY)
     facet = trace[tl.facet("res").latent(2)]
-    assert facet.spec.home.layer_label == trace["fc1"].layer_label
+    assert facet.spec.home.layer_label == trace.ops["fc1"].layer_label
     torch.testing.assert_close(facet.value, _latent_column(2), **TOL)
 
 

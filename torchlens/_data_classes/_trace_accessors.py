@@ -336,7 +336,16 @@ class TraceOpAccessor(Accessor[Op]):
         if isinstance(key, int):
             return self._counted_ops()[key]
         _refuse_colliding_label(key, getattr(self, "_duplicate_labels", {}).get(key))
-        return super().__getitem__(key)
+        try:
+            return super().__getitem__(key)
+        except KeyError:
+            # A module, module-call or buffer key names its output Op here.
+            from ._lookup_kinds import converted, output_op
+
+            resolved = converted(self, key, output_op)
+            if resolved is None:
+                raise
+            return resolved
 
     def __iter__(self) -> Iterator[Op]:
         """Iterate over the counted ops in capture order."""
@@ -625,7 +634,9 @@ class TraceModuleCallAccessor(Accessor[Any]):
                 f"Module '{key}' has {len(parent_matches)} calls. Use a 0-based integer "
                 f"position or a call-qualified label like '{key}:1'."
             )
-        return None
+        from ._lookup_kinds import converted, module_call_for_key
+
+        return converted(self, key, module_call_for_key)  # an op label names its call
 
 
 class TraceGradFnCallAccessor(Accessor[Any]):

@@ -178,8 +178,10 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
     2. int -> Op by 0-based ordinal position
     3. ``label:last`` / ``label:all`` -> last-pass Op / Selection of every pass
     4. layer label -> its Op (one pass) or the multi-pass teaching refusal
-    5. accessors, alternate Op lookup keys, case-insensitive, then substring
-    6. fallback: KeyError with contextual help message (never a ``Layer``)
+    5. the kind the key names: module address -> Module, ``addr:N`` -> ModuleCall,
+       parameter address -> Param, buffer address -> Buffer (``addr:N`` -> version Op)
+    6. accessors, alternate Op lookup keys, case-insensitive, then substring
+    7. fallback: KeyError with contextual help message (never a ``Layer``)
 
     Args:
         ix: int (ordinal), slice, or str (label/address/substring).
@@ -212,6 +214,7 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
 
     if isinstance(ix, str):
         from .._trace_selector_helpers import canonical_module_site_key
+        from ._lookup_kinds import named_record
 
         ix = canonical_module_site_key(self, ix) or ix
         if (record := _layer_label_lookup(self, ix)) is not None:
@@ -221,31 +224,28 @@ def _getitem_after_pass(self: "Trace", ix: Any) -> Any:
         if ix in ambiguous_lookup_keys:
             _raise_ambiguous_lookup_key(self, ix, ix)
 
+        if (record := named_record(self, ix)) is not None:  # the kind the key names
+            return record
+
         if ix in self._layer_dict_all_keys:
             return self._layer_dict_all_keys[ix]
 
-        for accessor in (
+        accessors = (
             self.ops,
-            self.module_calls,
             self.modules,
+            self.module_calls,
             self.params,
             self.buffers,
             self.autograd.grad_fns,
-        ):
+        )
+        for accessor in accessors:
             try:
                 return accessor[ix]
             except (AttributeError, KeyError, ValueError, TypeError):
                 pass
 
         lower_ix = ix.lower()
-        for accessor in (
-            self.ops,
-            self.module_calls,
-            self.modules,
-            self.params,
-            self.buffers,
-            self.autograd.grad_fns,
-        ):
+        for accessor in accessors:
             try:
                 # ``ops.keys()`` lists the counted ops only; a
                 # case-insensitive label still reaches every row.

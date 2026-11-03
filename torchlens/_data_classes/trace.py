@@ -1255,14 +1255,14 @@ class Trace(TraceOutputMixin, TraceLike):
     def __getitem__(self, ix: Any) -> Any:
         """Return one record, or the Selection a selector names.
 
-        After the pass an int, slice or string addresses records; a selector is
-        the one resolution door: a set-naming selector (``tl.func``, ``tl.where``,
-        ``tl.in_module``, ``tl.label_contains``, compositions) returns a
-        ``tl.Selection`` of every match, never capped; a one-thing spelling (exact
-        label, target spec, facet) must match exactly one and returns it. During
-        the pass the raw barcode lookup applies. Never a ``Layer`` (that door is
-        ``trace.layers[...]``): a layer label gives its Op or refuses a bare
-        multi-pass label; ``label:N`` (1-based), ``label:last``, ``label:all``.
+        After the pass an int, slice or string addresses records; a set-naming
+        selector (``tl.func``, ``tl.where``, ``tl.in_module``, compositions)
+        returns a ``tl.Selection`` of every match; a one-thing spelling must match
+        exactly one. A key gives the kind it names: a layer label its Op (a bare
+        multi-pass label refuses; ``label:N``, ``:last``, ``:all``), never a
+        ``Layer`` (that door is ``trace.layers[...]``); a module address its
+        Module, ``address:N`` its ModuleCall, a parameter, buffer or grad_fn key
+        its record. Typed doors convert: ``trace.ops[address]`` is the output Op.
 
         Args:
             ix: index, slice, label, address, substring or selector.

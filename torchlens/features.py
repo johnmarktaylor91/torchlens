@@ -190,7 +190,9 @@ class SiteMatrix:
 def _matrix_from_trace(trace: Any, site: str) -> SiteMatrix:
     """Shape one saved Trace site (adapters' in-memory route)."""
 
-    layer = trace[site]
+    from ._data_classes._lookup_kinds import op_at
+
+    layer = op_at(trace, site)  # a module name names its output op here
     out = getattr(layer, "out", None)
     if not isinstance(out, torch.Tensor):
         raise FeatureShapingError(

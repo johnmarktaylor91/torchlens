@@ -180,7 +180,9 @@ class OpAccessor(Accessor["Op"]):
                 op_log.raw_label,
             }:
                 return op_log
-        return None
+        from ._lookup_kinds import scoped_op_by_lookup_key
+
+        return scoped_op_by_lookup_key(self._dict.values(), key)  # module-call or buffer key
 
 
 class LayerAccessor(Accessor["Layer"]):
@@ -259,7 +261,9 @@ class LayerAccessor(Accessor["Layer"]):
                 f"Layer lookup '{key}' is ambiguous across {len(matches)} Layers: {listed}. "
                 f"Use the full Layer label, e.g. {matches[0].layer_label!r}."
             )
-        return None
+        from ._lookup_kinds import converted, layer_for_key
+
+        return converted(self, key, layer_for_key)  # a module or buffer key names its Layer
 
     def _suggest(self, key: str) -> list[str]:
         """Return similar layer labels from the source Trace."""

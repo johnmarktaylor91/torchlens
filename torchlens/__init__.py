@@ -471,8 +471,10 @@ def _matching_saved_layer_labels(trace: Trace, pattern: str) -> list[str]:
     ]
     if matches:
         return matches
+    from ._data_classes._lookup_kinds import op_at
+
     try:
-        resolved = trace[pattern]
+        resolved = op_at(trace, pattern)  # a module name names its output op here
     except AmbiguousOpLookupError:
         raise
     except (KeyError, ValueError):

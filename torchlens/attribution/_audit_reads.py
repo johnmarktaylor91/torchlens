@@ -27,6 +27,7 @@ from typing import Any
 import torch
 from torch import Tensor
 
+from torchlens._data_classes._lookup_kinds import op_at
 from torchlens.attribution._audit_claims import _AUDIT_DOCS_POINTER, _AuditRequest
 from torchlens.attribution._audit_sites import _site_edits, _SitesPlan, _SiteUnit
 from torchlens.attribution._result import AttributionError
@@ -133,7 +134,7 @@ def _seed_scorer(trace: Any, target: Any, recorded: str | None, seed: str) -> An
         )
     raw = _site_label(target.site)
     try:
-        label = str(trace[raw].label) if raw is not None else None
+        label = str(op_at(trace, raw).label) if raw is not None else None
     except (KeyError, ValueError, IndexError, AttributeError):
         label = None
     if label is None:
@@ -182,7 +183,7 @@ def _plan_read_audit(request: _AuditRequest, trace: Any) -> _SitesPlan:
     for index, row in audited:
         site = _row_site(row)
         try:
-            value = trace[site].out
+            value = op_at(trace, site).out
         except (KeyError, ValueError, IndexError, AttributeError):
             value = None
         if not isinstance(value, Tensor) or (

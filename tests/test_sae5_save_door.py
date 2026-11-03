@@ -85,7 +85,7 @@ def test_a_latent_save_keeps_its_site_and_reads_the_closed_form(latent_setup) ->
     model, x = latent_setup
     selector = tl.facet("res").latent(1)
     trace = tl.trace(model, x, save=selector)
-    assert trace["fc1"].layer_label in _saved(trace)
+    assert trace.ops["fc1"].layer_label in _saved(trace)
     torch.testing.assert_close(trace[selector].value, _latent_column(1), **TOL)
     torch.testing.assert_close(trace["fc1"].facets["res[1]"].value, _latent_column(1), **TOL)
 
@@ -96,7 +96,7 @@ def test_a_latent_registered_at_a_selector_site_saves_every_home() -> None:
     tl.bridge.sae.register("both", sae, site=tl.module("fc_a") | tl.module("fc_b"))
     try:
         trace = tl.trace(model, x, save=tl.facet("both").latent(2))
-        assert {trace["fc_a"].layer_label, trace["fc_b"].layer_label} <= _saved(trace)
+        assert {trace.ops["fc_a"].layer_label, trace.ops["fc_b"].layer_label} <= _saved(trace)
         for site in ("fc_a", "fc_b"):
             expected = sae.encode(trace[site].out)[..., 2].detach()
             torch.testing.assert_close(trace[site].facets["both[2]"].value, expected, **TOL)

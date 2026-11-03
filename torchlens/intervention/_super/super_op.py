@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, cast
 
-from ._accessor_base import SharedNamesMixin, SuperAccessor
+from ._accessor_base import SharedNamesMixin, SuperAccessor, member_lookup
 from ._base import Super, _TensorBearing
 
 if TYPE_CHECKING:
@@ -197,15 +197,8 @@ class SuperOpAccessor(SharedNamesMixin, SuperAccessor["Op", SuperOp]):
         Op | None
             Matching Op, or ``None`` when unresolved.
         """
-        try:
-            resolved = trace.layers[label]
-        except (KeyError, ValueError):
-            return None
-        if type(resolved).__name__ == "Op":
-            return cast("Op", resolved)
-        if type(resolved).__name__ == "Layer" and len(resolved.ops) == 1:
-            return cast("Op", resolved.ops[0])
-        return None
+        resolved = member_lookup(trace.ops, label)
+        return cast("Op", resolved) if type(resolved).__name__ == "Op" else None
 
 
 class SuperLayerAccessor(SharedNamesMixin, SuperAccessor["Layer", SuperLayer]):
@@ -239,10 +232,7 @@ class SuperLayerAccessor(SharedNamesMixin, SuperAccessor["Layer", SuperLayer]):
         Layer | None
             Matching Layer, or ``None`` when unresolved.
         """
-        try:
-            resolved = trace.layers[label]
-        except (KeyError, ValueError):
-            return None
+        resolved = member_lookup(trace.layers, label)
         return cast("Layer", resolved) if type(resolved).__name__ == "Layer" else None
 
 
