@@ -146,15 +146,19 @@ class ContinueInLoop(nn.Module):
 
 
 class AlternatingLoopIf(nn.Module):
-    """A looped ``if``/``else`` whose arms alternate across iterations."""
+    """A looped ``if``/``else`` whose arms alternate across iterations.
+
+    Each iteration reads its own row, so no op of one arm feeds the other arm.
+    """
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        for _ in range(2):
-            if x.sum() > 0:  # noqa: SIM108 (the statement form is under test)
-                x = -x
+        outs = []
+        for i in range(x.shape[0]):
+            if x[i, 0] > 0:
+                outs.append(x[i] + 1)
             else:
-                x = x * 2
-        return x
+                outs.append(x[i] - 1)
+        return torch.stack(outs)
 
 
 class ThenWithoutTensorOp(nn.Module):
@@ -467,7 +471,7 @@ def test_statement_list_terminates_never_proves_loops_or_empty_bodies() -> None:
 
 
 def test_looped_alternating_arms_report_multiple() -> None:
-    trace = _validated_trace(AlternatingLoopIf(), _POS)
+    trace = _validated_trace(AlternatingLoopIf(), torch.tensor([[1.0], [-1.0]]))
     try:
         conditional = _only_conditional(trace)
         assert [arm.fired for arm in conditional.arms] == [True, True]
