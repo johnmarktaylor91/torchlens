@@ -305,9 +305,16 @@ def test_dtype_vocabulary_refuses() -> None:
 def test_dtype_unstorable_refuses_unit() -> None:
     """A cast the safetensors shard codec cannot store refuses typed."""
 
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        cast_for_store("k", torch.randn(2, 3), {"global": torch.complex128}, "safetensors")
-    assert _code(excinfo) == "extraction_dtype_unsupported"
+    value = torch.randn(2, 3)
+    for source in (value, value.to(torch.complex128)):
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            cast_for_store("k", source, {"global": torch.complex128}, "safetensors")
+        assert _code(excinfo) == "extraction_dtype_unsupported"
+    # The physical-codec restriction does not forbid complex values in a PT shard.
+    stored, _ = cast_for_store("k", value, {"global": torch.complex128}, "pt")
+    assert stored.dtype == torch.complex128
+    torch.testing.assert_close(stored.real, value.to(torch.float64))
+    assert torch.count_nonzero(stored.imag) == 0
 
 
 # --- ragged carriers (item 10) --------------------------------------------------------
