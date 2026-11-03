@@ -26,7 +26,7 @@ from typing import TypeGuard
 import torch
 from torch.overrides import get_ignored_functions, get_testing_overrides
 
-from ._torchvision_ops import _get_torchvision_funcs
+from ._torchvision_ops import _get_torchvision_funcs as _get_torchvision_funcs
 from ._utils._torch_compat import get_torch_vf_namespace, get_variable_function_names
 
 # ---------------------------------------------------------------------------

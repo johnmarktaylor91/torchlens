@@ -187,6 +187,9 @@ def _perturb_float_outs(parent_outs: torch.Tensor, output_outs: torch.Tensor) ->
     lo = finite_parent.min().item()
     hi = finite_parent.max().item()
     finite_output = output_outs.detach().float().abs()
+    if finite_output.layout is not torch.strided:
+        # A sparse child output (``to_sparse``) calibrates through its dense form.
+        finite_output = finite_output.to_dense()
     finite_output = finite_output[torch.isfinite(finite_output)]
     output_scale = finite_output.max().item() if finite_output.numel() else 0.0
     dtype_info = torch.finfo(parent_outs.dtype)
