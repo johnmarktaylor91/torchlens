@@ -5,20 +5,20 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1439 modules, 647392 lines, 0 modules without a docstring.
+83 packages, 1439 modules, 647436 lines, 0 modules without a docstring.
 
 ## Packages
 
 | Package | What it holds | Modules | Lines |
 | --- | --- | ---: | ---: |
-| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32847 |
+| `torchlens` | TorchLens - extract outs and metadata from PyTorch models. | 74 | 32837 |
 | `torchlens._autoroute` | TorchLens auto-routing registries. | 6 | 1254 |
 | `torchlens._autoroute.input` | Input auto-routing registry namespace. | 1 | 27 |
 | `torchlens._autoroute.output` | Output auto-routing registry namespace. | 1 | 27 |
 | `torchlens._capture` | Real-time tensor operation capture: logging source/output tensors, tracking families, and orchestrating the forward pass. | 46 | 25254 |
 | `torchlens._capture.finalize` | FINALIZE stage of torch capture: outputs, exit arms, settlement and the epilogue. | 4 | 1459 |
 | `torchlens._capture.prepare` | PREPARE stage of torch capture: request resolution, cache and dispatch. | 8 | 4650 |
-| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38198 |
+| `torchlens._data_classes` | Core data structures for representing a logged forward pass. | 90 | 38252 |
 | `torchlens._data_substrate` | Extraction data substrates: digest primitives + artifact v2 + model identity. | 4 | 1210 |
 | `torchlens._ecosystem` | TorchLens ecosystem runtime: provider discovery. | 2 | 606 |
 | `torchlens._extraction` | Extraction v2 runtime (extract memo items 4-19). | 19 | 10636 |
@@ -99,7 +99,7 @@ a package move shows up on the next run with no edit to the generator.
 
 ### `torchlens`
 
-TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32847 lines)
+TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32837 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -134,7 +134,7 @@ TorchLens - extract outs and metadata from PyTorch models. (74 modules, 32847 li
 | `_fast_sparse_state` | Cached-state safety analysis for the guarded fast sparse engine. | 297 |
 | `_input_coerce` | Duck-typed ergonomic input coercion for TorchLens entry points. | 442 |
 | `_input_walk` | Single-sourced model-input boundary traversal ( Cluster Y, the normative dispatch). | 1627 |
-| `_kernel_telemetry` | Detachable CUDA kernel telemetry for the gated ATen execution profile. | 506 |
+| `_kernel_telemetry` | Detachable CUDA kernel telemetry for the gated ATen execution profile. | 496 |
 | `_legacy_ctor_sites` | Legacy tensor constructor classes whose ''__new__'' the torch backend patches. | 39 |
 | `_literals` | Shared Literal aliases for public TorchLens option strings. | 17 |
 | `_memory_probes` | Host and device memory headroom probes for the save budget. | 85 |
@@ -288,7 +288,7 @@ PREPARE stage of torch capture: request resolution, cache and dispatch. (8 modul
 
 ### `torchlens._data_classes`
 
-Core data structures for representing a logged forward pass. (90 modules, 38198 lines)
+Core data structures for representing a logged forward pass. (90 modules, 38252 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -312,7 +312,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38198 
 | `_module_facade_fields` | Stored-field tables for the ''ModuleCall'' and ''Module'' record facades. | 95 |
 | `_module_role_hints` | Semantic role hints for structured module outputs. | 152 |
 | `_nonfinite` | Shared non-finite activation scan behind a revalidated per-log memo. | 885 |
-| `_op_aten` | Per-op ATen-operation accessor for ''Op'' (''CaptureOptions(aten_ops=True)''). | 40 |
+| `_op_aten` | Per-op ATen-operation accessors for ''Op'' (''aten_ops'' and the ''gpu_kernels'' view). | 66 |
 | `_op_container_census` | Alias census for container-cell pooling (the single scan over swept cells). | 153 |
 | `_op_cost` | Cost derivations for ''Op'': compute record, MACs, FLOPs, arithmetic intensity. | 110 |
 | `_op_dedup` | Saved-activation dedup helpers for retained payload copies. | 258 |
@@ -363,7 +363,7 @@ Core data structures for representing a logged forward pass. (90 modules, 38198 
 | `_trace_viz_arguments` | Private argument forwarding for the Trace visualization surface. | 34 |
 | `_transform_repr` | Persistence-safe repr of an activation-transform callable. | 52 |
 | `_value_repr` | Value-record line/card renderers (lovely memo item 6). | 571 |
-| `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 200 |
+| `aten_op` | Primitive-operation records for the ATen profile (persisted, tlspec v8). | 228 |
 | `attribute_write` | The record of one plain module attribute a traced forward wrote. | 66 |
 | `backward_pass` | Per-invocation backward pass records and accessors. | 372 |
 | `buffer` | Persistent buffer entities and dict-like accessors. | 486 |
