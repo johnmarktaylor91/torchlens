@@ -124,6 +124,14 @@ def test_backfill_meanings_drop_internal_planning_ids() -> None:
     assert strip("merged :class:`RaggedBatch` keys") == "merged :class:`RaggedBatch` keys"
 
 
+def test_backfill_meanings_name_cross_references_by_their_object() -> None:
+    """A docstring cross-reference renders as its object's name, never a module path."""
+
+    clean = glossary_backfill._clean
+    assert clean("A :class:`torchlens._semantic.lens.LensResult`.") == "A `LensResult`"
+    assert clean("see :meth:`Trace.draw <torchlens.Trace.draw>`") == "see `Trace.draw`"
+
+
 @pytest.mark.heavy
 def test_every_public_parameter_has_a_glossary_row() -> None:
     """Every parameter a caller can pass by name is named by a glossary keyword row."""

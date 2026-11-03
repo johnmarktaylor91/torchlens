@@ -27,6 +27,9 @@ from typing import Any
 from name_lockstep.glossary_params import _KEYWORD_ROW, missing
 
 _RST_LITERAL = re.compile(r"``([^`]+)``")
+_SPHINX_ROLE = re.compile(
+    r":(?:py:)?(?:class|func|meth|attr|data|exc|obj):`~?([^`<]*?)\s*(?:<([^`>]+)>)?`"
+)
 _INHERITED = " and the classes that inherit that constructor"
 _PARENTHETICAL = re.compile(r"\s*\(([^()]*)\)")
 _ID_LINT = Path(__file__).resolve().parents[2] / "scripts" / "checks" / "id_lint.py"
@@ -67,10 +70,22 @@ def strip_internal_ids(text: str) -> str:
     return re.sub(r"\s*\0[\0/,\s]*", " ", text).strip()
 
 
+def _role_name(match: re.Match[str]) -> str:
+    """Render a Sphinx cross-reference by its last name, as Sphinx shows ``~`` references.
+
+    Docstring targets are often private or moved module paths; the glossary names the object,
+    and only public ``tl.*`` spellings it can resolve.
+    """
+
+    title, target = match.group(1), match.group(2)
+    return f"`{title if target else title.rsplit('.', 1)[-1]}`"
+
+
 def _clean(meaning: str) -> str:
     """Return a docstring meaning as one markdown table cell, without internal ids."""
 
-    text = strip_internal_ids(_RST_LITERAL.sub(r"`\1`", " ".join(meaning.split())))
+    text = _SPHINX_ROLE.sub(_role_name, " ".join(meaning.split()))
+    text = strip_internal_ids(_RST_LITERAL.sub(r"`\1`", text))
     return text.replace("|", "\\|").strip().removesuffix(".")
 
 
