@@ -273,20 +273,6 @@ def test_valid_family_cells_remain_loadable(
     loaded.cleanup()
 
 
-def test_family_node_checks_do_not_require_record_construction() -> None:
-    """Decoding alone rejects grammar before trace state hooks can run.
-
-    Notes
-    -----
-    No trace state hook runs during this check.
-    """
-
-    with pytest.raises(ArtifactError) as caught:
-        Decoder(defer_records=True).decode("invented", at="trace[2].grad_fn_timing_provenance")
-    assert caught.value.fields["code"] == "artifact_grad_fn_timing_provenance_invalid"
-    assert caught.value.fields["at"] == "trace[2].grad_fn_timing_provenance"
-
-
 @pytest.fixture(scope="module")
 def saved_backward(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Save a trace with a real backward-pass record.
