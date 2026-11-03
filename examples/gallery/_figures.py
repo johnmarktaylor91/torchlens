@@ -89,9 +89,8 @@ def _save(fig: Any, out: Path, stem: str) -> list[Path]:
     """Write ``stem.png`` and ``stem.svg`` to ``out`` and close the figure."""
     import matplotlib.pyplot as plt
 
-    engine = fig.get_layout_engine()
-    if engine is not None:
-        engine.set(w_pad=0.02, h_pad=0.02)
+    if fig.get_layout_engine() is not None:
+        fig.set_layout_engine("constrained", w_pad=0.02, h_pad=0.02)
     paths = []
     for suffix in ("png", "svg"):
         path = Path(out) / f"{stem}.{suffix}"
@@ -152,14 +151,12 @@ def draw_causal_tracing(out: Path) -> list[Path]:
             1, 2, figsize=(WIDTH, 4.9), layout="constrained", width_ratios=(12, 1.4)
         )
         image = left.imshow(matrix, cmap="RdBu_r", vmin=-limit, vmax=limit, aspect="auto")
-        left.set(
-            xticks=range(matrix.shape[1]),
-            xticklabels=[str(i) if i % 2 == 0 else "" for i in range(matrix.shape[1])],
-            yticks=range(len(rows)),
-            yticklabels=rows,
-            xlabel="Layer whose MLP output is restored",
-            ylabel="Token position restored",
-        )
+        left.set_xticks(range(matrix.shape[1]))
+        left.set_xticklabels([str(i) if i % 2 == 0 else "" for i in range(matrix.shape[1])])
+        left.set_yticks(range(len(rows)))
+        left.set_yticklabels(rows)
+        left.set_xlabel("Layer whose MLP output is restored")
+        left.set_ylabel("Token position restored")
         left.tick_params(length=0)
         left.tick_params(axis="x", labelsize=SMALL)
         setup = "GPT-2 small"
@@ -193,12 +190,10 @@ def draw_causal_tracing(out: Path) -> list[Path]:
             f"value from\nlayer {int(wrong_layer['wrong_layer'])}",
             "value from\nanother fact",
         )
-        right.set(
-            xticks=[],
-            yticks=range(3),
-            yticklabels=[
-                f"{name}\n{_num(value, '+.4f')}" for name, value in zip(names, column[:, 0])
-            ],
+        right.set_xticks([])
+        right.set_yticks(range(3))
+        right.set_yticklabels(
+            [f"{name}\n{_num(value, '+.4f')}" for name, value in zip(names, column[:, 0])]
         )
         right.tick_params(length=0)
         right.set_xlabel(f"patched at\nlayer {layer},\n{category}", fontsize=SMALL, color=MUTED)
@@ -294,7 +289,8 @@ def draw_cnn_fields(out: Path) -> list[Path]:
             va="bottom",
             bbox={"facecolor": "white", "edgecolor": GREEN, "alpha": 0.9, "pad": 1.5},
         )
-        left.set(xticks=(0, side // 2, side - 1), yticks=(0, side // 2, side - 1))
+        left.set_xticks((0, side // 2, side - 1))
+        left.set_yticks((0, side // 2, side - 1))
         left.tick_params(labelsize=13.5)  # single digits read small
         right.tick_params(which="major", labelsize=13.5)
         left.set_title(
@@ -337,28 +333,27 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         right.set_yticks(np.arange(-0.5, height, 1), minor=True)
         right.grid(which="minor", color=RULE, linewidth=0.6)
         right.tick_params(which="minor", length=0)
-        right.set(
-            xticks=range(0, width, 4),
-            yticks=range(0, height, 4),
-            xlim=(-0.5, width - 0.5),
-            ylim=(height - 0.5, -0.5),
-        )
+        right.set_xticks(range(0, width, 4))
+        right.set_yticks(range(0, height, 4))
+        # A little room past the last unit keeps the outline's far edges inside the axes.
+        right.set_xlim(-0.5, width - 0.1)
+        right.set_ylim(height - 0.1, -0.5)
         right.set_title(
             f"{layer} output ({height} x {width} units)\nreach of the green patch", loc="left"
         )
         right.set_xlabel("Unit column")
         right.set_ylabel("Unit row")
         fig.supxlabel(
-            f"Predicted from the architecture: pixels {c0} to {c1 - 1} on both axes; units {g0} to "
-            f"{g1 - 1}\n(row and column {g0 - 1} lie outside the reach and are unchanged).\n"
+            f"Predicted from the architecture: pixels {c0} to {c1 - 1} on both axes; "
+            f"units {g0} to {g1 - 1}.\n"
             "Measured: pixels where the unit's gradient is nonzero; units changed by zeroing the patch.",
             fontsize=SMALL,
-            color=MUTED,
+            color=INK,
         )
-        masks = " (identical masks)" if identical else ""
+        match = "exactly" if identical else "closely"
         fig.suptitle(
-            "The geometric fields match the measured influence exactly:\n"
-            f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output{masks}",
+            f"The geometric fields match the measured influence {match}:\n"
+            f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output",
             fontsize=TITLE,
         )
         return _save(fig, out, "cnn_fields")
@@ -411,7 +406,8 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         for panel, stage, rdm in zip(panels, stages, rdms, strict=True):
             image = panel.imshow(rdm, cmap="cividis", vmin=0, vmax=top, interpolation="nearest")
             panel.set_title(stage)
-            panel.set(xticks=[], yticks=[])
+            panel.set_xticks([])
+            panel.set_yticks([])
         panels[0].set_ylabel("TorchLens\nRDM")
         bar = fig.colorbar(
             image,
@@ -464,14 +460,16 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         )
         curve.axhline(0, color=RULE, lw=0.7, zorder=0)
         labels = [_site_label(k) for k in keys]
-        curve.set(
-            xticks=x,
-            xticklabels=[label if i % 2 == 0 else f"\n{label}" for i, label in enumerate(labels)],
-            xlim=(-0.6, len(keys) - 0.4),
-            ylim=(-0.4, 1.08),
-            yticks=(-0.25, 0, 0.25, 0.5, 0.75, 1.0),
-            ylabel="Pearson r between the TorchLens RDM\nand the plain-hooks RDM",
-            xlabel="Site: the selected stages, then each residual addition in execution order",
+        curve.set_xticks(x)
+        curve.set_xticklabels(
+            [label if i % 2 == 0 else f"\n{label}" for i, label in enumerate(labels)]
+        )
+        curve.set_xlim(-0.6, len(keys) - 0.4)
+        curve.set_ylim(-0.4, 1.08)
+        curve.set_yticks((-0.25, 0, 0.25, 0.5, 0.75, 1.0))
+        curve.set_ylabel("Pearson r between the TorchLens RDM\nand the plain-hooks RDM")
+        curve.set_xlabel(
+            "Site: the selected stages, then each residual addition in execution order"
         )
         curve.tick_params(axis="x", labelsize=SMALL)
         curve.tick_params(axis="y", labelsize=13.5)
@@ -523,12 +521,12 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
             va="top",
             arrowprops={"arrowstyle": "-", "color": VERMILION, "lw": 0.8},
         )
-        ax.set(
-            xlim=(-0.005, 1.005),
-            ylim=(0, 1.03),
-            xlabel=f"False positive rate (share of the other {heads - positives} heads above the cutoff)",
-            ylabel=f"True positive rate\n(share of Wang's {positives} heads above the cutoff)",
+        ax.set_xlim(-0.005, 1.005)
+        ax.set_ylim(0, 1.03)
+        ax.set_xlabel(
+            f"False positive rate (share of the other {heads - positives} heads above the cutoff)"
         )
+        ax.set_ylabel(f"True positive rate\n(share of Wang's {positives} heads above the cutoff)")
         ax.grid(axis="y")
         setup = "GPT-2 small, one run"
         if "rows" in data and "steps" in data:
@@ -601,22 +599,24 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
                 label=label,
                 zorder=5,
             )
-        ax.set(
-            xticks=range(layers),
-            yticks=range(per_layer),
-            xlabel="Layer (zero-based)",
-            ylabel="Head index (zero-based)",
-            xlim=(-0.5, layers - 0.5),
-            ylim=(-0.5, per_layer - 0.5),
-        )
+        ax.set_xticks(range(layers))
+        ax.set_yticks(range(per_layer))
+        ax.set_xlabel("Layer (zero-based)")
+        ax.set_ylabel("Head index (zero-based)")
+        ax.set_xlim(-0.5, layers - 0.5)
+        ax.set_ylim(-0.5, per_layer - 0.5)
         ax.tick_params(length=0, labelsize=13.5)  # single digits read small
+        ax.set_title(
+            f"Arrows: thicker = larger absolute edge score ({low:.2f} thinnest, {high:.2f} thickest)",
+            loc="left",
+            color=MUTED,
+        )
         fig.legend(
             loc="outside lower center",
             ncol=4,
             fontsize=SMALL,
             columnspacing=1.4,
-            title=f"Wang's head classes; arrows: the {len(edges)} largest absolute edge scores, "
-            f"width by |score|\n({low:.2f} thinnest to {high:.2f} thickest)",
+            title="Wang's head classes (coloured dots)",
             title_fontsize=SMALL,
         )
         count = "All" if joined == len(edges) else f"{joined} of the"
@@ -633,10 +633,11 @@ def _edge_geometry(
 ) -> list[tuple[dict[str, Any], tuple[float, float], tuple[float, float], float]]:
     """Return ``(edge, start, end, curvature)`` with the ends spread around each head.
 
-    Arrows into one head leave and land at distinct points on a small circle around the
-    dot, and their curvatures differ, so the arrowheads stay apart and a reader can count
-    them. Arrows are drawn above the dots with a white halo, so a line passing a head it
-    does not touch stays visibly continuous.
+    Arrows into one head land at distinct points on a small circle around the dot, and
+    their curvatures differ, so the arrowheads stay apart and a reader can count them.
+    Tails start just inside the source dot (the class dots draw above the arrows), so
+    every arrow visibly leaves its head. Arrows carry a white halo, so a line passing a
+    head it does not touch stays visibly continuous.
     """
     import math
 
@@ -653,17 +654,13 @@ def _edge_geometry(
         rank_in = seen_in.get(target, 0)
         rank_out = seen_out.get(source, 0)
         seen_in[target], seen_out[source] = rank_in + 1, rank_out + 1
-        offset_in = 0.9 * (rank_in - (fan_in[target] - 1) / 2)
-        offset_out = 0.9 * (rank_out - (fan_out[source] - 1) / 2)
+        offset_in = 1.0 * (rank_in - (fan_in[target] - 1) / 2)
         theta = math.atan2(source[1] - target[1], source[0] - target[0])
         end = (
-            target[0] + 0.22 * math.cos(theta + offset_in),
-            target[1] + 0.22 * math.sin(theta + offset_in),
+            target[0] + 0.3 * math.cos(theta + offset_in),
+            target[1] + 0.3 * math.sin(theta + offset_in),
         )
-        start = (
-            source[0] - 0.2 * math.cos(theta - offset_out),
-            source[1] - 0.2 * math.sin(theta - offset_out),
-        )
+        start = (source[0] - 0.06 * math.cos(theta), source[1] - 0.06 * math.sin(theta))
         rad = 0.18 * (rank_in - (fan_in[target] - 1) / 2) + 0.12 * (
             rank_out - (fan_out[source] - 1) / 2
         )

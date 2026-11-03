@@ -153,12 +153,11 @@ def test_edge_geometry_spreads_arrow_ends_around_shared_heads() -> None:
     geometry = figures._edge_geometry(edges)
     assert [g[0] for g in geometry] == edges
     ends = [g[2] for g in geometry]
-    starts = [g[1] for g in geometry]
     assert ends[0] != ends[1], "two arrows into one head must land at distinct points"
-    assert starts[0] != starts[2], "two arrows out of one head must leave from distinct points"
     for (_edge, start, end, _rad), edge in zip(geometry, edges, strict=True):
         assert np.hypot(end[0] - edge["target"][0], end[1] - edge["target"][1]) < 0.5
-        assert np.hypot(start[0] - edge["source"][0], start[1] - edge["source"][1]) < 0.5
+        # Tails start inside the source dot, so the arrow visibly leaves its head.
+        assert np.hypot(start[0] - edge["source"][0], start[1] - edge["source"][1]) < 0.1
 
 
 def test_ioi_figure_data_reduces_scores() -> None:
