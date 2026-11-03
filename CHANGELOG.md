@@ -45,7 +45,10 @@
   serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
   `decoded_output`. An unknown style refuses `decode_style_unknown`
   (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
-  `OutputStyleUnknownError`).
+  `OutputStyleUnknownError`). `style="hf_text"` on a trace captured without a tokenizer
+  returns the argmax `token_ids` with `text` `None` instead of refusing. Passing
+  `output_style=` or `output_head=` to `CaptureOptions` or `tl.trace` refuses
+  (`facade_redirect` / `trace_forward_kwargs_unrouted`) naming the read-time call.
 - **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
   model at read time instead: `trace.decode_output(head="logits")` or
   `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
