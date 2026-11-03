@@ -76,8 +76,7 @@ class LMHeadAnchor:
                 code="mi_payload_missing",
                 message="The final norm's input/output payloads were not saved, so the "
                 "frozen-scale linearization has no operating point.",
-                remedy="recapture with the residual stream saved (retention_plan or "
-                "layers_to_save='all')",
+                remedy="recapture with the residual stream saved (retention_plan or save='all')",
                 analysis="norm_reconstruction",
                 missing_sites=[
                     {

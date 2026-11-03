@@ -900,14 +900,14 @@ class Bundle:
 
         return _operations.bundle_fork(self, name)
 
-    def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
+    def run(self, model: nn.Module, inputs: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
 
         Parameters
         ----------
         model:
             Model forwarded to each member.
-        x:
+        inputs:
             Forward input.
 
         Returns
@@ -916,7 +916,7 @@ class Bundle:
             This bundle.
         """
 
-        return _operations.bundle_run(self, model, x, **kwargs)
+        return _operations.bundle_run(self, model, inputs, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
         """Apply a function independently to each member; released members read ``"unmeasured"``.

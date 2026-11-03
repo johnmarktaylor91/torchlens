@@ -311,7 +311,7 @@ def test_session_end_walk_does_not_grow_with_the_step_count(monkeypatch) -> None
 @pytest.mark.parametrize(
     ("record_kwargs", "extra", "fragment"),
     [
-        ({"stop_after": lambda ctx: False}, {}, "halted forward"),
+        ({"stop_after": lambda ctx: False}, {}, "stopped forward"),
         (
             {"on_forward_error": "return_partial"},
             {},

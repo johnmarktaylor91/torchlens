@@ -96,7 +96,6 @@ def _trace_mlx_model(
     visualization: VisualizationOptions | None,
     backward_ready: bool | MissingType,
     name: str | None | MissingType,
-    module_filter: Callable[[Any], bool] | None | MissingType,
     module_identity_mode: str | None | MissingType,
     grad_options: Any | None | MissingType,
     verbose: bool | MissingType,
@@ -153,7 +152,6 @@ def _trace_mlx_model(
         name=name,
         cache=MISSING,
         cache_dir=MISSING,
-        module_filter=module_filter,
         module_identity_mode=module_identity_mode,
     )
     save_options = (
@@ -217,7 +215,6 @@ def _trace_mlx_model(
         verbose=capture_options.verbose,
         backward_ready=capture_options.backward_ready,
         name=capture_options.name,
-        module_filter=capture_options.module_filter,
         transform=None,
         raw_input=raw_input,
         save_raw_input=capture_options.save_raw_input,
@@ -355,7 +352,6 @@ def _trace_mlx_model_from_public_kwargs(**kwargs: Any) -> Trace:
         visualization=None,
         backward_ready=kwargs.get("backward_ready", MISSING),
         name=kwargs.get("name", MISSING),
-        module_filter=kwargs.get("module_filter", MISSING),
         module_identity_mode=kwargs.get("module_identity_mode", MISSING),
         grad_options=kwargs["grad_options"],
         verbose=kwargs.get("verbose", MISSING),

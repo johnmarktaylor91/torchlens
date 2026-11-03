@@ -661,3 +661,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 33ee54600749ac22c6fb19d7b812cbd05b26db5b (dirty)
 recorded: 2026-11-01T11:29:21.162768+00:00
+---
+generator: tests/test_state_keyset_contract.py
+flag: TORCHLENS_UPDATE_STATE_KEYSET_ORACLE=1
+reason: rulings-apply-entry: inputs= rename, Recorder capture=/stop_after=, module_filter and layers_to_save removal
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ad0b5e78b1f577b423e4340b39dabd1d00df6c85 (dirty)
+recorded: 2026-11-03T08:04:52.495068+00:00
