@@ -11,7 +11,7 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
-from .._errors import KeywordConflictError
+from .._errors import InvalidArgumentError, KeywordConflictError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -24,6 +24,7 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._generation import GenerationRecording, enrich_generation, record_generation
+from ._generation_options import GenerationOptions
 from ._recorder import Recorder
 from ._validation import validate_postprocess
 from .options import (
@@ -93,6 +94,7 @@ def record(
     storage: StorageOptions | None = None,
     streaming: StorageOptions | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    generation: GenerationOptions | None = None,
     return_output: bool = False,
     postprocess: str = "none",
     seed: int | None = None,
@@ -181,6 +183,18 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``halt=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    generation:
+        DOCUMENTED-UNSTABLE. :class:`~torchlens.recording.GenerationOptions`
+        widening the generation door: ``reducers=`` keeps a per-token reduction
+        of each declared site instead of its activation (``torchlens.recording.
+        reducers`` has ``norm``, ``top_k`` and ``probe``), ``kv_sites=`` keeps
+        the declared layers' new KV-cache slices per token, ``keep_last=`` and
+        ``spill=`` bound the forwards held in memory (a ring buffer with disk
+        spill), and ``max_saved_bytes=`` refuses a generation whose retained
+        payloads would exceed the budget (projected after the first decode
+        step; code ``record_generation_budget_exceeded``). Read the per-token
+        values with ``GenerationRecording.series(name)``. Needs
+        ``generate_kwargs=``.
     return_output:
         Whether to return ``(model_output, recording)``; with
         ``generate_kwargs`` the output is ``generate()``'s own return value.
@@ -208,70 +222,48 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, input_args, input_kwargs)
-    if generate_kwargs is not None:
-        output, generation = record_generation(
-            model,
-            input_args,
-            input_kwargs,
-            generate_kwargs,
-            {
-                "save": save,
-                "default_op": default_op,
-                "default_module": default_module,
-                "history_size": history_size,
-                "lookback": lookback,
-                "lookback_payload_policy": lookback_payload_policy,
-                "include_source_events": include_source_events,
-                "intervene": intervene,
-                "halt": halt,
-                "max_predicate_failures": max_predicate_failures,
-                "on_predicate_error": on_predicate_error,
-                "on_forward_error": on_forward_error,
-                "storage": storage,
-                "streaming": streaming,
-                "seed": seed,
-                "activation_transform": activation_transform,
-                "save_raw_activations": save_raw_activations,
-                "save_grads": save_grads,
-                "default_grad": default_grad,
-                "grad_transform": grad_transform,
-                "save_raw_grads": save_raw_grads,
-                "backward_ready": backward_ready,
-                "narrate": narrate,
-                "detach_saved_activations": detach_saved_activations,
-            },
+    if generation is not None and generate_kwargs is None:
+        raise InvalidArgumentError(
+            "tl.record(generation=GenerationOptions(...)) needs generate_kwargs=: the per-token "
+            "options describe a recorded generation",
+            code="record_generation_options_invalid",
+            remedy="pass generate_kwargs={} (the model's defaults) or drop generation=",
         )
-        generation = enrich_generation(generation, postprocess)
+    recorder_kwargs: dict[str, Any] = {
+        "save": save,
+        "default_op": default_op,
+        "default_module": default_module,
+        "history_size": history_size,
+        "lookback": lookback,
+        "lookback_payload_policy": lookback_payload_policy,
+        "include_source_events": include_source_events,
+        "intervene": intervene,
+        "halt": halt,
+        "max_predicate_failures": max_predicate_failures,
+        "on_predicate_error": on_predicate_error,
+        "on_forward_error": on_forward_error,
+        "storage": storage,
+        "streaming": streaming,
+        "seed": seed,
+        "activation_transform": activation_transform,
+        "save_raw_activations": save_raw_activations,
+        "save_grads": save_grads,
+        "default_grad": default_grad,
+        "grad_transform": grad_transform,
+        "save_raw_grads": save_raw_grads,
+        "backward_ready": backward_ready,
+        "narrate": narrate,
+        "detach_saved_activations": detach_saved_activations,
+    }
+    if generate_kwargs is not None:
+        output, generated = record_generation(
+            model, input_args, input_kwargs, generate_kwargs, recorder_kwargs, generation
+        )
+        generated = enrich_generation(generated, postprocess)
         if return_output:
-            return output, generation
-        return generation
-    with Recorder(
-        model,
-        save=save,
-        default_op=default_op,
-        default_module=default_module,
-        history_size=history_size,
-        lookback=lookback,
-        lookback_payload_policy=lookback_payload_policy,
-        include_source_events=include_source_events,
-        intervene=intervene,
-        halt=halt,
-        max_predicate_failures=max_predicate_failures,
-        on_predicate_error=on_predicate_error,
-        on_forward_error=on_forward_error,
-        storage=storage,
-        streaming=streaming,
-        seed=seed,
-        activation_transform=activation_transform,
-        save_raw_activations=save_raw_activations,
-        save_grads=save_grads,
-        default_grad=default_grad,
-        grad_transform=grad_transform,
-        save_raw_grads=save_raw_grads,
-        backward_ready=backward_ready,
-        narrate=narrate,
-        detach_saved_activations=detach_saved_activations,
-    ) as recorder:
+            return output, generated
+        return generated
+    with Recorder(model, **recorder_kwargs) as recorder:
         output = recorder(input_args, input_kwargs)
     recording = recorder.recording
     if postprocess != "none":

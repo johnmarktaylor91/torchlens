@@ -21,13 +21,18 @@ import dataclasses
 import hashlib
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
+from functools import partial
 from types import MappingProxyType
 from typing import Any, Literal, cast
 
 import torch
 from torch import nn
 
+from .._capture.predicates import _save_selector_matches
 from .._errors import InvalidArgumentError
+from .._selection.selector_base import BaseSelector
+from ._generation_options import GenerationOptions
+from ._generation_stream import TokenSeries, _StepSink, site_predicate
 from ._recorder import Recorder
 from .types import ActivationRecord, Recording
 
@@ -53,7 +58,8 @@ TOKEN_CHOICE_SETTINGS: tuple[str, ...] = (
 
 #: What a generation recording never holds, disclosed on every result.
 NOT_RECORDED: tuple[str, ...] = (
-    "KV-cache tensors (past_key_values) are not saved; only the selected sites are.",
+    "KV-cache tensors (past_key_values) are not saved; only the selected sites are "
+    "(GenerationOptions(kv_sites=) keeps the declared layers' new slices per token).",
     "Logits processing, sampling and stopping run between forwards, outside any recorded forward.",
     "The last generated token is never fed back through the model, so no step computes "
     "activations at its position.",
@@ -123,6 +129,9 @@ class GenerationRecording:
         and a digest of the torch RNG state at the start of generation.
     not_recorded:
         What the recording never holds, in plain words.
+    options:
+        The :class:`GenerationOptions` the recording ran with (``None`` for the
+        plain door, which keeps every selected site at every token).
     """
 
     recording: Recording
@@ -131,12 +140,59 @@ class GenerationRecording:
     prompt_length: int
     settings: Mapping[str, Any]
     not_recorded: tuple[str, ...] = NOT_RECORDED
+    options: GenerationOptions | None = None
+    _sink: Any = dataclasses.field(default=None, repr=False, compare=False)
 
     @property
     def n_steps(self) -> int:
         """Return the number of recorded forwards (prefill included)."""
 
         return len(self.steps)
+
+    @property
+    def series_names(self) -> tuple[str, ...]:
+        """Return the per-token series this recording answers (reducer sites, KV slices)."""
+
+        return () if self._sink is None else tuple(self._sink.series_names)
+
+    @property
+    def peak_saved_bytes(self) -> int:
+        """Return the most payload bytes held in memory at once during the generation."""
+
+        if self._sink is None:
+            return sum(step.saved_bytes for step in self.steps)
+        return int(self._sink.peak_bytes)
+
+    @property
+    def evicted_steps(self) -> Mapping[int, str]:
+        """Return the forwards the ring buffer evicted, step to ``"spilled"`` or ``"dropped"``."""
+
+        return MappingProxyType({} if self._sink is None else dict(self._sink.evicted))
+
+    def series(self, name: str) -> TokenSeries:
+        """Return one per-token series: a reducer site's values or a KV slice.
+
+        Parameters
+        ----------
+        name:
+            A site address passed in ``GenerationOptions(reducers=)`` or a KV
+            series name, ``kv.<layer>.key`` or ``kv.<layer>.value``.
+
+        Returns
+        -------
+        TokenSeries
+            The values over every readable position (spilled forwards are read
+            back from disk; dropped ones are absent from the front).
+        """
+
+        if self._sink is None:
+            raise InvalidArgumentError(
+                f"no per-token series named {name!r}: this recording ran without "
+                "generation=GenerationOptions(...)",
+                code="record_generation_step_missing",
+                remedy="pass generation=GenerationOptions(reducers={...}) or kv_sites=",
+            )
+        return cast("TokenSeries", self._sink.series(name))
 
     def records_at(self, step: int) -> list[ActivationRecord]:
         """Return the activation records of one generation step.
@@ -365,40 +421,49 @@ class _ForwardRoute:
     descends an object only through ``__dict__``; this slotted holder has none.
     """
 
-    __slots__ = ("depth", "original", "recorder", "windows")
+    __slots__ = ("depth", "original", "recorder", "sink", "windows")
 
     def __init__(
         self,
         recorder: Recorder,
         windows: list[tuple[int, range]],
         original: Callable[..., Any],
+        sink: _StepSink | None = None,
     ) -> None:
         self.recorder = recorder
         self.windows = windows
         self.original = original
+        self.sink = sink
         self.depth = 0
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         if self.depth:
             return self.original(*args, **kwargs)
         step = len(self.windows)
-        self.windows.append((self.recorder._next_pass_index, _step_window(kwargs, step)))
+        pass_index, window = self.recorder._next_pass_index, _step_window(kwargs, step)
+        self.windows.append((pass_index, window))
         self.depth += 1
         try:
-            return self.recorder(args, kwargs)
+            output = self.recorder(args, kwargs)
         finally:
             self.depth -= 1
+        if self.sink is not None:
+            self.sink.after_pass(step, pass_index, window, kwargs)
+        return output
 
 
 @contextmanager
 def _forwards_through(
-    model: nn.Module, recorder: Recorder, windows: list[tuple[int, range]]
+    model: nn.Module,
+    recorder: Recorder,
+    windows: list[tuple[int, range]],
+    sink: _StepSink | None = None,
 ) -> Iterator[None]:
     """Route each outermost ``model.forward`` call through the recorder call."""
 
     had_instance_forward = "forward" in model.__dict__
     saved_forward = model.__dict__.get("forward")
-    route = _ForwardRoute(recorder, windows, model.forward)
+    route = _ForwardRoute(recorder, windows, model.forward, sink)
 
     def forward(*args: Any, **kwargs: Any) -> Any:
         """Hand the call to the route, which records outermost forwards only."""
@@ -415,7 +480,11 @@ def _forwards_through(
             del model.__dict__["forward"]
 
 
-def _steps(recording: Recording, windows: list[tuple[int, range]]) -> tuple[GenerationStep, ...]:
+def _steps(
+    recording: Recording,
+    windows: list[tuple[int, range]],
+    bytes_by_step: list[int] | None = None,
+) -> tuple[GenerationStep, ...]:
     """Build one :class:`GenerationStep` per recorded forward."""
 
     ops_by_pass: dict[int, int] = {}
@@ -426,6 +495,14 @@ def _steps(recording: Recording, windows: list[tuple[int, range]]) -> tuple[Gene
     for step, (pass_index, window) in enumerate(windows):
         indexes = recording.by_pass.get(pass_index, [])
         payloads = (recording.records[index].ram_payload for index in indexes)
+        if bytes_by_step is not None and step < len(bytes_by_step):
+            saved_bytes = bytes_by_step[step]
+        else:
+            saved_bytes = sum(
+                payload.numel() * payload.element_size()
+                for payload in payloads
+                if payload is not None
+            )
         steps.append(
             GenerationStep(
                 step=step,
@@ -434,14 +511,39 @@ def _steps(recording: Recording, windows: list[tuple[int, range]]) -> tuple[Gene
                 positions=window,
                 n_ops=ops_by_pass.get(pass_index, 0),
                 n_records=len(indexes),
-                saved_bytes=sum(
-                    payload.numel() * payload.element_size()
-                    for payload in payloads
-                    if payload is not None
-                ),
+                saved_bytes=saved_bytes,
             )
         )
     return tuple(steps)
+
+
+def _save_with_sites(save: Any, sites: tuple[str, ...]) -> Any:
+    """Return ``save`` widened so the declared reducer sites are always kept."""
+
+    keep_sites = site_predicate(sites)
+    if save is None:
+        return keep_sites
+    if isinstance(save, BaseSelector):
+
+        def keep_selector_or_sites(ctx: Any) -> Any:
+            return keep_sites(ctx) or _save_selector_matches(save, ctx)
+
+        return keep_selector_or_sites
+
+    def keep_either(ctx: Any) -> Any:
+        return keep_sites(ctx) or save(ctx)
+
+    return keep_either
+
+
+def _max_new_tokens(settings: Mapping[str, Any], prompt_length: int | None) -> int | None:
+    """Return how many tokens the generation may add, when the settings say."""
+
+    if settings.get("max_new_tokens") is not None:
+        return int(settings["max_new_tokens"])
+    if settings.get("max_length") is not None and prompt_length is not None:
+        return max(int(settings["max_length"]) - prompt_length, 0)
+    return None
 
 
 def _sequences(output: Any) -> torch.Tensor:
@@ -455,12 +557,29 @@ def _sequences(output: Any) -> torch.Tensor:
     raise TypeError(f"generate() returned {type(output).__name__} without token sequences")
 
 
+def _seeded_settings(settings: dict[str, Any], recorder_kwargs: dict[str, Any]) -> dict[str, Any]:
+    """Seed torch once for the whole generation and return ``settings`` with the RNG facts."""
+
+    random_seed = recorder_kwargs.pop("seed", None)
+    if random_seed is not None:
+        # Seed once for the whole generation; a per-forward reseed would change
+        # which tokens a sampled generation produces.
+        torch.manual_seed(random_seed)
+    return {
+        **settings,
+        "random_seed": random_seed,
+        "torch_initial_seed": torch.initial_seed(),
+        "torch_rng_state_sha256": _rng_digest(),
+    }
+
+
 def record_generation(
     model: nn.Module,
     input_args: Any,
     input_kwargs: Mapping[str, Any] | None,
     generate_kwargs: Mapping[str, Any],
     recorder_kwargs: dict[str, Any],
+    generation: GenerationOptions | None = None,
 ) -> tuple[Any, GenerationRecording]:
     """Run ``model.generate`` once and record every forward it runs.
 
@@ -475,6 +594,9 @@ def record_generation(
         Generation settings forwarded verbatim to ``generate``.
     recorder_kwargs:
         The ``Recorder`` options of the ``tl.record`` call.
+    generation:
+        Per-token reducers, KV-cache slices, ring buffer, spill and the
+        retained-byte guard (``None`` keeps every selected site, unguarded).
 
     Returns
     -------
@@ -486,31 +608,30 @@ def record_generation(
     settings = preflight_generation(
         model, input_args, prompt_kwargs, generate_kwargs, recorder_kwargs
     )
-    random_seed = recorder_kwargs.pop("seed", None)
-    if random_seed is not None:
-        # Seed once for the whole generation; a per-forward reseed would change
-        # which tokens a sampled generation produces.
-        torch.manual_seed(random_seed)
-    settings = {
-        **settings,
-        "random_seed": random_seed,
-        "torch_initial_seed": torch.initial_seed(),
-        "torch_rng_state_sha256": _rng_digest(),
-    }
+    settings = _seeded_settings(settings, recorder_kwargs)
     windows: list[tuple[int, range]] = []
+    if generation is not None and generation.reducers:
+        recorder_kwargs["save"] = _save_with_sites(
+            recorder_kwargs.get("save"), tuple(generation.reducers)
+        )
+    sink: _StepSink | None = None
     with Recorder(model, **recorder_kwargs) as recorder:
-        with _forwards_through(model, recorder, windows):
+        if generation is not None:
+            live = cast("Any", recorder)._state.recording
+            sink = _StepSink(generation, live, partial(_max_new_tokens, settings))
+        with _forwards_through(model, recorder, windows, sink):
             generate = cast("Callable[..., Any]", model.generate)
             output = generate(*_positional(input_args), **prompt_kwargs, **generate_kwargs)
     recording = recorder.recording
-    steps = _steps(recording, windows)
-    prompt_length = steps[0].positions.stop if steps else 0
+    steps = _steps(recording, windows, None if sink is None else sink.bytes_by_step)
     return output, GenerationRecording(
         recording=recording,
         steps=steps,
         sequences=_sequences(output),
-        prompt_length=prompt_length,
+        prompt_length=steps[0].positions.stop if steps else 0,
         settings=MappingProxyType(settings),
+        options=generation,
+        _sink=sink,
     )
 
 
