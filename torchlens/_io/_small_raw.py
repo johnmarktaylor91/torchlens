@@ -28,6 +28,7 @@ _RAW_IMAGE_SENTINEL = "__torchlens_small_raw_image__"
 _LOGGER = logging.getLogger("torchlens._io.scrub")
 
 
+# Complexity: one bounded recursive scrub preserves the shared byte budget across value kinds.
 def _small_raw_value(value: Any, *, field_name: str) -> Any:
     """Return a bounded portable representation of a raw value.
 
@@ -309,6 +310,7 @@ def _rehydrate_small_raw_image(value: dict[str, Any]) -> Any:
     return image
 
 
+# Complexity: the bounded image visitor keeps byte and dimension checks on the same decode path.
 def _rehydrate_small_raw_images(value: Any) -> Any:
     """Restore bounded raw-image sentinels to PIL images when possible.
 
