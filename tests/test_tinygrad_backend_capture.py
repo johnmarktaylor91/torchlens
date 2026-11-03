@@ -662,9 +662,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         # canonical message names the owning flag and the refused option.
         (
             {"intervene": tl.when(tl.func("relu"), tl.zero_ablate())},
-            "interventions=False.*intervene",
+            "can_intervene=False.*intervene",
         ),
-        ({"halt": tl.func("relu")}, "interventions=False.*halt"),
+        ({"halt": tl.func("relu")}, "can_intervene=False.*halt"),
         ({"save_grads": True}, "backward_capture=False.*save_grads"),
     ),
 )
@@ -894,13 +894,13 @@ def test_tinygrad_derived_grads_are_not_backward_capture() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.saved_grad_ops
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
@@ -944,7 +944,10 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert trace.provenance.param_source == "none"
     assert list(trace.params.keys()) == []
     assert trace.autograd.has_backward_pass is False
-    assert len(trace.autograd.backward_passes) == 0
+    # The public pass count is len(trace.autograd.backward_passes); a backend without
+    # backward capture refuses that read typed rather than reporting zero passes.
+    with pytest.raises(ValueError, match="do not capture true backward graphs"):
+        _ = trace.autograd.backward_passes
     assert trace.autograd.num_backward_edges is None
     assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
@@ -988,11 +991,11 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     assert loaded_status.payload_load_status == "loaded_device_best_effort"
     with pytest.raises(TypeError, match="not a boolean"):
         bool(loaded_status)
-    with pytest.raises(BackendUnsupportedError, match="trace\\.derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="trace\\.autograd\\.derived_grads"):
         trace.log_backward(trace[trace.output_layers[0]].out)
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace.autograd.backward_passes
-    with pytest.raises(ValueError, match="trace\\.derived_grads"):
+    with pytest.raises(ValueError, match="trace\\.autograd\\.derived_grads"):
         _ = trace[0].grads
 
 
