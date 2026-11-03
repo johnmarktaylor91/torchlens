@@ -457,6 +457,14 @@
   static FuncGraph path stays ungrouped and keeps `False`. Validation sidecars stay keyed to raw
   capture identities and oracles compare in raw-label space; per-backend tamper tests prove a
   stale-label sidecar FAILS validation rather than silently passing.
+- `Trace.draw(highlight="interventions")` (keyword-only) draws the surgery lens: recorded
+  interventions marked on their nodes, the per-lane census in the caption, and the full census
+  written beside the figure as `<path>.census.txt` (beside the collision-safe file a bare draw
+  chose). Any other value refuses `draw_highlight_invalid` listing the allowed values; an
+  un-edited trace refuses `surgery_evidence_missing`.
+- `tl.viz.contact_sheet(view, page=k)` returns a `ContactSheet`: the page's SVG text (a `str`)
+  carrying `page` and `page_count`, so `contact_sheet(view).page_count` says how many pages to
+  ask for.
 - `Trace.draw(order_siblings=True)` is the default Graphviz sibling-ordering pass for
   forward unrolled graphs; set it to `False` to render the raw dot layout.
 - `Trace.draw(color_by=...)` (UNSTABLE spelling, keyword-only, no deprecation shim owed until
@@ -480,10 +488,14 @@
 - `Trace.draw(size_by=..., size_scale="sqrt"|"linear")` (UNSTABLE spellings, keyword-only) is the
   wave-1 SIZE channel, shipped with the D4 DEFAULT APPLIED (D4 unruled at merge: sqrt scale +
   conservative area-only mapping + typed refusal on rolled varying sources). Sources: a scalar
-  record field, the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
+  record field, the `color_by` builtin tokens (same meaning and units; field-backed ones take
+  the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  encoded area clamped to `SIZE_BY_MAX_AREA_MULT` (4.0) x the default node area; strictly
+  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: base box =
+  per-dimension max(median label box, own label box), area grows linearly to
+  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value); collapsed
+  boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified
   single-valued (marker-varying reconciled fields, mirrored/per-pass projections, varying

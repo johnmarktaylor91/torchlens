@@ -43,6 +43,10 @@ def test_clip_style_dict_routes_via_auto_processor() -> None:
     import PIL.Image  # noqa: F401
 
     model = transformers.CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+    # The auto-route gate probes the local Hugging Face cache only (it never does
+    # network I/O while routing), so fetch the processor files the way the model's
+    # weights were fetched; a cache holding only the weights declines the route.
+    transformers.AutoProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
     log = tl.trace(
         model,
