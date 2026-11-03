@@ -32,8 +32,8 @@ from typing import Any
 
 import torch
 
-from . import ArtifactError
 from ._canonical_pickle import dump_canonical_metadata
+from .format_errors import ArtifactError
 from .state_contract import governed_artifact_load
 
 __all__ = [
