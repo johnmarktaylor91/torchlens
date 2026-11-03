@@ -101,7 +101,8 @@ class AttentionRecording(Mapping[str, torch.Tensor]):
 
     Examples
     --------
-    >>> call = AttentionCall("layers.0.attn", torch.full((1, 2, 3, 3), 1 / 3), 2, "causal", False)
+    >>> probs = torch.full((1, 2, 3, 3), 1 / 3)
+    >>> call = tl.bridge.transformers.AttentionCall("layers.0.attn", probs, 2, "causal", False)
     >>> recording = AttentionRecording(calls=[call])
     >>> list(recording)
     ['layers.0.attn']
