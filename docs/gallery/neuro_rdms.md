@@ -81,10 +81,12 @@ RESULT = bool(torch.equal(features, independent))
 
 ```python
 # recipe-test: tool=torchvision expected=True
+import numpy as np
+
 rdm = tl.repgeom.rdm(features, metric="correlation")
 reference = tl.repgeom.rdm(independent, metric="correlation")
 ids = [f"stimulus-{i}" for i in range(8)]
 permutation = torch.tensor([3, 0, 6, 1, 7, 4, 2, 5])
 wrong_ids = [ids[i] for i in permutation.tolist()]
-RESULT = bool(torch.equal(rdm, reference)) and ids != wrong_ids
+RESULT = bool(np.array_equal(rdm, reference)) and ids != wrong_ids
 ```
