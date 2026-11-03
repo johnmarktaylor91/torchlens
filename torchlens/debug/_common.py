@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes.func_call_location import display_frame
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -38,7 +40,11 @@ def _ordered_ops(trace: Trace) -> list[Op]:
 
 
 def _source_line(op: Op) -> str | None:
-    """Return the first source location for an op.
+    """Return the source location of the line that ran an op.
+
+    The location is the innermost recorded frame outside torch's own code
+    (:func:`torchlens._data_classes.func_call_location.display_frame`), the
+    same line an op's card shows.
 
     Parameters
     ----------
@@ -51,10 +57,9 @@ def _source_line(op: Op) -> str | None:
         ``"file:line"`` or ``None`` when no source context is present.
     """
 
-    context = getattr(op, "code_context", None) or ()
-    if not context:
+    location = display_frame(getattr(op, "code_context", None))
+    if location is None:
         return None
-    location = context[0]
     file_name = getattr(location, "file", None)
     line_number = getattr(location, "line_number", None)
     if file_name is None or line_number is None:

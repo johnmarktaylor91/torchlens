@@ -526,9 +526,9 @@ torchlens/_utils/display.py::warn_parallel	101
 torchlens/_utils/facade.py::resolve_facade_attr	120
 torchlens/_utils/hashing.py::compute_graph_shape_hash	105
 torchlens/_utils/hashing.py::compute_raw_event_shape_hash	73
-torchlens/_utils/introspection.py	1104
+torchlens/_utils/introspection.py	1097
 torchlens/_utils/introspection.py::_extend_search_stack_from_item	90
-torchlens/_utils/introspection.py::_get_code_context	189
+torchlens/_utils/introspection.py::_get_code_context	182
 torchlens/_utils/introspection.py::_search_stack_for_vars_of_type	70
 torchlens/_utils/introspection.py::get_arg_tensors_for_resolution	74
 torchlens/_utils/introspection.py::get_vars_of_type_from_obj	80
@@ -915,7 +915,7 @@ torchlens/backends/torch/aliasing.py::detect_torch_alias_contract	61
 torchlens/backends/torch/backend.py	887
 torchlens/backends/torch/backend.py::TorchBackend.fetch_label_move_input_tensors	153
 torchlens/backends/torch/backend.py::TorchBackend.setup_inputs_and_device	88
-torchlens/backends/torch/backward.py	4246
+torchlens/backends/torch/backward.py	4245
 torchlens/backends/torch/backward.py::RecordingBackward.__enter__	65
 torchlens/backends/torch/backward.py::_capture_autograd_engine_call	95
 torchlens/backends/torch/backward.py::_close_implicit_backward_pass_if_open	74

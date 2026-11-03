@@ -233,23 +233,21 @@ def operation_witness(op: Any) -> tuple[str | None, int | None] | None:
     """Return the op's source-location witness ``(file, line)``, or ``None``.
 
     The witness is the deepest OPERATION frame of the persisted
-    ``code_context``: live contexts are ordered shallow-to-deep and END
-    with the trace CALL-SITE entry -- the first surviving frame above the
-    outermost forward, appended after the operation frames
-    (``utils/introspection.py``) -- so the operation frame is
-    ``code_context[-2]``. NEVER ``[0]``: that is the outermost forward
-    line, identical across captures of a nested model whose INNER branch
-    sites differ -- reading it re-opens exactly the false-join class this
-    witness exists to refuse. A degenerate single-entry context (not
-    producible by ``tl.trace``, whose user call-site frame always survives
-    the internal-frame filter) falls back to its only frame. The selector
+    ``code_context``: contexts are ordered outermost to innermost, like a
+    traceback -- the trace CALL-SITE entry (the first surviving frame above
+    the outermost forward, ``utils/introspection.py``) first, then the
+    outermost forward down to the frame that ran the op -- so the operation
+    frame is ``code_context[-1]``. NEVER ``[0]`` or ``[1]``: those are the
+    call site and the outermost forward line, identical across captures of a
+    nested model whose INNER branch sites differ -- reading them re-opens
+    exactly the false-join class this witness exists to refuse. The selector
     is pinned byte-for-byte against the reference implementation.
     """
 
     code_context = getattr(op, "code_context", None)
     if not code_context:
         return None
-    frame = code_context[-2] if len(code_context) >= 2 else code_context[0]
+    frame = code_context[-1]
     return (getattr(frame, "file", None), getattr(frame, "line_number", None))
 
 
