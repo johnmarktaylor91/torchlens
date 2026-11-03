@@ -210,3 +210,106 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
     assert compat_row.status == "pass"
     assert compat_row.severity == "ok"
     assert "unprobed_candidates=" in compat_row.details
+
+
+def _capture_from_file_probe_paths(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the temp path every ``from_file`` probe recipe creates."""
+
+    real_recipe = belt.PROBE_RECIPES[("torch", "from_file")]
+    paths: list[str] = []
+
+    def recording_recipe() -> tuple[tuple[Any, ...], dict[str, Any]]:
+        args, kwargs = real_recipe()
+        paths.append(str(args[0]))
+        return args, kwargs
+
+    monkeypatch.setitem(belt.PROBE_RECIPES, ("torch", "from_file"), recording_recipe)
+    return paths
+
+
+def _from_file_classification(report: belt.BeltReport) -> tuple[bool, bool, bool]:
+    key = ("torch", "from_file")
+    return (key in report.members, key in report.probed_visible, key in report.probe_failures)
+
+
+def test_from_file_probe_releases_mapping_before_unlink(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The probe tensor is gone before its temp file is removed (Windows).
+
+    Windows refuses to delete a file a live mapping still holds; the
+    ``from_file`` result maps the probe file, so unlinking while it is alive
+    raised ``PermissionError`` out of ``_derive`` and failed every
+    ``tl.trace`` on Windows. The fake ``unlink`` reproduces that refusal
+    whenever a probe result tensor is still alive.
+    """
+
+    import os
+    import weakref
+
+    expected = _from_file_classification(belt._derive()[0])
+    paths = _capture_from_file_probe_paths(monkeypatch)
+    live_results: list[weakref.ref[torch.Tensor]] = []
+    real_touches = belt._touches_tensor
+
+    def spying_touches(result: Any, func: Any) -> bool:
+        if isinstance(result, torch.Tensor):
+            live_results.append(weakref.ref(result))
+        return real_touches(result, func)
+
+    real_unlink = os.unlink
+
+    def windows_unlink(path: Any, *args: Any, **kwargs: Any) -> None:
+        if str(path) in paths and any(ref() is not None for ref in live_results):
+            raise PermissionError(13, "simulated WinError 5: file is mapped", str(path))
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(belt, "_touches_tensor", spying_touches)
+    monkeypatch.setattr(belt, "_deferred_probe_paths", [])
+    monkeypatch.setattr(os, "unlink", windows_unlink)
+
+    report, _ = belt._derive()
+
+    assert paths, "the from_file probe never ran"
+    assert _from_file_classification(report) == expected
+    assert belt._deferred_probe_paths == []
+    assert not any(os.path.exists(path) for path in paths)
+
+
+def test_trace_survives_refused_probe_file_removal(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A refused removal defers cleanup; ``tl.trace`` and the report are unchanged.
+
+    Even with the mapping released, Windows (or a scanner holding a handle)
+    can refuse the first removal. The capture must still succeed, the probe's
+    classification must not change, and the file must be removed on retry.
+    """
+
+    import os
+
+    expected = _from_file_classification(belt._derive()[0])
+    paths = _capture_from_file_probe_paths(monkeypatch)
+    refused: list[str] = []
+    real_unlink = os.unlink
+
+    def refuse_first_unlink(path: Any, *args: Any, **kwargs: Any) -> None:
+        if str(path) in paths and not refused:
+            refused.append(str(path))
+            raise PermissionError(13, "simulated WinError 32: file in use", str(path))
+        real_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(belt, "_deferred_probe_paths", [])
+    monkeypatch.setattr(os, "unlink", refuse_first_unlink)
+    # Force a fresh derivation inside the next capture, as on a first wrap.
+    monkeypatch.setattr(belt, "_report", None)
+    monkeypatch.setattr(belt, "_member_map", None)
+
+    trace = tl.trace(torch.nn.Linear(2, 2), torch.randn(1, 2))
+
+    assert trace is not None
+    assert refused == paths[:1]
+    report = belt._report
+    assert report is not None
+    assert _from_file_classification(report) == expected
+    assert belt._deferred_probe_paths == refused
+    assert os.path.exists(refused[0])
+    belt._retry_deferred_probe_files()
+    assert belt._deferred_probe_paths == []
+    assert not os.path.exists(refused[0])

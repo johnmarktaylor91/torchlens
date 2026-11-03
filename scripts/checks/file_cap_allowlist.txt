@@ -921,7 +921,6 @@ torchlens/backends/torch/backward.py::_traces_for_roots	63
 torchlens/backends/torch/backward.py::_walk_and_hook_backward_graph	202
 torchlens/backends/torch/backward.py::install_autograd_wrappers	103
 torchlens/backends/torch/backward.py::log_recording_backward	84
-torchlens/backends/torch/belt.py::_derive	72
 torchlens/backends/torch/belt.py::sweep_stale_belt_references	72
 torchlens/backends/torch/buffer_writes.py	1787
 torchlens/backends/torch/buffer_writes.py::BufferWriteTracker._refresh_overlapping_alias_snapshots	66
