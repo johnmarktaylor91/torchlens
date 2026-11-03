@@ -7,6 +7,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.types import TraceHealth, TraceProvenance
+from torchlens.validation import validate_forward_pass
 
 
 def _tiny_trace() -> tl.Trace:
@@ -43,7 +44,7 @@ class _WithBuffer(nn.Module):
         return self.norm(self.fc(x)).sum()
 
 
-#: The label property names JMT confirmed through the record refactor (walk names.5,
+#: The label property names JMT confirmed through the record refactor (decision walk,
 #: 1 Nov 2026): owner type, then the names that must still resolve on it.
 _CONFIRMED_LABEL_NAMES: dict[str, tuple[str, ...]] = {
     "Op": ("label", "layer_label", "short_label", "short_layer_label", "raw_label"),
@@ -87,6 +88,6 @@ def test_confirmed_label_names_still_resolve() -> None:
         assert op.layer_label in trace.layer_labels
         assert op.label in trace.op_labels
         assert callable(trace.validate_forward_pass)
-        assert callable(tl.validate_forward_pass)
+        assert callable(validate_forward_pass)
     finally:
         trace.cleanup()
