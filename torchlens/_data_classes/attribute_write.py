@@ -49,6 +49,17 @@ class AttributeWrite:
     recorded nor undone. Builtin containers of any size are tracked by value. Rebinding to an equal immutable scalar is not
     a write. A capture that re-ran the forward (escape rescue) records the net
     effect of both runs.
+
+    Examples
+    --------
+    >>> class Stash(nn.Module):
+    ...     def forward(self, a):
+    ...         self.last_total = a.sum()
+    ...         return a * 2
+    >>> trace = tl.trace(Stash(), x)
+    >>> write = trace.modules["self"].attribute_writes["last_total"]
+    >>> type(write).__name__, write.kind
+    ('AttributeWrite', 'added')
     """
 
     kind: AttributeWriteKind
