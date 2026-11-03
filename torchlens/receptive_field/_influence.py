@@ -154,10 +154,11 @@ def _source_string(direction: str, **extra: Any) -> str:
 
 
 def _influence_entry(
-    op: Any, mask: _Mask, relation: str, source: str, basis: str, field_status: str
+    op: Any, mask: _Mask, relation: str, source: str, disclosure: tuple[str, str]
 ) -> Site:
-    """Build one influence entry with its typed ``basis`` and ``field_status``."""
+    """Build one influence entry; ``disclosure`` is its ``(basis, field_status)``."""
 
+    basis, field_status = disclosure
     entry = _act_entry(op, mask, relation, source)
     provenance = replace(entry.provenance, basis=basis, field_status=field_status)
     return replace(entry, provenance=provenance)
@@ -180,7 +181,9 @@ def _resolve_influence_term(node: _InfluenceTerm, trace: Any) -> Selection:
         # entries at every target (family kept), never as an error.
         source = _source_string(node.direction)
         entries = [
-            _influence_entry(op, _mask_empty(_site_shape(op)), "exact", source, node.method, "none")
+            _influence_entry(
+                op, _mask_empty(_site_shape(op)), "exact", source, (node.method, "none")
+            )
             for op in targets
         ]
         return Selection(trace, "ACT", entries)
@@ -252,7 +255,9 @@ def _geometric_influence(
             statuses.extend(pair_statuses)
         source = _source_string(node.direction)
         entries.append(
-            _influence_entry(target, folded, relation, source, "geometric", _worst_status(statuses))
+            _influence_entry(
+                target, folded, relation, source, ("geometric", _worst_status(statuses))
+            )
         )
     return Selection(trace, "ACT", entries)
 
@@ -567,8 +572,7 @@ def _gradient_influence(
             _source_string(
                 node.direction, cross_batch_influence=cross_batch[target.label], probes=total
             ),
-            "gradient",
-            "empirical",
+            ("gradient", "empirical"),
         )
         for target in targets
     ]
