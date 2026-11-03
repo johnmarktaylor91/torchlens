@@ -149,11 +149,12 @@ def draw_causal_tracing(out: Path) -> list[Path]:
     draws = _first_int(summary.get("pinned", {}).get("noise", ""), r"(\d+) samples")
     with plt.rc_context(STYLE):
         fig, (left, right) = plt.subplots(
-            1, 2, figsize=(WIDTH, 4.3), layout="constrained", width_ratios=(12, 1.4)
+            1, 2, figsize=(WIDTH, 4.9), layout="constrained", width_ratios=(12, 1.4)
         )
         image = left.imshow(matrix, cmap="RdBu_r", vmin=-limit, vmax=limit, aspect="auto")
         left.set(
             xticks=range(matrix.shape[1]),
+            xticklabels=[str(i) if i % 2 == 0 else "" for i in range(matrix.shape[1])],
             yticks=range(len(rows)),
             yticklabels=rows,
             xlabel="Layer whose MLP output is restored",
@@ -163,23 +164,28 @@ def draw_causal_tracing(out: Path) -> list[Path]:
         left.tick_params(axis="x", labelsize=SMALL)
         setup = "GPT-2 small"
         if facts and draws:
-            setup += f"; {facts} facts, {draws} noise draws each"
+            setup += f"; {facts} facts, {draws} noise draws on the subject tokens each"
         ate = summary["measured"].get("ate")
         if ate is not None:
-            setup += f"\ncorruption removes {ate:.3f} of the answer probability"
-        left.set_title(setup, loc="left", fontsize=SMALL, color=MUTED)
+            setup += f"\ncorruption removes {ate:.3f} of the answer probability on average"
+        setup += "\nrestoring patches one clean-run MLP output into the corrupted run"
+        fig.supxlabel(setup, fontsize=SMALL, color=MUTED)
         row = rows.index(category)
         left.add_patch(
             Rectangle((layer - 0.5, row - 0.5), 1, 1, fill=False, edgecolor=INK, linewidth=1.6)
         )
-        left.text(
-            layer + 0.65,
-            row,
-            f"peak {_num(peak['peak_aie'], '+.4f')}",
-            va="center",
-            ha="left",
-            fontsize=SMALL,
-            color=INK,
+        low_row, low_layer = np.unravel_index(int(np.argmin(matrix)), matrix.shape)
+        low = float(matrix[low_row, low_layer])
+        left.add_patch(
+            Rectangle(
+                (low_layer - 0.5, low_row - 0.5),
+                1,
+                1,
+                fill=False,
+                edgecolor=INK,
+                linewidth=1.2,
+                linestyle=(0, (2, 2)),
+            )
         )
         right.imshow(column, cmap="RdBu_r", vmin=-limit, vmax=limit, aspect="auto")
         names = (
@@ -195,16 +201,21 @@ def draw_causal_tracing(out: Path) -> list[Path]:
             ],
         )
         right.tick_params(length=0)
-        fig.colorbar(
+        right.set_xlabel(f"patched at\nlayer {layer},\n{category}", fontsize=SMALL, color=MUTED)
+        bar = fig.colorbar(
             image,
             ax=[left, right],
-            label="Average indirect effect\n(answer probability recovered)",
+            label="Average indirect effect\n(answer probability restored minus corrupted)",
             shrink=0.92,
             pad=0.02,
+            ticks=[-limit, -limit / 2, 0, limit / 2, limit],
         )
+        bar.ax.set_yticklabels([_num(t, "+.4f") if t else "0" for t in bar.get_ticks()])
         fig.suptitle(
             f"Restoring one MLP output recovers the most at layer {layer}, {category};\n"
-            "restoring a wrong value there (other layer, other fact) recovers nothing",
+            "a wrong value there (other layer, other fact) recovers almost nothing;\n"
+            f"the dashed cell (layer {low_layer}, {rows[low_row]}) is the most negative: "
+            f"{_num(low, '+.4f')}",
             fontsize=TITLE,
         )
         return _save(fig, out, "causal_tracing")
@@ -234,15 +245,19 @@ def draw_cnn_fields(out: Path) -> list[Path]:
     oracles = summary["oracles"]
     field_iou = float(oracles["gradient_support"]["measured"])
     projective_iou = float(oracles["projective_support"]["measured"])
-    layer = str(summary["pinned"].get("layer", "layer"))
+    pinned = summary["pinned"]
+    layer = str(pinned.get("layer", "layer"))
     side = int(image.shape[0])
     height, width = projected.shape
     r0, r1, c0, c1 = _bbox(spatial)
     p0, p1, q0, q1 = _bbox(patch)
+    f0, f1, g0, g1 = _bbox(projected)
+    # The noise input is shown as faint grey so the measured blue fill and the patch stay visible.
+    faint = 0.78 + 0.22 * image.mean(axis=-1)
     with plt.rc_context(STYLE):
-        fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 5.4), layout="constrained")
-        left.imshow(image, interpolation="nearest")
-        left.imshow(_overlay(empirical, BLUE, 0.35), interpolation="nearest")
+        fig, (left, right) = plt.subplots(1, 2, figsize=(WIDTH, 5.6), layout="constrained")
+        left.imshow(faint, cmap="gray", vmin=0, vmax=1, interpolation="nearest")
+        left.imshow(_overlay(empirical, BLUE, 0.45), interpolation="nearest")
         left.add_patch(
             Rectangle((c0 - 0.5, r0 - 0.5), c1 - c0, r1 - r0, fill=False, edgecolor=VERMILION, lw=2)
         )
@@ -250,19 +265,35 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         left.text(
             q1 + 0.03 * side,
             p0 - 0.015 * side,
-            f"{q1 - q0} x {p1 - p0} patch",
+            f"{q1 - q0} x {p1 - p0} patch zeroed",
             color=INK,
             fontsize=SMALL,
             va="bottom",
             bbox={"facecolor": "white", "edgecolor": GREEN, "alpha": 0.9, "pad": 1.5},
         )
         left.set(xticks=(0, side // 2, side - 1), yticks=(0, side // 2, side - 1))
-        left.set_title(f"Input ({side} x {side} noise)\nfield of one {layer} unit", loc="left")
+        left.tick_params(labelsize=13.5)  # single digits read small
+        right.tick_params(which="major", labelsize=13.5)
+        left.set_title(
+            f"Input ({side} x {side} noise, shown faint)\nfield of one {layer} unit "
+            f"(channel {pinned.get('channel', 0)}, centre)",
+            loc="left",
+        )
         left.set_xlabel("Pixel")
         left.set_ylabel("Pixel")
-        right.imshow(_overlay(projected, BLUE, 0.35), interpolation="nearest")
-        ys, xs = np.nonzero(changed)
-        right.scatter(xs, ys, s=16, color=VERMILION, zorder=3)
+        right.imshow(_overlay(changed, BLUE, 0.45), interpolation="nearest")
+        right.add_patch(
+            Rectangle((g0 - 0.5, f0 - 0.5), g1 - g0, f1 - f0, fill=False, edgecolor=VERMILION, lw=2)
+        )
+        right.text(
+            (width - 1) / 2,
+            0,
+            "outside: unchanged",
+            ha="center",
+            va="center",
+            fontsize=SMALL,
+            color=INK,
+        )
         right.set_xticks(np.arange(-0.5, width, 1), minor=True)
         right.set_yticks(np.arange(-0.5, height, 1), minor=True)
         right.grid(which="minor", color=RULE, linewidth=0.6)
@@ -279,14 +310,15 @@ def draw_cnn_fields(out: Path) -> list[Path]:
         right.set_xlabel("Feature-map unit")
         right.set_ylabel("Feature-map unit")
         fig.supxlabel(
-            f"Outline: the geometric box [{c0}, {c1}); blue: gradient support (left) and "
-            "projective field (right);\ndots: units changed by zeroing the green patch",
+            f"Vermilion outline: the geometric prediction (pixels {c0} to {c1 - 1} on both axes; "
+            f"units {g0} to {g1 - 1});\nblue: the measurement (pixels with nonzero gradient; "
+            "units changed by zeroing the green patch)",
             fontsize=SMALL,
             color=MUTED,
         )
         fig.suptitle(
             "The geometric fields match the measured influence exactly:\n"
-            f"IoU {field_iou:.2f} at the input, {projective_iou:.2f} at the output",
+            f"IoU (overlap) {field_iou:.2f} at the input, {projective_iou:.2f} at the output",
             fontsize=TITLE,
         )
         return _save(fig, out, "cnn_fields")
@@ -299,7 +331,7 @@ def _site_label(key: str) -> str:
 
 
 def draw_neuro_rdms(out: Path) -> list[Path]:
-    """Draw the per-stage RDMs and the aligned-versus-shuffled correlation curves.
+    """Draw the per-stage RDMs and the agreement curves from the saved ``neuro_rdms`` files.
 
     Parameters
     ----------
@@ -321,45 +353,89 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
     shuffled_max = float(arrays["shuffled_max"])
     aligned = summary["oracles"]["per_layer_rdm"]["measured"]
     shuffled = summary["controls"]["shuffled_order"]["measured"]
-    keys = list(aligned)
+    keys = [k for k in stages if k in aligned] + sorted(
+        (k for k in aligned if k not in stages), key=lambda k: (len(k), k)
+    )
     x = np.arange(len(keys))
+    arch_key = str(summary.get("pinned", {}).get("arch", "the network"))
+    arch = {"resnet18": "ResNet-18", "vit_b_16": "ViT-B/16"}.get(arch_key, arch_key)
+    n_stimuli = int(rdms[0].shape[0])
+    top = float(np.ceil(rdms.max() * 10) / 10)
     with plt.rc_context(STYLE):
-        fig = plt.figure(figsize=(WIDTH, 5.8), layout="constrained")
-        spec = fig.add_gridspec(2, len(rdms), height_ratios=(0.75, 1.25))
+        fig = plt.figure(figsize=(WIDTH, 6.0), layout="constrained")
+        # The square RDM panels fix the top row's height; the curve row is a multiple of it.
+        spec = fig.add_gridspec(
+            2, len(rdms) + 1, height_ratios=(1.0, 2.6), width_ratios=[1.0] * len(rdms) + [0.07]
+        )
         panels = [fig.add_subplot(spec[0, i]) for i in range(len(rdms))]
         for panel, stage, rdm in zip(panels, stages, rdms, strict=True):
-            image = panel.imshow(rdm, cmap="cividis", vmin=0, vmax=2, interpolation="nearest")
+            image = panel.imshow(rdm, cmap="cividis", vmin=0, vmax=top, interpolation="nearest")
             panel.set_title(stage)
-            panel.set(xticks=(0, rdm.shape[0] - 1), yticks=(0, rdm.shape[0] - 1))
-            panel.tick_params(length=0, labelsize=13.5)  # single digits read small
-        panels[0].set_ylabel("Stimulus")
-        fig.colorbar(image, ax=panels, label="Correlation distance (1 − r)", shrink=0.9, pad=0.02)
+            panel.set(xticks=[], yticks=[])
+        panels[0].set_ylabel(f"TorchLens RDM\n({n_stimuli} x {n_stimuli} stimuli)")
+        bar = fig.colorbar(
+            image, cax=fig.add_subplot(spec[0, -1]), label="Dissimilarity (1 − r)\nof two stimuli"
+        )
+        bar.ax.tick_params(labelsize=13.5)  # single digits read small
         curve = fig.add_subplot(spec[1, :])
+        curve.set_title(
+            f"{arch}, {n_stimuli} Fashion-MNIST images; RDM = representational dissimilarity "
+            f"matrix over the stimuli;\nthe {len(rdms)} stage RDMs above are TorchLens's",
+            loc="left",
+            fontsize=SMALL,
+            color=MUTED,
+        )
         curve.plot(x, [aligned[k] for k in keys], "o-", color=INK, lw=2, ms=5)
         curve.plot(x, [shuffled[k] for k in keys], "s--", color=BLUE, lw=2, ms=5)
-        curve.text(x[-1] + 0.3, aligned[keys[-1]], "aligned stimulus order", va="center")
-        curve.text(x[-1] + 0.3, shuffled[keys[-1]], "one side shuffled", va="center", color=BLUE)
-        for level, label in ((correlation_min, "pass bar"), (shuffled_max, "control bar")):
-            curve.plot(
-                [-0.6, x[-1] + 0.2], [level, level], color=GREY, linestyle=":", lw=1, zorder=0
-            )
-            curve.text(
-                -0.4, level - 0.03, f"{label} {level:g}", va="top", fontsize=SMALL, color=MUTED
-            )
+        curve.text(
+            x.mean(),
+            1.05,
+            f"aligned order: must reach {correlation_min:g} "
+            f"(all {len(keys)} round to {min(aligned.values()):.3f})",
+            ha="center",
+            va="bottom",
+        )
+        curve.text(
+            x.mean(),
+            min(shuffled.values()) - 0.06,
+            f"one side shuffled: must stay below {shuffled_max:g} "
+            f"(all at or below {max(shuffled.values()):.2f})",
+            ha="center",
+            va="top",
+            color=BLUE,
+        )
+        curve.plot(
+            [-0.6, x[-1] + 0.4],
+            [shuffled_max, shuffled_max],
+            color=GREY,
+            linestyle=":",
+            lw=1,
+            zorder=0,
+        )
+        curve.text(
+            -0.4,
+            shuffled_max - 0.03,
+            f"control bar {shuffled_max:g}",
+            va="top",
+            fontsize=SMALL,
+            color=MUTED,
+        )
         curve.axhline(0, color=RULE, lw=0.7, zorder=0)
+        labels = [_site_label(k) for k in keys]
         curve.set(
             xticks=x,
-            xticklabels=[_site_label(k) for k in keys],
-            xlim=(-0.6, len(keys) + 2.6),
-            ylim=(-0.25, 1.12),
-            ylabel="Pearson r with the plain-hooks RDM",
+            xticklabels=[label if i % 2 == 0 else f"\n{label}" for i, label in enumerate(labels)],
+            xlim=(-0.6, len(keys) - 0.4),
+            ylim=(-0.4, 1.25),
+            ylabel="Pearson r between the TorchLens RDM\nand the plain-hooks RDM",
             xlabel="Site: the selected stages, then each residual addition in execution order",
         )
-        curve.tick_params(axis="x", labelsize=SMALL, rotation=30)
+        curve.tick_params(axis="x", labelsize=SMALL)
         curve.grid(axis="y")
         fig.suptitle(
-            f"All {len(keys)} sites match the plain-hooks RDMs (r ≥ {min(aligned.values()):.3f});\n"
-            f"shuffling one side's stimulus order drops r to {_num(max(shuffled.values()), '.2f')} or less",
+            f"All {len(keys)} sites match the plain-hooks RDMs (r rounds to "
+            f"{min(aligned.values()):.3f}; pass bar {correlation_min:g});\n"
+            f"shuffling one side's stimulus order drops r to {max(shuffled.values()):.2f} or less",
             fontsize=TITLE,
         )
         return _save(fig, out, "neuro_rdms")
@@ -392,11 +468,10 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(WIDTH, 4.9), layout="constrained")
         ax.plot([0, 1], [0, 1], color=GREY, linestyle=":", lw=1, zorder=1)
-        ax.text(0.72, 0.68, "chance", color=MUTED, rotation=38, rotation_mode="anchor")
         ax.plot(roc[:, 0], roc[:, 1], color=BLUE, lw=2.2, zorder=2)
         ax.scatter([data["fpr_at_k"]], [data["recall_at_k"]], s=48, color=VERMILION, zorder=3)
         ax.annotate(
-            f"top {data['k']} heads: {data['recall_at_k']:.0%} of Wang's {positives}",
+            f"cutoff at the top {data['k']} heads: {data['recall_at_k']:.0%} of Wang's {positives}",
             (data["fpr_at_k"], data["recall_at_k"]),
             xytext=(data["fpr_at_k"] + 0.06, data["recall_at_k"] - 0.1),
             color=INK,
@@ -405,13 +480,14 @@ def _draw_ioi_roc(data: dict[str, Any], out: Path) -> list[Path]:
         ax.set(
             xlim=(-0.005, 1.005),
             ylim=(0, 1.03),
-            xlabel="False positive rate (share of the other heads ranked above)",
-            ylabel="True positive rate (share of Wang's heads recovered)",
+            xlabel=f"False positive rate (share of the other {heads - positives} heads above the cutoff)",
+            ylabel=f"True positive rate\n(share of Wang's {positives} heads above the cutoff)",
         )
         ax.grid(axis="y")
         setup = "GPT-2 small, one run"
         if "rows" in data and "steps" in data:
             setup = f"GPT-2 small, {data['rows']:,} IOI rows, {data['steps']} integration steps, one run"
+        setup += "; dotted diagonal: chance"
         ax.set_title(setup, loc="left", color=MUTED)
         fig.suptitle(
             f"Summed outgoing attribution separates Wang's {positives} IOI heads\n"
@@ -432,19 +508,29 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
     class_of = {tuple(pair): label for label, pairs in groups.items() for pair in pairs}
     ends = [class_of.get(tuple(edge["target"]), "other") for edge in edges]
     top_class = max(set(ends), key=lambda label: (ends.count(label), label))
-    scale = max((abs(edge["score"]) for edge in edges), default=1.0)
+    # Edges into one head fan out with distinct curvatures so their arrowheads stay apart.
+    fan_in: dict[tuple[int, int], int] = {}
+    for edge in edges:
+        fan_in[tuple(edge["target"])] = fan_in.get(tuple(edge["target"]), 0) + 1
+    seen: dict[tuple[int, int], int] = {}
     with plt.rc_context(STYLE):
         fig, ax = plt.subplots(figsize=(WIDTH + 0.2, 5.8), layout="constrained")
         for edge in edges:
+            target = tuple(edge["target"])
+            rank = seen.get(target, 0)
+            seen[target] = rank + 1
+            rad = 0.16 * (rank - (fan_in[target] - 1) / 2)
             ax.annotate(
                 "",
-                tuple(edge["target"]),
+                target,
                 tuple(edge["source"]),
                 arrowprops={
-                    "arrowstyle": "->",
-                    "color": GREY,
-                    "alpha": 0.7,
-                    "lw": 0.5 + 2.2 * abs(edge["score"]) / scale,
+                    "arrowstyle": "-|>,head_length=0.5,head_width=0.25",
+                    "color": MUTED,
+                    "lw": 1.4,
+                    "shrinkA": 4,
+                    "shrinkB": 5,
+                    "connectionstyle": f"arc3,rad={rad:.2f}",
                 },
                 zorder=1,
             )
@@ -452,7 +538,7 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
             [layer for layer in range(layers) for _ in range(per_layer)],
             list(range(per_layer)) * layers,
             s=16,
-            color="#dddddd",
+            color="#e2e2de",
             zorder=2,
         )
         for (label, pairs), color in zip(groups.items(), colors, strict=False):
@@ -473,12 +559,13 @@ def _draw_ioi_edges(data: dict[str, Any], out: Path) -> list[Path]:
             ylim=(-0.5, per_layer - 0.5),
         )
         ax.tick_params(length=0, labelsize=13.5)  # single digits read small
-        ax.legend(
-            loc="upper center",
-            bbox_to_anchor=(0.5, -0.1),
+        fig.legend(
+            loc="outside lower center",
             ncol=4,
             fontsize=SMALL,
-            title="Wang's head classes (grey: other heads); arrow width: edge score size",
+            columnspacing=2.4,
+            title=f"Wang's head classes (grey: other heads); arrows: the {len(edges)} largest "
+            "absolute edge scores",
             title_fontsize=SMALL,
         )
         fig.suptitle(
