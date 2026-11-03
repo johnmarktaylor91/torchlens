@@ -3535,7 +3535,7 @@ deprecation shim owed*
 **HealthReport fields** — *unstable — no deprecation shim owed*
 : `HealthReport.checks_run`, `HealthReport.findings`, `HealthReport.skipped`.
 **MfuReport fields** — *unstable — no deprecation shim owed*
-: `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
+: `MfuReport.denominator`, `MfuReport.denominator_scope`, `MfuReport.ideal_seconds`, `MfuReport.mfu`, `MfuReport.mode_terms`, `MfuReport.peaks_source`, `MfuReport.step_seconds`.
 **NonfiniteReport fields** — *unstable — no deprecation shim owed*
 : `NonfiniteReport.amp_disclosure`, `NonfiniteReport.capture_status`, `NonfiniteReport.cost_tier`, `NonfiniteReport.coverage_basis`, `NonfiniteReport.defer_recipe`, `NonfiniteReport.has_nonfinite`, `NonfiniteReport.nonfinite_labels`, `NonfiniteReport.num_checked_ops`, `NonfiniteReport.num_unchecked_ops`, `NonfiniteReport.num_unexamined_ops`, `NonfiniteReport.origin_label`, `NonfiniteReport.phase`, `NonfiniteReport.scope_note`, `NonfiniteReport.tensor_role`, `NonfiniteReport.uncertainty_zone`.
 **OverheadReport fields** — *unstable — no deprecation shim owed*
@@ -3543,7 +3543,7 @@ deprecation shim owed*
 **ParamHealthReport fields** — *unstable — no deprecation shim owed*
 : `ParamHealthReport.checks_run`, `ParamHealthReport.findings`, `ParamHealthReport.schema_version`, `ParamHealthReport.skipped`, `ParamHealthReport.to_json`.
 **ProfileReport fields** — *unstable — no deprecation shim owed*
-: `ProfileReport.capture_status`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
+: `ProfileReport.capture_status`, `ProfileReport.capture_verification_reason`, `ProfileReport.column_additivity`, `ProfileReport.evidence_labels`, `ProfileReport.frame`, `ProfileReport.is_capture_verified`, `ProfileReport.partition_total`, `ProfileReport.tree`, `ProfileReport.unknown_events`.
 **RooflineReport fields** — *unstable — no deprecation shim owed*
 : `RooflineReport.aggregate_intensity`, `RooflineReport.coverage_by_reason`, `RooflineReport.excluded_cache_resident`, `RooflineReport.headline_compute_bound`, `RooflineReport.headline_memory_bound`, `RooflineReport.ridge_intensity`.
 ## Visuals and kits spellings
@@ -3650,6 +3650,7 @@ describe each surface in depth.
 | `FacetFunction.target_scope` | Record scope the recipe targets |
 | `FacetRegistrySnapshot.functions` | Immutable active recipe entries |
 | `FacetRegistrySnapshot.provenance_id` | Stable digest of the recipe identities and their source tier |
+| `FacetRegistrySnapshot.version` | Monotonic global registry version at snapshot construction time |
 | `FacetSpec.apply_transforms` | Apply the transform chain to a value |
 | `FacetSpec.capability_class` | Weakest capability class of the transform chain |
 | `FacetSpec.capability_flags` | Weakest-link capability flags of the transform chain |
@@ -3787,6 +3788,7 @@ describe each surface in depth.
 | `Recording.add_grad_record` | Append one retained gradient record and update the gradient indexes |
 | `Recording.by_address` | Map from module address to indexes of its retained records |
 | `Recording.by_label` | Map from layer label to `(pass, record)` index pairs of its retained records |
+| `Recording.by_pass` | Map from pass index to indexes of the retained records captured in that pass |
 | `Recording.end_times` | Per-pass end timestamps of the recording |
 | `Recording.enrich` | Return a new recording with the requested incremental enrichments, or all feasible ones |
 | `Recording.error_repr` | Repr of the error that ended a failed recording, or `None` |
@@ -3802,6 +3804,7 @@ describe each surface in depth.
 | `Recording.last_event_label` | Label of the last captured event on a failed recording, best effort |
 | `Recording.last_event_source_line` | Source line of the last captured event on a failed recording, best effort |
 | `Recording.last_successful_op_label` | Label of the last op committed before a failure, or `None` |
+| `Recording.orphan_records` | Payload-free rows (raw label, label, payload reference) of the orphan island ops kept by `keep_orphans=True` |
 | `Recording.raw_metadata` | Return payload-free raw metadata rows for every captured event, retained or not |
 | `Recording.records` | Retained activation records, in capture order |
 | `Recording.recovery_warnings` | Warnings collected while recovering this recording from disk |
@@ -3821,6 +3824,8 @@ describe each surface in depth.
 ### Keywords
 | Spelling | Meaning |
 | --- | --- |
+| `ce_loss_clean=` | field and constructor keyword of `SpliceResult` |
+| `ce_loss_spliced=` | field and constructor keyword of `SpliceResult` |
 | `extra_positional=` | Var-positional catch on `tl.trace` and `tl.record`: only the model and the inputs are positional; any further positional argument refuses typed `extra_positional_input_invalid` (`input_kwargs=` is keyword-only) |
 | `axis_roles=` | field and constructor keyword of `ReceptiveField` |
 | `backward_pass_number=` | field and constructor keyword of `FireRecord`; keyword of `build_fire_record` |
@@ -3846,6 +3851,7 @@ describe each surface in depth.
 | `is_coarsened=` | keyword of `tl.trackers.SeriesPoint` |
 | `is_compatible_with_append=` | field and constructor keyword of `Edit` |
 | `is_detached=` | keyword of `tl.attribution.ReadRow` |
+| `is_detected=` | field and constructor keyword of `DoctorCheck` |
 | `is_frozen_requested=` | keyword of `tl.attribution.ReadRow` |
 | `is_frozen_resolved=` | keyword of `tl.attribution.ReadRow` |
 | `is_included=` | keyword of `tl.neuro.PlanSite` |
@@ -3853,6 +3859,7 @@ describe each surface in depth.
 | `is_magnitude_based=` | keyword of `tl.stats.TensorStats` |
 | `is_rescorable=` | keyword of `tl.attribution.ReadRow` |
 | `is_validated=` | keyword of `tl.mechinterp.LogitLens`, `tl.mechinterp.LogitLensPredictions` |
+| `kl_divergence=` | field and constructor keyword of `SpliceResult` |
 | `module_pass_number=` | field and constructor keyword of `RecordContext` |
 | `mutation_version=` | keyword of `TensorInputObservation` |
 | `num_components=` | keyword of `tl.repgeom.classical_mds`, `tl.stats.PCA` and `tl.transforms.srp`: the number of components (output dimensions) to return |
@@ -4283,6 +4290,7 @@ The sections above describe each surface in depth.
 | `PreprocessingComparison.unknown_fields` | Names of every uncomparable field, in field order |
 | `PreprocessingComparison.unknown_reasons` | Deduplicated reasons behind every unknown field, in field order |
 | `PreprocessingComparison.verdict` | `"verified"` / `"mismatch"` / `"unknown"` |
+| `ProfileReport.capture_verification_reason` | Why the capture is unverified when `is_capture_verified` is `False`, else `None` |
 | `ProfileReport.has_rescue_rerun` | Whether the profile needed a rescue rerun |
 | `ProfileReport.is_structure_only` | Whether the profiled capture kept structure only |
 | `ReceptiveField.axis_roles` | Axis layout of the input grid: per-axis kinds, windowed axes and their provenance |
@@ -4353,6 +4361,9 @@ The sections above describe each surface in depth.
 | `SiteRow.pass_number` | Pass number of the site |
 | `SixNDFacts.num_params` | Parameter count used by the 6ND estimate |
 | `SpecCompat.has_identical_target_resolution` | Whether the spec resolves to the same targets on both sides |
+| `SpliceResult.ce_loss_clean` | Mean next-token cross-entropy of the clean run when `tokens=` is given, else `None` |
+| `SpliceResult.ce_loss_spliced` | Mean next-token cross-entropy with the SAE reconstruction spliced in, else `None` |
+| `SpliceResult.kl_divergence` | Mean KL divergence from the clean to the spliced next-token distribution, else `None` |
 | `SrpSizing.num_components` | Recommended number of projection components |
 | `SrpSizing.num_samples` | Number of samples (rows) the projection width was sized for |
 | `SummaryTotals.captured_bytes` | Bytes the capture retained when it ran |
@@ -4398,6 +4409,7 @@ The sections above describe each surface in depth.
 | `ValidationStatus.num_pure_unverified_ops` | Number of pure value nodes that classified cleanly but were not replayed, usually because no faithful backend raw-op replay is available |
 | `ValidationStatus.num_replayed_ops` | Number of ops or regions replay-validated for a completed result |
 | `ValidationStatus.num_unverified_ops` | Aggregate number of nodes or regions excluded from per-op replay |
+| `ValidationStatus.passed` | Whether replay validation ran and passed |
 | `ValidationStatus.payload_load_status` | Optional payload materialization status attached by `tl.load` |
 | `ValidationStatus.unavailable_loaded_runtime_stripped` | Build the loaded non-torch unavailable status |
 | `ValidationStatus.unavailable_unsupported` | Build an unavailable status for a backend without replay validation |
