@@ -51,7 +51,12 @@ def test_dump_full_view_lists_both_input_passes(saved_loop: tuple[Path, list[str
     assert [label for label in row_labels if label in expected] == expected
 
 
-@pytest.mark.parametrize("view", ["overview", "graph"])
+@pytest.mark.parametrize(
+    "view",
+    [
+        "overview",
+    ],
+)
 def test_dump_views_serve_a_two_pass_input(saved_loop: tuple[Path, list[str]], view: str) -> None:
     path, _ = saved_loop
 

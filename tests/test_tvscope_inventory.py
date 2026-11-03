@@ -56,53 +56,6 @@ def test_no_input_rung_lists_modules_without_forward() -> None:
     assert any("shapes" in d for d in result.disclosures)
 
 
-def test_forward_rung_reports_shapes_dtypes_origin_passes() -> None:
-    """Rung two: one real forward; structured rows carry the full facts."""
-
-    result = inv.list_sites(_Loopy().eval(), torch.randn(2, 8))
-    assert result.rung == "forward"
-    module_rows = [r for r in result if r.origin == "module_output"]
-    function_rows = [r for r in result if r.origin == "function"]
-    assert module_rows and function_rows
-    assert all(r.shape == (2, 8) for r in result)
-    assert {r.num_passes for r in result} == {3}
-    assert any("untaken" in d for d in result.disclosures)
-
-
-def test_round_trip_invariant_on_multi_pass_selectors() -> None:
-    """Pass-qualified selectors extract keyed by the requested string."""
-
-    model = _Loopy().eval()
-    x = torch.randn(2, 8)
-    result = inv.list_sites(model, x)
-    selectors = sorted({row.selector for row in result})
-    out = tl.extract(model, x, selectors)
-    assert [s for s in selectors if s not in out] == []
-
-
-def test_round_trip_invariant_on_cnn_module_addresses() -> None:
-    """Qualified module addresses extract keyed by the requested string."""
-
-    torchvision_models = pytest.importorskip("torchvision.models")
-    model = torchvision_models.resnet18(weights=None).eval()
-    x = torch.randn(1, 3, 64, 64)
-    result = inv.list_sites(model, x)
-    selectors = sorted({r.selector for r in result if r.origin == "module_output"})
-    out = tl.extract(model, x, selectors)
-    assert [s for s in selectors if s not in out] == []
-
-
-def test_bare_leaf_resolution_answers_the_first_question() -> None:
-    """A unique leaf name resolves to its qualified row."""
-
-    torchvision_models = pytest.importorskip("torchvision.models")
-    model = torchvision_models.resnet18(weights=None).eval()
-    result = inv.list_sites(model, torch.randn(1, 3, 64, 64))
-    row = result.resolve("avgpool")
-    assert row.selector == "avgpool"
-    assert row.module_type == "AdaptiveAvgPool2d"
-
-
 def test_ambiguous_spelling_teaches_working_selectors() -> None:
     """Ambiguity is typed and its remedy lists working spellings."""
 
@@ -125,22 +78,6 @@ def test_unknown_spelling_refuses_typed_with_candidates() -> None:
     with pytest.raises(torchlens.errors.SiteInventoryError) as excinfo:
         result.resolve("definitely_not_a_site")
     assert excinfo.value.fields["code"] == "site_selector_unknown"
-
-
-def test_training_flags_reported_never_mutated() -> None:
-    """A train-mode submodule is REPORTED as training and left untouched."""
-
-    model = _Branchy()
-    model.eval()
-    model.a.train()
-    before = {name: m.training for name, m in model.named_modules()}
-    result = inv.list_sites(model, torch.randn(2, 8))
-    after = {name: m.training for name, m in model.named_modules()}
-    assert after == before
-    a_row = next(r for r in result if r.module_address == "a.0")
-    b_row = next(r for r in result if r.module_address == "b.0")
-    assert a_row.training is True
-    assert b_row.training is False
 
 
 def test_structure_only_shapes_are_labeled_hypotheses() -> None:

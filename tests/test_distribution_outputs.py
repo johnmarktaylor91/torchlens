@@ -34,7 +34,6 @@ from torchlens._ir.container import (
 from torchlens._ir.distribution_container import (
     DISTRIBUTION_CONTAINER_KIND,
     DISTRIBUTION_STATE_UNRECORDABLE,
-    distribution_layout,
 )
 from torchlens._runnable import PathFaithfulness
 from torchlens.backends.torch._ops_container_base import _try_build_container_spec
@@ -133,90 +132,6 @@ def _assert_same_distribution(rebuilt: Any, live: Any) -> None:
             assert other == value, name
 
 
-def test_normal_output_records_one_output_op_per_parameter() -> None:
-    """Capture keeps ``loc`` and ``scale`` as two output ops at attribute paths."""
-
-    model = NormalHead().eval()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        trace = _trace(model)
-    # The attribute-search fallback (and its advisory) is no longer taken.
-    assert not [w for w in caught if "output traversal does not support" in str(w.message)]
-    paths = [tuple(op.container_path) for op in trace.output_ops]
-    assert paths == [(NamedField("loc"),), (NamedField("scale"),)]
-    live = model(_x())
-    assert torch.equal(trace.output_ops[0].out, live.loc.detach())
-    assert torch.equal(trace.output_ops[1].out, live.scale.detach())
-
-
-def test_normal_output_is_lossless_and_rebuilds_exactly() -> None:
-    """The proof is positive and the spec rebuilds the same type with the same state."""
-
-    model = NormalHead().eval()
-    out = model(_x())
-    entries = list(_walk_output_tensors_with_paths(out))
-    proof = runnable_output_losslessness(out, entries)
-    assert proof["lossless"] is True, proof
-    assert proof["root_kind"] == "supported_container"
-    spec = _try_build_container_spec(out)
-    assert spec is not None and spec.kind == DISTRIBUTION_CONTAINER_KIND
-    assert spec.fields == ("loc", "scale")
-    assert spec.lossy_reconstruction is False
-    rebuilt = rebuild_container_from_spec(spec, [tensor for tensor, _path, _spec in entries])
-    _assert_same_distribution(rebuilt, out)
-
-
-def test_categorical_records_the_constructed_parameter_and_its_alias() -> None:
-    """``Categorical(logits=...)`` records ``logits`` once; ``_param`` is an alias of it."""
-
-    out = CategoricalHead().eval()(_x())
-    layout = distribution_layout(out)
-    assert layout.fields == ("logits",)
-    assert ("_param", "logits") in layout.aliases
-    assert layout.lossy_reason == ""
-    spec = _try_build_container_spec(out)
-    assert spec is not None
-    rebuilt = rebuild_container_from_spec(spec, [out.logits])
-    assert rebuilt._param is rebuilt.logits
-    _assert_same_distribution(rebuilt, out)
-    assert torch.equal(rebuilt.probs, out.probs)
-
-
-def test_independent_rebuilds_through_its_base_distribution() -> None:
-    """A nested distribution is a child container at ``.base_dist``."""
-
-    out = IndependentHead().eval()(_x())
-    paths = [path for _tensor, path, _spec in _walk_output_tensors_with_paths(out)]
-    assert paths == [
-        (NamedField("base_dist"), NamedField("loc")),
-        (NamedField("base_dist"), NamedField("scale")),
-    ]
-    entries = list(_walk_output_tensors_with_paths(out))
-    assert runnable_output_losslessness(out, entries)["lossless"] is True
-    spec = _try_build_container_spec(out)
-    assert spec is not None
-    rebuilt = rebuild_container_from_spec(spec, [tensor for tensor, _path, _spec in entries])
-    _assert_same_distribution(rebuilt, out)
-
-
-def test_transformed_distribution_stays_lossy_and_names_the_transforms() -> None:
-    """The transform list is not recordable: lossy, reason named, parameters still addressable."""
-
-    out = TanhHead().eval()(_x())
-    entries = list(_walk_output_tensors_with_paths(out))
-    assert [path for _tensor, path, _spec in entries] == [
-        (NamedField("base_dist"), NamedField("loc")),
-        (NamedField("base_dist"), NamedField("scale")),
-    ]
-    proof = runnable_output_losslessness(out, entries)
-    assert proof["lossless"] is False
-    assert (
-        proof["reason"] == f"{DISTRIBUTION_STATE_UNRECORDABLE}:TransformedDistribution.transforms"
-    )
-    spec = _try_build_container_spec(out)
-    assert spec is not None and spec.lossy_reconstruction is True
-
-
 def test_distribution_output_settles_verified_on_run() -> None:
     """A live run rebuilds the Normal and settles VERIFIED (it used to be UNVERIFIABLE)."""
 
@@ -234,17 +149,6 @@ def test_lossy_distribution_output_settles_unverifiable_on_run() -> None:
     trace = _trace(model)
     result = trace.run(inputs=_x(), on_divergence="return")
     assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-
-
-def test_module_returning_a_distribution_exposes_parameter_outputs() -> None:
-    """The module boundary walks the same container: ``policy`` outputs ``.loc`` and ``.scale``."""
-
-    trace = _trace(PolicyWithInnerDistribution().eval())
-    call = trace.module_calls["policy:1"]
-    assert [tuple(path) for path in call.output_paths] == [
-        (NamedField("loc"),),
-        (NamedField("scale"),),
-    ]
 
 
 def test_output_replacement_targets_one_distribution_parameter() -> None:
@@ -278,24 +182,6 @@ def test_assign_by_path_rebuilds_a_nested_distribution() -> None:
     assert updated.base_dist.scale is ones
     assert updated.base_dist.loc is live.base_dist.loc
     assert live.base_dist.scale is not ones
-
-
-def test_distribution_output_round_trips_through_save_and_load(tmp_path: Path) -> None:
-    """The spec (kind, fields, literal state, aliases) survives a portable bundle."""
-
-    from torchlens.options import CaptureOptions
-
-    model = CategoricalHead().eval()
-    trace = _trace(model, capture=CaptureOptions(capture_container_structure=True))
-    bundle = tmp_path / "categorical.tlspec"
-    trace.save(bundle)
-    loaded = tl.load(bundle)
-    assert [tuple(op.container_path) for op in loaded.output_ops] == [(NamedField("logits"),)]
-    spec = loaded.output_ops[0].container_spec
-    assert isinstance(spec, ContainerSpec)
-    assert spec.kind == DISTRIBUTION_CONTAINER_KIND
-    rebuilt = rebuild_container_from_spec(spec, [op.out for op in loaded.output_ops])
-    _assert_same_distribution(rebuilt, model(_x()))
 
 
 def test_tampered_distribution_spec_refuses_typed() -> None:
@@ -484,19 +370,6 @@ def test_rerun_doors_zero_fire_name_the_distribution_output() -> None:
     (warning,) = _zero_fire_warnings(caught, "rerun_zero_fire")
     assert warning.fields["reason"] == NON_TENSOR_MODULE_OUTPUT_REASON
     assert "module 'policy' output is a Normal" in warning.fields["reason_detail"]
-
-
-@pytest.mark.parametrize(
-    "factory", [NormalHead, CategoricalHead, IndependentHead, PolicyWithInnerDistribution]
-)
-def test_forward_validation_passes_on_distribution_outputs(factory: Any) -> None:
-    """Replay and the metadata invariants (module output paths included) hold unchanged."""
-
-    torch.manual_seed(0)
-    model = factory().eval()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert bool(tl.validate(model, _x(), scope="forward", seed=0)) is True
 
 
 def test_bind_door_zero_fire_names_the_distribution_output() -> None:

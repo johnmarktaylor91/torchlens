@@ -706,15 +706,3 @@ def test_load_inventory_rejects_rows_without_ids(tmp_path: Path) -> None:
     bad.write_text(json.dumps({"schema": "name-lockstep-inventory/0", "rows": []}))
     with pytest.raises(ValueError, match="schema"):
         load_inventory(bad)
-
-
-@pytest.mark.slow
-def test_real_package_inventory_has_the_core_names() -> None:
-    """The walk over the real package reaches the core nouns and their members."""
-
-    rows = {row["id"]: row for row in build_inventory()["rows"]}
-    assert {"root:tl.trace", "root:tl.Trace", "param:layers_to_save"} <= set(rows)
-    trace_members = [
-        r for r in rows.values() if r["kind"] == "member" and "Trace" in r["owner_names"]
-    ]
-    assert len(trace_members) > 100

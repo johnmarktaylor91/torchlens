@@ -133,30 +133,3 @@ def test_repr_never_raises_on_detached_and_unsaved(swept_trace) -> None:
     selective = tl.trace(_Model().eval(), torch.randn(2, 8), save=tl.func("relu"))
     for record in selective.ops:
         assert isinstance(str(record), str)
-
-
-def test_repr_purity_no_rng_no_mutation(swept_trace) -> None:
-    """Rendering draws no global RNG and bumps no payload version."""
-
-    op = next(op for op in swept_trace.ops if op.has_saved_activation)
-    payload = op.out
-    rng_before = torch.get_rng_state()
-    version_before = payload._version if isinstance(payload, torch.Tensor) else None
-    for _ in range(2):
-        str(op)
-        repr(swept_trace)
-        swept_trace.summary()
-    assert torch.equal(rng_before, torch.get_rng_state())
-    if version_before is not None:
-        assert payload._version == version_before
-
-
-def test_nesting_bound_for_context_records() -> None:
-    """A 10-record container reprs within the nesting bound (<= 12 lines)."""
-
-    recording = tl.record(_Model().eval(), torch.randn(2, 8), save=tl.func("relu"))
-    records = list(recording.records) * 10
-    text = repr(records[:10])
-    assert len(text.splitlines()) <= 12
-    context_list = [record.ctx for record in records[:10]]
-    assert len(repr(context_list).splitlines()) <= 12

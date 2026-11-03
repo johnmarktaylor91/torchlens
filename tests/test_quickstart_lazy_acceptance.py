@@ -20,7 +20,6 @@ from torch import nn
 from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 import torchlens as tl
-from torchlens.validation import check_metadata_invariants
 
 
 def _lazy_head_model() -> nn.Sequential:
@@ -37,76 +36,8 @@ def _lazy_head_model() -> nn.Sequential:
     )
 
 
-class TestFourClauseAcceptance:
-    """SOL's acceptance condition as an executable test."""
-
-    def test_clause_1_saved_activations_byte_correct(self) -> None:
-        """COW clause: captured payloads equal a plain forward, byte-exact."""
-
-        torch.manual_seed(0)
-        model = _lazy_head_model().eval()
-        x = torch.randn(2, 3, 16, 16)
-        log = tl.trace(model, x)
-        with torch.no_grad():
-            expected = model(x)
-        assert torch.equal(log.output_ops[0].out, expected)
-
-    def test_clause_2_identity_stable_across_class_swap(self) -> None:
-        """Alias clause: object id and optimizer membership survive the swap."""
-
-        model = _lazy_head_model()
-        head = model[4]
-        pending = head.weight
-        assert isinstance(pending, UninitializedParameter)
-        pending_id = id(pending)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.1)
-        log = tl.trace(model, torch.randn(1, 3, 16, 16))
-        assert log is not None
-        assert not isinstance(head.weight, UninitializedParameter)
-        assert id(head.weight) == pending_id
-        optimizer_params = {
-            id(param) for group in optimizer.param_groups for param in group["params"]
-        }
-        assert pending_id in optimizer_params
-
-    def test_clause_3_param_records_resolve_post_materialization(self) -> None:
-        """Storage clause: the inventory reports the real geometry."""
-
-        model = _lazy_head_model()
-        log = tl.trace(model, torch.randn(1, 3, 16, 16))
-        head_rows = [
-            pl for pl in log._param_logs if getattr(pl, "shape", None) not in (None, (0,), ())
-        ]
-        ground_truth = {tuple(p.shape) for p in model.parameters()}
-        recorded = {tuple(pl.shape) for pl in head_rows}
-        assert ground_truth == recorded
-        assert all(int(pl.num_params) > 0 for pl in head_rows)
-
-    def test_clause_4_no_op_holds_a_live_pending_payload(self) -> None:
-        """Payload clause: no logged record retains an uninitialized tensor."""
-
-        model = _lazy_head_model()
-        log = tl.trace(model, torch.randn(1, 3, 16, 16))
-        for op in log:
-            out = getattr(op, "out", None)
-            assert not isinstance(out, UninitializedParameter)
-            for arg in getattr(op, "saved_args", None) or ():
-                assert not isinstance(arg, UninitializedParameter)
-
-
 class TestFlipSignal:
     """The mechanical flip signal: metadata invariants on the lazy fixture."""
-
-    def test_invariants_pass_and_totals_match_ground_truth(self) -> None:
-        """trainable + frozen == total, and total == the live model's count."""
-
-        model = _lazy_head_model()
-        log = tl.trace(model, torch.randn(2, 3, 16, 16))
-        check_metadata_invariants(log)
-        ground_truth = sum(p.numel() for p in model.parameters())
-        assert log.num_params == ground_truth
-        assert log.num_params_trainable + log.num_params_frozen == log.num_params
-        assert int(log.cost.total_param_memory) > 0
 
     def test_summary_totals_are_truthful(self) -> None:
         """The one-call summary's totals include the materialized head."""

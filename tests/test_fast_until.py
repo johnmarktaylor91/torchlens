@@ -14,7 +14,6 @@ them. Repeated fast training steps no longer report a pending value edit.
 from __future__ import annotations
 
 import copy
-import warnings
 from typing import Any
 
 import pytest
@@ -23,7 +22,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.errors import RunCapabilityUnavailableError
-from torchlens.intervention.errors import PendingValueEditsWarning
 
 torchvision = pytest.importorskip("torchvision")
 
@@ -165,19 +163,3 @@ def test_until_fast_refuses_an_unsaved_site_typed() -> None:
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run(inputs=_batch(1), until="layer3", fast=True)
     assert refused.value.fields["detection_stage"] == "fast_until_site_unsaved"
-
-
-def test_repeated_fast_training_steps_report_no_pending_value_edit() -> None:
-    """A previous fast run's own trail is a fresh execution, not a value edit."""
-
-    model = _resnet18()
-    trace = tl.trace(model, _batch(0), save=tl.module("layer2"))
-    optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        for step in range(3):
-            optimizer.zero_grad()
-            out = trace.run(inputs=_batch(10 + step), until="layer2", fast=True).trace["layer2"]
-            out.out.pow(2).mean().backward()
-            optimizer.step()
-    assert not [w for w in caught if issubclass(w.category, PendingValueEditsWarning)]

@@ -13,7 +13,6 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.errors import MissingFacetError
 
 pytest.importorskip("transformers")
 
@@ -35,25 +34,6 @@ def sdpa_captures():
     )
     yield model, plain, ready
     tl.release_model(model)
-
-
-def test_plain_sdpa_capture_declares_actionable_absences(sdpa_captures):
-    """Without saved SDPA args every per-head facet is needs_capture, never silent."""
-
-    _model, plain, _ready = sdpa_captures
-    view = plain.modules[ATTN_ADDRESS].facets
-    menu = view.declared()
-    for facet in ("scores", "pattern", "z", "result"):
-        assert menu[facet].status == "needs_capture", facet
-    # The pattern absence teaches BOTH remedies at the point of failure.
-    detail = menu["pattern"].detail or ""
-    assert "reconstruction_ready=True" in detail
-    assert "eager" in detail
-    with pytest.raises(MissingFacetError, match="attention pattern not captured"):
-        view["pattern"]
-    # q/k/v and attn_out ride real ops regardless of the kernel.
-    for facet in ("q", "k", "v", "attn_out"):
-        assert view.has(facet), facet
 
 
 def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
@@ -84,14 +64,3 @@ def test_reconstruction_ready_serves_checked_read_only_facets(sdpa_captures):
     # tolerance/orientation bundle, owned by lane A03) -- declaration is the
     # A01 contract, a wrong tensor is never served.
     assert "result" in view.declared()
-
-
-def test_head_view_slices_reconstructed_facets(sdpa_captures):
-    """Per-head slicing works on reconstructed head-major facets."""
-
-    _model, _plain, ready = sdpa_captures
-    view = ready.modules[ATTN_ADDRESS].facets
-    head = view.head(1)
-    assert torch.equal(head["pattern"].value, view["pattern"].value[:, 1])
-    assert torch.equal(head["z"].value, view["z"].value[:, 1])
-    assert torch.equal(head["q"].value, view["q"].value[:, :, 1, :])

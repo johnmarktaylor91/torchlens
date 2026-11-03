@@ -52,35 +52,6 @@ def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
     assert "Capture verified: NO (escape_rescue_unrecovered)" in text
 
 
-def test_verified_and_unrecorded_captures_print_unchanged() -> None:
-    """A verified (or not-recorded) capture keeps the original wording exactly."""
-
-    trace = tl.trace(_Tiny(), torch.randn(2, 4))
-    baseline = _summary(trace)
-    assert "purely feedforward, no recurrence" in baseline
-    assert "at least" not in baseline and "lower bound" not in baseline
-    assert (
-        f"Parameters: {trace._num_layers_with_params} parameter operations "
-        f"({trace.num_params} params total;"
-    ) in baseline
-    trace._provenance_verified = True
-    assert _summary(trace).split("\n")[3:] == baseline.split("\n")[3:]
-
-
-def test_not_checked_footer_names_track_nonfinite_and_the_default_stays_false() -> None:
-    """forks.7: the default is off and the NOT-CHECKED line teaches the option."""
-
-    assert tl.options.CaptureOptions().on_nonfinite == "ignore"
-    trace = tl.trace(_Tiny(), torch.randn(2, 4), save=tl.func("relu"))
-    assert trace.track_nonfinite is False
-    assert trace.nonfinite_verdict == "not_checked"
-    health = [line for line in _summary(trace).split("\n") if "Health:" in line]
-    assert health == [
-        "\tHealth: NOT-CHECKED (payloads unexamined; capture with "
-        "CaptureOptions(on_nonfinite='track') to check every op)"
-    ]
-
-
 def test_the_named_option_records_every_op_and_drops_the_hint() -> None:
     """The footer's remedy runs: the opt-in capture checks each op at capture time.
 

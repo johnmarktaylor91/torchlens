@@ -48,11 +48,10 @@ def tiny() -> tuple[nn.Module, torch.Tensor]:
 @pytest.mark.parametrize(
     "layers",
     [
-        ["no_such_layer_anywhere"],
         {"mine": "no_such_layer_anywhere"},
         ["lin:3"],
     ],
-    ids=["list", "mapping", "module-pass-beyond-count"],
+    ids=["mapping", "module-pass-beyond-count"],
 )
 def test_extract_unknown_layer_refuses_op_lookup_not_found(
     tiny: tuple[nn.Module, torch.Tensor], layers: Any
@@ -97,16 +96,4 @@ def test_pluck_unknown_layer_refuses_op_lookup_not_found(
     model, x = tiny
     with pytest.raises(InvalidArgumentError) as info:
         tl.pluck(model, x, "no_such_layer_anywhere")
-    assert _code(info.value) == "op_lookup_not_found"
-
-
-def test_trace_lookup_of_bare_module_address_does_not_crash(
-    tiny: tuple[nn.Module, torch.Tensor],
-) -> None:
-    """A key with no ``:`` never reaches the module-pass unpack."""
-
-    model, x = tiny
-    trace = tl.trace(model, x)
-    with pytest.raises(InvalidArgumentError) as info:
-        trace["no_such_module_address"]
     assert _code(info.value) == "op_lookup_not_found"

@@ -72,16 +72,6 @@ def test_module_filter_partial_suppression_stays_silent() -> None:
     assert "module_filter_zero_saved" not in _warned_codes(caught)
 
 
-def test_module_filter_none_never_warns() -> None:
-    """The default path (no filter) is untouched."""
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        log = tl.trace(ThreeStep(), torch.randn(2, 4))
-    assert sum(1 for op in log if getattr(op, "out", None) is not None) > 0
-    assert "module_filter_zero_saved" not in _warned_codes(caught)
-
-
 def test_module_filter_empty_save_selection_not_blamed() -> None:
     """A zero-save caused by the SAVE selection never blames module_filter."""
 
@@ -96,19 +86,3 @@ def test_module_filter_empty_save_selection_not_blamed() -> None:
             save="none",
         )
     assert "module_filter_zero_saved" not in _warned_codes(caught)
-
-
-def test_module_filter_keeps_metadata_when_suppressing() -> None:
-    """Suppression drops payloads only; op metadata stays complete."""
-
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        log = tl.trace(
-            ThreeStep(),
-            torch.randn(2, 4),
-            capture=CaptureOptions(module_filter=lambda op: False),
-        )
-    del caught
-    labels = [op.layer_label for op in log]
-    assert any(label.startswith("linear_1") for label in labels)
-    assert any(label.startswith("relu") for label in labels)

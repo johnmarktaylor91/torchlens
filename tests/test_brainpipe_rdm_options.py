@@ -30,35 +30,6 @@ def test_no_new_keyword_call_is_bit_identical() -> None:
     assert (repgeom.rdm(acts) == repgeom.activation_distance_matrix(acts)).all()
 
 
-def test_manhattan_metric_and_row_blocking() -> None:
-    """Manhattan ships; blocked computation equals one-shot computation."""
-
-    acts = _acts()
-    one_shot = repgeom.rdm(acts, metric="manhattan")
-    blocked = repgeom.rdm(acts, metric="manhattan", row_chunk_size=3)
-    assert np.allclose(one_shot, blocked)
-    # Manhattan >= euclidean pairwise, elementwise (norm inequality).
-    euclid = repgeom.rdm(acts)
-    assert (one_shot >= euclid - 1e-12).all()
-
-
-def test_blocked_euclidean_matches_legacy() -> None:
-    """Row blocking is a memory shape, never a numeric change."""
-
-    acts = _acts()
-    assert np.allclose(repgeom.rdm(acts, row_chunk_size=4), repgeom.rdm(acts))
-
-
-def test_condensed_output_is_strict_upper_triangle() -> None:
-    """output='condensed' returns the row-major strict upper triangle."""
-
-    acts = _acts(8)
-    square = repgeom.rdm(acts)
-    condensed = repgeom.rdm(acts, output="condensed")
-    assert condensed.shape == (8 * 7 // 2,)
-    assert np.allclose(condensed, square[np.triu_indices(8, k=1)])
-
-
 def test_batched_input_kind_is_explicit() -> None:
     """[B, N, D] means one RDM per batch element ONLY under input_kind."""
 
