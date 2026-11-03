@@ -15,6 +15,7 @@ from torch import nn
 
 from torchlens._data_classes.op import Op
 from torchlens._io import BlobRef as PortableBlobRef
+from torchlens._ir import op_record_scatter as _scatter
 from torchlens._ir.capture_events import CaptureEvents
 from torchlens._ir.events import (
     ModuleEnterEvent,
@@ -23,7 +24,6 @@ from torchlens._ir.events import (
     OpEvent,
 )
 from torchlens._ir.op_record import OpRecord, op_record_from_event
-from torchlens._ir.op_record_scatter import scatter_record_to_cells
 from torchlens.intervention.types import EdgeUseRecord
 
 from .._constants import LAYER_PASS_LOG_FIELD_ORDER
@@ -346,7 +346,7 @@ def ingest_op_records(inputs: IngestInputs, manifest: Mapping[str, str]) -> Step
         else:
             record, extras = op_record_from_event(event)
         fields_dict: dict[str, object] = dict.fromkeys(LAYER_PASS_LOG_FIELD_ORDER)
-        fields_dict.update(scatter_record_to_cells(record, extras, inputs.owning_trace))
+        fields_dict.update(_scatter.scatter_record_to_cells(record, extras, inputs.owning_trace))
         _apply_join_cells(
             fields_dict,
             record,

@@ -65,7 +65,7 @@ from ..._utils.tensor_utils import (
     get_memory_amount_from_metadata,
     is_functorch_wrapped_tensor,
 )
-from . import module_stack as _mstack
+from . import buffer_writes as _buffer_writes, module_stack as _mstack
 from ._held_refs import normalize_held_torch_function_refs, register_released_model
 from ._held_tensor_scan import iter_module_held_plain_tensors
 from ._model_prep_containers import (
@@ -97,7 +97,7 @@ from ._session_forwards import (
     restore_session_forward_wrappers as _restore_session_forward_wrappers,
     restore_undecorated_forward as _restore_undecorated_forward,
 )
-from .buffer_writes import register_session_buffer_stamp, session_validated_buffer_address
+from .buffer_writes import session_validated_buffer_address
 from .escape_detection import (
     expected_original_call,
     mark_expected_original_accounted,
@@ -1032,7 +1032,7 @@ def prepare_buffer_tensors(trace: "Trace", model: nn.Module) -> None:
         # internal sources instead of buffer versions -- so it is collected
         # and disclosed once below instead of silently swallowed (B1-13a).
         try:
-            register_session_buffer_stamp(trace, tensor, address)
+            _buffer_writes.register_session_buffer_stamp(trace, tensor, address)
             _state._tagged_buffer_ids.add(id(tensor))
         except Exception as exc:
             unstampable.append(f"{address} ({type(exc).__name__}: {exc})")
@@ -1097,7 +1097,7 @@ def _tag_untagged_buffers(trace: "Trace", module: nn.Module) -> None:
             address = buffer_name
         else:
             address = f"{module_addr}.{buffer_name}"
-        register_session_buffer_stamp(trace, buffer_tensor, address)
+        _buffer_writes.register_session_buffer_stamp(trace, buffer_tensor, address)
         # If this buffer was already logged as an intermediate tensor, save the
         # previous label as parent and reset so it gets a proper buffer source entry.
         promote_label_to_buffer_source_and_clear_label(buffer_tensor)

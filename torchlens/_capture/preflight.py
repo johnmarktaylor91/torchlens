@@ -22,7 +22,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .._ir.selector_eval import module_exit_bound_addresses, selector_contains_kind
+from .._ir import selector_eval as _selector_eval
+from .._ir.selector_eval import selector_contains_kind
 from .._trace_selection_shape import _selector_component_is_final_only
 
 __all__ = ["AddressPreflight", "AddressVerdict", "address_preflight", "cone_preflight"]
@@ -92,7 +93,7 @@ def _classify(component: Any) -> tuple[str, str]:
     if isinstance(component, BaseSelector) and selector_contains_kind(component, "module"):
         # Any selector naming a module resolves post hoc; one whose matches all
         # lie among module-pass outputs limits its escrow to those passes.
-        if module_exit_bound_addresses(component) is None:
+        if _selector_eval.module_exit_bound_addresses(component) is None:
             verdict = ("deferred", _UNBOUNDED_MODULE_REASON)
         else:
             verdict = ("live", "tl.module selectors escrow only the ops inside matching passes")

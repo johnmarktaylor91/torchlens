@@ -23,8 +23,8 @@ from typing import Any
 
 import torch
 
+from .. import fingerprint as _fingerprint
 from .._state import pause_logging
-from ..fingerprint import content
 from .types import Edit
 
 #: HookSpec metadata key holding the staged helper's tensor digests.
@@ -98,7 +98,7 @@ def helper_digests(helper: Edit | None) -> tuple[str, ...] | None:
     # Staging can happen mid-capture (the predicate door stages at fire time);
     # the digest's copy ops are TorchLens-internal and must not be logged.
     with pause_logging():
-        return tuple(content(tensor) for tensor in tensors)
+        return tuple(_fingerprint.content(tensor) for tensor in tensors)
 
 
 def helper_versions(helper: Edit | None) -> tuple[int, ...] | None:

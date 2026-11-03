@@ -152,7 +152,7 @@ def _except_skip_sites(path: Path) -> list[str]:
 EXCEPT_SKIP_LEDGER: frozenset[str] = frozenset(
     {
         "test_checkpoint_live_ref_real_models.py:97",
-        "test_distributed_census_topologies.py:105",
+        "test_distributed_census_topologies.py:107",
         "test_distributed_honesty.py:377",
         "test_distributed_honesty.py:393",
         "test_input_coercion.py:348",

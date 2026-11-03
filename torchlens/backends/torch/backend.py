@@ -28,12 +28,12 @@ from ..._utils.input_leaves import flatten_input_tensor_addresses
 from ..._utils.rng import log_current_rng_states, set_random_seed, set_rng_from_saved_states
 from ..._utils.tensor_utils import safe_copy
 from ...recording.types import ModuleStackFrame
+from . import _ops_capture_records as _ops_capture_records_mod
 from ._completeness_finalize import capture_completeness_witness
 from ._completeness_origins import internal_scalar_read
 from ._completeness_storage import capture_scalar_escape_warning
 from ._held_refs_capture import rebind_held_torch_refs, restore_held_torch_refs
 from ._ops_autograd import _get_autograd_saved_stats_for_tensor
-from ._ops_capture_records import set_capture_producer_policy
 from ._ops_emission import log_function_output_tensors
 from .aliasing import detect_torch_alias_contract
 from .buffer_writes import uninstall_buffer_write_tracker
@@ -463,7 +463,9 @@ class TorchBackend:
             Torch producer policy metadata is updated in place.
         """
 
-        set_capture_producer_policy(cast("Trace", session), cast(Any, capture_mode))
+        _ops_capture_records_mod.set_capture_producer_policy(
+            cast("Trace", session), cast(Any, capture_mode)
+        )
 
     def restore_rng(self, session: object, rng_state: object) -> None:
         """Restore a previously captured torch RNG state.
