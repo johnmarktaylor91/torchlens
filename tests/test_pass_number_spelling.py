@@ -87,10 +87,15 @@ def test_generation_step_counts_its_pass_as_pass_number() -> None:
 def test_tracelike_lookups_take_pass_number(two_pass_trace: tl.Trace) -> None:
     """``TraceLike`` pass lookups take ``pass_number``; ``pass_index=`` refuses."""
 
-    raw_label = two_pass_trace._layer_list[0].raw_label
-    assert two_pass_trace.activations_by_pass(pass_number=1) == (
-        two_pass_trace.activations_by_pass(1)
+    trace = two_pass_trace
+    assert trace.activations_by_pass(pass_number=1) == trace.activations_by_pass(1)
+    record = next(
+        record
+        for record in trace._iter_activation_records()
+        if trace._activation_pass_index(record) is not None
     )
-    assert two_pass_trace.activation_by_raw_label(raw_label, pass_number=1) is not None
+    raw_label = trace._activation_raw_label(record)
+    pass_number = trace._activation_pass_index(record)
+    assert trace.activation_by_raw_label(raw_label, pass_number=pass_number) is record
     with pytest.raises(TypeError, match="pass_index"):
-        two_pass_trace.activation_by_raw_label(raw_label, pass_index=1)
+        trace.activation_by_raw_label(raw_label, pass_index=pass_number)
