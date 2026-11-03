@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ._errors import ArgumentTypeError
+from ._options_removed import REMOVED_CAPTURE_MEMBERS
 from ._utils.arg_handling import rebuild_tuple_like
 
 
@@ -95,9 +96,37 @@ def _reject_unrouted_forward_kwargs(
         return
 
     keys = sorted(forward_kwargs)
-    homes = _option_homes(keys, option_classes or {})
-    model_inputs = [key for key in keys if key not in homes]
-    remedies = [
+    # A removed capture option is never a model input: name its replacement first.
+    removed = [key for key in keys if key in REMOVED_CAPTURE_MEMBERS]
+    homes = _option_homes([key for key in keys if key not in removed], option_classes or {})
+    model_inputs = [key for key in keys if key not in removed and key not in homes]
+    remedies = _unrouted_remedies(removed, homes, model_inputs)
+    if removed:
+        unrouted = [key for key in keys if key not in removed]
+        message = f"trace() got removed capture option keyword(s): {', '.join(removed)}" + (
+            f" (and unrouted keyword(s): {', '.join(unrouted)})" if unrouted else ""
+        )
+    else:
+        message = (
+            f"trace() got keyword(s) it does not route: {', '.join(keys)}. Capture settings "
+            "are grouped in option objects and forward keyword arguments travel through "
+            "input_kwargs="
+        )
+    raise ArgumentTypeError(
+        message,
+        code="trace_forward_kwargs_unrouted",
+        remedy="; ".join(remedies),
+        unrouted_keywords=keys,
+    )
+
+
+def _unrouted_remedies(
+    removed: list[str], homes: Mapping[str, tuple[str, str, str]], model_inputs: list[str]
+) -> list[str]:
+    """One remedy per unrouted keyword class: removed option, option-class field, model input."""
+
+    remedies = [f"{key}: {REMOVED_CAPTURE_MEMBERS[key]}" for key in removed]
+    remedies += [
         f"{key} is a {class_name} field: tl.trace(model, x, "
         f"{param}=tl.options.{class_name}({field}=...))"
         for key, (param, class_name, field) in homes.items()
@@ -109,14 +138,7 @@ def _reject_unrouted_forward_kwargs(
             "for HuggingFace text models, torchlens.bridge.transformers.trace_text(model, "
             "'prompt') builds the inputs for you"
         )
-    raise ArgumentTypeError(
-        f"trace() got keyword(s) it does not route: {', '.join(keys)}. Capture settings "
-        "are grouped in option objects and forward keyword arguments travel through "
-        "input_kwargs=",
-        code="trace_forward_kwargs_unrouted",
-        remedy="; ".join(remedies),
-        unrouted_keywords=keys,
-    )
+    return remedies
 
 
 def _option_homes(
