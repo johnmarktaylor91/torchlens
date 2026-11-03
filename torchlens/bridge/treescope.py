@@ -676,15 +676,18 @@ def display(obj: Any) -> None:
     Spelling is [UI-SPRINT]; ``layer.show(kind="treescope")`` is the
     candidate method form.
 
+    The render needs a live IPython kernel. Outside one (a script, a plain
+    interpreter) treescope has nowhere to display and raises its own
+    ``RuntimeError``; in a notebook cell the same call renders and returns
+    None.
+
     Examples
     --------
     >>> # requires: treescope
-    >>> import contextlib, io
     >>> trace = tl.trace(model, x)
-    >>> with contextlib.redirect_stdout(io.StringIO()):
-    ...     result = tl.bridge.treescope.display(trace)
-    >>> result is None
-    True
+    >>> tl.bridge.treescope.display(trace)  # not in a notebook kernel
+    Traceback (most recent call last):
+    RuntimeError: Cannot use `display` outside of IPython.
     """
 
     treescope = _import_treescope()

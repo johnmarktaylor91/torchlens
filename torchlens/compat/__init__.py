@@ -138,7 +138,7 @@ def from_timm(model_class_name: str, *, pretrained: bool = False, **kwargs: Any)
     Examples
     --------
     >>> # requires: timm
-    >>> net = from_timm("resnet18", num_classes=3)
+    >>> net = from_timm("resnet18", num_classes=3).eval()
     >>> tuple(net(torch.randn(1, 3, 32, 32)).shape)
     (1, 3)
     """
