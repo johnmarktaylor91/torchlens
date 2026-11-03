@@ -64,6 +64,12 @@ class _PairNet(nn.Module):
         return a - b
 
 
+class _NoisyPairNet(_PairNet):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        a, b = self.pair(x + torch.rand_like(x))
+        return a - b
+
+
 def _full(model: nn.Module, x: Any, layers: Any) -> dict[str, torch.Tensor]:
     return _tl_pkg._extract_layers_with_trace(model, x, layers)[1]
 
@@ -128,7 +134,7 @@ def test_ineligible_requests_run_the_full_capture(
         model, layers = _Net().eval(), ["blocks.0"]
     inputs: Any = [x] if case == "kwargs_input" else x
     ran = _spy(monkeypatch)
-    if case == "never_called":
+    if case in ("never_called", "called_twice"):  # the capture owns both refusals
         with pytest.raises(InvalidArgumentError):
             tl.extract(model, inputs, layers)
         assert ran == [1]
@@ -142,11 +148,11 @@ def test_ineligible_requests_run_the_full_capture(
 
 def test_a_fallback_restores_the_random_state() -> None:
     torch.manual_seed(0)
-    model, x = _Twice().eval(), torch.randn(2, 6)
+    model, x = _NoisyPairNet().eval(), torch.randn(2, 6)
     torch.manual_seed(5)
-    got = tl.extract(model, x, ["fc"])
+    got = tl.extract(model, x, ["pair"])  # hooked forward draws noise, sees a tuple, falls back
     torch.manual_seed(5)
-    _same(got, _full(model, x, ["fc"]))
+    _same(got, _full(model, x, ["pair"]))
 
 
 def test_unknown_names_keep_the_capture_refusal() -> None:

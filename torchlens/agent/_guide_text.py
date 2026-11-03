@@ -17,8 +17,17 @@ TorchLens runs a model's ordinary PyTorch forward pass once and records
 every operation: its function, the module it ran in, its parents and
 children, and its output tensor. You get any internal tensor by module name
 or by operation, and you can edit tensors during the pass, without writing
-or removing hooks. Works on any nn.Module (HuggingFace included); it adds
-about 1-3 s per capture on a small model.
+or removing hooks. Works on any nn.Module (HuggingFace included). The
+tensors are the model's own, from its real forward pass, so they equal what
+a forward hook on the same module would see. In eval mode, tl.extract on
+modules that return one tensor (a HuggingFace decoder layer, an MLP, a
+Linear) costs about one plain forward pass; other requests and tl.trace
+record every op and add about 1-3 s on a small model.
+
+Where it saves the most code compared with hooks: ops that have no module
+of their own (an inline softmax, matmul or residual add), the first op that
+produced NaN or Inf, editing what goes into a module (one attention head),
+edits at several sites in one pass, and comparing two models op by op.
 
 Every snippet below runs as written once `model` (any nn.Module) and `x`
 (its input) exist. Module names are the ones model.named_modules() prints,
