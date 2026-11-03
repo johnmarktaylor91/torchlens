@@ -304,7 +304,7 @@ def save_lens(
             "top10": actual,
             "matrix_sha256": digest,
             "matrix_bytes": weights.stat().st_size,
-            "uses_pinned_model_weights": True,
+            "requires_same_model_weights": True,
         }
 
     return gallery.artifact_record(target, replay)
