@@ -1762,13 +1762,7 @@ torchlens._io.format3.recipe:read_recipe:ArtifactError::1	CONTRACTED	bundle_load
 torchlens._io.format3.recipe:read_recipe:ArtifactError::2	CONTRACTED	bundle_load_failed	3.0 recipe: intervention.json is not a torchlens.intervention_recipe document
 torchlens._io.format3.recipe:read_recipe:ArtifactError::3	CONTRACTED	bundle_load_failed	3.0 recipe: a recipe format_version this build does not read
 torchlens._io.format3.values:ValueEncoder._enter:ArtifactError::1	CONTRACTED	metadata_value_unportable	3.0 writer: a value nested past the encoder depth bound, refused before publish
-torchlens._io.format3.values:_decode_dict:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: a dict item that is not a [key, value] pair
-torchlens._io.format3.values:_decode_dtype:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: a dtype name torch does not define
-torchlens._io.format3.values:_decode_enum:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: an enum value that is not a TorchLens enum member
-torchlens._io.format3.values:_decode_items:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: a tuple, set or frozenset whose items are not an array
 torchlens._io.format3.values:build_record:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: a record type off the allowlist (field_registry.component_spec_tables)
-torchlens._io.format3.values:decode_value:ArtifactError:_refuse_value:1	CONTRACTED	record_schema_invalid	3.0 typed decode: a $tl tag off the closed vocabulary
-torchlens._io.format3.values:decode_value:ArtifactError:_refuse_value:2	CONTRACTED	record_schema_invalid	3.0 typed decode: a tagged value missing a required field
 torchlens._io.format3.writer:make_encoder_factory.tensor_ref:ArtifactError::1	CONTRACTED	bundle_save_failed	3.0 writer: a tensor cell met with no payload store in a payload-writing save (writer bug surfaced typed)
 torchlens._io.format3.writer:reload_check:ArtifactError:_refuse_reload:1	CONTRACTED	bundle_save_failed	3.0 save reload check (replaces the portability preflight): the staged manifest does not parse
 torchlens._io.format3.writer:reload_check:ArtifactError:_refuse_reload:2	CONTRACTED	bundle_save_failed	3.0 save reload check: a staged record table does not parse or decode
