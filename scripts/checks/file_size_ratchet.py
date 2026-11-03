@@ -81,7 +81,7 @@ _NEW_FILE_LINE_CAP = 2000
 #: kickoff 75439a67 (the debloat pass's target to return to or beat):
 #:   _io/bundle.py 4450 | backends/torch/backward.py 3800
 #:   bundle/__init__.py 2450 | _capture/trace.py 2200
-#:   _data_classes/trace.py 3750 | options.py 2425 | user_funcs.py 3900
+#:   _data_classes/trace.py 3600 | options.py 2425 | user_funcs.py 3900
 #:   _runnable/state.py 2700 (L4 D18 mode-aware projector + snapshot-restore)
 #:   _visualization/_render_edges.py 2350 (portable rolled-edge label placement)
 #: 2026-08-16 L6 merge settle (same debt record): three more ceilings
@@ -227,7 +227,7 @@ _GOD_FILE_CEILINGS: dict[str, int] = {
     # measure_host_peak_memory DROP knob and the KEEP backward_peak_memory_reason
     # field need their policy, init, default-fill and rerun-refresh rows here,
     # beside their forward twins; the file sat at 3998.
-    "torchlens/_data_classes/trace.py": 3750,
+    "torchlens/_data_classes/trace.py": 3600,
     # 3550 -> 3800: fix/private-probe-routing moved the last 9 stray private
     # torch touches (funcol module/ACT/wait-redispatch, checkpoint hook class,
     # engine queue_callback) behind named HAS_* families IN this file -- the
