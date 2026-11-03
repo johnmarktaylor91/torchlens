@@ -280,6 +280,7 @@ def translate_staged_final_labels(trace: Any, capture_spec: Any) -> Any:
     from .._ir.selector_eval import looks_like_finalized_label
 
     def lower(entry: Any) -> Any:
+        """Return ``entry`` with a finalized label target lowered to its one raw live label."""
         target = entry.site_target
         value = target.selector_value
         if (
