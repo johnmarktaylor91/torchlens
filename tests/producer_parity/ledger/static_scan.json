@@ -1226,7 +1226,7 @@
  {
   "ambiguous": true,
   "field": "kind",
-  "file": "torchlens/_distributed.py",
+  "file": "torchlens/_distributed/__init__.py",
   "has_default": false,
   "sites": 2,
   "via_getattr": false
@@ -1234,9 +1234,17 @@
  {
   "ambiguous": true,
   "field": "modules",
-  "file": "torchlens/_distributed.py",
+  "file": "torchlens/_distributed/__init__.py",
   "has_default": false,
   "sites": 4,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/_distributed/_ledger.py",
+  "has_default": false,
+  "sites": 6,
   "via_getattr": false
  },
  {
@@ -4041,6 +4049,14 @@
  },
  {
   "ambiguous": true,
+  "field": "label_raw",
+  "file": "torchlens/_utils/_tensor_label.py",
+  "has_default": false,
+  "sites": 7,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
   "field": "modules",
   "file": "torchlens/_utils/_torch_compat.py",
   "has_default": false,
@@ -6521,14 +6537,6 @@
  },
  {
   "ambiguous": true,
-  "field": "label_raw",
-  "file": "torchlens/backends/torch/_tl.py",
-  "has_default": false,
-  "sites": 7,
-  "via_getattr": false
- },
- {
-  "ambiguous": true,
   "field": "parents",
   "file": "torchlens/backends/torch/_weightsfree_transparency.py",
   "has_default": false,
@@ -7406,14 +7414,6 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
- },
- {
-  "ambiguous": true,
-  "field": "kind",
-  "file": "torchlens/distributed/_ledger.py",
-  "has_default": false,
-  "sites": 6,
-  "via_getattr": false
  },
  {
   "ambiguous": true,

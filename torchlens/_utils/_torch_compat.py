@@ -53,14 +53,8 @@ from torch.utils._python_dispatch import TorchDispatchMode
 
 from ..errors._base import TorchLensWarning
 from ._module_call_dispatch import probe_module_call_dispatch_frame
-from ._producer_version import _torch_minor_version
-from ._script_call_slot import probe_script_function_call_hook
 from ._torch_structseq import torch_structseq_field_names
 from ._torch_symbols import shadowed_torch_submodule, torch_attr
-from ._type_new_slot import probe_type_new_slot_patch
-from ._type_sequence_slot import clear_sequence_item_slot, sequence_slot_layout_problem
-from ._untyped_storage_probe import probe_cached_untyped_storage_wrapper
-from .env_flags import closed_bool_env
 
 __all__ = [
     "torch_structseq_field_names",
@@ -520,6 +514,8 @@ def resolve_runnable_torch_alias(
         when the path has no explicit monotonic alias.
     """
 
+    from ._producer_version import _torch_minor_version  # deferred: vocabulary closure
+
     parsed_version = _torch_minor_version(recorded_version)
     for alias in _RUNNABLE_TORCH_ALIASES:
         if parsed_version is not None and (
@@ -732,7 +728,9 @@ def _probe_cached_untyped_storage_wrapper() -> bool:
         ``True`` when repeated ``Tensor.untyped_storage()`` calls return one wrapper.
     """
 
-    return probe_cached_untyped_storage_wrapper()
+    from . import _untyped_storage_probe  # deferred: vocabulary closure
+
+    return _untyped_storage_probe.probe_cached_untyped_storage_wrapper()
 
 
 def _probe_dynamo_orig_callable_marker() -> bool:
@@ -782,6 +780,8 @@ def _probe_legacy_constructor_new_patch() -> bool:
         mirror ``backends/torch/legacy_ctors.py`` patches through.
     """
 
+    from ._type_new_slot import probe_type_new_slot_patch  # deferred: vocabulary closure
+
     return probe_type_new_slot_patch(getattr(torch, "FloatTensor", None))
 
 
@@ -797,11 +797,15 @@ def _probe_tensor_sequence_slot_fix() -> bool:
         True on CPython when the expected ``torch.Tensor`` type layout is visible.
     """
 
+    from ._type_sequence_slot import sequence_slot_layout_problem  # deferred: vocabulary closure
+
     return sequence_slot_layout_problem(torch.Tensor, b"Tensor") is None
 
 
 def _probe_script_function_call_hook() -> bool:
     """Return whether ``ScriptFunction.__call__`` can be replaced (leaf imported at probe time)."""
+
+    from ._script_call_slot import probe_script_function_call_hook  # deferred: vocabulary closure
 
     return probe_script_function_call_hook()
 
@@ -2203,6 +2207,7 @@ def mark_torch_capability_missing(capability_name: str, detail: str) -> None:
     if capability_name not in _CAPABILITY_ATTR_SET:
         raise ValueError(f"unknown torch capability flag: {capability_name}")
     globals()[capability_name] = False
+    from .env_flags import closed_bool_env  # deferred: vocabulary closure
 
     if closed_bool_env(_CAPABILITY_WARNING_ENV):
         return
@@ -4050,11 +4055,13 @@ def fix_tensor_sequence_slot() -> bool:
         when the private CPython layout was unavailable.
     """
 
-    problem = sequence_slot_layout_problem(torch.Tensor, b"Tensor")
+    from . import _type_sequence_slot  # deferred: vocabulary closure
+
+    problem = _type_sequence_slot.sequence_slot_layout_problem(torch.Tensor, b"Tensor")
     if problem is not None:
         mark_torch_capability_missing("HAS_TENSOR_SEQUENCE_SLOT_FIX", problem)
         return False
-    clear_sequence_item_slot(torch.Tensor)
+    _type_sequence_slot.clear_sequence_item_slot(torch.Tensor)
     return True
 
 

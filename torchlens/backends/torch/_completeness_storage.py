@@ -14,7 +14,7 @@ from typing import Any
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
-from torchlens._utils._torch_compat import get_current_dispatch_mode_stack
+from torchlens._utils import _torch_compat
 
 from ... import _state
 from ..._utils import _exception_notes
@@ -297,7 +297,7 @@ def _completeness_census_active() -> bool:
     converting a belt-witnessed escape into an unwitnessed one (false VERIFIED).
     """
 
-    stack = get_current_dispatch_mode_stack()
+    stack = _torch_compat.get_current_dispatch_mode_stack()
     if stack is None:
         return False
     return any(isinstance(mode, _CompletenessDispatchMode) for mode in stack)

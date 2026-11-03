@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from .._utils.tensor_utils import SAVE_MODES
-
 __tl_layer__ = "L1"
 __tl_vocabulary__ = True
 
@@ -156,6 +154,8 @@ class CaptureSpec:
 
     def __post_init__(self) -> None:
         """Normalize and validate capture save-mode settings."""
+
+        from .._utils.tensor_utils import SAVE_MODES  # deferred: vocabulary closure
 
         if self.save_mode not in SAVE_MODES:
             raise InvalidArgumentError(
