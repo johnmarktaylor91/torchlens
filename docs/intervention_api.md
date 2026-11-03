@@ -95,8 +95,8 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 | --- | --- | --- |
 | `tl.zero_ablate` | `zero_ablate(*, allow_shape_change=False)` | Portable built-in; append-compatible unless shape changes are forced. |
 | `tl.mean_ablate` | `mean_ablate(source=None, *, dim, allow_shape_change=False)` | The one mean door; `dim` is required (`None` for every axis, else the axes). Portable for self and tensor sources; a population source is audit-only; the self mean couples the batch and blocks append. |
-| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, from_=None, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
-| `tl.steer` | `steer(direction, strength=1.0, *, coef=None, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
+| `scramble_elements` | `torchlens.intervention.scramble_elements(source=None, *, seed=None, allow_shape_change=False)` (the honest rename of the removed `resample_ablate` spelling; elementwise iid scramble, NOT coherent resampling ablation -- see MIGRATIONS.md) | Built-in, stochastic; seeded runs are reproducible, append-incompatible. |
+| `tl.steer` | `steer(direction, strength=1.0, *, dim=None, allow_shape_change=False)` | Portable when `direction` is serializable tensor data. |
 | `tl.scale` | `scale(factor, *, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.clamp` | `clamp(*, low=None, high=None, allow_shape_change=False)` | Portable built-in and append-compatible. |
 | `tl.add_noise` | `add_noise(std, *, seed=None, allow_shape_change=False)` | Built-in stochastic helper; seeded runs avoid global RNG consumption. |
