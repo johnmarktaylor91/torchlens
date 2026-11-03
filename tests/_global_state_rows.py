@@ -676,6 +676,9 @@ _PUBLIC_REGISTRATION_STATE = frozenset(
         # torch-aware snapshot at import; the basis module falls back to the torch
         # compat snapshot when nothing is registered.
         ("torchlens/_doctor_types.py", "_CAPABILITY_SNAPSHOT_PROVIDER"),
+        # Facet-snapshot provider slot: the capture door registers a lazy loader and
+        # _semantic.facets registers snapshot() when it loads; the engine reads it.
+        ("torchlens/_registry/_facet_snapshot.py", "_PROVIDER"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "_FROZEN_POLICIES"),
         ("torchlens/attribution/onebackward/_facet_bridge.py", "FROZEN_POLICY_NAMES"),
         ("torchlens/backends/registry.py", "_REGISTRY"),
