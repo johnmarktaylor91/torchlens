@@ -4378,6 +4378,22 @@
  {
   "ambiguous": true,
   "field": "kind",
+  "file": "torchlens/_visualization/_focus_scope.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_visualization/_focus_scope.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
   "file": "torchlens/_visualization/_geometry_audit.py",
   "has_default": false,
   "sites": 13,
@@ -4388,7 +4404,7 @@
   "field": "kind",
   "file": "torchlens/_visualization/_header_block.py",
   "has_default": false,
-  "sites": 2,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -7387,9 +7403,9 @@
   "ambiguous": false,
   "field": "step_index",
   "file": "torchlens/debug/_grad_scale_proof.py",
-  "has_default": true,
+  "has_default": false,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -7459,9 +7475,9 @@
   "ambiguous": true,
   "field": "parents",
   "file": "torchlens/debug/_unit_axis.py",
-  "has_default": true,
+  "has_default": false,
   "sites": 1,
-  "via_getattr": true
+  "via_getattr": false
  },
  {
   "ambiguous": true,
