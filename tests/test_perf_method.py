@@ -172,6 +172,24 @@ def test_runner_fastlog_zero_operation_executes_on_current_api() -> None:
     assert "save=" in str(state["fastlog_zero_policy"])
 
 
+@pytest.mark.parametrize(
+    "operation",
+    ["fastlog_module", "fastlog_all", "aux_validate", "aux_compat_report"],
+)
+def test_runner_record_validate_and_doctor_operations_execute_on_current_api(
+    operation: str,
+) -> None:
+    """The tl.record, tl.validate and tl.report.doctor cells run on the current API."""
+
+    model, x = _tiny_model()
+    state: dict[str, object] = {}
+
+    fn = _operation(operation, model, x, "cpu", state)
+    result = fn()
+
+    assert result is not None
+
+
 def test_runner_fastlog_selectivity_operations_execute_on_current_api() -> None:
     """Selectivity cells (dry_run + record) run against the ``save=`` API."""
 

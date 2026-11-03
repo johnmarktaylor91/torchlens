@@ -1327,9 +1327,8 @@ def _build_conditional_records(self: "Trace") -> None:
     for event in self._graph_conditional_records:
         terminal_bool_label = event.bool_layers[0] if event.bool_layers else str(event.id)
         conditional_id = conditional_id_by_event_id[event.id]
-        # Use AST-derived branch_ranges so every static arm is materialized,
-        # regardless of which arm fired at runtime. fired-vs-not is captured
-        # per-arm via ConditionalArm.fired below.
+        # AST-derived branch_ranges materialize every static arm regardless of which
+        # fired at runtime; fired-vs-not is captured per-arm via ConditionalArm.fired.
         ast_branch_kinds = list(event.branch_ranges)
         ordered_branch_kinds = ["then"]
         ordered_branch_kinds.extend(
@@ -1363,9 +1362,8 @@ def _build_conditional_records(self: "Trace") -> None:
             if kind not in {"then", "elif"}:
                 evaluation_labels = []
             elif arm_bool_indices is not None:
-                # An arm whose test never ran (short-circuited elif) has no
-                # witnessed consumption, so its evaluation set is honestly
-                # empty and ``condition_evaluated`` below reports False.
+                # A short-circuited elif has no witnessed consumption: its evaluation
+                # set is honestly empty and ``condition_evaluated`` below reports False.
                 evaluation_labels = [
                     event.bool_layers[bool_index]
                     for bool_index in arm_bool_indices.get(branch_kind, [])
@@ -1373,7 +1371,9 @@ def _build_conditional_records(self: "Trace") -> None:
                 ]
             else:
                 evaluation_labels = list(event.bool_layers)
-            if kind == "then" and evaluation_labels:
+            # A witnessed elif names its bool too (a pure-Python then-test leaves none).
+            witnessed_arm = kind == "then" or (kind == "elif" and arm_bool_indices is not None)
+            if witnessed_arm and evaluation_labels:
                 terminal_bool = evaluation_labels[0]
             elif kind == "then" and arm_bool_indices is None and event.bool_layers:
                 terminal_bool = terminal_bool_label
