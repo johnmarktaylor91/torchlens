@@ -23,7 +23,7 @@ hostile input, and every load path here is fail-closed.
   modules (`os`, `sys`, `subprocess`, `builtins`, `importlib`, ...) are hard-denied.
 - `_pre3_module_paths.refuse_pre_3_module_path()` (called from `find_class`) refuses a pickled
   module path only torchlens 2.x wrote, with `ArtifactTooOldError`; that includes any path at or
-  below a public package's submodule 3.0 made private (`torchlens.intervention.types`).
+  below a public package's submodule 3.0 made private (the old types module of `tl.intervention`).
 - No file bytes ever reach `torch.load`: `torch.storage._load_from_bytes` (the storage leg of
   torch's default tensor reduction) is refused by name. Plain metadata tensors (annotation
   values, small raw inputs/outputs) are written by `_canonical_pickle.py` through the
