@@ -94,6 +94,14 @@ def _pre3_observed(path: Path) -> str | None:
     stamp = legacy_stamp(path / "manifest.json")
     if stamp is not None:
         return f"tlspec_version={stamp}"
+    manifest = _read_json_object_if_present(path / "manifest.json")
+    if manifest is not None and all(
+        marker in manifest for marker in ("io_format_version", "n_activation_blobs")
+    ):
+        return (
+            f"io_format_version={manifest['io_format_version']}, "
+            f"n_activation_blobs={manifest['n_activation_blobs']}"
+        )
     for marker in ("metadata.pkl", "bundle.json"):
         marker_path = path / marker
         _reject_symlinked_metadata_path(marker_path)
@@ -102,7 +110,6 @@ def _pre3_observed(path: Path) -> str | None:
     spec = _read_json_object_if_present(path / "spec.json")
     if spec is not None and "format_version" in spec:
         return f"intervention format_version={spec['format_version']}"
-    manifest = _read_json_object_if_present(path / "manifest.json")
     if manifest is None:
         return None
     for marker in ("tlspec_version", "kind", "io_format_version", "n_activation_blobs"):

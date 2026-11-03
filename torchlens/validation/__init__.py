@@ -75,11 +75,17 @@ def validate_tlspec(
 
     tlspec_format = detect_tlspec_format(tlspec_path)
     if tlspec_format == "pre_3":
-        from .._io.format_contract import below_floor_error
+        from .._io.format_contract import _MODELLOG_216_NOTE, below_floor_error
 
+        observed = _pre3_observed(tlspec_path) or "2.x artifact markers"
         raise below_floor_error(
-            observed=_pre3_observed(tlspec_path) or "2.x artifact markers",
+            observed=observed,
             path=str(tlspec_path),
+            remedy_note=(
+                _MODELLOG_216_NOTE
+                if observed.startswith("io_format_version=2, n_activation_blobs=")
+                else ""
+            ),
             code="artifact_version_below_floor",
         )
     if tlspec_format == "v3":

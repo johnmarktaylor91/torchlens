@@ -75,6 +75,11 @@ def test_genuine_modellog_refusal_names_the_one_release_that_reads_it() -> None:
     path, _ = _FAMILIES["modellog_v2_16_genuine"]
     error = assert_refuses_as_2x(path)
     assert "torchlens==2.17.0" in error.fields["remedy"]
+    assert error.fields["observed"].startswith("io_format_version=2, n_activation_blobs=")
+    with pytest.raises(ArtifactTooOldError) as excinfo:
+        validate_tlspec(path)
+    assert excinfo.value.fields["remedy"] == error.fields["remedy"]
+    assert excinfo.value.fields["observed"] == error.fields["observed"]
 
 
 def test_restamped_2x_payload_refuses_at_the_root_listing(tmp_path: Path) -> None:
