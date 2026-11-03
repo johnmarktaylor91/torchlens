@@ -316,6 +316,66 @@ def test_trace_reference_save_mode_copies_known_inplace_ops() -> None:
     assert torch.equal(op.out, torch.full((1, 2), 2.0))
 
 
+def test_trace_reference_save_mode_keeps_dunder_op_outputs_by_reference() -> None:
+    """Operator dunders (``__add__``) are out-of-place: reference mode keeps the live tensor.
+
+    The in-place spelling ends in one underscore (``add_``); the dunders end in two.
+    The live tensor is the one the rest of the forward consumed, so ``autograd.grad``
+    of the output with respect to it works (the Jacobian-lens recipe's door).
+    """
+
+    class Residual(torch.nn.Module):
+        """``x + linear(x)``: the block output is an ``__add__``."""
+
+        def __init__(self) -> None:
+            super().__init__()
+            self.linear = torch.nn.Linear(2, 2)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return (x + self.linear(x)).relu()
+
+    model = Residual()
+    seen: dict[str, torch.Tensor] = {}
+    handle = model.register_forward_hook(lambda m, i, out: seen.__setitem__("out", out))
+    try:
+        log = tl.trace(
+            model,
+            torch.ones(1, 2, requires_grad=True),
+            capture=tl.options.CaptureOptions(save_mode="reference"),
+        )
+    finally:
+        handle.remove()
+    add_op = next(layer for layer in log._layer_list if layer.func_name == "__add__")
+    relu_op = next(layer for layer in log._layer_list if layer.func_name == "relu")
+
+    assert add_op.annotations["save_mode"] == "reference"
+    assert relu_op.annotations["save_mode"] == "reference"
+    # The live model output differentiates with respect to the saved block state:
+    # a clone would raise "appears to not have been used in the graph".
+    (grad,) = torch.autograd.grad(seen["out"].sum(), add_op.out)
+    assert grad.shape == (1, 2)
+
+
+def test_trace_reference_save_mode_copies_inplace_dunder_outputs() -> None:
+    """``__iadd__`` mutates its input: the version-counter flag still forces a copy."""
+
+    class AugmentedAdd(torch.nn.Module):
+        """``y = x * 2; y += 1``: the second op is an in-place dunder."""
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            y = x * 2
+            y += 1
+            return y
+
+    log = tl.trace(
+        AugmentedAdd(), torch.ones(1, 2), capture=tl.options.CaptureOptions(save_mode="reference")
+    )
+    op = next(layer for layer in log._layer_list if layer.func_name in {"__iadd__", "add_"})
+
+    assert "save_mode" not in op.annotations
+    assert torch.equal(op.out, torch.full((1, 2), 3.0))
+
+
 def test_trace_view_save_mode_keeps_saved_out_grad_connected() -> None:
     """View mode keeps saved activation payloads on the autograd graph."""
 
