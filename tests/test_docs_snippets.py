@@ -438,6 +438,12 @@ _RECIPE_PAGES_EXECUTED = (
     "the peer-recipe leg)"
 )
 
+#: Reason shared by the launch docs pages (Field guide, strip, comparison).
+_LAUNCH_PAGES_EXECUTED = (
+    "executed by tests/test_launch_docs_pages.py (a Field guide page as one session in "
+    "order; each strip fence alone, skipped where its declared package is absent)"
+)
+
 #: r7 R81 (opus b2 MED): pages with python fences OUTSIDE the executed set,
 #: each with a reason. The executed gate covered 9 of 33 fence-bearing pages
 #: with NO drift gate, so a new page (or a new fence on an old one) shipped
@@ -678,6 +684,12 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
         "executed by tests/test_migrations.py (the TorchLens side always; the pyvene "
         "comparison fence is collected and skipped)"
     ),
+    "field-guide/running_examples.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/see_and_inspect.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/extract_features.md": _LAUNCH_PAGES_EXECUTED,
+    "field-guide/intervene.md": _LAUNCH_PAGES_EXECUTED,
+    "gallery/any_architecture.md": _LAUNCH_PAGES_EXECUTED,
+    "migration/comparison.md": _LAUNCH_PAGES_EXECUTED,
 }
 
 
