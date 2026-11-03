@@ -55,6 +55,11 @@ class GenerationOptions:
         whole generation from the prefill and per-step bytes and refuses
         early when it would exceed the budget; the running total is checked
         at every step. ``None`` disables the guard.
+
+    Whatever the options do not keep is released as each forward is reduced: a
+    pass's unkept payloads (its model inputs, the KV cache ``generate`` feeds back
+    among them) and the logits of every pass but the newest, so the recording's
+    memory grows with the number of tokens, not with its square.
     """
 
     reducers: Mapping[str, ReducerFn] = dataclasses.field(

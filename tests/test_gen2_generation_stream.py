@@ -9,6 +9,8 @@ full no-cache forward over that step's prefix (float32, ``rtol=1e-4``,
 
 from __future__ import annotations
 
+import collections
+import gc
 from collections.abc import Callable
 from pathlib import Path
 
@@ -367,3 +369,31 @@ def test_reducer_contract_and_option_refusals(tmp_path: Path) -> None:
     )
     _refusal(lambda: widened.series(LN_F), "record_generation_step_missing")
     assert repr(widened.options.reducers[MLP0]) == "Reducer('norm(ord=2.0)')"
+
+
+def test_past_forwards_release_their_inputs_and_logits() -> None:
+    """Only the declared sites and reducers survive a step: the KV cache a decode step
+    took as input and the logits it produced are freed, so memory grows with the number
+    of tokens, not with its square (the 2,000-token acceptance found the cache held)."""
+    model = build_distilgpt2("eager")
+    n_new = 6
+    generation = tl.record(
+        model,
+        PROMPT,
+        generate_kwargs=_greedy(n_new),
+        generation=GenerationOptions(reducers={LN_F: reducers.norm()}, max_saved_bytes=None),
+    )
+    assert generation.n_steps == n_new
+    assert generation.series(LN_F).values.shape[0] == PROMPT.shape[1] + n_new - 1
+
+    gc.collect()
+    live = collections.Counter(
+        tuple(o.shape) for o in gc.get_objects() if isinstance(o, torch.Tensor)
+    )
+    heads, head_dim = model.config.n_head, WIDTH // model.config.n_head
+    # Decode step s takes the cache of prompt + s - 1 positions as its input; the recording
+    # keeps none of them, and generate() returns none, so every cache length is gone.
+    cache_shapes = [(1, heads, PROMPT.shape[1] + s, head_dim) for s in range(n_new)]
+    assert {shape: live[shape] for shape in cache_shapes if live[shape]} == {}
+    # The logits of every pass but the newest are released too.
+    assert live[(1, 1, model.config.vocab_size)] <= 1

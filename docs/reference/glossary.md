@@ -123,7 +123,10 @@ removed spellings are listed separately in [Deprecations](deprecations.md).
   forwards are written to `spill=` (one `torch.save` file per step) or dropped, and the record
   keeps a metadata stub (`payload`, `spill_file`). `max_saved_bytes=` (512 MiB by default,
   `None` off) refuses with `record_generation_budget_exceeded` when the retained bytes exceed
-  the budget, projected for the whole generation right after the first decode step. The
+  the budget, projected for the whole generation right after the first decode step. What the
+  options do not keep is released as each forward is reduced (a pass's model inputs, the fed-back
+  KV cache among them, and the logits of every pass but the newest), so memory grows with the
+  token count, not its square. The
   `GenerationRecording` adds `.options`, `.series_names`, `.series(name)` (a `TokenSeries`:
   `name`, `positions`, a `range` of absolute positions, `values`, one row per position, read back
   from the spill when evicted; refuses an unknown or fully dropped series with

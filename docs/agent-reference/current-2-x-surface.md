@@ -80,8 +80,9 @@
   `generation=torchlens.recording.GenerationOptions(reducers=, kv_sites=, keep_last=, spill=,
   max_saved_bytes=)` (DOCUMENTED-UNSTABLE) streams that recording at thousands of tokens: per-token
   reducers from `torchlens.recording.reducers` (`norm`, `top_k`, `probe`; each a `Reducer`), KV-cache
-  slices as series, a ring buffer with disk spill and a retained-byte guard
-  (`record_generation_budget_exceeded`); `GenerationRecording.series(name)` returns a
+  slices as series, a ring buffer with disk spill, a retained-byte guard
+  (`record_generation_budget_exceeded`) and the release of each pass's unkept payloads (model
+  inputs, older logits) once it is reduced, so memory is linear in the token count; `GenerationRecording.series(name)` returns a
   `TokenSeries` (`positions`, `values`), `.series_names`, `.peak_saved_bytes`, `.evicted_steps`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
   payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1

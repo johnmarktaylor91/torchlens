@@ -102,6 +102,12 @@ def _kv_slice(tensor: torch.Tensor, window: range) -> torch.Tensor:
     return torch.movedim(tensor[0, :, window.start : window.stop, :], 1, 0).detach().clone()
 
 
+#: Projection facts of a pass whose outputs were released (the newest pass keeps its own).
+_NO_OUTPUTS: Mapping[str, tuple[()]] = MappingProxyType(
+    {"output_tensors": (), "output_tensor_addresses": (), "output_labels": ()}
+)
+
+
 def _release(event: Any, payload: torch.Tensor | None) -> None:
     """Replace the payload a capture event holds for its output (``None`` releases it).
 
@@ -152,6 +158,7 @@ class _StepSink:
         self.pass_of_step.append(pass_index)
         step_bytes = self._reduce(step, window)
         step_bytes += self._read_kv(step, window, kwargs.get("past_key_values"))
+        self._release_unkept(step)
         self.bytes_by_step.append(step_bytes)
         self.retained_bytes += step_bytes
         self._evict(step)
@@ -233,6 +240,32 @@ class _StepSink:
                 "(model.get_submodule(address) must exist)",
             )
         return total
+
+    def _release_unkept(self, step: int) -> None:
+        """Free what no kept record of forward ``step`` projects, and the previous forward's logits.
+
+        A forward's model inputs are logged with their payloads whether or not the
+        save predicate keeps them; under ``generate()`` they include the KV cache fed
+        back at every step, which grows with the sequence, so holding every pass's
+        inputs would cost memory quadratic in the length. A widened recording keeps
+        the declared sites and reducers only: the unkept payloads go once the step is
+        reduced, and so do the logits of every pass but the newest (the projection
+        reads the newest pass's outputs).
+        """
+
+        cores = self.recorder._captured_run_cores
+        kept = {
+            id(event)
+            for record, event in zip(self.step_records[step], self.step_events[step], strict=True)
+            if record.ram_payload is not None or record.transformed_ram_payload is not None
+        }
+        for event in cores[step].events:
+            if id(event) not in kept:
+                _release(event, None)
+        if step > 0:
+            previous = cores[step - 1]
+            facts = MappingProxyType({**previous.projection_facts, **_NO_OUTPUTS})
+            cores[step - 1] = dataclasses.replace(previous, projection_facts=facts)
 
     def _reduced_value(
         self, site: str, record: ActivationRecord, window: range, step: int
