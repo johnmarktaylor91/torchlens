@@ -56,8 +56,8 @@ def test_batch_applies_every_pair_in_one_transaction() -> None:
     fork = log.fork()
     fork.do(
         [
-            (log["relu_1_2"].__selection__(), tl.scale(2.0)),
-            (log["relu_2_4"].__selection__(), tl.zero_ablate()),
+            (log.layers["relu_1_2"].__selection__(), tl.scale(2.0)),
+            (log.layers["relu_2_4"].__selection__(), tl.zero_ablate()),
         ]
     )
     assert torch.allclose(fork["relu_1_2"].out, first * 2)
@@ -85,8 +85,8 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     fork = log.fork()
     fork.do(
         [
-            (log["relu_1_2"].__selection__(), tl.patch_from(plan)),
-            (log["relu_2_4"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_1_2"].__selection__(), tl.patch_from(plan)),
+            (log.layers["relu_2_4"].__selection__(), tl.patch_from(plan)),
         ]
     )
     records = sampling_draws(fork)
@@ -107,8 +107,8 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     fork_two = log.fork()
     fork_two.do(
         [
-            (log["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
-            (log["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
+            (log.layers["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
+            (log.layers["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
         ]
     )
     two_plan_records = sampling_draws(fork_two)[-2:]
@@ -118,8 +118,8 @@ def test_shared_plan_identity_shares_one_donor_group() -> None:
     fork_three = log.fork()
     fork_three.do(
         [
-            (log["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
-            (log["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
+            (log.layers["relu_2_4"].__selection__(), tl.patch_from(plan_b)),
+            (log.layers["relu_1_2"].__selection__(), tl.patch_from(plan_a)),
         ]
     )
     reversed_ids = {row.donor_group_id for row in sampling_draws(fork_three)[-2:]}
@@ -134,7 +134,7 @@ def test_leaf_site_pair_refuses_typed() -> None:
         log.fork().do(
             [
                 (log.input_ops[0].__selection__(), tl.scale(2.0)),
-                (log["relu_1_2"].__selection__(), tl.scale(2.0)),
+                (log.layers["relu_1_2"].__selection__(), tl.scale(2.0)),
             ]
         )
     assert excinfo.value.fields["code"] == "selection_batch_leaf_unsupported"
@@ -162,7 +162,10 @@ def _cross_kind_pairs(fork: tl.Trace, order: tuple[str, ...], bad: str = "") -> 
 
     edge = next(e for e in fork.graph.edges if e.parent_label == "relu_1_2")
     pairs = {
-        "ACT": (fork["relu_1_2"].__selection__(), _refuse if bad == "ACT" else tl.scale(2.0)),
+        "ACT": (
+            fork.layers["relu_1_2"].__selection__(),
+            _refuse if bad == "ACT" else tl.scale(2.0),
+        ),
         "PARAM": (tl.param("b.weight"), _wrong_shape if bad == "PARAM" else tl.scale(0.25)),
         "EDGE": (edge.__selection__(), _wrong_shape if bad == "EDGE" else tl.add(0.25)),
     }
@@ -285,13 +288,13 @@ def test_mixed_selection_and_legacy_pairs_refuse() -> None:
     with pytest.raises(Exception) as excinfo:
         log.fork().do(
             [
-                (log["relu_1_2"].__selection__(), tl.scale(2.0)),
+                (log.layers["relu_1_2"].__selection__(), tl.scale(2.0)),
                 (tl.label("relu_2_4"), tl.zero_ablate()),
             ]
         )
     assert excinfo.value.fields["code"] == "selection_batch_pair_invalid"
     with pytest.raises(Exception) as excinfo:
-        log.fork().do([(log["relu_1_2"].__selection__(), None)], tl.scale(2.0))
+        log.fork().do([(log.layers["relu_1_2"].__selection__(), None)], tl.scale(2.0))
     assert excinfo.value.fields["code"] == "selection_batch_pair_invalid"
 
 
@@ -306,8 +309,8 @@ def test_abort_leaves_pre_call_state_with_one_error_record() -> None:
     with pytest.raises(ValueError):
         fork.do(
             [
-                (log["relu_1_2"].__selection__(), tl.scale(2.0)),
-                (log["relu_2_4"].__selection__(), "not-an-edit"),
+                (log.layers["relu_1_2"].__selection__(), tl.scale(2.0)),
+                (log.layers["relu_2_4"].__selection__(), "not-an-edit"),
             ]
         )
     assert torch.equal(fork["relu_1_2"].out, baseline_first), "values untouched"
@@ -332,7 +335,7 @@ def test_batch_failure_mid_attach_detaches_earlier_pairs() -> None:
     with pytest.raises(Exception) as excinfo:
         fork.do(
             [
-                (log["relu_1_2"].__selection__(), tl.scale(2.0)),
+                (log.layers["relu_1_2"].__selection__(), tl.scale(2.0)),
                 (fork[ragged], permute_batch(seed=1, axis=0)),
             ]
         )

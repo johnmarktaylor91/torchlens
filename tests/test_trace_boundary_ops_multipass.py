@@ -87,7 +87,7 @@ def test_loop_inputs_fold_into_one_two_pass_layer() -> None:
 
     trace, _ = _loop_trace()
     assert trace.input_layers == ["input_1", "input_1"]
-    assert trace["input_1"].num_passes == 2
+    assert trace.layers["input_1"].num_passes == 2
 
 
 def test_input_ops_lists_each_pass_as_an_op_in_argument_order() -> None:
@@ -141,14 +141,14 @@ def test_boundary_label_ops_expands_an_under_listed_layer() -> None:
 
     trace, (a, b) = _loop_trace()
 
-    ops = boundary_label_ops(["input_1"], trace.__getitem__)
+    ops = boundary_label_ops(["input_1"], trace.layers.__getitem__)
     assert [op.pass_number for op in ops] == [1, 2]
     assert torch.equal(ops[0].out, a) and torch.equal(ops[1].out, b)
 
 
 def test_agent_json_and_overview_succeed_on_a_two_pass_input(tmp_path: Path) -> None:
     trace, _ = _loop_trace()
-    expected = [f"{trace['input_1'].layer_label}:{index}" for index in (1, 2)]
+    expected = [f"{trace.layers['input_1'].layer_label}:{index}" for index in (1, 2)]
 
     assert build_agent_json(trace)["inputs"] == expected
     assert trace.to_agent_json()["inputs"] == expected
@@ -181,7 +181,7 @@ def test_classics_multipass_input_entries_build_agent_json(entry: Any) -> None:
         trace = tl.trace(model, inputs)
     tensors = [value for value in inputs if isinstance(value, torch.Tensor)]
 
-    assert any(trace[label].num_passes > 1 for label in trace.input_layers)
+    assert any(trace.layers[label].num_passes > 1 for label in trace.input_layers)
     dumped = build_agent_json(trace)["inputs"]
     assert len(dumped) == len(tensors) == len(trace.input_ops)
     for label, value in zip(dumped, tensors, strict=True):

@@ -41,13 +41,15 @@ from __future__ import annotations
 import hashlib
 import random as _random_module
 from collections.abc import Iterable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, overload
 
 import torch
 
 from .._utils.fail_open import fail_open
 from ..errors._base import TorchLensError
+from ._site_record import _require_edge_provenance, bind_entries, edge_address_of, site_record
+from ._site_refusals import multipass_bare_label_message
 from .align import align_resolved_selection
 from .errors import SelectionError, SelectorCompositionError
 from .mask import (
@@ -108,6 +110,18 @@ class Site:
     provenance: SelectionProvenance
     _mask: _Mask
     structural_site_key: Any = None
+    #: Weak trace link filled by ``Selection``; outside equality and hashing.
+    _trace_ref: Any = field(default=None, compare=False, repr=False)
+
+    @property
+    def record(self) -> Any:
+        """The ``Op`` (ACT), ``Param`` (PARAM) or ``EdgeUseRecord`` (EDGE) this row names.
+
+        Weak trace link: ``selection_trace_released`` once the trace is gone,
+        ``selection_unresolvable`` (``site_not_in_trace``) when it has no such record.
+        """
+
+        return site_record(self, _forward_ops, _trace_edge_records)
 
     @property
     def mask(self) -> torch.Tensor:
@@ -234,6 +248,7 @@ class Selection:
         object.__setattr__(self, "_kind", kind)
         object.__setattr__(self, "_selector", selector)
         object.__setattr__(self, "_entries", _graph_entry_order(trace, entries))
+        bind_entries(trace, self._entries)
         digest = hashlib.sha256()
         digest.update(kind.encode())
         for entry in self._entries:
@@ -1212,8 +1227,6 @@ def _resolve_param_term(node: _ParamTerm, trace: Any) -> Selection:
 
 def _multipass_bare_label_refusal(site: str, matches: Sequence[Any]) -> SelectionError:
     """Refuse a multi-pass layer's bare spelling: units() addresses ONE op's index space."""
-    from ._site_refusals import multipass_bare_label_message
-
     layer_label = getattr(matches[0], "layer_label", None) or site
     pass_indices = sorted(int(getattr(op, "pass_number", 1) or 1) for op in matches)
     return _unresolvable(
@@ -1553,25 +1566,6 @@ class _EdgeTerm:
         if self.display:
             return f"edges({', '.join(self.display)})"
         return f"edges(n={len(self.addresses)})"
-
-
-def edge_address_of(record: Any) -> tuple[Any, ...]:
-    """Return one EdgeUseRecord's canonical occurrence address."""
-
-    return (record.child_func_call_id, record.arg_kind, tuple(record.arg_path))
-
-
-def _require_edge_provenance(trace: Any) -> None:
-    """Refuse typed when edge provenance was not captured."""
-
-    if not bool(getattr(trace, "is_replayable", False)):
-        raise SelectionError(
-            "edge provenance requires an replayable capture "
-            "(EdgeUseRecords exist only under it). Re-capture with "
-            "tl.trace(model, x, capture=tl.options.CaptureOptions("
-            "replayable=True)).",
-            code="edge_provenance_unavailable",
-        )
 
 
 def _trace_edge_records(trace: Any) -> tuple[Any, ...]:

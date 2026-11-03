@@ -93,7 +93,7 @@ def test_layer_door_on_multi_pass_layer_edits_every_pass(captured, door: str) ->
     model, x, trace = captured
     shared, _fresh = _linear_labels(trace)
     fork = trace.fork()
-    layer = fork[shared]
+    layer = fork.layers[shared]
     with pytest.warns(MultiMatchWarning, match="matched 2 sites"):
         if door == "do":
             layer.do(tl.scale(2.0))
