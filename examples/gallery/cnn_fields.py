@@ -164,7 +164,7 @@ def measure(
     """
     trace = tl.trace(model, x, save="all")
     target = trace[layer]
-    source = trace.ops[trace.input_ops[0]]
+    source = trace.input_ops[0]
     h, w = target.out.shape[-2:]
     unit = (0, channel, h // 2, w // 2)
     box = target.receptive_field.at(unit[-2:])
