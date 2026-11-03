@@ -59,7 +59,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.paddle` | Paddle backend preview. | 14 | 6379 |
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8488 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3945 |
-| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 54000 |
+| `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 109 | 53999 |
 | `torchlens.bridge` | External-tool bridge namespace. | 26 | 7917 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8487 |
@@ -84,7 +84,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.preprocessing` | Preprocessing provenance + verification (tvscope lane; NeuroAI audience). | 8 | 2474 |
 | `torchlens.receptive_field` | Lazy public namespace for TorchLens receptive-field analysis. | 22 | 12385 |
 | `torchlens.receptive_field.rules` | Built-in receptive-field rules and idempotent pack registration. | 10 | 1581 |
-| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5992 |
+| `torchlens.recording` | Lightweight predicate-recording namespace for TorchLens. | 19 | 5993 |
 | `torchlens.repgeom` | Import-clean representation geometry helpers (real subpackage; item 18). | 8 | 3712 |
 | `torchlens.report` | Reports that describe a completed trace: summary, cost, profile, FLOPs and health. | 34 | 13666 |
 | `torchlens.report._notebook` | Extras-gated notebook namespace with no public objects yet. | 10 | 2470 |
@@ -1228,7 +1228,7 @@ tinygrad backend preview. (7 modules, 3945 lines)
 
 ### `torchlens.backends.torch`
 
-Torch backend implementation package for TorchLens capture. (109 modules, 54000 lines)
+Torch backend implementation package for TorchLens capture. (109 modules, 53999 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1285,7 +1285,7 @@ Torch backend implementation package for TorchLens capture. (109 modules, 54000 
 | `_ops_emission` | Output logging, event emission, and live-hook dispatch. | 487 |
 | `_ops_exhaustive` | Exhaustive event emission and autograd candidate collection. | 615 |
 | `_ops_finalize` | Predicate context evaluation and layer-entry finalization. | 528 |
-| `_ops_interventions` | Legacy and predicate-mode live interventions. | 827 |
+| `_ops_interventions` | Legacy and predicate-mode live interventions. | 826 |
 | `_ops_payload_stream` | Forward-time disk streaming of predicate-selected op payloads. | 46 |
 | `_ops_predicate_events` | Predicate event records and graph relationship fields. | 525 |
 | `_ops_predicates` | Predicate output replacement and backend semantics. | 546 |
@@ -1814,7 +1814,7 @@ Built-in receptive-field rules and idempotent pack registration. (10 modules, 15
 
 ### `torchlens.recording`
 
-Lightweight predicate-recording namespace for TorchLens. (19 modules, 5992 lines)
+Lightweight predicate-recording namespace for TorchLens. (19 modules, 5993 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1823,7 +1823,7 @@ Lightweight predicate-recording namespace for TorchLens. (19 modules, 5992 lines
 | `_halt` | Fastlog early-abort control signal. | 73 |
 | `_indexes` | Index file writers for fastlog directory bundles. | 81 |
 | `_record_one_shot` | One-shot public fastlog recording API. | 364 |
-| `_recorder` | Public Recorder context manager for fastlog sessions. | 847 |
+| `_recorder` | Public Recorder context manager for fastlog sessions. | 848 |
 | `_recorder_config` | Resolved stop and capture configuration for one predicate recording pass. | 32 |
 | `_recorder_streaming` | Rank-local streaming-option helper for the fastlog ''Recorder''. | 50 |
 | `_storage_resolver` | Storage resolution for fastlog tensor payloads. | 410 |
