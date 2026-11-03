@@ -366,7 +366,7 @@ positions[:, -1] = True  # pyreft's unit_locations: the last token
 base = tl.trace(model, tokens, capture=tl.options.CaptureOptions(replayable=True))
 fork = base.fork()
 fork.do(artifact.subspace(site, positions=positions), artifact.edit)
-h, edited = base[site].out[0, -1], fork.push()[site].out
+h, edited = base[site].out[0, -1], fork[site].out  # do() already replayed the edit
 R, W, b = rotation.double(), weight.double(), bias.double()
 
 RESULT = [

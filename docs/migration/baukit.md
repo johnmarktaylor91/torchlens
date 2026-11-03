@@ -4,10 +4,10 @@
 | --- | --- | --- |
 | `Trace` a module output | `tl.trace(...); log.find_sites(tl.module("module.path"))` | Similar for module boundaries. |
 | `TraceDict` over many layers | `log.find_sites(tl.in_module(...), max_fanout=...)` and iterate results | Equivalent discovery, different object model. |
-| Edit an activation in a trace | `log.fork().set(site, value).push()` | Equivalent post-hoc mutation for stable graphs. |
+| Edit an activation in a trace | `log.fork().do(site, value)` | Equivalent post-hoc mutation for stable graphs. |
 | Retain input/output tensors | TorchLens records activations and selected argument metadata in `Op` records | TorchLens is broader but heavier. |
 | Stop or replace module output inline | `tl.trace(model, x, intervene=tl.when(site, helper))` during capture, or `trace.run(inputs=x, until=site)` to stop early | Similar for visible module/op outputs. |
-| Patch generated-token traces | Capture the generation loop, then `.set(...)` and `.push()` (replay) or `.run(...)` at the target sites | Equivalent when the Python loop is visible. |
+| Patch generated-token traces | Capture the generation loop, then `.do(site, value)` (replay) or `.do(site, value, model=..., inputs=...)` (rerun) at the target sites | Equivalent when the Python loop is visible. |
 | Lightweight context manager only | No exact equivalent | TorchLens creates a persistent `Trace`; lightweight tracing is deferred to v2.x. |
 | Causal tracing utilities | Build with `Bundle`, helpers, and metrics | Turnkey causal-tracing dashboards are deferred to v2.x. |
 | Save edited trace recipe | `save_intervention(..., level=...)` | TorchLens has first-class recipe persistence. |

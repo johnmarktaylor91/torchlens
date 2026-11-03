@@ -7,9 +7,9 @@ since August 2026. Existing penzai code keeps working; new work needs another ho
 | Penzai operation | TorchLens v2 idiom | Parity |
 | --- | --- | --- |
 | Name and select model subtrees | `tl.in_module("path")`, `tl.module("path")`, and exact labels after discovery | Similar goal; TorchLens uses PyTorch module addresses and op labels. |
-| Functional model surgery | Capture with `capture=tl.options.CaptureOptions(replayable=True)`; `trace.fork()`, then `.set(site, value)` or `.attach_hooks(site, helper)`, then `.push()` (replay the recorded graph) or `.run()` (run the model again) | TorchLens edits a recorded run, not the model definition. |
+| Functional model surgery | Capture with `capture=tl.options.CaptureOptions(replayable=True)`; `trace.fork()`, then `.do(site, value)` or `.do(site, helper)` (replay the recorded graph), or the same call with `model=` and `inputs=` (run the model again) | TorchLens edits a recorded run, not the model definition. |
 | Inspect intermediate values | `trace.find_sites(selector).first().out`, or `trace[label].out` | Equivalent for captured tensors. |
-| Patch or replace a value | `.set(site, tensor)` or `.attach_hooks(site, helper)` on a forked trace | Equivalent for visible activations. |
+| Patch or replace a value | `.do(site, tensor)` or `.do(site, helper)` on a forked trace | Equivalent for visible activations. |
 | Declarative named axes | Explicit tensor shapes, plus `dim=` where a helper needs it | No named-axis system. |
 | Transformer-specific layer abstractions | `torchlens.mechinterp` (TransformerLens-style names through `resolve_alias`) and attention facets | Different vocabulary; no penzai layer classes. |
 | Save a modified computation | `trace.save_intervention(path, level="portable")` writes a `.tlspec/` recipe | TorchLens saves recipes, not rewritten model trees. |
@@ -45,8 +45,7 @@ trace = tl.trace(
     torch.tensor([[2.0, 3.0]]),
     capture=tl.options.CaptureOptions(replayable=True),
 )
-edited = trace.fork("zeroed").set(tl.module("proj"), torch.zeros(1, 2), confirm_mutation=True)
-edited.push()
+edited = trace.fork("zeroed").do(tl.module("proj"), torch.zeros(1, 2))
 RESULT = (
     trace[trace.output_layers[0]].out.tolist(),  # the original run is untouched
     edited[edited.output_layers[0]].out.tolist(),

@@ -89,8 +89,8 @@ portable selector after discovery.
 
 ## Forward Helpers
 
-Forward helpers return `Edit` objects that can be passed to `set`,
-`attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
+Forward helpers return `Edit` objects that can be passed to `set`, `do`
+(on the replay, rerun or set-only engine), or live capture `hooks=...`.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
@@ -106,7 +106,7 @@ Forward helpers return `Edit` objects that can be passed to `set`,
 | `tl.splice_module` | `splice_module(module, *, input_route="in", output_route="out", allow_shape_change=False)` | Executable in the same environment; not portable and not append-compatible. |
 
 The packaged SAE splice experiment, `torchlens.bridge.sae.splice(...)`
-(documented-unstable), composes `splice_module` with fork + push: it swaps a
+(documented-unstable), composes `splice_module` with fork + `do`: it swaps a
 duck-typed SAE's reconstruction (`encode`/`decode` pair; no SAE package
 required) back into the model at one site, replays downstream, and reports
 reconstruction fidelity plus output-level causal effect. The optional
@@ -224,17 +224,18 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | Method | Use |
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(site, edit)` | The one editing verb: stage the edit (a value sets, a hook or helper attaches as a sticky rule) and propagate it. Without `model=`/`inputs=` the replay engine propagates over the saved DAG without calling `model.forward`; with both, the rerun engine re-executes the model; `engine="set_only"` stages without propagating. |
+| `log.do({site_a: edit_a, site_b: edit_b})` | Apply several edits in one propagation. |
+| `log.do(site, edit, intervention=InterventionOptions(differentiable=True))` | Replay onto a new fork whose outputs stay differentiable and return it (replay engine only). |
+| `log.clear_edits(site)` | Detach the sticky edits staged at `site` (or by `handle=`); `do` returns the trace, not a handle. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
-| `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |
 | `log.save_intervention(path, level=...)` | Write a `.tlspec/` intervention recipe. |
 | `recipe.save(path, level=...)` | Write an authored `tl.Recipe` on its own (`kind: "recipe"`); `tl.load(path)` returns the Recipe. |
 
 There are two distinct intervention paths, and they do not mix implicitly:
 (1) edit a SAVED value and push the effect downstream on the captured DAG
-(`do()` on a resolved selection, `push_from`, direct writes), and (2)
+(`do()` on a site or a resolved selection, direct writes), and (2)
 intervene on a FRESH execution (`do(..., model=..., inputs=..., intervention=InterventionOptions(engine="rerun"))`
 or a new capture with `intervene=...`). A new-input `run(inputs=...)` on a
 trace carrying path-1 value-edits is a fresh execution — the edits do NOT
@@ -261,15 +262,15 @@ pass `intervention=tl.options.InterventionOptions(engine="replay")`. Leaf sites
 The two engines differ sharply in cost when you sweep many edits over one
 captured input. On the 144-head ablation sweep of a 12-layer, 12-head GPT-2
 configuration (585 captured ops; `benchmarks/head_sweep_engine_cost.py`), the
-push engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
+replay engine (`engine="replay"`) took about 2.1 minutes for all 144 heads
 (129 s and 125 s in two runs; median 0.60-0.62 s per head) and the rerun
 engine (`engine="rerun"`) about 34 minutes (2052 s and 2008 s; median
 13.5-13.7 s per head), on CPU with four torch threads (torch 2.13) on a shared
 32-core x86-64 Linux host. Both engines produce bitwise-identical ablated
 traces on all 144 heads, so the difference is cost only. A rerun re-executes
 every captured op, and from an intervention-ready source it also runs under
-the host RNG monitor, so its cost is the same for every site; push cost grows
-with the edited site's downstream cone. Prefer push for many edits on one
+the host RNG monitor, so its cost is the same for every site; replay cost grows
+with the edited site's downstream cone. Prefer replay for many edits on one
 captured input, and use rerun when the edit must see a fresh execution.
 A rerun from an intervention-ready source also snapshots the model state
 before its forward pass, as every intervention-ready capture does; each state
@@ -280,7 +281,7 @@ in-place weight edit, say) is cloned afresh. Every edit on either engine
 starts with `trace.fork()`, whose cost is fixed by the size of the trace, not
 by the edit: on this 585-op trace a fork takes about 0.08-0.09 s and makes
 about 419,000 Python calls (about 580,000 before its label tables were copied
-directly), which is the floor under the fastest push edits. A rerun that
+directly), which is the floor under the fastest replay edits. A rerun that
 refreshes its fork in place releases the capture it discarded before it
 returns, so a fork made right after a rerun costs the same as any other
 (about 420,000 calls; about 1.25 million before, when that capture's cleanup

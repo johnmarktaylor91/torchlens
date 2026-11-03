@@ -62,27 +62,32 @@ RESULT = [
 ]
 ```
 
-They stop agreeing when the edit changes what the forward does. A push recomputes the downstream
+They stop agreeing when the edit changes what the forward does. A replay recomputes the downstream
 ops exactly as they were recorded, so a branch the edit would have flipped, a dropout mask, or a
 module that reads its own state takes the recorded path, not the new one. Use the re-executing
 form whenever that can happen.
 
-## Push vs run
+## Replay vs run
 
-`trace.push()` walks the saved TorchLens graph and recomputes the affected downstream cone without
-calling `model.forward` again. It is fast and right for graph-stable interventions, where the saved
-op metadata is enough to recompute the children.
+`trace.do(site, edit)` stages the edit and, on the replay engine (no `model=`/`inputs=`), walks the
+saved TorchLens graph and recomputes the affected downstream cone without calling `model.forward`
+again. It is fast and right for graph-stable interventions, where the saved op metadata is enough to
+recompute the children. A mapping, `trace.do({site_a: edit_a, site_b: edit_b})`, applies several
+edits in one propagation; `intervention=tl.options.InterventionOptions(engine="set_only")` stages
+an edit without propagating it, and `trace.clear_edits(site)` detaches a sticky edit.
 
 `trace.run(model, x)` re-executes the model under the trace's active intervention spec. Use it when
 the intervention may affect Python control flow, module behavior, randomness, or anything else the
 saved graph cannot reconstruct. A module-targeted spec reruns through a guarded fast engine and
 falls back to the capture engine when a guard refuses; `trace.last_run` says which engine ran.
 
-The older `replay()` and `rerun()` spellings are removed; `push()` and `run()` replace them.
+The older `replay()` and `rerun()` spellings are removed; `do()` and `run()` replace them, and `do`
+is also the one verb that stages and propagates an edit (docs/reference/deprecations.md maps the
+removed spellings).
 
 ## Mutate In Place and Fork First
 
-`set`, `attach_hooks`, and `do` mutate the `Trace` they are called on. A root trace warns once
+`set` and `do` mutate the `Trace` they are called on. A root trace warns once
 before this kind of mutation. For branched experiments, fork first:
 
 ```python
@@ -98,8 +103,7 @@ clean = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 before = clean.find_sites(tl.module("2")).first().out.clone()
 
 candidate = clean.fork("candidate")
-candidate.attach_hooks(tl.func("relu"), tl.zero_ablate())
-candidate.push()
+candidate.do(tl.func("relu"), tl.zero_ablate())
 
 # The fork changed; the trace it came from did not.
 RESULT = torch.equal(clean.find_sites(tl.module("2")).first().out, before)
@@ -112,8 +116,8 @@ captured evidence where safe.
 
 Writing directly to a saved value, for example `trace[label].out = value`, bypasses the
 intervention recipe. TorchLens marks the owning trace `DIRECT_WRITE_DIRTY` and warns once. A later
-push overlays recipe state; it does not treat the direct write as a portable, auditable
-intervention. Use `set`, `attach_hooks` or `do` when the edit should be part of the recipe.
+replay overlays recipe state; it does not treat the direct write as a portable, auditable
+intervention. Use `set` or `do` when the edit should be part of the recipe.
 
 ## Subspace edits: the component along a basis
 
@@ -252,9 +256,7 @@ tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, x, capture=options).fork()
-for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-reloaded = fresh.push()
+reloaded = fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
 helper = spec.hook_specs[0].helper
 
 RESULT = [
@@ -299,7 +301,7 @@ h = base[site].out
 loreft = h + (h @ weight.T + bias - h @ rotation) @ rotation.T
 
 RESULT = [
-    torch.allclose(fork.push()[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
+    torch.allclose(fork[site].out, loreft, rtol=0.0, atol=1e-12),  # LoReFT, by hand
     fork.intervention_audit[-1]["edit"] == "set_affine_coordinates",
 ]
 ```
@@ -339,17 +341,16 @@ fork.do(
     tl.subspace(tl.units(site, last), rotation.T, origin="LoReFT trained elsewhere"),
     tl.intervention.set_affine_coordinates(weight, bias=bias),
 )
-edited = fork.push()
+edited = fork  # do() already replayed the edit downstream
 path = Path(tempfile.mkdtemp()) / "loreft.tlspec"
 tl.io.save_intervention(fork, path, level="portable")
 
 spec = tl.io.load_intervention_spec(path)
 fresh = tl.trace(model, tokens, capture=options).fork()
-for hook_spec in spec.hook_specs:
-    fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
+fresh.do(spec, intervention=tl.options.InterventionOptions(confirm_mutation=True))
 
 RESULT = [
-    torch.equal(fresh.push()[site].out, edited[site].out),  # the same edit, bit for bit
+    torch.equal(fresh[site].out, edited[site].out),  # the same edit, bit for bit
     torch.equal(edited[site].out[:, :-1], base[site].out[:, :-1]),  # other positions untouched
     spec.hook_specs[0].helper.portability == "builtin",
 ]

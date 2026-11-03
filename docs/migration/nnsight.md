@@ -4,11 +4,11 @@
 | --- | --- | --- |
 | Trace a model invocation | `tl.trace(model, x, save=tl.func("relu"))` | TorchLens stores a completed `Trace` after execution. |
 | Save a node value | Use `save=selector`, then access `log.find_sites(selector).first().out` | Equivalent for captured activations. |
-| Assign into a traced value | `log.fork().set(site, value).push()` (replay the recorded graph) or `.run(model, x)` (run the model again) | TorchLens recipes are explicit and auditable. |
+| Assign into a traced value | `log.fork().do(site, value)` (replay the recorded graph) or `log.fork().do(site, value, model=model, inputs=x)` (run the model again) | TorchLens recipes are explicit and auditable. |
 | Invoke with intervention in one block | `tl.trace(model, x, intervene=tl.when(site, helper_or_value), save=site)` | Capture-time intervention is the direct one-forward path. |
 | Scan modules by path | `tl.in_module("path")`, `tl.module("path")`, `log.find_sites(...)` | Similar workflow; labels differ. |
 | Remote execution (NDIF), vLLM serving, tensor parallelism, quantized models | No equivalent | TorchLens captures a local eager PyTorch forward; for those back ends NNsight is the tool. |
-| Cross-prompt patching | Capture separate logs and patch with `set` or `attach_hooks` | Equivalent for local PyTorch models. |
+| Cross-prompt patching | Capture separate logs and patch with `do(site, tl.patch_from(source))` | Equivalent for local PyTorch models. |
 | Repeated interventions from one base | `fork()` first, then mutate each branch | TorchLens emphasizes fork-first branch isolation. |
 | Save intervention for sharing | `log.save_intervention(path, level="portable")` | TorchLens has `.tlspec/` recipes. |
 | Intervene inside fused attention internals | Default fused SDPA load: by-head and by-pattern patching through `torchlens.mechinterp.lowered_counterfactual` (no eager reload); eager-attention load: the softmax and score ops are ordinary intervention sites | Head-level and pattern-level edits work on fused models; other edits inside the fused kernel need an eager recapture. |
