@@ -135,7 +135,7 @@ def test_applied_edit_equals_the_hand_loreft_formula(tmp_path: Path) -> None:
     artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
     fork = _ready().fork()
     fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
-    result = fork.push()[_SITE].out
+    result = fork[_SITE].out
     helper = _reloaded_helper(fork, tmp_path)
     kwargs = dict(helper.kwargs)
     rows = kwargs["basis"]
@@ -166,14 +166,13 @@ def test_one_position_edit_saves_portable_and_reapplies_bit_identically(tmp_path
     artifact = tl.bridge.pyreft.read(_write(tmp_path / "artifact"))
     fork = _ready().fork()
     fork.do(artifact.subspace(_SITE, positions=_positions()), artifact.edit)
-    staged = fork.push()
+    staged = fork
     path = tmp_path / "one_position.tlspec"
     tl.io.save_intervention(fork, path, level="portable")
     spec = tl.io.load_intervention_spec(path)
     fresh = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fresh.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    assert torch.equal(fresh.push()[_SITE].out, staged[_SITE].out)
+    fresh.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
+    assert torch.equal(fresh[_SITE].out, staged[_SITE].out)
 
 
 def _remedy_runs(error: Any, tmp_path: Path) -> None:

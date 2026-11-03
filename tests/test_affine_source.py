@@ -84,7 +84,7 @@ def _hand(rank: int, one_position: bool) -> torch.Tensor:
 def test_affine_source_equals_the_hand_loreft_formula(rank: int, one_position: bool) -> None:
     fork = _ready().fork()
     fork.do(_target(rank, one_position), _edit(rank))
-    result = fork.push()[_SITE].out
+    result = fork[_SITE].out
     assert torch.allclose(result, _hand(rank, one_position), rtol=0.0, atol=1e-12)
     if one_position:
         untouched = ~_one_position_mask()
@@ -93,16 +93,14 @@ def test_affine_source_equals_the_hand_loreft_formula(rank: int, one_position: b
 
 def _apply(spec: Any) -> Any:
     fork = _ready().fork()
-    for hook_spec in spec.hook_specs:
-        fork.attach_hooks(hook_spec.site_target, hook_spec.helper, confirm_mutation=True)
-    return fork.push()
+    return fork.do([(hook_spec.site_target, hook_spec.helper) for hook_spec in spec.hook_specs])
 
 
 @pytest.mark.parametrize("rank", [1, 4])
 def test_saved_affine_source_applies_bit_identically(tmp_path: Path, rank: int) -> None:
     fork = _ready().fork()
     fork.do(_target(rank, False), _edit(rank))
-    session = fork.push()
+    session = fork
     path = tmp_path / "loreft.tlspec"
     tl.io.save_intervention(fork, path, level="portable")
     loaded = tl.io.load_intervention_spec(path)
@@ -127,7 +125,7 @@ def test_bias_absent_default_fills_and_applies_without_a_bias() -> None:
     with torch.no_grad():
         h = _MODEL.lin1(_X)
         hand = h + (h @ weight.T - h @ rotation) @ rotation.T
-    assert torch.allclose(fork.push()[_SITE].out, hand, rtol=0.0, atol=1e-12)
+    assert torch.allclose(fork[_SITE].out, hand, rtol=0.0, atol=1e-12)
 
 
 def _coded(error: BaseException) -> Any:
@@ -151,7 +149,7 @@ def _remedy_runs(error: Any) -> None:
         tl.subspace(_SITE, rotation.T, origin=_ORIGIN),
         tl.intervention.set_affine_coordinates(weight, bias=bias),
     )
-    assert not torch.equal(fork.push()[_SITE].out, _ready()[_SITE].out)
+    assert not torch.equal(fork[_SITE].out, _ready()[_SITE].out)
 
 
 def test_outside_a_subspace_refuses_at_do_and_the_remedy_runs() -> None:
@@ -168,7 +166,6 @@ def test_outside_a_subspace_refuses_on_a_site_label() -> None:
     fork = _ready().fork()
     with pytest.raises(Exception) as excinfo:
         fork.do(_SITE, _edit(2))
-        fork.push()
     error = _coded(excinfo.value)
     assert error.fields["code"] == "affine_source_needs_subspace"
     assert _SITE in str(error)
