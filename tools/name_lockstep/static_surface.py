@@ -103,11 +103,14 @@ def _codes_in(tree: ast.Module) -> set[str]:
                 value = _string(node.value)
                 if value is not None:
                     found.add(value)
-        elif isinstance(node, ast.AnnAssign):
-            if isinstance(node.target, ast.Name) and node.target.id == "code":
-                value = _string(node.value)
-                if value is not None:
-                    found.add(value)
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and node.target.id == "code"
+        ):
+            value = _string(node.value)
+            if value is not None:
+                found.add(value)
     return {code for code in found if _CODE_NAME.match(code)}
 
 
@@ -116,9 +119,9 @@ def _code_defaults(args: ast.arguments) -> set[str]:
 
     positional = args.posonlyargs + args.args
     pairs: list[tuple[ast.arg, ast.expr | None]] = list(
-        zip(positional[len(positional) - len(args.defaults) :], args.defaults)
+        zip(positional[len(positional) - len(args.defaults) :], args.defaults, strict=True)
     )
-    pairs += list(zip(args.kwonlyargs, args.kw_defaults))
+    pairs += list(zip(args.kwonlyargs, args.kw_defaults, strict=True))
     found: set[str] = set()
     for arg, default in pairs:
         value = _string(default) if arg.arg == "code" else None
