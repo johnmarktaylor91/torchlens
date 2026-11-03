@@ -31,7 +31,7 @@ Draw it, then read one module's output and one operation's metadata:
 drawing = trace.draw(collapse="auto", file_format="svg")
 block = trace["layer3"]
 print(block.out.shape)
-relu = next(op for op in trace.ops if op.func_name == "relu")
+relu = next(op for op in trace.ops if op.func_name.startswith("relu"))
 print(relu.label, relu.func_name, tuple(relu.shape))
 ```
 
