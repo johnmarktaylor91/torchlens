@@ -2142,6 +2142,22 @@ torch: 2.13.0+cpu
 source: 5665683f750cad2d36405821a772c3ad233c7cc6 (clean)
 recorded: 2026-11-03T07:29:49.729316+00:00
 ---
+generator: tests/capture_oracle (plain_cnn__disk_exhaustive)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-135 merge of origin/main 2.37.1 onto C-128: main and the train each re-recorded these two goldens for the blob-id floor (b29cd1856, 03d66dd82). C-128 already failed them before the merge: replay templates on every eager capture (mq-c100) turns templates.args_template from unknown into its populated sub-fields; the regenerated record also moves the measured perf fields and the digest
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ebd2923b234458cc3dac250bd98e935afd5e9a69 (clean)
+recorded: 2026-11-03T20:52:34.527830+00:00
+---
+generator: tests/capture_oracle (plain_cnn__disk_predicate)
+flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
+reason: C-135 merge of origin/main 2.37.1 onto C-128: main and the train each re-recorded these two goldens for the blob-id floor (b29cd1856, 03d66dd82). C-128 already failed them before the merge: replay templates on every eager capture (mq-c100) turns templates.args_template from unknown into its populated sub-fields; the regenerated record also moves the measured perf fields and the digest
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: ebd2923b234458cc3dac250bd98e935afd5e9a69 (clean)
+recorded: 2026-11-03T20:52:38.960132+00:00
+---
 generator: tests/capture_oracle (conditional__exhaustive)
 flag: TORCHLENS_UPDATE_CAPTURE_ORACLE=1
 reason: replay templates on every eager capture (e43f52686 "feat(replay): record per-op argument templates on every eager capture so trace.do(site, edit) replays a default trace", on the train via C-102 57b82a635, settled by 9463fcbb0): templates.args_template (and kwargs_template for conditional) goes from unknown to its populated sub-fields; the re-recorded record also moves the measured wall-time and peak-memory medians and the digest. No other field differs (oracle-goldens og-basematrix-1 per-case diff; bisect og-bisect-1, og-bisect-2).
