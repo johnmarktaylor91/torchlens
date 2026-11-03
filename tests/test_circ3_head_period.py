@@ -57,7 +57,7 @@ def test_period_mask_is_the_positional_induction_score(repeated) -> None:
     token_equality = mi.head_scores(repeated, kind="induction")
     assert token_equality.eligible_rows != result.eligible_rows  # the repeat inside R adds rows
     assert result.kind == "induction"
-    appliance = repeated.using("mi").head_scores(kind=mi.FixedPeriodInduction(period=6))
+    appliance = repeated.using("mechinterp").head_scores(kind=mi.FixedPeriodInduction(period=6))
     assert appliance.scores == result.scores
 
 

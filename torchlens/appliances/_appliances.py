@@ -1,7 +1,7 @@
 """Appliance registry behind the ``trace.using(name)`` accessor door.
 
 An appliance is an analysis toolkit bound to one :class:`~torchlens.Trace`
-(for example ``trace.using("mi").head_scores(...)``). Appliances hang off this
+(for example ``trace.using("mechinterp").head_scores(...)``). Appliances hang off this
 single door instead of adding methods to ``Trace``; TorchLens's own appliances
 and outside packages register the same way, through
 :func:`register`. Spellings are DOCUMENTED-UNSTABLE.
@@ -60,7 +60,7 @@ def _validated_name(name: object) -> str:
         raise ArgumentTypeError(
             f"appliance name must be a str; received {type(name).__name__}",
             code="appliance_registration_invalid",
-            remedy="pass the appliance name as a string, e.g. trace.using('mi')",
+            remedy="pass the appliance name as a string, e.g. trace.using('mechinterp')",
             argument="name",
             received_type=type(name).__name__,
         )
@@ -225,8 +225,8 @@ def open_appliance(trace: Any, name: str) -> Any:
 
 
 register(
-    "mi",
+    "mechinterp",
     "torchlens.mechinterp._appliance:MechInterpAppliance",
-    summary="mechinterp kit: head_scores, qk_circuit, ov_circuit",
+    summary="mechinterp kit: head_scores, qk_circuit, ov_circuit, logit_lens",
     provider=TORCHLENS_PROVIDER,
 )

@@ -133,12 +133,12 @@ def test_using_unknown_name_refuses_with_registered_names(net, empty_registry) -
     model, x = net
     trace = tl.trace(model, x)
     with pytest.raises(errors.InvalidArgumentError) as empty_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert empty_info.value.fields["code"] == "appliance_unknown"
     assert "register(name, factory)" in empty_info.value.fields["remedy"]
     tl.appliances.register("outside", _OutsideAppliance)
     with pytest.raises(errors.InvalidArgumentError) as exc_info:
-        trace.using("mi")
+        trace.using("mechinterp")
     assert exc_info.value.fields["registered"] == ("outside",)
     remedy_call = re.search(r"trace\.using\('[^']*'\)", exc_info.value.fields["remedy"])
     assert remedy_call is not None
