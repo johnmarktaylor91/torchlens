@@ -308,8 +308,8 @@ def test_flash_attention_4_capture_and_validate() -> None:
     from torchlens._utils._torch_compat import HAS_FLASH_ATTENTION_4_INTERFACE
     from torchlens.validation import last_validation_failure
 
-    assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     model, input_ids = _fa4_llama()
+    assert HAS_FLASH_ATTENTION_4_INTERFACE is True
     with torch.no_grad():
         direct = model(input_ids=input_ids).logits
         with pytest.warns(tl.errors.TorchLensWarning, match="foreign-kernel boundary op"):
