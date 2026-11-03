@@ -15,6 +15,7 @@ from torchlens.intervention.types import Edit
 @pytest.mark.parametrize(
     ("edit", "expected"),
     [
+        (tl.clip_norm(1.0), "tl.clip_norm(1.0)"),
         (tl.zero_ablate(), "tl.zero_ablate()"),
     ],
 )
