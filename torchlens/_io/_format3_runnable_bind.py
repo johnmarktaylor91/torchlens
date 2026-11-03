@@ -367,7 +367,7 @@ def attach_runnable(
 
 
 def _family_disposition(trace: Any, present: bool) -> str:
-    """Return ``bind``, ``skip`` or ``error`` for one family (the r39 corr2_3 rule)."""
+    """Return ``bind``, ``skip`` or ``error`` for one family."""
 
     if trace._sparse_run_descriptor is not None:
         return "bind"

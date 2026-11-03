@@ -16,7 +16,7 @@ import hashlib
 import json
 import os
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from importlib import import_module
 from pathlib import Path
 from typing import Any, Final
@@ -484,7 +484,11 @@ def _rows_of(tables: Mapping[str, list[dict[str, Any]]], kind: str) -> int:
     return len(tables.get(kind, ()))
 
 
-def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Path) -> None:
+def _check_trace_containers(
+    tables: Mapping[str, list[dict[str, Any]]],
+    objects: Mapping[str, Sequence[Any]],
+    root: Path,
+) -> None:
     """Check the trace row's container columns against the decoded tables."""
 
     trace = tables["trace"][0]
@@ -496,7 +500,9 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
             raise _invariant_error(
                 root, f"trace.{field} is not a container", field=field, code=_CODE
             )
-        if len(container) != _rows_of(tables, kind):
+        if kind == "op":
+            _check_op_coverage(objects, trace, field, root)
+        elif len(container) != _rows_of(tables, kind):
             raise _invariant_error(
                 root,
                 f"trace.{field} holds {len(container)} entries but the {kind} table has "
@@ -504,6 +510,42 @@ def _check_trace_containers(tables: Mapping[str, list[dict[str, Any]]], root: Pa
                 field=field,
                 code=_CODE,
             )
+
+
+def _entries(container: Any) -> list[Any]:
+    """Return a container column's entries (a mapping's values, a sequence's items)."""
+
+    return list(container.values()) if isinstance(container, Mapping) else list(container)
+
+
+def _check_op_coverage(
+    objects: Mapping[str, Sequence[Any]], trace: Mapping[str, Any], field: str, root: Path
+) -> None:
+    """The op table is exactly the retained refs plus the orphan refs (keep_orphans saves).
+
+    Reference cells are settled to the op record objects before this runs (a dangling ref
+    refuses at settle time), so coverage is by identity: every op row must be reached once by
+    ``_layer_list`` or ``_orphan_logs``; a row neither references (a forged extra) or a repeated
+    entry refuses. The ``_layer_dict_main_keys`` values are the retained ops themselves.
+    """
+
+    entries = _entries(trace[field])
+    if field == "_layer_dict_main_keys":
+        rows = {id(op) for op in _entries(trace.get("_layer_list") or ())}
+    else:
+        rows = {id(op) for op in objects.get("op", ())}
+        orphans = trace.get("_orphan_logs")
+        entries += _entries(orphans) if isinstance(orphans, (list, tuple)) else []
+    covered = {id(op) for op in entries}
+    if len(covered) != len(entries) or covered != rows:
+        raise _invariant_error(
+            root,
+            f"trace.{field} covers {len(covered)} op rows but {len(rows)} are expected: "
+            f"{len(rows - covered)} unreferenced, {len(covered - rows)} foreign, "
+            f"{len(entries) - len(covered)} repeated",
+            field=field,
+            code=_CODE,
+        )
 
 
 def _check_orphans_disjoint(tables: Mapping[str, list[dict[str, Any]]], root: Path) -> None:
@@ -543,21 +585,85 @@ def _check_manifest_rows(
         )
 
 
+def _persistent_slot_names(descriptor: Mapping[str, Any]) -> set[str]:
+    """Return the state names of the descriptor's persistent tensor slots."""
+
+    slots = descriptor.get("tensor_slots")
+    names: set[str] = set()
+    for slot in slots if isinstance(slots, list) else ():
+        binding = slot.get("state_binding") if isinstance(slot, Mapping) else None
+        if not isinstance(binding, Mapping) or binding.get("persistent") is not True:
+            continue
+        name = binding.get("state_dict_name")
+        if isinstance(name, str):
+            names.add(name)
+    return names
+
+
+def check_runnable_slots(root: Path, manifest: Mapping[str, Any]) -> None:
+    """Cross-check the runnable descriptor's weight slots against the shipped state family.
+
+    With ``payload_layers.weights.present`` true, the names of ``runnable.state_dict_tensors``
+    must equal the descriptor's persistent slot names: a deleted family (a missing entry) or a
+    relabelled entry refuses typed ``manifest_schema_invalid``. Without the flag the family
+    must be absent. An artifact without a runnable object has nothing to check.
+    """
+
+    runnable = manifest.get("runnable")
+    if not isinstance(runnable, Mapping):
+        return
+    descriptor_path = root / f"{contract.RUNNABLE_DIR}/descriptor.json"
+    descriptor, _ = read_json_file(descriptor_path, code=_CORRUPT, what="runnable descriptor")
+    layers = descriptor.get("payload_layers") if isinstance(descriptor, Mapping) else None
+    weights = layers.get("weights") if isinstance(layers, Mapping) else None
+    present = weights.get("present") if isinstance(weights, Mapping) else None
+    if not isinstance(present, bool):
+        raise artifact_error(
+            f"Runnable descriptor {descriptor_path} must declare payload_layers.weights.present.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(descriptor_path),
+        )
+    shipped_value = runnable.get("state_dict_tensors")
+    shipped = set(shipped_value) if isinstance(shipped_value, Mapping) else set()
+    declared = _persistent_slot_names(descriptor)
+    if present and shipped != declared:
+        raise artifact_error(
+            f"Runnable weight entries disagree with tensor slots: {len(declared - shipped)} "
+            f"declared state name(s) missing, {len(shipped - declared)} shipped name(s) "
+            "undeclared.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(root),
+            missing=sorted(declared - shipped),
+            undeclared=sorted(shipped - declared),
+        )
+    if not present and shipped:
+        raise artifact_error(
+            "Runnable weight blobs are present while payload_layers.weights.present is false.",
+            code=_CODES["manifest_invalid"],
+            remedy="save the trace again at level='runnable'; the runnable component was altered",
+            file_path=str(root),
+        )
+
+
 def validate_records(
     tables: Mapping[str, list[dict[str, Any]]],
     *,
     manifest: Mapping[str, Any],
     root: Path,
+    objects: Mapping[str, Sequence[Any]],
 ) -> None:
     """Run every cross-record invariant over the decoded tables; refuse on the first failure.
 
     Runs after the reader resolved every reference (so dangling labels and
-    indices have already refused) and before any record's state hook runs.
+    indices have already refused) and before any record's state hook runs;
+    ``objects`` holds the settled record objects the reference cells now name.
     """
 
     _check_manifest_rows(tables, manifest, root)
     if "trace" in tables:
-        _check_trace_containers(tables, root)
+        _check_trace_containers(tables, objects, root)
         _check_orphans_disjoint(tables, root)
 
 

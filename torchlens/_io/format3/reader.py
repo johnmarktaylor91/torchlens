@@ -24,6 +24,7 @@ from ..._data_classes.field_policy import StorageKind
 from ..format_contract import BlobRef
 from ..state_contract import governed_artifact_load
 from . import contract
+from .container import verify_member_reference
 from .decode import (
     CELL_CODE,
     DEVICE_TEXT,
@@ -42,6 +43,7 @@ from .validate import (
     TLSPEC_KEY,
     artifact_error,
     check_record_anchors,
+    check_runnable_slots,
     check_version_window,
     integrity_error,
     is_int,
@@ -180,12 +182,13 @@ def _refuse_schema_errors(manifest_path: Path, errors: list[str]) -> None:
 
 
 def validate_artifact(path: str | Path) -> dict[str, Any]:
-    """Validate the manifest and every listed file (bytes, SHA-256, no unlisted file;
-    ``bundle_metadata_integrity_refused`` otherwise); return the manifest."""
+    """Validate the manifest, every listed file (bytes, SHA-256, no unlisted file;
+    ``bundle_metadata_integrity_refused`` otherwise) and the runnable slot cross-check."""
 
     root = Path(path)
     manifest = read_manifest(root)
     verify_listed_files(root, manifest)
+    check_runnable_slots(root, manifest)
     return manifest
 
 
@@ -193,11 +196,9 @@ def validate_artifact(path: str | Path) -> dict[str, Any]:
 
 
 class TensorRefSink:
-    """Collects the tensor cells a decode meets, as ``BlobRef`` markers plus lazy-layer entries.
-
-    The entries become the manifest's tensor index for the rehydrate path. A structure-only
-    cell decodes to ``None``; codec, chunk and ``t<k>`` key are checked; repeats must agree.
-    """
+    """Collects the tensor cells a decode meets (``BlobRef`` markers plus lazy-layer entries that
+    become the tensor index); a structure-only cell decodes to ``None``; codec, chunk and
+    ``t<k>`` key are checked; repeats must agree."""
 
     def __init__(self, *, codecs: tuple[str, ...], files: Mapping[str, Mapping[str, Any]]) -> None:
         self.entries: dict[str, dict[str, Any]] = {}
@@ -657,7 +658,7 @@ def read_tables(root: Path, manifest: Mapping[str, Any]) -> DecodedArtifact:
     artifact = DecodedArtifact(root, manifest)
     artifact.decode_tables()
     artifact.resolve_references()
-    validate_records(artifact.tables, manifest=manifest, root=root)
+    validate_records(artifact.tables, manifest=manifest, root=root, objects=artifact.objects)
     artifact.build_records()
     layer_list = artifact.tables["trace"][0].get("_layer_list")
     persisted_rows = len(layer_list) if isinstance(layer_list, list) else None
@@ -773,18 +774,16 @@ def _iter_members(
             raise integrity_error(
                 root / relpath, "member files must belong to a declared member", code=_CORRUPT
             )
-    for path, name in declared.items():
-        member_root = root / path
+    for member in metadata["members"]:
+        member_root = root / member["path"]
         symlink_guard(member_root, "bundle member")
-        yield name, member_root
+        verify_member_reference(member_root, member, required=True)
+        yield member["name"], member_root
 
 
 def load_intervention_recipe(path: str | Path) -> Any:
-    """Load the intervention recipe (``intervention.json``) of a trace or intervention artifact.
-
-    Built-in edits come back through the helper registry; a callable placeholder loads as an
-    audit-only edit every rerun door refuses (``run_intervention_spec_not_persisted``).
-    """
+    """Load the recipe (``intervention.json``) of a trace or intervention artifact: built-in edits
+    through the helper registry; a callable placeholder is an audit-only edit (rerun refuses)."""
 
     root = Path(path)
     manifest = validate_artifact(root)
