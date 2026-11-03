@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from .hooks import HookCallable, HookDirection
-    from .types import Edit
+    from .types import Edit, HookSpec
 
 #: Selector kind of the ``tl.grad(...)`` wrapper (SPEC section 0, THE_WRAPPER).
 _GRAD_SELECTOR_KIND = "grad"
@@ -340,42 +340,27 @@ def _validate_hook_signature(fn: Callable[..., Any], *, signal: HookDirection) -
         raise HookSignatureError("'ctx' must be a keyword-only parameter")
 
 
-def refuse_lost_facet_scatter(hook_spec: Any) -> Any:
-    """Return a sticky facet-slice hook's scatter wrapper, refusing when it is gone.
+def _stored_facet_scatter_hook(hook_spec: HookSpec) -> Any:
+    """Return a sticky facet-slice hook's stored scatter wrapper, or refuse.
 
     Facet-slice hooks fire through the scatter wrapper built at attach time
-    (``_facet_scatter_hook``), which closes over the resolved ``FacetSpec`` and
-    cannot be rebuilt from the raw helper: the generic path would silently apply
-    the helper to the whole home tensor (``tl.head(0, "q") + tl.zero_ablate()``
-    zeroing every head). Fail closed when the wrapper is absent (a spec loaded
-    from disk).
-
-    Parameters
-    ----------
-    hook_spec:
-        Stored sticky hook spec whose metadata carries ``facet_write``.
-
-    Returns
-    -------
-    Any
-        The stored live scatter wrapper.
-
-    Raises
-    ------
-    ReplayPreconditionError
-        When the stored hook is not the live facet scatter wrapper.
+    (``_facet_scatter_hook``), which closes over the resolved FacetSpec and
+    CANNOT be rebuilt from the raw helper: the generic normalization path
+    would silently apply the helper to the WHOLE home tensor
+    (``tl.head(0, "q")`` plus ``tl.zero_ablate()`` zeroing every head). Fail
+    closed when the wrapper is absent (for example a spec loaded from disk).
     """
 
     stored_hook = hook_spec.hook
-    if getattr(stored_hook, "_tl_facet_scatter", False):
-        return stored_hook
-    facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
-    home_label = hook_spec.metadata.get("facet_home_label", "<unknown>")
-    raise ReplayPreconditionError(
-        "Sticky facet-slice hook lost its scatter wrapper: the stored hook "
-        f"for facet {facet_name!r} on home {home_label!r} is not the live "
-        "facet scatter wrapper, so firing it would write the whole home "
-        "tensor instead of the selected facet slice. Facet hooks cannot be "
-        "rebuilt from a serialized helper; re-attach the facet intervention "
-        "on a live trace (e.g. trace.attach_hooks(tl.head(...), helper))."
-    )
+    if not getattr(stored_hook, "_tl_facet_scatter", False):
+        facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
+        home_label = hook_spec.metadata.get("facet_home_label", "<unknown>")
+        raise ReplayPreconditionError(
+            "Sticky facet-slice hook lost its scatter wrapper: the stored hook "
+            f"for facet {facet_name!r} on home {home_label!r} is not the live "
+            "facet scatter wrapper, so firing it would write the whole home "
+            "tensor instead of the selected facet slice. Facet hooks cannot be "
+            "rebuilt from a serialized helper; re-attach the facet intervention "
+            "on a live trace (e.g. trace.do(tl.head(...), helper, model=model, inputs=x))."
+        )
+    return stored_hook

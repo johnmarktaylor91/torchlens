@@ -72,7 +72,6 @@ def test_address_identity_ignores_object_identity() -> None:
     assert sampling_draws(fork_a)[-1].draw_indices == sampling_draws(fork_b)[-1].draw_indices
 
 
-@pytest.mark.smoke
 def test_content_digest_hashes_retained_payloads() -> None:
     """Same facts + same geometry + DIFFERENT values: one address, two content identities."""
 
@@ -93,7 +92,6 @@ def test_content_digest_hashes_retained_payloads() -> None:
     assert again.content_digest == content_one.content_digest
 
 
-@pytest.mark.smoke
 def test_content_digest_refuses_without_retained_payloads() -> None:
     """The content stamp must be earned: no retained payload anywhere refuses typed."""
 

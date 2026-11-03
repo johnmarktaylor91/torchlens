@@ -2,7 +2,7 @@
 
 Surgery memo section 3.1: ``tl.when(...)`` is promoted to return the
 immutable, public :class:`InterventionSpec` -- one multi-clause noun accepted
-unchanged by ``fork.do``, ``fork.attach_hooks``, ``intervene=``, Bundle
+unchanged by ``fork.do``, ``intervene=``, Bundle
 operations, generalized ``sweep``, save/load, and (F01) ``spec.bind(model)``.
 Lane options (``strict``, ``log_injections``, fast tiers) never enter the
 spec: a spec means the same experiment in every lane.
@@ -279,6 +279,12 @@ class Rule:
     (``tl.grad(site)`` edits the gradient, a bare site the activation,
     ``tl.grad(site) | site`` both) and is never a field. The removed
     ``direction`` field refuses typed (``intervention_direction_invalid``).
+
+    Examples
+    --------
+    >>> rule = tl.when(tl.func("relu"), tl.zero_ablate()).rules[0]
+    >>> isinstance(rule, tl.intervention.Rule), rule.signal, rule.edit.name
+    (True, 'forward', 'zero_ablate')
     """
 
     target: Any
@@ -440,6 +446,14 @@ class Recipe:
     than one matching rule refuses typed (``spec_rules_overlap``) -- implicit
     same-site composition is exactly the silent-drop class the spec exists to
     kill; ``tl.compose`` is the explicit spelling for chained values.
+
+    Examples
+    --------
+    >>> first = tl.when(tl.func("relu"), tl.scale(0.5))
+    >>> second = tl.when(tl.module("2"), tl.scale(2.0))
+    >>> both = first & second
+    >>> len(both.rules), both.rules == first.rules + second.rules
+    (2, True)
     """
 
     rules: tuple[Rule, ...] = ()
@@ -658,6 +672,13 @@ def when(condition: Callable[[Any], bool], action: Any) -> Recipe:
     -------
     InterventionSpec
         Immutable one-clause spec.
+
+    Examples
+    --------
+    >>> spec = tl.when(tl.func("relu"), tl.zero_ablate())
+    >>> edited = tl.trace(model, x, intervene=spec)
+    >>> isinstance(spec, tl.Recipe), len(spec.rules), edited["relu_1_2"].is_edited
+    (True, 1, True)
     """
 
     return Recipe(rules=(Rule(condition, action),))

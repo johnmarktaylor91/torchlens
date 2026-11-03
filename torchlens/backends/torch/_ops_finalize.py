@@ -37,6 +37,7 @@ from ...recording.types import (
     CaptureSpec,
     RecordContext,
 )
+from ._aten_capture import _note_aten_owner_verdict
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -270,8 +271,7 @@ def _make_layer_log_entry(
             call_ref_box=call_ref_box,
         ),
     )
-    if predicate_ctx is not None and not save_this_activation:
-        _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
+    _settle_lookback_and_aten_values(self, predicate_ctx, save_this_activation, fields_dict, t)
     _record_nonfinite_if_requested(self, t, new_entry)
     # Echo narrator slot (snoop D1): exactly once per committed op, after the
     # commit and the nonfinite recording, BEFORE the raise_on_nan settlement
@@ -280,6 +280,40 @@ def _make_layer_log_entry(
     _raise_if_nonfinite_requested(self, t, new_entry)
 
     return new_entry
+
+
+def _settle_lookback_and_aten_values(
+    self: "Trace",
+    predicate_ctx: Any,
+    save_this_activation: bool,
+    fields_dict: dict[str, Any],
+    t: torch.Tensor,
+) -> None:
+    """Park an unsaved op as a lookback candidate, then settle its ATen values.
+
+    Args:
+        self: Trace under capture.
+        predicate_ctx: The op's save-predicate context, or ``None`` without a predicate.
+        save_this_activation: Whether the op's output was saved at commit time.
+        fields_dict: The committed op's field values.
+        t: The op's output tensor.
+    """
+
+    deferred = False
+    if predicate_ctx is not None and not save_this_activation:
+        deferred = _retain_lookback_candidate(self, predicate_ctx, fields_dict, t)
+    if self._options_aten_ops == "values":
+        # The ATen values recorded beneath this call follow its save verdict:
+        # kept with a saved output, parked while a lookback candidate may still
+        # be saved retroactively, freed at the next recorded call otherwise.
+
+        _note_aten_owner_verdict(
+            self,
+            fields_dict.get("func_call_id"),
+            "keep"
+            if fields_dict.get("has_saved_activation")
+            else ("deferred" if deferred else "drop"),
+        )
 
 
 def _record_nonfinite_if_requested(self: Any, tensor: torch.Tensor, entry: Any) -> None:

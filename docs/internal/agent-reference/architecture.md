@@ -286,7 +286,8 @@ Key entry points:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
-  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, served by
+  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
+  keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
   from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.
@@ -317,7 +318,7 @@ Key entry points:
 - Visualization encoding channel (UNSTABLE naming, keyword-only): `Trace.draw(color_by=...)`
   fills op nodes from a sequential ramp (field name / scalar builtin / callable), dot-layout-only
   (AUTO forces dot; explicit rank refuses `encoding_requires_dot_layout`), legend-disclosed via
-  the tri-state `show_legend` (`None`=AUTO channel-only legend, `True`/`False` historical; explicit
+  the tri-state `show_legend` (`None`=AUTO channel-only legend, plus the key on a `module=` focus; `True`/`False` historical; explicit
   `False` honored). Rolled multi-pass field sources resolve through the name-keyed allowlist in
   `torchlens/_visualization/_encoding.py`; varying/first-pass-only sources stay unencoded with a
   legend note (honest-visuals tripwire), and unclassified sources refuse `encoding_source_invalid`.
@@ -346,15 +347,17 @@ Key entry points:
   `None` preserves defaults (`"none"` has no run folding; `"auto"`/`"max"` use band-pressure
   folding), `True` folds eligible repeated runs even with `collapse="none"`, and `False` disables
   run folding. `collapse="max"` may emit segment boxes; `(xN)`, ellipsis, and segment labels must
-  `Trace.collapse_plan(mode=...)` returns the diagnostic
-  plan, and `Trace.collapse_schedule()` returns the float schedule metadata. Smart-collapse
+  stay honest about hidden calls or ranges. A forward drawing's `Drawing.collapse_plan` returns
+  the diagnostic plan it rendered from (mode = the draw's `collapse=`, context = the render
+  request the draw resolved), and `Drawing.collapse_schedule` returns the float schedule
+  metadata under that context. Smart-collapse
   admission (F11, memo D5) gates on U -- the rendered universe of the full plan -- tiered by
   a measured (U, W) work estimator, with `COLLAPSE_OPTIMIZER_MAX_OPS` (2000,
   `torchlens._visualization.collapse_optimizer`) as the defensive constant: over-budget
   requests DEGRADE to a deterministic compact fallback plan (coded
   `collapse_budget_fallback`, `planner="linear_fallback"`), never an uncollapsed wall;
   only pathological inputs (raw ops above 20x the constant) still decline outright
-  (`collapse_pathological_skip`; `collapse_plan()` refuses `collapse_plan_unavailable`;
+  (`collapse_pathological_skip`; `Drawing.collapse_plan` refuses `collapse_plan_unavailable`;
   the schedule degrades to one full-graph step). Context reductions (`module=` focus,
   `depth=`, rolled mode) genuinely re-admit the quality planner.
 

@@ -1,6 +1,6 @@
 """Trace edit functions reached from the records through ``_data_classes._doors.intervention``.
 
-The ``do``, ``set``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies of ``Trace``
+The ``do``, ``remove``, ``clear_edits`` and ``save_intervention`` bodies of ``Trace``
 live here as functions taking the trace first; the record keeps one thin method per verb.
 Selection-kind ``do`` bodies: ``_trace_selection_edits``; sticky hook attachment:
 ``_trace_hooks``; spec state and history records: ``_data_classes._trace_intervention_records``.
@@ -9,7 +9,6 @@ Selection-kind ``do`` bodies: ``_trace_selection_edits``; sticky hook attachment
 from __future__ import annotations
 
 import copy
-import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,8 +33,9 @@ from .._data_classes._trace_intervention_records import (
 )
 from .._errors import InvalidArgumentError
 from ..options import InterventionOptions, ReplayOptions, merge_intervention_options
+from ._do_target_doors import apply_region_target_do, lift_trace_slice
 from ._edit_guards import select_do_engine, warn_if_root_mutation
-from ._live_hook_plan import retire_removed_from_live_plan, sticky_handle_ids
+from ._live_hook_plan import retire_live_hook_handles, sticky_handle_ids
 from ._trace_selection_edits import (
     apply_selection_batch_do,
     apply_selection_do,
@@ -150,32 +150,12 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
     site: Any,
     value: Any,
     *,
-    direction: str = "forward",
     strict: bool = False,
     confirm_mutation: bool = False,
 ) -> Trace:
-    """Set a site out recipe without propagating it. (the ``Trace.set`` body)."""
+    """Stage a site out recipe without propagating it (the ``engine="set_only"`` body of ``Trace.do``)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-    if direction not in {"forward", "backward", "both"}:
-        raise InvalidArgumentError(
-            "set(..., direction=...) must be 'forward', 'backward', or 'both'; "
-            f"received {direction!r}",
-            code="intervention_direction_invalid",
-            remedy="pass direction='forward', 'backward', or 'both'",
-            argument="direction",
-        )
-    if direction in {"backward", "both"}:
-        # Gradients are addressed as sites now; ``set`` (removed by wave D)
-        # keeps only its activation path rather than a second gradient door.
-        raise InvalidArgumentError(
-            f"set(..., direction={direction!r}) no longer edits gradients: a gradient "
-            "is addressed as a site, tl.grad(site)",
-            code="intervention_direction_invalid",
-            remedy="trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn), or "
-            "trace.attach_hooks(tl.grad(site), edit) then trace.backward(loss)",
-            argument="direction",
-        )
     if is_facet_target(site):
 
         def _facet_replacement_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
@@ -199,7 +179,7 @@ def set_site(  # noqa: PLR0913 - trace stands in for self on the moved method
                 return cast(torch.Tensor, value(out))
             return cast(torch.Tensor, value)
 
-        trace.attach_hooks(
+        trace._attach_hooks(
             site,
             _facet_replacement_hook,
             strict=strict,
@@ -252,7 +232,7 @@ def clear_edits(
     strict: bool = False,
     confirm_mutation: bool = False,
 ) -> Trace:
-    """Detach sticky hooks by site or handle, at once (the ``Trace.clear_edits`` body)."""
+    """Detach sticky hooks by site or handle. (the ``Trace.clear_edits`` body)."""
 
     warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
     if site is None and handle is None:
@@ -265,8 +245,15 @@ def clear_edits(
         validate_intervention_site(trace, site, strict=strict)
         target_spec = target_spec_from_site(trace, site, strict=strict)
 
+    # ``handle`` is one handle id or the tuple of ids ``do`` staged (``_attach_hooks``).
     handle_values = (
-        tuple(getattr(handle, "handle_ids", (str(handle),))) if handle is not None else (None,)
+        (
+            tuple(str(value) for value in handle)
+            if isinstance(handle, (tuple, list))
+            else (str(handle),)
+        )
+        if handle is not None
+        else (None,)
     )
     spec = ensure_intervention_spec(trace)
     handles_before = sticky_handle_ids(spec)
@@ -277,7 +264,8 @@ def clear_edits(
         raise SpecMutationError("clear_edits did not match any sticky hooks.")
     if removed > 0:
         mark_intervention_spec_mutated(trace)
-        retire_removed_from_live_plan(handles_before, spec)
+        # Removal takes effect at once, in a rerun or backward pass in progress.
+        retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
     record_operation(
         trace,
         "detach_hooks",
@@ -582,32 +570,23 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
                 "(site, edit) call shape without a spec",
                 argument="value_or_hook",
             )
-        handle = trace.attach_hooks(
+        return "attach_hooks", trace._attach_hooks(
             hooks_or_site,
             strict=strict,
             confirm_mutation=confirm_mutation,
         )
-        return "attach_hooks", tuple(handle.handle_ids)
 
-    # A RegionTarget (F01) is the region-as-a-unit door: the replay lowering
-    # substitutes the region's derived exit values without replaying the
-    # interior. Distinct from the TraceSlice lift below, which keeps its shipped
-    # member-site family semantics. sys.modules gate keeps do() free of the regions import.
-    regions_module = sys.modules.get("torchlens.intervention.regions")
-    if regions_module is not None and isinstance(hooks_or_site, regions_module.RegionTarget):
-        warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
-        return (
-            regions_module.apply_region_do(
-                trace, hooks_or_site, value_or_hook, engine=engine, strict=strict
-            ),
-            (),
-        )
-    # A TraceSlice targets its member family: lift it to the whole-site
-    # QUERY (re-resolved on THIS trace by site name, so a slice built on the
-    # source log addresses the same sites on a fork). sys.modules gate keeps do() slice-free.
-    slice_module = sys.modules.get("torchlens._trace_slice")
-    if slice_module is not None and isinstance(hooks_or_site, slice_module.TraceSlice):
-        hooks_or_site = hooks_or_site.__selection__()
+    region_result = apply_region_target_do(
+        trace,
+        hooks_or_site,
+        value_or_hook,
+        engine=engine,
+        strict=strict,
+        confirm_mutation=confirm_mutation,
+    )
+    if region_result is not None:
+        return region_result
+    hooks_or_site = lift_trace_slice(hooks_or_site)
     if is_selection_batch(hooks_or_site):
         warn_if_root_mutation(trace, confirm_mutation=confirm_mutation)
         if value_or_hook is not None:
@@ -629,7 +608,10 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             engine=engine,
             strict=strict,
         )
-    if value_or_hook is not None and (engine == "set_only" or not callable(value_or_hook)):
+    # A value (tensor) is set; a callable is a hook. ``engine="set_only"`` only
+    # decides whether the staged edit propagates now, so a hook stays a sticky
+    # hook under it (the staging door that replaced the removed attach_hooks).
+    if value_or_hook is not None and not callable(value_or_hook):
         set_site(
             trace,
             hooks_or_site,
@@ -638,13 +620,12 @@ def apply_do_mutation(  # noqa: PLR0913 - trace stands in for self on the moved 
             confirm_mutation=confirm_mutation,
         )
         return "set", ()
-    handle = trace.attach_hooks(
+    return "attach_hooks", trace._attach_hooks(
         hooks_or_site,
         value_or_hook,
         strict=strict,
         confirm_mutation=confirm_mutation,
     )
-    return "attach_hooks", tuple(handle.handle_ids)
 
 
 def validate_supplied_model_matches_capture(trace: Trace, model: nn.Module) -> None:
@@ -752,7 +733,7 @@ def validate_intervention_site(trace: Trace, site: Any, *, strict: bool) -> None
         return
     # A staged edit runs as a live hook on the rerun, so a selector kind that can
     # never be a live hook site (tl.model_input) refuses by its condition, as
-    # attach_hooks does, instead of reporting "matched 0 sites".
+    # the do() attach path does, instead of reporting "matched 0 sites".
     if isinstance(site, BaseSelector):
         _validate_live_site_target(site, allow_replay_only=True)
     max_fanout = max(1, len(trace._layer_list))

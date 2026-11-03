@@ -18,6 +18,13 @@ class Extractor:
         PyTorch model to execute.
     layers:
         Layer names accepted by ``torchlens.extract``.
+
+    Examples
+    --------
+    >>> extractor = Extractor(model, {"stem": "0", "head": "2"})
+    >>> features = extractor(x)
+    >>> sorted((name, tuple(out.shape)) for name, out in features.items())
+    [('head', (1, 2, 8, 8)), ('stem', (1, 4, 8, 8))]
     """
 
     def __init__(self, model: nn.Module, layers: Iterable[str] | Mapping[str, str]) -> None:

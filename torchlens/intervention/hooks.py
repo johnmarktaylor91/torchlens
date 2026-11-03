@@ -33,11 +33,11 @@ from ._hooks_support import (
     _needs_tensor_backward_adapter,
     _selector_call_index,
     _snapshot_layer_log,
+    _stored_facet_scatter_hook,
     _targets_accumulate_grad,
     _validate_hook_signature,
     gradient_inner,
     make_live_site_proxy,
-    refuse_lost_facet_scatter,
 )
 from .errors import (
     HelperMountError,
@@ -104,6 +104,16 @@ class HookContext:
         Frozen positional tensor arguments at the hook site.
     kwargs:
         Mapping proxy of tensor keyword arguments at the hook site.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> def hook(out, *, ctx):
+    ...     seen.append((isinstance(ctx, HookContext), ctx.signal))
+    ...     return out
+    >>> _ = tl.trace(model, x, intervene=tl.when(tl.func("relu"), hook))
+    >>> seen
+    [(True, 'forward')]
     """
 
     name: str
@@ -120,15 +130,16 @@ class HookContext:
 
 @dataclass(frozen=True, slots=True)
 class NormalizedHookEntry:
-    """Uniform representation of one requested hook attachment."""
+    """Uniform representation of one requested hook attachment.
+
+    ``handle`` is the sticky spec's handle id; removal through it retires the
+    entry from a live plan mid-run (``_live_hook_plan``).
+    """
 
     site_target: Any
     normalized_callable: HookCallable
     helper_spec: Edit | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
-    #: The sticky spec's removable handle id when the entry came from a recipe hook
-    #: attached through ``attach_hooks``; a removal through that handle mid-run
-    #: retires the entry from the live plan by this id.
     handle: str | None = None
 
     @property
@@ -1094,12 +1105,7 @@ def _normalize_sticky_hook_specs(
     entries: list[NormalizedHookEntry] = []
     for hook_spec in hook_specs:
         if hook_spec.metadata.get("facet_write"):
-            # Facet-slice hooks fire through the scatter wrapper built at attach time
-            # (_facet_scatter_hook), which closes over the resolved FacetSpec and CANNOT be
-            # rebuilt from the raw helper: the generic path below would silently apply the
-            # helper to the WHOLE home tensor (tl.head(0, "q") + tl.zero_ablate() zeroing
-            # every head). Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
-            stored_hook = refuse_lost_facet_scatter(hook_spec)
+            stored_hook = _stored_facet_scatter_hook(hook_spec)
             entries.append(
                 NormalizedHookEntry(
                     site_target=hook_spec.site_target,
@@ -1167,7 +1173,7 @@ def _refuse_legacy_backward_hook_spec(hook_spec: HookSpec) -> None:
         f"{hook_spec.metadata.get('direction')!r} keyword; the site now decides the pass, "
         "and this site is an activation. Nothing was attached.",
         code="edit_signal_mismatch",
-        remedy="re-attach the edit on the gradient address: trace.attach_hooks(tl.grad(site), edit)",
+        remedy="re-attach the edit on the gradient address: trace.do(tl.grad(site), edit, model=model, inputs=x, loss=fn)",
         argument="hooks_or_site",
         site=repr(site),
     )
@@ -1354,7 +1360,7 @@ def _live_backward_context_matches(
         return any(isinstance(value, torch.Tensor) for value in values or ())
     if isinstance(selector, BackwardPassSelector):
         trace = getattr(grad_fn_handle, "trace", None)
-        return getattr(trace, "_active_backward_pass_index", None) == selector.pass_index
+        return getattr(trace, "_active_backward_pass_number", None) == selector.pass_index
     return True
 
 

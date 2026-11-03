@@ -10,7 +10,7 @@ import inspect
 from collections.abc import Callable, Collection
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import torch
 from torch import nn
@@ -75,6 +75,22 @@ def register_tensor_connection(parent: torch.Tensor, child: torch.Tensor) -> Non
         If no forward pass is being captured.
     ValueError
         If either tensor has not been tagged by TorchLens.
+
+    Examples
+    --------
+    >>> class Linked(nn.Module):
+    ...     def forward(self, a):
+    ...         h, y = a.relu(), a.sigmoid()
+    ...         register_tensor_connection(h, y)
+    ...         return y * 2
+    >>> trace = tl.trace(Linked(), x)
+    >>> "relu_1_1" in trace["sigmoid_1_2"].parents
+    True
+    >>> try:
+    ...     register_tensor_connection(x, x)
+    ... except tl.errors.TorchLensError as err:
+    ...     print(type(err).__name__)
+    CaptureNotActiveError
     """
 
     trace = _state._active_trace
@@ -195,7 +211,7 @@ def _run_model_and_save_specified_outs(
     structure_only: bool = False,
     log_injections: bool = False,
     measure_host_peak_memory: bool = False,
-    aten_ops: bool = False,
+    aten_ops: bool | Literal["values"] = False,
     transform: Callable[[Any], Any] | None = None,
     raw_input: Any | None = None,
     save_raw_input: str | bool = "small",
@@ -303,7 +319,7 @@ def _run_model_and_save_specified_outs(
         capture_container_structure: If True, persist input and output container
             structure without enabling intervention replay metadata.
         hooks: Optional live forward post-hook plan. Accepts the same shapes as
-            ``Trace.attach_hooks`` and executes during this capture when supplied.
+            ``Trace.do`` and executes during this capture when supplied.
         intervention_spec: Active intervention spec to expose in runtime context.
         normalized_hook_plan: Optional pre-normalized hook entries for internal engines.
             When ``intervention_spec`` is also supplied they must be its normalization:
@@ -340,7 +356,8 @@ def _run_model_and_save_specified_outs(
             knob; never changes control flow).
         log_injections: Record intervention-hook torch calls as injected-op records.
         measure_host_peak_memory: Measure CPU peaks (resets the process ``VmHWM``).
-        aten_ops: Record the ATen operations each logged torch call dispatched to.
+        aten_ops: Record the ATen operations each logged torch call dispatched to
+            (``"values"`` also keeps their output tensors).
         transform: Optional callable used to produce model-ready inputs from raw user input.
         raw_input: Original user input before ``transform`` was applied.
         save_raw_input: Portable save policy for the original raw input.
@@ -376,9 +393,26 @@ def _run_model_and_save_specified_outs(
     -------
         Fully-populated Trace.
     """
-    plan = {k: v for k, v in locals().items() if k not in _REQUEST_POSITIONALS}
+    return _run_keyword_capture(locals())
+
+
+def _run_keyword_capture(arguments: dict[str, Any]) -> Trace:
+    """Build the capture request from the keyword adapter's arguments and run it.
+
+    Args:
+        arguments: ``locals()`` of ``_run_model_and_save_specified_outs`` taken
+            before it binds any name of its own, so exactly its parameters.
+
+    Returns:
+        Fully-populated Trace.
+    """
+
+    plan = {k: v for k, v in arguments.items() if k not in _REQUEST_POSITIONALS}
     request = CaptureRequest(
-        model=model, input_args=input_args, input_kwargs=input_kwargs, plan=plan
+        model=arguments["model"],
+        input_args=arguments["input_args"],
+        input_kwargs=arguments["input_kwargs"],
+        plan=plan,
     )
     return run_capture(request).trace
 

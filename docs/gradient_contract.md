@@ -21,8 +21,8 @@ this one) and silent for training, so a caller who needs the gradient says so wi
 - A selection door edits only the selected elements, so the rest of the site keeps the graph:
   under `do(tl.units(...))` a cutting verb still lets the gradient through the unselected
   elements, and under `do(tl.subspace(...))` through the orthogonal complement.
-- The capture doors, `fork.do` (replay), `do(model=, inputs=)` (rerun), `attach_hooks` + `run` and
-  `spec.bind(model)` keep whatever the verb keeps. `push(replay=ReplayOptions(differentiable=True))`
+- The capture doors, `fork.do` (replay), `do(model=, inputs=)` (rerun), a hook staged with `do`
+  (`engine="set_only"`) + `run` and `spec.bind(model)` keep whatever the verb keeps. `push(replay=ReplayOptions(differentiable=True))`
   re-leafs the replayed values by design, so no gradient reaches the parameters upstream of the
   edit under any verb; the gradient stops at the replay frontier. To train parameters upstream of
   an edit, use a live door (`tl.when(site, edit).bind(model)(x)` or `tl.trace(model, x,
@@ -248,36 +248,36 @@ that does not raise also carries the `keep_grad_replay_frontier` warning, and th
 | do(model=, inputs=) (rerun) | `compose` | reaches | reaches |
 | do(model=, inputs=) (rerun) | `at_positions` | reaches | reaches |
 | do(model=, inputs=) (rerun) | `hook callable` | reaches | reaches |
-| attach_hooks + run | `zero_ablate` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `mean_ablate` | reaches | reaches |
-| attach_hooks + run | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `scale` | reaches | reaches |
-| attach_hooks + run | `clamp` | reaches | reaches |
-| attach_hooks + run | `add_noise` | reaches | reaches |
-| attach_hooks + run | `steer` | reaches | reaches |
-| attach_hooks + run | `add(scalar)` | reaches | reaches |
-| attach_hooks + run | `add(tensor)` | reaches | reaches |
-| attach_hooks + run | `replace_with` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `swap_with` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `project_onto` | reaches | reaches |
-| attach_hooks + run | `project_out` | reaches | reaches |
-| attach_hooks + run | `scramble_elements` | reaches | reaches |
-| attach_hooks + run | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `splice_module` | reaches | reaches |
-| attach_hooks + run | `patch_from` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `permute_batch` | reaches | reaches |
-| attach_hooks + run | `resample_rows_from` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `mean_ablate(dim=0)` | reaches | reaches |
-| attach_hooks + run | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
-| attach_hooks + run | `set_direction_mean` | reaches | reaches |
-| attach_hooks + run | `subspace_ablate` | reaches | reaches |
-| attach_hooks + run | `subspace_ablate(resample)` | reaches | reaches |
-| attach_hooks + run | `subspace_interchange` | reaches | reaches |
-| attach_hooks + run | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
-| attach_hooks + run | `compose` | reaches | reaches |
-| attach_hooks + run | `at_positions` | reaches | reaches |
-| attach_hooks + run | `hook callable` | reaches | reaches |
+| do(set_only) + run | `zero_ablate` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `mean_ablate` | reaches | reaches |
+| do(set_only) + run | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `scale` | reaches | reaches |
+| do(set_only) + run | `clamp` | reaches | reaches |
+| do(set_only) + run | `add_noise` | reaches | reaches |
+| do(set_only) + run | `steer` | reaches | reaches |
+| do(set_only) + run | `add(scalar)` | reaches | reaches |
+| do(set_only) + run | `add(tensor)` | reaches | reaches |
+| do(set_only) + run | `replace_with` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `swap_with` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `project_onto` | reaches | reaches |
+| do(set_only) + run | `project_out` | reaches | reaches |
+| do(set_only) + run | `scramble_elements` | reaches | reaches |
+| do(set_only) + run | `scramble_elements(source)` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `splice_module` | reaches | reaches |
+| do(set_only) + run | `patch_from` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `permute_batch` | reaches | reaches |
+| do(set_only) + run | `resample_rows_from` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `mean_ablate(population)` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `mean_ablate(dim=0)` | reaches | reaches |
+| do(set_only) + run | `mean_ablate(population, dim=(0, 1))` | cut | raises:edit_detached_from_graph |
+| do(set_only) + run | `set_direction_mean` | reaches | reaches |
+| do(set_only) + run | `subspace_ablate` | reaches | reaches |
+| do(set_only) + run | `subspace_ablate(resample)` | reaches | reaches |
+| do(set_only) + run | `subspace_interchange` | reaches | reaches |
+| do(set_only) + run | `set_affine_coordinates` | raises:affine_source_needs_subspace | raises:affine_source_needs_subspace |
+| do(set_only) + run | `compose` | reaches | reaches |
+| do(set_only) + run | `at_positions` | reaches | reaches |
+| do(set_only) + run | `hook callable` | reaches | reaches |
 | spec.bind(model) | `zero_ablate` | cut | raises:edit_detached_from_graph |
 | spec.bind(model) | `mean_ablate` | reaches | reaches |
 | spec.bind(model) | `mean_ablate(source)` | cut | raises:edit_detached_from_graph |

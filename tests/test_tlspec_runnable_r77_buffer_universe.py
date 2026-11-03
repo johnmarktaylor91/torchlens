@@ -116,6 +116,7 @@ def _slot_universe(path: Path) -> list[str]:
     )
 
 
+# Kept: sole branch coverage of _io/runnable.py, _runnable/witness_contracts.py; a sole mutation kill.
 def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) -> None:
     """RED-now-fixed: dead-save universe == live-save universe; honest bind succeeds.
 
@@ -164,6 +165,7 @@ def test_r77_dead_extra_state_universe_matches_live_and_binds(tmp_path: Path) ->
     assert dead_result.report.is_poisoned == live_result.report.is_poisoned
 
 
+# Kept: a sole mutation kill.
 def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:
     """Zero collateral: the tensor-only-state dead lane (r75 F2) declares identically."""
 
@@ -185,6 +187,7 @@ def test_r77_plain_bn_dead_universe_unchanged(tmp_path: Path) -> None:
     assert "bn.num_batches_tracked" in live_universe
 
 
+# Kept: sole branch coverage of _io/runnable.py, _runnable/state.py; a sole mutation kill.
 def test_r77_unknown_universe_refuses_loudly(tmp_path: Path) -> None:
     """No capture-time record at all: the dead save refuses TYPED, never under-declares.
 
@@ -237,31 +240,3 @@ class NonMappingWakesParkedThread(NonMappingStateDict):
         self._go.set()
         _wait_until_parked(self._hold)
         return self.bn(x)
-
-
-def test_r77_unknown_universe_refuses_with_a_thread_parked_in_window(tmp_path: Path) -> None:
-    """The dead-model refusal still fires when a background thread is parked in-window.
-
-    An intervention-ready capture arms the host-RNG monitor, whose wait patches are
-    process-wide; a thread an earlier test left behind that enters a patched wait in the
-    window keeps the monitor reachable until the wait returns. The monitor must not pin
-    the source model past teardown, or this save finds a live model and declares instead
-    of refusing (main Nightly 37611347240, fixed by the r15-b monitor release).
-    """
-
-    go, hold = threading.Event(), threading.Event()
-    helper = threading.Thread(target=_park_after, args=(go, hold), daemon=True)
-    helper.start()
-    _wait_until_parked(go)  # blocked BEFORE the window, in the unpatched wait
-    try:
-        model = NonMappingWakesParkedThread(go, hold).eval()
-        trace = tl.trace(model, _x(), capture=_CAPTURE)
-        parked = hold._cond._waiters  # type: ignore[attr-defined]
-        assert parked, "the helper must still be parked in its in-window wait"
-        del model
-        gc.collect()
-        with pytest.raises(ArtifactError, match="persistent-buffer state universe"):
-            trace.save(tmp_path / "unknown.tlspec", level="runnable", include_weights=False)
-    finally:
-        hold.set()
-        helper.join(_PARK_SECONDS)

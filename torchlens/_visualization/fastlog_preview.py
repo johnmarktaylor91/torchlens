@@ -341,10 +341,10 @@ def preview_fastlog(
         Graphviz DOT source.
     """
 
-    # TODO(fastlog-dagua): add native dagua support after the v1 Graphviz preview ships.
+    # Graphviz DOT only: the experimental dagua renderer emits no DOT and takes no overlays.
     if render_kwargs.get("vis_renderer") == "dagua":
         raise NotImplementedError(
-            "fastlog preview currently supports Graphviz only; dagua support is planned."
+            "fastlog preview renders Graphviz DOT only; vis_renderer='dagua' is not supported."
         )
     resolved_predicate = _select_predicate(predicate, keep_op)
     preview_nodes = _build_preview_nodes(trace, resolved_predicate)

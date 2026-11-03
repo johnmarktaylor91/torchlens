@@ -76,6 +76,16 @@ class BackwardPass:
         closed record, written when the trace is saved so a loaded trace
         keeps the counted answer; ``None`` on a live pass (read the census
         through ``flops_attribution``) and on artifacts saved without it.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> opts = tl.options.CaptureOptions(backward_ready=True)
+    >>> trace = tl.trace(net, torch.randn(2, 4), capture=opts)
+    >>> _ = trace.backward(trace[trace.output_layers[0]].out.sum())
+    >>> backward_pass = trace.autograd.backward_passes[0]
+    >>> type(backward_pass).__name__, backward_pass.pass_number
+    ('BackwardPass', 1)
     """
 
     _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {

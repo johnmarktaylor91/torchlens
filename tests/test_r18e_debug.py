@@ -146,8 +146,8 @@ def test_audit_multi_backward_gradient_is_skipped_not_run() -> None:
         nn.Linear(3, 3), torch.randn(2, 3), capture=tl.options.CaptureOptions(save_grads=True)
     )
     output = trace[trace.output_layers[0]].out
-    trace.log_backward(output.sum(), retain_graph=True)
-    trace.log_backward((output**2).sum())
+    trace.backward(output.sum(), retain_graph=True)
+    trace.backward((output**2).sum())
 
     audit = trace.audit()
     skipped = dict(audit.skipped)

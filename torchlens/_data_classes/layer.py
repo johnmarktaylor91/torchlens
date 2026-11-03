@@ -56,6 +56,7 @@ from .._quantities import Bytes, Duration, Flops, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
 from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
+from .._utils.facade import refuse_removed_member
 from . import _doors
 
 # LayerAccessor is re-exported (not used here) so every historical
@@ -302,6 +303,14 @@ class Layer(_SelectionOperand):
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
     reads from ``ops[0].out``).
+
+    Examples
+    --------
+    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> type(layer).__name__, layer.func_name
+    ('Layer', 'relu')
+    >>> tuple(layer.out.shape)
+    (1, 4, 8, 8)
     """
 
     if TYPE_CHECKING:
@@ -1476,6 +1485,16 @@ class Layer(_SelectionOperand):
                 pass
         if ops and len(ops) > 1 and name in _LAYER_DELEGATED_PASS_FIELDS:
             return self._single_pass_or_error(name)
+        refuse_removed_member(
+            type(self).__name__,
+            name,
+            {
+                "set": (
+                    "use layer.do(value, intervention=tl.options.InterventionOptions("
+                    "engine='set_only')) -- Layer.set was replaced by the set_only engine of do"
+                )
+            },
+        )
         raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
 
     # ********************************************
@@ -1588,75 +1607,6 @@ class Layer(_SelectionOperand):
             model=model,
             inputs=inputs,
             intervention=intervention,
-        )
-
-    def set(
-        self,
-        value: Any,
-        *,
-        strict: bool = False,
-        confirm_mutation: bool = False,
-    ) -> "Trace":
-        """Set this layer's out recipe through the owning Trace.
-
-        Parameters
-        ----------
-        value:
-            Static replacement value or one-shot callable.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Trace
-            Source Trace with a stale intervention recipe.
-        """
-
-        return self._source_trace_or_error().set(
-            self._intervention_site(),
-            value,
-            strict=strict,
-            confirm_mutation=confirm_mutation,
-        )
-
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this layer through the owning Trace.
-
-        Parameters
-        ----------
-        hook:
-            Hook or helper to attach to this layer.
-        *extra_hooks:
-            Additional hooks to compose on this layer in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Any
-            Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-        """
-
-        return self._source_trace_or_error().attach_hooks(
-            self._intervention_site(),
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def to_pandas(self) -> "pd.DataFrame":

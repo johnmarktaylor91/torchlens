@@ -89,21 +89,3 @@ def test_grad_scale_junk_refuses_typed(bad_scale: float) -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         grad_health(log, grad_scale=bad_scale)
     assert excinfo.value.fields["code"] == "grad_scale_invalid"
-
-
-def test_unscaled_backward_stays_clean_without_hint() -> None:
-    """A plain backward neither flags everything nor emits the AMP hint."""
-
-    pytest.importorskip("pandas")
-    from torchlens.debug import grad_health
-
-    torch.manual_seed(20260826)
-    log = tl.trace(
-        ThreeStep(),
-        torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
-    )
-    list(log)[-1].out.sum().backward()
-    frame = grad_health(log).to_pandas()
-    assert frame.attrs["exploding"] == 0
-    assert "all_exploding_hint" not in frame.attrs

@@ -99,7 +99,19 @@ def _mlflow_key(tag: str) -> str:
 
 
 class MLflowSink:
-    """Native MLflow receiver over an existing run (it never starts or ends one)."""
+    """Native MLflow receiver over an existing run (it never starts or ends one).
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> from torchlens.trackers import ScalarPoint
+    >>> client = SimpleNamespace(log_metric=lambda run_id, key, value, step: print(run_id, key, value, step), log_text=print, log_dict=print)
+    >>> sink = MLflowSink(client, run_id="run-1")
+    >>> sink.emit_scalar(ScalarPoint("gradients/norm/0.weight", 3, 0.5))
+    run-1 gradients/norm/0.weight 0.5 3
+    >>> sink.run_id
+    'run-1'
+    """
 
     def __init__(self, client: Any = None, *, run_id: str | None = None) -> None:
         """Wrap a run the user created.

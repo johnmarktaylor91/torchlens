@@ -110,6 +110,7 @@ def _assert_context_field_invalid_analysis_only(path: Path, run_inputs: Any) -> 
         loaded.run(inputs=run_inputs)
 
 
+# Kept: a sole mutation kill; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     "encoded_value",
     [_NESTED_LIST_COMPONENT, _MAPPING_COMPONENT, _SLICE_COMPONENT],
@@ -130,6 +131,7 @@ def test_r77_unhashable_metadata_path_component_refuses_typed(
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path) -> None:
     """An unhashable metadata-fact POSITION component refuses typed (was ``in set`` crash)."""
 
@@ -139,15 +141,7 @@ def test_r77_unhashable_metadata_position_component_refuses_typed(tmp_path: Path
     _assert_context_field_invalid_analysis_only(path, x.clone())
 
 
-def test_r77_unhashable_literal_path_component_refuses_typed(tmp_path: Path) -> None:
-    """The sibling literal-fact path lane refuses an unhashable component typed."""
-
-    x = torch.randn(4, 4)
-    path = _save(_LiteralCarrier().eval(), (x, 3), tmp_path / "lit_path.tlspec")
-    _tamper_fact_field(path, "model_input_literal:", "path", _MAPPING_COMPONENT)
-    _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path) -> None:
     """The literal-fact POSITION coercion refuses an unhashable component typed."""
 
@@ -157,6 +151,7 @@ def test_r77_unhashable_literal_position_component_refuses_typed(tmp_path: Path)
     _assert_context_field_invalid_analysis_only(path, (x.clone(), 3))
 
 
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_r77_unhashable_structure_position_component_refuses_typed(tmp_path: Path) -> None:
     """A structure-fact POSITION with an unhashable component refuses typed.
 

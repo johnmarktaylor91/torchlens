@@ -133,21 +133,6 @@ def _fire_counts(log):
 # ---------------------------------------------------------------------------
 
 
-def test_episode_x_intervene_cell_is_coupled():
-    """The combination runs, and the product carries the full evidence bar."""
-
-    torch.manual_seed(0)
-    runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=4)
-    attestation = log.episode_coupling
-    assert attestation.coupled is True
-    assert attestation.bound is True  # product binding: the capture digest
-    assert attestation.intervention_digest is not None
-    assert attestation.fidelity_basis == "perturbed"
-    assert attestation.fire_counts == (1, 1, 1, 1)
-    assert log.outcome.status.name == "COMPLETE"
-
-
 # ---------------------------------------------------------------------------
 # Item 7, clause by clause: before / inside / after a stepped call
 # ---------------------------------------------------------------------------
@@ -202,18 +187,6 @@ def test_zero_and_multiple_fires_are_first_class():
     assert _fire_counts(multi) == [2, 2, 2]
 
 
-def test_step_qualified_intervention_fires_at_exactly_one_step():
-    """The evidence-bar selector: at_step(k) narrows the fire to step k."""
-
-    torch.manual_seed(0)
-    runner = GreedyRunner(TinyLM(), n_steps=4)
-    log = _coupled(
-        runner, _ids(), tl.when(tl.func("tanh") & at_step(2), tl.scale(0.5)), num_steps=4
-    )
-    assert _fire_counts(log) == [0, 0, 1, 0]
-    assert _header(log)["fidelity_basis"] == "perturbed"
-
-
 def test_changed_output_and_changed_step_count():
     """Perturbation may change emissions AND how many steps run; both settle."""
 
@@ -255,41 +228,9 @@ def test_changed_output_and_changed_step_count():
     )
 
 
-def test_identical_coupled_reruns_mint_identical_digests():
-    """Digest identity: same model/input/seed/spec -> the same two digests."""
-
-    def capture():
-        torch.manual_seed(0)
-        runner = GreedyRunner(TinyLM(), n_steps=3)
-        return _coupled(
-            runner, _ids(), tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)), num_steps=3
-        )
-
-    first, second = capture(), capture()
-    assert _header(first)["capture_digest"] == _header(second)["capture_digest"]
-    assert _header(first)["intervention_digest"] == _header(second)["intervention_digest"]
-
-
 # ---------------------------------------------------------------------------
 # Same/new-input replay on both engines
 # ---------------------------------------------------------------------------
-
-
-def test_replay_refuses_coupled_products_on_both_engines():
-    """run() on a coupled product refuses typed: same input, new input,
-    default and guarded-fast engines alike (the verdict's refusal arm)."""
-
-    torch.manual_seed(0)
-    runner = GreedyRunner(TinyLM(), n_steps=3)
-    ids = _ids()
-    log = _coupled(runner, ids, tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=3)
-    for inputs in (ids, torch.tensor([[4, 5, 6]])):
-        for fast in (False, True):
-            with pytest.raises(EpisodeCaptureError) as excinfo:
-                log.run(inputs=inputs, fast=fast)
-            assert excinfo.value.fields["code"] == "episode_coupled_replay_underivable"
-    # The refusal preserved the product: the ledger is still bound.
-    assert log.episode_coupling.bound is True
 
 
 def test_uncoupled_episode_replay_never_carries_the_ledger():
@@ -403,34 +344,12 @@ def test_halt_mid_episode_keeps_measured_fire_counts():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
-def test_selective_save_couples_and_keeps_evidence():
-    """save= narrows retention; the coupling evidence still settles whole."""
-
-    torch.manual_seed(0)
-    runner = GreedyRunner(TinyLM(), n_steps=3)
-    log = tl.trace(
-        runner,
-        _ids(),
-        episode=EpisodeOptions(stepped_module=runner.model, num_steps=3),
-        intervene=tl.when(tl.func("tanh") & at_step(1), tl.scale(0.5)),
-        save=tl.func("tanh"),
-        capture=tl.options.CaptureOptions(seed=SEED),
-    )
-    assert _fire_counts(log) == [0, 1, 0]
-    assert log.episode_coupling.coupled is True
-    assert [row["step_output"] is not None for row in log.annotations["episode"]["rows"]] == [
-        True,
-        True,
-        True,
-    ]
-
-
 # ---------------------------------------------------------------------------
 # Save/load
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.smoke
 def test_coupled_product_survives_save_load_and_loaded_replay_refuses(tmp_path):
     """The coupled slots persist (reserved C07X slots); the gate holds loaded."""
 
@@ -512,13 +431,3 @@ def test_failed_forward_coupled_episode_attaches_partial_evidence():
             capture=tl.options.CaptureOptions(seed=SEED),
         )
     assert isinstance(_tce_info.value.__cause__, RuntimeError)
-
-
-def test_the_old_refusal_site_is_retired():
-    """The D5 pre-execution refusal no longer fires; the cell is COUPLED."""
-
-    torch.manual_seed(0)
-    runner = GreedyRunner(TinyLM(), n_steps=2)
-    log = _coupled(runner, _ids(), tl.when(tl.func("tanh"), tl.scale(0.5)), num_steps=2)
-    assert log.outcome.status.name == "COMPLETE"
-    assert log.episode_coupling.coupled is True

@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1180" height="282">
 <rect width="100%" height="100%" fill="#fbfbfb" stroke="#d0d0d0"/>
 <style>text { font: 14px monospace; fill: #202020; }</style>
-<text x="20" y="36">collapse_plan(mode=&#x27;auto&#x27;)</text>
+<text x="20" y="36">draw(collapse=&#x27;auto&#x27;).collapse_plan</text>
 <text x="20" y="54">CollapsePlan(total=13, module_box=5, raw_op=8)</text>
 <text x="20" y="72"></text>
-<text x="20" y="90">collapse_plan(mode=&#x27;max&#x27;)</text>
+<text x="20" y="90">draw(collapse=&#x27;max&#x27;).collapse_plan</text>
 <text x="20" y="108">CollapsePlan(total=11, module_box=2, raw_op=8, child_segment=1)</text>
 <text x="20" y="126"></text>
 <text x="20" y="144">t      target  visible  collapsed module addresses</text>

@@ -28,7 +28,15 @@ Severity = Literal["recoverable", "informational", "fatal"]
 
 
 class TorchLensInterventionError(InterventionError, RuntimeError):
-    """Base class for future TorchLens intervention errors."""
+    """Base class for future TorchLens intervention errors.
+
+    Examples
+    --------
+    >>> issubclass(TorchLensInterventionError, tl.errors.InterventionError)
+    True
+    >>> issubclass(TorchLensInterventionError, RuntimeError)
+    True
+    """
 
     severity: Severity = "recoverable"
 
@@ -61,23 +69,63 @@ class TorchLensInterventionError(InterventionError, RuntimeError):
 
 
 class InterventionReadyConflictError(ConfigurationError, ValueError):
-    """Raised when intervention-ready capture is requested with unsupported options."""
+    """Raised when intervention-ready capture is requested with unsupported options.
+
+    Examples
+    --------
+    >>> issubclass(InterventionReadyConflictError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(InterventionReadyConflictError, ValueError)
+    True
+    """
 
 
 class DirectActivationWriteWarning(InterventionWarning):
-    """User directly wrote a Op out field."""
+    """User directly wrote a Op out field.
+
+    Examples
+    --------
+    >>> issubclass(DirectActivationWriteWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(DirectActivationWriteWarning, UserWarning)
+    True
+    """
 
 
 class TraceMutationWarning(InterventionWarning):
-    """First root-log mutation; Trace mutators operate in place."""
+    """First root-log mutation; Trace mutators operate in place.
+
+    Examples
+    --------
+    >>> issubclass(TraceMutationWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(TraceMutationWarning, UserWarning)
+    True
+    """
 
 
 class DirectWriteIgnoredWarning(InterventionWarning):
-    """Warning for propagation engines that ignore direct out writes."""
+    """Warning for propagation engines that ignore direct out writes.
+
+    Examples
+    --------
+    >>> issubclass(DirectWriteIgnoredWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(DirectWriteIgnoredWarning, UserWarning)
+    True
+    """
 
 
 class InterventionAuditWarning(InterventionWarning):
-    """Warning for non-canonical intervention state in audit contexts."""
+    """Warning for non-canonical intervention state in audit contexts.
+
+    Examples
+    --------
+    >>> issubclass(InterventionAuditWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(InterventionAuditWarning, UserWarning)
+    True
+    """
 
 
 class PendingValueEditsWarning(InterventionWarning):
@@ -112,6 +160,13 @@ class ReplayPreconditionError(TorchLensInterventionError):
     structured ``fields`` (``code``, ``remedy`` and the subject), so callers
     branch on ``exc.fields["code"]`` without parsing message text. Bare
     precondition failures keep the prose-only form.
+
+    Examples
+    --------
+    >>> issubclass(ReplayPreconditionError, tl.errors.TorchLensInterventionError)
+    True
+    >>> issubclass(ReplayPreconditionError, RuntimeError)
+    True
     """
 
     def __init__(self, *args: object, **fields: object) -> None:
@@ -144,11 +199,26 @@ class UntrustedCallableError(ReplayPreconditionError):
     ``allowed_custom_callable_modules`` allowlist without parsing message
     text (R65). The prose-plus-fields constructor is inherited from
     :class:`ReplayPreconditionError`.
+
+    Examples
+    --------
+    >>> issubclass(UntrustedCallableError, tl.errors.ReplayPreconditionError)
+    True
+    >>> issubclass(UntrustedCallableError, RuntimeError)
+    True
     """
 
 
 class OpaqueCallableError(ConfigurationError, ValueError):
-    """Raised when an executable intervention save would require opaque code."""
+    """Raised when an executable intervention save would require opaque code.
+
+    Examples
+    --------
+    >>> issubclass(OpaqueCallableError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(OpaqueCallableError, ValueError)
+    True
+    """
 
 
 SpecPortabilityError = OpaqueCallableError
@@ -156,7 +226,15 @@ SpecPortabilityError = OpaqueCallableError
 
 
 class DirectWriteSaveError(ConfigurationError, ValueError):
-    """Raised when executable spec save sees direct out writes."""
+    """Raised when executable spec save sees direct out writes.
+
+    Examples
+    --------
+    >>> issubclass(DirectWriteSaveError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(DirectWriteSaveError, ValueError)
+    True
+    """
 
 
 class NonExecutableSpecError(ConfigurationError, RuntimeError):
@@ -167,6 +245,13 @@ class NonExecutableSpecError(ConfigurationError, RuntimeError):
     live callable. Attempting to fire such a helper raises this loud error at
     use time rather than silently loading a corrupted argument and crashing
     several frames downstream with a misleading message.
+
+    Examples
+    --------
+    >>> issubclass(NonExecutableSpecError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NonExecutableSpecError, RuntimeError)
+    True
     """
 
     severity = "fatal"
@@ -179,41 +264,104 @@ class UnserializableDictKeyError(ConfigurationError, TypeError):
     (mirroring ``annotate``'s reject-don't-coerce philosophy). A key that is not
     ``str``/``int``/``float``/``bool``/``None`` or a tuple of such values raises
     this rather than being lossily coerced to its ``str()`` form.
+
+    Examples
+    --------
+    >>> issubclass(UnserializableDictKeyError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(UnserializableDictKeyError, TypeError)
+    True
     """
 
 
 class GraphShapeMismatchError(ValidationError, ValueError):
-    """Raised when a saved spec's graph shape is incompatible with a target log."""
+    """Raised when a saved spec's graph shape is incompatible with a target log.
+
+    Examples
+    --------
+    >>> issubclass(GraphShapeMismatchError, tl.errors.ValidationError)
+    True
+    >>> issubclass(GraphShapeMismatchError, ValueError)
+    True
+    """
 
     severity = "fatal"
 
 
 class ControlFlowDivergenceWarning(InterventionWarning):
-    """Warning for replay-detected control-flow or saved-edge divergence."""
+    """Warning for replay-detected control-flow or saved-edge divergence.
+
+    Examples
+    --------
+    >>> issubclass(ControlFlowDivergenceWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(ControlFlowDivergenceWarning, UserWarning)
+    True
+    """
 
 
 class ControlFlowDivergenceError(ValidationError, RuntimeError):
-    """Raised when strict replay escalates a control-flow divergence."""
+    """Raised when strict replay escalates a control-flow divergence.
+
+    Examples
+    --------
+    >>> issubclass(ControlFlowDivergenceError, tl.errors.ValidationError)
+    True
+    >>> issubclass(ControlFlowDivergenceError, RuntimeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class EngineDispatchError(ConfigurationError, ValueError):
-    """Raised when ``do(...)`` cannot determine a propagation engine."""
+    """Raised when ``do(...)`` cannot determine a propagation engine.
+
+    Examples
+    --------
+    >>> issubclass(EngineDispatchError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(EngineDispatchError, ValueError)
+    True
+    """
 
 
 class ModelMismatchError(CompatibilityError, RuntimeError):
-    """Raised when a supplied model does not match capture evidence."""
+    """Raised when a supplied model does not match capture evidence.
+
+    Examples
+    --------
+    >>> issubclass(ModelMismatchError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(ModelMismatchError, RuntimeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class AppendMismatchError(ValidationError, ValueError):
-    """Raised when a chunked append candidate is incompatible with the base log."""
+    """Raised when a chunked append candidate is incompatible with the base log.
+
+    Examples
+    --------
+    >>> issubclass(AppendMismatchError, tl.errors.ValidationError)
+    True
+    >>> issubclass(AppendMismatchError, ValueError)
+    True
+    """
 
 
 class AppendStreamingUnsupportedError(ValidationError, ValueError):
-    """Raised when append rerun would need to mutate active streamed activation blobs."""
+    """Raised when append rerun would need to mutate active streamed activation blobs.
+
+    Examples
+    --------
+    >>> issubclass(AppendStreamingUnsupportedError, tl.errors.ValidationError)
+    True
+    >>> issubclass(AppendStreamingUnsupportedError, ValueError)
+    True
+    """
 
 
 class AppendBatchDependenceError(ValidationError, ValueError):
@@ -224,31 +372,86 @@ class AppendBatchDependenceError(ValidationError, ValueError):
     metadata because it cannot prove chunked execution matches full-batch
     execution. Use a batch-independent helper, disable train-mode grad append, or
     replay chunks manually when this invariant does not hold.
+
+    Examples
+    --------
+    >>> issubclass(AppendBatchDependenceError, tl.errors.ValidationError)
+    True
+    >>> issubclass(AppendBatchDependenceError, ValueError)
+    True
     """
 
 
 class AmbiguousBatchInputError(ConfigurationError, ValueError):
-    """Raised when ``chunk_size`` cannot infer which input leaf is batched."""
+    """Raised when ``chunk_size`` cannot infer which input leaf is batched.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousBatchInputError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(AmbiguousBatchInputError, ValueError)
+    True
+    """
 
 
 class ChunkedForwardConfigError(ConfigurationError, ValueError):
-    """Raised when chunked forward capture is requested with unsupported options."""
+    """Raised when chunked forward capture is requested with unsupported options.
+
+    Examples
+    --------
+    >>> issubclass(ChunkedForwardConfigError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(ChunkedForwardConfigError, ValueError)
+    True
+    """
 
 
 class AppendStateValidationWarning(InterventionWarning):
-    """Warning for validators that skip fresh checks on stacked appended traces."""
+    """Warning for validators that skip fresh checks on stacked appended traces.
+
+    Examples
+    --------
+    >>> issubclass(AppendStateValidationWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(AppendStateValidationWarning, UserWarning)
+    True
+    """
 
 
 class MultiOutputModuleError(ValidationError, ValueError):
-    """Raised for ambiguous single-output access on multi-output module calls."""
+    """Raised for ambiguous single-output access on multi-output module calls.
+
+    Examples
+    --------
+    >>> issubclass(MultiOutputModuleError, tl.errors.ValidationError)
+    True
+    >>> issubclass(MultiOutputModuleError, ValueError)
+    True
+    """
 
 
 class BatchNormTrainModeWarning(InterventionWarning):
-    """Warning for append reruns through batch-sensitive train-mode modules."""
+    """Warning for append reruns through batch-sensitive train-mode modules.
+
+    Examples
+    --------
+    >>> issubclass(BatchNormTrainModeWarning, tl.errors.InterventionWarning)
+    True
+    >>> issubclass(BatchNormTrainModeWarning, UserWarning)
+    True
+    """
 
 
 class SpecMutationError(ConfigurationError, ValueError):
-    """Raised when an intervention spec mutator cannot apply a requested change."""
+    """Raised when an intervention spec mutator cannot apply a requested change.
+
+    Examples
+    --------
+    >>> issubclass(SpecMutationError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(SpecMutationError, ValueError)
+    True
+    """
 
 
 class BindingRuntimeError(InterventionError, RuntimeError):
@@ -259,6 +462,13 @@ class BindingRuntimeError(InterventionError, RuntimeError):
     retained), the missing-``generate`` capability refusal, serialization
     refusal, and training-surface teaching refusals. Branch on
     ``exc.fields["code"]``, never message text.
+
+    Examples
+    --------
+    >>> issubclass(BindingRuntimeError, tl.errors.InterventionError)
+    True
+    >>> issubclass(BindingRuntimeError, RuntimeError)
+    True
     """
 
 
@@ -269,51 +479,130 @@ class RegionError(ConfigurationError, ValueError):
     convexity, pass closure, replay-lane effect closure -- rather than trust
     user assertions; every refusal here names the derived violation. Branch
     on ``exc.fields["code"]``, never message text.
+
+    Examples
+    --------
+    >>> issubclass(RegionError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(RegionError, ValueError)
+    True
     """
 
 
 class RecursiveTracingError(CaptureError, RuntimeError):
-    """Raised when intervention tracing recursively enters an active trace."""
+    """Raised when intervention tracing recursively enters an active trace.
+
+    Examples
+    --------
+    >>> issubclass(RecursiveTracingError, tl.errors.CaptureError)
+    True
+    >>> issubclass(RecursiveTracingError, RuntimeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class AmbiguousAxisError(ConfigurationError, ValueError):
-    """Raised when a helper cannot infer a feature axis safely."""
+    """Raised when a helper cannot infer a feature axis safely.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousAxisError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(AmbiguousAxisError, ValueError)
+    True
+    """
 
 
 class SpliceModuleDtypeError(CompatibilityError, RuntimeError):
-    """Raised when ``splice_module`` returns a tensor with an unexpected dtype."""
+    """Raised when ``splice_module`` returns a tensor with an unexpected dtype.
+
+    Examples
+    --------
+    >>> issubclass(SpliceModuleDtypeError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(SpliceModuleDtypeError, RuntimeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class SpliceModuleDeviceError(CompatibilityError, RuntimeError):
-    """Raised when ``splice_module`` returns a tensor on an unexpected device."""
+    """Raised when ``splice_module`` returns a tensor on an unexpected device.
+
+    Examples
+    --------
+    >>> issubclass(SpliceModuleDeviceError, tl.errors.CompatibilityError)
+    True
+    >>> issubclass(SpliceModuleDeviceError, RuntimeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class HookSignatureError(ConfigurationError, TypeError):
-    """Raised when a hook callable does not accept the required signature."""
+    """Raised when a hook callable does not accept the required signature.
+
+    Examples
+    --------
+    >>> issubclass(HookSignatureError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(HookSignatureError, TypeError)
+    True
+    """
 
     severity = "fatal"
 
 
 class HookValueError(InterventionError, ValueError):
-    """Raised when a hook returns an invalid replacement value."""
+    """Raised when a hook returns an invalid replacement value.
+
+    Examples
+    --------
+    >>> issubclass(HookValueError, tl.errors.InterventionError)
+    True
+    >>> issubclass(HookValueError, ValueError)
+    True
+    """
 
 
 class HookSiteCoverageError(SiteResolutionError):
-    """Raised when hook normalization cannot associate a hook with any site."""
+    """Raised when hook normalization cannot associate a hook with any site.
+
+    Examples
+    --------
+    >>> issubclass(HookSiteCoverageError, tl.errors.SiteResolutionError)
+    True
+    >>> issubclass(HookSiteCoverageError, ValueError)
+    True
+    """
 
 
 class HelperMountError(HookSiteCoverageError):
-    """Raised when a helper is mounted on an incompatible selector universe."""
+    """Raised when a helper is mounted on an incompatible selector universe.
+
+    Examples
+    --------
+    >>> issubclass(HelperMountError, tl.errors.HookSiteCoverageError)
+    True
+    >>> issubclass(HelperMountError, ValueError)
+    True
+    """
 
 
 class BundleMemberError(ConfigurationError, ValueError):
-    """Raised when a bundle operation cannot resolve against one or more members."""
+    """Raised when a bundle operation cannot resolve against one or more members.
+
+    Examples
+    --------
+    >>> issubclass(BundleMemberError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(BundleMemberError, ValueError)
+    True
+    """
 
 
 class BundleComparisonError(ValidationError, ValueError):
@@ -322,21 +611,52 @@ class BundleComparisonError(ValidationError, ValueError):
     ``fields["code"]`` carries ``bundle_gate_ordering_topology``,
     ``bundle_gate_model_axis_unmet``, ``bundle_gate_input_values_differ``,
     or ``bundle_gate_input_identity_unproven``.
+
+    Examples
+    --------
+    >>> issubclass(BundleComparisonError, tl.errors.ValidationError)
+    True
+    >>> issubclass(BundleComparisonError, ValueError)
+    True
     """
 
     severity = "fatal"
 
 
 class BaselineUndeterminedError(ConfigurationError, ValueError):
-    """Raised when a bundle operation requires an unambiguous baseline."""
+    """Raised when a bundle operation requires an unambiguous baseline.
+
+    Examples
+    --------
+    >>> issubclass(BaselineUndeterminedError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(BaselineUndeterminedError, ValueError)
+    True
+    """
 
 
 class NoParentError(ConfigurationError, ValueError):
-    """Raised when a lineage operation requires a parent run and none is recorded."""
+    """Raised when a lineage operation requires a parent run and none is recorded.
+
+    Examples
+    --------
+    >>> issubclass(NoParentError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(NoParentError, ValueError)
+    True
+    """
 
 
 class DeadParentError(ConfigurationError, ValueError):
-    """Raised when a lineage operation requires a parent run whose weakref is dead."""
+    """Raised when a lineage operation requires a parent run whose weakref is dead.
+
+    Examples
+    --------
+    >>> issubclass(DeadParentError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(DeadParentError, ValueError)
+    True
+    """
 
 
 __all__ = [

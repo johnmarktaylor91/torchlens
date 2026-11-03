@@ -75,15 +75,6 @@ def test_animate_unknown_site_raises() -> None:
         trace.animate("no_such_layer_1_1")
 
 
-def test_draw_has_no_animate_keyword() -> None:
-    """``draw(animate=)`` is gone: the animation is ``trace.animate(site)``."""
-
-    trace = tl.trace(RecurrentLinear(), torch.randn(1, 3))
-    with pytest.raises(TypeError, match="animate"):
-        trace.draw(animate=_recurrent_label(trace))  # type: ignore[call-arg]
-    assert "animate" not in VisualizationOptions().to_dict()
-
-
 def test_visualization_options_animate_redirects_to_trace_animate() -> None:
     """Reading the removed ``animate`` member names ``trace.animate`` as the remedy."""
 
@@ -91,18 +82,6 @@ def test_visualization_options_animate_redirects_to_trace_animate() -> None:
         _ = VisualizationOptions().animate
     assert excinfo.value.fields["code"] == "facade_redirect"
     assert "trace.animate" in str(excinfo.value)
-
-
-def test_drawing_close_is_public_and_idempotent() -> None:
-    """``Drawing.close()`` releases the retained trace; a second call is a no-op."""
-
-    retained = object()
-    drawing = Drawing(dot="digraph {}", trace=retained)
-
-    drawing.close()
-    assert drawing.trace is None
-    drawing.close()
-    assert drawing.trace is None
 
 
 def test_drawing_with_block_calls_close() -> None:

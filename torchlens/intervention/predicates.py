@@ -74,6 +74,13 @@ def add(delta: torch.Tensor | float | int, *, allow_shape_change: bool = False) 
     -------
     Edit
         Built-in-compatible forward helper spec.
+
+    Examples
+    --------
+    >>> clean = tl.trace(model, x)
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.add(1.0)))
+    >>> torch.allclose(edited["relu_1_2"].out, clean["relu_1_2"].out + 1.0)
+    True
     """
 
     def factory() -> Callable[..., torch.Tensor]:
@@ -117,6 +124,12 @@ def replace_with(
     -------
     Edit
         Built-in-compatible forward helper spec.
+
+    Examples
+    --------
+    >>> edited = tl.trace(model, x, intervene=tl.when(tl.func("relu"), tl.replace_with(torch.ones(1, 4, 8, 8))))
+    >>> bool((edited["relu_1_2"].out == 1).all())
+    True
     """
 
     def factory() -> Callable[..., torch.Tensor]:

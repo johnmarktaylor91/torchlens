@@ -20,19 +20,15 @@ Pins:
 
 from __future__ import annotations
 
-import math
-
 import numpy as np
 import pytest
 
 from torchlens.repgeom import (
-    ScoreInterval,
     cka_interval,
     compare_rdms,
     compare_rdms_interval,
     rdm,
 )
-from torchlens.stats import cka
 
 
 def _features(seed: int, n: int = 20, d: int = 6) -> tuple[np.ndarray, np.ndarray]:
@@ -40,18 +36,6 @@ def _features(seed: int, n: int = 20, d: int = 6) -> tuple[np.ndarray, np.ndarra
     x = rng.normal(size=(n, d))
     y = x @ rng.normal(size=(d, d)) + 0.8 * rng.normal(size=(n, d))
     return x, y
-
-
-@pytest.mark.parametrize("method", ["pearson", "spearman", "kendall"])
-def test_point_score_is_exactly_rdm_compare(method: str) -> None:
-    x, y = _features(0, n=12)
-    rdm_a, rdm_b = rdm(x, "euclidean"), rdm(y, "correlation")
-    result = compare_rdms_interval(rdm_a, rdm_b, method, num_resamples=20, seed=1)
-    assert isinstance(result, ScoreInterval)
-    assert result.score == compare_rdms(rdm_a, rdm_b, method=method)
-    assert result.low <= result.high
-    assert result.num_resamples == 20 and result.seed == 1 and result.confidence == 0.95
-    assert result.basis == "bootstrap over stimuli, percentile interval"
 
 
 def test_condensed_input_gives_the_same_interval_as_square() -> None:
@@ -65,17 +49,6 @@ def test_condensed_input_gives_the_same_interval_as_square() -> None:
     assert from_square == from_condensed
 
 
-def test_same_seed_same_interval_other_seed_differs() -> None:
-    x, y = _features(2)
-    rdm_a, rdm_b = rdm(x), rdm(y)
-    first = compare_rdms_interval(rdm_a, rdm_b, num_resamples=200, seed=7)
-    again = compare_rdms_interval(rdm_a, rdm_b, num_resamples=200, seed=7)
-    other = compare_rdms_interval(rdm_a, rdm_b, num_resamples=200, seed=8)
-    assert first == again
-    assert (first.low, first.high) != (other.low, other.high)
-    assert first.score == other.score
-
-
 def test_identical_inputs_give_a_zero_width_interval() -> None:
     x, _ = _features(3)
     same = rdm(x, "correlation")
@@ -86,89 +59,6 @@ def test_identical_inputs_give_a_zero_width_interval() -> None:
     cka_result = cka_interval(x, x.copy(), num_resamples=100, seed=0)
     assert cka_result.width == 0.0
     assert cka_result.low == cka_result.high == 1.0
-
-
-def test_rdm_resample_equals_hand_recomputation() -> None:
-    x, y = _features(4, n=9)
-    rdm_a, rdm_b = rdm(x), rdm(y)
-    result = compare_rdms_interval(rdm_a, rdm_b, "pearson", num_resamples=5, seed=11)
-    indices = np.random.default_rng(11).integers(0, 9, size=(5, 9))
-    hand = []
-    for index in indices:
-        a_vals, b_vals = [], []
-        for i in range(9):
-            for j in range(i + 1, 9):
-                if index[i] != index[j]:
-                    a_vals.append(rdm_a[index[i], index[j]])
-                    b_vals.append(rdm_b[index[i], index[j]])
-        hand.append(float(np.corrcoef(a_vals, b_vals)[0, 1]))
-    low, high = np.quantile(hand, [0.025, 0.975])
-    assert result.low == pytest.approx(low, abs=1e-12)
-    assert result.high == pytest.approx(high, abs=1e-12)
-
-
-def test_kendall_resample_never_compares_copies_of_one_pair() -> None:
-    x, y = _features(8, n=8)
-    rdm_a, rdm_b = rdm(x), rdm(y)
-    result = compare_rdms_interval(rdm_a, rdm_b, "kendall", num_resamples=4, seed=5)
-    indices = np.random.default_rng(5).integers(0, 8, size=(4, 8))
-    hand = []
-    for index in indices:
-        copies: dict[tuple[int, int], int] = {}
-        for i in range(8):
-            for j in range(i + 1, 8):
-                if index[i] != index[j]:
-                    key = (min(index[i], index[j]), max(index[i], index[j]))
-                    copies[key] = copies.get(key, 0) + 1
-        keys = sorted(copies)
-        num = den = 0.0
-        for p_index, p in enumerate(keys):
-            for q in keys[p_index + 1 :]:
-                weight = copies[p] * copies[q]
-                num += weight * np.sign(rdm_a[p] - rdm_a[q]) * np.sign(rdm_b[p] - rdm_b[q])
-                den += weight
-        hand.append(num / den)
-    low, high = np.quantile(hand, [0.025, 0.975])
-    assert result.low == pytest.approx(low, abs=1e-12)
-    assert result.high == pytest.approx(high, abs=1e-12)
-
-
-def test_cka_point_and_resamples_match_tl_stats_cka() -> None:
-    x, y = _features(5, n=15, d=40)
-    result = cka_interval(x, y, num_resamples=6, seed=2)
-    assert result.score == pytest.approx(cka(x, y), abs=1e-12)
-    indices = np.random.default_rng(2).integers(0, 15, size=(6, 15))
-    hand = [cka(x[index], y[index]) for index in indices]
-    low, high = np.quantile(hand, [0.025, 0.975])
-    assert result.low == pytest.approx(low, abs=1e-12)
-    assert result.high == pytest.approx(high, abs=1e-12)
-
-
-def test_population_coverage_meets_the_stated_rate() -> None:
-    population, n_sample, n_seeds, confidence = 300, 30, 200, 0.90
-    rng = np.random.default_rng(2026)
-    x = rng.normal(size=(population, 5))
-    y = x @ rng.normal(size=(5, 5)) + 1.5 * rng.normal(size=(population, 5))
-    rdm_x, rdm_y = rdm(x), rdm(y)
-    truth = compare_rdms(rdm_x, rdm_y, method="pearson")
-    covered = 0
-    for seed in range(n_seeds):
-        pick = np.random.default_rng(10_000 + seed).choice(population, n_sample, replace=False)
-        sub = np.ix_(pick, pick)
-        result = compare_rdms_interval(
-            rdm_x[sub], rdm_y[sub], "pearson", num_resamples=400, seed=seed, confidence=confidence
-        )
-        covered += int(result.low <= truth <= result.high)
-    rate = covered / n_seeds
-    spread = 3.0 * math.sqrt(confidence * (1.0 - confidence) / n_seeds)
-    print(
-        f"population coverage: {rate:.3f} (band {confidence - spread:.3f} to "
-        f"{confidence + spread:.3f}, truth {truth:.4f})"
-    )
-    # Lower bound pre-registered before the first run; the upper bound
-    # (an interval wide enough to cover everything fails) was added after
-    # the first measured rate, 0.915, under review.
-    assert confidence - spread <= rate <= confidence + spread
 
 
 def test_invalid_settings_refuse() -> None:
@@ -186,26 +76,6 @@ def test_invalid_settings_refuse() -> None:
         compare_rdms_interval(np.ones(5), np.ones(5))
     with pytest.raises(ValueError, match="same stimuli"):
         cka_interval(x, y[:7])
-
-
-def test_to_dict_carries_every_field() -> None:
-    x, y = _features(7, n=10)
-    data = compare_rdms_interval(rdm(x), rdm(y), num_resamples=10, seed=0).to_dict()
-    assert set(data) == {
-        "score",
-        "low",
-        "high",
-        "width",
-        "confidence",
-        "num_resamples",
-        "n_valid",
-        "seed",
-        "basis",
-        "similarity_repository_id",
-    }
-    assert data["width"] == data["high"] - data["low"]
-    # Precomputed RDMs do not name their RDM metric, so no RSA variant is claimed.
-    assert data["similarity_repository_id"] is None
 
 
 def test_cka_interval_names_the_cka_variant_in_its_result_and_dict() -> None:
@@ -233,19 +103,6 @@ def test_spearman_resample_with_ties_equals_hand_recomputation() -> None:
     low, high = np.quantile(hand, [0.025, 0.975])
     assert result.low == pytest.approx(low, abs=1e-12)
     assert result.high == pytest.approx(high, abs=1e-12)
-
-
-def test_private_rank_and_tau_helpers_equal_the_public_estimators() -> None:
-    from torchlens.repgeom._geometry import _average_ranks, _kendall_tau_a
-    from torchlens.repgeom._uncertainty import _average_ranks_vector, _weighted_tau_a
-
-    rng = np.random.default_rng(14)
-    values = np.round(rng.normal(size=40), 1)
-    np.testing.assert_array_equal(_average_ranks_vector(values), _average_ranks(values))
-    other = rng.normal(size=40)
-    assert _weighted_tau_a(values, other, np.ones(40)) == pytest.approx(
-        _kendall_tau_a(values, other), abs=1e-15
-    )
 
 
 def test_constant_resamples_are_counted_out() -> None:

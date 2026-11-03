@@ -104,7 +104,11 @@
     so the dispatch census balances without any exemption. A custom
     `autograd.Function` whose forward LEAVES torch (a `numpy` / `__array__` / `__dlpack__` /
     `to_dlpack` export, or a `from_numpy` / `from_dlpack` / `frombuffer` or parentless
-    `as_tensor` / `asarray` op, inside its `apply`) is one
+    `as_tensor` / `asarray` op, inside its `apply`), or that is a known foreign kernel
+    (`backends/torch/_foreign_data.py`: every Function of `flash_attn.cute.interface`,
+    FlashAttention 4, hands its tensors to a CuTe kernel through TVM FFI, which no export patch
+    sees; gated by `HAS_FLASH_ATTENTION_4_INTERFACE`, a filesystem probe that never imports the
+    package), is one
     `autogradfunction` boundary op (`transform_kind="autograd.Function"`,
     `backends/torch/_function_boundary.py`): its interior ops are dropped in postprocess step
     3, every dispatch inside it is owned by the audited `autograd_function:foreign` token, and
@@ -144,8 +148,9 @@
     (the TF static FuncGraph path stays ungrouped at `False`), validation sidecars stay keyed
     to raw capture identities, and tamper tests prove stale-label oracles fail closed.
 16. Smart-collapse metadata is computed, not serialized: `Module.collapse_score`,
-    `Trace.module_collapse_order`, and `Trace.collapse_order(mode=...)` (documented-inert
-    `weights=` removed, collapse memo D9) must stay
+    `Trace.module_collapse_order`, and the per-mode ranking `Drawing.collapse_plan` carries
+    (the public per-mode order accessor and its documented-inert `weights=` are gone, collapse
+    memo D9) must stay
     out of `*_FIELD_ORDER` schemas until the policy is intentionally stabilized.
 17. `Trace.load_state_dict(sd)` on a loaded sparse runnable Trace validates and stages state only;
    it never executes the DAG or writes values into the sparse core. User staging overrides the
@@ -196,7 +201,7 @@
     `save=` predicate or the save-all default), each module call collected by its call number.
     Per-call input, path, output structure/shape/dtype, and control-witness guards remain
     mandatory; divergence always raises. `until=` on a live fast run cuts the native forward
-    after the saved site (U26.3): the cut is a `live_stop_after` truncation, later sites read
+    after the saved site: the cut is a `live_stop_after` truncation, later sites read
     `None` for that run, and the verdict is `unverifiable` (no whole-forward fingerprint), which
     marks the live trace monotonically like every truncated run product. `fast=False`
     preserves the full transaction and attestation contract. The live session also fires a
@@ -247,3 +252,9 @@
   `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
   and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
   filled with synthetic rows.
+- ATen values (`CaptureOptions(aten_ops="values")`) are graph-detached snapshots in `AtenOp.out`
+  kept only for calls whose `Op` saved its output: `aten_values_consistent` fails a kept value whose
+  leaf count, shapes or dtypes disagree with `output_tensor_facts`, a forward row with a value whose
+  owner saved nothing, and (under `save_mode="copy"`, no disclosed gap) a saved op none of whose
+  rows reproduces its `out`. With `aten_ops=True` or off, no value is ever copied (tripwire in
+  `tests/test_aten_values.py`).

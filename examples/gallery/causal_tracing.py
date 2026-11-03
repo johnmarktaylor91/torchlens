@@ -342,12 +342,16 @@ def mlp_addresses(trace: Any) -> list[str]:
 
 
 def restore(corrupt: Any, wrapped: EmbedsGPT2, prepared: dict[str, Any], edits: dict) -> Any:
-    """Fork the corrupted trace, attach one restoring edit per MLP address, rerun it."""
+    """Fork the corrupted trace, stage one restoring edit per MLP address, rerun it."""
 
     restored = corrupt.fork("restore")
     for address, write in edits.items():
         hook = lambda out, *, ctx, write=write: write(out)  # noqa: E731
-        restored.attach_hooks(tl.facet("down_out").in_module(address), hook)
+        restored.do(
+            tl.facet("down_out").in_module(address),
+            hook,
+            intervention=tl.options.InterventionOptions(engine="set_only"),
+        )
     restored.run(wrapped, prepared["corrupted"])
     return restored
 

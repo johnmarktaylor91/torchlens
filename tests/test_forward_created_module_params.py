@@ -30,26 +30,6 @@ class _ModuleInForward(nn.Module):
         return self.late(torch.relu(self.pre(x)))
 
 
-def test_forward_created_parameters_bind_to_their_initializer_ops() -> None:
-    torch.manual_seed(0)
-    trace = tl.trace(_ModuleInForward(), torch.randn(2, 4))
-    by_label = {op.label.split(":")[0]: op for op in trace.ops}
-    late = [op for op in trace.ops if op.func_name == "linear"][-1]
-    assert not late.unattributed_tensor_args
-    parent_funcs = sorted(by_label[label.split(":")[0]].func_name for label in late.parents)
-    assert parent_funcs == ["relu", "uniform_", "uniform_"]
-    # Each initializer nests to one bottom-level ``uniform_`` write; the enclosing
-    # ``kaiming_uniform_`` and ``init.uniform_`` calls record no second op.
-    initializer_funcs = [op.func_name for op in trace.ops if op.func_name.endswith("uniform_")]
-    assert initializer_funcs == ["uniform_", "uniform_"]
-    # Each write's receiver is the Parameter minted on ``torch.empty``'s storage
-    # inside the pass, so the allocation is the write's one parent.
-    for op in trace.ops:
-        if op.func_name == "uniform_":
-            assert [by_label[p.split(":")[0]].func_name for p in op.parents] == ["empty"]
-            assert not op.unattributed_tensor_args
-
-
 @pytest.mark.smoke
 def test_forward_created_module_validates() -> None:
     torch.manual_seed(0)

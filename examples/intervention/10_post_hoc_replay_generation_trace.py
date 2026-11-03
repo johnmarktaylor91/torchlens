@@ -47,12 +47,11 @@ def main() -> None:
     torch.manual_seed(10)
     model = TinyGenerator().eval()
     x = torch.randn(2, 4)
-    log = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    log = tl.trace(model, x)
     relu_sites = log.find_sites(tl.func("relu"), max_fanout=3)
 
     edited = log.fork("generation_patch")
-    edited.attach_hooks(tl.func("relu"), tl.zero_ablate())
-    edited.run(model, x)
+    edited.do(tl.func("relu"), tl.zero_ablate(), model=model, inputs=x)
 
     assert edited.output_ops[-1].out.shape == (2, 3, 4)
     assert len(relu_sites) == 3

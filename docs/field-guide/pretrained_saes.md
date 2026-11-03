@@ -18,6 +18,42 @@ pip install torchlens transformers
 pip install "sae-lens==6.54.0"
 ```
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). An SAE reads one
+site's activations; these are the MLP outputs of block 1 of the running decoder, the width an
+SAE for this model would take. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=sae_lens expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+acts = trace["transformer.h.1.mlp"].out
+RESULT = acts.shape[-1] == config.n_embd
+```
+
 ## Real use: Gemma Scope
 
 This block is not run here: the Gemma weights are gated on the Hugging Face
@@ -45,7 +81,7 @@ model = AutoModelForCausalLM.from_pretrained(
 ).eval()
 ids = tokenizer("The capital of France is Paris.", return_tensors="pt").input_ids
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 site = resolve_alias(trace, sae.cfg.metadata.hook_name).module_address  # "model.layers.12"
 result = splice(trace, site=site, sae=sae, tokens=ids, exclude_bos=True)
 result.fraction_variance_explained_pooled, result.ce_loss_recovered, result.kl_divergence
@@ -116,7 +152,7 @@ a vocabulary axis.
 from torchlens.bridge.sae import splice
 from torchlens.mechinterp import resolve_alias
 
-trace = tl.trace(model, ids, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(model, ids)
 alias = resolve_alias(trace, sae.cfg.metadata.hook_name)
 result = splice(trace, site=alias.module_address, sae=sae, tokens=ids, exclude_bos=True)
 
@@ -185,7 +221,6 @@ spliced = tl.trace(
     model,
     ids,
     capture=tl.options.CaptureOptions(
-        replayable=True,
         hooks={tl.module("transformer.h.1.mlp"): tl.splice_module(transcoder, input_route="in")},
     ),
 )

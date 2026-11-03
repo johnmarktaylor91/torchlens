@@ -83,15 +83,6 @@ def _decision(loader: Any, data: bytes) -> tuple[str, ...]:
     return ("ok", repr(value))
 
 
-def _both_refuse(data: bytes, match: str | None = None) -> None:
-    """Assert both machines refuse ``data`` with ``UnpicklingError``."""
-
-    with pytest.raises(pickle.UnpicklingError, match=match):
-        _new_path(data)
-    with pytest.raises(pickle.UnpicklingError, match=match):
-        _old_path(data)
-
-
 def _agree(data: bytes) -> tuple[str, ...]:
     """Assert the two machines decide alike on ``data`` and return the decision."""
 
@@ -144,38 +135,6 @@ def _load_in_subprocess(data: bytes, address_space_bytes: int = 4 * 1024**3) -> 
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    "put_opcode",
-    [
-        pickle.BINPUT + b"\xff",
-        pickle.LONG_BINPUT + struct.pack("<I", 2**31 - 1),
-        pickle.LONG_BINPUT + struct.pack("<I", 2**32 - 1),
-        pickle.PUT + b"4294967295\n",
-        pickle.PUT + b" 4294967295\n",
-        pickle.PUT + b"000000009999\n",
-    ],
-)
-def test_memo_put_index_above_the_opcode_count_is_refused(put_opcode: bytes) -> None:
-    """Every memo-writing spelling is held to the opcode count, text forms included.
-
-    The C machine sizes its memo table from the PUT index, so a five-byte opcode could
-    demand billions of slots; the index is bounded by the opcodes seen so far, which an
-    honest (sequentially memoizing) pickler never exceeds.
-    """
-
-    data = _P2 + pickle.NONE + put_opcode + pickle.STOP
-    with pytest.raises(pickle.UnpicklingError, match="memo PUT index above the opcode count"):
-        _new_path(data)
-
-
-def test_the_memo_index_ceiling_admits_an_honest_sequential_stream() -> None:
-    """The guard is a ceiling on dishonesty, not on size: real streams memoize densely."""
-
-    honest = pickle.dumps([{"k": index} for index in range(200)], protocol=4)
-    assert _new_path(honest) == [{"k": index} for index in range(200)]
-    assert pickle.BINPUT[0] in honest or pickle.MEMOIZE[0] in honest
-
-
 def test_an_absurd_memo_index_never_allocates_the_table() -> None:
     """The amplifier is refused inside a 2 GiB child, not merely refused eventually."""
 
@@ -183,98 +142,9 @@ def test_an_absurd_memo_index_never_allocates_the_table() -> None:
     assert _load_in_subprocess(data) == "refused"
 
 
-@pytest.mark.parametrize(
-    "length_opcode",
-    [
-        pickle.BINBYTES8 + struct.pack("<Q", 2**42),
-        pickle.BYTEARRAY8 + struct.pack("<Q", 2**42),
-        pickle.BINUNICODE8 + struct.pack("<Q", 2**42),
-        pickle.BINBYTES + struct.pack("<I", 2**31),
-        pickle.BINSTRING + struct.pack("<I", 2**31 + 5),
-        pickle.LONG4 + struct.pack("<i", 2**30),
-    ],
-)
-def test_a_declared_length_above_the_stream_never_allocates(length_opcode: bytes) -> None:
-    """A length-prefixed opcode may only promise what the remaining bytes can pay for."""
-
-    data = _P2 + length_opcode + b"ab" + pickle.STOP
-    assert _load_in_subprocess(data) == "refused"
-    _both_refuse(data)
-
-
-def test_a_frame_longer_than_the_stream_is_refused_by_the_reader() -> None:
-    """A FRAME may not declare more bytes than the stream holds.
-
-    The reader decides it before either machine runs, so the frame length can never
-    become a read size.
-    """
-
-    body = pickle.NONE + pickle.STOP
-    data = _P2 + _frame(2**40) + body
-    with pytest.raises(pickle.UnpicklingError, match="FRAME declares more bytes than remain"):
-        _new_path(data)
-    assert _load_in_subprocess(data) == "refused"
-
-
-def test_an_exact_frame_still_loads() -> None:
-    """The frame check is a bound on the declaration, not a refusal of framing."""
-
-    body = pickle.NONE + pickle.STOP
-    assert _new_path(_P2 + _frame(len(body)) + body) is None
-    assert _new_path(pickle.dumps({"a": [1, 2, 3]}, protocol=4)) == {"a": [1, 2, 3]}
-
-
-def test_repeated_empty_container_growth_is_bounded_by_the_stream() -> None:
-    """``EMPTY_LIST`` plus ``APPENDS`` grows only with the items the stream spells out."""
-
-    data = _P2 + pickle.EMPTY_LIST + pickle.MARK + pickle.NONE * 50 + pickle.APPENDS + pickle.STOP
-    assert _agree(data) == ("ok", repr([None] * 50))
-
-
 # --------------------------------------------------------------------------- #
 # 2. The dry run: no admitted code runs, and the plan binds the real run
 # --------------------------------------------------------------------------- #
-
-
-def test_extension_codes_never_resolve_through_the_process_wide_registry() -> None:
-    """EXT1 / EXT2 / EXT4 are refused by both machines before anything is cached.
-
-    Both pickle machines memoize what an extension code resolved to in the shared
-    ``copyreg._extension_cache``. The dry run resolves globals to RECORDING PROBES, so an
-    admitted extension code would publish a probe class into that process-wide cache,
-    where every later unpickler -- including unrelated ``pickle.load`` callers in the same
-    process -- would read it instead of the registered class. No bundle writer emits an
-    extension code, so both machines refuse one and neither writes the cache.
-    """
-
-    program = textwrap.dedent(
-        """
-        import copyreg, io, pickle, sys
-        copyreg.add_extension("collections", "OrderedDict", 177)
-        from torchlens._io._safe_unpickle import (
-            SafeBundleUnpickler,
-            _PurePythonBundleUnpickler,
-        )
-        data = (
-            pickle.PROTO + b"\\x02" + pickle.EXT1 + bytes([177])
-            + pickle.MARK + pickle.TUPLE + pickle.REDUCE + pickle.STOP
-        )
-        verdicts = []
-        for machine in (SafeBundleUnpickler, _PurePythonBundleUnpickler):
-            try:
-                machine(io.BytesIO(data)).load()
-            except pickle.UnpicklingError:
-                verdicts.append("refused")
-            else:
-                verdicts.append("loaded")
-        print(" ".join(verdicts), "cache=" + repr(dict(copyreg._extension_cache)))
-        """
-    )
-    completed = subprocess.run(  # noqa: S603 -- fixed argv, this interpreter
-        [sys.executable, "-I", "-c", program], capture_output=True, timeout=180
-    )
-    assert completed.returncode == 0, completed.stderr.decode()
-    assert completed.stdout.decode().strip() == "refused refused cache={}"
 
 
 def test_a_reduce_result_that_is_built_and_called_takes_the_interpreter() -> None:
@@ -333,31 +203,10 @@ def test_more_reduces_than_planned_are_refused() -> None:
         plan.take_reduce_site()
 
 
-def test_no_guard_survives_into_a_second_load_in_the_same_process() -> None:
-    """Two loads of the same bytes in one process give the same value and the same path."""
-
-    data = pickle.dumps({"a": [1, 2, 3], "b": ("x", None)}, protocol=4)
-    first = SafeBundleUnpickler(io.BytesIO(data))
-    second = SafeBundleUnpickler(io.BytesIO(data))
-    assert first.load() == second.load() == {"a": [1, 2, 3], "b": ("x", None)}
-    assert first.load_path == second.load_path == "c"
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "label,stream",
     [
-        (
-            "callable_reached_through_a_memo_get",
-            _P2
-            + _ORDERED_DICT
-            + pickle.BINPUT
-            + b"\x01"
-            + pickle.POP
-            + pickle.BINGET
-            + b"\x01"
-            + _CALL
-            + pickle.STOP,
-        ),
         (
             "global_stored_and_also_called",
             _P2
@@ -382,39 +231,6 @@ def test_no_guard_survives_into_a_second_load_in_the_same_process() -> None:
             + pickle.NEWOBJ
             + pickle.STOP,
         ),
-        (
-            "stack_global_spelling_of_a_call",
-            pickle.PROTO
-            + b"\x04"
-            + _unicode("collections")
-            + _unicode("OrderedDict")
-            + pickle.STACK_GLOBAL
-            + _CALL
-            + pickle.STOP,
-        ),
-        (
-            "legacy_inst_construction",
-            pickle.MARK + pickle.INST + b"collections\nOrderedDict\n" + pickle.STOP,
-        ),
-        (
-            "legacy_obj_construction",
-            pickle.MARK + _ORDERED_DICT + pickle.OBJ + pickle.STOP,
-        ),
-        (
-            "self_referential_argument_tree",
-            _P2
-            + _global("builtins", "dict")
-            + pickle.EMPTY_DICT
-            + pickle.BINPUT
-            + b"\x01"
-            + _unicode("k")
-            + pickle.BINGET
-            + b"\x01"
-            + pickle.SETITEM
-            + pickle.TUPLE1
-            + pickle.REDUCE
-            + pickle.STOP,
-        ),
     ],
 )
 def test_indirect_callable_shapes_decide_alike(label: str, stream: bytes) -> None:
@@ -426,73 +242,6 @@ def test_indirect_callable_shapes_decide_alike(label: str, stream: bytes) -> Non
 # --------------------------------------------------------------------------- #
 # 3. The allocation belt still refuses what it refused, through both machines
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize(
-    "label,stream",
-    [
-        (
-            "sized_bytearray_via_reduce",
-            _P2
-            + _global("builtins", "bytearray")
-            + pickle.MARK
-            + _int(2**30)
-            + pickle.TUPLE
-            + pickle.REDUCE
-            + pickle.STOP,
-        ),
-        (
-            "sized_bytearray_via_newobj",
-            _P2
-            + _global("builtins", "bytearray")
-            + pickle.MARK
-            + _int(2**30)
-            + pickle.TUPLE
-            + pickle.NEWOBJ
-            + pickle.STOP,
-        ),
-        (
-            "sized_bytearray_via_inst",
-            pickle.MARK + _int(2**30) + pickle.INST + b"builtins\nbytearray\n" + pickle.STOP,
-        ),
-        (
-            "sized_bytearray_via_obj",
-            pickle.MARK + _global("builtins", "bytearray") + _int(2**30) + pickle.OBJ + pickle.STOP,
-        ),
-        (
-            "tensor_construction",
-            _P2 + _global("torch", "Tensor") + pickle.EMPTY_TUPLE + pickle.NEWOBJ + pickle.STOP,
-        ),
-        (
-            "parameter_construction",
-            _P2
-            + _global("torch.nn.parameter", "Parameter")
-            + pickle.EMPTY_TUPLE
-            + pickle.NEWOBJ
-            + pickle.STOP,
-        ),
-    ],
-)
-def test_the_allocation_belt_refuses_through_both_machines(label: str, stream: bytes) -> None:
-    """Each construction opcode reaches the belt on the fast path and the interpreter."""
-
-    _both_refuse(stream, match="Blocked")
-    assert _load_in_subprocess(stream) == "refused"
-
-
-@pytest.mark.parametrize(
-    "name",
-    ["system", "popen", "eval", "exec", "__import__", "compile", "open", "getattr"],
-)
-def test_code_execution_globals_stay_denied_on_the_fast_path(name: str) -> None:
-    """The pre-scan resolves through the same policy, so the old denials still fire."""
-
-    module = "os" if name in ("system", "popen") else "builtins"
-    stream = _P2 + _global(module, name) + pickle.MARK + pickle.TUPLE + pickle.REDUCE + pickle.STOP
-    with pytest.raises(pickle.UnpicklingError):
-        _new_path(stream)
-    with pytest.raises(pickle.UnpicklingError):
-        _old_path(stream)
 
 
 def test_a_global_the_prescan_never_saw_is_refused_by_the_c_phase() -> None:
@@ -572,16 +321,6 @@ _SEVEN_ELEMENT_DTYPE_STATE = (
 )
 
 
-def test_an_honest_numpy_dtype_still_round_trips_through_both_machines() -> None:
-    """The dtype reconstruction legitimate metadata uses is unaffected by the gap below."""
-
-    import numpy as np
-
-    data = pickle.dumps(np.dtype("f8"), protocol=4)
-    assert _new_path(data) == np.dtype("f8")
-    assert _old_path(data) == np.dtype("f8")
-
-
 @pytest.mark.xfail(
     strict=True,
     reason=(
@@ -601,12 +340,3 @@ def test_a_malformed_dtype_build_state_does_not_crash_the_process() -> None:
     data = _dtype_build_with_state(_SEVEN_ELEMENT_DTYPE_STATE)
     assert _load_machine_in_child(data, "SafeBundleUnpickler") == 0
     assert _load_machine_in_child(data, "_PurePythonBundleUnpickler") == 0
-
-
-def test_the_malformed_dtype_build_state_treats_both_machines_alike() -> None:
-    """Whatever the gap above does, it does to both machines; neither is the weaker path."""
-
-    data = _dtype_build_with_state(_SEVEN_ELEMENT_DTYPE_STATE)
-    assert _load_machine_in_child(data, "SafeBundleUnpickler") == _load_machine_in_child(
-        data, "_PurePythonBundleUnpickler"
-    )

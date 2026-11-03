@@ -526,6 +526,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "migration/from_hooks.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_torchinfo.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/coming_from_torchsnooper.md": _MIGRATIONS_TEST_EXECUTED,
+    "migration/cross_engine.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_nnsight.md": _MIGRATIONS_TEST_EXECUTED,
     "migration/from_thingsvision.md": _MIGRATIONS_TEST_EXECUTED,
     "reference/neuro.md": (
@@ -561,6 +562,7 @@ DOC_FENCE_EXEMPT: dict[str, str] = {
     "field-guide/generation_step_attribution.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/trainable_backbone.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/tuned_lens.md": _RECIPE_PAGES_EXECUTED,
+    "field-guide/jacobian_lens.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/conditional_steering.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/weightwatcher.md": _RECIPE_PAGES_EXECUTED,
     "field-guide/torchcam.md": _RECIPE_PAGES_EXECUTED,

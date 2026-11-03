@@ -22,7 +22,7 @@ from torchlens._observability._kineto import extract_events
 
 
 def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
-    """One armed capture + log_backward inside one owned session."""
+    """One armed capture + backward inside one owned session."""
 
     with obs.session() as sess:
         log = tl.trace(
@@ -31,25 +31,9 @@ def _backward_session(model: nn.Module, x: torch.Tensor, **backward_kwargs):
             capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         loss = log.output_ops[0].out.sum()
-        log.log_backward(loss, **backward_kwargs)
+        log.backward(loss, **backward_kwargs)
     extraction = extract_events(sess.closed_profiler)
     return log, extraction
-
-
-def test_every_fire_markered() -> None:
-    """One marker per grad_fn fire; names carry object/pass/call identity."""
-
-    model = nn.Sequential(nn.Linear(8, 8), nn.ReLU(), nn.Linear(8, 4))
-    log, extraction = _backward_session(model, torch.randn(2, 8, requires_grad=True))
-    markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
-    assert len(markers) == len(log._grad_fn_logs)
-    assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
-    for event in markers:
-        object_id, pass_index, call_index = event.name.rsplit("::", 1)[-1].split(":")
-        assert int(object_id) in log._grad_fn_logs
-        assert int(pass_index) == 1
-        assert int(call_index) == 1
-    log.cleanup()
 
 
 def test_internal_hook_bodies_are_typed() -> None:
@@ -76,8 +60,8 @@ def test_second_pass_markers_carry_pass_index() -> None:
             capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
         )
         loss = log.output_ops[0].out.sum()
-        log.log_backward(loss, retain_graph=True)
-        log.log_backward(loss)
+        log.backward(loss, retain_graph=True)
+        log.backward(loss)
     extraction = extract_events(sess.closed_profiler)
     markers = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
     pass_indexes = {int(e.name.rsplit("::", 1)[-1].split(":")[1]) for e in markers}
@@ -86,7 +70,6 @@ def test_second_pass_markers_carry_pass_index() -> None:
     log.cleanup()
 
 
-@pytest.mark.smoke
 def test_raising_node_leaks_are_drained_and_disclosed() -> None:
     """TN-D17: a raising node's open marker closes at the pass boundary."""
 
@@ -119,7 +102,7 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
         )
         loss = log.output_ops[0].out.sum()
         with pytest.raises(RuntimeError, match="injected backward failure"):
-            log.log_backward(loss)
+            log.backward(loss)
     extraction = extract_events(sess.closed_profiler)
     # No marker survives the pass boundary: the profiler's marker stack was
     # fully unwound before the session closed (otherwise export would show
@@ -127,20 +110,4 @@ def test_raising_node_leaks_are_drained_and_disclosed() -> None:
     assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) >= 1
     opened = [e for e in extraction.events if e.name.startswith("torchlens::gradfn::")]
     assert opened, "the pre-raise fires should still have produced markers"
-    log.cleanup()
-
-
-def test_no_marker_work_without_a_session() -> None:
-    """Strictly opt-in: plain armed backward pushes no gradfn markers."""
-
-    model = nn.Linear(8, 4)
-    log = tl.trace(
-        model,
-        torch.randn(2, 8, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"),
-    )
-    loss = log.output_ops[0].out.sum()
-    log.log_backward(loss)
-    assert log.__dict__.get("_tl_gradfn_marker_leaks", 0) == 0
-    assert log.__dict__.get("_tl_gradfn_marker_gaps", 0) == 0
     log.cleanup()

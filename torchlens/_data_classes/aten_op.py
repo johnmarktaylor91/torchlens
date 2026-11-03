@@ -13,7 +13,15 @@ from .field_policy import build_record_field_policy_table, portable_state_spec_f
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OpRef:
-    """Redundant foreign key from an ATen row to a final Op row."""
+    """Redundant foreign key from an ATen row to a final Op row.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> ref = trace["relu_1_2"].aten_ops[0].parent_op_refs[0]
+    >>> type(ref).__name__, ref.op_label
+    ('OpRef', 'relu_1_2')
+    """
 
     op_row_index: int
     op_label: str
@@ -68,7 +76,19 @@ class _PrimitiveOpProfile:
 
 @dataclass(eq=False, kw_only=True)
 class AtenOp:
-    """One value-free ATen dispatcher call observed during capture."""
+    """One ATen dispatcher call observed during capture.
+
+    Rows are value-free unless the capture asked for values
+    (``CaptureOptions(aten_ops="values")``), in which case ``out`` holds the
+    call's returned tensor(s) under the same save rules as ``Op.out``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
+    >>> row = trace["relu_1_2"].aten_ops[0]
+    >>> type(row).__name__, row.capture_phase
+    ('AtenOp', 'forward')
+    """
 
     label: str
     sequence: int
@@ -102,10 +122,17 @@ class AtenOp:
     outcome: str = "returned"
     exception_type: str | None = None
     execution_context: Any = None
+    out: Any = None
+    """The tensor(s) this call returned, mirroring ``Op.out``: a tensor for a
+    single-tensor result, a tuple of tensors (one per ``output_tensor_facts``
+    entry, same order) for a container result, ``None`` when no value was kept
+    (values off, a raised call, a non-tensor result, an owner whose ``save=``
+    selection dropped it, or an artifact saved without outs)."""
 
-    _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = dict.fromkeys(
-        PRIMITIVE_OP_FIELD_ORDER, FieldPolicy.KEEP
-    )
+    _PORTABLE_STATE_POLICY: ClassVar[dict[str, FieldPolicy]] = {
+        **dict.fromkeys(PRIMITIVE_OP_FIELD_ORDER, FieldPolicy.KEEP),
+        "out": FieldPolicy.BLOB_RECURSIVE,
+    }
     _FIELD_POLICY = build_record_field_policy_table(
         PRIMITIVE_OP_FIELD_ORDER,
         _PORTABLE_STATE_POLICY,
@@ -134,6 +161,10 @@ class AtenOp:
         from .._trace_core.record_rows import record_state_restore
 
         record_state_restore(self, mapping)
+        if isinstance(self.out, list):
+            # A container result round-trips through JSON as a list; the
+            # user-facing shape is the capture-time tuple.
+            self.out = tuple(self.out)
 
     def __getstate__(self) -> dict[str, Any]:
         """Return primitive row state without its backing-store handle."""

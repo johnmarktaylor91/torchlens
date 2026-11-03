@@ -15,6 +15,30 @@ pip install torchlens open_clip_torch timm
 pip install "vit-prisma @ git+https://github.com/Prisma-Multimodal/ViT-Prisma@771494b8181a0f7779fab19adb5342688f95c724"
 ```
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). A vision SAE reads one
+layer's activations; these are `layer4`'s on the running CNN. The recipe below builds its own
+model for the method.
+
+```python
+# recipe-test: tool=prisma expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+acts = trace["layer4"].out
+RESULT = acts.shape[1] == 512
+```
+
 ## Real use: a Prisma CLIP SAE
 
 Not run here: the SAE (about 300 MB) and the CLIP weights download from the
@@ -148,7 +172,7 @@ forward on the same activations:
 import torchlens as tl
 from torchlens.bridge.sae import splice
 
-trace = tl.trace(vit, images, capture=tl.options.CaptureOptions(replayable=True))
+trace = tl.trace(vit, images)
 result = splice(trace, site="blocks.1", sae=PrismaCodec(sae))
 with torch.no_grad():
     own_reconstruction, own_latents = sae(result.clean_site_out)[:2]

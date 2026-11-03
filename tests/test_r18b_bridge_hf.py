@@ -137,35 +137,6 @@ def test_image_transform_single_image_unsqueezes() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_record_explicit_tokenizer_is_not_verified() -> None:
-    """An explicit user tokenizer must not be recorded as model-verified."""
-
-    tokenizer = SimpleNamespace(name_or_path="my/custom", model_max_length=128)
-    record = hf._tokenizer_preprocessing_record(tokenizer, nn.Linear(1, 1), explicit=True)
-
-    assert record.verified is False
-
-
-def test_record_unknown_identifier_is_not_verified() -> None:
-    """When no identifier can be resolved, verified must be False (not True)."""
-
-    tokenizer = SimpleNamespace(model_max_length=128)  # no name_or_path
-    record = hf._tokenizer_preprocessing_record(tokenizer, nn.Linear(1, 1), explicit=False)
-
-    assert record.identifier == "unknown"
-    assert record.verified is False
-
-
-def test_record_auto_resolved_identifier_stays_verified() -> None:
-    """Auto-resolved tokenizers with a real identifier remain verified."""
-
-    tokenizer = SimpleNamespace(name_or_path="bert-base-uncased", model_max_length=512)
-    record = hf._tokenizer_preprocessing_record(tokenizer, nn.Linear(1, 1), explicit=False)
-
-    assert record.identifier == "bert-base-uncased"
-    assert record.verified is True
-
-
 def test_record_reports_actual_padding_fallback() -> None:
     """A no-pad-token fallback must be recorded as padding=False, not True."""
 

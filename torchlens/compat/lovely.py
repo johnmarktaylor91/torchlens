@@ -47,6 +47,13 @@ def lovely(obj: Any, *args: Any, **kwargs: Any) -> Any:
     -------
     Any
         Downstream lovely-tensors result or patched tensor repr.
+
+    Examples
+    --------
+    >>> # requires: lovely_tensors
+    >>> text = repr(lovely(torch.zeros(2, 3)))
+    >>> "[2, 3]" in text
+    True
     """
 
     try:
@@ -83,6 +90,13 @@ def str(obj: Any, *args: Any, **kwargs: Any) -> Any:
     -------
     str
         Lovely representation.
+
+    Examples
+    --------
+    >>> # requires: lovely_tensors
+    >>> text = tl.compat.lovely.str(torch.zeros(2, 3))
+    >>> "[2, 3]" in text
+    True
     """
 
     return builtins.str(lovely(obj, *args, **kwargs))

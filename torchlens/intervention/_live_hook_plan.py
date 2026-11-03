@@ -1,16 +1,16 @@
-"""Make a sticky hook removal reach the rerun or backward pass in progress.
+"""Hook-plan bookkeeping for the live engines: accounting ids and mid-run handle removal.
 
-The engines fire from a hook plan built at the run's start and published as
-the ``_state._active_hook_plan`` global. A removal through ``HookHandle``
-(``Trace.clear_edits`` / ``Trace.clear_hooks``) used to edit only the recipe,
-so the removed hook kept firing until that run ended. These helpers retire
-the removed entries from the live plan at removal time and let the run's
-fire audit and ledger count the recipe as it stands after the run, so a
-removal mid-run ends like a removal between runs.
+A rerun, an append rerun or a backward pass fires from a hook plan built at
+the run's start and published as ``_state._active_hook_plan``. Removing a
+sticky hook by its handle ids (``clear_edits(handle=...)``) takes effect at once,
+like a torch hook handle: ``retire_live_hook_handles`` rebinds the published plan without the
+removed entries, and ``_drop_handles_removed_mid_run`` makes the rerun's fire
+audit and ledger count the recipe as it stands after the run.
 """
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
@@ -20,19 +20,62 @@ if TYPE_CHECKING:
     from .hooks import NormalizedHookEntry
 
 
-def sticky_handle_ids(spec: Any) -> set[str]:
-    """Return the removable handle ids held by a recipe's sticky hook specs.
+def _assign_unique_plan_ids(hook_plan: list[NormalizedHookEntry]) -> list[NormalizedHookEntry]:
+    """Give every planned entry a unique, stable accounting identifier.
+
+    The fallback identifier ladder (plan id -> hook id -> helper name ->
+    callable qualname) can COLLIDE across entries with different targets, and
+    the fire audit compares ``Counter`` values keyed by that string: two
+    fires of one entry hid the other entry's total miss (``fired=2``,
+    ``unfired=()``), so a partially-applied plan claimed every entry fired
+    (incomplete f9f5b140). Colliding identifiers get a stable occurrence
+    suffix stamped into ``metadata["plan_id"]``, which live execution writes
+    into each ``FireResult``, so the audit is per-entry; unique identifiers
+    are preserved verbatim.
+    """
+
+    import dataclasses as _dataclasses
+
+    counts = Counter(_hook_plan_identifier(entry) for entry in hook_plan)
+    seen: Counter[str] = Counter()
+    unique_plan: list[NormalizedHookEntry] = []
+    for entry in hook_plan:
+        base = _hook_plan_identifier(entry)
+        if counts[base] > 1:
+            metadata = dict(entry.metadata)
+            metadata["plan_id"] = f"{base}#occ{seen[base]}"
+            metadata["plan_id_base"] = base
+            entry = _dataclasses.replace(entry, metadata=metadata)
+        seen[base] += 1
+        unique_plan.append(entry)
+    return unique_plan
+
+
+def _hook_plan_identifier(entry: NormalizedHookEntry) -> str:
+    """Return the identifier written into a live ``FireResult``.
 
     Parameters
     ----------
-    spec:
-        Intervention recipe (``InterventionSpec``) or ``None``.
+    entry:
+        Planned normalized hook entry.
 
     Returns
     -------
-    set[str]
-        Handle ids of the sticky hook specs that carry one.
+    str
+        Plan id using the same fallback order as live execution.
     """
+
+    if "plan_id" in entry.metadata:
+        return str(entry.metadata["plan_id"])
+    if "hook_id" in entry.metadata:
+        return str(entry.metadata["hook_id"])
+    if entry.helper_spec is not None:
+        return str(entry.helper_spec.name)
+    return str(getattr(entry.normalized_callable, "__qualname__", "user_hook"))
+
+
+def sticky_handle_ids(spec: Any) -> set[str]:
+    """Return the removable handle ids held by a recipe's sticky hook specs."""
 
     return {
         hook_spec.handle
@@ -44,13 +87,12 @@ def sticky_handle_ids(spec: Any) -> set[str]:
 def retire_live_hook_handles(handle_ids: Iterable[str]) -> int:
     """Drop sticky hooks removed through their handles from the live plan.
 
-    ``HookHandle.remove()`` takes effect at once, like torch's own hook
-    handles: the next hook site the running engine (a rerun, an append rerun
-    or a backward pass) reaches reads a plan without the entry. The plan
-    global is rebound, never mutated in place, so the site that is firing
-    when ``remove()`` is called finishes the list it is iterating, the way a
-    torch module call fires its per-call snapshot of hooks. This runs only at
-    removal time, so a run that removes nothing pays nothing per site.
+    The next hook site the running engine reaches reads a plan without the
+    entry. The plan global is rebound, never mutated in place, so the site
+    that is firing when ``remove()`` is called finishes the list it is
+    iterating, the way a torch module call fires its per-call snapshot of
+    hooks. This runs only at removal time, so a run that removes nothing pays
+    nothing per site.
 
     Parameters
     ----------
@@ -65,10 +107,8 @@ def retire_live_hook_handles(handle_ids: Iterable[str]) -> int:
     """
 
     plan = _state._active_hook_plan
-    if not plan:
-        return 0
     retired = set(handle_ids)
-    if not retired:
+    if not plan or not retired:
         return 0
     kept = [entry for entry in plan if getattr(entry, "handle", None) not in retired]
     removed = len(plan) - len(kept)
@@ -77,64 +117,17 @@ def retire_live_hook_handles(handle_ids: Iterable[str]) -> int:
     return removed
 
 
-def retire_removed_from_live_plan(handles_before: set[str], spec: Any) -> int:
-    """Retire from the live plan every handle that ``spec`` no longer holds.
-
-    Parameters
-    ----------
-    handles_before:
-        The recipe's sticky handle ids before the removal.
-    spec:
-        The recipe after the removal.
-
-    Returns
-    -------
-    int
-        Number of live plan entries retired.
-    """
-
-    return retire_live_hook_handles(handles_before - sticky_handle_ids(spec))
-
-
-def drop_handles_removed_mid_run(
+def _drop_handles_removed_mid_run(
     hook_plan: list[NormalizedHookEntry], spec: Any
 ) -> list[NormalizedHookEntry]:
     """Return the plan without entries whose handle left the recipe during the run.
 
-    A sticky hook removed through its ``HookHandle`` while the rerun was in
-    progress stopped firing at once (``retire_live_hook_handles``); the fire
-    audit and the run ledger then count what the recipe holds after the run,
-    the same as a removal between reruns. When nothing was removed the same
-    list object comes back, so a plain rerun is unchanged.
-
-    Parameters
-    ----------
-    hook_plan:
-        The plan the run started with.
-    spec:
-        The recipe as it stands after the run.
-
-    Returns
-    -------
-    list[NormalizedHookEntry]
-        The plan restricted to entries the recipe still holds.
+    The fire audit and the run ledger then count what the recipe holds after
+    the run, the same as a removal between reruns. When nothing was removed
+    the same list object comes back, so a plain rerun is unchanged.
     """
 
     live_handles = sticky_handle_ids(spec)
     if all(entry.handle is None or entry.handle in live_handles for entry in hook_plan):
         return hook_plan
     return [entry for entry in hook_plan if entry.handle is None or entry.handle in live_handles]
-
-
-def reset_append_state(trace: Any) -> None:
-    """Mark ``trace`` as a fresh, un-appended rerun product.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose run state was just replaced by a full rerun.
-    """
-
-    trace._provenance_is_appended = False
-    trace._append_sequence_id = 0
-    trace._append_history = []

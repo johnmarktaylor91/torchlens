@@ -36,8 +36,8 @@ class ReferenceSpec:
     structural_role: str
     description: str
     substitution_note: str | None
-    vis_mode: str
-    vis_direction: str
+    rolled: bool
+    direction: str
     vis_nesting_depth: int
     builder_name: str
     input_description: str
@@ -95,7 +95,7 @@ def _two_tower():
 def _monster():
     example_models = _example_models()
     return example_models.RandomGraphModel(
-        target_nodes=120, nesting_depth=4, seed=42
+        target_nodes=120, call_depth=4, seed=42
     ).eval(), torch.rand(2, 64)
 
 
@@ -106,8 +106,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="sanity check",
         description="Minimal 3-op chain to judge the baseline rhythm of nodes, labels, and arrows.",
         substitution_note=None,
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=1000,
         builder_name="example_models.SimpleFF",
         input_description="torch.rand(5, 5)",
@@ -119,8 +119,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="repetitive sequential depth",
         description="VGG-style stack for sequential convolutional depth and repeated module rhythm.",
         substitution_note="Uses example_models.ConvAutoencoder as the lightweight sequential-convolution substitute for a VGG-style stack.",
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=2,
         builder_name="example_models.ConvAutoencoder",
         input_description="torch.rand(1, 1, 28, 28)",
@@ -132,8 +132,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="skip connections",
         description="Residual topology for long skip edges and repeated parameterized blocks.",
         substitution_note="Uses example_models.ResidualBlockModel as the lightweight residual substitute.",
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=3,
         builder_name="example_models.ResidualBlockModel",
         input_description="torch.rand(1, 16, 16, 16)",
@@ -145,8 +145,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="encoder-decoder with lateral skips",
         description="Nested encoder-decoder with lateral merge edges and mirrored stages.",
         substitution_note=None,
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=3,
         builder_name="example_models.SmallUNet",
         input_description="torch.rand(1, 1, 32, 32)",
@@ -158,8 +158,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="attention stack",
         description="Encoder-only transformer block stack with repeated attention and normalization motifs.",
         substitution_note=None,
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=3,
         builder_name="example_models.TransformerEncoderModel",
         input_description="torch.rand(10, 2, 16)",
@@ -171,8 +171,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="cross-attention two-stream structure",
         description="Two-stream transformer with decoder-side cross-attention.",
         substitution_note="Uses example_models.TransformerDecoderModel as a lightweight T5-style structural substitute.",
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=3,
         builder_name="example_models.TransformerDecoderModel",
         input_description="[torch.rand(8, 2, 16), torch.rand(10, 2, 16)]",
@@ -184,8 +184,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="recurrent network",
         description="Temporal recurrence with hidden-state threading and repeated cell structure.",
         substitution_note="Uses bidirectional LSTM rather than a plain LSTM because it stresses recurrent clarity more aggressively.",
-        vis_mode="rolled",
-        vis_direction="leftright",
+        rolled=True,
+        direction="leftright",
         vis_nesting_depth=2,
         builder_name="example_models.BiLSTMModel",
         input_description="torch.rand(2, 6, 8)",
@@ -197,8 +197,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="GAN/dual-subgraph substitute",
         description="Twin shared-weight branches for contrastive learning, standing in for a generator/discriminator style split.",
         substitution_note="Uses example_models.SimCLRModel as the dual-subgraph substitute because it cleanly exposes mirrored branches and a merge objective.",
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=2,
         builder_name="example_models.SimCLRModel",
         input_description="[torch.rand(4, 16), torch.rand(4, 16)]",
@@ -210,8 +210,8 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         structural_role="heterogeneous input streams merging",
         description="Parallel user/item towers with a late interaction point.",
         substitution_note="Uses example_models.TwoTowerRecommender as the multi-input structural reference.",
-        vis_mode="unrolled",
-        vis_direction="leftright",
+        rolled=False,
+        direction="leftright",
         vis_nesting_depth=2,
         builder_name="example_models.TwoTowerRecommender",
         input_description="[torch.rand(4, 8), torch.rand(4, 8)]",
@@ -222,9 +222,9 @@ REFERENCE_SPECS: list[ReferenceSpec] = [
         title="Monster graph",
         structural_role="100+ layer stress test",
         description="Large nested random graph model for clutter, hierarchy, and scale resilience.",
-        substitution_note="Uses example_models.RandomGraphModel(target_nodes=120, nesting_depth=4) as the lightweight production-scale stress test.",
-        vis_mode="rolled",
-        vis_direction="leftright",
+        substitution_note="Uses example_models.RandomGraphModel(target_nodes=120, call_depth=4) as the lightweight production-scale stress test.",
+        rolled=True,
+        direction="leftright",
         vis_nesting_depth=2,
         builder_name="example_models.RandomGraphModel",
         input_description="torch.rand(2, 64)",
@@ -239,14 +239,13 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
     outpath = gallery_dir / f"{spec.key}.png"
     try:
         log.draw(
-            vis_renderer="dagua",
+            str(outpath),
+            renderer="dagua",
             theme="torchlens",
-            vis_mode=spec.vis_mode,
-            direction=spec.vis_direction,
-            vis_call_depth=spec.vis_nesting_depth,
-            vis_save_only=True,
+            rolled=spec.rolled,
+            direction=spec.direction,
+            depth=spec.vis_nesting_depth,
             file_format="png",
-            path=str(outpath),
         )
         audit = log.visualization_field_audit().to_dict()
         result = {
@@ -258,8 +257,8 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
             "substitution_note": spec.substitution_note,
             "builder_name": spec.builder_name,
             "input_description": spec.input_description,
-            "vis_mode": spec.vis_mode,
-            "vis_direction": spec.vis_direction,
+            "rolled": spec.rolled,
+            "direction": spec.direction,
             "vis_nesting_depth": spec.vis_nesting_depth,
             "output_path": str(outpath),
             "num_nodes": len(log.layer_labels),
@@ -277,8 +276,8 @@ def _render_one(spec: ReferenceSpec, gallery_dir: Path) -> dict[str, Any]:
             "substitution_note": spec.substitution_note,
             "builder_name": spec.builder_name,
             "input_description": spec.input_description,
-            "vis_mode": spec.vis_mode,
-            "vis_direction": spec.vis_direction,
+            "rolled": spec.rolled,
+            "direction": spec.direction,
             "vis_nesting_depth": spec.vis_nesting_depth,
             "error": f"{type(exc).__name__}: {exc}",
         }
@@ -320,7 +319,7 @@ def build_gallery(
                 f"- Structural role: {item['structural_role']}",
                 f"- Builder: `{item['builder_name']}`",
                 f"- Input: `{item['input_description']}`",
-                f"- Render mode: `{item['vis_mode']}` / `{item['vis_direction']}` / depth `{item['vis_nesting_depth']}`",
+                f"- Render mode: rolled `{item['rolled']}` / `{item['direction']}` / depth `{item['vis_nesting_depth']}`",
                 f"- Status: `{item['status']}`",
             ]
         )

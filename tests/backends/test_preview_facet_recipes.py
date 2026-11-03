@@ -68,4 +68,4 @@ def test_preview_backend_refuses_non_callable_recipes_typed(backend: str) -> Non
     with pytest.raises(BackendUnsupportedError, match="recipe callables") as info:
         tl.trace(model, example_input, backend=backend, facets=["not-callable"])
     assert info.value.code == "trace_option_unsupported"
-    assert info.value.option == "facets"
+    assert info.value.fields["option"] == "facets"

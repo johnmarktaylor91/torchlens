@@ -25,6 +25,42 @@ pip install "sae-dashboard==0.8.0"   # to render the dashboard
 pip install "eai-delphi==0.1.3"      # to explain and score the latents
 ```
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). SAE latents are
+computed from one site's activations; `tl.extract` returns them for the running decoder. The
+recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+acts = tl.extract(model, x, ["transformer.h.1.mlp"])["transformer.h.1.mlp"]
+RESULT = tuple(acts.shape) == (1, len(words), config.n_embd)
+```
+
 ## One batch: the latents a splice kept
 
 A tiny next-token model and a hand-built SAE stand in for a real model and a

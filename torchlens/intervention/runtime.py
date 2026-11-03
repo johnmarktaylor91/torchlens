@@ -28,7 +28,7 @@ from ._module_boundary import (
     _replace_tensor_outputs as _replace_tensor_outputs,
 )
 from ._runtime_gradient import (
-    _active_backward_pass_index,
+    _active_backward_pass_number,
     _current_injection_rule,
     _first_replaced_tuple_index,
     _hook_display_name,
@@ -37,7 +37,7 @@ from ._runtime_gradient import (
     _live_run_ctx,
     _next_gradient_call_index,
     _record_backward_selector_fire,
-    _trace_backward_pass_index,
+    _trace_backward_pass_number,
 )
 from ._runtime_probes import (
     _apply_inplace_replacement_to_mutated_storage,
@@ -946,7 +946,7 @@ def apply_live_gradient_hooks(
     hook_plan = _state._active_hook_plan
     if not hook_plan or _state.active_capture()[0] is not trace:
         return grad, ()
-    pass_index = _trace_backward_pass_index(trace)
+    pass_index = _trace_backward_pass_number(trace)
     current = grad
     fire_records: list[FireRecord] = []
     candidates = _gradient_site_ops(trace, op)
@@ -1016,7 +1016,7 @@ def _fire_gradient_entry(
         args=(grad,),
         kwargs={
             "grad_kind": "grad_output",
-            "backward_pass_index": pass_index,
+            "backward_pass_number": pass_index,
             "tuple_index": tuple_index,
             "call_index": call_index,
         },
@@ -1100,7 +1100,7 @@ def _gradient_fire_record(
         timing="post",
         signal="backward",
         edit_name=_hook_display_name(entry),
-        backward_pass_number=context.kwargs["backward_pass_index"],
+        backward_pass_number=context.kwargs["backward_pass_number"],
         call_index=context.kwargs["call_index"],
         grad_kind="grad_output",
         tuple_index=context.kwargs["tuple_index"],
@@ -1553,7 +1553,7 @@ def _build_live_backward_fire_record(
 
     tuple_index = _first_replaced_tuple_index(previous, current)
     label = str(getattr(grad_fn_handle, "label", ""))
-    pass_index = _active_backward_pass_index(grad_fn_handle)
+    pass_index = _active_backward_pass_number(grad_fn_handle)
     return build_fire_record(
         target_label=label,
         call_label=f"{label}:{call_index}" if label else str(call_index),

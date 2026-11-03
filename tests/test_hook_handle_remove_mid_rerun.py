@@ -1,11 +1,11 @@
-"""A hook removed through its handle during a run stops firing at once.
+"""A hook removed through its handle ids during a run stops firing at once.
 
-``HookHandle.remove()`` matches torch's own hook handles: the next hook site
-the run reaches after ``remove()`` returns skips the removed hook, inside the
+``clear_edits(handle=ids)`` matches torch's own hook handles: the next hook site
+the run reaches after the removal returns skips the removed hook, inside the
 same rerun or backward pass, not from the next one. Hooks still queued at the
-site that is firing when ``remove()`` is called finish that site (torch
+site that is firing when the removal is called finish that site (torch
 snapshots the hook list per call the same way). After the run the trace's
-recipe and the handle are the same as if the hook had been removed between
+recipe and the handle ids are the same as if the hook had been removed between
 runs: no entry for it, no zero-fire disclosure for it.
 """
 
@@ -14,15 +14,12 @@ from __future__ import annotations
 import warnings
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.intervention.errors import MultiMatchWarning
 from torchlens.options import CaptureOptions
-
-pytestmark = pytest.mark.filterwarnings("ignore::torchlens._selection.errors.MultiMatchWarning")
 
 
 def _model() -> nn.Sequential:
@@ -41,8 +38,22 @@ def _recipe_handles(trace: Any) -> set[str | None]:
     return {spec.handle for spec in trace._intervention_spec.hook_specs}
 
 
+def _attach(trace: Any, selector: Any, hook: Any) -> tuple[str, ...]:
+    """Stage a hook on every matching site; the fan-out disclosure is expected here."""
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", MultiMatchWarning)
+        return trace._attach_hooks(selector, hook, confirm_mutation=True)
+
+
+def _remove(trace: Any, handle_ids: tuple[str, ...]) -> None:
+    """Remove the staged hook by its handle ids, as ``do``'s caller would."""
+
+    trace.clear_edits(handle=handle_ids, confirm_mutation=True)
+
+
 def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
-    """The probe: a prepend hook on linear removes the relu hook on its first fire."""
+    """The probe: a hook on linear removes the relu hook on its first fire."""
 
     model, x, trace = _ready_trace()
     events: list[str] = []
@@ -51,29 +62,27 @@ def test_forward_hook_removed_before_its_site_never_fires_on_that_run() -> None:
         events.append("victim")
         return out * 0.5
 
-    relu_handle = trace.attach_hooks(tl.func("relu"), victim, confirm_mutation=True)
-
-    removed: list[bool] = []
+    relu_handle = _attach(trace, tl.func("relu"), victim)
+    removed_once: list[bool] = []
 
     def remover(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
-        if not removed:
-            relu_handle.remove()
-            removed.append(True)
+        if not removed_once:
+            _remove(trace, relu_handle)
+            removed_once.append(True)
             events.append("removed")
         events.append("linear")
         return out
 
-    trace.attach_hooks(tl.func("linear"), remover, prepend=True, confirm_mutation=True)
+    _attach(trace, tl.func("linear"), remover)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert events == ["removed", "linear", "linear"], events
     assert trace.last_run["hooks"] == 1
     assert trace.last_run["hooks_fired"] == 2
     assert trace.last_run["hooks_unfired"] == 0
-    assert relu_handle.handle_ids[0] not in _recipe_handles(trace)
+    assert relu_handle[0] not in _recipe_handles(trace)
     # The unhooked output: the relu hook never scaled anything on this run.
     expected = model(x)
     assert torch.allclose(trace[trace.output_layers[0]].out, expected)
@@ -90,13 +99,12 @@ def test_forward_hook_removing_itself_fires_once() -> None:
 
     def once(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         fired.append(1)
-        handle_box[0].remove()
+        _remove(trace, handle_box[0])
         return out
 
-    handle_box.append(trace.attach_hooks(tl.func("relu"), once, confirm_mutation=True))
+    handle_box.append(_attach(trace, tl.func("relu"), once))
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert len(fired) == 1, "a hook that removed itself fired again at a later site"
@@ -115,19 +123,18 @@ def test_forward_hook_on_a_passed_site_is_gone_at_its_next_site() -> None:
         events.append("linear")
         return out
 
-    linear_handle = trace.attach_hooks(tl.func("linear"), linear_hook, confirm_mutation=True)
+    linear_handle = _attach(trace, tl.func("linear"), linear_hook)
 
     def relu_hook(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         if "removed" not in events:
-            linear_handle.remove()
+            _remove(trace, linear_handle)
             events.append("removed")
         events.append("relu")
         return out
 
-    trace.attach_hooks(tl.func("relu"), relu_hook, confirm_mutation=True)
+    _attach(trace, tl.func("relu"), relu_hook)
     with warnings.catch_warnings():
         warnings.simplefilter("error")
-        warnings.simplefilter("ignore", MultiMatchWarning)  # tl.func fans out to both sites
         trace.run(model, x)
 
     assert events == ["linear", "removed", "relu", "relu"], events
@@ -145,16 +152,18 @@ def test_hooks_later_at_the_firing_site_still_finish_that_site() -> None:
         events.append("second")
         return out
 
-    second_handle = trace.attach_hooks(tl.func("relu"), second, confirm_mutation=True)
+    second_handle: list[tuple[str, ...]] = []
 
     def first(out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
         if "removed" not in events:
-            second_handle.remove()
+            _remove(trace, second_handle[0])
             events.append("removed")
         events.append("first")
         return out
 
-    trace.attach_hooks(tl.func("relu"), first, prepend=True, confirm_mutation=True)
+    # Hooks at one site fire in staging order, so ``first`` is staged before ``second``.
+    _attach(trace, tl.func("relu"), first)
+    second_handle.append(_attach(trace, tl.func("relu"), second))
     trace.run(model, x)
 
     assert events == ["removed", "first", "second", "first"], events
@@ -168,7 +177,7 @@ def test_nothing_removed_keeps_the_rerun_unchanged() -> None:
         fired.append(1)
         return out
 
-    trace.attach_hooks(tl.func("relu"), count, confirm_mutation=True)
+    _attach(trace, tl.func("relu"), count)
     trace.run(model, x)
     assert len(fired) == 2
     assert trace.last_run["hooks"] == 1
@@ -198,8 +207,9 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
     ) -> None:
         events.append("addmm")
 
-    addmm_handle = trace.attach_hooks(tl.grad_fn(name="addmm"), victim, confirm_mutation=True)
-    removed: list[bool] = []
+    victim.signal = "backward"  # type: ignore[attr-defined]
+    addmm_handle = _attach(trace, tl.grad_fn(name="addmm"), victim)
+    removed_once: list[bool] = []
 
     def remover(
         grad_input: tuple[torch.Tensor | None, ...],
@@ -209,19 +219,20 @@ def test_backward_hook_removed_mid_pass_skips_the_remaining_grad_fns() -> None:
         call_index: int,
         run_ctx: dict[str, Any],
     ) -> None:
-        if not removed:
-            addmm_handle.remove()
-            removed.append(True)
+        if not removed_once:
+            _remove(trace, addmm_handle)
+            removed_once.append(True)
             events.append("removed")
         events.append("relu")
 
-    trace.attach_hooks(tl.grad_fn(name="relu"), remover, confirm_mutation=True)
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    remover.signal = "backward"  # type: ignore[attr-defined]
+    _attach(trace, tl.grad_fn(name="relu"), remover)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
 
     # Backward order: relu2, addmm2, relu1, addmm1. The addmm hook is removed at relu2.
     assert events == ["removed", "relu", "relu"], events
-    assert addmm_handle.handle_ids[0] not in _recipe_handles(trace)
+    assert addmm_handle[0] not in _recipe_handles(trace)
 
     events.clear()
-    trace.log_backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
+    trace.backward(trace[trace.output_layers[0]].out.sum(), retain_graph=True)
     assert events == ["relu", "relu"], events

@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-import pytest
-
 
 def authority_drift(values: Sequence[Any], *, require_identity: bool) -> tuple[int, ...]:
     """Return indexes whose value diverges from the first authority.
@@ -107,7 +105,6 @@ class TestSecurityDriftGateIsRedCapable:
         assert authority_drift((canonical, planted), require_identity=True) == (1,)
 
 
-@pytest.mark.smoke
 def test_runnable_wire_vocabulary_uses_one_authority_per_concept() -> None:
     """Writers and readers alias the same prefix and closed-vocabulary objects."""
 

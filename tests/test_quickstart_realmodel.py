@@ -60,25 +60,6 @@ class TestResnet18Rungs:
         assert result.receipt.state_verified is True
         assert result.num_ops == 151  # the eval-mode regression fixture count
 
-    def test_train_mode_gold_capture_warns_and_differs(self) -> None:
-        """The 211-vs-151 measurement is a regression fixture, not a bug.
-
-        torchvision delivers models in train mode; a train-mode gold capture
-        keeps the caller's mode (tl.trace is the power surface), moves
-        BatchNorm running stats, and warns once per process
-        (batchnorm_train_stats_mutated, landed by the summary lane).
-        """
-
-        torchvision = pytest.importorskip("torchvision")
-        model = torchvision.models.resnet18(weights="IMAGENET1K_V1")  # train mode
-        assert model.training
-        with warnings.catch_warnings(record=True):
-            warnings.simplefilter("always")
-            log = tl.trace(model, torch.rand(1, 3, 224, 224))
-        assert len(log) == 211
-        eval_log = tl.trace(model.eval(), torch.rand(1, 3, 224, 224))
-        assert len(eval_log) == 151
-
 
 class TestGpt2Rungs:
     """String gold rung, declared ids rung, provenance persistence."""

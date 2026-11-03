@@ -133,6 +133,15 @@ class CostTreeRow:
         ``backward_state`` says whether it was not run or is unknown).
     self_forward_backward_flops / subtree_forward_backward_flops:
         Forward MAC work plus executed backward; ``None`` with the backward.
+
+    Examples
+    --------
+    >>> tree = tl.report.cost_tree(tl.trace(model, x))
+    >>> roots = [row for row in tree.rows if row.kind == "root"]
+    >>> [row.depth for row in roots]
+    [0]
+    >>> roots[0].parent_id is None
+    True
     """
 
     row_id: str
@@ -172,6 +181,14 @@ class CostTree:
     backward count when one was counted (the self backward column sums to
     it exactly, unattributed calls included as their own row), else
     ``None``; ``column_conventions`` names each FLOPs column's convention.
+
+    Examples
+    --------
+    >>> tree = tl.report.cost_tree(tl.trace(model, x))
+    >>> tree.partition_total > 0
+    True
+    >>> tree.backward_state
+    'grad_enabled_unobserved'
     """
 
     rows: tuple[CostTreeRow, ...]
@@ -241,6 +258,18 @@ def build_cost_tree(
         An existing :class:`ComputeAggregation` to project (the tree is a
         layout over the same rows, never a second traversal); built once
         from the trace when omitted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tree = cost_tree(trace, max_depth=1)
+    >>> tree.partition_total == tl.report.cost_tree(trace).partition_total
+    True
+    >>> try:
+    ...     cost_tree(trace, k=0)
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     if k is not None and (not isinstance(k, int) or isinstance(k, bool) or k < 1):

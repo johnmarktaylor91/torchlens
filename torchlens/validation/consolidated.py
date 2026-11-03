@@ -63,6 +63,14 @@ class InterventionValidationReport:
         Whether intervention checks stay local to the requested model/input.
     details:
         Human-readable axis details.
+
+    Examples
+    --------
+    >>> report = tl.validate(model, x, scope="intervention")
+    >>> isinstance(report, InterventionValidationReport)
+    True
+    >>> report.is_invariant
+    True
     """
 
     is_invariant: bool
@@ -512,6 +520,13 @@ def validate(
     invariant itself is untouched and still records its identity on the side
     channel; the lower-level :func:`torchlens.validation.validate_forward_pass`
     door keeps raising it.
+
+    Examples
+    --------
+    >>> tl.validate(model, x, scope="forward")
+    True
+    >>> tl.validate(model, x, scope="saved")
+    True
     """
 
     normalized_scope = scope.lower()

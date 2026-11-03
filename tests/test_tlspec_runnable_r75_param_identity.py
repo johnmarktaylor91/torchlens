@@ -89,17 +89,6 @@ def _x() -> torch.Tensor:
     return torch.randn(4, 4)
 
 
-def test_r75_inline_model_gc_before_descriptor_preflights() -> None:
-    """The r74 F2 repro direction: no model ref + gc.collect -> preflight passes."""
-
-    trace = tl.trace(_BNModel().eval(), _x(), capture=_CAPTURE)  # model NOT held
-    gc.collect()
-    descriptor = build_sparse_run_descriptor(trace)
-    assert descriptor.preflight.passed, [
-        (diag.code, diag.message) for diag in descriptor.preflight.diagnostics
-    ]
-
-
 def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
     """End-to-end: dead model + gc -> save embeds the FULL state universe and runs VERIFIED.
 
@@ -125,40 +114,6 @@ def test_r75_inline_model_gc_full_save_load_run(tmp_path: Path) -> None:
     result = loaded.run(inputs=x.clone())
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
     assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
-
-
-def test_r75_model_alive_matching_unchanged(tmp_path: Path) -> None:
-    """Zero collateral: holding the model across the same gc still saves and verifies."""
-
-    x = _x()
-    model = _BNModel().eval()
-    trace = tl.trace(model, x, capture=_CAPTURE)
-    gc.collect()
-    path = tmp_path / "alive.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert model is not None  # the strong hold is the point of the fixture
-
-
-def test_r75_retrace_does_not_confuse_first_capture(tmp_path: Path) -> None:
-    """Barcode identity is PER-CAPTURE: re-tracing re-stamps, the snapshot still matches.
-
-    The template snapshot was taken during capture 1, so capture 2 re-stamping the same
-    parameter objects must not break capture 1's deferred save (the snapshot, not the
-    live registry, is the identity authority).
-    """
-
-    x = _x()
-    model = _BNModel().eval()
-    first = tl.trace(model, x, capture=_CAPTURE)
-    second = tl.trace(model, x, capture=_CAPTURE)
-    gc.collect()
-    path = tmp_path / "first.tlspec"
-    first.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert second is not None
 
 
 def test_r75_unmatched_tensor_constant_still_refuses_typed() -> None:

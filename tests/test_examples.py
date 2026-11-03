@@ -21,7 +21,7 @@ EXPECTED_EXAMPLE_STEMS = frozenset(
         "02_exact_site_after_discovery",
         "03_activation_patching_paired_prompt",
         "04_sticky_hooks_multiple_engines",
-        "05_set_vs_attach_hooks",
+        "05_set_vs_sticky_hooks",
         "06_chunked_batching",
         "07_bundle_comparison",
         "08_live_post_hooks_during_capture",

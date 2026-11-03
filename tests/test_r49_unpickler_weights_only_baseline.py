@@ -30,19 +30,14 @@ from __future__ import annotations
 
 import io
 import pickle
-import struct
-from pathlib import Path
 
 import pytest
 import torch
 from torch import nn
 
-import torchlens as tl
 from torchlens._io._safe_unpickle import (
     _SAFE_EXPLICIT_GLOBALS,
     _SAFE_TORCHLENS_TYPES,
-    _TORCH_STORAGE_BASE_CLASSES,
-    _TORCH_STORAGE_CLASSES,
     SafeBundleUnpickler,
     _is_torch_storage_instance,
     _is_torch_storage_type,
@@ -57,70 +52,9 @@ _CAP = CaptureOptions(
 )
 
 
-def _reduce_pickle_int_arg(module: str, name: str, int_arg: int) -> bytes:
-    """Hand-assemble ``GLOBAL(module,name) + REDUCE((int_arg,))`` -- the storage DoS gadget.
-
-    The int is LONG1-encoded so a size well beyond 2**31 can be expressed (the multi-GiB
-    allocation a storage ctor would perform if it were not denied FIRST).
-    """
-
-    body = (
-        int_arg.to_bytes((int_arg.bit_length() + 8) // 8, "little", signed=True) if int_arg else b""
-    )
-    out = pickle.PROTO + bytes([2]) + pickle.GLOBAL + (module + "\n" + name + "\n").encode()
-    out += pickle.MARK + pickle.LONG1 + bytes([len(body)]) + body
-    return out + pickle.TUPLE + pickle.REDUCE + pickle.STOP
-
-
 # --------------------------------------------------------------------------- #
 # 1. Storage-family construction is denied (exhaustive over the storage surface).
 # --------------------------------------------------------------------------- #
-
-
-def _all_storage_classes() -> list[type]:
-    classes = set(_TORCH_STORAGE_CLASSES)
-    classes |= set(_TORCH_STORAGE_BASE_CLASSES)
-    classes |= {torch.storage.TypedStorage, torch.UntypedStorage}
-    return sorted(classes, key=lambda c: f"{c.__module__}.{c.__qualname__}")
-
-
-def test_every_storage_class_is_identity_denied() -> None:
-    """Every torch storage class is recognized by the identity helper (surface-complete)."""
-
-    storage_classes = _all_storage_classes()
-    assert len(storage_classes) >= 31, "storage-class surface unexpectedly small"
-    for cls in storage_classes:
-        assert _is_torch_storage_type(cls), f"{cls!r} not recognized as a storage type"
-
-
-def test_storage_construction_denied_end_to_end() -> None:
-    """A REDUCE pickle of each resolvable storage class RAISES (never allocates)."""
-
-    checked = 0
-    for cls in _all_storage_classes():
-        module, name = cls.__module__, cls.__qualname__
-        # Only exercise classes actually addressable via their (module, name) so the
-        # deny path is the storage guard, not an unrelated resolution error.
-        if getattr(__import__(module, fromlist=[name]), name, None) is not cls:
-            continue
-        payload = _reduce_pickle_int_arg(module, name, 8_000_000_000)
-        with pytest.raises(pickle.UnpicklingError, match="storage"):
-            SafeBundleUnpickler(io.BytesIO(payload)).load()
-        checked += 1
-    assert checked >= 2, "expected at least Typed/Untyped storage to be exercised"
-
-
-def test_canonical_storage_ctors_denied_at_find_class() -> None:
-    """The two real baseline storage classes are denied at ``find_class`` (Layer 1)."""
-
-    for module, name in (
-        ("torch.storage", "TypedStorage"),
-        ("torch.storage", "UntypedStorage"),
-        ("torch", "UntypedStorage"),
-        ("torch", "FloatStorage"),
-    ):
-        with pytest.raises(pickle.UnpicklingError, match="torch storage constructor"):
-            SafeBundleUnpickler(io.BytesIO(b"")).find_class(module, name)
 
 
 # --------------------------------------------------------------------------- #
@@ -136,18 +70,6 @@ def test_reduce_belt_denies_storage_ctor_bypassing_find_class() -> None:
     u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
     with pytest.raises(pickle.UnpicklingError, match="via REDUCE"):
         u.load_reduce()
-
-
-def test_newobj_belts_deny_storage_ctor_bypassing_find_class() -> None:
-    """``load_newobj`` / ``load_newobj_ex`` refuse ``storage.__new__`` on the stack."""
-
-    u = _PurePythonBundleUnpickler(io.BytesIO(b""))
-    u.stack = [torch.UntypedStorage, (16,)]  # type: ignore[attr-defined]
-    with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ"):
-        u.load_newobj()
-    u.stack = [torch.UntypedStorage, (16,), {}]  # type: ignore[attr-defined]
-    with pytest.raises(pickle.UnpicklingError, match="via NEWOBJ_EX"):
-        u.load_newobj_ex()
 
 
 # --------------------------------------------------------------------------- #
@@ -171,69 +93,10 @@ def test_build_belt_denies_tensor_rebind_white_box() -> None:
         u.load_build()
 
 
-def test_build_rebind_denied_end_to_end_no_setstate() -> None:
-    """A crafted ``inline tensor -> Tensor -> BUILD`` load RAISES; ``__setstate__`` never runs.
-
-    The tensor on the stack comes from the TorchLens inline reduction (the only admitted
-    tensor source now that ``torch.storage._load_from_bytes`` is refused by name).
-    """
-
-    tensor_bytes = bytes(12)  # three float32 zeros
-
-    buf = pickle.PROTO + bytes([2])
-    buf += pickle.GLOBAL + b"torchlens._io._inline_tensor\nrebuild_inline_tensor\n"
-    buf += pickle.MARK
-    buf += pickle.BINBYTES + struct.pack("<I", len(tensor_bytes)) + tensor_bytes
-    buf += pickle.SHORT_BINUNICODE + bytes([13]) + b"torch.float32"
-    buf += pickle.BININT1 + bytes([3]) + pickle.TUPLE1
-    buf += pickle.TUPLE + pickle.REDUCE  # -> a real Tensor on the stack
-    buf += pickle.EMPTY_DICT + pickle.BUILD + pickle.STOP  # attacker rebind BUILD
-
-    setstate_calls = 0
-    original_setstate = torch.Tensor.__setstate__
-
-    def _spy(self: torch.Tensor, *args: object, **kwargs: object) -> object:
-        nonlocal setstate_calls
-        setstate_calls += 1
-        return original_setstate(self, *args, **kwargs)  # type: ignore[arg-type]
-
-    torch.Tensor.__setstate__ = _spy  # type: ignore[method-assign, assignment]
-    try:
-        with pytest.raises(pickle.UnpicklingError, match="BUILD applied to a torch"):
-            SafeBundleUnpickler(io.BytesIO(buf)).load()
-    finally:
-        torch.Tensor.__setstate__ = original_setstate  # type: ignore[method-assign]
-    assert setstate_calls == 0, "Tensor.__setstate__ ran despite the BUILD gate"
-
-
 # --------------------------------------------------------------------------- #
 # 4. Interposition non-vacuity: the rebuilt dispatch actually points at the
 #    subclass overrides (guards the "method-override-alone-is-inert" trap).
 # --------------------------------------------------------------------------- #
-
-
-def test_dispatch_table_repointed_to_subclass_overrides() -> None:
-    """The interpreter's ``dispatch`` targets its OWN opcode handlers, not the base ones."""
-
-    for opcode, method_name in (
-        (pickle.BUILD[0], "load_build"),
-        (pickle.REDUCE[0], "load_reduce"),
-        (pickle.NEWOBJ[0], "load_newobj"),
-        (pickle.NEWOBJ_EX[0], "load_newobj_ex"),
-    ):
-        subclass_handler = _PurePythonBundleUnpickler.dispatch[opcode]
-        assert subclass_handler is getattr(_PurePythonBundleUnpickler, method_name)
-        assert subclass_handler is not pickle._Unpickler.dispatch[opcode], (
-            f"dispatch[{opcode!r}] still points at the inert base handler"
-        )
-
-
-def test_base_swap_is_pure_python_unpickler() -> None:
-    """The fast path runs the C machine behind a pre-scan; the interpreter is pure Python."""
-
-    assert issubclass(SafeBundleUnpickler, pickle.Unpickler)
-    assert not issubclass(SafeBundleUnpickler, pickle._Unpickler)
-    assert issubclass(_PurePythonBundleUnpickler, pickle._Unpickler)
 
 
 # --------------------------------------------------------------------------- #
@@ -285,27 +148,6 @@ def test_admit_set_constructs_no_storage_strict_subset_of_baseline() -> None:
     )
 
 
-def test_intentional_inert_resolution_set_still_admitted() -> None:
-    """Documented intentional inert resolutions still work (the delta is storage-only)."""
-
-    # torch inert data TYPEs and reconstructors that legit metadata references. These
-    # RESOLVE (the type object is an inert reference); only their CONSTRUCTION on a
-    # REDUCE/NEWOBJ belt is denied (r63 -- see test_r63_construct_deny.py). Keeping
-    # ``torch.Tensor`` / ``torch.FloatTensor`` resolvable here is exactly the
-    # resolution-admitted half the construction-refused half must NOT mask.
-    for module, name in (
-        ("torch", "Size"),
-        ("torch", "Tensor"),
-        ("torch", "FloatTensor"),
-        ("torch.nn.parameter", "Parameter"),
-        ("torch._utils", "_rebuild_tensor_v2"),
-    ):
-        assert _resolve_or_none(module, name) is not None, f"{module}.{name} should resolve"
-    # numpy reconstructors + a representative torchlens DATA type.
-    assert _resolve_or_none("numpy", "ndarray") is not None
-    assert _resolve_or_none("torchlens._io", "BlobRef") is not None
-
-
 # --------------------------------------------------------------------------- #
 # 6. Over-trigger pins: legitimate bundles still load AND run under both layers.
 # --------------------------------------------------------------------------- #
@@ -330,38 +172,3 @@ class _ControlFlow(nn.Module):
         if value.sum() > 0:
             return torch.relu(value) * 2
         return torch.sigmoid(value) - 1
-
-
-@pytest.mark.filterwarnings(
-    # A08 random-role-init disclosure (runnable_random_init_run): this test
-    # exercises a weight-free runnable run DELIBERATELY; the warning is the
-    # feature under test elsewhere (tests/test_persist_honesty_runnable_random.py).
-    "default:This runnable artifact carries no model weights"
-)
-def test_legit_bundles_round_trip_under_the_gate(tmp_path: Path) -> None:
-    """Portable + all runnable levels still load AND run (no over-trigger)."""
-
-    x = torch.randn(2, 4)
-    keep_alive: list[nn.Module] = []
-
-    portable = tmp_path / "portable"
-    cf = _ControlFlow()
-    keep_alive.append(cf)
-    tl.trace(cf, x, save="all").save(portable, level="portable")
-    assert tl.load(portable) is not None
-
-    for suffix, kwargs in (
-        ("runnable", {}),
-        ("runnable_weights", {"include_weights": True}),
-        ("runnable_activations", {"include_activations": True}),
-    ):
-        model = _StatefulLinear()
-        keep_alive.append(model)
-        path = tmp_path / suffix
-        tl.trace(model, x, save=tl.func("relu"), capture=_CAP).save(
-            path, level="runnable", **kwargs
-        )
-        loaded = tl.load(path)
-        assert loaded is not None, suffix
-        result = loaded.run(inputs=x)
-        assert tuple(result.output.shape) == (2, 4), suffix

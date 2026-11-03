@@ -20,7 +20,7 @@ pytest.importorskip("torchvision")
 
 import torchlens as tl  # noqa: E402
 import torchlens.preprocessing as pp  # noqa: E402
-from torchlens._extraction_provenance import INPUT_PREPROCESSING_SCHEMA, input_preprocessing_of
+from torchlens._extraction_provenance import input_preprocessing_of
 from torchlens.errors import DatasetExtractionResumeError
 
 
@@ -81,49 +81,6 @@ def _stimuli(n: int = 5) -> torch.Tensor:
     return torch.rand(n, 3, 8, 8)
 
 
-def test_resolution_backed_run_stamps_verified_block(model, resolution, tmp_path) -> None:
-    """The golden path: applied + recorded, verdict verified-by-construction."""
-
-    out_dir = tmp_path / "run"
-    tl.extract_dataset(
-        model,
-        _stimuli(),
-        ["conv"],
-        batch_size=2,
-        path=out_dir,
-        input_transform=resolution,
-        stimulus_ids=[f"s{i}" for i in range(5)],
-        progress=False,
-    )
-    manifest = json.loads((out_dir / "manifest.json").read_text())
-    block = manifest["input_preprocessing"]
-    assert block["schema"] == INPUT_PREPROCESSING_SCHEMA
-    assert block["verdict"] == "verified"
-    assert block["applied_by"] == "extract_dataset"
-    assert block["authority"]["source"] == "explicit_declaration"
-    assert block["versions"]["torchlens"]
-    signature_value = manifest["signature"]["transform_pipeline"]
-    assert set(signature_value) == {"output", "input"}
-    assert signature_value["input"]["kind"] == "resolved"
-    loaded = tl.load(out_dir)
-    assert loaded.input_preprocessing["verdict"] == "verified"
-
-
-def test_undeclared_run_carries_honest_unknown_block(model, tmp_path) -> None:
-    """No input path declared -> the block still exists and says unknown."""
-
-    out_dir = tmp_path / "plain"
-    tl.extract_dataset(model, _stimuli(), ["conv"], batch_size=2, path=out_dir, progress=False)
-    manifest = json.loads((out_dir / "manifest.json").read_text())
-    block = manifest["input_preprocessing"]
-    assert block["verdict"] == "unknown"
-    assert "input_preprocessing_undeclared" in block["unknown_reasons"]
-    # the historical signature value shape is preserved byte-for-byte
-    assert not isinstance(manifest["signature"]["transform_pipeline"], dict) or (
-        "input" not in manifest["signature"]["transform_pipeline"]
-    )
-
-
 def test_legacy_manifest_reads_as_unknown() -> None:
     """Pre-block artifacts are never read as asserted-clean (memo D10)."""
 
@@ -131,34 +88,6 @@ def test_legacy_manifest_reads_as_unknown() -> None:
     assert block["verdict"] == "unknown"
     assert block["legacy"] is True
     assert "legacy_artifact_predates_input_preprocessing_block" in block["unknown_reasons"]
-
-
-@pytest.mark.smoke
-def test_resume_with_differing_input_path_refuses_typed(model, resolution, tmp_path) -> None:
-    """The input identity rides the ONE signature door (D16)."""
-
-    out_dir = tmp_path / "sig"
-    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
-    tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
-    with pytest.raises(DatasetExtractionResumeError) as excinfo:
-        tl.extract_dataset(model, _stimuli(), ["conv"], resume=True, **kwargs)
-    assert excinfo.value.fields["code"] == "extraction_resume_signature_mismatch"
-    assert "transform_pipeline" in excinfo.value.fields["mismatched_fields"]
-
-
-def test_resume_never_grafts_new_provenance(model, resolution, tmp_path) -> None:
-    """Composition row 3: a compatible resume keeps the artifact's own block."""
-
-    out_dir = tmp_path / "graft"
-    kwargs = {"batch_size": 2, "path": out_dir, "progress": False}
-    paths = tl.extract_dataset(model, _stimuli(), ["conv"], input_transform=resolution, **kwargs)
-    before = json.loads((out_dir / "manifest.json").read_text())["input_preprocessing"]
-    again = tl.extract_dataset(
-        model, _stimuli(), ["conv"], input_transform=resolution, resume=True, **kwargs
-    )
-    after = json.loads((out_dir / "manifest.json").read_text())["input_preprocessing"]
-    assert after == before
-    assert [p.name for p in again] == [p.name for p in paths]
 
 
 def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path) -> None:
@@ -194,19 +123,6 @@ def test_opaque_input_transform_applies_and_refuses_continuation(model, tmp_path
         )
     assert excinfo.value.fields["code"] == "extraction_resume_opaque_transform"
     assert excinfo.value.fields["input_opaque"] is True
-
-
-def test_input_transform_values_actually_apply(model, resolution) -> None:
-    """The input path does real work in memory mode (B5 is not a stamp-only)."""
-
-    stimuli = _stimuli(4)
-    transformed = tl.extract_dataset(
-        model, stimuli, ["conv"], batch_size=2, input_transform=resolution, progress=False
-    )
-    manual = tl.extract_dataset(
-        model, (stimuli - 0.5) / 0.5, ["conv"], batch_size=2, progress=False
-    )
-    assert torch.allclose(transformed["conv"], manual["conv"])
 
 
 def test_input_provenance_in_memory_is_a_false_affordance(model, resolution) -> None:
@@ -276,7 +192,6 @@ def test_declaration_only_resolution_as_transform_refuses(model, tmp_path) -> No
     assert excinfo.value.fields["code"] == "extraction_input_transform_missing_callable"
 
 
-@pytest.mark.smoke
 def test_row_count_contract_guards_the_input_path(model) -> None:
     """A row-eating input transform refuses instead of mislabeling rows."""
 

@@ -53,9 +53,42 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
     "replay": "use trace.push(...) -- Trace.replay was renamed",
     "replay_from": "use trace.push_from(...) -- Trace.replay_from was renamed",
     "rerun": "use trace.run(model, x) -- Trace.rerun was renamed",
+    "attach_hooks": (
+        "use trace.do(site, edit, model=model, inputs=x) -- attach_hooks folded into do; "
+        "stage without running with intervention=InterventionOptions(engine='set_only')"
+    ),
+    "clear_hooks": (
+        "use trace.clear_edits(site) or trace.clear_edits(handle=...) -- clear_hooks was "
+        "removed; a fresh fork() starts without staged edits"
+    ),
+    "collapse_plan": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the collapse plan is a member "
+        "of the Drawing a forward draw returns"
+    ),
+    "collapse_schedule": (
+        "use trace.draw(...).collapse_schedule -- the collapse schedule is a member of the "
+        "Drawing a forward draw returns"
+    ),
+    "collapse_order": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the plan carries the ranking; "
+        "trace.module_collapse_order still lists every module's collapse score"
+    ),
+    "save_new_outs": (
+        "use trace.run(inputs=x) -- save_new_outs left the public surface; run(inputs=) is the "
+        "graph-checked refresh (a changed graph raises), while run(model, x) re-captures"
+    ),
     "validate_saved_outs": (
         "use trace.validate_forward_pass(...) -- validate_saved_outs was its removed alias"
     ),
+    "log_backward": "use trace.backward(loss) -- Trace.log_backward was renamed",
+    "disarm_triggers": (
+        "use trace.autograd.disarm() -- Trace.disarm_triggers moved to the autograd group"
+    ),
+    "set": (
+        "use trace.do(site, value, intervention=tl.options.InterventionOptions("
+        "engine='set_only')) -- Trace.set was replaced by the set_only engine of do"
+    ),
+    "animate_ops": "use trace.animate(site) -- Trace.animate_ops was renamed",
     "conditional_then_entry_edges": (
         "use trace.graph.conditional_arm_entry_edges (one mapping for then, elif and else arms)"
     ),
@@ -89,9 +122,9 @@ def _raise_missing_trace_attribute(trace: Trace, name: str) -> Any:
         # raw AttributeError naming whichever private field the reader hit
         # first (b6-opus R25: summary/iteration/getitem/draw/receptive_fields
         # each leaked a different private name).
-        from .._errors import TraceCleanedUpError
+        from .._errors import refuse_cleaned_up
 
-        raise TraceCleanedUpError(
+        refuse_cleaned_up(
             f"this Trace was husked by cleanup(), so {name!r} (like every "
             "logged field) has been deleted",
             remedy="re-capture with tl.trace(...); cleanup() permanently empties a Trace",

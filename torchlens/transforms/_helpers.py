@@ -56,6 +56,14 @@ class SrpSizing:
     note:
         The scope label: a DENSE-JL Euclidean heuristic, a poor guide for
         correlation-distance RDMs.
+
+    Examples
+    --------
+    >>> sizing = tl.transforms.srp_dims_for(100, eps=0.5)
+    >>> isinstance(sizing, SrpSizing), int(sizing), sizing.formula
+    (True, 222, 'dense_jl_l2_heuristic')
+    >>> tl.transforms.srp(int(sizing), seed=1).name
+    'srp'
     """
 
     num_components: int
@@ -115,6 +123,12 @@ def srp_dims_for(num_samples: int, eps: float = 0.1) -> SrpSizing:
     -------
     SrpSizing
         The sized width with formula/version/assumptions recorded.
+
+    Examples
+    --------
+    >>> sizing = srp_dims_for(100, eps=0.5)
+    >>> sizing.num_components, sizing.num_samples
+    (222, 100)
     """
 
     if isinstance(num_samples, bool) or not isinstance(num_samples, int) or num_samples < 2:
@@ -276,6 +290,14 @@ class ProbeReport:
         Scope disclosure — always the user's own pilot batch.
     distance_claim:
         The construction's earned claim (``"empirical_only"``).
+
+    Examples
+    --------
+    >>> report = tl.transforms.srp_fidelity_probe(torch.randn(8, 64), [4, 16])
+    >>> isinstance(report, ProbeReport), [row["n_components"] for row in report.rows]
+    (True, [4, 16])
+    >>> report.distance_claim
+    'empirical_only'
     """
 
     rows: tuple[dict[str, Any], ...]
@@ -356,6 +378,12 @@ def srp_fidelity_probe(
     -------
     ProbeReport
         Per-width fidelity rows with the T-C12 scope fields attached.
+
+    Examples
+    --------
+    >>> report = srp_fidelity_probe(torch.randn(8, 64), [4, 16], seed=0)
+    >>> report.n_rows, report.input_extent, len(report.rows)
+    (8, 64, 2)
     """
 
     if not isinstance(features, torch.Tensor) or features.dim() < 2 or features.shape[0] < 4:
