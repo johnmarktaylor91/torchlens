@@ -527,7 +527,6 @@ torchlens/_utils/arg_handling.py::_record_unpreserved_tensor_aliases	71
 torchlens/_utils/arg_handling.py::copy_arg_tree	161
 torchlens/_utils/arg_handling.py::rebuild_tuple_like	69
 torchlens/_utils/arg_handling.py::safe_copy_input_tree	98
-torchlens/_utils/collections.py::assign_into_container_by_path	64
 torchlens/_utils/display.py::tensor_stats_summary	72
 torchlens/_utils/display.py::warn_parallel	101
 torchlens/_utils/facade.py::resolve_facade_attr	120
