@@ -7085,7 +7085,7 @@ meaning; `tests/test_glossary_params.py` fails on a public parameter no row name
 | `rule_fire_counts=` | constructor keyword of `tl.intervention.BindReport` (optional) |
 | `rules=` | constructor keyword of `tl.Recipe`, `tl.intervention.BindReport` (default `()`) |
 | `run=` | keyword of `HistoryView.from_blocks` (required) |
-| `run_context=` | keyword of `TapObserver.record_backward` (keyword-only; default `None`): Shared hook run context. Accepted for hook API compatibility |
+| `run_ctx=` | keyword of `TapObserver.record_backward` (keyword-only; default `None`): Shared hook run context. Accepted for hook API compatibility |
 | `run_id=` | keyword of `tl.export.mlflow` (keyword-only; default `None`): MLflow run to log into. Required with an `MlflowClient`; with the fluent module it is forwarded as `run_id=`; constructor keyword of `tl.trackers.MLflowSink` (keyword-only; default `None`): The run to log into |
 | `run_policy=` | constructor keyword of `tl.debug.DeterminismReport` (required): Reserved run-policy slot (`"same_seed_isolated"` today; `"as_run"` / cross-device policies land here without a reshape) |
 | `run_state=` | field and constructor keyword of `HookContext`: the run-scoped scratch dict (`ctx.run_state`) |

@@ -128,7 +128,7 @@ from torchlens._semantic import logit_lens
 
 lens = {address: (lambda h, J=J: unembed(final_norm(h @ J.T))) for address, J in zip(blocks, lenses)}
 trace = tl.trace(model, corpus[:1], save="all")
-result = logit_lens(trace, lens=lens, layers=list(lens), verify=False)
+result = logit_lens(trace, lens=lens, modules=list(lens), verify=False)
 RESULT = ([entry.address for entry in result.entries], tuple(result.entries[-1].logits.shape))
 ```
 

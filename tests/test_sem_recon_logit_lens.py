@@ -282,7 +282,7 @@ def test_predictions_tie_ranks_share_smallest_rank(_models: dict[str, nn.Module]
         tied = torch.zeros(1, 1, VOCAB)
         tied[0, 0, 0] = 1.0  # unique top; all other tokens tied at 0
         preds = logit_lens_predictions(
-            log, k=1, tokens=[1, 2], layers=["b0"], lens=lambda hidden: tied
+            log, k=1, tokens=[1, 2], modules=["b0"], lens=lambda hidden: tied
         )
         row = preds.rows[0]
         # Both tied tokens rank 2 (one strictly-greater logit each).
