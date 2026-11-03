@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 import torch
+from _format3_envelope import redigest
 from example_models import TinyReluAdd as _ReluModel
 from torch import nn
 
@@ -361,6 +362,7 @@ def test_stored_helper_keyword_outside_the_constructor_refuses_typed(tmp_path: P
 
     assert _plant(spec_json) >= 1
     spec_path.write_text(json.dumps(spec_json), encoding="utf-8")
+    redigest(path, "intervention.json")
 
     with pytest.raises(InvalidArgumentError) as excinfo:
         load_intervention_spec(path)
@@ -573,6 +575,7 @@ def test_intervention_tlspec_v2_writes_and_v1_still_loads(tmp_path: Path) -> Non
     # A recipe stamped with a format this TorchLens does not read refuses typed.
     recipe_json["format_version"] = 4
     recipe_path.write_text(json.dumps(recipe_json), encoding="utf-8")
+    redigest(path, "intervention.json")
     with pytest.raises(ArtifactError) as excinfo:
         load_intervention_spec(path)
     assert excinfo.value.fields["code"] == "bundle_load_failed"
@@ -735,6 +738,7 @@ def test_loaded_spec_tolerates_custom_key_without_import(
         }
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
+    redigest(path, "intervention.json")
 
     def fail_import(module_name: str) -> object:
         """Fail if loading attempts to import an untrusted custom module.
@@ -794,6 +798,7 @@ def test_loaded_custom_key_is_denied_at_execution_until_trusted(
         }
     ]
     spec_path.write_text(json.dumps(payload), encoding="utf-8")
+    redigest(path, "intervention.json")
 
     loaded = load_intervention_spec(path)
     loaded_key = FunctionRegistryKey(**loaded.metadata["function_registry_keys"][0]["key"])

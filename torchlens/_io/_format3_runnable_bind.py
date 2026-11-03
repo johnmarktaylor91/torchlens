@@ -101,12 +101,15 @@ def _index_error(blob_id: str, detail: str) -> ArtifactError:
 def _sorted_state_names(descriptor: SparseRunDescriptor, *, persistent: bool) -> list[str]:
     """Return the state names of one binding family in the save's blob-id order."""
 
+    # Several slots may bind one state tensor; the save wrote each name once.
     return sorted(
-        slot.state_binding.state_dict_name
-        for slot in descriptor.tensor_slots
-        if slot.state_binding is not None
-        and slot.state_binding.persistent is persistent
-        and (persistent or slot.role == _BUFFER_ROLE)
+        {
+            slot.state_binding.state_dict_name
+            for slot in descriptor.tensor_slots
+            if slot.state_binding is not None
+            and slot.state_binding.persistent is persistent
+            and (persistent or slot.role == _BUFFER_ROLE)
+        }
     )
 
 

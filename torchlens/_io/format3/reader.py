@@ -455,8 +455,12 @@ class DecodedArtifact:
             return build_component(value.cls, fields, at=at)
         if isinstance(value, list):
             return [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
+        if isinstance(value, BlobRef):
+            return value
         if isinstance(value, tuple):
-            return tuple(self._settle(item, f"{at}[{i}]") for i, item in enumerate(value))
+            items = [self._settle(item, f"{at}[{i}]") for i, item in enumerate(value)]
+            maker = getattr(type(value), "_make", None)  # a named tuple keeps its type
+            return maker(items) if callable(maker) else tuple(items)
         if isinstance(value, (set, frozenset)):
             return type(value)(self._settle(item, at) for item in value)
         if isinstance(value, dict):
@@ -535,7 +539,7 @@ class DecodedArtifact:
         step because the record classes sit above this module.
         """
 
-        state = dict(self.tables["trace"][0])
+        state = dict(self._rebuild_accessors("trace", 0, self.tables["trace"][0]))
         state[TLSPEC_KEY] = self.version
         accessor = state.pop("_io_module_accessor_state", None)
         if isinstance(accessor, Unencodable):
