@@ -3939,7 +3939,6 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 3d4a13a363d115f0055528a0b25e663dc8c3ea0a (dirty)
 recorded: 2026-11-03T07:35:26.188294+00:00
-
 ---
 generator: producer_parity/test_ledger.py (full closure)
 flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1

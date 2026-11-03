@@ -828,6 +828,15 @@ docs-md	docs/benchmarks/summary_performance.md	7691.3
 docs-md	docs/benchmarks/summary_performance.md	87.1
 docs-md	docs/benchmarks/summary_performance.md	989.0
 docs-md	docs/benchmarks/summary_performance.md	99.2
+docs-md	docs/bridges.md	17_66
+docs-md	docs/bridges.md	18
+docs-md	docs/bridges.md	18.
+docs-md	docs/bridges.md	3.10
+docs-md	docs/bridges.md	3.11
+docs-md	docs/bridges.md	3.13
+docs-md	docs/bridges.md	4.1.
+docs-md	docs/bridges.md	64
+docs-md	docs/bridges.md	64,
 docs-md	docs/buffers.md	0,1,2,3
 docs-md	docs/buffers.md	1.0
 docs-md	docs/buffers.md	7,8,9,10
@@ -1750,9 +1759,9 @@ docs-md	docs/maintainers/where.md	624
 docs-md	docs/maintainers/where.md	625
 docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
-docs-md	docs/maintainers/where.md	629924
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
+docs-md	docs/maintainers/where.md	630290
 docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	634
 docs-md	docs/maintainers/where.md	635
@@ -1854,7 +1863,6 @@ docs-md	docs/maintainers/where.md	775
 docs-md	docs/maintainers/where.md	776
 docs-md	docs/maintainers/where.md	78
 docs-md	docs/maintainers/where.md	780
-docs-md	docs/maintainers/where.md	7812
 docs-md	docs/maintainers/where.md	782
 docs-md	docs/maintainers/where.md	786
 docs-md	docs/maintainers/where.md	789
@@ -1873,6 +1881,7 @@ docs-md	docs/maintainers/where.md	81
 docs-md	docs/maintainers/where.md	811
 docs-md	docs/maintainers/where.md	814
 docs-md	docs/maintainers/where.md	816
+docs-md	docs/maintainers/where.md	8178
 docs-md	docs/maintainers/where.md	82
 docs-md	docs/maintainers/where.md	821
 docs-md	docs/maintainers/where.md	827
@@ -3813,6 +3822,7 @@ error-strings	torchlens/backends/default_specs.py	2.16
 error-strings	torchlens/backends/tinygrad/backend.py	0.13.0
 error-strings	torchlens/backends/torch/completeness_witness.py	2.1
 error-strings	torchlens/bridge/brain_score.py	3.11
+error-strings	torchlens/bridge/captum.py	4.1.
 error-strings	torchlens/bridge/depyf.py	0.18
 error-strings	torchlens/bridge/hf_attention.py	4.53
 error-strings	torchlens/bridge/lit/_refusals.py	20
@@ -5987,6 +5997,7 @@ package-docstrings	torchlens/bridge/brain_score.py	3.11,
 package-docstrings	torchlens/bridge/brain_score.py	3.12
 package-docstrings	torchlens/bridge/brain_score.py	36
 package-docstrings	torchlens/bridge/brain_score.py	4.3
+package-docstrings	torchlens/bridge/captum.py	4.1.
 package-docstrings	torchlens/bridge/dialz.py	32,
 package-docstrings	torchlens/bridge/hf_attention.py	16
 package-docstrings	torchlens/bridge/hf_attention.py	32
@@ -7451,6 +7462,7 @@ test-docstrings	tests/test_bridge_brain_score_extractor.py	32
 test-docstrings	tests/test_bridge_pyreft.py	64
 test-docstrings	tests/test_bridge_pyreft.py	64.
 test-docstrings	tests/test_bridge_real_captum.py	18,
+test-docstrings	tests/test_bridge_real_captum.py	4.1
 test-docstrings	tests/test_bridge_real_dialz.py	1.1
 test-docstrings	tests/test_bridge_real_gradcam.py	18,
 test-docstrings	tests/test_bridge_real_gradcam.py	4.1.

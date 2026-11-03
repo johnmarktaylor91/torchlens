@@ -5,7 +5,7 @@ renaming a module and commit the result. Each row is a module's first docstring 
 so a wrong row is fixed in the module's docstring, not here. The index follows the tree:
 a package move shows up on the next run with no edit to the generator.
 
-83 packages, 1401 modules, 630248 lines, 0 modules without a docstring.
+83 packages, 1401 modules, 630290 lines, 0 modules without a docstring.
 
 ## Packages
 
@@ -60,7 +60,7 @@ a package move shows up on the next run with no edit to the generator.
 | `torchlens.backends.tf` | TensorFlow backend preview exports. | 13 | 8488 |
 | `torchlens.backends.tinygrad` | tinygrad backend preview. | 7 | 3945 |
 | `torchlens.backends.torch` | Torch backend implementation package for TorchLens capture. | 108 | 53697 |
-| `torchlens.bridge` | External-tool bridge namespace. | 25 | 8136 |
+| `torchlens.bridge` | External-tool bridge namespace. | 25 | 8178 |
 | `torchlens.bridge.lit` | LIT (Google PAIR Language Interpretability Tool) bridge. | 6 | 2700 |
 | `torchlens.bundle` | Single Bundle type for intervention-ready TorchLens model logs. | 24 | 8288 |
 | `torchlens.callbacks` | Callback integration namespace with lazy Lightning support. | 2 | 688 |
@@ -1339,7 +1339,7 @@ Torch backend implementation package for TorchLens capture. (108 modules, 53697 
 
 ### `torchlens.bridge`
 
-External-tool bridge namespace. (25 modules, 8136 lines)
+External-tool bridge namespace. (25 modules, 8178 lines)
 
 | Module | What it holds | Lines |
 | --- | --- | ---: |
@@ -1349,7 +1349,7 @@ External-tool bridge namespace. (25 modules, 8136 lines)
 | `_sae_metrics` | Reconstruction and next-token metrics for the SAE splice experiment. | 204 |
 | `_utils` | Shared helpers for optional bridge adapters. | 510 |
 | `brain_score` | Brain-Score bridge helpers. | 498 |
-| `captum` | Captum bridge helpers. | 512 |
+| `captum` | Captum bridge helpers. | 554 |
 | `depyf` | depyf bridge helpers. | 93 |
 | `dialz` | dialz converter. | 64 |
 | `hf_attention` | TorchLens as a registered Hugging Face attention backend (DOCUMENTED-UNSTABLE). | 502 |
