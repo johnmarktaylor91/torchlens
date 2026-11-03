@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
+from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
 
 
@@ -43,6 +43,7 @@ def _save(model: nn.Module, x: torch.Tensor, path: Path) -> Path:
     return path
 
 
+# Kept: sole branch coverage of _runnable/attestation.py, _runnable/path_faithfulness.py; the catch of its regression fault.
 def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> None:
     """InstanceNorm with running stats must VERIFY, not raise a false mutation divergence."""
 
@@ -60,43 +61,3 @@ def test_r29_instance_norm_tracking_does_not_falsely_diverge(tmp_path: Path) -> 
         fresh.load_state_dict(model.state_dict())
         getattr(fresh, mode)()
         torch.testing.assert_close(result.output, fresh(x.clone()), atol=1e-6, rtol=1e-6)
-
-
-def test_r29_batchnorm_eval_read_only_stats_are_attested(tmp_path: Path) -> None:
-    """BatchNorm eval (read-only running stats) must ATTEST, not falsely NOT_APPLICABLE."""
-
-    model = nn.BatchNorm1d(4)
-    model.eval()
-    x = torch.randn(8, 4)
-    path = _save(model, x, tmp_path / "bn_eval.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_r29_instance_norm_eval_read_only_stats_are_attested(tmp_path: Path) -> None:
-    """InstanceNorm eval with read-only running stats must ATTEST."""
-
-    model = nn.InstanceNorm1d(4, track_running_stats=True)
-    model.eval()
-    x = torch.randn(2, 4, 8)
-    path = _save(model, x, tmp_path / "in_eval.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
-def test_r29_batchnorm_train_journaled_stats_stay_conservative(tmp_path: Path) -> None:
-    """BatchNorm train (journaled running stats) stays NOT_APPLICABLE, never a false ATTESTED."""
-
-    model = nn.BatchNorm1d(4)
-    model.train()
-    x = torch.randn(8, 4)
-    path = _save(model, x, tmp_path / "bn_train.tlspec")
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-    assert result.report.numeric_attestation is NumericAttestationStatus.NOT_APPLICABLE

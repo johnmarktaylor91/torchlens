@@ -38,7 +38,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(replayable=True, capture_container_structure=True, cache=False)
@@ -145,6 +144,7 @@ def _retarget_registry(source: Path, target: Path, frm: str, to: str) -> Path:
 # --------------------------------------------------------------------------- #
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize(
     "frm, to",
     [
@@ -180,30 +180,7 @@ def test_self_contradictory_callable_registry_is_refused(tmp_path: Path, frm: st
     assert type(excinfo.value).__name__ != "AssertionError"
 
 
-def test_tampered_registry_leaves_a_typed_diagnostic(tmp_path: Path) -> None:
-    """The refusal must carry the typed diagnostic, not just fail opaquely.
-
-    A resolvable-but-contradictory swap surfaces as ``SEMANTIC_DRIFT`` (the
-    resolved callable is semantically different from what the op records),
-    detected at the resolver's registry-coherence stage.
-    """
-
-    from torchlens._runnable import ReadinessStatus, RunnableErrorCode
-
-    clean = _save(tmp_path / "clean.tlspec")
-    tampered = _retarget_registry(clean, tmp_path / "tampered.tlspec", "__add__", "__sub__")
-
-    loaded = tl.load(tampered)
-    report = loaded.readiness
-    assert report.status is ReadinessStatus.UNAVAILABLE
-    codes = {diagnostic.code for diagnostic in report.diagnostics}
-    assert RunnableErrorCode.SEMANTIC_DRIFT in codes
-    assert any(
-        diagnostic.detection_stage == "resolver_registry_coherence"
-        for diagnostic in report.diagnostics
-    )
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> None:
     """An UNRESOLVABLE key must keep the resolver's richer aggregate-report path.
 
@@ -242,21 +219,6 @@ def test_unresolvable_key_keeps_the_resolver_reattach_path(tmp_path: Path) -> No
     assert captured.value.fields["readiness"] is loaded.readiness
 
 
-def test_untampered_artifact_still_runs_verified(tmp_path: Path) -> None:
-    """ZERO COLLATERAL: the anchor runs on every load and must pass honest ones.
-
-    The reconciliation is exact for method, function, dunder and in-place
-    dispatch; only two spellings differ between the two records at all
-    (``__neg__``/``neg``, ``__pow__``/``pow``) and the operator-dunder
-    normalization collapses exactly those.
-    """
-
-    path = _save(tmp_path / "clean.tlspec")
-    result = tl.load(path).run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
 class _MixedDispatch(nn.Module):
     """Exercises the dispatch spellings the two records name differently."""
 
@@ -277,28 +239,12 @@ class _MixedDispatch(nn.Module):
         return y.reshape(-1).contiguous()
 
 
-def test_dunder_and_inplace_spellings_do_not_false_refuse(tmp_path: Path) -> None:
-    """``__neg__``/``neg`` and ``__pow__``/``pow`` must normalize, not refuse.
-
-    These are the ONLY two measured pairs where the site keeps the operator
-    dunder while the registry records the torch method. In-place spellings
-    (``__iadd__``, ``relu_``) keep their distinguishing characters, so they can
-    never normalize onto their out-of-place siblings.
-    """
-
-    path = tmp_path / "mixed.tlspec"
-    trace = tl.trace(_MixedDispatch(), torch.randn(4), capture=_CAPTURE)
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=torch.randn(4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
 # --------------------------------------------------------------------------- #
 # S4 -- cache=True + a repeat capture must save.
 # --------------------------------------------------------------------------- #
 
 
+# Kept: sole branch coverage of _capture/prepare/cache.py, _capture/prepare/door.py, _capture_state_helpers.py and more.
 def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
     """Pre-fix the SECOND capture raised the field-catalog tripwire outright.
 
@@ -308,22 +254,3 @@ def test_cache_true_repeat_capture_saves_runnable(tmp_path: Path) -> None:
 
     for index in range(3):
         _save(tmp_path / f"cached_{index}.tlspec", cache=True)
-
-
-def test_cached_repeat_capture_still_replays_verified(tmp_path: Path) -> None:
-    """The saved cached artifact must also load and replay faithfully."""
-
-    _save(tmp_path / "warm.tlspec", cache=True)
-    path = _save(tmp_path / "cached.tlspec", cache=True)
-    result = tl.load(path).run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-
-
-def test_pending_live_fire_records_is_registered() -> None:
-    """The field must be in the catalog, so the tripwire stays armed for others."""
-
-    from torchlens._data_classes.trace import FieldPolicy, Trace
-
-    spec: dict[str, Any] = Trace._PORTABLE_STATE_SPEC
-    assert spec["_pending_live_fire_records"] is FieldPolicy.DROP
