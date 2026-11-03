@@ -945,17 +945,6 @@ class Bundle:
 
         return _operations.bundle_map(self, fn)
 
-    @staticmethod
-    def _accepts_member_name(fn: Callable[..., Any]) -> bool:
-        """Whether ``fn`` can take (member, name) rather than (member,) only.
-
-        Signature inspection failures (builtins, C callables) fall back to
-        the historical single-argument call, never a guessed two-argument
-        call that would raise mid-iteration.
-        """
-
-        return _operations.accepts_member_name(fn)
-
     def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
         """Render each bundle member graph as a member-keyed strip.
 

@@ -510,13 +510,17 @@ class ReceptiveFieldView:
             resolve on this trace.
         """
 
+        return self._units_field(units, within, method=method, probe_budget=probe_budget)
+
+    def _units_field(self, units: Any, within: object | None, **options: Any) -> Selection:
+        """Resolve :meth:`of`'s influence query (``method``, ``probe_budget``) on this trace."""
+
         trace = self._op.source_trace
         query = _influence(
             _units(self._op.label, units),
             _module_outputs(trace, within),
             direction=self._direction.value,
-            method=method,
-            probe_budget=probe_budget,
+            **options,
         )
         return query._resolve(trace)
 

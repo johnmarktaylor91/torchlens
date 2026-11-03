@@ -18,6 +18,10 @@ from .._errors import InvalidArgumentError, UserTransformError
 from .._io.format_errors import ArtifactError
 from .._quantities import Bytes, Duration, Flops, as_bytes
 from .._trace_core.op_store import row_clone_scope
+from .._utils._mutation_names import (
+    _SETTER_MUTATION_FUNC_NAMES,
+    _is_inplace_augmented_assignment_dunder,
+)
 from .._utils._torch_compat import tensor_version_or_none
 from .._utils.tensor_utils import (
     SaveMode,
@@ -251,11 +255,6 @@ def _has_mutating_func_name(func_name: str | None) -> bool:
     if func_name is None:
         return False
     if func_name.startswith("__") and func_name.endswith("__"):
-        from ..backends.torch._ops_capture_records import (
-            _is_inplace_augmented_assignment_dunder,
-        )
-        from ..backends.torch.ops import _SETTER_MUTATION_FUNC_NAMES
-
         return (
             _is_inplace_augmented_assignment_dunder(func_name)
             or func_name in _SETTER_MUTATION_FUNC_NAMES
