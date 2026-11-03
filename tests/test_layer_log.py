@@ -255,10 +255,10 @@ class TestMultiPassLayerLog:
                 break
 
     def test_getitem_returns_layer_log_for_multi_pass(self, recurrent_log):
-        """log['label'] returns Layer for multi-pass layers."""
+        """log.layers['label'] returns the Layer for multi-pass layers."""
         for layer_log in recurrent_log._layer_logs.values():
             if layer_log.num_passes > 1:
-                result = recurrent_log[layer_log.layer_label]
+                result = recurrent_log.layers[layer_log.layer_label]
                 assert isinstance(result, Layer)
                 assert result is layer_log
                 break

@@ -392,7 +392,7 @@ def test_module_fields(small_input):
     mh = trace_fn(model, small_input)
     found = False
     for label in mh.layer_labels:
-        entry = mh[label]
+        entry = mh.layers[label]
         if entry.in_submodule:
             assert isinstance(entry.module, str)
             assert isinstance(entry.module_call_depth, int)
@@ -463,7 +463,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
 
     mh = trace_fn(
         model=_WithOrphans(),
-        input_args=torch.randn(2, 3),
+        inputs=torch.randn(2, 3),
         capture=torchlens.options.CaptureOptions(keep_orphans=True),
     )
     orphan_labels = list(mh.graph.orphans.keys())
@@ -471,9 +471,11 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     orphan_sibling = next(k for k in orphan_labels if mh.graph.orphans[k].siblings)
 
     mainline = next(
-        mh[label] for label in mh.layer_labels if not mh[label].is_input and mh[label].parents
+        mh.layers[label]
+        for label in mh.layer_labels
+        if not mh.layers[label].is_input and mh.layers[label].parents
     )
-    parent_op = list(mh[mainline.parents[0]].ops.values())[0]
+    parent_op = list(mh.layers[mainline.parents[0]].ops.values())[0]
     # Direct assignment is the supported mutation spelling on Op records; the
     # list normalizes to the immutable view type.
     parent_op.children = list(parent_op.children) + [orphan_sibling]
@@ -489,7 +491,7 @@ def test_layer_siblings_tolerate_orphan_relation_labels():
     # fix's own output (`parent_layer.children` succeeded while
     # `parent_layer.get_children()` raised "not found"). They now resolve
     # orphan labels through the same fallback.
-    parent_layer = mh[mainline.parents[0]]
+    parent_layer = mh.layers[mainline.parents[0]]
     layer_children = parent_layer.get_children()
     assert orphan_sibling in {getattr(c, "layer_label", None) for c in layer_children} or any(
         getattr(c, "label", None) == orphan_sibling for c in layer_children
@@ -550,7 +552,7 @@ def test_recurrent_layer_ops_total(input_2d):
     mh = trace_fn(model, input_2d)
     found = False
     for label in mh.layer_labels:
-        entry = mh[label]
+        entry = mh.layers[label]
         if entry.num_passes > 1:
             found = True
             break
@@ -1704,7 +1706,7 @@ class TestConditionalBranchDetection:
         model = example_models.SimpleFF()
         x = torch.rand(2, 3, 32, 32)
         mh = self._log(model, x)
-        cond_nodes = [label for label in mh.layer_labels if mh[label].is_in_conditional_body]
+        cond_nodes = [label for label in mh.layer_labels if mh.layers[label].is_in_conditional_body]
         assert len(cond_nodes) == 0, f"SimpleFF should have no cond nodes: {cond_nodes}"
 
     def test_non_conditional_layers_not_marked(self):
@@ -1712,7 +1714,7 @@ class TestConditionalBranchDetection:
         model = example_models.ConditionalBranching()
         mh = self._log(model, self._cond_input())
         for label in mh.layer_labels:
-            entry = mh[label]
+            entry = mh.layers[label]
             if not entry.conditional_role_stacks and not entry.conditional_entry_children:
                 assert entry.is_in_conditional_body is False, (
                     f"Output ancestor {label} falsely marked is_in_conditional_body"
@@ -1724,7 +1726,7 @@ class TestConditionalBranchDetection:
         x = torch.ones(2, 3, 32, 32)
         mh = self._log(model, x)
         for label in mh.layer_labels:
-            entry = mh[label]
+            entry = mh.layers[label]
             # Output-ancestor nodes that are NOT branch-starts should not be marked
             if not entry.conditional_role_stacks and not entry.conditional_entry_children:
                 assert entry.is_in_conditional_body is False, (

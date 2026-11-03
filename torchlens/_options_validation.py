@@ -5,8 +5,6 @@ validation seam: every function here checks or normalizes ONE resolved option
 value and raises a typed, teaching refusal on violation. The construction
 plumbing (explicitness tracking, frozen-field assembly, grouped/flat merging)
 stays with the dataclasses in ``options.py``; this module never imports it.
-The table of removed ``VisualizationOptions`` members, which feeds that class's
-teaching refusal, lives here too.
 """
 
 from __future__ import annotations
@@ -26,20 +24,6 @@ from ._literals import (
 
 if TYPE_CHECKING:
     from .options import VisualizationOptions
-
-
-#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
-_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
-    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
-    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
-    "for_paper": 'use VisualizationOptions.theme="paper"',
-    "return_graph": "read Drawing.dot on the returned Drawing",
-    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
-    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
-    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
-    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
-}
 
 
 def _validate_node_style(node_style: VisNodeModeLiteral) -> None:

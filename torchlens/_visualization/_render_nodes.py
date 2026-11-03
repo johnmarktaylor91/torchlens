@@ -6,6 +6,12 @@ import re as _re
 
 from .._errors import InvalidArgumentError
 from .._record_type import record_type
+from ._encoding_aggregate import (
+    BoxScopeHelpers,
+    box_channel_spec,
+    collapsed_box_scope,
+    segment_encoding_attrs,
+)
 from ._label_format import compute_selected_node_lines as _compute_selected_node_lines
 from ._render_common import *
 from ._render_edges import *
@@ -17,8 +23,16 @@ from .modes import CollapsedModeScope
 # The spec-slot context lives there too, so the intervention callback reads it
 # without importing this module.
 from .node_spec import _SPEC_SLOT_RENDERED_NODE, _annotation_image_path_for_node
+from .themes import _edge_and_label_inks
 
 _TOOLTIP_ADDRESS_PATTERN = _re.compile(r"0x[0-9a-fA-F]+")
+#: Renderer helpers the leaf box-scope rule needs (injected: no import cycle).
+BOX_SCOPE_HELPERS = BoxScopeHelpers(
+    _run_fold_for_address,
+    _collapsed_module_should_show_remainder,
+    _surfaced_own_output_ops,
+    _segment_for_node,
+)
 
 
 def _tooltip_repr(value: Any) -> str:
@@ -414,7 +428,7 @@ def _add_node_to_graphviz(
             module_edge_dict,
             emitted_segment_nodes,
             segment,
-            (vis_mode, theme),
+            (vis_mode, theme, encoding),
         )
     is_collapsed_module = collapse_address is not None
     is_hidden_run_member = (
@@ -448,6 +462,7 @@ def _add_node_to_graphviz(
             theme,
             repeat_folds,
             collapse_fn,
+            encoding=encoding,
         )
         node_color = "black"
     elif is_hidden_run_member:
@@ -473,12 +488,7 @@ def _add_node_to_graphviz(
             show_saved_for_backward=show_saved_for_backward,
         )
 
-    # Edges and their labels keep the renderer's black only on skins that
-    # leave edge ink unset; the dark skin's edge colours apply here.
-    edge_ink = node_color if theme is None else _theme_line_ink(theme, node_color) or node_color
-    label_ink = (
-        node_color if theme is None else _theme_annotation_ink(theme, node_color) or node_color
-    )
+    edge_ink, label_ink = _edge_and_label_inks(theme, node_color)
     _add_edges_for_node(
         self,
         node,
@@ -685,7 +695,7 @@ def _queue_segment_node(
     module_edge_dict: Dict[str, Any],
     emitted_segment_nodes: set[str] | None,
     segment: SegmentDescriptor,
-    presentation: "tuple[str, VisualizationTheme | None] | str" = "unrolled",
+    presentation: "tuple[str, VisualizationTheme | None] | tuple[str, Any, Any] | str" = "unrolled",
 ) -> None:
     """Queue one dashed segment node if it has not already been emitted.
 
@@ -706,9 +716,9 @@ def _queue_segment_node(
     segment:
         Segment descriptor to render.
     presentation:
-        The ``(vis_mode, theme)`` pair, or a bare ``vis_mode`` string
-        (``"unrolled"`` / ``"rolled"``) keeping the historical theme-less
-        spelling; a ``None`` theme resolves to the torchlens preset.
+        ``(vis_mode, theme)`` or ``(vis_mode, theme, encoding)`` (the draw's
+        encoding state fills/sizes an encoded segment), or a bare ``vis_mode``
+        string; a ``None`` theme resolves to the torchlens preset.
     """
 
     if emitted_segment_nodes is None:
@@ -716,9 +726,9 @@ def _queue_segment_node(
     if segment.name in emitted_segment_nodes:
         return
     emitted_segment_nodes.add(segment.name)
-    # ``presentation`` is the (vis_mode, theme) pair (one arg: PLR0913);
-    # a bare string keeps the historical vis_mode-only spelling for tests.
-    vis_mode, theme = presentation if isinstance(presentation, tuple) else (presentation, None)
+    # One ``presentation`` arg (PLR0913); a bare string is vis_mode only.
+    pres = presentation if isinstance(presentation, tuple) else (presentation,)
+    vis_mode, theme, encoding = (*pres, None, None)[:3]
     # K4 capsule colors derive from the active theme (F11 memo item 10:
     # the hardcoded #f7f7f7 family ignored dark themes -- a live theme bug).
     from .themes import THEME_PRESETS, collapse_tokens
@@ -734,6 +744,7 @@ def _queue_segment_node(
         "fontcolor": tokens.segment_font,
         "ordering": "out",
     }
+    node_args.update(segment_encoding_attrs(encoding, segment.name))
     owner = _segment_owner_for_mode(segment.owner, vis_mode)
     if owner is None:
         graphviz_graph.node(**node_args)
@@ -1334,6 +1345,7 @@ def _build_collapsed_module_node(
     repeat_folds: Mapping[str, "ModuleRepeatFold"] | None = None,
     collapse_fn: CollapseFn | None = None,
     resolved_specs: list[NodeSpec] | None = None,
+    encoding: Any | None = None,
 ) -> None:
     """Builds and adds a collapsed module box node to the graphviz graph.
 
@@ -1345,7 +1357,16 @@ def _build_collapsed_module_node(
         vis_mode: 'unrolled' or 'rolled'.
         vis_call_depth: Maximum nesting depth; nodes at this depth are collapsed.
         overrides: Graphviz attribute overrides.
+        encoding: Per-draw encoding state; the box takes its exact member-op
+            aggregate fill/size before the user callback.
     """
+    scope = collapsed_box_scope(
+        self,
+        node,
+        (vis_mode, vis_call_depth),
+        (collapse_address, repeat_folds, collapse_fn),
+        BOX_SCOPE_HELPERS,
+    )
     # Access the module at the collapse threshold depth.  This index is safe
     # because _is_collapsed_module already verified the node is deep enough.
     address_w_pass = (
@@ -1384,12 +1405,9 @@ def _build_collapsed_module_node(
     if vis_mode == "unrolled":
         graph_node_label = "pass".join(module_tuple)
         module_call = ml.ops[int(call_index) - 1]
-        # Mode presets aggregate over exactly the calls this box represents:
-        # this ONE call for an unrolled per-call box.
-        scope_op_labels = tuple(module_call.ops)
         module_num_tensors = module_call.num_layers
-        module_num_buffers = sum(self[layer].is_buffer for layer in module_call.ops)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in module_call.ops)
+        module_num_buffers = sum(self.layers[o].is_buffer for o in module_call.ops)
+        module_has_input_ancestor = any(self.layers[o].has_input_ancestor for o in module_call.ops)
         if (
             _collapsed_module_should_show_remainder(
                 self,
@@ -1412,21 +1430,11 @@ def _build_collapsed_module_node(
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
-            # Surfaced ops render as their own nodes with their own rows;
-            # keeping them in the box scope would double-count them and
-            # contradict the box's remainder tensor-count line.
-            surfaced_labels = {str(op.layer_label) for op in surfaced_call_ops}
-            scope_op_labels = tuple(
-                label for label in scope_op_labels if label not in surfaced_labels
-            )
     else:
         graph_node_label = module_tuple[0]
-        # A rolled box stands for every call of the module, so the mode
-        # presets aggregate per-pass op records across all calls.
-        scope_op_labels = tuple(op_label for call in ml.ops.values() for op_label in call.ops)
         module_num_tensors = len(ml.layer_labels)
-        module_num_buffers = sum(self[layer].is_buffer for layer in ml.layer_labels)
-        module_has_input_ancestor = any(self[layer].has_input_ancestor for layer in ml.layer_labels)
+        module_num_buffers = sum(layer.is_buffer for layer in ml)
+        module_has_input_ancestor = any(layer.has_input_ancestor for layer in ml)
         # Rolled boxes need the same surfaced-exit remainder belt as the
         # unrolled branch (round-25): the atomic-exit drop in
         # ``_collapse_address_for_node`` is vis_mode-independent, so the exit
@@ -1449,19 +1457,6 @@ def _build_collapsed_module_node(
             module_nparams = remainder_stats["num_params"]
             module_nparams_trainable = remainder_stats["num_params_trainable"]
             module_nparams_frozen = remainder_stats["num_params_frozen"]
-            # The surfaced-exit predicate is a per-layer invariant, so every
-            # pass of a surfaced layer renders outside the rolled box; drop
-            # the whole layer base from the mode-preset scope to match the
-            # remainder tensor count.
-            surfaced_bases = {
-                str(op.layer_label).rsplit(":", 1)[0]
-                for op in _surfaced_own_output_ops(self, address, ml.layer_labels)
-            }
-            scope_op_labels = tuple(
-                op_label
-                for op_label in scope_op_labels
-                if op_label.rsplit(":", 1)[0] not in surfaced_bases
-            )
 
     # Deduplicate: multiple layers in the same collapsed module will each
     # trigger this function, but the node should only be added once.
@@ -1545,10 +1540,12 @@ def _build_collapsed_module_node(
         scope_note = (
             f"@{address}:{call_index} only" if vis_mode == "unrolled" else f"@{address} only"
         )
-    mode_scope = CollapsedModeScope(op_labels=scope_op_labels, note=scope_note)
+    mode_scope = CollapsedModeScope(op_labels=scope.op_labels, note=scope_note)
     mode_fn = COLLAPSED_MODE_REGISTRY[node_mode]
     mode_result = mode_fn(ml, default_spec, mode_scope)
     mode_spec = default_spec if mode_result is None else mode_result
+    # Encoding channels: exact member-op aggregate, user may override.
+    mode_spec = box_channel_spec(encoding, scope.name, mode_spec)
     if collapsed_node_spec_fn is not None:
         result = collapsed_node_spec_fn(ml, mode_spec)
         spec = mode_spec if result is None else result

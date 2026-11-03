@@ -221,7 +221,12 @@ class TraceSettings(_TraceGroup):
 
 
 class TraceSource(_TraceGroup):
-    """Source facts of the traced model class: locations, signatures, docstrings."""
+    """Where the traced model's source lives.
+
+    The class, ``__init__`` and ``forward`` locations (file, line and the
+    combined location), the forward signature, the three docstrings, the
+    captured frames, and the live class while the model is still alive.
+    """
 
     __slots__ = ()
 

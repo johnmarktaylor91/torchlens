@@ -404,7 +404,7 @@ for the full reference.
 
 To steer many forwards or a `generate()` loop, use `spec.bind(model)` (about the cost of a
 plain hook) rather than tracing or rerunning per step; see the steering recipe in
-[docs/agent-reference/common-patterns.md](docs/agent-reference/common-patterns.md).
+[docs/internal/agent-reference/common-patterns.md](docs/internal/agent-reference/common-patterns.md).
 
 Compare multiple runs side by side with `tl.bundle`:
 
@@ -474,7 +474,7 @@ and pipeline point-to-point graphs still refuse with typed findings; see the
 | Recurrence grouping (multi-pass layers) | yes | yes | yes (eager) | yes (eager) | yes (eager) | yes (eager; static FuncGraph path stays ungrouped) |
 | Validation oracle (live) | whole-forward replay | per-equation replay + perturbation | per-UOp replay + perturbation | per-op replay + perturbation | replay + perturbation + coverage guard | per-op replay (allowlisted) + self-consistency |
 | Interventions | yes | -- | -- | yes (+`stop_after=`) | yes (+`stop_after=`, value-dependent predicates) | yes (eager entries, static-label, fail-closed) |
-| Halt / fastlog / streaming | yes | -- | -- | halt only | halt only | -- |
+| Halt / recording / streaming | yes | -- | -- | halt only | halt only | -- |
 
 Preview `save=` selectors filter what is exposed, not what is captured (no memory
 reduction); preview `tl.validate(...)` returns a status whose `bool()` raises for
@@ -709,6 +709,9 @@ saved activations are unaffected either way.
 | [docs/reference/collapse.md](docs/reference/collapse.md) | Smart-collapse visual reference and label contract |
 | [docs/reference/glossary.md](docs/reference/glossary.md) | Public terminology and stable mechanism names |
 | [docs/reference/limitations.md](docs/reference/limitations.md) | Edge scenarios, typed symptoms, and remedies |
+| [docs/reference/composition_matrix.md](docs/reference/composition_matrix.md) | Which feature pairings are verified together, refused on purpose, or not yet verified |
+| [docs/migration/landscape.md](docs/migration/landscape.md) | Comparable tools and their status, with dated sources |
+| [MIGRATIONS.md](MIGRATIONS.md) | Artifact compatibility: the 2.x floor and the conditional five-year window |
 
 
 ## Security

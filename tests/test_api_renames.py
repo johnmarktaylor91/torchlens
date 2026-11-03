@@ -201,3 +201,14 @@ def test_streaming_options_group_supports_every_field(
 
     assert captured[captured_key] == value
     assert _deprecation_messages(records) == []
+
+
+def test_trace_takes_inputs_and_refuses_the_old_input_args_keyword() -> None:
+    """``inputs=`` binds the model input; ``input_args=`` is an unrouted keyword, never forwarded."""
+
+    trace = tl.trace(_TinyModel(), inputs=_tiny_input())
+    assert isinstance(trace, tl.Trace)
+    with pytest.raises(tl.errors.ArgumentTypeError) as excinfo:
+        tl.trace(_TinyModel(), input_args=_tiny_input())
+    assert excinfo.value.fields["code"] == "trace_forward_kwargs_unrouted"
+    assert excinfo.value.fields["unrouted_keywords"] == ["input_args"]

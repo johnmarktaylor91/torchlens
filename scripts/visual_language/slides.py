@@ -764,6 +764,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Shared",
                 call="surgery",
+                kwargs={"highlight": "interventions"},
                 capture={"replayable": True, "save_args": True},
                 prep="fork_edit",
                 # The edit fires on pass 1; pass 2 carries the cohort note (one mark per pass
@@ -988,7 +989,7 @@ SLIDES: tuple[Slide, ...] = (
                 "a",
                 "Nonfinite",
                 call="lens",
-                capture={"module_filter": "@unsaved_abs"},
+                capture={"save": "@unsaved_abs"},
                 kwargs={"lens": "debug", "node_label_fields": ["label"]},
             ),
         ),
@@ -1358,7 +1359,11 @@ CHEAT_GROUPS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
         "show_buffers, show_containers, show_orphans",
         ("show_buffers", "show_containers", "container_max_inline", "show_orphans"),
     ),
-    ("Edits", "intervention_mode, show_cone", ("intervention_mode", "show_cone")),
+    (
+        "Edits",
+        "intervention_mode, highlight",
+        ("intervention_mode", "show_cone", "highlight"),
+    ),
     (
         "Measurements",
         "color_by, size_by, node_overlay",
