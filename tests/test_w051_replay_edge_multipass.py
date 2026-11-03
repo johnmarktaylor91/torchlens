@@ -5,7 +5,8 @@ Before the fix the edge door committed ``{child.layer_label: new_out}`` and
 ``layer_dict_all_keys`` resolves to the LAST pass -- then the downstream
 push (``replay.replay_from_op``, formerly ``push_from``) pushed the
 addressed pass's UNCHANGED captured out downstream: a silent no-op whose
-FireRecord landed on the wrong pass while the audit row claimed success (and the fork was un-validatable, ``edge_substitution_uncorroborated``).
+FireRecord landed on the wrong pass while the audit row claimed success
+(and the fork was un-validatable, ``edge_substitution_uncorroborated``).
 
 Test-design rules (do not weaken): ground truth is computed BY HAND from the
 model's own weights, fidelity assertions are PER PASS, and the loop cell uses
