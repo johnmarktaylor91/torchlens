@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 import torch
 from example_models import TinyReluAdd
+from support.cairosvg_skip import require_cairosvg
 from torch import nn
 
 import torchlens as tl
@@ -274,7 +275,7 @@ def test_highlighter_dark_opacity(tmp_path: Path) -> None:
 def test_highlighter_pdf_and_png_from_processed_svg(tmp_path: Path) -> None:
     """PDF and PNG carry the highlighter: they are written from the processed SVG."""
 
-    pytest.importorskip("cairosvg")
+    require_cairosvg()
     trace = _traced()
     try:
         for fileformat in ("pdf", "png"):

@@ -4,6 +4,7 @@
 
 from .._errors import InvalidArgumentError
 from .._utils._multipass_access import get_multipass_attr
+from ._cairosvg import get_cairosvg_support
 from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
@@ -57,11 +58,7 @@ def _code_panel_composition_available(file_format: str, engine: str) -> bool:
         return False
     if file_format == "svg":
         return True
-    try:
-        import cairosvg  # noqa: F401
-    except Exception:
-        return False
-    return True
+    return get_cairosvg_support()
 
 
 def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:

@@ -254,6 +254,29 @@ def _probe_graphviz() -> _EnvironmentCheck:
     )
 
 
+def _probe_cairosvg() -> _EnvironmentCheck:
+    """Probe the ``cairosvg`` rasterizer (PDF/PNG highlighter and code-panel composition).
+
+    Returns
+    -------
+    _EnvironmentCheck
+        ``PASS`` when ``import cairosvg`` works; ``SKIP`` otherwise, with the
+        reason naming the missing package or cairo library (SVG output never
+        needs it, so absence is optional, not broken).
+    """
+
+    from .._visualization._cairosvg import cairosvg_unavailable_reason, get_cairosvg_support
+
+    if get_cairosvg_support(force_probe=True):
+        return _EnvironmentCheck("cairosvg", "PASS", "HAS_CAIROSVG=True")
+    return _EnvironmentCheck(
+        "cairosvg",
+        "SKIP",
+        f"HAS_CAIROSVG=False; {cairosvg_unavailable_reason()}; PDF/PNG highlighter and "
+        "side-by-side code panels fall back to plain Graphviz output",
+    )
+
+
 def _probe_extras() -> _EnvironmentCheck:
     """Probe declared optional extras by importing their representative modules.
 
@@ -483,8 +506,8 @@ def _environment_checks() -> tuple[_EnvironmentCheck, ...]:
     Returns
     -------
     tuple[_EnvironmentCheck, ...]
-        Private probes for PyTorch, CUDA, Graphviz, safetensors, extras,
-        and model-fingerprint checks.
+        Private probes for PyTorch, CUDA, Graphviz, cairosvg, safetensors,
+        extras, and model-fingerprint checks.
     """
 
     checks: list[_EnvironmentCheck] = [
@@ -498,6 +521,7 @@ def _environment_checks() -> tuple[_EnvironmentCheck, ...]:
             f"available={torch.cuda.is_available()}; devices={torch.cuda.device_count()}",
         ),
         _probe_graphviz(),
+        _probe_cairosvg(),
         _EnvironmentCheck(
             "safetensors",
             "PASS" if _module_is_installed("safetensors") else "FAIL",

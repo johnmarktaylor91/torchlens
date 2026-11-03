@@ -13,8 +13,10 @@ from xml.etree import ElementTree
 import numpy as np
 import pytest
 import torch
+from support.cairosvg_skip import require_cairosvg
 
 import torchlens as tl
+from torchlens._visualization._cairosvg import get_cairosvg_support
 from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
 from torchlens.errors import MultiMatchWarning
 
@@ -103,7 +105,7 @@ def _rasterize(svg_path: Path) -> np.ndarray[Any, np.dtype[np.uint8]]:
         RGB pixel data.
     """
 
-    cairosvg = pytest.importorskip("cairosvg")
+    cairosvg = require_cairosvg()
     from PIL import Image as pillow_image
 
     png_bytes = cairosvg.svg2png(url=str(svg_path), output_width=1200, output_height=800)
@@ -191,9 +193,7 @@ def test_bundle_diff_canonical_resnet_snapshot(tmp_path: Path) -> None:
     # convert a real regression into a skip (b10 R78-4: cairosvg is installed
     # nowhere, so the mid-test importorskip made every byte regression green-
     # adjacent on every environment that exists).
-    import importlib.util
-
-    if importlib.util.find_spec("cairosvg") is None:
+    if not get_cairosvg_support():
         pytest.fail(
             "bundle-diff SVG bytes diverged from the committed golden and cairosvg is "
             f"unavailable to run the pixel-similarity exoneration. {context}"

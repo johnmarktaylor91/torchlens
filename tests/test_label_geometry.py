@@ -17,9 +17,10 @@ from pathlib import Path
 import pytest
 import torch
 from PIL import Image
+from support.cairosvg_skip import require_cairosvg
 from torch import nn
 
-cairosvg = pytest.importorskip("cairosvg")
+cairosvg = require_cairosvg()
 
 import test_loop_module_rolling as demos  # noqa: E402
 from support.label_geometry import audit_gv_source  # noqa: E402

@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from .._utils.display import atomic_write_text
+from ._cairosvg import cairosvg_unavailable_reason, get_cairosvg_support
 from ._edit_marks import DOWNSTREAM_NODE_CLASS, EDITED_NODE_CLASS, edit_ink
 
 if TYPE_CHECKING:
@@ -130,11 +131,10 @@ def highlighter_supported(fileformat: str) -> bool:
     if fileformat == "svg" or fileformat in _SOURCE_FORMATS:
         return fileformat == "svg"
     if fileformat in _CAIRO_FORMATS:
-        try:
-            import cairosvg  # noqa: F401
-        except (ImportError, OSError):
+        if not get_cairosvg_support():
             _warn_unsupported(
-                f"vis_fileformat={fileformat!r} needs the cairosvg package (pip install cairosvg)"
+                f"vis_fileformat={fileformat!r} needs cairosvg (pip install cairosvg): "
+                f"{cairosvg_unavailable_reason()}"
             )
             return False
         return True
