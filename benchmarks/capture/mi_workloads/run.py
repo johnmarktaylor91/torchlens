@@ -270,6 +270,12 @@ def main() -> None:
     p.add_argument("--patch-positions", type=int, default=4)
     p.add_argument("--new-tokens", type=int, default=16)
     p.add_argument("--reps", type=int, default=3)
+    p.add_argument(
+        "--slow-rep-s",
+        type=float,
+        default=C.SLOW_REP_S,
+        help="a timed rep slower than this ends the repetition loop; 0 always runs every rep",
+    )
     p.add_argument("--label", default="")
     p.add_argument(
         "--profile", default="", help="cProfile one rep of the workload into this .pstats path"
@@ -277,6 +283,7 @@ def main() -> None:
     a = p.parse_args()
     C.OUT_PATH = a.out
     C.REPS = a.reps
+    C.SLOW_REP_S = a.slow_rep_s if a.slow_rep_s > 0 else float("inf")
     os.makedirs(a.resdir, exist_ok=True)
     base = {
         "kind": "workload",
