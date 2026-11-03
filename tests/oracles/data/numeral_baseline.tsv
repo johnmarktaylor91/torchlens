@@ -1866,8 +1866,8 @@ docs-md	docs/maintainers/where.md	10
 docs-md	docs/maintainers/where.md	10,
 docs-md	docs/maintainers/where.md	100
 docs-md	docs/maintainers/where.md	1003
+docs-md	docs/maintainers/where.md	1009
 docs-md	docs/maintainers/where.md	101
-docs-md	docs/maintainers/where.md	1013
 docs-md	docs/maintainers/where.md	1016
 docs-md	docs/maintainers/where.md	102
 docs-md	docs/maintainers/where.md	103
@@ -1933,6 +1933,7 @@ docs-md	docs/maintainers/where.md	125
 docs-md	docs/maintainers/where.md	1253
 docs-md	docs/maintainers/where.md	1254
 docs-md	docs/maintainers/where.md	126
+docs-md	docs/maintainers/where.md	1260
 docs-md	docs/maintainers/where.md	1266
 docs-md	docs/maintainers/where.md	127
 docs-md	docs/maintainers/where.md	1272
@@ -1982,7 +1983,7 @@ docs-md	docs/maintainers/where.md	1439
 docs-md	docs/maintainers/where.md	144
 docs-md	docs/maintainers/where.md	1440
 docs-md	docs/maintainers/where.md	1444
-docs-md	docs/maintainers/where.md	1446
+docs-md	docs/maintainers/where.md	1449
 docs-md	docs/maintainers/where.md	145
 docs-md	docs/maintainers/where.md	1459
 docs-md	docs/maintainers/where.md	146
@@ -2168,13 +2169,13 @@ docs-md	docs/maintainers/where.md	2527
 docs-md	docs/maintainers/where.md	253
 docs-md	docs/maintainers/where.md	254
 docs-md	docs/maintainers/where.md	255
-docs-md	docs/maintainers/where.md	25518
 docs-md	docs/maintainers/where.md	256
 docs-md	docs/maintainers/where.md	258
 docs-md	docs/maintainers/where.md	2592
 docs-md	docs/maintainers/where.md	2597
 docs-md	docs/maintainers/where.md	26
 docs-md	docs/maintainers/where.md	260
+docs-md	docs/maintainers/where.md	26061
 docs-md	docs/maintainers/where.md	261
 docs-md	docs/maintainers/where.md	262
 docs-md	docs/maintainers/where.md	263
@@ -2471,7 +2472,7 @@ docs-md	docs/maintainers/where.md	544
 docs-md	docs/maintainers/where.md	546
 docs-md	docs/maintainers/where.md	547
 docs-md	docs/maintainers/where.md	548
-docs-md	docs/maintainers/where.md	54842
+docs-md	docs/maintainers/where.md	54843
 docs-md	docs/maintainers/where.md	549
 docs-md	docs/maintainers/where.md	55
 docs-md	docs/maintainers/where.md	552
@@ -2536,9 +2537,9 @@ docs-md	docs/maintainers/where.md	627
 docs-md	docs/maintainers/where.md	628
 docs-md	docs/maintainers/where.md	63
 docs-md	docs/maintainers/where.md	630
-docs-md	docs/maintainers/where.md	6310
 docs-md	docs/maintainers/where.md	6316
 docs-md	docs/maintainers/where.md	632
+docs-md	docs/maintainers/where.md	6333
 docs-md	docs/maintainers/where.md	635
 docs-md	docs/maintainers/where.md	6365
 docs-md	docs/maintainers/where.md	638
@@ -2550,7 +2551,7 @@ docs-md	docs/maintainers/where.md	642
 docs-md	docs/maintainers/where.md	643
 docs-md	docs/maintainers/where.md	647
 docs-md	docs/maintainers/where.md	648
-docs-md	docs/maintainers/where.md	648479
+docs-md	docs/maintainers/where.md	649046
 docs-md	docs/maintainers/where.md	65
 docs-md	docs/maintainers/where.md	651
 docs-md	docs/maintainers/where.md	656
@@ -2703,8 +2704,8 @@ docs-md	docs/maintainers/where.md	937
 docs-md	docs/maintainers/where.md	94
 docs-md	docs/maintainers/where.md	940
 docs-md	docs/maintainers/where.md	946
+docs-md	docs/maintainers/where.md	949
 docs-md	docs/maintainers/where.md	95
-docs-md	docs/maintainers/where.md	950
 docs-md	docs/maintainers/where.md	952
 docs-md	docs/maintainers/where.md	957
 docs-md	docs/maintainers/where.md	96
@@ -4551,6 +4552,8 @@ package-docstrings	torchlens/_capture/_input_records.py	42
 package-docstrings	torchlens/_capture/_input_records.py	64
 package-docstrings	torchlens/_capture/_input_records.py	65
 package-docstrings	torchlens/_capture/_input_records.py	67
+package-docstrings	torchlens/_capture/_multipass_cook.py	1_1
+package-docstrings	torchlens/_capture/_multipass_cook.py	1_2_
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_1
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_1_
 package-docstrings	torchlens/_capture/_nonfinite_prefix.py	1_4_
@@ -7370,6 +7373,7 @@ package-docstrings	torchlens/recording/recover.py	29700
 package-docstrings	torchlens/recording/storage_disk.py	022
 package-docstrings	torchlens/recording/storage_disk.py	0600
 package-docstrings	torchlens/recording/storage_disk.py	0700
+package-docstrings	torchlens/recording/types.py	1_1
 package-docstrings	torchlens/recording/types.py	24
 package-docstrings	torchlens/recording/types.py	34
 package-docstrings	torchlens/repgeom/__init__.py	18
