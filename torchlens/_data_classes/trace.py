@@ -228,10 +228,12 @@ class ResolvedPostprocessing:
     ----------
     source:
         Resolver source that selected the postprocessing transform.
-    identifier:
-        Model, weights, label bank, or default-policy identifier.
-    verified:
-        Whether the postprocessing came from model-specific metadata.
+    resolved_for:
+        Name of the model weights, label bank or default policy this
+        postprocessing was resolved for.
+    is_model_specific:
+        Whether the postprocessing is specific to this model (from its own
+        metadata or the caller's choice) rather than a generic default.
     config:
         Best-effort serializable postprocessing configuration.
     description:
@@ -253,8 +255,8 @@ class ResolvedPostprocessing:
     """
 
     source: str
-    identifier: str
-    verified: bool
+    resolved_for: str
+    is_model_specific: bool
     config: dict[str, Any]
     description: str
     style: str | None = None

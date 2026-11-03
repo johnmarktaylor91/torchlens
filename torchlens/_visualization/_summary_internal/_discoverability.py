@@ -143,7 +143,7 @@ def _output_postprocessing_lines(trace: Trace) -> list[str]:
             "Output postprocessing:",
             "  undetected; call trace.decode_output(style=..., head=...) to decode.",
         ]
-    verified = "verified" if bool(getattr(record, "verified", False)) else "unverified"
+    verified = "verified" if bool(getattr(record, "is_model_specific", False)) else "unverified"
     confidence = getattr(record, "confidence", None)
     confidence_text = "" if confidence is None else f", confidence={float(confidence):.2f}"
     lines = [

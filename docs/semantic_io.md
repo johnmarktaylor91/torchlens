@@ -91,6 +91,9 @@ live model output object and `meta["style"] is None`, and on demand from
 keyed by head (`{"logits": tensor}`, or the one bare tensor) and
 `meta["style"]` set to the requested style. It returns a
 `ResolvedPostprocessing` record or `None`.
+The record's `resolved_for=` names the model weights, label bank or default policy the
+decoding was resolved for, and `is_model_specific=` says whether it is specific to this model
+rather than a generic default. Both field spellings are unstable (no deprecation shim owed).
 
 ```python
 from typing import Any
@@ -106,8 +109,8 @@ def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | No
         return None
     return ResolvedPostprocessing(
         source="project",
-        identifier="my_labels",
-        verified=True,
+        resolved_for="my_labels",
+        is_model_specific=True,
         config={"id2label": {0: "cat", 1: "dog"}},
         description="project label bank",
         style="classification",

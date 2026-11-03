@@ -91,8 +91,8 @@ def test_model_profile_recognizes_image_classifier_with_raw_images() -> None:
     )
     trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
-        identifier="tiny",
-        verified=True,
+        resolved_for="tiny",
+        is_model_specific=True,
         config={"id2label": {0: "zero", 1: "one"}},
         description="tiny labels",
         style="classification",

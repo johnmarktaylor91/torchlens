@@ -18,8 +18,8 @@ DETECTORS, and a project registers its own label bank the same way:
             return None
         return ResolvedPostprocessing(
             source="project",
-            identifier="my_labels",
-            verified=True,
+            resolved_for="my_labels",
+            is_model_specific=True,
             config={"id2label": {0: "cat", 1: "dog"}},
             description="project label bank",
             style="classification",

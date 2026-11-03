@@ -185,8 +185,8 @@ def test_custom_registered_output_detector_decodes() -> None:
                 return None
             return ResolvedPostprocessing(
                 source="custom",
-                identifier="custom_labels",
-                verified=True,
+                resolved_for="custom_labels",
+                is_model_specific=True,
                 config={"id2label": labels, "num_labels": 2},
                 description="custom labels",
                 style="classification",
