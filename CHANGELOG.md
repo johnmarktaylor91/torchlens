@@ -844,6 +844,48 @@
 
 <!-- version list -->
 
+## v2.37.0 (2026-11-02)
+
+### Features
+
+- **validation**: Report a degenerate forward as `degenerate_forward`
+  ([`92b8598`](https://github.com/johnmarktaylor91/torchlens/commit/92b859834fd4d1c58da87efa711ee4a99edbfda4),
+  [`4b5bf2f`](https://github.com/johnmarktaylor91/torchlens/commit/4b5bf2f073f9068bfa253eaf9c5dac758a2dc8f4),
+  [`193e8f3`](https://github.com/johnmarktaylor91/torchlens/commit/193e8f36685559182fb59d09462c4be89221d0ec))
+
+A forward whose final outputs are entirely NaN or infinite, or whose gradient is identically zero,
+  cannot show that its recorded graph matches the computation. Validation now fails it with the
+  `degenerate_forward` label (kinds `non_finite_output` and `zero_gradient`) instead of a misleading
+  perturbation failure, and `Trace.validate_forward_pass` runs the same check.
+
+- **capture**: Record an autograd.Function that leaves torch as one boundary op
+  ([`debb6944`](https://github.com/johnmarktaylor91/torchlens/commit/debb6944a1b8d014b905f25d5b488cb9e6b2c746),
+  [`8ae4a2f`](https://github.com/johnmarktaylor91/torchlens/commit/8ae4a2f5ab1981e8712b69e996654a71e3b50cba))
+
+A custom torch.autograd.Function whose forward hands its tensors to another library (a numpy or
+  dlpack round trip, as DGL does) is now logged as one op that replays through the Function's own
+  apply, with a `foreign_kernel_boundary` warning, instead of failing the completeness check. An
+  ordinary custom Function is unchanged, and a plain round trip outside a Function still fails.
+
+### Bug Fixes
+
+- **validation and capture**: Validate real models that failed on 2.36.x
+  ([merge `ac4e653`](https://github.com/johnmarktaylor91/torchlens/commit/ac4e6536811d1cde6c40a8838cfbab34acaff855))
+
+About forty fixes found by running validation over the Model Menagerie's hardest models. Capture
+  now keeps the op behind `Tensor.__index__` slice bounds, binds in-place writes through views and
+  `x[idx] += y` to the right base version, treats tensors held on plain objects of a module as
+  buffers, keeps a collapsed Function's argument provenance, patches module-level references to
+  wrapped torch callables (`from torch import cat` style), and no longer fails on an unhashable
+  non-tensor argument or a string positional input. Validation proves more inputs inert after
+  perturbation instead of failing them (saved zero values, unit-base exponents, single-key
+  attention, all-True boolean masks, empty matrix products, broadcast set-item overwrites, pinned
+  expand sizes, packed RNN batch sizes), keeps Parameter and grad-tracked inputs as leaves in its
+  input copies, replays autograd.grad against the unperturbed input, and records a typed failure for
+  every forward that does not pass. Receptive and projective field queries accept empty inputs and
+  walk deep graphs without recursion.
+
+
 ## v2.36.3 (2026-10-31)
 
 ### Bug Fixes
