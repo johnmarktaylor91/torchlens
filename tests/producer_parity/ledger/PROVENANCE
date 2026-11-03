@@ -4035,3 +4035,19 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 79eb84b6b82c7eb481cce501a2922077d44557a1 (dirty)
 recorded: 2026-11-03T12:57:15.778303+00:00
+---
+generator: producer_parity/test_ledger.py (static half)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: debug-truths fixq3: debug-findings (93dc76d1f) and debug-truths source-line, unit-axis and summary where= changes; getattr reach-ins replaced by declared reads
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a60f5af0b0dab0ec5fe7caf3ca82f0c3e5f547b4 (clean)
+recorded: 2026-11-03T16:20:36.050871+00:00
+---
+generator: producer_parity/test_ledger.py (full closure)
+flag: TORCHLENS_REFRESH_PRODUCER_LEDGER=1
+reason: debug-truths fixq3: debug-findings (93dc76d1f) and debug-truths source-line, unit-axis and summary where= changes; getattr reach-ins replaced by declared reads
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: a60f5af0b0dab0ec5fe7caf3ca82f0c3e5f547b4 (clean)
+recorded: 2026-11-03T16:20:42.211721+00:00
