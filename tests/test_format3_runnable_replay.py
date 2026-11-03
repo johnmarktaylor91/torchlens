@@ -642,3 +642,29 @@ def test_complex_tensor_round_trips_as_its_real_view(tmp_path: Path) -> None:
     assert references["w"]["complex"] is True and references["w"]["dtype"] == "complex64"
     loaded = runnable_families.read_family(tmp_path, paths, references, files, "cpu")
     torch.testing.assert_close(loaded["w"], value, rtol=0, atol=0)
+
+
+def test_runnable_and_record_payloads_share_one_tensor_key_counter(tmp_path: Path) -> None:
+    """All safetensors keys are unique across ordinary and runnable component files."""
+
+    from safetensors import safe_open
+
+    from torchlens._io.format3.payloads import PayloadStore, host_tensor
+
+    counter = [0]
+    store = PayloadStore(tmp_path, counter=counter)
+    store.submit(host_tensor(torch.ones(2)))
+    store.close()
+    trace = tl.trace(_StateModel().eval(), torch.ones(2, 3), capture=_CAP)
+    try:
+        written = runnable3.write_runnable(trace, tmp_path, counter=counter)
+        assert written.manifest["descriptor"] == "runnable/descriptor.json"
+        all_keys = []
+        for path in sorted(tmp_path.rglob("*.safetensors")):
+            with safe_open(path, framework="pt", device="cpu") as handle:
+                all_keys.extend(handle.keys())
+        assert len(all_keys) > 1
+        assert len(all_keys) == len(set(all_keys))
+        assert sorted(int(key[1:]) for key in all_keys) == list(range(len(all_keys)))
+    finally:
+        trace.cleanup()
