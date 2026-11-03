@@ -48,7 +48,7 @@ def owners():
             "Trace": first,
             "Bundle": tl.Bundle({"a": first, "b": second}),
             "Layer": first["relu_1_2"],
-            "Op": first["relu_1_2"].ops[0],
+            "Op": first.layers["relu_1_2"].ops[0],
             "VisualizationOptions": VisualizationOptions(),
             "CaptureOptions": CaptureOptions(),
             "VisualizationTheme": THEME_PRESETS["torchlens"],
