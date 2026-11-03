@@ -1239,7 +1239,7 @@ def torch_func_decorator(
             if needs_device_injection:
                 kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
             # Opened before the call: the fast collector mirrors capture's nesting barcode.
-            fast_collector = _state._active_fast_run_collector
+            fast_collector: Any = _state._active_fast_run_collector
             fast_event = fast_collector and fast_collector.enter_event(is_barcode_transparent)
             if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
                 args, _fast_path_subclass_cls_index
