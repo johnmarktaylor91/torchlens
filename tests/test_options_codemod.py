@@ -70,3 +70,80 @@ def test_imported_constructor_alias_migrates() -> None:
     assert not reports
     assert 'save=["relu"]' in rewritten
     assert "capture=" not in rewritten
+
+
+def _record_keywords(source: str) -> dict[str, ast.expr]:
+    call = next(
+        node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "record"
+    )
+    return {str(kw.arg): kw.value for kw in call.keywords}
+
+
+def _ctor_fields(node: ast.expr) -> dict[str, str]:
+    assert isinstance(node, ast.Call)
+    return {str(kw.arg): ast.unparse(kw.value) for kw in node.keywords}
+
+
+def test_record_recording_options_is_kept_not_spilled() -> None:
+    # Fails if the codemod spills recording=RecordingOptions(...) back onto record.
+    source = (
+        "import torchlens as tl\n"
+        "tl.record(model, x, recording=tl.options.RecordingOptions("
+        'default_op=True, history_size=4, postprocess="none"))\n'
+    )
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    assert rewritten == source
+
+
+def test_record_flat_recording_keywords_fold_into_recording_options() -> None:
+    source = (
+        "import torchlens as tl\n"
+        "tl.record(model, x, default_op=True, seed=1, history_size=4, "
+        'on_forward_error="raise")\n'
+    )
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    keywords = _record_keywords(rewritten)
+    assert set(keywords) == {"capture", "recording"}
+    assert ast.unparse(keywords["recording"]).startswith("tl.options.RecordingOptions(")
+    assert _ctor_fields(keywords["recording"]) == {
+        "default_op": "True",
+        "history_size": "4",
+        "on_forward_error": "'raise'",
+    }
+    assert _ctor_fields(keywords["capture"]) == {"seed": "1"}
+    assert _rewrite(rewritten) == (rewritten, [])
+
+
+def test_record_flat_recording_keywords_merge_into_existing_constructor() -> None:
+    source = "tl.record(model, x, recording=RecordingOptions(history_size=3), default_op=True)"
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    keywords = _record_keywords(rewritten)
+    assert set(keywords) == {"recording"}
+    assert _ctor_fields(keywords["recording"]) == {"history_size": "3", "default_op": "True"}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "tl.record(model, x, recording=RecordingOptions(history_size=3), history_size=4)",
+        "tl.record(model, x, recording=opts, default_op=True)",
+    ],
+)
+def test_record_recording_fold_conflicts_require_review(source: str) -> None:
+    rewritten, reports = _rewrite(source)
+    assert reports and all("move by hand" in report for report in reports)
+    assert rewritten == source
+
+
+def test_recorder_keywords_stay_flat() -> None:
+    source = "rec = tl.recording.Recorder(model, default_op=True, history_size=3)"
+    rewritten, reports = _rewrite(source)
+    assert not reports
+    assert rewritten == source

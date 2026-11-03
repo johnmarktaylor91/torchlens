@@ -11,9 +11,10 @@ Rewrites call sites of the ``trace`` and ``record`` doors in Python sources:
 * ``CaptureOptions(layers_to_save=...)`` moves to the enclosing door's ``save=``;
   standalone options move when all uses are visible in the same function; conflicts
   and ``save_preview=True`` require review, while ``save_preview=False`` is dropped;
-* ``record`` recording keywords (``default_op=``, ``history_size=``, ...) stay flat door
-  keywords; a ``recording=RecordingOptions(...)`` at a ``record`` door spills them back
-  onto the door;
+* ``record`` recording keywords (``default_op=``, ``history_size=``, ...) move into
+  ``recording=RecordingOptions(...)``, merging into an existing ``RecordingOptions(...)``
+  constructor; an existing ``recording=`` stays as it is (``tl.recording.Recorder(...)``
+  keeps its flat keywords);
 * a third positional ``trace`` argument becomes ``input_kwargs=``;
 * inside any ``CaptureOptions(...)`` constructor, ``raise_on_nan=`` / ``track_nonfinite=``
   become the one ``on_nonfinite=`` vocabulary.
@@ -60,7 +61,7 @@ RECORD_CAPTURE_MOVES = (
     "backward_ready",
     "detach_saved_activations",
 )
-# ``record`` recorder keywords: flat on the door, spilled out of ``recording=``.
+# ``record`` recorder keywords: grouped in ``recording=RecordingOptions(...)``.
 RECORD_RECORDING_MOVES = (
     "default_op",
     "default_module",
@@ -269,7 +270,9 @@ def _rewrite_door(
     call: ast.Call, door: str, ed: _Edits, counts: Counter, reports: list[str], path: Path
 ) -> None:
     capture_moves = TRACE_CAPTURE_MOVES if door == "trace" else RECORD_CAPTURE_MOVES
+    recording_moves = RECORD_RECORDING_MOVES if door == "record" else ()
     moved_capture: list[str] = []
+    recording_kws: list[ast.keyword] = []
     for kw in list(call.keywords):
         if kw.arg is None:
             continue
@@ -284,6 +287,8 @@ def _rewrite_door(
             moved_capture.append(f"{kw.arg}={ed.text(kw.value)}")
             ed.remove_arg(kw, call)
             counts[f"move:{kw.arg}"] += 1
+        elif kw.arg in recording_moves:
+            recording_kws.append(kw)
         elif (
             kw.arg == "save"
             and isinstance(kw.value, ast.Call)
@@ -303,7 +308,6 @@ def _rewrite_door(
                 moved_capture.extend(
                     _rewrite_recording_options(kw.value, call, ed, counts, reports, path)
                 )
-                _spill_recording_keyword(kw, call, ed, counts, reports, path)
     if door == "trace" and len(call.args) == 3:
         third = call.args[2]
         a, _ = ed.span(third)
@@ -335,47 +339,54 @@ def _rewrite_door(
             last = (list(call.args) + list(call.keywords))[-1]
             _, b = ed.span(last)
             ed.replace(b, b, f", {name}={style}({', '.join(pieces)})")
+    if recording_kws:
+        _fold_recording_keywords(call, recording_kws, ed, counts, reports, path)
 
 
-def _spill_recording_keyword(
-    kw: ast.keyword,
+def _fold_recording_keywords(
     door_call: ast.Call,
+    flat: list[ast.keyword],
     ed: _Edits,
     counts: Counter,
     reports: list[str],
     path: Path,
 ) -> None:
-    """Spill a ``record`` door's ``recording=RecordingOptions(...)`` onto the door.
+    """Fold a ``record`` door's flat recorder keywords into ``recording=RecordingOptions``.
 
-    The recorder knobs are flat ``record`` keywords; the ``recording=`` keyword
-    is dropped once every field in it has a door keyword to go to.
+    Merges into an existing ``RecordingOptions(...)`` constructor (a field it already
+    sets is a conflict for review) or adds a new ``recording=`` keyword. A ``recording=``
+    whose value is not a constructor call cannot be merged into and is reported. A
+    reported call keeps its flat keywords untouched.
     """
 
-    ctor = kw.value
-    assert isinstance(ctor, ast.Call)
-    taken = {k.arg for k in door_call.keywords}
-    handled = set(RECORDING_OPTIONS_CAPTURE_MOVES) | set(RECORDING_OPTIONS_DOOR_MOVES)
-    pieces: list[str] = []
-    stuck: list[str] = []
-    for inner in ctor.keywords:
-        if inner.arg in handled:
-            continue
-        if inner.arg in RECORD_RECORDING_MOVES and inner.arg not in taken:
-            pieces.append(f"{inner.arg}={ed.text(inner.value)}")
-            counts[f"recording_spill:{inner.arg}"] += 1
-        else:
-            stuck.append(ed.text(inner) if inner.arg is None else str(inner.arg))
-    if stuck or ctor.args:
+    pieces = [f"{kw.arg}={ed.text(kw.value)}" for kw in flat]
+    existing = next((k for k in door_call.keywords if k.arg == "recording"), None)
+    ctor = existing.value if existing is not None else None
+    if existing is not None and not (
+        isinstance(ctor, ast.Call) and _ctor_name(ctor.func, "RecordingOptions")
+    ):
         reports.append(
-            f"{path}:{door_call.lineno}: recording=RecordingOptions(...) has field(s) "
-            f"{', '.join(stuck) or 'positional'} with no flat record keyword; move by hand"
+            f"{path}:{door_call.lineno}: recording= is not a constructor; move by hand: {pieces}"
         )
         return
-    ed.remove_arg(kw, door_call)
-    if pieces:
-        last = (list(door_call.args) + list(door_call.keywords))[-1]
-        _, b = ed.span(last)
-        ed.replace(b, b, ", " + ", ".join(pieces))
+    present = {k.arg for k in ctor.keywords} if isinstance(ctor, ast.Call) else set()
+    clashes = [str(kw.arg) for kw in flat if kw.arg in present]
+    if clashes:
+        reports.append(
+            f"{path}:{door_call.lineno}: {', '.join(clashes)} set both on record and in "
+            "recording=RecordingOptions(...); move by hand"
+        )
+        return
+    for kw in flat:
+        ed.remove_arg(kw, door_call)
+        counts[f"recording_fold:{kw.arg}"] += 1
+    if isinstance(ctor, ast.Call):
+        _append_into_ctor(ed, ctor, pieces)
+        return
+    style = _style(ed.source, "RecordingOptions")
+    last = (list(door_call.args) + list(door_call.keywords))[-1]
+    _, b = ed.span(last)
+    ed.replace(b, b, f", recording={style}({', '.join(pieces)})")
 
 
 def _rewrite_recording_options(
@@ -560,6 +571,21 @@ def _extract_capture_selection(
         counts["capture_selection_to_save"] += 1
 
 
+def _add_options_import(source: str, new: str) -> str:
+    """Import the option classes a rewrite introduced when ``tl`` is not imported."""
+
+    if "import torchlens as tl" in new:
+        return new
+    added = [name for name in OPTION_CLASSES if f"{name}(" in new and name not in source]
+    if not added:
+        return new
+    return new.replace(
+        "\nimport torch\n",
+        f"\nimport torch\n\nfrom torchlens.options import {', '.join(added)}\n",
+        1,
+    )
+
+
 def rewrite(path: Path, apply: bool, counts: Counter, reports: list[str]) -> bool:
     source = path.read_text()
     return rewrite_source(source, path, apply, counts, reports)
@@ -613,17 +639,7 @@ def rewrite_source(
     _report_private_builders(tree, reports, path)
     if not ed.edits:
         return False
-    new = ed.apply()
-    if (
-        "CaptureOptions(" in new
-        and "CaptureOptions" not in source
-        and "import torchlens as tl" not in new
-    ):
-        new = new.replace(
-            "\nimport torch\n",
-            "\nimport torch\n\nfrom torchlens.options import CaptureOptions\n",
-            1,
-        )
+    new = _add_options_import(source, ed.apply())
     try:
         ast.parse(new)
     except SyntaxError as exc:
