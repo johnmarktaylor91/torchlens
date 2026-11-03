@@ -200,8 +200,8 @@ def _snapshot_probe_state(trace: Trace) -> _ProbeSnapshot:
         num_backward_passes=int(trace._num_backward_passes),
         has_gradients=bool(trace._autograd_has_grads),
         backward_event_count=_backward_event_count(trace),
-        active_index_present="_active_backward_pass_index" in trace_dict,
-        active_index=trace_dict.get("_active_backward_pass_index"),
+        active_index_present="_active_backward_pass_number" in trace_dict,
+        active_index=trace_dict.get("_active_backward_pass_number"),
     )
 
 
@@ -692,14 +692,14 @@ def _build_result(
 
     magnitude = grad.detach().abs()
     finite = torch.isfinite(magnitude)
-    nonfinite_count = int((~finite).sum().item())
+    num_nonfinite = int((~finite).sum().item())
     finite_values = magnitude[finite]
     maximum = finite_values.max() if finite_values.numel() else magnitude.new_tensor(0.0)
     support = finite & (magnitude > atol + rtol * maximum)
     result_warnings: tuple[str, ...] = ()
-    if nonfinite_count:
+    if num_nonfinite:
         message = (
-            f"Gradient receptive field for {target.label!r} contains {nonfinite_count} "
+            f"Gradient receptive field for {target.label!r} contains {num_nonfinite} "
             "NaN or Inf entries; validation is indeterminate."
         )
         warnings.warn(message, RuntimeWarning, stacklevel=3)
@@ -720,7 +720,7 @@ def _build_result(
         cross_batch_influence=cross_batch,
         atol=atol,
         rtol=rtol,
-        nonfinite_count=nonfinite_count,
+        num_nonfinite=num_nonfinite,
         warnings=result_warnings,
         direction=ReceptiveFieldDirection.RECEPTIVE,
         unit_shape=unit_shape,

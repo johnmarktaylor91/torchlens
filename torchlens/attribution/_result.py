@@ -28,6 +28,13 @@ class AttributionError(ConfigurationError, ValueError):
     additive (``except ValueError`` still catches it) and supplies the shared
     structured-payload contract: new raise sites pass ``code=`` and end their
     message with a ``Remedy:`` sentence per the S-17 refusal-site contract.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.AttributionError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(tl.errors.AttributionError, ValueError)
+    True
     """
 
 
@@ -83,6 +90,16 @@ class Attribution:
         Compact representation of the scalarization target.
     extra
         Method-specific metadata. This schema is intentionally minimal for v1.
+
+    Examples
+    --------
+    >>> attribution = tl.attribution.saliency(model, x, target=0)
+    >>> type(attribution).__name__
+    'Attribution'
+    >>> attribution.method
+    'saliency'
+    >>> tuple(attribution.values.shape)
+    (1, 3, 8, 8)
     """
 
     method: str

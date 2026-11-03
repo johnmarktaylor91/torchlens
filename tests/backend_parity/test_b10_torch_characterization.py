@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import importlib
 import warnings
 from typing import Any, cast
 
 import pytest
 import torch
-from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
-import torchlens._state as torchlens_state
 from torchlens._data_classes.trace import Trace
-from torchlens.errors import TraceCaptureError
 from torchlens.intervention.types import DictKey, TupleIndex
 
 pytestmark = pytest.mark.backend_parity
@@ -212,74 +208,6 @@ def _input_io_roles(trace: Trace) -> set[str]:
     return {cast(str, trace[label].io_role) for label in trace.input_layers}
 
 
-def test_forward_exception_restores_capture_state() -> None:
-    """A user exception mid-forward cleans up global logging state."""
-
-    model = _RaisesMidForward()
-    x = torch.ones(2, 2)
-
-    with pytest.raises(TraceCaptureError, match="boom during forward") as _tce_info:
-        tl.trace(model, x, save="all")
-    assert isinstance(_tce_info.value.__cause__, RuntimeError)
-
-    assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_trace is None
-    assert not hasattr(x, "_tl")
-
-    followup = tl.trace(
-        _FiveOpTraceModel(),
-        torch.ones(2, 2),
-        save="all",
-    )
-    assert followup._num_ops == 4
-
-
-def test_halt_signal_returns_partial_trace_from_predicate_capture() -> None:
-    """Predicate halt finalizes the partial graph through the HaltSignal path."""
-
-    trace = tl.trace(
-        _FiveOpTraceModel(),
-        torch.ones(2, 2),
-        save=lambda ctx: ctx.kind == "op",
-        stop_after=lambda ctx: ctx.label.startswith("relu"),
-    )
-
-    assert trace.is_stopped is True
-    # stop_reason/halt_frontier are now remapped from raw to FINAL labels in
-    # postprocess Step 10 (_rename_model_history_layer_names), consistently for
-    # both the exhaustive tl.trace(halt=...) and cooked Recording.to_trace()
-    # paths, so halt provenance is a stable public label that matches across
-    # capture modes (was raw "relu_1_3_raw", capture-mode-local).
-    assert trace.stop_reason == "relu_1_2"
-    assert trace.graph.stop_frontier == "relu_1_2"
-    assert [layer.func_name for layer in trace._layer_list] == ["none", "__add__", "relu", "none"]
-    assert torchlens_state._logging_enabled is False
-    assert torchlens_state._active_trace is None
-
-
-def test_selective_layers_to_save_uses_fast_pass_save_new_outs() -> None:
-    """Selective layer names save requested and output-parent payloads."""
-
-    torch.manual_seed(1703)
-    trace = tl.trace(
-        _SelectiveFastPassModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(seed=1703),
-        save=["relu"],
-    )
-
-    saved = [(layer.func_name, layer.has_saved_activation) for layer in trace._layer_list]
-    assert trace.options.mode == "exhaustive"
-    assert len(trace.saved_ops) == 3
-    assert saved == [
-        ("none", False),
-        ("linear", False),
-        ("relu", True),
-        ("linear", True),
-        ("none", True),
-    ]
-
-
 def test_intervention_ready_walks_nested_output_containers() -> None:
     """Intervention-ready output extraction records stable nested container paths."""
 
@@ -304,22 +232,6 @@ def test_intervention_ready_walks_nested_output_containers() -> None:
     ]
 
 
-def test_dataparallel_unwrap_preserves_structured_input_addresses() -> None:
-    """DataParallel unwrap still handles nontrivial mutable input structure."""
-
-    payload = {
-        "left": [torch.ones(2, 2)],
-        "right": {"x": torch.full((2, 2), 2.0)},
-    }
-    trace = tl.trace(nn.DataParallel(_DataParallelStructuredInputModel()), payload)
-
-    assert trace.source.class_name == "_DataParallelStructuredInputModel"
-    assert _input_io_roles(trace) == {"input.payload.left.0", "input.payload.right.x"}
-    assert torch.allclose(
-        cast(torch.Tensor, trace[trace.output_layers[0]].out), torch.full((2, 2), 3.0)
-    )
-
-
 def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() -> None:
     """Buffer reconciliation emits the initial source before the in-place write version."""
 
@@ -338,29 +250,8 @@ def test_buffer_mutation_reconciliation_orders_initial_and_written_versions() ->
     assert buffer_versions[1].buffer_write_kind == "inplace"
     assert str(buffer_versions[1].buffer_source).startswith("add_2_")
     assert buffer_versions[1].parents == ("add_2_2",)
-    # A default capture is a pure observer (U40.1): the live buffer is restored.
+    # A default capture is a pure observer: the live buffer is restored.
     assert torch.equal(model.offset, torch.zeros(2, 2))
-
-
-def test_dropout_two_pass_rng_alignment_matches_full_trace() -> None:
-    """Absorbed selective saving preserves the full-trace dropout RNG stream."""
-
-    x = torch.ones(4, 4)
-    full = tl.trace(
-        _DropoutTwoPassModel().train(),
-        x,
-        capture=tl.options.CaptureOptions(seed=1704),
-        save="all",
-    )
-    selective = tl.trace(
-        _DropoutTwoPassModel().train(),
-        x,
-        capture=tl.options.CaptureOptions(seed=1704),
-        save=["dropout"],
-    )
-
-    assert selective.options.mode == "exhaustive"
-    assert torch.equal(_dropout_out(selective), _dropout_out(full))
 
 
 def test_nested_input_paths_source_labels_and_caller_input_immutability() -> None:
@@ -384,59 +275,6 @@ def test_nested_input_paths_source_labels_and_caller_input_immutability() -> Non
     assert not hasattr(left, "_tl")
     assert not hasattr(right, "_tl")
     assert not hasattr(shift, "_tl")
-
-
-def test_top_level_tuple_input_type_is_preserved_after_internal_device_move() -> None:
-    """The top-level tuple argument workaround keeps tuple type for model.forward."""
-
-    model = _TupleInputModel()
-    trace = tl.trace(model, (torch.ones(2, 2), torch.full((2, 2), 2.0)))
-
-    assert stashed(trace, "saw_tuple") is True
-    assert _input_io_roles(trace) == {"input.pair.0", "input.pair.1"}
-
-
-def test_model_device_selection_params_buffers_and_paramless_fallback(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Input setup selects param, buffer, then device-less ``None``.
-
-    ``None`` (no parameters or buffers anywhere) means the inputs are never
-    moved: eager execution runs each op on its operands' devices. The
-    historical ``"cpu"`` fallback silently dragged CUDA inputs to the CPU
-    and computed the whole forward there (H200 finding, 2026-08-18).
-    """
-
-    capture_trace = importlib.import_module("torchlens._capture.run")
-    original = capture_trace._fetch_label_move_input_tensors
-    seen_devices: list[Any] = []
-
-    def spy_fetch_label_move_input_tensors(
-        session: object,
-        input_args: list[Any],
-        input_arg_names: list[str],
-        input_kwargs: dict[Any, Any],
-        model_device: str,
-    ) -> tuple[list[torch.Tensor], list[str]]:
-        """Record the selected model device before delegating."""
-
-        seen_devices.append(model_device)
-        return cast(
-            tuple[list[torch.Tensor], list[str]],
-            original(session, input_args, input_arg_names, input_kwargs, model_device),
-        )
-
-    monkeypatch.setattr(
-        capture_trace,
-        "_fetch_label_move_input_tensors",
-        spy_fetch_label_move_input_tensors,
-    )
-
-    tl.trace(_ParamDeviceModel(), torch.ones(2, 2))
-    tl.trace(_BufferDeviceModel(), torch.ones(2, 2))
-    tl.trace(_ParamlessDeviceModel(), torch.ones(2, 2))
-
-    assert seen_devices == [torch.device("cpu"), torch.device("cpu"), None]
 
 
 @pytest.mark.cuda

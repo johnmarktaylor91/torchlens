@@ -115,6 +115,7 @@ exclude_docs: |
   /field-guide/feature_visualisation.md
   /field-guide/generation_step_attribution.md
   /field-guide/intervene.md
+  /field-guide/jacobian_lens.md
   /field-guide/lrp_epsilon_litmus.md
   /field-guide/lrp_transformers_lxt.md
   /field-guide/pretrained_saes.md
@@ -141,6 +142,7 @@ exclude_docs: |
   /maintainers/review_checklist.md
   /maintainers/saved_format_3.md
   /maintainers/testing.md
+  /maintainers/docstring_examples_census.md
   /maintainers/where.md
   /guides/grouping.md
   /guides/kv_cache.md
@@ -154,6 +156,7 @@ exclude_docs: |
   /migration/baukit.md
   /migration/coming_from_torchsnooper.md
   /migration/comparison.md
+  /migration/cross_engine.md
   /migration/from_bertviz_ecco.md
   /migration/from_captum.md
   /migration/from_fx.md

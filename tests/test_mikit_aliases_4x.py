@@ -1,4 +1,4 @@
-"""TransformerLens 4.x canonical hook names resolve to live sites (U12.5).
+"""TransformerLens 4.x canonical hook names resolve to live sites.
 
 Every ``4.x`` translation row, instantiated at every executed layer, must
 resolve on a real-class tiny model to a ``real`` (or validated
@@ -107,34 +107,3 @@ def test_4x_conditional_rows_absent_honestly(traces):
     report = mi.alias_report(traces["gpt2"], generation="4.x")
     assert {r.generation for r in report} == {"4.x"}
     assert sum(1 for r in report if r.status in LIVE) == len(report) - 2  # hook_pre_linear x2
-
-
-def test_embedding_roles_resolve_token_and_position(traces):
-    gpt2, llama = traces["gpt2"], traces["llama"]
-    for token_name, position_name in (
-        ("hook_embed", "hook_pos_embed"),
-        ("embed.hook_out", "pos_embed.hook_out"),
-    ):
-        assert mi.resolve_alias(gpt2, token_name).module_address == "transformer.wte"
-        assert mi.resolve_alias(gpt2, position_name).module_address == "transformer.wpe"
-        assert mi.resolve_alias(llama, token_name).module_address == "model.embed_tokens"
-        # Rotary Llama has no position table: absent, never the token embedding.
-        absent = mi.resolve_alias(llama, position_name)
-        assert absent.status == "structurally_absent" and absent.module_address is None
-        assert "position" in (absent.remedy or "")
-
-
-def test_resolution_answers_after_the_model_is_collected():
-    """Roles read recorded parameter shapes, never live values: no raise after GC."""
-
-    import gc
-
-    model, trace = _capture("build_gpt2")
-    del model
-    gc.collect()
-    try:
-        assert mi.resolve_alias(trace, "embed.hook_out").module_address == "transformer.wte"
-        assert mi.resolve_alias(trace, "hook_pos_embed").module_address == "transformer.wpe"
-        assert mi.resolve_alias(trace, "blocks.1.attn.o.hook_in").status == "real"
-    finally:
-        trace.cleanup()

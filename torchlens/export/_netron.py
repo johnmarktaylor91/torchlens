@@ -358,6 +358,22 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     -------
     Path | None
         The written JSON path, or ``None`` for the memory-only serve mode.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.netron(trace, pathlib.Path(tmp) / "model.json")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> '"irVersion"' in text
+    True
+    >>> try:
+    ...     tl.export.netron(trace)
+    ... except tl.errors.ConfigurationError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'ConfigurationError'
     """
 
     _require_trace(trace, exporter="tl.export.netron")

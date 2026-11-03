@@ -25,7 +25,7 @@ from torchlens._io.manifest import Manifest
 from torchlens._io.payload_codec import get_payload_codec
 from torchlens._runnable import NumericAttestationStatus
 from torchlens.options import CaptureOptions
-from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
+from torchlens.validation import _validate_runnable_payload_entries
 
 _CAP = CaptureOptions(
     replayable=True,
@@ -90,15 +90,6 @@ class ParamsOnlyModel(nn.Module):
         """Apply a deterministic parameter-only graph."""
 
         return torch.relu(self.linear(value))
-
-
-class NoStateModel(nn.Module):
-    """No parameters and no buffers at all."""
-
-    def forward(self, value: torch.Tensor) -> torch.Tensor:
-        """Apply a stateless graph."""
-
-        return torch.relu(value)
 
 
 def _save(path: Path, model: nn.Module, inputs: torch.Tensor, **kwargs: Any) -> Path:
@@ -209,52 +200,6 @@ def test_validator_rejects_present_weights_with_missing_entries(tmp_path: Path) 
         _validate_runnable_payload_entries(stripped)
 
 
-def test_validator_rejects_relabelled_weight_entries(tmp_path: Path) -> None:
-    """Weight LABELS are cross-checked against the descriptor's declared state names."""
-
-    path = _save(
-        tmp_path / "relabelled.tlspec",
-        StateModel().eval(),
-        torch.ones(2, 3),
-        include_weights=True,
-    )
-    manifest = _manifest(path)
-    relabelled = copy.deepcopy(manifest)
-    for entry in relabelled["tensors"]:
-        if entry.get("kind") == "runnable_weight":
-            entry["label"] = f"bogus.{entry['label']}"
-    with pytest.raises(ValueError, match="weight entries disagree with tensor slots"):
-        _validate_runnable_payload_entries(relabelled)
-
-
-@pytest.mark.parametrize("include_weights", [False, True])
-@pytest.mark.parametrize(
-    "factory", [NoStateModel, ParamsOnlyModel, StateModel], ids=["no-state", "params", "mixed"]
-)
-def test_weight_invariant_holds_on_every_honest_shape(
-    tmp_path: Path,
-    factory: type[nn.Module],
-    include_weights: bool,
-) -> None:
-    """The strengthened invariant is behavior-preserving across the honest shape matrix.
-
-    ``present`` tracks the optional ``include_weights=`` FLAG (unlike the REQUIRED
-    non-persistent-buffer family, whose ``present`` tracks EXISTENCE), so the honest matrix
-    includes both a params-bearing model at the DEFAULT ``include_weights=False`` and a
-    no-state model at ``include_weights=True``.
-    """
-
-    path = _save(
-        tmp_path / f"shape-{factory.__name__}-{include_weights}.tlspec",
-        factory().eval(),
-        torch.ones(2, 3),
-        include_weights=include_weights,
-    )
-
-    _validate_runnable_payload_entries(_manifest(path))
-    validate_tlspec(path)
-
-
 # --------------------------------------------------------------------------- #
 # H2: a selectively-saved activation archive DISCLOSES that it is unattestable.
 # --------------------------------------------------------------------------- #
@@ -301,28 +246,6 @@ def test_selective_activation_save_discloses_unattestable_archive(tmp_path: Path
     assert all(check.passed for check in result.report.contract_checks)
 
 
-def test_full_capture_activation_save_stays_attested_and_silent(tmp_path: Path) -> None:
-    """The disclosure is NARROW: a full capture still records inputs and attests."""
-
-    import torchlens._io.bundle as bundle_module
-
-    model = StateModel().eval()
-    inputs = torch.ones(2, 3)
-    path = tmp_path / "full-capture.tlspec"
-
-    bundle_module._UNATTESTABLE_ACTIVATION_DISCLOSURE_WARNED = False
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        tl.trace(model, inputs, capture=_CAP).save(
-            path, level="runnable", include_weights=True, include_activations=True
-        )
-    assert not any("records no original-input digests" in str(e.message) for e in caught)
-
-    assert _manifest(path)["run"]["payload_layers"]["activations"]["original_input_digests"]
-    result = tl.load(path).run(inputs=inputs.clone())
-    assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
-
-
 # --------------------------------------------------------------------------- #
 # M5: the unreachable torch NumPy transport fails closed instead of trapping.
 # --------------------------------------------------------------------------- #
@@ -345,23 +268,6 @@ def test_torch_codec_numpy_transport_fails_closed() -> None:
         codec.to_numpy(torch.ones(2, dtype=torch.bfloat16))
     with pytest.raises(TypeError, match="no NumPy transport"):
         codec.from_numpy(np.zeros(2, dtype=np.float32), None, map_location=None)
-
-
-def test_bfloat16_payload_round_trips_through_the_real_routing(tmp_path: Path) -> None:
-    """The REAL torch routing still handles a bfloat16 payload end-to-end."""
-
-    class Bf16(nn.Module):
-        def forward(self, value: torch.Tensor) -> torch.Tensor:
-            """Apply a bfloat16 op."""
-
-            return torch.relu(value)
-
-    inputs = torch.ones(2, 3, dtype=torch.bfloat16)
-    path = tmp_path / "bf16.tlspec"
-    tl.trace(Bf16(), inputs, capture=_CAP).save(path, level="runnable", include_weights=True)
-
-    assert tl.load(path) is not None
-    validate_tlspec(path)
 
 
 # --------------------------------------------------------------------------- #

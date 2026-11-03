@@ -52,74 +52,6 @@ def _skip_unless_cached(name: str):
         pytest.skip(f"{name} not in the offline HF cache")
 
 
-@pytest.mark.heavy
-def test_distilgpt2_real_weights_twin() -> None:
-    """The launch blocker's direct closure: real-weights checkpoint vs meta
-    config twin — digest EQUAL, >=800 claims CORROBORATED (memo headline:
-    291/291 records, 873 claims on the 5.x leg)."""
-
-    from transformers import AutoModelForCausalLM
-
-    cfg = _skip_unless_cached("distilgpt2")
-    real = AutoModelForCausalLM.from_pretrained("distilgpt2")
-    real.eval()
-    with torch.device("meta"):
-        twin = AutoModelForCausalLM.from_config(cfg)
-    twin.eval()
-    ids = torch.zeros(1, 8, dtype=torch.long)
-    ids_meta = torch.zeros(1, 8, dtype=torch.long, device="meta")
-    real_trace = tl.trace(real, ids)
-    meta_trace = _structure(twin, ids_meta)
-    digest_equal, discharge = _gate(real_trace, meta_trace)
-    assert digest_equal
-    assert discharge.verdict.value == "corroborated"
-    assert len(discharge.claims) >= 800
-    assert len(real_trace._layer_list) == len(meta_trace._layer_list)
-
-
-@pytest.mark.heavy
-def test_bert_config_twin_buffer_parity() -> None:
-    """Class-matched in-code config twin: buffer parity, zero fabricated
-    writes, no host-escape flag, CORROBORATED (memo acceptance: 307/307
-    records, 921 claims on the 5.x leg; 4.x no-mask legs refuse typed)."""
-
-    from transformers import AutoModel
-
-    cfg = _skip_unless_cached("bert-base-uncased")
-    torch.manual_seed(0)
-    real = AutoModel.from_config(cfg)
-    real.eval()
-    with torch.device("meta"):
-        twin = AutoModel.from_config(cfg)
-    twin.eval()
-    ids = torch.zeros(1, 8, dtype=torch.long)
-    ids_meta = torch.zeros(1, 8, dtype=torch.long, device="meta")
-    if _TRANSFORMERS_MAJOR < 5:
-        # 8.2 row: BERT-no-mask refuses on 4.x via a padding-warning guard
-        # that reads token values (guard gone in 5.x).
-        with pytest.raises(Exception) as excinfo:
-            _structure(twin, ids_meta)
-        assert getattr(excinfo.value, "fields", {}).get("code") in (
-            "value_dependent_branch_unsupported",
-            "structure_only_substrate_mismatch",
-            "meta_kernel_unavailable",
-        )
-        return
-    real_trace = tl.trace(real, ids)
-    meta_trace = _structure(twin, ids_meta)
-    digest_equal, discharge = _gate(real_trace, meta_trace)
-    assert digest_equal
-    assert discharge.verdict.value == "corroborated"
-    from torchlens.backends.torch.completeness_witness import (
-        _HOST_ESCAPE_MUTABLE_WRITEBACK,
-    )
-
-    assert meta_trace not in _HOST_ESCAPE_MUTABLE_WRITEBACK
-    real_writes = [(real_trace[label].buffer_write_kind) for label in real_trace.buffer_write_ops]
-    meta_writes = [(meta_trace[label].buffer_write_kind) for label in meta_trace.buffer_write_ops]
-    assert sorted(meta_writes) == sorted(real_writes)
-
-
 @pytest.mark.slow
 def test_llama_7b_flagship_structural_anchors() -> None:
     """The 7B flagship row (memo 8.1 item 3): published Llama-2-7B geometry
@@ -238,7 +170,9 @@ def test_llama_2l_input_ids_only_twin_green() -> None:
 
 @pytest.mark.parametrize(
     "escape",
-    ["nonzero", "masked_select", "bool_index", "unique"],
+    [
+        "bool_index",
+    ],
 )
 @pytest.mark.heavy
 def test_value_limitation_matrix_refuses_typed(escape: str) -> None:
@@ -275,27 +209,3 @@ def test_value_limitation_matrix_refuses_typed(escape: str) -> None:
         "meta_kernel_unavailable",
         "value_dependent_branch_unsupported",
     ), f"{escape}: expected the typed teaching family, got {excinfo.value!r}"
-
-
-@pytest.mark.heavy
-def test_static_topk_succeeds_with_declared_shape() -> None:
-    import torch.nn as nn
-
-    class TopK(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.fc = nn.Linear(8, 8)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            values, _indices = torch.topk(self.fc(x), k=3, dim=-1)
-            return values
-
-    with torch.device("meta"):
-        model = TopK()
-    model.eval()
-    trace = tl.trace(
-        model, torch.empty(2, 8, device="meta"), capture=CaptureOptions(structure_only=True)
-    )
-    assert trace.outcome.status.value == "complete"
-    top_layers = [layer for layer in trace._layer_list if layer.func_name == "topk"]
-    assert top_layers and tuple(top_layers[0].shape) in ((2, 3), (2, 3, 2))

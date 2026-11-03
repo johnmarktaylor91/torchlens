@@ -289,7 +289,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 14),
+        (2, 15),
     ),
     RunnableTorchAlias(
         "_C._nn.linear",
@@ -297,7 +297,7 @@ _RUNNABLE_TORCH_ALIASES: tuple[RunnableTorchAlias, ...] = (
         "linear",
         "private_to_public:_C._nn.linear->torch.nn.functional.linear",
         (2, 1),
-        (2, 14),
+        (2, 15),
     ),
     RunnableTorchAlias(
         "torch._VF.linear",
@@ -2064,6 +2064,13 @@ class TorchCapabilityWarning(TorchLensWarning):
     into a suite-wide error under ``error::UserWarning:torchlens``). Subclasses
     ``TorchLensWarning`` (itself a ``UserWarning``), so existing category
     filters keep matching and the documented root covers it (R64-1).
+
+    Examples
+    --------
+    >>> issubclass(TorchCapabilityWarning, tl.errors.TorchLensWarning)
+    True
+    >>> issubclass(TorchCapabilityWarning, UserWarning)
+    True
     """
 
 

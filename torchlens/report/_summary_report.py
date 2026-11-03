@@ -51,6 +51,15 @@ class SummaryRow:
     ``exclusive`` and ``subtree`` value families are both present so module
     rollups (F08's ladder) extend the SAME row type; at op grain they
     coincide (costreport D5). Every numeric field is a plain int or None.
+
+    Examples
+    --------
+    >>> report = tl.report.summary(tl.trace(model, x), "demo")
+    >>> row = report.rows[0]
+    >>> type(row).__name__
+    'SummaryRow'
+    >>> isinstance(row.evidence, str)
+    True
     """
 
     row_id: str
@@ -76,6 +85,14 @@ class SummaryTotals:
     is set only on a pruned model (raw total minus mask zeros);
     ``optimizer_state_*`` are set only when the capture was given an
     optimizer, read from its live state at summary time.
+
+    Examples
+    --------
+    >>> report = tl.report.summary(tl.trace(model, x), "demo")
+    >>> report.totals.params_total
+    186
+    >>> report.totals.flops_forward_fma2 > 0
+    True
     """
 
     params_total: int | None
@@ -97,7 +114,16 @@ class SummaryTotals:
 
 @dataclass(frozen=True)
 class CaptureFacts:
-    """Capture honesty facts the report carries detached."""
+    """Capture honesty facts the report carries detached.
+
+    Examples
+    --------
+    >>> report = tl.report.summary(tl.trace(model, x), "demo")
+    >>> report.capture.model_class_name
+    'Sequential'
+    >>> report.capture.is_structure_only
+    False
+    """
 
     backend: str | None
     model_class_name: str | None
@@ -120,6 +146,14 @@ class SummaryReport(str):
     ``render``/``print``/``to_pandas``/``to_markdown``/``to_html``/
     ``details`` and the scalar conveniences; the report retains neither
     the model nor the Trace and survives cleanup and GC.
+
+    Examples
+    --------
+    >>> report = tl.report.summary(tl.trace(model, x), "demo")
+    >>> isinstance(report, str)
+    True
+    >>> report.total_params
+    186
     """
 
     _rows: tuple[SummaryRow, ...]
@@ -493,6 +527,14 @@ def summary(trace: Trace, text: str) -> SummaryReport:
     FactCore; the caller produced ``text``; this assembler never re-sums
     anything. The result carries no rebuilt payload, so the rebuilt-only
     result methods refuse it typed (``summary_result_legacy``).
+
+    Examples
+    --------
+    >>> report = tl.report.summary(tl.trace(model, x), "demo text")
+    >>> str(report)
+    'demo text'
+    >>> report.sections
+    ('capture', 'totals', 'rows')
     """
 
     rows, totals, capture = build_summary_data(trace)

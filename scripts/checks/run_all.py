@@ -57,6 +57,8 @@ CHECKS: list[tuple[str, Callable[[Path], Outcome]]] = [
     ("skip-audit", governance.as_check("skip_audit")),
     ("schema-lockstep", governance.as_check("schema_lockstep")),
     ("golden-governance-lint", governance.as_check("golden_governance_lint")),
+    ("global-state-inventory", governance.as_check("global_state_inventory")),
+    ("backend-docs-lockstep", governance.as_check("backend_docs_lockstep")),
 ]
 
 

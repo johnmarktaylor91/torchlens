@@ -47,7 +47,7 @@ class MechInterpAppliance:
         *,
         kind: str | FixedPeriodInduction = "induction",
         measure: str = "mul",
-        layers: Any = None,
+        modules: Any = None,
         pattern_source: Any = None,
     ) -> HeadScores:
         """Score every head against one taxonomy mask (see :func:`head_scores`)."""
@@ -56,7 +56,7 @@ class MechInterpAppliance:
             self._trace,
             kind=kind,
             measure=measure,
-            layers=layers,
+            modules=modules,
             pattern_source=pattern_source,
         )
 

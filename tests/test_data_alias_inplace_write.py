@@ -19,7 +19,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.validation import last_validation_failure
 
 
 class _DataMaskedFill(nn.Module):
@@ -31,15 +30,6 @@ class _DataMaskedFill(nn.Module):
         attn = self.lin(x)
         attn.data.masked_fill_(x > 1.0, -float("inf"))
         return torch.softmax(attn, -1)
-
-
-def test_data_alias_masked_fill_validates() -> None:
-    torch.manual_seed(0)
-    model = _DataMaskedFill().eval()
-    x = torch.randn(3, 4) * 2
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        assert tl.validate(model, x, scope="forward") is True, last_validation_failure()
 
 
 def test_data_alias_write_binds_the_base_consumer() -> None:

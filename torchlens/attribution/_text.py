@@ -475,6 +475,20 @@ class TokenAttributionPayload:
         state, truncation).
     score_domain
         ``"zero_centered_diverging"`` -- the renderer's color-domain request.
+
+    Examples
+    --------
+    >>> payload = tl.attribution.TokenAttributionPayload(
+    ...     raw_tokens=["a", "b"],
+    ...     display_tokens=["a", "b"],
+    ...     scores=[0.5, -0.25],
+    ...     tooltips=["a", "b"],
+    ...     footer_lines=["target: demo"],
+    ... )
+    >>> payload.score_domain
+    'zero_centered_diverging'
+    >>> "<table" in payload.to_html()
+    True
     """
 
     raw_tokens: list[str]
@@ -572,6 +586,45 @@ class TokenAttribution:
     truncation
         ``None`` or the explicit-truncation record (original length,
         retained span).
+
+    Examples
+    --------
+    >>> class ToyLM(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.emb = nn.Embedding(8, 4)
+    ...         self.head = nn.Linear(4, 8)
+    ...     def get_input_embeddings(self):
+    ...         return self.emb
+    ...     def forward(self, inputs_embeds=None, attention_mask=None):
+    ...         return (self.head(inputs_embeds),)
+    >>> class ToyTokenizer:
+    ...     pad_token_id = None
+    ...     def __call__(self, text, **kwargs):
+    ...         ids = torch.tensor([[len(word) % 8 for word in text.split()]])
+    ...         return {
+    ...             "input_ids": ids,
+    ...             "attention_mask": torch.ones_like(ids),
+    ...             "special_tokens_mask": torch.zeros_like(ids),
+    ...         }
+    ...     def convert_ids_to_tokens(self, ids):
+    ...         return [f"t{i}" for i in ids]
+    >>> result = tl.attribution.text(
+    ...     ToyLM().eval(),
+    ...     ToyTokenizer(),
+    ...     "the cat sat on mat",
+    ...     target=lambda logits: logits[0, -1, 0],
+    ...     num_steps=4,
+    ...     steps_per_batch=None,
+    ... )
+    >>> result.text
+    'the cat sat on mat'
+    >>> result.num_steps
+    4
+    >>> result.converged is None
+    True
+    >>> type(result.show()).__name__
+    'TokenAttributionPayload'
     """
 
     text: str
@@ -850,6 +903,45 @@ def text(
     AttributionError
         On unresolvable baselines/targets, unsupported models, or batching
         audit failures.
+
+    Examples
+    --------
+    A toy language model and tokenizer stand in for a Hugging Face pair.
+
+    >>> class ToyLM(nn.Module):
+    ...     def __init__(self):
+    ...         super().__init__()
+    ...         self.emb = nn.Embedding(8, 4)
+    ...         self.head = nn.Linear(4, 8)
+    ...     def get_input_embeddings(self):
+    ...         return self.emb
+    ...     def forward(self, inputs_embeds=None, attention_mask=None):
+    ...         return (self.head(inputs_embeds),)
+    >>> class ToyTokenizer:
+    ...     pad_token_id = None
+    ...     def __call__(self, text, **kwargs):
+    ...         ids = torch.tensor([[len(word) % 8 for word in text.split()]])
+    ...         return {
+    ...             "input_ids": ids,
+    ...             "attention_mask": torch.ones_like(ids),
+    ...             "special_tokens_mask": torch.zeros_like(ids),
+    ...         }
+    ...     def convert_ids_to_tokens(self, ids):
+    ...         return [f"t{i}" for i in ids]
+    >>> result = tl.attribution.text(
+    ...     ToyLM().eval(),
+    ...     ToyTokenizer(),
+    ...     "the cat sat on mat",
+    ...     target=lambda logits: logits[0, -1, 0],
+    ...     num_steps=4,
+    ...     steps_per_batch=None,
+    ... )
+    >>> type(result).__name__
+    'TokenAttribution'
+    >>> len(result.raw_tokens)
+    5
+    >>> tuple(result.scores.shape)
+    (5,)
     """
 
     import warnings

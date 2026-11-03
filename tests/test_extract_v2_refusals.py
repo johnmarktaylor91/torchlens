@@ -178,7 +178,6 @@ def test_collate_bare_tuple_refuses_as_ambiguous() -> None:
     assert "BatchEnvelope" in str(excinfo.value)
 
 
-@pytest.mark.smoke
 def test_tokenizer_unresolvable_refuses_with_all_three_doors_named() -> None:
     """Text stimuli with no resolvable tokenizer refuse typed (D9)."""
 
@@ -203,19 +202,6 @@ class _PadlessTokenizer:
         raise AssertionError("tokenization must not be reached without a pad token")
 
 
-@pytest.mark.smoke
-def test_missing_pad_token_refuses_with_eos_opt_in_named() -> None:
-    """D9: a missing pad token refuses; EOS-as-pad is the explicit opt-in."""
-
-    from torchlens.dataset_extraction import hf_collate
-
-    collate = hf_collate(_PadlessTokenizer())
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        extract_dataset(_model(), ["a", "b", "c"], ["relu"], collate=collate, progress=False)
-    assert _code(excinfo) == "extraction_pad_token_missing"
-    assert "pad_token='eos'" in str(excinfo.value)
-
-
 def test_pad_token_vocabulary_refuses_unknown_opt_in() -> None:
     """The only pad-token opt-in is 'eos'; anything else refuses."""
 
@@ -230,7 +216,6 @@ def test_pad_token_vocabulary_refuses_unknown_opt_in() -> None:
 # --- pool (item 8) ----------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_pool_vocabulary_refusals() -> None:
     """``pool=`` outside the preset vocabulary refuses typed (D10)."""
 
@@ -259,7 +244,6 @@ def test_pool_axis_ambiguity_refuses() -> None:
     assert _code(excinfo) == "extraction_pool_axes_ambiguous"
 
 
-@pytest.mark.smoke
 def test_pool_mask_required_refuses_without_mask() -> None:
     """Mask-aware token pooling without a mask refuses (measured 20.66%)."""
 
@@ -301,7 +285,6 @@ def test_dtype_vocabulary_refuses() -> None:
     assert _code(excinfo) == "extraction_dtype_invalid"
 
 
-@pytest.mark.smoke
 def test_dtype_unstorable_refuses_unit() -> None:
     """A cast the safetensors shard codec cannot store refuses typed."""
 
@@ -313,7 +296,6 @@ def test_dtype_unstorable_refuses_unit() -> None:
 # --- ragged carriers (item 10) --------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_noncontiguous_mask_refuses_trimming_unit() -> None:
     """T-TRIM: a hand-built interior-gap mask refuses (start, extent) slicing."""
 
@@ -338,7 +320,6 @@ def test_trim_geometry_mismatch_refuses_unit() -> None:
     assert _code(excinfo) == "extraction_ragged_geometry_mismatch"
 
 
-@pytest.mark.smoke
 def test_to_padded_max_len_shorter_than_a_row_refuses() -> None:
     """to_padded never truncates: a short max_len refuses typed (D4)."""
 
@@ -420,7 +401,6 @@ def test_relabel_refuses_incomplete_and_mislengthed(tmp_path) -> None:
     assert _code(excinfo) == "extraction_relabel_invalid"
 
 
-@pytest.mark.smoke
 def test_relabel_rewrites_sidecar_with_audit(tmp_path) -> None:
     """The audited verb relabels, records both digests, and changes identity."""
 

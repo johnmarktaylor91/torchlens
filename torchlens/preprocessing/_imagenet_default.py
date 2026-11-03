@@ -125,6 +125,14 @@ def imagenet_default() -> Callable[[Any], torch.Tensor]:
     -------
     Callable[[Any], torch.Tensor]
         The transform.
+
+    Examples
+    --------
+    >>> # requires: PIL
+    >>> from PIL import Image
+    >>> transform = tl.preprocessing.imagenet_default()
+    >>> transform(Image.new("RGB", (320, 260))).shape
+    torch.Size([1, 3, 224, 224])
     """
 
     return _ImageNetDefaultTransform()

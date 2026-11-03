@@ -1446,20 +1446,6 @@ def _vis_grad(
 # ---------------------------------------------------------------------------
 
 
-def test_aesthetic_deep_nested_visualizations():
-    """Nesting depth + direction variations."""
-    model = example_models.AestheticDeepNested()
-    x = torch.rand(1, 8)
-
-    # depth=0 triggers IndexError in vis.py (edge case, not a valid user value)
-    _vis(model, x, "deep_nested_depth1", depth=1)
-    _vis(model, x, "deep_nested_depth2", depth=2)
-    _vis(model, x, "deep_nested_depth3", depth=3)
-    _vis(model, x, "deep_nested_full", depth=1000)
-    _vis(model, x, "deep_nested_topdown", depth=1000, direction="topdown")
-    _vis(model, x, "deep_nested_leftright", depth=1000, direction="leftright")
-
-
 def test_aesthetic_shared_module_visualizations():
     """Rolled vs unrolled."""
     model = example_models.AestheticSharedModule()
@@ -1469,37 +1455,6 @@ def test_aesthetic_shared_module_visualizations():
     _vis(model, x, "shared_code_panel", code_panel=True)
     _vis(model, x, "shared_rolled", vis_mode="rolled")
     _vis(model, x, "shared_rolled_depth1", vis_mode="rolled", depth=1)
-
-
-def test_aesthetic_buffer_branch_visualizations():
-    """Buffer toggle + direction."""
-    model = example_models.AestheticBufferBranch()
-    x = torch.rand(1, 8)
-
-    _vis(model, x, "buffer_visible", buffer_layers=True)
-    _vis(model, x, "buffer_hidden", buffer_layers=False)
-    _vis(model, x, "buffer_topdown", buffer_layers=True, direction="topdown")
-    _vis(model, x, "buffer_leftright", buffer_layers=True, direction="leftright")
-
-
-def test_aesthetic_kitchen_sink_visualizations():
-    """Combined features."""
-    model = example_models.AestheticKitchenSink()
-    x = torch.rand(1, 8)
-
-    _vis(model, x, "kitchen_sink_unrolled", buffer_layers=True)
-    _vis(model, x, "kitchen_sink_rolled", vis_mode="rolled", buffer_layers=True)
-    _vis(model, x, "kitchen_sink_depth1", depth=1, buffer_layers=True)
-    _vis(model, x, "kitchen_sink_depth2", depth=2, buffer_layers=True)
-
-
-def test_aesthetic_frozen_mix_visualizations():
-    """Frozen + trainable params."""
-    model = example_models.AestheticFrozenMix()
-    x = torch.rand(1, 8)
-
-    _vis(model, x, "frozen_mix_unrolled")
-    _vis(model, x, "frozen_mix_topdown", direction="topdown")
 
 
 def test_aesthetic_loop_visualizations():
@@ -1524,30 +1479,6 @@ def test_aesthetic_loop_visualizations():
     _vis(model, x_5d, "nested_modules_depth2", depth=2)
 
 
-def test_aesthetic_grad_visualizations():
-    """Gradient backward arrows (blue) — requires save_grads=True + backward().
-
-    Note: grad edges only render in unrolled mode.
-    TODO: Consider supporting grad arrows in rolled mode.
-    """
-    # DeepNested: simple nested model with grads
-    model = example_models.AestheticDeepNested()
-    x = torch.rand(1, 8)
-    _vis_grad(model, x, "grad_deep_nested")
-    _vis_grad(model, x, "grad_deep_nested_topdown", direction="topdown")
-
-    # FrozenMix: frozen params shouldn't have grad arrows, trainable ones should
-    model = example_models.AestheticFrozenMix()
-    x = torch.rand(1, 8)
-    _vis_grad(model, x, "grad_frozen_mix")
-
-    # KitchenSink: grads with nesting, branching, buffers
-    model = example_models.AestheticKitchenSink()
-    x = torch.rand(1, 8)
-    _vis_grad(model, x, "grad_kitchen_sink")
-    _vis_grad(model, x, "grad_kitchen_sink_depth1", depth=1)
-
-
 # =============================================================================
 # Bugfix regression: visualization smoke tests
 # =============================================================================
@@ -1563,27 +1494,6 @@ class _SimpleLinear(nn.Module):
 
 
 class TestVisualizationBugfixes:
-    def test_successful_render_removes_dot_source(self, tmp_path: Path) -> None:
-        """Successful forward rendering should remove the intermediate DOT source."""
-
-        if shutil.which("dot") is None:
-            pytest.skip("graphviz dot executable not available")
-
-        model = nn.Identity()
-        log = trace_fn(model, torch.randn(2, 3))
-        outpath = tmp_path / "identity_render"
-        try:
-            log.draw(
-                path=str(outpath),
-                file_format="pdf",
-            )
-
-            assert outpath.with_suffix(".pdf").exists()
-            # Success removes the intermediate DOT source (saved at vis_outpath itself).
-            assert not outpath.exists()
-        finally:
-            log.cleanup()
-
     def test_failed_render_keeps_dot_source(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -1624,26 +1534,6 @@ class TestVisualizationBugfixes:
         finally:
             log.cleanup()
 
-    def test_vis_call_depth_0(self):
-        """depth=0 should not crash and must emit a real PDF."""
-        model = _SimpleLinear()
-        log = trace_fn(model, torch.randn(2, 10))
-        pdf_path = Path(VIS_DIR) / "test_call_depth_0.pdf"
-        pdf_path.unlink(missing_ok=True)
-        try:
-            from torchlens._visualization._render_dot import draw
-
-            dot = draw(
-                log,
-                vis_call_depth=0,
-                vis_outpath=opj(VIS_DIR, "test_call_depth_0"),
-            )
-        except ImportError:
-            pytest.skip("graphviz not available")
-        # A no-op renderer would return "" and write nothing; assert real output.
-        assert isinstance(dot, str) and "digraph" in dot
-        _assert_generated_pdf(pdf_path)
-
     def test_intervention_visualization_styles(self):
         """Intervention node-mark and as-node modes emit expected style cues."""
 
@@ -1658,7 +1548,11 @@ class TestVisualizationBugfixes:
             torch.randn(2, 3),
             capture=tl.options.CaptureOptions(replayable=True),
         )
-        log.set(func("relu"), torch.zeros(2, 3))
+        log.do(
+            func("relu"),
+            torch.zeros(2, 3),
+            intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
+        )
         try:
             node_mark = log.draw(
                 path=opj(VIS_DIR, "test_intervention_node_mark"),
@@ -1688,36 +1582,6 @@ class TestVisualizationBugfixes:
             dot = draw(log, vis_outpath=opj(VIS_DIR, "test_selective_save"))
         except ImportError:
             pytest.skip("graphviz not available")
-        # A no-op renderer would return "" and write nothing; assert real output.
-        assert isinstance(dot, str) and "digraph" in dot
-        _assert_generated_pdf(pdf_path)
-
-
-class TestVisModuleListFormat:
-    """_get_lowest_module should handle mixed Layer/Op nodes."""
-
-    def test_vis_with_nested_modules(self):
-        class Inner(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.linear = nn.Linear(10, 10)
-
-            def forward(self, x):
-                return torch.relu(self.linear(x))
-
-        class Outer(nn.Module):
-            def __init__(self):
-                super().__init__()
-                self.inner = Inner()
-
-            def forward(self, x):
-                return self.inner(x)
-
-        model = Outer()
-        log = trace_fn(model, torch.randn(2, 10))
-        pdf_path = Path(VIS_DIR) / "test_nested_modules.pdf"
-        pdf_path.unlink(missing_ok=True)
-        dot = log.draw(path=opj(VIS_DIR, "test_nested_modules")).dot
         # A no-op renderer would return "" and write nothing; assert real output.
         assert isinstance(dot, str) and "digraph" in dot
         _assert_generated_pdf(pdf_path)

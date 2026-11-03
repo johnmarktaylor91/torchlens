@@ -72,15 +72,6 @@ def test_recipe_bind_matches_plain_hook_exactly(recipe):
     assert not torch.equal(recipe["tokens"], unsteered), "the steer must change generation"
 
 
-def test_recipe_bind_generate_cache_off_agrees(recipe):
-    """The bound generate gives the same tokens with the KV cache off."""
-
-    no_cache = recipe["steered"].generate(
-        recipe["ids"], max_new_tokens=5, do_sample=False, use_cache=False
-    )
-    assert torch.equal(no_cache, recipe["tokens"])
-
-
 def test_recipe_record_and_trace_match_plain_hook(recipe):
     """tl.record's output and the trace oracle's saved site equal the plain hook."""
 

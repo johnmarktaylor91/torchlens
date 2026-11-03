@@ -392,7 +392,7 @@ TRACE_FIELD_OWNERSHIP: dict[str, str] = {
     "_tl_backward_hooked_tensor_keys": "session",
     "_tl_grad_hook_owner_by_label": "session",
     "_tl_rf_probe_active": "session",
-    "_active_backward_pass_index": "graph",
+    "_active_backward_pass_number": "graph",
     "_backward_roots_by_pass": "graph",
     "_backward_projection_event_count": "graph",
     "_backward_projection_revision": "graph",

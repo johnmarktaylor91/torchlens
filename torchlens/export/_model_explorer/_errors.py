@@ -17,11 +17,25 @@ __tl_layer__ = "L8"
 class ModelExplorerExportError(_ActionableErrorMixin, CaptureError, RuntimeError):
     """Raised when a Model Explorer export cannot be emitted honestly.
 
+    The refusal code is ``exc.fields["code"]``; this class has no ``.code``
+    attribute.
+
     Covers exporter-integrity failures (an unresolvable parent reference,
     duplicate node/graph ids, an episode join mismatch): conditions that are
     TorchLens bugs or capture-integrity gaps rather than user errors, where
     silently continuing would ship a silently lossy artifact into a viewer
     that also drops bad rows silently.
+
+    Examples
+    --------
+    >>> issubclass(ModelExplorerExportError, tl.errors.TorchLensError)
+    True
+    >>> try:
+    ...     tl.export.validate_model_explorer_payload({"graphs": [{"id": "g"}, {"id": "g"}]}, strict=True)
+    ... except ModelExplorerExportError as err:
+    ...     refused = type(err).__name__
+    >>> refused
+    'ModelExplorerExportError'
     """
 
     def __init__(

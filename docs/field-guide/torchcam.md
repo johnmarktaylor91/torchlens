@@ -17,6 +17,30 @@ pip install --no-deps torchcam==0.4.0
 torch. Its other dependencies (`torch`, Pillow, matplotlib) come with the
 first line, and it runs on numpy 2, so `--no-deps` is enough.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). Grad-CAM weights the maps of
+the last convolutional stage; these are `layer4`'s maps on the running CNN. The recipe below
+builds its own model for the method.
+
+```python
+# recipe-test: tool=torchcam expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+maps = trace["layer4"].out
+RESULT = tuple(maps.shape) == (1, 512, 7, 7)
+```
+
 ## Both libraries choose the same layer
 
 torch-cam locates its target layer from a dummy forward pass when you name

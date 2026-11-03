@@ -1,4 +1,4 @@
-"""Named scale profiles and their budgets (U40.3; oracles memo D23/H6).
+"""Named scale profiles and their budgets (oracles memo D23/H6).
 
 A scale profile re-runs quantity oracles at a size where scale-only
 wrongness could show. Each profile names its discriminating property, the

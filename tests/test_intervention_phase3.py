@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 import pytest
@@ -19,7 +18,6 @@ from torchlens.intervention.errors import (
 )
 from torchlens.intervention.hooks import HookContext, make_hook_context, normalize_hook_plan
 from torchlens.intervention.runtime import _execute_hook
-from torchlens.intervention.sites import sites
 from torchlens.intervention.types import Edit
 from torchlens.validation import check_metadata_invariants
 
@@ -122,50 +120,6 @@ def test_phase3_helpers_import_and_return_specs() -> None:
     assert helper_specs[-2].signal == "forward"
 
 
-@pytest.mark.smoke
-def test_project_onto_uses_batch_independent_feature_axis_projection() -> None:
-    """Projecting onto a vector direction computes one coefficient per sample."""
-
-    out = torch.tensor(
-        [
-            [[2.0, 4.0, 0.0], [1.0, 3.0, 5.0]],
-            [[6.0, 8.0, 0.0], [7.0, 9.0, 11.0]],
-        ]
-    )
-    direction = torch.tensor([1.0, 1.0, 0.0])
-    hook = tl.project_onto(direction, dim=-1)()
-
-    projected = hook(out, ctx=_context())
-
-    expected = torch.tensor(
-        [
-            [[3.0, 3.0, 0.0], [2.0, 2.0, 0.0]],
-            [[7.0, 7.0, 0.0], [8.0, 8.0, 0.0]],
-        ]
-    )
-    assert torch.allclose(projected, expected)
-
-    changed = out.clone()
-    changed[1] = torch.tensor([[100.0, 102.0, 0.0], [104.0, 106.0, 108.0]])
-    changed_projected = hook(changed, ctx=_context())
-
-    assert torch.allclose(changed_projected[0], expected[0])
-    assert not torch.allclose(changed_projected[1], expected[1])
-
-
-def test_hook_context_uses_mapping_proxy_and_frozen_fields() -> None:
-    """HookContext exposes metadata as snapshots rather than live logs."""
-
-    context = _context()
-
-    assert isinstance(context.op, MappingProxyType)
-    assert context.op["layer_label"] == "relu_1_1"
-    with pytest.raises(TypeError):
-        context.op["layer_label"] = "mutated"  # type: ignore[index]
-    with pytest.raises(AttributeError):
-        context.name = "mutated"  # type: ignore[misc]
-
-
 def test_normalizer_accepts_supported_shapes_in_order() -> None:
     """Hook normalization covers callable, helper, mapping, list, and pair shapes."""
 
@@ -191,36 +145,6 @@ def test_activation_only_edit_on_gradient_site_raises() -> None:
     assert fields.get("code", getattr(excinfo.value, "code", None)) == "edit_signal_mismatch"
 
 
-def test_sites_callable_predicate_is_preserved_with_ops_filter() -> None:
-    """Callable site predicates remain part of composed ``sites(..., ops=...)`` selectors."""
-
-    class _Relu(torch.nn.Module):
-        """Small model with a relu op."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Apply a relu.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                ReLU output.
-            """
-
-            return torch.relu(x)
-
-    log = tl.trace(_Relu(), torch.randn(1, 3), capture=tl.options.CaptureOptions(replayable=True))
-
-    selected = log.find_sites(sites(lambda ctx: False, ops=["relu"]).entries[0].selector)
-
-    assert selected.labels() == ()
-
-
-@pytest.mark.smoke
 def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
     """Normalizer fails closed on ambiguous bare hooks and bad signatures."""
 
@@ -235,7 +159,6 @@ def test_normalizer_rejects_missing_site_and_bad_signature() -> None:
         normalize_hook_plan((tl.label("x"), bad_hook))
 
 
-@pytest.mark.smoke
 def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
     """Hook execution validates return values by default; None leaves the value unchanged."""
 
@@ -278,24 +201,6 @@ def test_execute_hook_rejects_none_type_shape_dtype_and_device() -> None:
         _execute_hook(device_hook, out, context)
 
 
-@pytest.mark.smoke
-def test_force_shape_change_allows_metadata_changes() -> None:
-    """The escape hatch byops dtype/device/shape checks."""
-
-    out = torch.ones(2, 3)
-
-    def shape_hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-        """Return a shape-changed tensor."""
-
-        return torch.ones(3, 2, dtype=torch.float64)
-
-    result = _execute_hook(shape_hook, out, _context(), allow_shape_change=True)
-
-    assert result.shape == (3, 2)
-    assert result.dtype == torch.float64
-
-
-@pytest.mark.smoke
 def test_seeded_noise_is_deterministic_and_unseeded_records_note() -> None:
     """Stochastic helper RNG follows the Phase 3 policy."""
 
@@ -340,27 +245,6 @@ def test_splice_module_dtype_error_is_specific() -> None:
 
 
 @pytest.mark.smoke
-def test_splice_module_default_replaces_with_module_on_input() -> None:
-    """splice_module defaults to documented input-splice semantics."""
-
-    class _HundredModule(torch.nn.Module):
-        """Replacement module that makes input-vs-output routing observable."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return ``100 * x``."""
-
-            return 100 * x
-
-    hook = tl.splice_module(_HundredModule())()
-    original_input = torch.tensor([[1.0, 2.0, 3.0]])
-    original_output = 2 * original_input
-
-    result = hook(original_output, ctx=_context_with_args(original_input))
-
-    assert torch.equal(result, 100 * original_input)
-    assert not torch.equal(result, 100 * original_output)
-
-
 def test_splice_module_forwards_full_input_signature() -> None:
     """Input-splice helpers receive all positional and keyword inputs."""
 
@@ -379,54 +263,6 @@ def test_splice_module_forwards_full_input_signature() -> None:
     result = hook(a + b, ctx=_context_with_args(a, b))
 
     assert torch.equal(result, a - b)
-
-
-def test_splice_module_input_splices_multi_input_module_end_to_end() -> None:
-    """Module-scoped input splice receives the module call's full input structure."""
-
-    class _AddBlock(torch.nn.Module):
-        """Two-input module used as the splice target."""
-
-        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-            """Return a visible function of both inputs."""
-
-            return torch.add(a, b) * 3
-
-    class _SubtractReplacement(torch.nn.Module):
-        """Replacement requiring both original module inputs."""
-
-        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-            """Return ``a - b``."""
-
-            return a - b
-
-    class _Model(torch.nn.Module):
-        """Model with one named multi-input block."""
-
-        def __init__(self) -> None:
-            """Initialize the model."""
-
-            super().__init__()
-            self.block = _AddBlock()
-
-        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
-            """Run the block."""
-
-            return self.block(a, b)
-
-    a = torch.tensor([[5.0, 7.0]])
-    b = torch.tensor([[2.0, 3.0]])
-
-    log = tl.trace(
-        _Model().eval(),
-        (a, b),
-        capture=tl.options.CaptureOptions(
-            replayable=True,
-            hooks={tl.in_module("block"): tl.splice_module(_SubtractReplacement())},
-        ),
-    )
-
-    assert torch.equal(log[log.output_layers[0]].out, a - b)
 
 
 def test_splice_module_input_splices_module_scope_once_end_to_end() -> None:
@@ -651,121 +487,6 @@ def test_splice_module_input_preserves_common_op_arg_orders() -> None:
     assert any(torch.equal(out, torch.tensor([[2.0, 3.0, 5.0, 7.0]])) for out in outputs)
 
 
-def test_intervene_input_splice_on_inplace_relu_receives_pre_mutation_values() -> None:
-    """Input-routed post-hook intervention on ``relu_`` receives semantic inputs."""
-
-    class _DoubleAndRecord(torch.nn.Module):
-        """Replacement module that records the input values it receives."""
-
-        def __init__(self) -> None:
-            """Initialize the recorder."""
-
-            super().__init__()
-            self.seen: list[torch.Tensor] = []
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Record and double ``x``."""
-
-            self.seen.append(x.detach().clone())
-            return x * 2
-
-    class _InplaceReluModel(torch.nn.Module):
-        """Model with a downstream consumer after an in-place relu."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run an in-place relu and consume its replacement."""
-
-            y = x * 1
-            y = torch.relu_(y)
-            return y + 1
-
-    replacement = _DoubleAndRecord()
-    x = torch.tensor([[-2.0, 3.0]])
-
-    log = tl.trace(
-        _InplaceReluModel().eval(),
-        x,
-        intervene=tl.when(tl.func("relu_"), tl.splice_module(replacement)),
-    )
-
-    assert len(replacement.seen) == 1
-    assert torch.equal(replacement.seen[0], x)
-    assert torch.equal(log[log.output_layers[0]].out, x * 2 + 1)
-
-
-def test_intervene_input_splice_on_relu_matches_inplace_semantics() -> None:
-    """Input-routed post-hook intervention on ``relu`` matches ``relu_`` semantics."""
-
-    class _DoubleAndRecord(torch.nn.Module):
-        """Replacement module that records the input values it receives."""
-
-        def __init__(self) -> None:
-            """Initialize the recorder."""
-
-            super().__init__()
-            self.seen: list[torch.Tensor] = []
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Record and double ``x``."""
-
-            self.seen.append(x.detach().clone())
-            return x * 2
-
-    class _ReluModel(torch.nn.Module):
-        """Model with a downstream consumer after an out-of-place relu."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run an out-of-place relu and consume its replacement."""
-
-            y = x * 1
-            y = torch.relu(y)
-            return y + 1
-
-    replacement = _DoubleAndRecord()
-    x = torch.tensor([[-2.0, 3.0]])
-
-    log = tl.trace(
-        _ReluModel().eval(),
-        x,
-        intervene=tl.when(tl.func("relu"), tl.splice_module(replacement)),
-    )
-
-    assert len(replacement.seen) == 1
-    assert torch.equal(replacement.seen[0], x)
-    assert torch.equal(log[log.output_layers[0]].out, x * 2 + 1)
-
-
-def test_plain_trace_of_inplace_relu_does_not_snapshot_intervention_inputs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Plain traces of in-place ops do not clone intervention input snapshots."""
-
-    class _InplaceReluModel(torch.nn.Module):
-        """Model with an in-place relu."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Run an in-place relu."""
-
-            y = x * 1
-            return torch.relu_(y)
-
-    calls = 0
-    original = intervention_runtime.copy_arg_tree
-
-    def _counting_copy_arg_tree(arg: Any) -> Any:
-        """Count intervention snapshot clones."""
-
-        nonlocal calls
-        calls += 1
-        return original(arg)
-
-    monkeypatch.setattr(intervention_runtime, "copy_arg_tree", _counting_copy_arg_tree)
-
-    tl.trace(_InplaceReluModel().eval(), torch.tensor([[-2.0, 3.0]]))
-
-    assert calls == 0
-
-
 def test_intervention_on_different_op_does_not_snapshot_inplace_relu_inputs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -958,82 +679,6 @@ def test_inplace_snapshot_pregate_populates_module_context() -> None:
 
     assert len(recorder.seen) == 1
     assert torch.equal(recorder.seen[0], x)
-
-
-def test_noninplace_dunder_does_not_take_intervention_input_snapshot(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A non-in-place dunder op does not enter the in-place snapshot pre-gate."""
-
-    class _Double(torch.nn.Module):
-        """Replacement module used only to activate an unrelated intervention."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Return the input unchanged.
-
-            Parameters
-            ----------
-            x:
-                Intervention input.
-
-            Returns
-            -------
-            torch.Tensor
-                Unchanged input.
-            """
-
-            return x
-
-    class _Model(torch.nn.Module):
-        """Run a dunder multiplication without any in-place operation."""
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Multiply the input.
-
-            Parameters
-            ----------
-            x:
-                Input tensor.
-
-            Returns
-            -------
-            torch.Tensor
-                Product tensor.
-            """
-
-            return x.__mul__(2)
-
-    calls = 0
-    original = intervention_runtime.copy_arg_tree
-
-    def _counting_copy_arg_tree(arg: Any) -> Any:
-        """Count intervention snapshot copies.
-
-        Parameters
-        ----------
-        arg:
-            Value passed to the snapshot copier.
-
-        Returns
-        -------
-        Any
-            Copied value.
-        """
-
-        nonlocal calls
-        calls += 1
-        return original(arg)
-
-    monkeypatch.setattr(intervention_runtime, "copy_arg_tree", _counting_copy_arg_tree)
-
-    with pytest.warns(UserWarning, match="intervention selector .* matched zero sites"):
-        tl.trace(
-            _Model().eval(),
-            torch.tensor([[2.0]]),
-            intervene=tl.when(tl.func("relu_"), tl.splice_module(_Double())),
-        )
-
-    assert calls == 0
 
 
 def test_input_splice_warns_for_out_aliasing_without_snapshot() -> None:

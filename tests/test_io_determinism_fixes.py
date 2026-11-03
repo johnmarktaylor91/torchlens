@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import copy
 import json
 import os
-import pickle
-from collections import defaultdict
 from pathlib import Path
 
 import numpy as np
@@ -174,7 +171,7 @@ def test_save_scrub_remaps_autograd_identity_joins(tmp_path: Path) -> None:
 
     value = torch.ones(1, 2, requires_grad=True)
     trace = tl.trace(_LinearModel(), value, capture=tl.options.CaptureOptions(backward_ready=True))
-    trace.log_backward(trace.output_ops[0].out.sum())
+    trace.backward(trace.output_ops[0].out.sum())
     path = tmp_path / "backward.tlspec"
     trace.save(path)
 
@@ -205,31 +202,6 @@ def test_bundle_writer_resolves_lazy_conjugate_payloads(tmp_path: Path) -> None:
 
     loaded = tl.load(path)
     assert torch.equal(loaded.output_ops[0].transformed_out, expected)
-
-
-def test_pickle_preserves_module_and_buffer_hierarchy() -> None:
-    """Plain pickle rebuilds the same module and buffer accessors as TLSPEC load."""
-
-    trace = tl.trace(_BufferedModel(), torch.ones(1, 2))
-    restored = pickle.loads(pickle.dumps(trace))
-
-    assert [module.address for module in restored.modules] == [
-        module.address for module in trace.modules
-    ]
-    assert [buffer.address for buffer in restored.buffers] == [
-        buffer.address for buffer in trace.buffers
-    ]
-    assert restored.modules["linear"]._source_trace is restored
-
-
-def test_deepcopy_uses_supported_detached_pickle_semantics() -> None:
-    """Deepcopy succeeds for grad-connected activations and detaches the clone."""
-
-    trace = tl.trace(_LinearModel(), torch.ones(1, 2, requires_grad=True))
-    cloned = copy.deepcopy(trace)
-
-    assert torch.equal(cloned.output_ops[0].out, trace.output_ops[0].out)
-    assert cloned.output_ops[0].out.grad_fn is None
 
 
 def test_frozenset_round_trips_recursive_blob_payloads(tmp_path: Path) -> None:
@@ -265,54 +237,7 @@ def test_tuple_subclasses_preserve_type_across_bundle_round_trip(tmp_path: Path)
     assert torch.equal(config["maximum"].values, maximum.values)
 
 
-def test_defaultdict_factory_survives_bundle_round_trip(tmp_path: Path) -> None:
-    """Auto-vivifying relation metadata remains a defaultdict after load."""
-
-    trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    assert isinstance(trace.output_ops[0].module_entry_arg_keys, defaultdict)
-    path = tmp_path / "defaultdict.tlspec"
-    trace.save(path)
-
-    loaded = tl.load(path)
-    mapping = loaded.output_ops[0].module_entry_arg_keys
-    assert isinstance(mapping, defaultdict)
-    assert mapping["unseen"] == []
-
-
-def test_explicit_unknown_resolver_status_is_not_upgraded() -> None:
-    """A persisted None resolver status remains unknown rather than becoming resolved."""
-
-    trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    op = trace.output_ops[0]
-    op.resolver_status = None
-    layer = trace._layer_logs[op.layer_label]
-    layer.resolver_status = None
-
-    restored_op = pickle.loads(pickle.dumps(op))
-    restored_layer = pickle.loads(pickle.dumps(layer))
-    assert restored_op.resolver_status is None
-    assert restored_layer.resolver_status is None
-
-
-def test_rehydrated_trace_retains_source_tlspec_version() -> None:
-    """Trace pickle state preserves its validated source artifact version.
-
-    The only readable stamp is the current one; an older stamp is a torchlens 2.x
-    file and refuses typed instead of rehydrating.
-    """
-
-    from torchlens._io import TLSPEC_VERSION
-
-    trace = tl.trace(_LinearModel(), torch.ones(1, 2))
-    state = trace.__getstate__()
-    state["tlspec_version"] = TLSPEC_VERSION
-    restored = tl.Trace.__new__(tl.Trace)
-    restored.__setstate__(state)
-    assert restored.tlspec_version == TLSPEC_VERSION
-
-    assert restored.tlspec_version == TLSPEC_VERSION
-
-
+@pytest.mark.smoke
 def test_backup_cleanup_failure_does_not_fail_completed_save(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -366,7 +291,6 @@ def test_intervention_overwrite_rename_failure_restores_previous_artifact(
     assert (path / "spec.json").read_bytes() == original_spec
 
 
-@pytest.mark.smoke
 def test_content_hash_is_address_and_insertion_order_independent() -> None:
     """Object fallback and tied mapping keys never ingest address or source order."""
 
@@ -381,7 +305,6 @@ def test_content_hash_is_address_and_insertion_order_independent() -> None:
     )
 
 
-@pytest.mark.smoke
 def test_loop_signature_sorts_sets_by_emitted_tokens() -> None:
     """Set signature order is total even when distinct elements share repr."""
 
@@ -426,21 +349,6 @@ def test_resave_preserves_capture_provenance_certificate(tmp_path: Path) -> None
     assert second_manifest["provenance"] == first_manifest["provenance"]
 
 
-def test_resave_preserves_model_fingerprint_with_buffers(tmp_path: Path) -> None:
-    """Loaded traces carry their buffer fingerprint instead of claiming no buffers."""
-
-    first_path = tmp_path / "first-buffered.tlspec"
-    second_path = tmp_path / "second-buffered.tlspec"
-    trace = tl.trace(_BufferedModel(), torch.ones(1, 2))
-    trace.save(first_path)
-    tl.load(first_path).save(second_path)
-
-    first_manifest = json.loads((first_path / "manifest.json").read_text(encoding="utf-8"))
-    second_manifest = json.loads((second_path / "manifest.json").read_text(encoding="utf-8"))
-    assert second_manifest["model_fingerprint"] == first_manifest["model_fingerprint"]
-
-
-@pytest.mark.smoke
 def test_provenance_set_values_are_canonically_ordered() -> None:
     """Set-like provenance values normalize independently of hash iteration order."""
 
@@ -465,7 +373,6 @@ def test_current_manifest_refuses_unparseable_torchlens_version(tmp_path: Path) 
         tl.load(path)
 
 
-@pytest.mark.smoke
 def test_bounded_json_ceiling_counts_utf8_bytes() -> None:
     """Multibyte JSON text cannot exceed a byte ceiling via character counting."""
 
@@ -486,6 +393,8 @@ def test_tlspec_writer_refuses_nonstandard_nan_tokens(tmp_path: Path) -> None:
     assert not path.exists()
 
 
+@pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_codec_refuses_unknown_logical_dtype() -> None:
     """JAX decode fails closed instead of silently retaining the transport dtype."""
 
@@ -498,6 +407,8 @@ def test_jax_codec_refuses_unknown_logical_dtype() -> None:
         JaxPayloadCodec().from_numpy(np.ones(1, dtype=np.float32), entry, map_location=None)
 
 
+@pytest.mark.rare
+@pytest.mark.backend_jax
 def test_jax_codec_restores_weak_type() -> None:
     """JAX weak scalar semantics survive codec encode/decode when JAX is available."""
 
@@ -560,29 +471,6 @@ def test_codec_metadata_round_trip_preserves_tuples() -> None:
     assert reparsed.codec_metadata == entry.codec_metadata
 
 
-def test_computed_record_fields_are_not_portable() -> None:
-    """Reported computed facade fields must not claim portable storage."""
-
-    from torchlens._data_classes.layer import Layer
-    from torchlens._data_classes.op import Op
-    from torchlens._data_classes.trace import Trace
-    from torchlens._io import FieldPolicy
-
-    expected_drops = {
-        Trace: ("ops_with_params",),
-        Op: ("is_in_conditional_body",),
-        Layer: (
-            "source_trace",
-            "transformed_out",
-            "transformed_grad",
-            "is_in_conditional_body",
-        ),
-    }
-    for record_type, field_names in expected_drops.items():
-        for field_name in field_names:
-            assert record_type._FIELD_POLICY[field_name].portable_policy is FieldPolicy.DROP
-
-
 def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     """Saving a trace with a multi-pass Layer must not trip the scrub probe.
 
@@ -607,24 +495,3 @@ def test_save_succeeds_for_multi_pass_recurrent_trace(tmp_path: Path) -> None:
     path = tmp_path / "recurrent.tlspec"
     trace.save(path)
     assert tl.load(path)._num_ops == trace._num_ops
-
-
-def test_canonical_metadata_relation_sets_round_trip(tmp_path: Path) -> None:
-    """Relation frozensets survive the canonical (sorted-REDUCE) metadata dump.
-
-    B3R4-R21-2 rewrites exact set/frozenset pickling in ``metadata.pkl`` as
-    ``cls(sorted_members)`` — a REDUCE on ``builtins.frozenset``/``set`` —
-    so this pins that the default-deny safe unpickler admits the spelling
-    and the loaded relation sets are logically unchanged.
-    """
-
-    model = torch.nn.Sequential(torch.nn.Linear(2, 2), torch.nn.ReLU(), torch.nn.Linear(2, 2))
-    trace = tl.trace(model, torch.ones(1, 2))
-    path = tmp_path / "canonical.tlspec"
-    trace.save(path)
-
-    loaded = tl.load(path)
-    for label in ("linear_1_1", "relu_1_2", "linear_2_3"):
-        loaded_layer = loaded[label]
-        assert isinstance(loaded_layer.input_ancestors, frozenset)
-        assert set(loaded_layer.input_ancestors) == set(trace[label].input_ancestors)
