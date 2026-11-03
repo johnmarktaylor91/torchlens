@@ -29,7 +29,7 @@ def gpt2_trace():
     torch.manual_seed(6)
     first = torch.randint(0, 500, (1, 5))
     x = torch.cat([first, first], dim=1)  # repeated tokens give induction heads signal
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     try:
         yield trace
     finally:

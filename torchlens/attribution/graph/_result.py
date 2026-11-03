@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import torch
 
@@ -173,6 +173,16 @@ class AttributionGraph:
     frozen_sites: tuple[str, ...]
     capture_status: str | None
     disclosures: tuple[str, ...] = field(default=())
+
+    # Read by ``draw(color_by=)`` so the drawing code needs no import of this package.
+    _color_by_kind: ClassVar[str] = "graph"
+
+    def _color_by_source(self, trace: Any, source: Any) -> Any:
+        """Return the ``draw(color_by=)`` value source for this graph."""
+
+        from torchlens.attribution._viz import attribution_color_by
+
+        return attribution_color_by(trace, source)
 
     @property
     def node_counts(self) -> dict[str, int]:

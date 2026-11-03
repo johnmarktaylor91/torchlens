@@ -151,8 +151,8 @@ def flops_vs_dispatch(
         which changes the EXECUTED PROGRAM: formula validation only, never
         a timing comparison). ``None`` means default selection.
     **trace_kwargs:
-        Extra ``tl.trace`` kwargs for the TorchLens side (``save=`` defaults
-        to the metadata tier).
+        Extra ``tl.trace`` kwargs for the TorchLens side. ``save=`` defaults
+        to ``"all"`` so the output comparison witness has its captured tensor.
 
     Returns
     -------
@@ -184,8 +184,8 @@ def flops_vs_dispatch(
     rng_state = torch.get_rng_state()
     training_flags = {name: module.training for name, module in model.named_modules()}
 
-    trace_kwargs.setdefault("save", None)
-    trace = user_funcs.trace(model, input_args, input_kwargs, **trace_kwargs)
+    trace_kwargs.setdefault("save", "all")
+    trace = user_funcs.trace(model, input_args, input_kwargs=input_kwargs, **trace_kwargs)
     try:
         aggregation = compute_aggregation(trace)
         torchlens_total = int(aggregation.partition_total)

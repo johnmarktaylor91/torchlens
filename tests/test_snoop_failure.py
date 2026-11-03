@@ -243,7 +243,7 @@ def test_raise_on_nan_minting_op_is_last_narrated_and_census_exact() -> None:
                 Minter(),
                 torch.randn(2, 4),
                 narrate=NarrationOptions(sites=True, sink=sink),
-                capture=tl.options.CaptureOptions(raise_on_nan=True),
+                capture=tl.options.CaptureOptions(on_nonfinite="raise"),
             )
     assert "div" in str(excinfo.value) or "nonfinite" in str(excinfo.value).lower()
     lines = [line for line in sink.getvalue().split("\n") if line]
@@ -264,7 +264,7 @@ def test_halted_capture_footer_says_halted_not_failed() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2)),
         torch.randn(2, 4),
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
         narrate=NarrationOptions(sites=True, sink=sink),
     )
     assert log is not None

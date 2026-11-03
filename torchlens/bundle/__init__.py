@@ -92,6 +92,7 @@ if TYPE_CHECKING:
     from .._capture.outcome import CaptureOutcome
     from .._data_classes.trace import Trace
     from .._literals import VisDirectionLiteral
+    from ..viz._drawing import Drawing
     from ._draw import BundleGraphLiteral
     from ._token_spans import TokenPairs
 
@@ -957,7 +958,7 @@ class Bundle:
 
         return _operations.accepts_member_name(fn)
 
-    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
+    def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, Drawing | str]:
         """Render each bundle member graph as a member-keyed strip.
 
         Parameters
@@ -965,16 +966,15 @@ class Bundle:
         kind:
             Picture kind forwarded to each member's :meth:`Trace.show`.
         **kwargs:
-            Forwarded to each member's :meth:`Trace.show`. When an output
-            path is supplied, member names are appended to produce one artifact
-            per log. ``vis_mode='none'`` is accepted and returns without
-            rendering, matching ``Trace.show``.
+            ``Trace.draw`` keywords, forwarded to each member. When a ``path``
+            is supplied, member names are appended to produce one artifact
+            per member.
 
         Returns
         -------
-        dict[str, str | None]
-            Member-keyed render results. Values are DOT source strings when
-            rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
+        dict[str, Drawing | str]
+            Member-keyed results: each member's :class:`Drawing`, or the
+            ``repr`` / HTML text for those kinds.
         """
 
         return _operations.bundle_show(self, kind, **kwargs)

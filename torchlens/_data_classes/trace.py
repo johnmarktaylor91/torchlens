@@ -49,6 +49,7 @@ if TYPE_CHECKING:
     from torchlens._runnable import ReadinessReport
 
     from .._io.streaming import BundleStreamWriter
+    from .._output_slot import OutputSlot
     from .._runnable import ArchivedActivation, SparseRunDescriptor
     from ..debug._audit import HealthReport
     from ..intervention.types import FrozenInterventionSpec, TargetSpec
@@ -78,7 +79,6 @@ from .._literals import (
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
-    VisModeLiteral,
     VisNodeModeLiteral,
     VisNodePlacementLiteral,
     VisRendererLiteral,
@@ -127,9 +127,11 @@ from ._trace_field_spec import TRACE_PORTABLE_STATE_SPEC
 from ._trace_fork import build_fork
 from ._trace_grad_sites import armed_edits, armed_summary_line
 from ._trace_groups import TraceAutograd, TraceCost, TraceGraph, TraceProvenance
-from ._trace_groups_capture import TraceHealth, TraceOptions, TraceSource
+from ._trace_groups_capture import TraceHealth, TraceSettings, TraceSource
 from ._trace_intervention_records import _DoTransaction
 from ._trace_missing_attrs import _raise_missing_trace_attribute
+from ._trace_output import TraceOutputMixin
+from ._trace_pickle_state import _initialize_output_metadata
 from ._trace_pristine import derive_pristine
 from ._trace_profile import ModelProfile
 from ._trace_removal import batch_remove_log_entries, release_param_refs, remove_log_entry
@@ -137,6 +139,7 @@ from ._trace_source_introspection import inspect_source_attr
 from ._trace_stack import StackedActivations, stack_traces
 from ._trace_state_io import _MODEL_LOG_DEFAULT_FILL
 from ._trace_views import _CallableList
+from ._trace_viz_arguments import _forward_draw, _forward_summary
 from ._transform_repr import _scrubbed_transform_repr
 from .backward_pass import BackwardPass, BackwardPassAccessor
 from .cleanup import (
@@ -169,7 +172,6 @@ if TYPE_CHECKING:
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
     from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
-    from ..experimental.dagua._bridge import TorchLensRenderAudit
     from ..intervention.types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
@@ -180,6 +182,7 @@ if TYPE_CHECKING:
     from ..report._profile import ProfileReport
     from ..report._trace_facts import _CallableDict
     from ..validation.status import ValidationStatus
+    from ..viz._drawing import Drawing
     from .aten_op import AtenOp, _ModePausedInteriorGap
     from .buffer import BufferAccessor
     from .layer import LayerAccessor
@@ -540,7 +543,7 @@ class ConditionalAccessor:
 
 
 @dataclass(init=False, repr=False, eq=False)
-class Trace(TraceLike):
+class Trace(TraceOutputMixin, TraceLike):
     """Top-level container for a logged forward pass.
 
     Serves double duty: during the forward pass it accumulates raw tensor
@@ -768,6 +771,7 @@ class Trace(TraceLike):
     output_postprocessor: ResolvedPostprocessing | None
     output_id2label: dict[int, str] | None
     output_num_classes: int | None
+    _output_slot: "OutputSlot | None"
     input_object_id: int | None
     model_object_id: int | None
     input_signature_hash: str | None
@@ -999,9 +1003,9 @@ class Trace(TraceLike):
         self.transformed_output = transformed_output
         self._decoded_output: Any | None = None
         self._provenance_output_postprocessor: ResolvedPostprocessing | None = None
-        self.output_id2label: dict[int, str] | None = None
-        self.output_num_classes: int | None = None
+        _initialize_output_metadata(self)
         self._output_transform = output_transform
+        self._output_slot = None
         self._options_save_transformed_output = save_transformed_output
         self.layer_visualizers = layer_visualizers
         self.save_visualizations = save_visualizations
@@ -2031,10 +2035,10 @@ class Trace(TraceLike):
         return TraceProvenance(self)
 
     @property
-    def options(self) -> "TraceOptions":
+    def options(self) -> "TraceSettings":
         """The capture options this Trace ran with (the stored snapshot)."""
 
-        return TraceOptions(self)
+        return TraceSettings(self)
 
     @property
     def health(self) -> "TraceHealth":
@@ -3347,130 +3351,79 @@ class Trace(TraceLike):
             self, k=k, batch_items=batch_items, style=style, head=head
         )
 
-    def show(self, kind: str | None = None, **kwargs: Any) -> str | None:
+    def show(self, kind: str | None = None, **kwargs: Any) -> Any:
         """Render this trace using a lightweight notebook-friendly dispatcher."""
 
         return _doors.visualization()._trace_draw.show(self, kind=kind, **kwargs)
 
-    def draw(
+    def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
         self,
-        view: VisModeLiteral | MissingType = MISSING,
-        depth: int | MissingType = MISSING,
-        renderer: VisRendererLiteral | MissingType = MISSING,
-        layout: VisNodePlacementLiteral | MissingType = MISSING,
-        node_style: VisNodeModeLiteral | MissingType = MISSING,
-        vis_mode: VisModeLiteral = "unrolled",
-        vis_call_depth: int = 1000,
         path: str | None = None,
-        vis_graph_overrides: dict[str, Any] | None = None,
+        *,
+        graph: Literal["forward", "backward", "combined"] = "forward",
+        rolled: bool = False,
+        depth: int = 1000,
         module: "Module | str | None" = None,
-        node_mode: VisNodeModeLiteral = "default",
-        node_spec_fn: Callable[..., Any] | None = None,
-        collapsed_node_spec_fn: Callable[..., Any] | None = None,
-        collapse_fn: Callable[..., Any] | None = None,
         collapse: CollapseLiteral = "none",
         fold_repeats: FoldRepeatsLiteral = None,
         fold_patterns: Any = None,
-        skip_fn: Callable[..., Any] | None = None,
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_grad_edge_overrides: dict[str, Any] | None = None,
-        vis_module_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        show_buffers: BufferVisibilityLiteral = "meaningful",
-        direction: VisDirectionLiteral = "bottomup",
-        vis_node_placement: VisNodePlacementLiteral = "auto",
-        vis_renderer: VisRendererLiteral = "graphviz",
         theme: str = "torchlens",
-        vis_intervention_mode: VisInterventionModeLiteral = "node_mark",
-        vis_show_cone: bool = False,
-        code_panel: "CodePanelOption" = False,
+        layout: VisNodePlacementLiteral = "auto",
+        renderer: VisRendererLiteral = "graphviz",
+        direction: VisDirectionLiteral | None = None,
+        node_style: VisNodeModeLiteral = "default",
+        show_buffers: BufferVisibilityLiteral = "meaningful",
+        show_legend: bool | None = None,
+        color_by: Any = None,
+        size_by: str | Callable[[Any], Any] | None = None,
+        size_scale: str | None = None,
+        stack_by: str | bool | Callable[[Any], Any] | None = None,
         node_overlay: str | Mapping[str, Any] | Callable[[Any], Any] | None = None,
         node_label_fields: list[str] | None = None,
-        show_legend: bool | None = None,
+        graph_overrides: dict[str, Any] | None = None,
+        edge_overrides: dict[str, Any] | None = None,
+        grad_edge_overrides: dict[str, Any] | None = None,
+        module_overrides: dict[str, Any] | None = None,
+        node_spec_fn: Callable[..., Any] | None = None,
+        collapsed_node_spec_fn: Callable[..., Any] | None = None,
+        collapse_fn: Callable[..., Any] | None = None,
+        skip_fn: Callable[..., Any] | None = None,
+        intervention_mode: VisInterventionModeLiteral = "node_mark",
+        show_cone: bool = False,
+        code_panel: "CodePanelOption" = False,
         font_size: int | None = None,
         dpi: int | None = None,
-        for_paper: bool = False,
-        return_graph: bool = False,
         order_siblings: bool = True,
         show_containers: Literal[False, "labels", "collapsed", "nodes"] = False,
         container_max_inline: int = 12,
         show_input_transform_summary: bool = False,
-        show_orphans: bool = False,
-        *,
-        color_by: str | Callable[[Any], Any] | None = None,
-        size_by: str | Callable[[Any], Any] | None = None,
-        scale: str | None = None,
-        stack_by: str | bool | Callable[[Any], Any] | None = None,
+        show_orphans: bool = False,  # Invariants support flipping this; owner visual review pending.
         show_redundant_args: bool = False,
         show_saved_for_backward: bool = False,
-    ) -> Any:
-        """Render the computational graph for this model log."""
+        bwd: int | Iterable[int] | None = None,
+        show_module_paths: bool = False,
+        show_grad_values: bool = False,
+        backward_node_spec_fn: Callable[..., Any] | None = None,
+        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
+        file_format: str = "pdf",
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Draw this trace and return the picture as a :class:`~torchlens.viz.Drawing`."""
 
-        return _doors.visualization()._trace_draw.draw(
-            self,
-            view=view,
-            depth=depth,
-            renderer=renderer,
-            layout=layout,
-            node_style=node_style,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            path=path,
-            vis_graph_overrides=vis_graph_overrides,
-            module=module,
-            node_mode=node_mode,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            collapse_fn=collapse_fn,
-            collapse=collapse,
-            fold_repeats=fold_repeats,
-            fold_patterns=fold_patterns,
-            skip_fn=skip_fn,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_grad_edge_overrides=vis_grad_edge_overrides,
-            vis_module_overrides=vis_module_overrides,
-            vis_save_only=vis_save_only,
-            file_format=file_format,
-            show_buffers=show_buffers,
-            direction=direction,
-            vis_node_placement=vis_node_placement,
-            vis_renderer=vis_renderer,
-            theme=theme,
-            vis_intervention_mode=vis_intervention_mode,
-            vis_show_cone=vis_show_cone,
-            code_panel=code_panel,
-            node_overlay=node_overlay,
-            node_label_fields=node_label_fields,
-            show_legend=show_legend,
-            font_size=font_size,
-            dpi=dpi,
-            for_paper=for_paper,
-            return_graph=return_graph,
-            order_siblings=order_siblings,
-            show_containers=show_containers,
-            container_max_inline=container_max_inline,
-            show_input_transform_summary=show_input_transform_summary,
-            show_orphans=show_orphans,
-            color_by=color_by,
-            size_by=size_by,
-            scale=scale,
-            stack_by=stack_by,
-            show_redundant_args=show_redundant_args,
-            show_saved_for_backward=show_saved_for_backward,
+        return _forward_draw(_doors.visualization()._trace_draw.draw, locals())
+
+    def animate(
+        self,
+        site: Any,
+        path: str | None = None,
+        *,
+        open_viewer: bool = False,
+    ) -> "Drawing":
+        """Animate the passes at ``site`` and return the picture as a :class:`~torchlens.viz.Drawing`."""
+
+        return _doors.visualization()._trace_draw.animate(
+            self, site, path=path, open_viewer=open_viewer
         )
-
-    def add_node_overlay(self, scores: Mapping[str, Any], *, name: str = "overlay") -> "Trace":
-        """Register external per-node overlay scores for later rendering."""
-
-        self._node_overlay_scores = dict(scores)
-        self._node_overlay_name = name
-        return self
-
-    def animate_ops(self, site: Any) -> str:
-        """Return a minimal HTML animation for repeated ops at ``site``."""
-
-        return _doors.visualization()._trace_draw.animate_ops(self, site=site)
 
     @property
     def nonfinite_ops(self) -> tuple[str, ...]:
@@ -3488,83 +3441,6 @@ class Trace(TraceLike):
         """Return a text answer describing the first saved non-finite out."""
 
         return _doors.report()._trace_summary.first_nonfinite(self, link_format=link_format)
-
-    def draw_backward(
-        self,
-        path: str = "backward_modelgraph",
-        vis_graph_overrides: dict[str, Any] | None = None,
-        node_spec_fn: Callable[..., Any] | None = None,
-        collapsed_node_spec_fn: Callable[..., Any] | None = None,
-        vis_node_mode: VisNodeModeLiteral = "default",
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        vis_direction: VisDirectionLiteral = "topdown",
-        code_panel: "CodePanelOption" = False,
-        vis_mode: VisModeLiteral = "rolled",
-        bwd: int | Iterable[int] | None = None,
-        show_legend: bool | None = None,
-        *,
-        theme: str = "torchlens",
-        show_module_paths: bool = False,
-        show_grad_values: bool = False,
-    ) -> str:
-        """Render the captured backward grad_fn_handle graph."""
-
-        return _doors.visualization()._trace_draw.draw_backward(
-            self,
-            path=path,
-            vis_graph_overrides=vis_graph_overrides,
-            node_spec_fn=node_spec_fn,
-            collapsed_node_spec_fn=collapsed_node_spec_fn,
-            vis_node_mode=vis_node_mode,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_save_only=vis_save_only,
-            file_format=file_format,
-            vis_direction=vis_direction,
-            code_panel=code_panel,
-            vis_mode=vis_mode,
-            bwd=bwd,
-            show_legend=show_legend,
-            theme=theme,
-            show_module_paths=show_module_paths,
-            show_grad_values=show_grad_values,
-        )
-
-    def draw_combined(
-        self,
-        path: str = "combined_modelgraph",
-        vis_graph_overrides: dict[str, Any] | None = None,
-        node_spec_fn: Callable[..., Any] | None = None,
-        backward_node_spec_fn: Callable[..., Any] | None = None,
-        vis_edge_overrides: dict[str, Any] | None = None,
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        vis_direction: VisDirectionLiteral = "leftright",
-        vis_mode: VisModeLiteral = "unrolled",
-        intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-        show_buffers: BufferVisibilityLiteral = "meaningful",
-        bwd: int | Iterable[int] | None = None,
-        show_legend: bool | None = None,
-    ) -> str:
-        """Render forward ops and backward grad_fns in one graph."""
-
-        return _doors.visualization()._trace_draw.draw_combined(
-            self,
-            path=path,
-            vis_graph_overrides=vis_graph_overrides,
-            node_spec_fn=node_spec_fn,
-            backward_node_spec_fn=backward_node_spec_fn,
-            vis_edge_overrides=vis_edge_overrides,
-            vis_save_only=vis_save_only,
-            file_format=file_format,
-            vis_direction=vis_direction,
-            vis_mode=vis_mode,
-            intervening_cluster=intervening_cluster,
-            show_buffers=show_buffers,
-            bwd=bwd,
-            show_legend=show_legend,
-        )
 
     def preview_fastlog(
         self,
@@ -3592,75 +3468,38 @@ class Trace(TraceLike):
         self,
         level: str | None = None,
         *,
+        # Rebuilt grammar (F08; summary memo 3.10). Spellings
+        # DOCUMENTED-UNSTABLE pending naming-session ratification.
         view: str | None = None,
         depth: Any = None,
         columns: list[str] | None = None,
-        filter: Any = None,
+        where: Any = None,
         buffers: str | None = None,
         fold_repeats: Any = None,
         max_rows: int | None = None,
         flop_convention: str | None = None,
         units: str | None = None,
         style: str | None = None,
+        max_scan_elements: int | None = None,
+        # One-call-only spellings (typed errors here, never no-ops).
         input_shape: Any = None,
         execution_mode: str | None = None,
         grad_mode: str | None = None,
+        # Internal plumbing from the one-call door (not public grammar).
         _execution_note: str | None = None,
         _input_synthesis: str | None = None,
+        # Anything else refuses typed (removed legacy spellings name their
+        # successor; unknown names get the nearest grammar option).
         **unsupported: Any,
     ) -> str:
         """Render a summary of this capture."""
 
-        return _doors.report()._trace_summary.summary(
-            self,
-            level=level,
-            view=view,
-            depth=depth,
-            columns=columns,
-            filter=filter,
-            buffers=buffers,
-            fold_repeats=fold_repeats,
-            max_rows=max_rows,
-            flop_convention=flop_convention,
-            units=units,
-            style=style,
-            input_shape=input_shape,
-            execution_mode=execution_mode,
-            grad_mode=grad_mode,
-            _execution_note=_execution_note,
-            _input_synthesis=_input_synthesis,
-            **unsupported,
-        )
-
-    def render_dagua_graph(
-        self,
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
-        path: str = "graph.gv",
-        vis_save_only: bool = False,
-        file_format: str = "pdf",
-        show_buffers: bool = False,
-        vis_direction: str = "bottomup",
-        theme: str = "torchlens",
-    ) -> str:
-        """Render this model log with the experimental Dagua backend."""
-
-        return _doors.visualization()._trace_draw.render_dagua_graph(
-            self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
-            path=path,
-            vis_save_only=vis_save_only,
-            file_format=file_format,
-            show_buffers=show_buffers,
-            vis_direction=vis_direction,
-            theme=theme,
-        )
+        return _forward_summary(_doors.report()._trace_summary.summary, locals())
 
     def to_dagua_graph(
         self,
-        vis_mode: str = "unrolled",
-        vis_call_depth: int = 1000,
+        rolled: bool = False,
+        depth: int = 1000,
         show_buffers: bool = False,
         direction: str = "bottomup",
         include_grad_edges: bool | None = None,
@@ -3669,17 +3508,12 @@ class Trace(TraceLike):
 
         return _doors.visualization()._trace_draw.to_dagua_graph(
             self,
-            vis_mode=vis_mode,
-            vis_call_depth=vis_call_depth,
+            vis_mode="rolled" if rolled else "unrolled",
+            vis_call_depth=depth,
             show_buffers=show_buffers,
             direction=direction,
             include_grad_edges=include_grad_edges,
         )
-
-    def visualization_field_audit(self) -> "TorchLensRenderAudit":
-        """Return the visualization field-usage audit for this model log."""
-
-        return _doors.visualization()._trace_draw.visualization_field_audit(self)
 
     def narrate(self, last: "int | None" = None, *, select: "Any" = None) -> "str":
         """Render this trace's events in the live-narration grammar."""

@@ -538,7 +538,9 @@ def _recording_from_records(
     status: Literal["complete", "halted", "partial_error", "recovered"] = (
         "recovered" if recovered else "halted" if halted else "complete"
     )
-    return Recording(
+    from .types import RecordingSettings
+
+    return Recording._build(
         records=records,
         by_pass={},
         by_label={},
@@ -556,15 +558,31 @@ def _recording_from_records(
             int(pass_index): str(reason)
             for pass_index, reason in dict(metadata.get("halts_by_pass", {})).items()
         },
-        keep_op_repr=metadata.get("keep_op_repr"),
         history_size=int(metadata.get("history_size", 0)),
-        _activation_transform_repr=metadata.get("_activation_transform_repr"),
+        _options=RecordingSettings._from_values(_persisted_settings(metadata)),
         is_recovered=recovered,
         status=status,
         recovery_warnings=recovery_warnings,
         is_failed=abort_reason is not None,
         error_repr=(None if abort_reason is None else f"recovered aborted bundle: {abort_reason}"),
     )
+
+
+def _persisted_settings(metadata: dict[str, Any]) -> dict[str, Any]:
+    """Return the bundle's stored ``Recording.options`` values (plain values only).
+
+    Metadata is untrusted bytes: only bool/int/float/str values are adopted,
+    so a crafted bundle cannot plant an object or callable in the record.
+    """
+
+    stored = metadata.get("settings")
+    if not isinstance(stored, dict):
+        return {}
+    return {
+        str(name): value
+        for name, value in stored.items()
+        if isinstance(value, (bool, int, float, str))
+    }
 
 
 def _read_metadata(path: Path) -> dict[str, Any]:

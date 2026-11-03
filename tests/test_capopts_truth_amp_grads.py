@@ -41,8 +41,7 @@ def _scaled_backward_trace() -> tl.Trace:
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
     )
     loss = list(log)[-1].out.sum() * SCALE  # what GradScaler.scale(loss) does
     loss.backward()
@@ -102,8 +101,7 @@ def test_unscaled_backward_stays_clean_without_hint() -> None:
     log = tl.trace(
         ThreeStep(),
         torch.randn(2, 4),
-        capture=CaptureOptions(save_grads=True, backward_ready=True),
-        save_mode="reference",
+        capture=CaptureOptions(save_grads=True, backward_ready=True, save_mode="reference"),
     )
     list(log)[-1].out.sum().backward()
     frame = grad_health(log).to_pandas()

@@ -434,7 +434,7 @@ def _capture_for_report(model: Any, input_args: Any, input_kwargs: dict[str, Any
     try:
         model.eval()
         with force_mha_slow_path(model), torch.no_grad():
-            return _trace(model, input_args, input_kwargs or {})
+            return _trace(model, input_args, input_kwargs=input_kwargs or {})
     finally:
         for module, was_training in saved_training_flags:
             module.training = was_training

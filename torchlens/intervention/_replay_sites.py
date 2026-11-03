@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 import torch
 
 from .._utils._stochastic_funcs import _STOCHASTIC_FUNC_NAMES
+from ._replay_cone import _disclosure_label
 from ._replay_context import _replay_site_key
 from .errors import ReplayPreconditionError
 
@@ -389,4 +390,48 @@ def _buffer_write_corroborated(captured_site: object, captured_producer: object)
         and isinstance(captured_producer, torch.Tensor)
         and captured_site.shape == captured_producer.shape
         and bool(torch.equal(captured_site, captured_producer))
+    )
+
+
+def _parent_value(
+    parent: Op,
+    pass_log: Op,
+    overlay: dict[str, torch.Tensor],
+    differentiable_frontier: dict[str, torch.Tensor] | None,
+) -> torch.Tensor:
+    """Return the value ``pass_log`` reads from ``parent`` during replay.
+
+    In order: the replay overlay, the version of the parent this child saw at
+    capture (``out_versions_by_child``), then the parent's saved out; a
+    differentiable replay reads the latter two through frontier leaves.
+    """
+
+    parent_key = _replay_site_key(parent)
+    if parent_key in overlay:
+        return overlay[parent_key]
+    versions = getattr(parent, "out_versions_by_child", {}) or {}
+    child_spelling = next(
+        (
+            spelling
+            for spelling in (_replay_site_key(pass_log), pass_log.layer_label)
+            if spelling in versions
+        ),
+        None,
+    )
+    if child_spelling is not None:
+        version = versions[child_spelling]
+        if isinstance(version, torch.Tensor):
+            if differentiable_frontier is not None:
+                return _frontier_leaf(
+                    differentiable_frontier,
+                    f"{_disclosure_label(parent)}->{_disclosure_label(pass_log)}",
+                    version,
+                )
+            return version
+    if isinstance(parent.out, torch.Tensor):
+        if differentiable_frontier is not None:
+            return _frontier_leaf(differentiable_frontier, _disclosure_label(parent), parent.out)
+        return parent.out
+    raise ReplayPreconditionError(
+        f"parent {parent.layer_label!r} for {pass_log.layer_label!r} has no out"
     )

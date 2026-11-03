@@ -34,13 +34,12 @@ from .._selection.selectors import (
     in_module as in_module_selector,
     where as where_selector,
 )
+from .._semantic._state_guard import _CounterfactualStateGuard, _teardown
 from .._semantic.patching import (
     _baseline_traces,
-    _CounterfactualStateGuard,
     _metric_scalar,
     _modules_with_facet,
     _run_patch,
-    _teardown,
     _warn_if_campaign_all_identical,
 )
 from ._errors import refuse

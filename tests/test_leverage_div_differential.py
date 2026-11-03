@@ -22,7 +22,7 @@ from torchlens.errors import SelectionError
 from torchlens.errors._base import TorchLensError
 from torchlens.report import diff
 
-_SAVE_ALL = {"capture": tl.options.CaptureOptions(layers_to_save="all")}
+_SAVE_ALL = {"capture": tl.options.CaptureOptions()}
 
 
 def _plain_pair():

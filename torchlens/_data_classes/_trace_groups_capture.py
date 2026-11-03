@@ -13,14 +13,14 @@ from typing import Any
 from ._trace_groups import _TraceGroup
 
 
-class TraceOptions(_TraceGroup):
+class TraceSettings(_TraceGroup):
     """The capture options this Trace ran with (the stored snapshot).
 
     Examples
     --------
     >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(backward_ready=True))
     >>> type(trace.options).__name__, trace.options.backward_ready
-    ('TraceOptions', True)
+    ('TraceSettings', True)
     """
 
     __slots__ = ()
@@ -235,6 +235,7 @@ class TraceSource(_TraceGroup):
     >>> source = tl.trace(model, x).source
     >>> type(source).__name__, source.class_name
     ('TraceSource', 'Sequential')
+
     """
 
     __slots__ = ()
@@ -365,6 +366,7 @@ class TraceHealth(_TraceGroup):
     >>> health = tl.trace(model, x).health
     >>> type(health).__name__, isinstance(health.num_escape_detector_events, int)
     ('TraceHealth', True)
+
     """
 
     __slots__ = ()

@@ -54,7 +54,6 @@ def dry_run(
         "history_size": history_size,
         "include_source_events": include_source_events,
         "on_predicate_error": "fail-fast",
-        "streaming": None,
         "seed": seed,
     }
     recorder_cm = Recorder(

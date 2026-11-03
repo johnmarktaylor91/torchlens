@@ -1,4 +1,4 @@
-"""The ``input_size=`` grammar and the deterministic synthesis kernel (B6).
+"""The ``input_shape=`` grammar and the deterministic synthesis kernel (B6).
 
 Grammar (quickstart memo D4, SOL's verbatim): one flat positive-integer tuple
 is one shape; a sequence of shapes is multiple positional tensors; a mapping
@@ -43,7 +43,7 @@ _IMAGE_KEYWORDS = frozenset({"pixel_values", "pixel_values_videos"})
 class InputSpec:
     """Explicit per-slot override for the declared rung (the taught remedy).
 
-    ``input_size=`` accepts an ``InputSpec`` anywhere it accepts a bare shape
+    ``input_shape=`` accepts an ``InputSpec`` anywhere it accepts a bare shape
     tuple, so a caller can pin the dtype and value recipe when the static
     facts are ambiguous (the fail-closed teach names this spelling).
 
@@ -87,7 +87,7 @@ class SlotSpec:
 
 @dataclass(frozen=True)
 class ParsedInputSize:
-    """The parsed ``input_size=`` argument: positional and keyword slots."""
+    """The parsed ``input_shape=`` argument: positional and keyword slots."""
 
     positional: tuple[SlotSpec, ...]
     keyword: tuple[SlotSpec, ...]
@@ -116,20 +116,20 @@ def _validate_shape(raw: Any) -> tuple[int, ...]:
 
     if not isinstance(raw, (tuple, list)) or len(raw) == 0:
         _refuse(
-            f"input_size= shape {raw!r} is not a non-empty tuple of positive integers.",
+            f"input_shape= shape {raw!r} is not a non-empty tuple of positive integers.",
             value=repr(raw),
         )
     dims: list[int] = []
     for dim in raw:
         if isinstance(dim, bool) or not isinstance(dim, int):
             _refuse(
-                f"input_size= dimension {dim!r} is not a plain positive integer "
+                f"input_shape= dimension {dim!r} is not a plain positive integer "
                 "(symbolic and non-integer dimensions cannot be synthesized).",
                 value=repr(dim),
             )
         if dim <= 0:
             _refuse(
-                f"input_size= dimension {dim} is not positive; a zero or negative "
+                f"input_shape= dimension {dim} is not positive; a zero or negative "
                 "dimension has no synthesizable tensor.",
                 value=dim,
             )
@@ -297,7 +297,7 @@ def _forward_keyword_names(model: nn.Module) -> tuple[frozenset[str], bool]:
 
 
 def parse_input_size(input_size: Any, model: nn.Module) -> ParsedInputSize:
-    """Parse and validate the ``input_size=`` argument (the D4 grammar).
+    """Parse and validate the ``input_shape=`` argument (the D4 grammar).
 
     Parameters
     ----------
@@ -340,10 +340,10 @@ def parse_input_size(input_size: Any, model: nn.Module) -> ParsedInputSize:
             for index, entry in enumerate(input_size)
         )
         if not slots:
-            _refuse("input_size= is empty; there is no shape to synthesize.")
+            _refuse("input_shape= is empty; there is no shape to synthesize.")
         return ParsedInputSize(positional=slots, keyword=())
     _refuse(
-        f"input_size= {input_size!r} is not a shape tuple, a sequence of shape "
+        f"input_shape= {input_size!r} is not a shape tuple, a sequence of shape "
         "tuples, or a mapping of forward keyword names to shapes.",
         value=repr(input_size),
     )
@@ -353,18 +353,18 @@ def _parse_mapping_form(input_size: Mapping[Any, Any], model: nn.Module) -> Pars
     """Parse the mapping (forward-keyword-to-shape) form."""
 
     if not input_size:
-        _refuse("input_size= mapping is empty; there is no shape to synthesize.")
+        _refuse("input_shape= mapping is empty; there is no shape to synthesize.")
     known_names, has_var_keyword = _forward_keyword_names(model)
     slots: list[SlotSpec] = []
     for key, raw in input_size.items():
         if not isinstance(key, str):
             _refuse(
-                f"input_size= mapping key {key!r} is not a forward keyword name string.",
+                f"input_shape= mapping key {key!r} is not a forward keyword name string.",
                 value=repr(key),
             )
         if known_names and not has_var_keyword and key not in known_names:
             _refuse(
-                f"input_size= binds {key!r}, but the model's forward accepts no such "
+                f"input_shape= binds {key!r}, but the model's forward accepts no such "
                 f"keyword (known keywords: {sorted(known_names)}).",
                 code="input_size_unknown_binding",
                 binding=key,

@@ -20,6 +20,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from ._capture_override import _with_capture_fields
+
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
 
@@ -210,14 +212,8 @@ def isolated_capture(
     capture_options = run_trace_kwargs.get("capture")
     if capture_options is None:
         run_trace_kwargs["capture"] = CaptureOptions(seed=seed)
-    elif not capture_options.is_field_explicit("seed"):
-        explicit_values = {
-            field_name: value
-            for field_name, value in capture_options.as_dict().items()
-            if capture_options.is_field_explicit(field_name)
-        }
-        explicit_values["seed"] = seed
-        run_trace_kwargs["capture"] = CaptureOptions(**explicit_values)
+    elif not capture_options._is_field_explicit("seed"):
+        run_trace_kwargs["capture"] = _with_capture_fields(capture_options, seed=seed)
     with preserved_rng_state():
         random.seed(seed)
         try:
@@ -227,4 +223,4 @@ def isolated_capture(
         except ImportError:
             pass
         torch.manual_seed(seed)
-        return trace(run_model, cloned_args, cloned_kwargs, **run_trace_kwargs)
+        return trace(run_model, cloned_args, input_kwargs=cloned_kwargs, **run_trace_kwargs)

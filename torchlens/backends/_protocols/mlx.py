@@ -59,7 +59,7 @@ class MLXProtocol(SpecBackedProtocol):
 
         from ..._user_funcs import trace
 
-        return trace(model, args, kwargs, backend="mlx", **options)
+        return trace(model, args, input_kwargs=kwargs, backend="mlx", **options)
 
     def reference_output(self, model: Any, args: Any, kwargs: dict[str, Any] | None) -> Any:
         """The model's own forward with no TorchLens wrapper installed.

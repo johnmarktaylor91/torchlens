@@ -330,7 +330,7 @@ def auto_capture(model: nn.Module, every: int = 100) -> Iterator[AutoCaptureSess
             try:
                 capture_input = list(args)
                 trace_fn = cast(Callable[..., Any], torchlens.trace)
-                log = trace_fn(model, capture_input, kwargs or None)
+                log = trace_fn(model, capture_input, input_kwargs=kwargs or None)
                 session.logs.append(log)
             finally:
                 model.forward = wrapped_forward

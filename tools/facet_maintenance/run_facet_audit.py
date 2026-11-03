@@ -181,7 +181,7 @@ def run_audit(roster: Iterable[tuple[str, Any, Any]], out_dir: Path) -> Path:
             log = tl.trace(
                 model,
                 input_args,
-                capture=tl.options.CaptureOptions(layers_to_save="all"),
+                save="all",
             )
             report = facet_coverage(log)
             sections.append(report.to_markdown())

@@ -451,7 +451,7 @@ def list_sites(
         Optional keyword inputs for the forward rung (kwargs-only models).
     capture:
         Optional ``CaptureOptions`` override for the forward rung, used
-        verbatim (e.g. ``structure_only=True``; shapes are then labeled
+        for capture metadata (e.g. ``structure_only=True``; shapes are then labeled
         hypotheses). Default is a metadata-only capture retaining no
         activation payloads.
 
@@ -472,8 +472,14 @@ def list_sites(
         return _module_rung(model)
     import torchlens as tl
 
-    options = capture if capture is not None else tl.options.CaptureOptions(layers_to_save=None)
-    trace = tl.trace(model, inputs if inputs is not None else (), input_kwargs, capture=options)
+    options = capture
+    trace = tl.trace(
+        model,
+        inputs if inputs is not None else (),
+        input_kwargs=input_kwargs,
+        capture=options,
+        save="none",
+    )
     return sites_of_trace(trace)
 
 

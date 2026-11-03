@@ -35,7 +35,7 @@ TORCHLENS_DIR = pathlib.Path(tl.__file__).resolve().parent
 def _halted_trace() -> tl.Trace:
     """Return a real halted trace carrying the structural halt fields."""
 
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
+    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
     assert trace.is_stopped is True
     return trace
 
@@ -167,7 +167,7 @@ def test_mlx_halted_capture_settles_halted() -> None:
         Tiny(),
         mx.ones((1, 3)),
         backend="mlx",
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     assert trace.is_stopped is True
     assert trace.outcome is not None
@@ -191,7 +191,7 @@ def test_paddle_halted_capture_settles_halted() -> None:
         Tiny(),
         paddle.ones([1, 3]),
         backend="paddle",
-        halt=tl.func("relu"),
+        stop_after=tl.func("relu"),
     )
     assert trace.is_stopped is True
     assert trace.outcome is not None

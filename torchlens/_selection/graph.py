@@ -524,3 +524,77 @@ def between(sources: Any, sinks: Any) -> Selector:
 register_term_resolver(_NeighborhoodTerm, _resolve_neighborhood_term)
 register_term_resolver(_BetweenTerm, _resolve_between_term)
 register_term_resolver(_SliceMembersTerm, _resolve_slice_members_term)
+
+
+# ---------------------------------------------------------------------------
+# Unit-level influence: the query term and its builder. The resolver (the
+# field-engine walk and the gradient probes) lives in
+# ``torchlens.receptive_field._influence``, which the ``receptive_field``
+# package imports, so the term resolves whenever a field view exists. The term
+# lives here, beside the other graph producers, so ``.of()`` on the field views
+# can build a query without importing the engine module.
+# ---------------------------------------------------------------------------
+
+_INFLUENCE_DIRECTIONS = ("projective", "receptive")
+_INFLUENCE_METHODS = ("geometric", "gradient")
+_DEFAULT_PROBE_BUDGET = 256
+
+
+@dataclass(frozen=True)
+class _InfluenceTerm:
+    """AST leaf for the unit-level influence query (``.of()`` on the field views)."""
+
+    seed: Any
+    within: tuple[Any, ...] | None
+    direction: str
+    method: str
+    probe_budget: int
+
+    def __repr__(self) -> str:
+        """Return the compact constructor-shaped disclosure."""
+
+        within = "None" if self.within is None else "[" + ", ".join(map(repr, self.within)) + "]"
+        return (
+            f"influence(of={self.seed!r}, within={within}, direction={self.direction!r}, "
+            f"method={self.method!r})"
+        )
+
+
+def _influence(
+    seed: Any,
+    within: Any = None,
+    *,
+    direction: str = "projective",
+    method: str = "geometric",
+    probe_budget: int = _DEFAULT_PROBE_BUDGET,
+) -> Selector:
+    """Build the influence query (the private builder behind the field views' ``.of()``).
+
+    ``seed`` is any ACT region (site label, ``Op``/``Layer``, selection);
+    ``within`` is one target region or a list of them, ``None`` meaning the
+    view default (model outputs when projective, model inputs when
+    receptive). ``direction`` is ``"projective"`` (units the seed reaches) or
+    ``"receptive"`` (units that reach the seed); ``method`` is
+    ``"geometric"`` or ``"gradient"``; ``probe_budget`` bounds the number of
+    autograd probes (seed units times target sites) the gradient method may
+    run.
+    """
+
+    if direction not in _INFLUENCE_DIRECTIONS:
+        raise ValueError(
+            f"influence `direction` must be one of {_INFLUENCE_DIRECTIONS}; got {direction!r}."
+        )
+    if method not in _INFLUENCE_METHODS:
+        raise ValueError(f"influence `method` must be one of {_INFLUENCE_METHODS}; got {method!r}.")
+    if isinstance(probe_budget, bool) or not isinstance(probe_budget, int) or probe_budget < 1:
+        raise ValueError(f"influence `probe_budget` must be a positive int; got {probe_budget!r}.")
+    return Selector(
+        _InfluenceTerm(
+            seed=_lift_region(seed, "influence", "of"),
+            within=None if within is None else _lift_region_group(within, "influence", "within"),
+            direction=direction,
+            method=method,
+            probe_budget=probe_budget,
+        ),
+        kind="ACT",
+    )

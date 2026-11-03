@@ -338,9 +338,11 @@ def _backward_ready_trace_kwargs(
         # Keep the caller's explicit-field record: a plain dataclass replace
         # would mark every field explicit, and explicit backend-only fields
         # refuse on the torch backend.
-        capture = CaptureOptions.from_values(
+        capture = CaptureOptions._from_values(
             {**capture.as_dict(), "backward_ready": True},
             capture._specified_fields | {"backward_ready"},
+            _layers_to_save=getattr(capture, "_layers_to_save", "all"),
+            _layers_to_save_explicit=getattr(capture, "_layers_to_save_explicit", False),
         )
     return {**trace_kwargs, "capture": capture}
 

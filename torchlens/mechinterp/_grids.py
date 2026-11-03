@@ -24,14 +24,13 @@ from typing import Any
 import torch
 
 from .._selection.selectors import facet as facet_selector
+from .._semantic._state_guard import _CounterfactualStateGuard, _teardown
 from .._semantic.patching import (
     _baseline_traces,
-    _CounterfactualStateGuard,
     _facet_tensor,
     _metric_scalar,
     _modules_with_facet,
     _run_patch,
-    _teardown,
     _warn_if_campaign_all_identical,
 )
 from ..errors._base import TorchLensWarning

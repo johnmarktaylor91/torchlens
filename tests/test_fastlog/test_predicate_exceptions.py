@@ -107,11 +107,11 @@ def test_auto_maps_to_fail_fast_for_disk(tmp_path: Path) -> None:
             ExceptionModel(),
             torch.ones(1, 3),
             save=keep_op,
-            on_predicate_error="auto",
-            streaming=tl.options.StorageOptions(
+            storage=tl.options.StorageOptions(
                 path=tmp_path / "disk.tlfast",
                 retain_in_memory=False,
             ),
+            on_predicate_error="auto",
         )
 
     assert calls == 1

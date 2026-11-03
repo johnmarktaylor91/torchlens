@@ -48,6 +48,7 @@ from typing import TYPE_CHECKING, Any
 from .._constants import OP_LOG_FIELD_ORDER
 from .._errors import InvalidArgumentError
 from ..errors import TorchLensWarning
+from ._cost_tiers import COST_REPORT_TIERS, COST_REPORT_UNSHIPPED_TIERS, _validate_cost_tiers
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -869,16 +870,6 @@ def instrumented_rate(trace: Trace) -> InstrumentedRateTable:
 # The cost measurer (D27)
 
 
-#: The measurable tiers: public callables, never harness rung names (D25).
-COST_REPORT_TIERS: tuple[str, ...] = ("raw_forward", "trace")
-
-#: Ladder tiers that have no shipped callable yet, printed as words only
-#: (costreport bind row): no numeral in any column, not even a target.
-COST_REPORT_UNSHIPPED_TIERS: dict[str, str] = {
-    "bind": "planned / not shipped / not measured",
-}
-
-
 @dataclass(frozen=True)
 class CostTierMeasurement:
     """One measured tier: absolute time first, ratio derived (D24).
@@ -971,19 +962,7 @@ def overhead(
 
     from .._user_funcs import trace as _trace
 
-    unknown = sorted(set(tiers) - set(COST_REPORT_TIERS))
-    if unknown:
-        raise InvalidArgumentError(
-            f"unknown cost tier(s) {unknown}; measurable tiers are {COST_REPORT_TIERS}.",
-            code="cost_report_tier_unknown",
-            remedy="Pass tiers from the measurable set; each maps to one public callable.",
-        )
-    if "raw_forward" not in tiers:
-        raise InvalidArgumentError(
-            "the raw_forward baseline tier is required (ratios are derived against it).",
-            code="cost_report_tier_unknown",
-            remedy="Include 'raw_forward' in tiers.",
-        )
+    _validate_cost_tiers(tiers)
     kwargs = input_kwargs or {}
     args = input_args if isinstance(input_args, (list, tuple)) else (input_args,)
     n_forwards = 0
@@ -1024,7 +1003,9 @@ def overhead(
             def _run_trace() -> None:
                 """One full default capture, cleaned up immediately."""
 
-                _trace(model, list(args) if len(args) > 1 else args[0], kwargs).cleanup()
+                _trace(
+                    model, list(args) if len(args) > 1 else args[0], input_kwargs=kwargs
+                ).cleanup()
 
             median, spread = _measure(_run_trace)
             measurements.append(

@@ -34,12 +34,11 @@ from typing import Any
 import torch
 
 from .._selection.selectors import FuncSelector, InModuleSelector
+from .._semantic._state_guard import _CounterfactualStateGuard, _teardown
 from .._semantic.patching import (
     _baseline_traces,
-    _CounterfactualStateGuard,
     _facet_tensor,
     _run_patch,
-    _teardown,
 )
 from ._errors import refuse
 from ._params import head_weight_views
