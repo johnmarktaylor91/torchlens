@@ -227,7 +227,7 @@ def _summarize(results: dict[str, Any]) -> str:
             lines.append(f"| {label} | error | | | | | | | | | | |")
             continue
 
-        def med(phase: str, key: str = "wall_s") -> float:
+        def med(phase: str, key: str = "wall_s", reps: list[Any] = reps) -> float:
             vals = sorted(r[phase][key] for r in reps)
             return vals[len(vals) // 2]
 
