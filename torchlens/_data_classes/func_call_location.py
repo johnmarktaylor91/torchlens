@@ -106,6 +106,47 @@ def source_fingerprint(filename: str, num_context_lines: int) -> tuple[Any, ...]
     return ("stat", stat.st_size, stat.st_mtime_ns, num_context_lines)
 
 
+def cached_source_fingerprint(
+    filename: str, num_context_lines: int, context_cache: dict[Any, tuple[Any, ...]] | None
+) -> tuple[Any, ...] | None:
+    """Return a file's source fingerprint, taken at most once per capture.
+
+    One ``os.stat`` per distinct file per capture (``context_cache`` is the
+    capture's code-context cache): it lets an unsnapshotted frame read its
+    text lazily and refuse it when the file later changed.
+    """
+
+    if context_cache is None:
+        return source_fingerprint(filename, num_context_lines)
+    key = ("__torchlens_source_fingerprint__", filename, num_context_lines)
+    cached = context_cache.get(key)
+    if cached is None:
+        # Stored boxed in a 1-tuple: the cache holds tuples, and the
+        # fingerprint itself may be ``None``.
+        cached = (source_fingerprint(filename, num_context_lines),)
+        context_cache[key] = cached
+    return cast(tuple[Any, ...] | None, cached[0])
+
+
+def with_source_fingerprint(location: "FuncCallLocation", trace: Any) -> "FuncCallLocation":
+    """Fix a freshly captured location's source text policy; return it.
+
+    With ``save_source_context`` the text is snapshotted now; otherwise the
+    file's fingerprint is stamped so the text can be read lazily, with the
+    trace's ``num_context_lines`` around the line. For one-off locations built
+    outside ``_get_code_context`` (which caches one fingerprint per file per
+    capture).
+    """
+
+    if location.source_loading_enabled:
+        location._ensure_source_loaded()  # save_source_context: snapshot at capture
+    else:
+        location._linecache_entry = source_fingerprint(
+            location.file, int(getattr(trace, "num_context_lines", 7))
+        )
+    return location
+
+
 def _source_view(
     all_lines: list[str], line_number: int, num_context_lines: int
 ) -> tuple[list[str], str, str, str, int]:
@@ -255,6 +296,12 @@ class FuncCallLocation:
         schema_key="func_call_location",
     )
 
+    # Reached through the class by ``_utils.introspection``, which cannot
+    # import this module at module scope.
+    _cached_source_fingerprint = staticmethod(cached_source_fingerprint)
+    # Runtime-only source fingerprint (never persisted, unset when absent).
+    _linecache_entry: tuple[Any, ...] | None
+
     def __init__(
         self,
         file: str,
@@ -321,9 +368,6 @@ class FuncCallLocation:
         self.func_qualname = func_qualname
         self.col_offset = col_offset
         self.source_loading_enabled = source_loading_enabled
-        # Runtime-only source fingerprint (never persisted); the capture path
-        # sets it on unsnapshotted frames so their text can be read lazily.
-        self._linecache_entry = None
 
         # Detect which construction path: if func_signature was explicitly
         # passed, we're on the legacy path (direct construction from tests
@@ -432,10 +476,9 @@ class FuncCallLocation:
         )
         if self.source_loading_enabled or self._code_context is not None:
             return (stored if self._code_context is not None else None), _SOURCE_TEXT_UNAVAILABLE
-        try:
-            fingerprint = self._linecache_entry
-        except AttributeError:
-            fingerprint = None
+        # Runtime-only (never persisted); the capture path sets it on
+        # unsnapshotted frames, and an unset cell means "no fingerprint".
+        fingerprint = getattr(self, "_linecache_entry", None)
         if fingerprint is None or not self.file:
             return None, _SOURCE_TEXT_UNAVAILABLE
         lines = _read_fingerprinted_lines(self.file, fingerprint)

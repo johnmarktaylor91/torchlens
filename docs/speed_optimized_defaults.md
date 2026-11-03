@@ -29,7 +29,7 @@ Use these defaults when speed matters:
 | Saved layers | `save=tl.func(...)` / `save=tl.in_module(...)` | Saves activation payloads only where needed in the primary single-pass path. |
 | Windowed selection | `lookback=K` with `tl.followed_by(...)` / `tl.preceded_by(...)` | Enables local graph-context predicates without post-hoc filtering. |
 | Lookback payloads | Default `lookback_payload_policy="metadata_only"` | Avoids pinning recent tensors unless retroactive payload saving is required. |
-| Source context | `save_source_context=False` | Keeps file/line identity but avoids source-text loading. |
+| Source context | `save_source_context=False` (the default) | Keeps file/line identity and defers source text to read time (from the file on disk, only while it is unchanged since capture). |
 | Validation | Run separately | Validation replays the model and should be a gate, not the hot path. |
 | Streaming | `storage=tl.to_disk(path)` | Moves predicate-selected payload storage to disk while preserving the manifest. |
 

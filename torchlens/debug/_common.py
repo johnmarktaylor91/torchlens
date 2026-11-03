@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes.func_call_location import display_frame
+
 if TYPE_CHECKING:
     from torchlens._data_classes.op import Op
     from torchlens._data_classes.trace import Trace
@@ -54,8 +56,6 @@ def _source_line(op: Op) -> str | None:
     str | None
         ``"file:line"`` or ``None`` when no source context is present.
     """
-
-    from .._data_classes.func_call_location import display_frame
 
     location = display_frame(getattr(op, "code_context", None))
     if location is None:

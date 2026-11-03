@@ -1903,11 +1903,7 @@ def test_documented_false_negatives_do_not_materialise_branch_events(
 def test_save_code_context_off_model_keeps_branch_classification_without_loading_source(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Disabled source snapshot keeps branch attribution and stores no source text.
-
-    Capture records file/line identity only; the text is read lazily from the
-    file on access (``tests/test_source_text_lazy.py`` pins that path).
-    """
+    """Without a source snapshot, branch attribution holds and no text is stored at capture."""
     trace = _log_model(
         SaveSourceContextOffModel(),
         torch.ones(2, 2),
@@ -1940,8 +1936,7 @@ def test_save_code_context_off_model_keeps_branch_classification_without_loading
                 assert frame.source_loading_enabled is False
                 assert frame._source_loaded is True
                 assert frame._frame_func_obj is None
-                # The stored state is the canonical no-source state: no text
-                # was read or kept at capture.
+                # Stored state is the canonical no-source state (lazy reads: test_source_text_lazy).
                 assert frame._code_context is None
                 assert frame._source_context == "None"
                 assert frame._code_context_labeled == ""

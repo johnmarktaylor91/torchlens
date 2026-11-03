@@ -9,7 +9,7 @@ import sys
 import warnings
 from collections.abc import Callable, Iterator
 from types import CodeType, FrameType
-from typing import Any, TypeAlias, cast
+from typing import Any, TypeAlias
 
 import numpy as np
 import torch
@@ -913,30 +913,6 @@ def _call_site_chain(
     return chain
 
 
-def _cached_source_fingerprint(
-    filename: str, num_context_lines: int, context_cache: _CodeContextCache | None
-) -> tuple[Any, ...] | None:
-    """Return a file's source fingerprint, taken at most once per capture.
-
-    One ``os.stat`` per distinct file per capture: it lets an unsnapshotted
-    frame read its text lazily and refuse it when the file later changed
-    (:func:`torchlens._data_classes.func_call_location.source_fingerprint`).
-    """
-
-    from .._data_classes.func_call_location import source_fingerprint
-
-    if context_cache is None:
-        return source_fingerprint(filename, num_context_lines)
-    key = ("__torchlens_source_fingerprint__", filename, num_context_lines)
-    cached = context_cache.get(key)
-    if cached is None:
-        # Stored boxed in a 1-tuple: the cache holds tuples, and the
-        # fingerprint itself may be ``None``.
-        cached = (source_fingerprint(filename, num_context_lines),)
-        context_cache[key] = cached
-    return cast(tuple[Any, ...] | None, cached[0])
-
-
 def _get_code_context(
     num_context_lines: int = 7,
     source_loading_enabled: bool = True,
@@ -1060,38 +1036,20 @@ def _get_code_context(
             )
         )
 
-    # Select the context from the survivor list, outermost first like a
-    # traceback: the call site (when one survives), then the outermost
-    # ``forward`` frame down to the innermost frame, which ran the op and is
-    # always LAST. With no ``forward`` frame, tracking never starts and the
-    # context is empty; the call site is only ever included when a ``forward``
-    # frame exists.
-    selected: list[tuple[FrameType, CodeType, int, int]] = []
-    if last_forward_pos >= 0:
-        call_site: tuple[FrameType, CodeType, int, int] | None
-        if last_forward_pos + 1 < len(survivors):
-            call_site = survivors[last_forward_pos + 1]
-        elif anchor_frame is not None:
-            call_site = (
-                anchor_frame,
-                anchor_frame.f_code,
-                anchor_frame.f_lineno,
-                anchor_frame.f_lasti,
-            )
-        else:
-            call_site = None
-        selected = ([call_site] if call_site is not None else []) + survivors[last_forward_pos::-1]
-        if context_cache is not None and anchor is None and call_site is not None:
-            # Establish the anchor: ``call_site`` is the first survivor above
-            # the OUTERMOST ``forward`` frame, so no ``forward``-named survivor
-            # exists anywhere above it -- the invariant the early-stop relies on.
-            cs_frame = call_site[0]
-            context_cache[_CODE_CONTEXT_ANCHOR_KEY] = (
-                id(cs_frame),
-                cs_frame.f_code,
-                cs_frame.f_lasti,
-                cs_frame.f_lineno,
-            )
+    selected, call_site = _call_site.select_context_frames(
+        survivors, last_forward_pos, anchor_frame
+    )
+    if call_site is not None and context_cache is not None and anchor is None:
+        # Establish the anchor: ``call_site`` is the first survivor above the
+        # OUTERMOST ``forward`` frame, so no ``forward``-named survivor exists
+        # anywhere above it -- the invariant the early-stop relies on.
+        cs_frame = call_site[0]
+        context_cache[_CODE_CONTEXT_ANCHOR_KEY] = (
+            id(cs_frame),
+            cs_frame.f_code,
+            cs_frame.f_lasti,
+            cs_frame.f_lineno,
+        )
 
     cache_key: _CodeContextCacheKey | None = None
     if context_cache is not None:
@@ -1126,8 +1084,10 @@ def _get_code_context(
             col_offset=None if disable_col_offset else _get_col_offset(frame_ref),
             source_loading_enabled=source_loading_enabled,
         )
-        if not source_loading_enabled:
-            loc._linecache_entry = _cached_source_fingerprint(
+        if source_loading_enabled:  # save_source_context: snapshot the text at capture
+            loc._ensure_source_loaded()
+        else:
+            loc._linecache_entry = FuncCallLocation._cached_source_fingerprint(
                 code.co_filename, num_context_lines, context_cache
             )
         result.append(loc)

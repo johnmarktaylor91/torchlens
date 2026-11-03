@@ -35,7 +35,7 @@ from ..._data_classes._grad_fn_naming import (
     _normalize_grad_fn_type,
 )
 from ..._data_classes.backward_pass import BackwardPass
-from ..._data_classes.func_call_location import FuncCallLocation, source_fingerprint
+from ..._data_classes.func_call_location import FuncCallLocation, with_source_fingerprint
 from ..._data_classes.grad_fn import GradFn, _paired_pass_op
 from ..._data_classes.grad_fn_call import GradFnCall
 from ..._data_classes.op import _dtype_or_none, _memory_or_none, _shape_or_none
@@ -240,10 +240,8 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
     ``tests/test_backward_call_context.py``.
     """
 
-    frame = inspect.currentframe()
-    if frame is None:
-        return None
-    frame = frame.f_back
+    current = inspect.currentframe()
+    frame = current.f_back if current is not None else None
     while frame is not None:
         if not is_torchlens_code(frame.f_code):
             source_loading_enabled = bool(trace._options_save_source_context)
@@ -263,11 +261,7 @@ def _capture_backward_call_context(trace: Any) -> FuncCallLocation | None:
                 col_offset=_get_col_offset(frame),
                 source_loading_enabled=source_loading_enabled,
             )
-            if not source_loading_enabled:
-                location._linecache_entry = source_fingerprint(
-                    frame.f_code.co_filename, int(getattr(trace, "num_context_lines", 7))
-                )
-            return location
+            return with_source_fingerprint(location, trace)
         frame = frame.f_back
     return None
 

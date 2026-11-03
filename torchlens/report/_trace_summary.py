@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Literal
 
 from .._data_classes._nonfinite import coverage_gap_note, first_nonfinite_layer
+from .._data_classes.func_call_location import display_frame
 from .._errors import CaptureNotActiveError, InvalidArgumentError
 from .._source_links import file_line_text, terminal_file_line_link, vscode_file_line_link
 from ._notebook.cards import BRIDGE_SENTINEL_HTML, trace_repr_html
@@ -32,8 +33,6 @@ def first_nonfinite(trace: Trace, link_format: Literal["terminal", "html", "text
     # answer below names how many ops could not be examined.
     layer = first_nonfinite_layer(trace, kind="saved")
     if layer is not None:
-        from .._data_classes.func_call_location import display_frame
-
         frame = display_frame(getattr(layer, "code_context", None))
         location = "source unavailable"
         if frame is not None:

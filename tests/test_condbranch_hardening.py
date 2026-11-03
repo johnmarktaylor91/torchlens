@@ -358,7 +358,7 @@ def test_multi_line_nested_ternary_does_not_cross_wire_bools() -> None:
     assert len(bool_layers) == 2
     creation_lines = {
         layer.layer_label: next(
-            frame.line_number for frame in layer.code_context if frame.file == __file__
+            frame.line_number for frame in reversed(layer.code_context) if frame.file == __file__
         )
         for layer in bool_layers
     }
