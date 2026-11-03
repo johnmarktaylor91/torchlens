@@ -239,6 +239,25 @@ jobs:
           print(torch.__version__, torchvision.__version__)
           PY
 
+      - name: Collect the whole suite (Python 3.11+ import check)
+        # The smoke rows import only smoke-listed files (tests/conftest.py
+        # skips the rest before import) and the not-slow tier runs on 3.10
+        # only, so a module-level fault in a non-smoke test file was never
+        # imported on 3.11, 3.12 or 3.13 (one dataclass default once broke
+        # 35 test files on 3.11 unseen). Collection only, no run: pytest
+        # exits 2 on a collection error. The newest-admitted rows are the
+        # three measured at 0 errors; floor rows are not claimed. The ids go
+        # to a file: the log shows the count, or the errors on failure.
+        if: matrix.scope == 'smoke' && matrix.track == 'newest-admitted'
+        env:
+          OMP_NUM_THREADS: "1"
+        run: |
+          log="${{ runner.temp }}/collect-only.txt"
+          status=0
+          pytest tests/ --collect-only -q -p no:randomly > "$log" 2>&1 || status=$?
+          if [ "$status" -ne 0 ]; then tail -n 200 "$log"; else tail -n 3 "$log"; fi
+          exit "$status"
+
       - name: Run smoke tests and compatibility coverage
         if: matrix.scope == 'smoke'
         env:
@@ -1900,7 +1919,11 @@ jobs:
     # and torchvision are held at the versions the base install resolved, so
     # no peer can move them. The base install is the enforcing smoke row
     # (py3.10, torch 2.13.0). LXT (the LRP recipe) is Clear BSD licensed,
-    # which permits this CI use.
+    # which permits this CI use. The docs snippet suite
+    # (tests/test_docs_snippets.py) runs in the same pytest session: a peer
+    # that re-wraps a torch slot at import changes what later captures in the
+    # process see, and its per-peer parity probes run only where the peers
+    # are installed.
     name: Recipe pages with every peer installed
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -1955,7 +1978,10 @@ jobs:
             timm fancy-einsum "open_clip_torch==3.3.0" line_profiler \
             "transformer-lens==3.8.0" huggingface_hub safetensors \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
+            "xarray>=2023.1" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
+          # xarray is tl.export.xarray's peer (the neuro extra's bound): the
+          # export page's snippet and its parity probe skip without it.
           # These declare dependencies that would move torch, transformers or
           # numpy (torchcam pins numpy<2); their pages install them with
           # --no-deps too. dictionary_learning and ViT-Prisma would pull vllm
@@ -1970,18 +1996,21 @@ jobs:
           uv pip freeze --python "$PY" > "$RUNNER_TEMP/peer-freeze.txt"
           cat "$RUNNER_TEMP/peer-freeze.txt"
 
-      - name: Run the recipe pages with the peers required
+      - name: Run the recipe pages and doc snippets with the peers required
         env:
           TORCHLENS_RECIPE_PEERS: "1"
           OMP_NUM_THREADS: "1"
         run: |
           "$RUNNER_TEMP/peer-venv/bin/python" -m pytest tests/test_recipe_pages_executed.py \
+            tests/test_docs_snippets.py \
             -rA --tb=short -p no:cacheprovider \
             --junitxml="$RUNNER_TEMP/junit/peer-recipes.junit.xml"
 
-      - name: Declare the executed-test floor (recipe page)
+      - name: Declare the executed-test floor (recipe pages and doc snippets)
         # A skip counts as a failure on this leg (maximum skipped fraction 0):
-        # every page's peer is installed, so a skip means a page went unrun.
+        # every page's and snippet's peer is installed, so a skip means a page
+        # or snippet went unrun. The floor is the measured executed count of
+        # both files in this environment.
         run: |
           echo "peer-recipes.junit.xml 53 0" >> "$RUNNER_TEMP/junit/legs.floor"
 
