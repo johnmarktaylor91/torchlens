@@ -105,7 +105,7 @@ def gpt2_bundle():
     model = build_gpt2("eager")
     torch.manual_seed(3)
     x = torch.randint(0, 500, (1, 6))
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     try:
         yield model, trace
     finally:
@@ -119,7 +119,7 @@ def llama_bundle():
     model = build_llama("eager")
     torch.manual_seed(3)
     x = torch.randint(0, 500, (1, 6))
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(layers_to_save="all"))
+    trace = tl.trace(model, x, save="all")
     try:
         yield model, trace
     finally:

@@ -27,9 +27,8 @@ def _trace(model: nn.Module, inputs: torch.Tensor, **kwargs: object) -> tl.Trace
         Captured trace.
     """
 
-    return tl.trace(
-        model, inputs, **kwargs, save=tl.options.SaveOptions(save_raw_activations=False)
-    )
+    kwargs.setdefault("capture", tl.options.CaptureOptions(save_raw_activations=False))
+    return tl.trace(model, inputs, **kwargs)
 
 
 def _canonical_child_edges(trace: tl.Trace) -> set[tuple[str, str]]:
@@ -307,7 +306,9 @@ def test_backward_edges_gate_on_backward_capture() -> None:
     trace = _trace(
         BackwardModel(),
         torch.randn(2, 4, requires_grad=True),
-        capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True),
+        capture=tl.options.CaptureOptions(
+            backward_ready=True, save_grads=True, save_raw_activations=False
+        ),
     )
     assert trace.autograd.num_backward_edges is None
     loss = trace[trace.output_layers[0]].out

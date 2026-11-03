@@ -7,7 +7,6 @@ import example_models
 import pytest
 import torch
 
-import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens.experimental import dagua
 
@@ -25,10 +24,10 @@ class M(nn.Module):
     def forward(self, x):
         return x + 1
 
-log = tl.trace(M(), torch.ones(1), capture=tl.options.CaptureOptions(layers_to_save=None))
+log = tl.trace(M(), torch.ones(1), save=None)
 try:
     try:
-        log.draw(vis_renderer="dagua", vis_save_only=True, file_format="svg")
+        log.draw(renderer="dagua", file_format="svg")
     except RuntimeError as exc:
         message = "opt in via `from torchlens.experimental import dagua` first"
         raise SystemExit(0 if message in str(exc) else 2)
@@ -49,9 +48,9 @@ finally:
 def test_trace_to_dagua_graph_builds_semantic_nodes_and_clusters() -> None:
     pytest.importorskip("dagua")
     model = example_models.AestheticFrozenMix().eval()
-    log = trace_fn(model, torch.rand(1, 8), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = trace_fn(model, torch.rand(1, 8), save=None)
     try:
-        graph = dagua.trace_to_dagua_graph(log, vis_mode="unrolled", direction="leftright")
+        graph = dagua.trace_to_dagua_graph(log, rolled=False, direction="leftright")
         labels = [graph.node_labels[i] for i in range(graph.num_nodes)]
         assert any("trainable" in label.lower() for label in labels)
         assert any(node_type == "frozen_params" for node_type in graph.node_types)
@@ -67,16 +66,15 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
     log = trace_fn(
         model,
         torch.rand(1, 16, 16, 16),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     out = tmp_path / "residual.svg"
     try:
         log.draw(
-            vis_renderer="dagua",
+            renderer="dagua",
             theme="torchlens",
-            vis_mode="unrolled",
+            rolled=False,
             direction="leftright",
-            vis_save_only=True,
             file_format="svg",
             path=str(out),
         )
@@ -89,7 +87,7 @@ def test_dagua_renderer_exports_svg(tmp_path: Path) -> None:
 def test_render_audit_exposes_unused_fields() -> None:
     pytest.importorskip("dagua")
     model = example_models.SimpleFF().eval()
-    log = trace_fn(model, torch.rand(5, 5), capture=tl.options.CaptureOptions(layers_to_save=None))
+    log = trace_fn(model, torch.rand(5, 5), save=None)
     try:
         audit = dagua.build_render_audit(log).to_dict()
         assert "trace_unused" in audit

@@ -69,6 +69,7 @@ FIELD_ORDER_CASES: tuple[FieldOrderCase, ...] = (
                 "_out_hash_cache",
                 "_out_identity_cache",
                 "_output_transform",
+                "_output_slot",
                 "_runnable",
                 "_source_model_ref",
                 "_transform",

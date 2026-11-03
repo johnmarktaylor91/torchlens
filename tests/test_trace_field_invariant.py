@@ -32,6 +32,7 @@ def test_trace_field_set_subset_of_user_facing() -> None:
         "_uncalled_module_addresses",
         "_transform",
         "_output_transform",
+        "_output_slot",
         "_grad_transform",
         "_optimizer",
         "_visualizer_dir",

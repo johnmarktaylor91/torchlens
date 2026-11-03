@@ -36,12 +36,11 @@ def _render_dot(log: tl.Trace, tmp_path: Path, **kwargs: Any) -> str:
 
     tmp_path.mkdir(parents=True, exist_ok=True)
     draw_kwargs = {
-        "vis_save_only": True,
         "file_format": "svg",
         "path": str(tmp_path / "graph"),
         **kwargs,
     }
-    return log.draw(**draw_kwargs)
+    return log.draw(**draw_kwargs).dot
 
 
 def test_default_mode_unchanged_from_phase1(tmp_path: Path) -> None:
@@ -51,7 +50,7 @@ def test_default_mode_unchanged_from_phase1(tmp_path: Path) -> None:
     log = tl.trace(model, torch.randn(1, 4))
 
     omitted = _render_dot(log, tmp_path / "omitted")
-    explicit = _render_dot(log, tmp_path / "explicit", node_mode="default")
+    explicit = _render_dot(log, tmp_path / "explicit", node_style="default")
 
     assert explicit == omitted
 
@@ -62,7 +61,7 @@ def test_profiling_mode_adds_runtime(tmp_path: Path) -> None:
     model = nn.Sequential(nn.Conv2d(3, 4, 3), nn.Flatten(), nn.Linear(144, 8))
     log = tl.trace(model, torch.randn(1, 3, 8, 8))
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling")
+    dot = _render_dot(log, tmp_path, node_style="profiling")
 
     assert "t=" in dot
     assert "ms" in dot
@@ -79,7 +78,7 @@ def test_profiling_mode_omits_missing_fields(tmp_path: Path) -> None:
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = None
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling")
+    dot = _render_dot(log, tmp_path, node_style="profiling")
 
     assert re.search(r"t=[0-9.]+ms", dot) is None
 
@@ -150,7 +149,7 @@ def test_user_callback_wins_over_mode(tmp_path: Path) -> None:
         del layer_log, default_spec
         return NodeSpec(lines=["X"])
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", node_spec_fn=node_spec_fn)
+    dot = _render_dot(log, tmp_path, node_style="profiling", node_spec_fn=node_spec_fn)
 
     assert "X" in dot
     assert re.search(r"t=[0-9.]+ms", dot) is None
@@ -182,7 +181,7 @@ def _set_op_durations(log: tl.Trace, seconds: float) -> None:
 
 
 def test_profiling_collapsed_module_does_not_crash(tmp_path: Path) -> None:
-    """V1 regression: profiling x vis_call_depth=1 crashed on ANY collapsed module.
+    """V1 regression: profiling x depth=1 crashed on ANY collapsed module.
 
     ``profiling_collapsed_node_mode`` iterated ``Module.layers`` (Layer
     records) as if they were labels and indexed the trace with a Layer
@@ -206,7 +205,7 @@ def test_profiling_collapsed_module_does_not_crash(tmp_path: Path) -> None:
     log = tl.trace(Wrapper(), torch.randn(2, 4))
     _set_op_durations(log, 0.001)
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", vis_call_depth=1)
+    dot = _render_dot(log, tmp_path, node_style="profiling", depth=1)
 
     # The collapsed box aggregates its two ops: 2 x 1.00 ms.
     assert "t=2.00 ms" in dot
@@ -224,7 +223,7 @@ def test_profiling_collapsed_module_counts_every_pass(tmp_path: Path) -> None:
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
     _set_op_durations(log, 0.001)
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", vis_call_depth=1, vis_mode="rolled")
+    dot = _render_dot(log, tmp_path, node_style="profiling", depth=1, rolled=True)
 
     assert "t=6.00 ms" in dot  # 2 ops x 3 passes x 1.00 ms
     assert "t=2.00 ms" not in dot  # the pass-blind (first-call-only) undercount
@@ -236,7 +235,7 @@ def test_profiling_collapsed_module_unrolled_box_is_per_call(tmp_path: Path) -> 
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
     _set_op_durations(log, 0.001)
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", vis_call_depth=1, vis_mode="unrolled")
+    dot = _render_dot(log, tmp_path, node_style="profiling", depth=1, rolled=False)
 
     # Three per-call boxes, each 2 ops x 1.00 ms — never the 6.00 ms total.
     assert dot.count("t=2.00 ms") == 3
@@ -257,7 +256,7 @@ def test_profiling_multipass_unrolled_nodes_keep_per_pass_rows(tmp_path: Path) -
         for pass_index, layer_pass in log.layers[layer_label].ops.items():
             layer_pass.func_duration = durations[pass_index]
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling")
+    dot = _render_dot(log, tmp_path, node_style="profiling")
 
     # Each pass node carries ITS OWN captured duration (2 ops per pass).
     assert dot.count("t=1.00 ms") == 2
@@ -277,7 +276,7 @@ def test_profiling_multipass_rolled_node_discloses_aggregation(tmp_path: Path) -
     log = tl.trace(_RecurrentBlock(), torch.randn(2, 4))
     _set_op_durations(log, 0.001)
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", vis_mode="rolled")
+    dot = _render_dot(log, tmp_path, node_style="profiling", rolled=True)
 
     assert "t=3.00 ms (total across 3 passes)" in dot
     assert "(total across 3 passes)" in dot
@@ -309,7 +308,7 @@ def test_profiling_fold_representative_box_discloses_scope(tmp_path: Path) -> No
     log = tl.trace(Tower(), torch.randn(2, 4))
     _set_op_durations(log, 0.001)
 
-    dot = _render_dot(log, tmp_path, node_mode="profiling", collapse="none", fold_repeats=True)
+    dot = _render_dot(log, tmp_path, node_style="profiling", collapse="none", fold_repeats=True)
 
     assert "t=2.00 ms (@blocks.0:1 only)" in dot
 
@@ -322,8 +321,8 @@ def test_profiling_multipass_rows_omitted_when_untimed(tmp_path: Path) -> None:
         for layer_pass in layer_log.ops.values():
             layer_pass.func_duration = None
 
-    rolled = _render_dot(log, tmp_path / "rolled", node_mode="profiling", vis_mode="rolled")
-    unrolled = _render_dot(log, tmp_path / "unrolled", node_mode="profiling")
+    rolled = _render_dot(log, tmp_path / "rolled", node_style="profiling", rolled=True)
+    unrolled = _render_dot(log, tmp_path / "unrolled", node_style="profiling")
 
     assert re.search(r"t=[0-9.]+ [mun]?s", rolled) is None
     assert re.search(r"t=[0-9.]+ [mun]?s", unrolled) is None
@@ -335,9 +334,8 @@ def test_invalid_mode_raises() -> None:
     log = tl.trace(nn.Linear(4, 4), torch.randn(1, 4))
     with pytest.raises(ValueError, match="node_style"):
         log.draw(
-            vis_mode="unrolled",
+            rolled=False,
             node_style="bogus",  # type: ignore[arg-type]
-            vis_save_only=True,
         )
 
 
@@ -353,8 +351,7 @@ def test_domain_node_style_presets_refuse(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="node_style"):
         log.draw(
-            node_mode="vision",  # type: ignore[arg-type]
-            vis_save_only=True,
+            node_style="vision",  # type: ignore[arg-type]
             file_format="dot",
             path=str(tmp_path / "graph"),
         )
