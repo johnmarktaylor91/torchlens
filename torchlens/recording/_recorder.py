@@ -193,7 +193,14 @@ def _settle_recording_outcome(recording: Recording, state: RecordingState) -> No
 
 
 class Recorder:
-    """Context manager for explicitly captured fastlog forwards."""
+    """Context manager for explicitly captured fastlog forwards.
+
+    Examples
+    --------
+    >>> with Recorder(model, save=tl.func("relu")) as recorder:
+    ...     _ = recorder(x)
+    >>> recorder.recording.status, len(recorder.recording.records)
+    ('complete', 1)"""
 
     def __init__(
         self,

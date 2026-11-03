@@ -79,7 +79,14 @@ def _resolve_recording_option(
 
 @dataclass(frozen=True, slots=True, init=False)
 class RecordingOptions:
-    """Grouped options for one fastlog predicate recording session."""
+    """Grouped options for one fastlog predicate recording session.
+
+    Examples
+    --------
+    >>> opts = RecordingOptions(history_size=4)
+    >>> opts.history_size, opts.on_forward_error
+    (4, 'raise')
+    """
 
     keep_op: PredicateFn | None
     default_op: bool | CaptureSpec
