@@ -402,8 +402,7 @@ def _check_blob_layout(root: Path) -> dict[str, list[str]]:
         assert match is not None
         by_codec.setdefault(match.group(1), []).append(int(match.group(2)))
     assert all(sorted(series) == list(range(len(series))) for series in by_codec.values())
-    for blob_id, entry in manifest["tensors"].items():
-        assert entry["key"] in keys_by_chunk[entry["blob"]], blob_id
+    assert "tensors" not in manifest
     referenced = 0
     for payload in _records(root).values():
         for node in _walk_json(payload):
