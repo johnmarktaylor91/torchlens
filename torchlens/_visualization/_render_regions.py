@@ -86,6 +86,9 @@ def _setup_combined_special_clusters(
             subgraph.edge(**edge_dict)
 
 
+_ROOT = frozenset({"self", "self:1"})
+
+
 def _setup_subgraphs(
     self: Trace,
     graphviz_graph: graphviz.Digraph,
@@ -125,16 +128,16 @@ def _setup_subgraphs(
         module_submodule_dict = defaultdict(list)
         for call_label, mpl in self.modules._pass_dict.items():
             module_submodule_dict[call_label] = list(mpl.call_children)
-        subgraphs = list(self.modules["self"].ops[0].call_children)
+        subgraphs = ["self:1"]
+        module_submodule_dict["self:1"] = list(self.modules["self"].ops[0].call_children)
     else:
         module_submodule_dict = defaultdict(list)
         for ml in self.modules:
-            if ml.address != "self":
-                module_submodule_dict[ml.address] = list(ml.call_children)
-        subgraphs = list(self.modules["self"].call_children)
-
+            module_submodule_dict[ml.address] = list(ml.call_children)
+        subgraphs = ["self"]
+    # The root frame is never a cluster: content scoped to it is drawn at the top level.
     subgraphs, emitted_rank_groups = flatten_ancestor_frames(
-        graphviz_graph, subgraphs, module_edge_dict, module_submodule_dict, flatten, emit
+        graphviz_graph, subgraphs, module_edge_dict, module_submodule_dict, flatten | _ROOT, emit
     )
     max_call_depth = _get_max_call_depth(subgraphs, module_edge_dict, module_submodule_dict)
     # deque: list.pop(0) shifted the whole queue per module, Theta(M^2) on
