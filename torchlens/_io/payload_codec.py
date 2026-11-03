@@ -19,7 +19,13 @@ import torch
 
 from . import JaxPayloadLoadHint, PayloadLoadHints, _json
 from ._artifact_strings import _resolve_portable_device
-from ._numpy_payload_codec import NumpyPayloadCodec
+from ._numpy_payload_codec import (
+    NumpyPayloadCodec,
+    _dtype_string_is_object_like,
+    _raise_for_unsupported_array_dtype,
+    _unsupported_array_dtype_reason,
+    numpy_to_transport_tensor,
+)
 from ._payload_codec_paddle import _resolve_paddle_place
 from .format_errors import ArtifactError
 from .manifest import _json_ready_codec_metadata_value
@@ -983,15 +989,6 @@ def register_payload_codec(backend_name: str, codec: PayloadCodec) -> None:
     _CODECS[backend_name] = codec
 
 
-def numpy_to_transport_tensor(array: np.ndarray) -> torch.Tensor:
-    """Convert an encoded NumPy array to the CPU torch transport tensor."""
-
-    _raise_for_unsupported_array_dtype(array, backend_name="transport")
-    # np.array(copy=True, order="C") already yields a C-contiguous buffer, so
-    # from_numpy's zero-copy wrap is contiguous by construction.
-    return torch.from_numpy(np.array(array, copy=True, order="C"))
-
-
 def _resolve_materialization_codec(backend_name: str) -> PayloadCodec:
     """Keep registry failures inside the typed bundle-load boundary."""
 
@@ -1915,29 +1912,6 @@ def _jax_sharding_addressable_device_count(sharding: Any) -> int:
         return len(addressable_devices)
     except TypeError:
         return 0
-
-
-def _unsupported_array_dtype_reason(array: np.ndarray) -> str | None:
-    """Return an unsupported dtype reason for a host array, if any."""
-
-    if array.dtype.kind in {"O", "S", "U", "V"}:
-        return f"dtype {array.dtype} is not supported by the payload codec"
-    return None
-
-
-def _dtype_string_is_object_like(dtype: str) -> bool:
-    """Return whether a dtype string describes object or string data."""
-
-    lowered = dtype.lower()
-    return any(token in lowered for token in ("object", "str", "string", "bytes", "void"))
-
-
-def _raise_for_unsupported_array_dtype(array: np.ndarray, *, backend_name: str) -> None:
-    """Raise ``TypeError`` if ``array`` has a non-transportable dtype."""
-
-    reason = _unsupported_array_dtype_reason(array)
-    if reason is not None:
-        raise TypeError(f"{backend_name} payload {reason}.")
 
 
 # NumPy is a value carrier, not an additional model backend.
