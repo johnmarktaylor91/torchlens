@@ -570,6 +570,7 @@ def _extract_with_facets(
     as in a plain extract, from the same trace.
     """
 
+    from ._data_classes._lookup_kinds import op_at
     from .options import CaptureOptions as _LazyCaptureOptions
 
     capture = _LazyCaptureOptions(detach_saved_activations=detach_saved_activations)
@@ -592,7 +593,7 @@ def _extract_with_facets(
             outputs[key], views[key] = facet.value, facet
         else:
             outputs[key] = _out_from_log(trace, str(value))
-            views[key] = trace[str(value)]
+            views[key] = op_at(trace, str(value))
     return trace, outputs, views
 
 
@@ -628,6 +629,7 @@ def _extract_layers_with_trace(
         ``op_lookup_not_found`` (no such layer) or ``activation_not_saved`` (no saved tensor).
     """
 
+    from ._data_classes._lookup_kinds import op_at
     from ._extract_refusals import CaptureOptions, refuse_lookup_not_found
     from ._trace_selector_helpers import canonical_module_site_key
 
@@ -644,7 +646,7 @@ def _extract_layers_with_trace(
     if isinstance(layers, _Mapping):
         for label, pattern in layer_plan.items():
             outputs[label] = _out_from_log(trace, pattern)
-            views[label] = trace[canonical_module_site_key(trace, pattern) or pattern]
+            views[label] = op_at(trace, canonical_module_site_key(trace, pattern) or pattern)
         return trace, outputs, views
 
     for pattern in layer_plan.values():
@@ -654,7 +656,7 @@ def _extract_layers_with_trace(
             refuse_lookup_not_found(_did_you_mean_message(pattern, suggestions), pattern)
         for match in matches:
             outputs[match] = _out_from_log(trace, match)
-            views[match] = trace[match]
+            views[match] = op_at(trace, match)
     return trace, outputs, views
 
 
