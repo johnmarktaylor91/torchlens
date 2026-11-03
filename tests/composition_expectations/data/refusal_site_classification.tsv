@@ -1012,7 +1012,7 @@ torchlens.report._trace_summary:summary:CaptureNotActiveError::1	CONTRACTED	trac
 torchlens.report._summary_report:SummaryReport._rebuilt_or_refuse:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 result API on legacy-preset reports teaches the rebuilt grammar; typed + contract row
 torchlens.report._summary_report:SummaryReport.render:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 render style closed vocabulary; typed + contract row
 torchlens.report._summary_report:SummaryReport.print:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 print style closed vocabulary; typed + contract row
-torchlens.report._summary_result:_apply_filter:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 filter= accepts regex or callable; typed + contract row
+torchlens.report._summary_result:_row_matcher:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 where= accepts regex, selector or callable; typed + contract row
 torchlens.report._summary_result:build_rebuilt_summary:InvalidArgumentError::1	CONTRACTED	flop_convention_unavailable	F08 fma1 over an underivable MAC split refuses (never accepted-and-ignored); pre-existing code + contract row
 torchlens.report._summary_result:result_to_pandas:InvalidArgumentError::1	CONTRACTED	summary_option_invalid	F08 to_pandas scope closed vocabulary; typed + contract row
 torchlens.report._summary_result:result_to_markdown:InvalidArgumentError::1	CONTRACTED	summary_result_legacy	F08 markdown projection on legacy reports teaches the rebuilt grammar; typed + contract row

@@ -1200,9 +1200,7 @@ def resolve_view(
     if level == "op":
         rows = []
         for fact in index.pass_facts:
-            # The owning module rides on parent_address so where= can match it;
-            # op-grain views never elide, so no fold or protection rule reads it.
-            row = _op_row(fact, 1, fact.owner_address or None)
+            row = _op_row(fact, 1, fact.owner_address or None)  # owner feeds where=
             if len(fact.qualified_labels) == 1 and ":" in fact.qualified_labels[0]:
                 pass_index = fact.qualified_labels[0].rsplit(":", 1)[1]
                 layer_passes = sum(1 for f in index.pass_facts if f.label == fact.label)

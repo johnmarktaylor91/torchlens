@@ -561,24 +561,10 @@ def dead_neurons_rows(
         source_line = _source_line(op)
         out, reason = _safe_out(op)
         reason = reason or _tensor_unavailable_reason(out)
-        if reason is not None:
-            skipped += 1
-            rows.append(
-                {
-                    "op": label,
-                    "total_units": None,
-                    "dead_count": None,
-                    "dead_frac": None,
-                    "sample_dead_idx": [],
-                    "reason": reason,
-                    "source_line": source_line,
-                }
-            )
-            continue
-        if not isinstance(out, torch.Tensor):
+        if reason is None and not isinstance(out, torch.Tensor):
             skipped += 1
             continue
-        feature_dim = _feature_dim(trace, op, out, dim, axes)
+        feature_dim = None if reason else _feature_dim(trace, op, out, dim, axes)
         if feature_dim is None:
             skipped += 1
             rows.append(
@@ -588,7 +574,7 @@ def dead_neurons_rows(
                     "dead_count": None,
                     "dead_frac": None,
                     "sample_dead_idx": [],
-                    "reason": "invalid-dim",
+                    "reason": reason or "invalid-dim",
                     "source_line": source_line,
                 }
             )

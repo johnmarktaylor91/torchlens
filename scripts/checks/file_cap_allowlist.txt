@@ -1054,8 +1054,8 @@ torchlens/debug/_flops_vs_dispatch.py::flops_vs_dispatch	156
 torchlens/debug/_grad_fn_walk.py::walk_grad_fn	99
 torchlens/debug/_gradients.py::grad_health	76
 torchlens/debug/_gradients.py::gradient_flow_audit_rows	162
-torchlens/debug/_graph.py::_compare_rows	129
-torchlens/debug/_graph.py::dead_neurons_rows	93
+torchlens/debug/_graph.py::_compare_rows	126
+torchlens/debug/_graph.py::dead_neurons_rows	81
 torchlens/debug/_graph.py::lineage	81
 torchlens/debug/_graph_breaks.py::graph_breaks	68
 torchlens/debug/_infer_failure_classify.py::classify_nongeometric_failure	68
