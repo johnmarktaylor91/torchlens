@@ -281,7 +281,7 @@ def _is_torchlens_owned(obj: Any) -> bool:
 
 # Extras-gated "appliance" subpackages whose ``__init__`` imports heavy FOREIGN
 # third-party dependencies (rsatoolbox / brainscore_core for ``torchlens.neuro``,
-# IPython / jupyter_client for ``torchlens._notebook``). Unlike the rest of the
+# IPython / jupyter_client for ``torchlens.report._notebook``). Unlike the rest of the
 # first-party ``torchlens.*`` namespace -- which is safe to import + inspect
 # because it runs only our own already-installed code (see
 # ``_is_torchlens_owned`` above) -- importing one of these two runs foreign

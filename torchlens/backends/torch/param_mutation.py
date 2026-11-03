@@ -38,7 +38,16 @@ from ..._utils._torch_compat import HAS_PARAMETER_AS_SUBCLASS_IN_DISPATCH_MODE
 from ..._utils.hashing import make_random_barcode
 from ..._utils.tensor_leaves import iter_tensors
 from ..._utils.tensor_utils import get_memory_amount, safe_copy
-from ._tl import get_param_meta, set_param_meta
+from ._completeness_origins import internal_scalar_read
+from ._tl import (
+    get_param_meta,
+    get_tensor_label,
+    mutated_parameter_label,
+    set_param_meta,
+    set_tensor_label,
+    storage_alias_index_key,
+)
+from ._user_grad_fn import stamp_user_grad_fn
 from .buffer_writes import peek_buffer_write_tracker
 from .frozen_parameter_gradients import _forces_frozen_parameter_gradients
 
@@ -106,6 +115,143 @@ def is_prepared_parameter_receiver(trace: Any, value: Any) -> bool:
     if meta is None:
         return False
     return not getattr(trace._param_logs[meta.param_address], "_lazy_at_prep", False)
+
+
+def is_mutated_parameter_receiver(trace: Any, value: Any) -> bool:
+    """Return whether an in-place write to ``value`` becomes a Parameter's provenance.
+
+    True for a prepared Parameter initialized at prep (its reads after the write
+    bind to the mutation op) and for an attributed Parameter the forward itself
+    created: a module built inside ``forward`` initializes its Parameters with
+    in-place writes (``uniform_`` family) on storage a logged allocation produced
+    (``adopt_minted_parameter_label``), so the live Parameter takes the op's label
+    and the later read is attributed instead of orphaning the initializer ops. A
+    forward-created Parameter with no TorchLens label (a lazy module outside the
+    model tree, a Parameter minted from a captured value) has no provenance to
+    carry: its writes keep the plain-capture treatment and its read fails source
+    provenance honestly. A prepared lazy Parameter's in-forward materialization
+    stays out (see ``is_prepared_parameter_receiver``).
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace carrying the current-session parameter registry.
+    value:
+        Receiver of an in-place call.
+
+    Returns
+    -------
+    bool
+        ``True`` for an initialized-at-prep or attributed forward-created Parameter.
+    """
+
+    if not isinstance(value, torch.nn.Parameter):
+        return False
+    lazy_at_prep = _prepared_parameter_lazy_flag(trace, value)
+    if lazy_at_prep is None:
+        return get_tensor_label(value) is not None
+    return not lazy_at_prep
+
+
+def same_object_logging_copy(out_orig: Any) -> Any:
+    """Return the distinct tensor a same-object return is logged against.
+
+    Logging against the live receiver would clobber its label with the op's. The
+    copy carries the USER op's live autograd node: the safe copy's
+    own ``grad_fn`` is TorchLens's ``CloneBackward`` bookkeeping and must never
+    replace the operation's recorded autograd metadata (``grad_fn_class_*`` /
+    handle). A leaf receiver (``x.detach().requires_grad_(True)``) has no live
+    node: the sentinel makes the record carry ``None`` instead of the copy's
+    phantom handle. The ``grad_fn`` read is marked as TorchLens bookkeeping: for
+    a same-object in-place return the output IS the user's receiver (a registered
+    buffer for BN's ``num_batches_tracked.add_(1)``), and an unmarked read would
+    record a phantom declared-state fact.
+    """
+
+    with internal_scalar_read():
+        live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
+    logged = safe_copy(out_orig)
+    if isinstance(logged, torch.Tensor):
+        stamp_user_grad_fn(logged, live_user_grad_fn)
+    return logged
+
+
+def adopt_minted_parameter_label(trace: Any, param: Any, sources: tuple[Any, ...]) -> None:
+    """Give a forward-created Parameter the label of the tensor it was minted from.
+
+    ``nn.Parameter(data)`` (``Tensor._make_subclass``) returns a new Parameter
+    object on ``data``'s storage carrying none of ``data``'s TorchLens metadata.
+    When that tensor is a fresh allocation logged inside the captured pass (a
+    parentless internal source such as ``torch.empty`` in
+    ``nn.Linear.__init__``), the Parameter adopts its label: the Parameter's
+    first read or in-place initializer binds to the op that produced the storage
+    instead of consuming unattributed data. A Parameter minted from a captured
+    value (``nn.Parameter(y.detach())``) never adopts: TorchLens gives it no
+    provenance, so source-provenance validation keeps failing it honestly. A
+    prepared Parameter never qualifies, and neither does a pending lazy slot: its
+    materialization is constructor plumbing and the materialized Parameter
+    registers late (``late_register_forward_created_parameter``).
+
+    Parameters
+    ----------
+    trace:
+        Active capture trace.
+    param:
+        The Parameter the call returned or rebound.
+    sources:
+        Call arguments; the first internal-source plain tensor on ``param``'s storage is
+        the origin.
+    """
+
+    internal_sources = getattr(trace, "internal_source_ops", ())
+    if (
+        _is_uninitialized_param(param)
+        or not is_unregistered_parameter(trace, param)
+        or mutated_parameter_label(param) is not None
+    ):
+        return
+    for source in sources:
+        if isinstance(source, torch.Tensor) and not isinstance(source, torch.nn.Parameter):
+            label = get_tensor_label(source)
+            if label is not None and label in internal_sources and _same_storage(source, param):
+                set_tensor_label(param, label)
+                return
+
+
+def _same_storage(a: torch.Tensor, b: torch.Tensor) -> bool:
+    """Return whether two tensors are on one storage (unreadable storage fails closed)."""
+
+    try:
+        key_a = storage_alias_index_key(a.untyped_storage())
+        key_b = storage_alias_index_key(b.untyped_storage())
+    except (RuntimeError, ValueError, AttributeError):
+        return False
+    return key_a is not None and key_a == key_b
+
+
+def receiver_mutation_label(args: tuple[Any, ...]) -> str | None:
+    """Return the mutation label a Parameter receiver carries before a call runs."""
+
+    if not args or not isinstance(args[0], torch.nn.Parameter):
+        return None
+    return mutated_parameter_label(args[0])
+
+
+def nested_write_relabeled_receiver(receiver: Any, label_before: str | None) -> bool:
+    """Return whether a nested in-place write labeled ``receiver`` during this call.
+
+    Initializers nest: ``kaiming_uniform_`` and ``init.uniform_`` each end in the
+    bottom-level ``Tensor.uniform_`` write on the same Parameter. That write is the
+    recorded op, and it labels the live Parameter; the enclosing non-bottom-level
+    call then returns the same Parameter and must not be logged as a second op
+    reading the first (the second op would be insensitive to its parent and
+    replay would run the initializer twice).
+    """
+
+    if not isinstance(receiver, torch.nn.Parameter):
+        return False
+    label_now = mutated_parameter_label(receiver)
+    return label_now is not None and label_now != label_before
 
 
 @contextmanager

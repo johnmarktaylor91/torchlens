@@ -60,7 +60,6 @@ from ..._utils.tensor_utils import (
     disarm_deferred_payload_window,
     materialize_deferred_for_call,
     print_override,
-    safe_copy,
 )
 from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
 from ._completeness_boundaries import completeness_scope_for_wrapper
@@ -138,13 +137,17 @@ from .escape_detection import (
     reset_detector_tables,
 )
 from .param_mutation import (
+    adopt_minted_parameter_label as _adopt_minted_parameter_label,
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
-    is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    is_mutated_parameter_receiver as _is_mutated_parameter_receiver,
     late_register_forward_created_parameter,
     materialized_lazy_slots,
+    nested_write_relabeled_receiver as _nested_write_relabeled_receiver,
     note_lazy_slot_materializing,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
+    receiver_mutation_label as _receiver_mutation_label,
+    same_object_logging_copy as _same_object_logging_copy,
 )
 from .sources import log_closure_constant_if_known, log_source_tensor
 
@@ -1361,6 +1364,7 @@ def torch_func_decorator(
             return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
+        receiver_label_before = _receiver_mutation_label(args)
         if trace._options_save_args:
             from ._ops_arguments import _copy_saved_call_args
 
@@ -1528,6 +1532,9 @@ def torch_func_decorator(
             autocast_state=autocast_state,
         )
         is_bottom_level_func = trace._wrapper_runtime_ws.current_func_barcode == func_call_barcode
+        if isinstance(out_orig, torch.nn.Parameter):
+            # ``Parameter(data)`` minted in the pass is unlogged; it adopts data's label.
+            _adopt_minted_parameter_label(trace, out_orig, args)
 
         # __setitem__, zero_, __delitem__ modify in-place and return None;
         # treat the first arg (the modified tensor) as the output. Mutating
@@ -1568,10 +1575,10 @@ def torch_func_decorator(
         # too: a live intervention replacing its output must be copied into the
         # Parameter (``_apply_inplace_replacement_to_mutated_storage``) so later
         # reads see it, as for any labeled in-place receiver.
-        mutates_prepared_parameter = (
+        mutates_parameter_receiver = (
             was_inplace
             and not is_storage_rebinding_setter
-            and _is_prepared_parameter_receiver(trace, args[0])
+            and _is_mutated_parameter_receiver(trace, args[0])
         )
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
@@ -1580,31 +1587,20 @@ def torch_func_decorator(
         # otherwise the module exit re-reads the input's label and the boundary
         # node (e.g. identity_1_2) never attaches to the module's output_ops.
         if same_object_returned:
-            # Create a distinct tensor object for logging — otherwise attaching
-            # _tl.label_raw on the output would clobber the input's label.
-            # Snapshot the USER op's live autograd node first (round-31 M5):
-            # the safe copy's grad_fn is TorchLens's own ``CloneBackward``
-            # bookkeeping, and it must never replace the operation's recorded
-            # autograd metadata (``grad_fn_class_*`` / handle).
-            # TorchLens bookkeeping read: for a same-object in-place return the
-            # output IS the user's receiver (a registered buffer for BN's
-            # ``num_batches_tracked.add_(1)``), so an unmarked ``grad_fn`` read
-            # would record a phantom declared-state fact (r65 unread-bit).
-            with internal_scalar_read():
-                live_user_grad_fn = out_orig.grad_fn if isinstance(out_orig, torch.Tensor) else None
-            out_orig = safe_copy(out_orig)
-            if live_user_grad_fn is not None and isinstance(out_orig, torch.Tensor):
-                try:
-                    setattr(out_orig, "tl_user_grad_fn", live_user_grad_fn)
-                except AttributeError:
-                    pass
-            out_orig = _parameter_mutation_output_for_logging(
-                trace,
-                out_orig,
-                source=args[0],
-                was_inplace=was_inplace,
-                is_storage_rebind=is_storage_rebinding_setter,
-            )
+            out_orig = _same_object_logging_copy(out_orig)
+            # A nested bottom-level write already recorded this Parameter
+            # mutation; the enclosing initializer keeps its Parameter return
+            # and logs nothing (``nested_write_relabeled_receiver``).
+            if is_bottom_level_func or not (
+                was_inplace and _nested_write_relabeled_receiver(args[0], receiver_label_before)
+            ):
+                out_orig = _parameter_mutation_output_for_logging(
+                    trace,
+                    out_orig,
+                    source=args[0],
+                    was_inplace=was_inplace,
+                    is_storage_rebind=is_storage_rebinding_setter,
+                )
             # A storage rebind is recorded as the non-mutating ``detach(rhs)`` call.
             if not is_storage_rebinding_setter:
                 _stamp_same_object_mutation(out_orig, args[0], mutation_signature)
@@ -1754,7 +1750,7 @@ def torch_func_decorator(
                     if isinstance(return_value, torch.Tensor):
                         set_tensor_label(return_value, out_label)
                         _register_inplace_live_grad_hook(trace, return_value, out_label)
-            elif mutates_prepared_parameter and not force_distinct_return:
+            elif mutates_parameter_receiver and not force_distinct_return:
                 # Unhooked, or a live intervention whose replacement was copied
                 # into the Parameter: either way the Parameter now holds the
                 # logged op's output, so later reads bind to that op.
@@ -1848,7 +1844,7 @@ def torch_func_decorator(
         if is_barcode_transparent and enclosing_barcode:
             trace._wrapper_runtime_ws.current_func_barcode = enclosing_barcode
 
-        if out_orig is not out_before_hooks and not mutates_prepared_parameter:
+        if out_orig is not out_before_hooks and not mutates_parameter_receiver:
             return out_orig
         if force_distinct_return:
             return out_orig

@@ -22,6 +22,11 @@
   `tl.intervention.population(source, *, origin, ...)` builds the provenance-stamped donor
   population, a `tl.intervention.Population` (`origin=` is required; `.members`, `.origin`,
   `.identity`, `.mean(dim=None, ...)`, `.std(dim=None, ...)`).
+  Each realized draw of a stochastic edit is a `tl.intervention.SamplingRecord` (exported
+  beside `FireRecord`; fields `verb`, `base_seed`, `derived_seed`, `share_draw`,
+  `logical_firing_coordinate`, `eligible_count`, `population_count`, `population_identity`,
+  `donor_group_id`, `draw_indices`, `realized_draw_digest`), carried on
+  `FireRecord.sampling`.
 - Value helpers `tl.add_noise` and `tl.project_out` take `allow_shape_change=`. There are no
   gradient-only helpers: `tl.grad(site)` addresses the gradient of the site's OUTPUT, and the
   ordinary edits (`tl.scale`, `tl.zero_ablate`, `tl.clamp`, `tl.add_noise`, `tl.clip_norm(max_norm,
@@ -418,10 +423,10 @@
   reads `status.state == "passed"` on a plain torch module.
 
   Each backend ships a measured scorecard (`torchlens/backends/<name>/scorecard.json`, checked by
-  `python -m torchlens.conformance.scorecard --backend <name> --check` in its CI leg);
+  `python -m tests.conformance.scorecard --backend <name> --check` in its CI leg);
   `tl.report.doctor()` shows it as the `backend_scorecard:<name>` row;
-  `torchlens.conformance.graduation_report(name)` returns the
-  advisory six-item `GraduationReport`. Per-backend pages: `docs/backends/<name>.md`.
+  `python -m tests.conformance.scorecard --backend <name> --graduation` prints the
+  advisory six-item graduation report. Per-backend pages: `docs/backends/<name>.md`.
 - TensorFlow is available as `backend="tf"` / `backend="tensorflow"` for the Keras-3 / TF>=2.16
   preview when `keras.backend.backend() == "tensorflow"`. The shipped path is eager live capture
   with `op_callbacks` as the primary mechanism: real values, real taken-branch control flow,
@@ -649,7 +654,7 @@
   every payload into RAM while the bundle kept the first capture (behaviour-net IO-8). Capture
   again with `to_disk` to a new path or without `to_disk` and run that trace; a trace loaded from
   the bundle keeps its loaded providers. `Trace.save` / `Bundle.save` to an existing path refuse
-  `bundle_save_failed` without `overwrite=True` (no builtin `FileExistsError`).
+  `bundle_path_exists` without `overwrite=True` (no builtin `FileExistsError`).
 - `torch.compile` coexists with capture as a boundary UPGRADE on torch >= 2.6 and a graceful
   boundary below. Behind the feature-detected `HAS_SET_STANCE` flag, every capture holds the public
   `torch.compiler.set_stance("force_eager")` scoped to the forward (skipped when Dynamo was never
@@ -1308,14 +1313,8 @@
 - ECOSYSTEM RUNTIME (F32; DOCUMENTED-UNSTABLE): `torchlens._ecosystem` --
   `plugins` (entry-point discovery that NEVER executes third-party code at discovery; kill
   switch). A file saved by torchlens 2.x refuses at `tl.load` with one typed error.
-  `torchlens.conformance` holds the C0-C2 packs, plus the preview-backend
-  scorecard (DOCUMENTED-UNSTABLE): `preview_scorecard`, `PreviewScorecard`
-  (v2: `maturity`, `framework_requirement`, `capabilities`, `roster_groups`,
-  `graduation`), `ScorecardCell`, `PREVIEW_BACKENDS`, `graduation_report`
-  (`GraduationReport`, `GraduationItem`), `RosterModel.expected_op_kinds`
-  (the op-inventory check that fails when a backend silently drops an op) and the
-  protocol roster fields `RosterModel.expected_intermediates`,
-  `RosterModel.has_constants`, `RosterModel.random_init` and `RosterModel.group`.
+  `tests/conformance/` (a test-side harness, not shipped in the wheel) holds the C0-C2 packs and the
+  preview-backend scorecard builder; the shipped records stay in `torchlens/backends/<name>/scorecard.json`.
 - LIVE NARRATION (F28; DOCUMENTED-UNSTABLE): `narrate=` on `tl.trace`/`tl.record`
   streams compact per-op narration (the torchsnooper niche on the capture
   substrate, 3-4x cheaper than settrace); `torchlens._snoop` owns
@@ -1810,9 +1809,22 @@ object's docstring):
 - `tl.debug.BackwardNanReport`: Result of `bisect_nan_backward`.
 - `tl.debug.BisectNanReport`: Result returned by `bisect_nan`.
 - `tl.debug.BisectPrecisionReport`: Result of `bisect_precision`.
+- `tl.debug.CheckFinding`: One immutable finding recorded by a training-loop check.
+- `tl.debug.CheckReport`: Deterministically finalized report of the findings a checks session collected.
+- `tl.debug.ChecksSession`: Standalone, capture-free registry of training-loop checks bound to a model and optimizer.
+- `tl.debug.ClipLedger`: Clip-saturation evidence in three tiers, never a silent guess.
+- `tl.debug.ClipLedgerSnapshot`: Frozen clip-saturation facts, tiered and honest.
 - `tl.debug.FindNanReport`: Structured first-non-finite diagnostic returned by `find_nan`.
 - `tl.debug.GuessInputShapeReport`: Result returned by `guess_input_shape`.
 - `tl.debug.LineageReport`: Result returned by `lineage`.
+- `tl.debug.LivenessProbe`: Liveness statistic recorder; never a verdict.
+- `tl.debug.OptimizerFacts`: Adapter-read facts about one optimizer.
+- `tl.debug.RangeProbe`: Opt-in live semantic range check per site.
+- `tl.debug.ScaleLedger`: The decrement-counting mixed-precision skip ledger.
+- `tl.debug.ScaleLedgerSnapshot`: Frozen skip and scale ledger facts for reports and events.
+- `tl.debug.ScanRow`: Health facts for one unique tensor in a parameter scan.
+- `tl.debug.Watchdog`: Death-spiral watchdog: warns when no step is ever accepted.
+- `tl.debug.WatchdogSnapshot`: Frozen death-spiral watchdog state.
 - `tl.differential.DiffReport`: The settled two-capture differential: rows plus honest totals.
 - `tl.differential.diff`: Settle two captures into the guarded differential projection.
 - `tl.distributed.is_vetted_build`: Capability probe: does this torch build match a censused snapshot?

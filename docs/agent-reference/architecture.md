@@ -14,7 +14,7 @@ Key entry points:
   `torchlens/backends/_protocols/<name>.py`), `FrameworkRequirement`, `REFUSAL_CODES`,
   `VALIDATION_REASONS` and the `maturity` labels. Shared rules: constants
   (`backends/_constants.py`, called from `backends/_finalize.py`) and realize-once for lazy
-  frameworks. The conformance suite (`torchlens/conformance/`) scores every backend with the
+  frameworks. The conformance suite (`tests/conformance/`) scores every backend with the
   same case ids; the record ships as `torchlens/backends/<name>/scorecard.json` and surfaces as
   `tl.report.doctor()` rows built by `backends/_scorecard_rows.py`. `CaptureBackend`
   (`backends/_protocol.py`) stays torch's internal orchestration adapter.

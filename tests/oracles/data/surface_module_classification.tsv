@@ -21,12 +21,10 @@ bridge	submodule
 bundle	submodule
 callbacks	submodule
 changed	declared
-checks	submodule
 clamp	declared
 clear_cache	declared
 clip_norm	declared
 compat	submodule
-conformance	submodule
 dataset_extraction	submodule
 dead	declared
 debug	submodule

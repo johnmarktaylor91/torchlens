@@ -251,7 +251,7 @@ class PartialTrace:
             in the always-visible header, never folded.
         """
 
-        from .._notebook.cards import partial_repr_html
+        from ..report._notebook.cards import partial_repr_html
 
         return partial_repr_html(self)
 

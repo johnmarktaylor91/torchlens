@@ -48,9 +48,9 @@ EDIT_PRODUCT_MATRIX: dict[str, EditCell] = {
     "trace_live_fork": EditCell("WORKS"),
     "trace_live_no_fork": EditCell("WORKS_WITH_DISCLOSURE"),  # TraceMutationWarning
     "trace_loaded": EditCell(
-        "REFUSES_CODELESS",
+        "REFUSES_TYPED",
+        code="replay_loaded_trace_has_no_callables",
         exc="ReplayPreconditionError",
-        gap="DIGEST-AUDIT fields-clobber: intervention ctor destroys .fields",
     ),
     "trace_structure_only": EditCell(
         "REFUSES_TYPED",
