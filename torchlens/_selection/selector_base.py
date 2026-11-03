@@ -39,7 +39,7 @@ class BaseSelector:
     selector_kind: SelectorKind
     selector_value: Any
 
-    def __and__(self, other: SelectorLike) -> CompositeSelector:
+    def __and__(self, other: SelectorLike) -> BaseSelector:
         """Return a selector that matches the intersection of two selectors.
 
         Parameters
@@ -49,11 +49,14 @@ class BaseSelector:
 
         Returns
         -------
-        CompositeSelector
+        BaseSelector
             Intersection selector. A non-selector operand that implements
             ``__selection__`` defers to that object's reflected operator, so
             ``selector & rf_box`` composes as a Selection; junk operands keep
-            their shipped refusals.
+            their shipped refusals. ``tl.module(address) & tl.head(i)`` (either
+            order) folds into the facet selector scoped to that module, the
+            same selector as ``tl.head(i).in_module(address)``, so it works at
+            every door a facet selector does.
         """
 
         if not isinstance(other, BaseSelector) and hasattr(other, "__selection__"):
@@ -582,6 +585,41 @@ def _classify_selector_direction(
     return "forward" if universe == "activation" else "backward"
 
 
+def _fold_module_facet(left: Any, right: Any) -> BaseSelector | None:
+    """Fold ``module(address) & facet`` (either order) into the scoped facet selector.
+
+    Returns ``None`` when the operands are not one module selector and one
+    facet selector. A facet selector already scoped to another module cannot
+    also lie in this one.
+
+    Raises
+    ------
+    SelectorCompositionError
+        ``selector_module_facet_scope_conflict`` when the facet selector is
+        scoped to a different module address.
+    """
+
+    kinds = {
+        getattr(left, "selector_kind", None): left,
+        getattr(right, "selector_kind", None): right,
+    }
+    module, facet = kinds.get("module"), kinds.get("facet")
+    if module is None or facet is None or len(kinds) != 2:
+        return None
+    address = str(module.selector_value)
+    scoped = getattr(facet, "module_address", None)
+    if scoped is not None and scoped != address:
+        raise SelectorCompositionError(
+            f"tl.module({address!r}) & a facet selector already scoped to {scoped!r} names "
+            "no site: a facet lives in one module.",
+            code="selector_module_facet_scope_conflict",
+            remedy="drop one of the two module scopes",
+            module_address=address,
+            facet_module_address=scoped,
+        )
+    return type(facet)(facet.name, head_index=facet.head_index, module_address=address)
+
+
 def _flatten_same_operator(
     operator: str, left: SelectorLike, right: SelectorLike
 ) -> tuple[SelectorLike, ...]:
@@ -684,15 +722,21 @@ def _memo_safe(operand: Any) -> bool:
     return isinstance(operand, (BaseSelector, str))
 
 
-def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> CompositeSelector:
+def _compose(operator: Literal["and", "or"], left: Any, right: Any) -> BaseSelector:
     """Validate ``left <operator> right`` and build its flat composite.
 
     The composite memoises the facts ``_check_composition`` derived, so the
     next chained operator reads them instead of re-walking every accumulated
     child (an n-step chain was quadratic). They equal a fresh flat
     classification: the ``&`` fold and the ``|`` join combine per operand.
+    A module selector intersected with a facet selector folds into the facet
+    selector scoped to that module instead of a composite.
     """
 
+    if operator == "and":
+        folded = _fold_module_facet(left, right)
+        if folded is not None:
+            return folded
     facts = _check_composition(left, right, operator=operator)
     composite = CompositeSelector(operator, _flatten_same_operator(operator, left, right))
     if _memo_safe(left) and _memo_safe(right):

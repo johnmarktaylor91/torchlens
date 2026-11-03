@@ -1211,7 +1211,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.head(i)` writes head `i` of every matching facet in every module and says how many sites
   it writes (a `TorchLensWarning` coded `facet_selector_fanout`, with `fields["site_count"]`;
   36 on a 12-layer GPT-2: q, k and v in each layer); `.in_module(address)` scopes it to one
-  module;
+  module, and so does composition: `tl.module(address) & tl.head(i)` (either order) is that
+  same scoped facet selector, accepted wherever a selector is (`trace[sel]`, `tl.when`, `do`,
+  `attach_hooks`); a facet already scoped to another module refuses
+  `selector_module_facet_scope_conflict`;
   `tl.func_transform` selects `torch.func` and `torch.autograd` transform boundary ops
   (including `autogradgrad`, an in-forward `torch.autograd.grad` call, with
   `transform_kind="autograd.grad"`; `autogradbackward`, an in-forward `loss.backward()` or
@@ -1272,8 +1275,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `tl.grad(s) & tl.in_backward_pass(n)` restricts the gradient branch to pass `n`. `&` across
   universes refuses `selector_cross_universe_and` (`tl.grad(s) & s`, `s & tl.grad_fn(...)`,
   `tl.grad(s) & tl.grad_fn(...)`), `~` over a union that spans universes refuses
-  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), and a pass
-  qualifier on a bare activation selector refuses `selector_signal_mismatch`. A gradient site resolves its inner selector exactly as the
+  `selector_cross_universe_not` (negate inside each branch: `tl.grad(~a) | ~a`), a pass
+  qualifier on a bare activation selector refuses `selector_signal_mismatch`, and
+  `tl.module(a) & tl.head(i).in_module(b)` with `a != b` refuses
+  `selector_module_facet_scope_conflict`. A gradient site resolves its inner selector exactly as the
   activation door does (zero matches refuse); a matched op the loss never reaches is a
   `no_fire`, never a resolution error and never a zero tensor. `Trace.find_sites(tl.grad(s))`
   returns the matched forward sites with `signal="backward"`; its `.to_dataframe()` table
