@@ -107,3 +107,6 @@ The 3.0 runnable writer uses `format3/runnable.py` and its `runnable_families.py
 It shares the artifact tensor-key counter with `format3/payloads.py`; the descriptor and
 state families live under `runnable/`. The storage and persistence enums live in the
 leaf `_field_policy.py`, with the record package preserving its `StorageKind` re-export.
+Save preparation lives in `_save_gates.py`; runnable wire storage has no record or execution
+binding dependency. Runtime component attachment and family binding belong to
+`_format3_runnable_bind.py`, above the pure `format3/runnable.py` carrier.

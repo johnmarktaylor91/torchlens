@@ -72,7 +72,9 @@ from ._safe_unpickle import SafeBundleUnpickler
 from ._save_gates import (
     _refuse_edge_intervened_save,
     _refuse_shard_local_erasure,
+    _runnable_write_context,
     _save_bundle_via_container_door,
+    _stamped_descriptor,
 )
 from .format3 import (
     contract as format3_contract,
@@ -601,7 +603,7 @@ def save(
             nonpersistent_buffer_blob_specs,
             weight_blob_specs,
             activation_blob_specs,
-        ) = format3_runnable._stamped_descriptor(
+        ) = _stamped_descriptor(
             trace, include_weights=include_weights, include_activations=include_activations
         )
     backend_name = str(trace._provenance_backend if is_live_trace(trace) else "torch")
@@ -755,16 +757,15 @@ def save(
         runnable_entry = None
         if sparse_run_descriptor is not None:
             runnable_entry = format3_runnable.write_runnable(
-                trace,
                 tmp_path,
-                include_weights=include_weights,
-                include_activations=include_activations,
-                counter=payload_counter,
-                prepared=(
-                    sparse_run_descriptor,
-                    nonpersistent_buffer_blob_specs,
-                    weight_blob_specs,
-                    activation_blob_specs,
+                context=_runnable_write_context(
+                    (
+                        sparse_run_descriptor,
+                        nonpersistent_buffer_blob_specs,
+                        weight_blob_specs,
+                        activation_blob_specs,
+                    ),
+                    payload_counter,
                 ),
             )
             payload_store.writer(TORCH_CODEC)

@@ -1,7 +1,7 @@
 """The bundle container references member envelopes and keeps relations as JSON.
 
 ``torchlens/_io/format3/container.py`` writes each member trace as an artifact
-of its own and records, in ``bundle.json``, the member's path plus the sha256 of
+of its own and records, in ``relations.json``, the member's path plus the sha256 of
 its manifest. These tests prove that a bundle of two traces joined by a
 ``forked_from`` relation round trips through ``Bundle.save`` and ``tl.load``,
 that nothing in the container is a pickle, and that a member replaced, edited or
@@ -10,6 +10,7 @@ referenced with an unknown key refuses with the contract's typed codes.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -70,7 +71,15 @@ def _index(target: Path) -> dict[str, Any]:
 def _write_index(target: Path, index: dict[str, Any]) -> None:
     """Rewrite the bundle index."""
 
-    (target / container.BUNDLE_INDEX_FILE).write_text(json.dumps(index), encoding="utf-8")
+    payload = json.dumps(index).encode("utf-8")
+    (target / container.BUNDLE_INDEX_FILE).write_bytes(payload)
+    manifest_path = target / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["files"][container.BUNDLE_INDEX_FILE] = {
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "bytes": len(payload),
+    }
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
 
 
 def _load_code(target: Path) -> str:
@@ -105,25 +114,9 @@ def test_forked_bundle_round_trips(tmp_path: Path) -> None:
         assert [layer.label for layer in loaded.members[name].layers] == live_layers
 
 
-def _writer_built() -> bool:
-    """Return whether this checkout's 3.0 trace writer door is built."""
-
-    from torchlens._io.format3 import writer as writer3
-
-    try:
-        writer3.write_trace(None, "unused")
-    except ArtifactError as exc:
-        return "is not built in this checkout" not in str(exc)
-    except Exception:  # noqa: BLE001 - a built door refuses ``None`` in its own way
-        return True
-    return True
-
-
 def test_bundle_container_holds_no_pickle(tmp_path: Path) -> None:
-    """No file in a 3.0 bundle artifact is a pickle (tlspec 11 members still pickle records)."""
+    """No file in a 3.0 bundle artifact is a pickle, including its members."""
 
-    if not _writer_built():
-        pytest.skip("the 3.0 trace writer is not built in this checkout")
     _bundle, target = _saved(tmp_path)
     for path in target.rglob("*"):
         assert path.suffix not in {".pkl", ".pickle", ".pt"}, path

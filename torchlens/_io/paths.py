@@ -6,7 +6,7 @@ import uuid
 from pathlib import Path
 from typing import Any, TypeAlias
 
-from . import ArtifactError
+from .format_errors import ArtifactError
 
 ExceptionType: TypeAlias = type[Exception]
 

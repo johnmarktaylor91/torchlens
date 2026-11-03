@@ -56,7 +56,7 @@ build streams disjoint write territories (writer: `writer.py`, `payloads.py`, `v
 | `reader.py` | `read_manifest`, `validate_artifact`, `load_trace`, `load_bundle`, `load_intervention_recipe`: manifest first, digests, record tables through the decoder, record construction, accessor rebuild, grouping settlement | 750 | reader |
 | `route.py` | the `bundle.load` switch into the 3.0 format: the root test and the door dispatch, kept outside `bundle.py` and its import cycle | 100 | reader |
 | `validate.py` | cross-record invariants after decode (section 9): site keys, structure-only coherence, checkpoint windows, edge carriers, graph structure, kernel relations, identity facts, injection provenance, evidence facts | 600 | reader |
-| `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | runnable |
+| `runnable.py` | thin adapter: descriptor JSON and state chunks under `runnable/`; delegates to `_io/runnable.py` (producer) and `_io/runnable_load.py` (loader), which keep their frozen contracts | 200 | Pure wire descriptor and state families; save preparation and runtime binding remain above the carrier |
 | `runnable_families.py` | Fixed runnable family names, shared chunk writer, checked tensor references |
 | `container.py` | Bundle members, manifest bindings and relations |
 

@@ -17,6 +17,14 @@ from typing import Any
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import InvalidArgumentError
+from . import bundle as tlspec_bundle
+from .format3.runnable import _WriteContext
+from .runnable import (
+    require_sparse_run_descriptor,
+    sparse_descriptor_to_json,
+    with_activation_payload,
+    with_weight_payload,
+)
 
 
 def _refuse_edge_intervened_save(trace: Any) -> None:
@@ -183,3 +191,54 @@ def _save_bundle_via_container_door(
             options=tuple(unsupported),
         )
     bundle.save(path, level=level, overwrite=overwrite)
+
+
+def _stamped_descriptor(
+    trace: Any, *, include_weights: bool, include_activations: bool
+) -> tuple[Any, list[Any], list[Any], list[Any]]:
+    """Produce and payload-stamp the descriptor exactly as the tlspec 11 save did.
+
+    Returns the descriptor and the buffer, weight and activation blob specs.
+    """
+
+    descriptor = require_sparse_run_descriptor(trace)
+    buffer_specs = tlspec_bundle._capture_nonpersistent_buffer_blob_specs(trace, descriptor)
+    if buffer_specs:
+        tlspec_bundle._warn_nonpersistent_buffer_disclosure_once()
+    weight_specs: list[Any] = []
+    activation_specs: list[Any] = []
+    if include_weights:
+        weight_specs = tlspec_bundle._capture_weight_blob_specs(trace, descriptor)
+        descriptor = with_weight_payload(descriptor)
+    if include_activations:
+        (activation_specs, members, input_digests, state_digests, fingerprints) = (
+            tlspec_bundle._capture_activation_blob_specs(trace, descriptor)
+        )
+        if members and not input_digests:
+            tlspec_bundle._warn_unattestable_activation_archive_once()
+        descriptor = with_activation_payload(
+            descriptor,
+            members=members,
+            original_input_digests=input_digests,
+            capture_state_digests=state_digests,
+            input_fingerprints=fingerprints,
+        )
+    return descriptor, buffer_specs, weight_specs, activation_specs
+
+
+def _runnable_write_context(
+    prepared: tuple[Any, list[Any], list[Any], list[Any]], counter: list[int]
+) -> _WriteContext:
+    """Project a prepared runnable save onto the pure wire carrier's input."""
+
+    descriptor, buffers, weights, activations = prepared
+    layers = descriptor.payload_layers
+    return _WriteContext(
+        counter=counter,
+        descriptor=sparse_descriptor_to_json(descriptor),
+        families=(
+            ("state_dict", weights, str(layers.weights.schema), False),
+            ("buffers", buffers, str(layers.nonpersistent_buffers.schema), False),
+            ("activations", activations, str(layers.activations.schema), True),
+        ),
+    )
