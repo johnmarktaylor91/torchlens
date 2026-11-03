@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._utils._torch_compat import get_eval_batch_norm_mean_residual_support
 from torchlens.options import CaptureOptions
 from torchlens.validation import validate_forward_pass
 from torchlens.validation.core import (
@@ -218,6 +219,11 @@ def _hole_case_scale_overflows_after_unit_step() -> tuple[nn.Module, torch.Tenso
     return _bn2d(weight=torch.full((4,), 1e37)), torch.zeros(2, 4, 3, 3)
 
 
+#: Cases whose live running_var edge is only observable when the CPU eval kernel leaves a
+#: residual at a non-zero mean (``HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL``): with no weight to
+#: scale it, Apple ARM's kernel cancels the mean exactly and the output ignores running_var.
+KERNEL_RESIDUAL_CASES = {_hole_case_nonzero_mean_affine_false}
+
 HOLE_CASES = [
     pytest.param(_hole_case_var_below_unit_step, id="var-below-unit-step"),
     pytest.param(_hole_case_large_output, id="widening-by-output-scale"),
@@ -243,10 +249,28 @@ def test_dead_running_var_edge_a_live_edge_would_expose_still_fails(make) -> Non
     trace = _capture(model, x)
     op = _bn_op(trace)
     label = op.parent_arg_positions["args"][4]
-    assert _live_edge_changes(trace, op, label), "case no longer exposes a live edge"
+    live_edge_expected = (
+        make not in KERNEL_RESIDUAL_CASES or get_eval_batch_norm_mean_residual_support()
+    )
+    live_edge_changes = bool(_live_edge_changes(trace, op, label))
+    assert live_edge_changes == live_edge_expected, (
+        "case no longer exposes a live edge"
+        if live_edge_expected
+        else "this kernel cancels the mean exactly, yet the live edge moved"
+    )
     _freeze(op)
     result = _edge(trace, op, 4)
     assert result.decision == "failed", (result.decision, result.reason)
+
+
+def test_eval_bn_mean_residual_flag_matches_this_kernel() -> None:
+    """``HAS_EVAL_BATCH_NORM_MEAN_RESIDUAL`` agrees with the affine-free hole case measured here."""
+
+    model, x = _hole_case_nonzero_mean_affine_false()
+    base = model(x)
+    model.running_var.add_(1.0)
+    moved = model(x)
+    assert (not torch.equal(base, moved)) == get_eval_batch_norm_mean_residual_support()
 
 
 def _sound_case_zero_weight_channel_off_mean() -> tuple[nn.Module, torch.Tensor]:

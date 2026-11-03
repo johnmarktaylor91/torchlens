@@ -73,6 +73,20 @@ class _Offsets(nn.Module):
         return self.out(hidden) * self.scale
 
 
+def _hop_dtype(device_type: str) -> torch.dtype:
+    """Return the dtype the hop crosses to: float64 where the device has it, else float16."""
+
+    try:
+        torch.zeros((), device=device_type).to(torch.float64)
+    except (TypeError, RuntimeError):
+        # MPS has no float64 kernels ("Cannot convert a MPS Tensor to float64").
+        return torch.float16
+    return torch.float64
+
+
+_HOP_DTYPES = {name: _hop_dtype(name) for name in ("cpu", *([_ACCEL] if _ACCEL else []))}
+
+
 class _DtypeHop(nn.Module):
     """An activation changes dtype mid-forward and back (CPU stand-in for a device hop)."""
 
@@ -81,7 +95,7 @@ class _DtypeHop(nn.Module):
         self.lin = nn.Linear(4, 4)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        wide = torch.relu(self.lin(x)).to(torch.float64)
+        wide = torch.relu(self.lin(x)).to(_HOP_DTYPES[x.device.type])
         return (wide * 3.0 + 1.0).to(torch.float32)
 
 

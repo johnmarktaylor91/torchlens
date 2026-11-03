@@ -142,13 +142,23 @@ def fresh() -> dict[str, Any]:
     return reference
 
 
-def _assert_matches_fresh(trace: Any, fresh: dict[str, Any]) -> None:
-    """Assert the trace saved exactly what the fresh steered capture saved."""
+def _assert_matches_fresh(trace: Any, fresh: dict[str, Any], *, exact: bool = True) -> None:
+    """Assert the trace saved what the fresh steered capture saved.
+
+    ``exact`` compares bit for bit (the same ops on the same whole batch). A chunked
+    rerun runs per-sample GEMMs instead of the whole-batch GEMM, and BLAS backends
+    (Apple Accelerate measurably) round those differently by a few ulps, so a
+    chunked rerun compares at ``torch.testing.assert_close``'s default float32
+    tolerance, never wider.
+    """
 
     assert _saved_labels(trace) == fresh["saved"]
     outs = _site_outs(trace)
     for address, expected in fresh["outs"].items():
-        assert torch.equal(outs[address], expected), address
+        if exact:
+            assert torch.equal(outs[address], expected), address
+        else:
+            torch.testing.assert_close(outs[address], expected, msg=address)
 
 
 @pytest.mark.smoke
@@ -206,7 +216,7 @@ def test_chunked_rerun_resaves_the_requested_sites(fresh: dict[str, Any]) -> Non
     trace = tl.trace(model, x, save=_save())
     trace.attach_hooks(tl.module(_SITE), _steer(), confirm_mutation=True)
     _rerun(trace, model, x, replay=tl.options.ReplayOptions(chunk_size=1))
-    _assert_matches_fresh(trace, fresh)
+    _assert_matches_fresh(trace, fresh, exact=False)
 
 
 def test_rerun_after_set_resaves_the_requested_sites(fresh: dict[str, Any]) -> None:
