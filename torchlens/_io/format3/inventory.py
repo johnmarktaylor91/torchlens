@@ -8,14 +8,33 @@ persist, by owning record class, so a user can see everything without loading an
 
 from __future__ import annotations
 
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
+from .._json import loads_bounded, read_bytes_bounded
+from ..format_errors import ArtifactError
 from . import contract
-from ._tables import _unknown_columns
-from .validate import read_json_file
 
 __all__ = ["inspect_record_tables"]
+
+_REMEDY = "re-save the trace with trace.save()"
+
+
+def _read_json_file(path: Path, *, code: str, what: str) -> Any:
+    """Parse one JSON file under the bounded reader; an unreadable file refuses typed."""
+
+    try:
+        return loads_bounded(read_bytes_bounded(path).decode("utf-8"))
+    except (OSError, ValueError, ArtifactError) as exc:
+        if isinstance(exc, FileNotFoundError) and what == "manifest":
+            code = contract.REFUSAL_CODES["manifest_missing"]
+        raise ArtifactError(
+            f"Artifact {what} {path} could not be read: {exc}. Remedy: {_REMEDY}.",
+            code=code,
+            remedy=_REMEDY,
+            file_path=str(path),
+        ) from exc
 
 
 def inspect_record_tables(root: Path) -> dict[str, Any]:
@@ -34,7 +53,11 @@ def inspect_record_tables(root: Path) -> dict[str, Any]:
         ``ungoverned``), ``unknown_field_total`` and ``governed_record_types``.
     """
 
-    manifest, _ = read_json_file(
+    # The column bindings live with the record classes, a higher layer than this
+    # contract module; resolve them at call time, as the 2.x half resolves the record
+    # classes through the field registry.
+    unknown_columns = import_module(f"{__package__}._tables")._unknown_columns
+    manifest = _read_json_file(
         root / contract.MANIFEST_FILE,
         code=contract.REFUSAL_CODES["manifest_unreadable"],
         what="manifest",
@@ -47,7 +70,7 @@ def inspect_record_tables(root: Path) -> dict[str, Any]:
         if kind not in classes:
             report[str(kind)] = {"instances": rows, "unknown_fields": [], "ungoverned": True}
             continue
-        table, _ = read_json_file(
+        table = _read_json_file(
             root / contract.RECORDS_DIR / f"{kind}.json",
             code=contract.REFUSAL_CODES["record_file_corrupt"],
             what="record",
@@ -57,7 +80,7 @@ def inspect_record_tables(root: Path) -> dict[str, Any]:
             if isinstance(table, dict)
             else None
         )
-        unknown = _unknown_columns(kind, names) if isinstance(names, dict) else []
+        unknown = unknown_columns(kind, names) if isinstance(names, dict) else []
         report[classes[kind]] = {
             "instances": rows,
             "unknown_fields": sorted(unknown),
