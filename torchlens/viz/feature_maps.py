@@ -80,6 +80,15 @@ def feature_maps(
     ValueError
         If caps, selectors, or reductions are invalid, or if no selected site
         has saved spatial ``[N, C, H, W]`` activations.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> maps = tl.viz.feature_maps(trace, max_channels=2)
+    >>> len(maps) > 0
+    True
+    >>> all(key.startswith(("layer:", "op:")) for key in maps)
+    True
     """
 
     _validate_feature_map_options(
@@ -201,6 +210,12 @@ def feature_map_node_spec(
     ------
     ValueError
         If display parameters are invalid.
+
+    Examples
+    --------
+    >>> node_spec_fn = tl.viz.nodes.feature_map(cell_size=32, max_channels=2)
+    >>> callable(node_spec_fn)
+    True
     """
 
     _validate_node_spec_options(
