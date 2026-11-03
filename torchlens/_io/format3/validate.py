@@ -282,14 +282,14 @@ def manifest_schema_errors(manifest: Mapping[str, Any]) -> list[str]:
     return errors
 
 
-#: Writer stamps the runtime policy compares as versions; the writer's own stamp is judged by
-#: that policy (``bundle_producer_unverifiable``), these two by the manifest table.
-_PEP440_STAMPS: Final = ("python_version", "torch_version")
+#: Writer version stamps: each must parse under PEP 440 at schema-check time, before any
+#: runtime identity policy compares it (ruled 3 Nov 2026); an unparsable one is malformed data.
+_PEP440_STAMPS: Final = ("torchlens_version", "python_version", "torch_version")
 
 
 def _identity_errors(manifest: Mapping[str, Any]) -> list[str]:
     """The format name, the two version stamps, the writer-contract digest, the writer
-    identity strings (the python and torch stamps parse under PEP 440) and the artifact kind."""
+    identity strings (the three version stamps parse under PEP 440) and the artifact kind."""
 
     errors: list[str] = []
     if manifest["format"] != contract.FORMAT_NAME:
