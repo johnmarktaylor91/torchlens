@@ -948,20 +948,16 @@ class Trace(TraceLike):
 
         self._module_capture_ws.module_build_data = _init_module_hierarchy_data()
         self._options_mode: Literal["exhaustive", "predicate"] = "exhaustive"
-        # L7a: True marks a structure-only capture (the flag declares the
-        # mode; every value-bearing claim is a hypothesis and value consumers
-        # gate through torchlens._capture.structure_only). DOCUMENTED-UNSTABLE
-        # spelling pending naming-session ratification.
+        # L7a: a structure-only capture; value consumers gate through
+        # torchlens._capture.structure_only. DOCUMENTED-UNSTABLE spelling.
         self._options_structure_only: bool = False
         # tlspec v9 entry-dark slots (C07): the structure-only evidence
         # envelope (F33 writer) and the (path, digest) source-snapshot table
         # (F30 writer). Declared, persisted, load-validated; no writer yet.
         self._graph_structure_evidence: dict[str, Any] | None = None
         self._source_snapshots: list[dict[str, Any]] = []
-        # L6: session-time audit records for resolved-selection interventions
-        # (query repr + resolve digest + per-site relations; patch_from adds
-        # source identity + value digests). DROP under v7; pre-release-
-        # registered, flips to KEEP at the wave-3 bump. DOCUMENTED-UNSTABLE.
+        # L6: session-time audit rows of resolved-selection interventions (query repr,
+        # resolve digest, per-site relations). DROP under v7. DOCUMENTED-UNSTABLE.
         self.intervention_audit: list[dict[str, Any]] = []
         self._runnable = RunnableTraceState()
         self._fast_run_session: Any | None = None
@@ -1215,18 +1211,12 @@ class Trace(TraceLike):
         self._backward_pass_logs: dict[int, BackwardPass] = OrderedDict()
         self._grad_fn_param_refs: dict[str, str] = {}
         self._param_log_by_pid: dict[int, str] = {}
-        # r79 session-leak fix: the RECORDED prep inventories of stamped
-        # parameters/buffers. Session-scoped strong refs -- authoritative source
-        # for stamp cleanup (a param/buffer popped from the live module tree
-        # mid-forward escapes re-traversal but never this list); emptied by
-        # ``_cleanup_model_session``. Never portable.
+        # r79: the RECORDED prep inventories of stamped parameters/buffers, the source
+        # for stamp cleanup; emptied by ``_cleanup_model_session``. Never portable.
         self._session_param_inventory: list[Any] = []
         self._session_buffer_inventory: list[Any] = []
-        # r81: id(tensor) -> _SessionBufferStamp identity records for every
-        # buffer stamp written this session -- the buffer-rung storage-identity
-        # belt (param-rung ``_param_ref is value`` parity). Session-scoped
-        # strong refs (tensor + stamp-time storage keeper); emptied by
-        # ``_cleanup_model_session``. Never portable.
+        # r81: id(tensor) -> _SessionBufferStamp for every buffer stamp written this
+        # session (storage-identity belt); emptied by ``_cleanup_model_session``.
         self._session_buffer_identity: dict[int, Any] = {}
         self._autograd_backward_root_grad_fn_object_ids: list[int] = []
         self._cost_backward_durations: list[Duration] = []
@@ -2769,6 +2759,16 @@ class Trace(TraceLike):
         """Forward to ``_doors.intervention()._edit_guards.refuse_chunked_batch_coupling``."""
 
         return _doors.intervention()._edit_guards.refuse_chunked_batch_coupling(self, entries)
+
+    def __enter__(self) -> "Trace":
+        """Enter a scoped edit: ``with trace.fork() as scoped: scoped.do(...)``."""
+
+        return self
+
+    def __exit__(self, exc_type: Any, exc: Any, traceback: Any) -> None:
+        """Leave the scope: detach the sticky hooks the last ``do()`` inside it staged."""
+
+        _doors.intervention()._trace_edits.remove(self)
 
     def clear_edits(
         self,

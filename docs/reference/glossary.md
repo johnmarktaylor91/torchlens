@@ -634,7 +634,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   tensor arguments travel as sidecars), and `tl.load(path)` returns a `tl.Recipe` whose rule
   identities (`Recipe.digest`) equal the saved ones. A predicate WHERE term or an opaque callable
   edit has no portable form: it refuses below `"audit"` (`OpaqueCallableError`), and an audit
-  record, which stores it by repr, refuses `tl.load` with `recipe_audit_only`. `level="runnable"`
+  record, which stores it by repr, refuses `tl.load` with `recipe_audit_only`; a hand-edited or foreign record refuses with `recipe_record_malformed`. `level="runnable"`
   refuses `artifact_save_level_unsupported`: a recipe carries no model to run. The saved
   intervention artifact (`Trace.save_intervention`, `kind: "intervention"`) is the lowered,
   capture-bound form and still loads as an `InterventionSpec`.
@@ -1382,11 +1382,14 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 : `Trace.do` is the one editing verb on a captured log, and it propagates what it stages: a
   non-callable value sets the site, a hook or helper attaches as a sticky rule, a mapping of
   sites to edits (`trace.do({a: h1, b: h2})`) applies several edits in one propagation, and an
-  `InterventionSpec` or `Recipe` applies its rules. On the replay engine the edit is pushed
+  `InterventionSpec` or `Recipe` applies its rules, including a spec loaded back with
+  `tl.io.load_intervention_spec`. On the replay engine the edit is pushed
   downstream through the recorded graph (DAG replay of the affected cone);
   `InterventionOptions(engine="set_only")` stages the edit without propagating;
   `InterventionOptions(differentiable=True)` replays onto a new fork whose outputs stay
-  differentiable and returns it; `Trace.clear_edits` detaches staged edits. `Trace.run`
+  differentiable and returns it; `Trace.clear_edits` detaches staged edits, and the scoped
+  form `with trace.fork() as scoped: scoped.do(...)` detaches the last `do`'s hooks on exit.
+  `Trace.run`
   performs a full-forward run with the log's active intervention spec; `tl.sweep` captures one
   intervened trace per swept replacement value. (The former `replay`/`replay_from`/`rerun`
   aliases are removed, and so are the separate stage, propagate and detach verbs that `do`

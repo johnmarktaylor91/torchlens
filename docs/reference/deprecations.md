@@ -157,7 +157,7 @@ internal `MISSING` sentinel that existed only to arbitrate against the removed
 | `Trace.push()` | `Trace.do(site, edit)`: one verb stages and propagates | removed |
 | `Trace.push_from()` | `Trace.do(site, value)` | removed |
 | `Trace.attach_hooks()`, `Op.attach_hooks()`, `Layer.attach_hooks()` | `Trace.do(site, hook)`; `InterventionOptions(engine="set_only")` stages without propagating | removed |
-| `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)` | removed |
+| `Trace.remove()` and `with trace.attach_hooks(...)` | `Trace.clear_edits(site)`; the scoped form stays as `with trace.fork() as scoped: scoped.do(...)`, which detaches the last `do` hooks on exit | removed |
 | `ReplayOptions(hooks=)` | a mapping of sites to edits on `Trace.do` | removed |
 | `ReplayOptions(differentiable=)` | `InterventionOptions(differentiable=True)` on `Trace.do` | removed |
 | `Trace.rerun()` | `Trace.run()` | removed |

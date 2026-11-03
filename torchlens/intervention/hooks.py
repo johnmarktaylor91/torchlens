@@ -19,6 +19,7 @@ from .._selection.selectors import (
     NotSelector,
     label,
 )
+from .._utils._package_frames import external_warning_stacklevel
 from ..errors import TorchLensWarning
 from ._hooks_support import (
     _display_label,
@@ -301,10 +302,8 @@ def normalize_hook_plan(
     for order, (raw_site_target, hook_like) in enumerate(pairs):
         site_target = lower_record_site_target(raw_site_target)
         helper_spec = hook_like if isinstance(hook_like, Edit) else None
-        # The escape hatch is requested by the helper's own allow_shape_change
-        # kwarg (e.g. tl.replace_with(t, allow_shape_change=True)); it rides
-        # entry metadata so a helper-requested shape change reaches
-        # validate_hook_output, mirroring the append-safety check in rerun.py.
+        # A helper's own allow_shape_change kwarg rides entry metadata so the shape
+        # change reaches validate_hook_output (mirrors the append-safety check in rerun.py).
         entry_force_shape_change = helper_spec is not None and bool(
             dict(helper_spec.kwargs).get("allow_shape_change", False)
         )
@@ -769,10 +768,8 @@ def normalize_hooks_from_spec(
                     normalize_hook_plan(target, hook_like, allow_replay_only_site_targets=replay_ok)
                 )
     if live_forward:
-        # RERUN/backward preflight: sticky entries staged through the attach
-        # door's replay-only carve-out (site selectors) must refuse HERE,
-        # before any forward runs -- a mid-forward capability error is a
-        # late, ugly refusal.
+        # RERUN/backward preflight: entries staged through the replay-only carve-out
+        # (site selectors) refuse HERE, before any forward runs.
         for entry in entries:
             live_targets = (
                 gradient_inners(entry.site_target)
@@ -920,7 +917,7 @@ def _warn_facet_fanout(log: Any, selector: FacetSelector, written: list[tuple[st
             code="facet_selector_fanout",
             site_count=len(written),
         ),
-        stacklevel=5,
+        stacklevel=external_warning_stacklevel(),
     )
 
 
@@ -1029,11 +1026,9 @@ def _normalize_sticky_hook_specs(
     entries: list[NormalizedHookEntry] = []
     for hook_spec in hook_specs:
         if hook_spec.metadata.get("facet_write"):
-            # Facet-slice hooks fire through the scatter wrapper built at attach time
-            # (_facet_scatter_hook), which closes over the resolved FacetSpec and CANNOT be
-            # rebuilt from the raw helper: the generic path below would silently apply the
-            # helper to the WHOLE home tensor (tl.head(0, "q") + tl.zero_ablate() zeroing
-            # every head). Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
+            # Facet-slice hooks fire through the scatter wrapper built at attach time, which
+            # closes over the resolved FacetSpec and cannot be rebuilt from the raw helper (the
+            # generic path would edit the WHOLE home tensor). Fail closed when it is absent.
             stored_hook = hook_spec.hook
             if not getattr(stored_hook, "_tl_facet_scatter", False):
                 facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
@@ -1651,28 +1646,25 @@ def _facet_scatter_hook(
     return _hook
 
 
+def _hook_pairs_from_spec(spec: InterventionSpec) -> list[tuple[Any, HookInput]]:
+    """Expand a loaded spec into ``(site, hook)`` pairs: each rule's portable helper, else its hook."""
+
+    return [
+        (
+            hook_spec.site_target,
+            hook_spec.helper if hook_spec.helper is not None else hook_spec.hook,
+        )
+        for hook_spec in spec.hook_specs
+    ]
+
+
 def _dispatch_hook_pairs(
     hooks_or_site: Any,
     hook: HookInput | None,
     *,
     default_site_target: Any | None,
 ) -> list[tuple[Any, HookInput]]:
-    """Parse supported hook input shapes into ``(site, hook)`` pairs.
-
-    Parameters
-    ----------
-    hooks_or_site:
-        Attach-hooks input object.
-    hook:
-        Optional hook paired with a site.
-    default_site_target:
-        Site target used for bare callable/helper input.
-
-    Returns
-    -------
-    list[tuple[Any, HookInput]]
-        Parsed site/hook pairs.
-    """
+    """Parse the hook input shapes (site, hook-like, mapping, pairs, loaded spec) into pairs."""
 
     if hook is not None:
         if hasattr(hooks_or_site, "to_hook_pairs"):
@@ -1692,6 +1684,9 @@ def _dispatch_hook_pairs(
 
     if isinstance(hooks_or_site, Mapping):
         return [(site, hook_like) for site, hook_like in hooks_or_site.items()]
+
+    if isinstance(hooks_or_site, InterventionSpec):
+        return _hook_pairs_from_spec(hooks_or_site)
 
     if _is_single_pair(hooks_or_site):
         site_target, hook_like = hooks_or_site
