@@ -762,8 +762,9 @@ jobs:
     # The aggregate floor's measurement (see the coverage job's comment): the
     # mid tier, 'not rare and not slow and not heavy', under branch coverage,
     # in 4 whole-file shards (`--tier-shard`, balanced by
-    # tests/tiers/durations.csv), each at -n 4. Shard 1 also runs the tier's
-    # serial tests in one process, as the CI serial step does. A shard holds a
+    # tests/tiers/durations.csv), each at -n 4. Shard 4, the lightest (measured
+    # 2026-11-03: 545 to 1,007 s against 761 to 1,462 s for the heaviest), also
+    # runs the tier's serial tests in one process, as the CI serial step does. A shard holds a
     # quarter of the tier, so no shard applies a floor (--cov-fail-under=0
     # overrides pyproject's); coverage-aggregate combines all five data files
     # and enforces the floor on the whole tier.
@@ -819,7 +820,7 @@ jobs:
             --tb=short -q
 
       - name: Run the mid tier's serial tests under coverage
-        if: ${{ !cancelled() && matrix.shard == 1 }}
+        if: ${{ !cancelled() && matrix.shard == 4 }}
         env:
           OMP_NUM_THREADS: "1"
           COVERAGE_FILE: ${{ runner.temp }}/coverage-mid-data/coverage-mid.serial
@@ -883,7 +884,7 @@ jobs:
         env:
           COVERAGE_FILE: ${{ runner.temp }}/coverage-mid
         run: |
-          # Four shard files plus shard 1's serial file; fewer means a shard's
+          # Four shard files plus shard 4's serial file; fewer means a shard's
           # data is missing and the total would cover part of the tier.
           ls -l "${{ runner.temp }}/coverage-mid-data"
           test "$(ls "${{ runner.temp }}/coverage-mid-data" | grep -c '^coverage-mid\.')" -eq 5
