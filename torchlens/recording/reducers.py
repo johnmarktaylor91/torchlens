@@ -27,9 +27,6 @@ from .._errors import InvalidArgumentError
 
 __all__ = ["Reducer", "norm", "probe", "top_k"]
 
-#: The code of every reducer construction refusal.
-REDUCER_INVALID = "record_generation_reducer_invalid"
-
 
 class Reducer:
     """A named per-token reducer: ``name`` is recorded beside every value it produces.
@@ -62,7 +59,7 @@ def _position_major(tensor: torch.Tensor, position_dim: int) -> torch.Tensor:
         raise InvalidArgumentError(
             f"a reducer needs a payload with a batch axis and a position axis; got shape "
             f"{tuple(tensor.shape)}",
-            code=REDUCER_INVALID,
+            code="record_generation_reducer_invalid",
             remedy="declare a site whose output is a [batch, ..., positions, ...] tensor",
         )
     squeezed = tensor[0]
@@ -123,7 +120,7 @@ def top_k(k: int, *, dim: int = -1, position_dim: int = -2) -> Reducer:
     if k < 1:
         raise InvalidArgumentError(
             f"top_k needs k >= 1; got {k}",
-            code=REDUCER_INVALID,
+            code="record_generation_reducer_invalid",
             remedy="pass a positive k",
         )
 
@@ -158,7 +155,7 @@ def _linear_terms(fitted: Any) -> tuple[torch.Tensor, torch.Tensor, str]:
         f"probe() needs a fitted linear probe: an object with coef_ and intercept_ (a fitted "
         f"scikit-learn linear estimator), an nn.Linear, or a (weight, bias) pair; got "
         f"{type(fitted).__name__}",
-        code=REDUCER_INVALID,
+        code="record_generation_reducer_invalid",
         remedy="fit the probe first, or pass its weight and bias as a pair",
     )
 
@@ -197,7 +194,7 @@ def probe(fitted: Any, *, position_dim: int = 1) -> Reducer:
             raise InvalidArgumentError(
                 f"the probe was fitted on {weight.shape[1]} features but the site has "
                 f"{x.shape[-1]}",
-                code=REDUCER_INVALID,
+                code="record_generation_reducer_invalid",
                 remedy="declare the site the probe was fitted on",
             )
         scores = x @ weight.to(x.device).T + bias.to(x.device)

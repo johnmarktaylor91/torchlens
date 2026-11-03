@@ -7,7 +7,7 @@ import sys as _sys
 from types import ModuleType as _ModuleType
 from typing import Any
 
-_LAZY_ATTRS = {
+_LAZY_ATTRS: dict[str, tuple[str, str | None]] = {
     "ActivationRecord": ("torchlens.recording.types", "ActivationRecord"),
     "CaptureSpec": ("torchlens.recording.types", "CaptureSpec"),
     "GradRecord": ("torchlens.recording.types", "GradRecord"),
@@ -18,6 +18,7 @@ _LAZY_ATTRS = {
     "DryRun": ("torchlens.recording.types", "DryRun"),
     "GenerationOptions": ("torchlens.recording._generation_options", "GenerationOptions"),
     "TokenSeries": ("torchlens.recording._generation_stream", "TokenSeries"),
+    "reducers": ("torchlens.recording.reducers", None),
     "RecordContext": ("torchlens.recording.types", "RecordContext"),
     "_DEFERRED_VALUE": ("torchlens._ir.predicate", "_DEFERRED_VALUE"),
     "cleanup_partial": ("torchlens.recording.cleanup", "cleanup_partial"),
@@ -37,6 +38,7 @@ __all__ = [
     "DryRun",
     "GenerationOptions",
     "TokenSeries",
+    "reducers",
     "RecordContext",
     "_DEFERRED_VALUE",
     "cleanup_partial",
@@ -102,7 +104,8 @@ def __getattr__(name: str) -> Any:
 
     if name in _LAZY_ATTRS:
         module_path, attr_name = _LAZY_ATTRS[name]
-        value = getattr(_importlib.import_module(module_path), attr_name)
+        module = _importlib.import_module(module_path)
+        value = module if attr_name is None else getattr(module, attr_name)
         globals()[name] = value
         return value
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

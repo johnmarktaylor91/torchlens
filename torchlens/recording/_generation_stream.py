@@ -34,8 +34,6 @@ if TYPE_CHECKING:
 
 __all__ = ["TokenSeries"]
 
-BUDGET_EXCEEDED = "record_generation_budget_exceeded"
-REDUCER_INVALID = "record_generation_reducer_invalid"
 _REFUSAL = "tl.record(..., generate_kwargs=...) refuses: {}"
 
 
@@ -407,7 +405,7 @@ class _StepSink:
 
         raise InvalidArgumentError(
             _REFUSAL.format(reason),
-            code=BUDGET_EXCEEDED,
+            code="record_generation_budget_exceeded",
             remedy=(
                 "reduce the declared sites (GenerationOptions(reducers=)), bound the ring "
                 "(keep_last=, with spill= to keep the rest on disk), or raise max_saved_bytes="
@@ -419,7 +417,10 @@ class _StepSink:
         """Refuse the generation: a reducer or KV site broke its contract."""
 
         raise InvalidArgumentError(
-            _REFUSAL.format(reason), code=REDUCER_INVALID, remedy=remedy, reason=reason
+            _REFUSAL.format(reason),
+            code="record_generation_reducer_invalid",
+            remedy=remedy,
+            reason=reason,
         )
 
     # -- reading -------------------------------------------------------------------------
