@@ -11,6 +11,13 @@ fired for the RIGHT REASON — the stable ``fields["code"]`` plus the failed
 predicate — never merely "the read raised". One measured probe leg passed a
 naive blocked-test only because ``cosine_distance`` happened to refuse an
 element-count mismatch downstream of the broken gate.
+
+Runs on DIFFERENT inputs are comparison operands by design (clean vs.
+patched, two prompts, two checkpoints) when their sites line up: equal
+graph-shape hashes. The input digest still decides line-up for one model
+object, whose identity relationship cannot see a divergent control-flow path
+(``_Branchy``), and a site whose shapes differ refuses typed
+(``metric_shape_mismatch``) rather than failing inside a metric.
 """
 
 from __future__ import annotations
@@ -20,6 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._errors import InvalidArgumentError
 from torchlens.intervention.errors import BundleComparisonError
 from torchlens.types import Relationship
 
@@ -73,6 +81,59 @@ class _TanhModel(nn.Module):
         return torch.tanh(x) + 1
 
 
+class _Branchy(nn.Module):
+    """Data-dependent control flow: the graph depends on the input values."""
+
+    def __init__(self) -> None:
+        """Initialize the shared stem and the two branch layers."""
+
+        super().__init__()
+        self.stem = nn.Linear(4, 4)
+        self.up = nn.Linear(4, 4)
+        self.down = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the stem, then one of two branches chosen by the stem's sum.
+
+        Parameters
+        ----------
+        x:
+            Input tensor.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor.
+        """
+
+        h = self.stem(x)
+        # Data-dependent branch: the sign of the stem output picks the graph.
+        h = torch.relu(self.up(h)) if h.sum() > 0 else torch.sigmoid(self.down(h)) * 2.0
+        return h + 1
+
+
+def _branch_inputs(model: _Branchy) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return one input per branch of ``model`` (positive, then negative stem sum).
+
+    Parameters
+    ----------
+    model:
+        Branching model.
+
+    Returns
+    -------
+    tuple[torch.Tensor, torch.Tensor]
+        Inputs that take the ``up`` and the ``down`` branch.
+    """
+
+    generator = torch.Generator().manual_seed(12)
+    candidates = [torch.randn(1, 4, generator=generator) for _ in range(64)]
+    with torch.no_grad():
+        up = next(x for x in candidates if model.stem(x).sum() > 0)
+        down = next(x for x in candidates if model.stem(x).sum() <= 0)
+    return up, down
+
+
 def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     """Capture one intervention-ready trace.
 
@@ -92,13 +153,13 @@ def _capture(model: nn.Module, x: torch.Tensor) -> tl.Trace:
     return tl.trace(model, x, capture=_OPTS)
 
 
-def test_leg1_identity_shortcircuit_same_shape_different_values_refuses() -> None:
-    """LEG1: one model object, same input shape, DIFFERENT values refuses.
+def test_leg1_identity_cross_input_lined_up_graphs_compare() -> None:
+    """LEG1: one model object, same input shape, DIFFERENT values compares.
 
-    The old gate accepted the pair because the derivation returned
-    ``same_object`` before consulting the input. The relationship STAYS
-    identity-ranked (the reported vocabulary is unchanged) while the input
-    predicate refuses on value evidence.
+    The relationship stays identity-ranked (the reported vocabulary is
+    unchanged); the pair is admitted because both graphs have the same
+    graph-shape hash, so every site pairs one to one, not because of the
+    identity rank.
     """
 
     model = _TwoLayer()
@@ -109,53 +170,157 @@ def test_leg1_identity_shortcircuit_same_shape_different_values_refuses() -> Non
 
     left = _capture(model, x1)
     right = _capture(model, x2)
-    bundle = tl.Bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right}, baseline="a")
 
-    # Path-1 shape: the relationship itself is identity-ranked.
     assert bundle.comparability("a", "b") is Relationship.SAME_OBJECT
+    assert left._provenance_fingerprint == right._provenance_fingerprint
 
+    matrix = bundle.at(tl.func("relu")).compare()
+    assert matrix.shape == (2, 2)
+    assert torch.isfinite(matrix).all()
+    assert float(matrix[0, 1]) > 0.0
+    rows = dict(bundle.compare("a", "b"))
+    assert rows and all(value >= 0.0 for value in rows.values())
+    assert any(value > 0.0 for value in rows.values())
+    assert bundle.rank_changes(k=3)
+
+
+class _PerToken(nn.Module):
+    """A per-token loop: the graph grows with the input length, like a prompt."""
+
+    def __init__(self) -> None:
+        """Initialize the shared token projection."""
+
+        super().__init__()
+        self.proj = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Sum the projection of every row, one op chain per row.
+
+        Parameters
+        ----------
+        x:
+            Input tensor of shape ``(tokens, 4)``.
+
+        Returns
+        -------
+        torch.Tensor
+            Output tensor of shape ``(4,)``.
+        """
+
+        total = torch.zeros(4)
+        for row in x:
+            total = total + self.proj(row)
+        return total
+
+
+def test_leg1c_different_length_inputs_name_the_shapes() -> None:
+    """LEG1c: inputs of different lengths run different graphs; the refusal says why.
+
+    A per-token loop records one op chain per row, so a 3-row and a 2-row
+    input do not line up. The refusal names both input shapes instead of
+    blaming control flow alone.
+    """
+
+    model = _PerToken()
+    generator = torch.Generator().manual_seed(14)
+    left = _capture(model, torch.randn(3, 4, generator=generator))
+    right = _capture(model, torch.randn(2, 4, generator=generator))
+    bundle = tl.Bundle({"a": left, "b": right}, baseline="a")
+
+    assert left._provenance_fingerprint != right._provenance_fingerprint
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
+        bundle.compare("a", "b")
+    message = str(excinfo.value)
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
-    assert excinfo.value.fields["operation"] == "at.compare"
-    assert {excinfo.value.fields["left_member"], excinfo.value.fields["right_member"]} == {
-        "a",
-        "b",
-    }
+    assert "differ in shape" in message
+    assert "[3, 4]" in message.replace("(", "[").replace(")", "]")
+    assert "[2, 4]" in message.replace("(", "[").replace(")", "]")
 
 
-def test_leg2_different_shape_refuses_at_the_gate_not_downstream() -> None:
-    """LEG2: the refusal is the GATE's, not a downstream metric accident.
+def test_leg1b_identity_divergent_branches_refuse_on_line_up() -> None:
+    """LEG1b: one model object, different inputs, DIFFERENT control-flow paths.
+
+    The identity relationship passes the model-axis floor even though the
+    graphs differ; the line-up predicate (input digests differ AND the
+    graph-shape hashes differ) refuses with its own code, naming the pair.
+    """
+
+    model = _Branchy()
+    up, down = _branch_inputs(model)
+    left = _capture(model, up)
+    right = _capture(model, down)
+    bundle = tl.Bundle({"a": left, "b": right}, baseline="a")
+
+    assert bundle.comparability("a", "b") is Relationship.SAME_OBJECT
+    assert left._provenance_fingerprint != right._provenance_fingerprint
+
+    for read in (
+        lambda: bundle.compare("a", "b"),
+        lambda: bundle.rank_changes(k=3),
+        lambda: bundle.at(tl.module("stem")).compare(),
+    ):
+        with pytest.raises(BundleComparisonError) as excinfo:
+            read()
+        assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+        assert {excinfo.value.fields["left_member"], excinfo.value.fields["right_member"]} == {
+            "a",
+            "b",
+        }
+        assert "do not line up" in str(excinfo.value)
+        assert "differ in shape" not in str(excinfo.value)
+
+    # Same branch on different inputs: the graphs line up again and compare.
+    generator = torch.Generator().manual_seed(13)
+    same_branch = next(
+        x
+        for x in (torch.randn(1, 4, generator=generator) for _ in range(64))
+        if float(model.stem(x).sum()) > 0 and not torch.equal(x, up)
+    )
+    lined_up = tl.Bundle({"a": left, "c": _capture(model, same_branch)})
+    assert lined_up.compare("a", "c")
+
+
+def test_leg2_different_shape_refuses_typed_naming_the_site() -> None:
+    """LEG2: inputs of different shapes refuse typed at the first mismatched site.
 
     The measured probe leg 'passed' a naive blocked-test only because
-    ``cosine_distance`` threw an element-count mismatch AFTER the gate had
-    already waved the pair through. The gate must now refuse first, with its
-    own stable code (test law 3).
+    ``cosine_distance`` threw an element-count mismatch by accident. The graphs
+    line up (shapes are not part of the graph-shape hash), so the refusal is
+    the per-site shape guard's: ``metric_shape_mismatch`` naming the site and
+    the shapes, on every comparison read (test law 3).
     """
 
     model = _TwoLayer()
     torch.manual_seed(1)
     left = _capture(model, torch.randn(2, 4))
     right = _capture(model, torch.randn(3, 4))
-    bundle = tl.Bundle({"a": left, "b": right})
+    bundle = tl.Bundle({"a": left, "b": right}, baseline="a")
 
-    with pytest.raises(BundleComparisonError) as excinfo:
+    with pytest.raises(InvalidArgumentError) as excinfo:
         bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
-    # The right-reason assertion: nothing about element counts or metrics.
-    assert "cosine" not in str(excinfo.value)
-    assert "element" not in str(excinfo.value)
+    assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+    assert "relu" in str(excinfo.value.fields["site"])
+    assert excinfo.value.fields["member_shapes"] == {"a": (2, 4), "b": (3, 4)}
+    assert not isinstance(excinfo.value, BundleComparisonError)
+
+    for read in (lambda: bundle.compare("a", "b"), lambda: bundle.rank_changes(k=3)):
+        with pytest.raises(InvalidArgumentError) as excinfo:
+            read()
+        assert excinfo.value.fields["code"] == "metric_shape_mismatch"
+        assert excinfo.value.fields["site"]
 
 
-def test_leg3_value_blind_hash_path_distinct_objects_refuses() -> None:
+def test_leg3_value_blind_hash_path_distinct_objects_compare() -> None:
     """LEG3: two DISTINCT model objects, different input VALUES, same shape.
 
-    This pair reaches the input check (no identity short-circuit), where the
-    old shape/dtype/device hash reported "same input" for genuinely different
-    values. The derived relationship legitimately stays
-    ``shared_graph_same_input`` (a SHAPE-level report); the gate must still
-    refuse on value evidence.
+    The derived relationship stays ``shared_graph_same_input`` (a SHAPE-level
+    report, never consulted by the gate). The pair compares because the
+    graph-shape hashes are equal; the value digests still tell the inputs
+    apart (the comparison reports real, nonzero distances).
     """
+
+    from torchlens.bundle._compare_gate import _input_value_digest
 
     model_a = _TwoLayer()
     model_b = _TwoLayer()
@@ -167,12 +332,10 @@ def test_leg3_value_blind_hash_path_distinct_objects_refuses() -> None:
     right = _capture(model_b, x2)
     bundle = tl.Bundle({"a": left, "b": right})
 
-    # The value-blind rank IS derived (shape-level vocabulary unchanged) ...
     assert bundle.comparability("a", "b") is Relationship.SHARED_GRAPH_SAME_INPUT
-    # ... and is still not accepted as proof of input equality.
-    with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert _input_value_digest(left) != _input_value_digest(right)
+    matrix = bundle.at(tl.func("relu")).compare()
+    assert float(matrix[0, 1]) > 0.0
 
 
 def test_leg4_distinct_objects_identical_input_succeeds() -> None:
@@ -226,13 +389,13 @@ def test_at_keeps_model_floor_and_carries_no_input_requirement() -> None:
     assert excinfo.value.fields["required_floor"] == "same_param_shapes"
 
 
-def test_unproven_input_identity_refuses_fail_closed() -> None:
-    """Members without retained input payloads refuse UNPROVEN, never pass.
+def test_unproven_input_identity_needs_lined_up_graphs() -> None:
+    """Members without retained input payloads compare only when graphs line up.
 
     A selective-save capture leaves the input ops unsaved, so value-level
-    input identity is unprovable — even though the two captures genuinely
-    used the same input. Unproven is not proven-same (fail-closed), and the
-    refusal names the members lacking evidence.
+    input identity is unprovable. Unproven is not proven-same: such a pair is
+    admitted only on equal graph-shape hashes, and refuses UNPROVEN, naming
+    the members lacking evidence, when the graphs differ.
     """
 
     model = _TwoLayer()
@@ -241,10 +404,19 @@ def test_unproven_input_identity_refuses_fail_closed() -> None:
 
     left = tl.trace(model, x, save=tl.func("relu"))
     right = tl.trace(model, x, save=tl.func("relu"))
-    bundle = tl.Bundle({"a": left, "b": right})
+    lined_up = tl.Bundle({"a": left, "b": right})
+    assert lined_up.at(tl.func("relu")).compare().shape == (2, 2)
 
+    branchy = _Branchy()
+    up, down = _branch_inputs(branchy)
+    divergent = tl.Bundle(
+        {
+            "a": tl.trace(branchy, up, save=tl.module("stem")),
+            "b": tl.trace(branchy, down, save=tl.module("stem")),
+        }
+    )
     with pytest.raises(BundleComparisonError) as excinfo:
-        bundle.at(tl.func("relu")).compare()
+        divergent.at(tl.module("stem")).compare()
     assert excinfo.value.fields["code"] == "bundle_gate_input_identity_unproven"
     assert excinfo.value.fields["unproven_members"] == ["a", "b"]
 
@@ -253,32 +425,33 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     """Item 3: one foreign member no longer disables every gated read.
 
     ``compare(a, b)`` gates exactly its named pair, and ``most_changed``
-    gates only baseline pairs — while the whole-bundle reads (``at(site).compare()``)
-    honestly keep gating every pair they actually consume.
+    gates only baseline pairs, while the whole-bundle reads (``at(site)``
+    and its ``compare()``) honestly keep gating every pair they consume.
+    The foreign member is a different model class (a different input alone
+    no longer makes a member foreign).
     """
 
     model = _TwoLayer()
     torch.manual_seed(7)
     x = torch.randn(2, 4)
-    z = torch.randn(2, 4)
 
     bundle = tl.Bundle(
         {
             "a": _capture(model, x),
-            "b": _capture(model, x),
-            "foreign": _capture(model, z),
+            "b": _capture(model, torch.randn(2, 4)),
+            "foreign": _capture(_TanhModel(), x),
         },
         baseline="a",
     )
 
-    # The named pair a/b is clean: scoped read works.
+    # The named pair a/b lines up (different inputs, same graph): scoped read works.
     rows = bundle.compare("a", "b")
-    assert isinstance(rows, list)
+    assert rows and isinstance(rows, list)
 
-    # at(site).compare() consumes ALL pairs, so the foreign member still refuses it.
+    # at(site) consumes ALL pairs, so the foreign member still refuses it.
     with pytest.raises(BundleComparisonError) as excinfo:
         bundle.at(tl.func("relu")).compare()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
     assert "foreign" in {
         excinfo.value.fields["left_member"],
         excinfo.value.fields["right_member"],
@@ -287,7 +460,7 @@ def test_operand_scoping_pair_reads_survive_a_foreign_member() -> None:
     # most_changed compares baseline vs others: 'foreign' IS an operand there.
     with pytest.raises(BundleComparisonError) as excinfo:
         bundle.rank_changes()
-    assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
+    assert excinfo.value.fields["code"] == "bundle_gate_model_axis_unmet"
 
 
 def test_ordering_topology_refusal_direct_and_transitive() -> None:
@@ -395,19 +568,29 @@ def test_fork_comparison_workflow_stays_open() -> None:
 def test_at_label_compare_runs_the_comparison_gate() -> None:
     """``at(label).compare()`` carries the gate ``compare_at`` ran; the label view itself reads."""
 
-    model = _TwoLayer()
-    torch.manual_seed(11)
-    cross_input = tl.Bundle(
-        {"a": _capture(model, torch.randn(2, 4)), "b": _capture(model, torch.randn(2, 4))}
-    )
+    branchy = _Branchy()
+    up, down = _branch_inputs(branchy)
+    divergent = tl.Bundle({"a": _capture(branchy, up), "b": _capture(branchy, down)})
     label = next(
         str(layer.layer_label)
-        for layer in cross_input["a"]._layer_list
-        if "relu" in str(layer.layer_label)
+        for layer in divergent["a"]._layer_list
+        if str(layer.layer_label).startswith("linear")
     )
-    view = cross_input.at(label)
+    view = divergent.at(label)
     assert set(view.members) == {"a", "b"}
     with pytest.raises(BundleComparisonError) as excinfo:
         view.compare()
     assert excinfo.value.fields["code"] == "bundle_gate_input_values_differ"
     assert excinfo.value.fields["operation"] == "at.compare"
+
+    model = _TwoLayer()
+    torch.manual_seed(11)
+    cross_input = tl.Bundle(
+        {"a": _capture(model, torch.randn(2, 4)), "b": _capture(model, torch.randn(2, 4))}
+    )
+    relu_label = next(
+        str(layer.layer_label)
+        for layer in cross_input["a"]._layer_list
+        if "relu" in str(layer.layer_label)
+    )
+    assert cross_input.at(relu_label).compare().shape == (2, 2)
