@@ -5322,9 +5322,9 @@ drops a newly listed record from the keyword rows.
 | `tl.attribution.RandomizationStep` | One randomization of the test |
 | `tl.attribution.RandomizationTest` | The outcome of a model-parameter randomization test |
 | `tl.attribution.ReadRow` | One read result row; immutable; honesty fields are not optional |
-| `tl.attribution.ReadTable` | Immutable trace-bound mapping of read rows (D8) |
-| `tl.attribution.TokenAttributionPayload` | Renderer-neutral token-score payload (the tviz contract, D28) |
-| `tl.attribution.TokenAttribution` | Frozen result of the token-attribution two-liner (attrib memo D28) |
+| `tl.attribution.ReadTable` | Immutable trace-bound mapping of read rows |
+| `tl.attribution.TokenAttributionPayload` | Renderer-neutral token-score payload (the tviz contract) |
+| `tl.attribution.TokenAttribution` | Frozen result of the token-attribution two-liner |
 | `tl.bridge.brain_score.ScoreParts` | A benchmark score with its raw and ceiling-normalised values named apart |
 | `tl.bridge.pyreft.LoreftArtifact` | One pyreft LoReFT intervention, as read from its saved directory |
 | `tl.bridge.sae.SpliceResult` | Settled record of one SAE splice experiment |
@@ -5333,7 +5333,7 @@ drops a newly listed record from the keyword rows.
 | `tl.bridge.treescope.BridgeStatus` | One `status` snapshot |
 | `tl.bundle.SuperAtenOp` | Positional, coverage-qualified alignment of one ATen slot across members |
 | `tl.bundle.SuperOp` | View of a single site across all bundle members |
-| `tl.dataset_extraction.BatchEnvelope` | One collated batch, typed (extract D9) |
+| `tl.dataset_extraction.BatchEnvelope` | One collated batch, typed |
 | `tl.dataset_extraction.LoadedExtraction` | A dataset-extraction artifact read back with its self-description |
 | `tl.dataset_extraction.RaggedBatch` | One shard's trimmed carrier for one output key (the Arrow triplet) |
 | `tl.dataset_extraction.TokenRows` | Stored keys flattened to one row per token (DOCUMENTED-UNSTABLE) |
@@ -5353,7 +5353,7 @@ drops a newly listed record from the keyword rows.
 | `tl.debug.GradFnSketch` | Structure-only autograd-graph sketch of already-computed tensors |
 | `tl.debug.GuessInputShapeReport` | Result of `tl.debug.guess_input_shape` |
 | `tl.debug.LineageReport` | Result of `tl.debug.lineage` |
-| `tl.debug.NonfiniteReport` | One-call NaN forensics report (torchnative 6.5 / W3.1) |
+| `tl.debug.NonfiniteReport` | One-call NaN forensics report |
 | `tl.debug.OptimizerFacts` | Adapter-read facts about one optimizer; `is_known` gates every derived band |
 | `tl.debug.ParamHealthReport` | Notebook-friendly parameter-space audit (mirrors `HealthReport`) |
 | `tl.debug.ScaleLedgerSnapshot` | Point-in-time read of a `tl.debug.ScaleLedger` |
@@ -5391,7 +5391,7 @@ drops a newly listed record from the keyword rows.
 | `tl.mechinterp.ComponentRow` | One component row: a coordinate plus its tensor value |
 | `tl.mechinterp.ComponentSender` | One residual writer (a graph source node) |
 | `tl.mechinterp.ComponentStack` | An ordered, graded stack of component rows summing to a target |
-| `tl.mechinterp.ContributionScores` | Per-component direct-logit contribution rows (mikit D9's record) |
+| `tl.mechinterp.ContributionScores` | Per-component direct-logit contribution rows |
 | `tl.mechinterp.HeadScores` | Per-head taxonomy scores |
 | `tl.mechinterp.HeadWeightViews` | Head-indexed projection weight views for one attention module |
 | `tl.mechinterp.LogitLensPrediction` | Streaming per-layer prediction summary (one row per projected layer) |
@@ -5406,8 +5406,8 @@ drops a newly listed record from the keyword rows.
 | `tl.observers.TapRecord` | One observed tensor value |
 | `tl.preprocessing.AuditFinding` | One comparable field's audit row |
 | `tl.preprocessing.DiagnosticFinding` | One opt-in tensor check's outcome |
-| `tl.preprocessing.InputDiagnostics` | Opt-in tensor findings (tvscope memo D4, record three of three) |
-| `tl.preprocessing.PreprocessingComparison` | The field-level audit report (tvscope memo D4, record two of three) |
+| `tl.preprocessing.InputDiagnostics` | Opt-in tensor findings (record three of three) |
+| `tl.preprocessing.PreprocessingComparison` | The field-level audit report (record two of three) |
 | `tl.preprocessing.Resolution` | One authority resolution: provenance record + declared fields + transform |
 | `tl.receptive_field.AmbiguousInputError` | Raised when a query has more than one reachable model input |
 | `tl.receptive_field.EmpiricalAdjointCheck` | One sampled comparison of receptive and projective empirical derivatives |
@@ -5430,37 +5430,37 @@ drops a newly listed record from the keyword rows.
 | `tl.repgeom.DisagreeingPair` | Two sites that two or more metrics order oppositely |
 | `tl.repgeom.MetricDisagreement` | Per-metric rank orders of sites and the pairs where metrics disagree |
 | `tl.repgeom.ScoreInterval` | A point score with its stimulus-bootstrap interval beside it |
-| `tl.report.BackwardEstimate` | The named-door training-backward counterfactual (D14): HYPOTHETICAL |
-| `tl.report.BackwardStatus` | The always-visible backward STATUS facts (D14) |
-| `tl.report.CapabilityCard` | The registry filtered by the object in hand (D24): metadata-only |
+| `tl.report.BackwardEstimate` | The named-door training-backward counterfactual: HYPOTHETICAL |
+| `tl.report.BackwardStatus` | The always-visible backward STATUS facts |
+| `tl.report.CapabilityCard` | The registry filtered by the object in hand: metadata-only |
 | `tl.report.CapabilityRow` | One capability-card row: THIS object's answer for one surface |
 | `tl.report.CaptureFacts` | Capture honesty facts the report carries detached |
-| `tl.report.CleanStepTime` | One opt-in clean-step measurement (D16): method fully disclosed |
-| `tl.report.CostTierMeasurement` | One measured tier: absolute time first, ratio derived (D24) |
-| `tl.report.CostTreeRow` | One accounting-unit row of the cost tree (D5/D8) |
+| `tl.report.CleanStepTime` | One opt-in clean-step measurement: method fully disclosed |
+| `tl.report.CostTierMeasurement` | One measured tier: absolute time first, ratio derived |
+| `tl.report.CostTreeRow` | One accounting-unit row of the cost tree |
 | `tl.report.CostTree` | The cost tree: rows in render order plus the invariant denominators |
-| `tl.report.DevicePeaks` | An explicit peaks catalog: constructed, never auto-selected (D18) |
+| `tl.report.DevicePeaks` | An explicit peaks catalog: constructed, never auto-selected |
 | `tl.report.DiffReport` | The same class as `tl.differential.DiffReport` |
 | `tl.report.DoctorCheck` | One diagnostic row; constructor keywords are outside the public contract |
 | `tl.report.DoctorReport` | Environment and optional model compatibility report |
 | `tl.report.FlopsCrossCheck` | Side-by-side dispatch-formula evidence (never an oracle) |
-| `tl.report.FlopsReport` | The detached one-call cost report (D10) |
+| `tl.report.FlopsReport` | The detached one-call cost report |
 | `tl.report.HealthFacts` | Immutable normalized health observations for one capture |
 | `tl.report.HealthReport` | Notebook-friendly report from trace-local health diagnostics |
 | `tl.report.InterventionValidationReport` | Five-axis intervention validation result |
 | `tl.report.KernelProfileReport` | One door call: one execution, one trace, one joined result |
-| `tl.report.MachineBalance` | A roofline ceiling pair and its ridge point (D18): basis disclosed |
-| `tl.report.MemoryFacts` | Payload byte figures under the D8 scope law |
+| `tl.report.MachineBalance` | A roofline ceiling pair and its ridge point: basis disclosed |
+| `tl.report.MemoryFacts` | Payload byte figures under the payload scope law |
 | `tl.report.MergeReport` | Graph-free diagnostic summary of how rank captures were merged |
-| `tl.report.MfuReport` | The mode-split time-normalized MFU facts (D16) |
-| `tl.report.OverheadReport` | Measured capture costs on the USER'S model and host (D27) |
-| `tl.report.PaddingWaste` | The class-split padding-waste estimate (D12): a DISCLOSURE |
+| `tl.report.MfuReport` | The mode-split time-normalized MFU facts |
+| `tl.report.OverheadReport` | Measured capture costs on the USER'S model and host |
+| `tl.report.PaddingWaste` | The class-split padding-waste estimate: a DISCLOSURE |
 | `tl.report.ParamFacts` | Parameter truth (A07's identity partition, read as facts) |
 | `tl.report.ProfileReport` | A printable, tabular resource profile assembled from one trace |
 | `tl.report.PrunedParamFacts` | `torch.nn.utils.prune` state read from the capture (`<name>_orig` + `<name>_mask`) |
 | `tl.report.RooflineReport` | The roofline map: rows, sum/sum aggregate, coverage by reason |
-| `tl.report.RooflineRow` | One op's theoretical intensity/work coordinates (D21) |
-| `tl.report.SixNDFacts` | The 6ND comparator block (D11): reproduces what HF Trainer logs |
+| `tl.report.RooflineRow` | One op's theoretical intensity/work coordinates |
+| `tl.report.SixNDFacts` | The 6ND comparator block: reproduces what HF Trainer logs |
 | `tl.report.StatsTableRow` | One per-op observation row |
 | `tl.report.StatsTable` | The typed observation table (a FactCore projection, session-only) |
 | `tl.report.SummaryReport` | The summary text WITH its typed, detached data (items 10 + 12) |
@@ -5469,13 +5469,13 @@ drops a newly listed record from the keyword rows.
 | `tl.report.ValidationDiagnostic` | Structured non-failing diagnostic emitted by validation |
 | `tl.report.ValidationFailure` | A structured description of the first surfaced validation mismatch |
 | `tl.report.ValidationStatus` | Machine-readable replay-validation availability or result |
-| `tl.stats.FamilyEvidence` | Per-family computation evidence (D16) |
-| `tl.stats.FittedPCA` | The frozen fitted-PCA payload (memo P6 result upgrade) |
+| `tl.stats.FamilyEvidence` | Per-family computation evidence |
+| `tl.stats.FittedPCA` | The frozen fitted-PCA payload |
 | `tl.stats.HistogramResult` | Finalized signed-log2 histogram counts for one population |
 | `tl.stats.RunningStatsResult` | Finalized spine statistics for one population |
 | `tl.stats.SimilarityScore` | A similarity score that names the exact measure variant it computes |
 | `tl.stats.TensorStats` | Frozen tensor statistics shared by tensor displays and narration; per-family evidence owns every claim |
-| `tl.trackers.CloseReport` | The close report: every scheduled observation ends as data, an enumerated presence/skip outcome, or an exception (memo 3.13) |
+| `tl.trackers.CloseReport` | The close report: every scheduled observation ends as data, an enumerated presence/skip outcome, or an exception |
 | `tl.trackers.GraphIR` | The dep-free executed-DAG graph payload (sink capability `graph`) |
 | `tl.trackers.GraphNodeIR` | One executed-op node: name, op kind, inputs, shapes, evidence |
 | `tl.trackers.HistogramPoint` | One histogram emission: exact counts on explicit edges |
@@ -5485,10 +5485,10 @@ drops a newly listed record from the keyword rows.
 | `tl.trackers.StepEmission` | Everything one committed step block emits, in emission order |
 | `tl.trackers.TextPoint` | One text emission (manifests, disclosures) |
 | `tl.transformer.AttentionView` | One attention pattern in canonical coordinates |
-| `tl.transformer.CausalReceipt` | Validated measured-intervention evidence for annotation (D11/D12) |
+| `tl.transformer.CausalReceipt` | Validated measured-intervention evidence for annotation |
 | `tl.transformer.CropInfo` | Crop disclosure: cropping never renormalizes |
 | `tl.transformer.EpisodeCoordinates` | Episode coordinates (step and position) carried by transformer view records |
-| `tl.transformer.GqaInfo` | Grouped-query-attention disclosure (tviz memo D5/D15) |
+| `tl.transformer.GqaInfo` | Grouped-query-attention disclosure |
 | `tl.transformer.MaskInfo` | Mask provenance for an attention view |
 | `tl.transformer.PredictionTable` | Top-k tokens per position |
 | `tl.transformer.PredictionTrajectory` | Per-layer prediction trajectory record |
@@ -5497,7 +5497,7 @@ drops a newly listed record from the keyword rows.
 | `tl.transformer.TokenMetrics` | Per-token metric strip record |
 | `tl.transformer.TokenScoreRow` | One labeled row of per-token scores (strip row) |
 | `tl.transformer.TokenScores` | Colored-token strip record, single- or multi-row |
-| `tl.transforms.ProbeReport` | Fidelity-probe result: rows per candidate width + T-C12 scope fields |
+| `tl.transforms.ProbeReport` | Fidelity-probe result: rows per candidate width plus scope fields |
 | `tl.transforms.SpecialTokenFacts` | Recorded special-token evidence for semantic token addressing |
 | `tl.transforms.TransformContext` | Frozen per-invocation context handed to context-capable transforms |
 | `tl.transforms.TransformSpec` | One frozen, declared transform step (the B1 protocol object) |
@@ -6717,9 +6717,6 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `version_index=` | keyword of `Buffer.value_at` (required) |
 | `view=` | keyword of `Trace.summary` (keyword-only; default `None`): Column/footer preset: `"overview"` (default) \| `"compute"`; keyword of `tl.debug.sketch_grad_fn` (keyword-only; default `False`): Open the rendered file in the managed viewer (never a raw Popen); keyword of `tl.viz.attention` (required): The attention view record; keyword of `tl.viz.contact_sheet`, `tl.viz.histogram_waterfall`, `tl.viz.quantile_fan`, `tl.viz.site_detail` (required) |
 | `views=` | keyword of `tl.transformer.bertviz_tuple` (required): Per-layer attention views in layer order; keyword of `tl.transformer.circuitsvis_attention`, `tl.transformer.circuitsvis_payload` (required): Per-layer attention views sharing one token axis; keyword of `tl.viz.attention_atlas` (required): One attention view per layer, in execution order |
-| `vis_call_depth=` | keyword of `tl.experimental.dagua.trace_to_dagua_graph` (default `1000`) |
-| `vis_mode=` | keyword of `tl.experimental.dagua.trace_to_dagua_graph` (default `'unrolled'`) |
-| `vis_save_only=` | keyword of `tl.viz.bundle_diff` (keyword-only; default `False`): Whether to suppress opening the rendered artifact |
 | `vmax=` | keyword of `tl.viz.heatmap` (keyword-only; default `None`): Optional upper normalization bound |
 | `vmin=` | keyword of `tl.viz.heatmap` (keyword-only; default `None`): Optional lower normalization bound |
 | `vs=` | keyword of `tl.mechinterp.direct_logit_contributions` (keyword-only; default `None`): Optional comparison token id(s); when given, rows decompose the LOGIT DIFF `answer - vs` (the recommended, norm-robust form); keyword of `tl.mechinterp.inspect_prompt` (keyword-only; default `None`): Optional single comparator token id (logit-diff row); keyword of `tl.mechinterp.test_prompt` (keyword-only; default `None`) |
