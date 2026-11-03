@@ -43,6 +43,7 @@ from ... import _state
 from ..._errors import CaptureGapWarning, OutputAttributionError
 from ..._utils.display import user_stacklevel
 from ..._utils.rng import log_current_rng_states, set_rng_from_saved_states
+from ..._utils.tensor_leaves import flat_byte_view
 from ...errors._base import TorchLensWarning
 
 if TYPE_CHECKING:
@@ -476,12 +477,8 @@ def _state_bytes_equal(current: torch.Tensor, baseline: torch.Tensor) -> bool:
     # detach-ok: read-only byte comparison of state snapshots; never a
     # training-path payload, nothing retains the detached views.
     try:
-        current_bytes = (
-            current.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
-        baseline_bytes = (
-            baseline.detach().resolve_conj().resolve_neg().contiguous().reshape(-1)
-        ).view(torch.uint8)
+        current_bytes = flat_byte_view(current.detach().resolve_conj().resolve_neg().contiguous())
+        baseline_bytes = flat_byte_view(baseline.detach().resolve_conj().resolve_neg().contiguous())
         return bool(torch.equal(current_bytes, baseline_bytes))
     except (RuntimeError, TypeError, NotImplementedError):
         return bool(torch.equal(current, baseline))

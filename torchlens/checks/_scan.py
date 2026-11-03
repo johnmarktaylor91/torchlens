@@ -22,6 +22,7 @@ from typing import Any
 import torch
 
 from .. import _state
+from .._utils.tensor_leaves import flat_byte_view
 from .._utils.tensor_utils import fp8_widen_for_numeric_ops
 from ._errors import CheckConfigError
 
@@ -374,7 +375,7 @@ def tensor_digest(tensor: torch.Tensor) -> str:
 
     with torch.no_grad(), _state.pause_logging():
         flat = tensor.detach().reshape(-1).contiguous()
-        payload = b"" if flat.numel() == 0 else flat.view(torch.uint8).cpu().numpy().tobytes()
+        payload = b"" if flat.numel() == 0 else flat_byte_view(flat).cpu().numpy().tobytes()
         return hashlib.sha256(payload).hexdigest()
 
 
