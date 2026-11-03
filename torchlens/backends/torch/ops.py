@@ -597,7 +597,7 @@ setattr(
 # directly. Registration reads the live class attribute, so it runs after
 # all four overlays are installed.
 for _ancestor_field_name in _ANCESTOR_FIELD_NAMES:
-    register_row_release_property(_ancestor_field_name)
+    register_row_release_property(op_attr(_ancestor_field_name))
 del _ancestor_field_name
 from ._ops_container_base import (  # noqa: E402
     _op_record_from_log,
