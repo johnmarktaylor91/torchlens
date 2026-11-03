@@ -1628,9 +1628,9 @@
         "tests/test_checks_kit_scan.py",
         "tests/test_debug_analysis.py",
         "tests/test_debug_findings_source_lines.py",
+        "tests/test_debug_truths.py",
         "tests/test_infer_input_shape.py",
         "tests/test_infer_input_shape_hardening.py",
-        "tests/test_observe_kit_backward.py",
         "tests/test_report_honesty_wave0.py",
         "tests/test_report_lane_debug_report.py"
       ],
@@ -2902,7 +2902,7 @@
         "tests/test_buffer_datamodel.py",
         "tests/test_chunk_size.py",
         "tests/test_factcore_safety_tranche.py",
-        "tests/test_r18i2_options_residue.py",
+        "tests/test_intervention_phase8b.py",
         "tests/test_r18i_utils_options.py",
         "tests/test_train_mode/test_patterns.py",
         "tests/test_validation.py"
@@ -3191,7 +3191,7 @@
         "tests/test_buffer_datamodel.py",
         "tests/test_chunk_size.py",
         "tests/test_factcore_safety_tranche.py",
-        "tests/test_r18i2_options_residue.py",
+        "tests/test_intervention_phase8b.py",
         "tests/test_r18i_utils_options.py",
         "tests/test_train_mode/test_patterns.py",
         "tests/test_validation.py"
@@ -4843,10 +4843,10 @@
         "tests/test_validation.py"
       ],
       "torchlens/_utils/facade.py": [
+        "tests/test_entry_facade_env_flags.py",
         "tests/test_entry_facade_five_step.py",
         "tests/test_facade_dx_contract.py",
         "tests/test_intervention_phase10.py",
-        "tests/test_intervention_phase3.py",
         "tests/test_ledger_exp_grid.py",
         "tests/test_state_hygiene_oracles.py",
         "tests/test_validation.py",
@@ -8554,7 +8554,9 @@
       "torchlens/bridge/lit/_sites.py": [
         "tests/test_lit_bridge_contract.py",
         "tests/test_lit_bridge_matrix.py",
-        "tests/test_lit_bridge_real.py"
+        "tests/test_lit_bridge_real.py",
+        "tests/test_site_join.py",
+        "tests/test_site_key.py"
       ],
       "torchlens/bridge/mcp.py": [
         "tests/test_mcp_bridge.py",
@@ -9139,7 +9141,7 @@
         "tests/test_capopts_truth_amp_grads.py",
         "tests/test_checks_kit_scan.py",
         "tests/test_debug_findings_source_lines.py",
-        "tests/test_deploy_env_grad_fn_walk.py",
+        "tests/test_debug_truths.py",
         "tests/test_dtype_range_audit.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_report_lane_debug_report.py",
@@ -9205,8 +9207,8 @@
         "tests/test_debug_truths.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_r18e_debug.py",
+        "tests/test_replay_templates_default_capture.py",
         "tests/test_report_honesty_pandas_free.py",
-        "tests/test_report_honesty_preamble.py",
         "tests/test_report_lane_debug_report.py"
       ],
       "torchlens/debug/_graph_breaks.py": [
@@ -9307,8 +9309,8 @@
         "tests/test_debug_truths.py",
         "tests/test_observe_kit_rerun.py",
         "tests/test_r18e_debug.py",
+        "tests/test_replay_templates_default_capture.py",
         "tests/test_report_honesty_pandas_free.py",
-        "tests/test_report_honesty_preamble.py",
         "tests/test_report_lane_debug_report.py"
       ],
       "torchlens/differential.py": [
@@ -9852,24 +9854,10 @@
         "tests/test_selection_do.py"
       ],
       "torchlens/intervention/_do_target_doors.py": [
-        "tests/test_backward_intervention.py",
-        "tests/test_intervention_directions.py",
-        "tests/test_intervention_error_catalog.py",
-        "tests/test_intervention_phase10.py",
-        "tests/test_intervention_phase3.py",
-        "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase6.py",
-        "tests/test_intervention_spec_pickle.py"
+        "tests/test_intervention_phase8a.py"
       ],
       "torchlens/intervention/_edit_guards.py": [
-        "tests/test_backward_intervention.py",
-        "tests/test_intervention_directions.py",
-        "tests/test_intervention_error_catalog.py",
-        "tests/test_intervention_phase10.py",
-        "tests/test_intervention_phase3.py",
-        "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase6.py",
-        "tests/test_intervention_spec_pickle.py"
+        "tests/test_intervention_phase8a.py"
       ],
       "torchlens/intervention/_edit_repr.py": [
         "tests/test_backward_intervention.py",
@@ -10004,10 +9992,10 @@
         "tests/behaviour/test_hooks_oracle.py",
         "tests/test_circ4_fast_patch.py",
         "tests/test_interv_honesty_depth2_tripwire.py",
+        "tests/test_intervention_phase8a.py",
         "tests/test_leverage_div_honesty.py",
         "tests/test_replay_capture_layout.py",
-        "tests/test_replay_commit_rollback.py",
-        "tests/test_replay_pass_qualified.py"
+        "tests/test_replay_commit_rollback.py"
       ],
       "torchlens/intervention/_patch_mapping.py": [
         "tests/test_grad_site_doors.py",
@@ -10150,10 +10138,10 @@
         "tests/test_intervention_hardening_cert6.py",
         "tests/test_intervention_hardening_cert7.py",
         "tests/test_intervention_hardening_cert8.py",
+        "tests/test_intervention_spec_tensor_dedupe.py",
         "tests/test_persist_honesty_intervention_spec.py",
         "tests/test_predicate_review_regressions.py",
         "tests/test_r12_import_ref_rce.py",
-        "tests/test_r23_type_reduce_rce.py",
         "tests/test_r27_dotted_walk_rce.py"
       ],
       "torchlens/intervention/_subspace_edits.py": [
@@ -10239,14 +10227,7 @@
         "tests/test_report_honesty_wave0.py"
       ],
       "torchlens/intervention/_trace_edits.py": [
-        "tests/test_backward_intervention.py",
-        "tests/test_intervention_directions.py",
-        "tests/test_intervention_error_catalog.py",
-        "tests/test_intervention_phase10.py",
-        "tests/test_intervention_phase3.py",
-        "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase6.py",
-        "tests/test_intervention_spec_pickle.py"
+        "tests/test_intervention_phase8a.py"
       ],
       "torchlens/intervention/_trace_hooks.py": [
         "tests/test_backward_intervention.py",
@@ -10263,14 +10244,7 @@
         "tests/test_runnable_contract_scaffolding.py"
       ],
       "torchlens/intervention/_trace_selection_edits.py": [
-        "tests/test_backward_intervention.py",
-        "tests/test_intervention_directions.py",
-        "tests/test_intervention_error_catalog.py",
-        "tests/test_intervention_phase10.py",
-        "tests/test_intervention_phase3.py",
-        "tests/test_intervention_phase4c.py",
-        "tests/test_intervention_phase6.py",
-        "tests/test_intervention_spec_pickle.py"
+        "tests/test_intervention_phase8a.py"
       ],
       "torchlens/intervention/_zero_fire.py": [
         "tests/test_buffer_datamodel.py",
@@ -10492,16 +10466,6 @@
         "tests/test_selector_refusal_codes.py",
         "tests/test_site_key.py",
         "tests/test_site_key_portability.py",
-        "tests/test_surgery_live_bind.py"
-      ],
-      "torchlens/intervention/sites.py": [
-        "tests/behaviour/test_cell_tmp.py",
-        "tests/test_grad_site_records.py",
-        "tests/test_interv_honesty_rename.py",
-        "tests/test_intervention_phase3.py",
-        "tests/test_selection_do.py",
-        "tests/test_sites.py",
-        "tests/test_stoch_edits_batch_do.py",
         "tests/test_surgery_live_bind.py"
       ],
       "torchlens/intervention/spec.py": [
