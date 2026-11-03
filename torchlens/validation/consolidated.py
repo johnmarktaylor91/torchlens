@@ -13,13 +13,20 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._literals import OutputDeviceLiteral
-from .._save_budget import SaveBudgetOption
+from .._options_validation import _validate_output_device
+from .._save_budget import SaveBudgetOption, resolve_save_budget
 from .._utils.display import user_stacklevel
 from .._utils.rng import restores_rng_streams
 from ..backends.registry import BackendName, resolve_backend_spec
 from ..errors import TorchLensWarning
 from ..options import CaptureOptions
 from .backward import validate_backward_pass
+from .diagnostics import (
+    CHECK_METADATA_INVARIANT,
+    ValidationFailure,
+    last_validation_failure,
+    record_validation_failure,
+)
 
 if TYPE_CHECKING:
     from ..receptive_field._types import ReceptiveFieldValidation
@@ -217,9 +224,6 @@ def _validate_save_option_keywords(
         If a non-default value is passed for ``scope="backward"`` or
         ``scope="receptive_field"``.
     """
-
-    from .._options_validation import _validate_output_device
-    from .._save_budget import resolve_save_budget
 
     _validate_output_device(output_device)
     resolve_save_budget(save_budget)
@@ -667,13 +671,6 @@ def validate(
 
 def _record_invariant_failure_if_missing(invariant_error: BaseException) -> None:
     """Record a metadata-invariant failure on the side channel when none is present."""
-
-    from .diagnostics import (
-        CHECK_METADATA_INVARIANT,
-        ValidationFailure,
-        last_validation_failure,
-        record_validation_failure,
-    )
 
     if last_validation_failure() is not None:
         return

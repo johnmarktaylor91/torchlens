@@ -6,6 +6,8 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
+from torchlens.backends.registry import UnknownBackendError
+
 from .status import has_importer_region_provenance, is_region_replay_annotation
 
 if TYPE_CHECKING:
@@ -350,8 +352,6 @@ def _check_backend_identity_invariants(trace: Trace) -> None:
     MetadataInvariantError
         If backend identity fields are invalid or unsupported by the registry.
     """
-
-    from torchlens.backends.registry import UnknownBackendError
 
     from ..backends.registry import get_backend_spec
 

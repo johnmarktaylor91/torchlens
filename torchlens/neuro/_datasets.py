@@ -16,8 +16,10 @@ import numpy as np
 
 from ._handoff import (
     PRESENTATION_INDEX_KEY,
+    NeuroHandoffError,
     SiteDatasets,
     SitePayload,
+    _shape_payload,
     _source_kind,
     base_descriptors,
     check_pool,
@@ -225,8 +227,6 @@ def single_dataset(source: Any, site: str | None = None) -> Any:
         Core refusals for an explicitly requested ineligible or unsaved
         site, and the historical no-tensor-output error.
     """
-
-    from ._handoff import NeuroHandoffError, _shape_payload, _source_kind
 
     rsatoolbox = require_rsatoolbox()
     kind = _source_kind(source)

@@ -12,6 +12,8 @@ from torch import nn
 from torch.utils.hooks import RemovableHandle
 
 from .._utils.introspection import get_vars_of_type_from_obj
+from .._utils.rng import set_random_seed
+from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
 _PASS_INDEX_PARSE_WARNED = False
 ModuleOutputGradKey = tuple[str, int, int]
@@ -374,9 +376,6 @@ def _stock_layer_grads(
         Captured stock module-output grads, identity-output addresses, and
         every module-output key the stock forward reached in this run.
     """
-
-    from .._utils.rng import set_random_seed
-    from ._live_model_state import load_state_dict_restore, restore_state_dict_if_changed
 
     input_args, input_kwargs = stock_call
     collector = _StockModuleGradCollector()

@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._utils.collections import assign_to_sequence_or_dict
 from .._utils.rng import execute_with_restored_rng_autocast
 from ..backends.torch._autograd_grad_boundary import grad_signature, is_autograd_grad_recorder
 from ._replay_device import align_parent_to_slot_device, saved_args_on_consumed_devices
@@ -92,8 +93,6 @@ def _tensor_leaf_paths(value: Any, path: tuple[Any, ...]) -> list[tuple[tuple[An
 
 def _write_path(container: Any, path: tuple[Any, ...], value: Any) -> Any:
     """Return ``container`` with the leaf at ``path`` replaced (tuples rebuilt)."""
-
-    from .._utils.collections import assign_to_sequence_or_dict
 
     if not path:
         return value

@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._constants import _is_suffixed_raw_label
+from .._errors import AmbiguousOpLookupError
+
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
 
@@ -384,9 +387,6 @@ def _check_op_label_resolution(ml: Trace) -> None:
     letting the topology check (which resolves through ``Trace.__getitem__``)
     pass it.
     """
-
-    from .._constants import _is_suffixed_raw_label
-    from .._errors import AmbiguousOpLookupError
 
     name = "graph_topology"
     if getattr(type(ml), "ops", None) is None and "ops" not in getattr(ml, "__dict__", {}):

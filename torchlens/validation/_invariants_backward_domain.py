@@ -4,6 +4,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._ir.events import BackwardPassStart, OpGradObserved
+from ..backends.registry import TORCH_BACKEND_NAME
+from ..backends.torch.backward import _resolve_op_grad_event_label as _impl
+
 if TYPE_CHECKING:
     from .._data_classes.layer import Layer
     from .._data_classes.op import Op
@@ -266,8 +270,6 @@ def _backward_trigger_forward_positions(trace: Trace) -> list[int]:
         forward op is the last layer guaranteed to exist when graph walking ran.
     """
 
-    from .._ir.events import BackwardPassStart
-
     event_positions = {
         event.pass_index: event.forward_op_count_at_trigger
         for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ())
@@ -343,8 +345,6 @@ def _backward_pass_observed_forward_position(trace: Trace, pass_index: int) -> i
         Highest observed forward ``step_index`` for the pass, when available.
     """
 
-    from .._ir.events import OpGradObserved
-
     layer_lookup = trace._layer_dict_all_keys
     observed_steps = []
     for event in getattr(getattr(trace, "_capture_events", None), "backward_events", ()):
@@ -364,8 +364,6 @@ def _resolve_op_grad_event_label(trace: Trace, op_label: str) -> str:
     Delegates to the single implementation next to the event emitter so the
     validation-side resolution can never drift from the projection-side one.
     """
-
-    from ..backends.torch.backward import _resolve_op_grad_event_label as _impl
 
     return _impl(trace, op_label)
 
@@ -422,7 +420,6 @@ def _check_journal_seq_invariants(trace: Trace, name: str) -> None:
     # which surfaced as a call-time NameError. Importing at call time -- when
     # backends is fully initialized -- avoids the cycle and still routes through
     # the canonical registry constant (satisfies the backend-literal gate).
-    from ..backends.registry import TORCH_BACKEND_NAME
 
     if trace._provenance_backend != TORCH_BACKEND_NAME:
         return

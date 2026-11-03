@@ -28,6 +28,7 @@ from typing import (
 import torch
 
 from .._data_classes.op import Op
+from .._io import ArtifactError
 from .._ir.container import (
     DataclassField,
     DictKey,
@@ -37,6 +38,10 @@ from .._ir.container import (
     TupleIndex,
 )
 from .._ir.events import is_control_edge_use
+from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
+from ._constant_source import is_closure_constant_source
+from ._invariants_backward_flow import op_has_genuine_replacement_evidence
+from ._loaded_callables import release_loaded_callables, resolve_loaded_callables
 
 if TYPE_CHECKING:
     from .._data_classes.trace import Trace
@@ -617,7 +622,6 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
 
     if not bool(getattr(self, "_loaded_from_bundle", False)):
         return
-    from ._constant_source import is_closure_constant_source
 
     # ``validate_saved_outs`` already resolved what recorded function identities
     # can resolve for the replay phase; whatever did not is refused by name here.
@@ -652,7 +656,6 @@ def _raise_if_portable_bundle_log(self: Any) -> None:
         )
     else:
         return
-    from .._io import ArtifactError
 
     raise ArtifactError(message)
 
@@ -829,7 +832,6 @@ def validate_saved_outs(
         Aggregate replay-validation status. Fully validated pass/fail results
         remain bool-compatible through callers that unwrap completed statuses.
     """
-    from ._loaded_callables import release_loaded_callables, resolve_loaded_callables
 
     # Replay is an execution boundary: a loaded op's recorded function identity
     # (``func_id``) resolves to its callable for the replay phase only; whatever
@@ -856,7 +858,6 @@ _ORPHAN_CANDIDATE_INDEX_KEY = "_validation_orphan_candidate_index"
 
 def _refuse_unreplayable_trace(self: "Trace") -> None:
     """Refuse traces that cannot be replay-validated, then prove the comparator."""
-    from .._runnable import refuse_collective_boundary_trace, refuse_poisoned_trace
 
     refuse_poisoned_trace(self, "validation")
     # A collective boundary cannot be replayed single-device: re-issuing it
@@ -1022,7 +1023,6 @@ def _check_metadata_invariants_recorded(
     """Release replay callables, then run the metadata invariants, recording any firing one."""
     # Metadata invariant checks (after out validation ops) read the loaded
     # artifact as loaded: the replay-phase callables are released first.
-    from ._loaded_callables import release_loaded_callables
 
     release_loaded_callables(resolved_callables or [])
     if validate_metadata:
@@ -1346,7 +1346,6 @@ def _is_intentional_intervention_replacement(layer: "Op") -> bool:
     )
     if getattr(layer, "func", None) is not None and not has_own_live_replacement:
         return False
-    from ._invariants_backward_flow import op_has_genuine_replacement_evidence
 
     return op_has_genuine_replacement_evidence(layer)
 

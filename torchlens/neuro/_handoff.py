@@ -25,7 +25,17 @@ import torch
 
 from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import _actionable_message, _ActionableErrorMixin
-from ..errors._base import ConfigurationError
+from .._utils._multipass_access import get_multipass_attr
+from ..dataset_extraction import LoadedExtraction, load_extraction
+from ..errors._base import ConfigurationError, TorchLensError
+from ..features import SHAPING_OP, as_matrix, site_matrix
+from ..repgeom._annotation_gate import (
+    _expected_stimulus_counts,
+    _raise_ineligible_site,
+    _raise_unsaved_activation,
+    _site_ineligibility,
+    _warn_skipped_sites,
+)
 
 #: Observation-descriptor key of the ALWAYS-written original-row-index
 #: descriptor (neuro memo D10): rsatoolbox's ``calc_rdm(descriptor=...)``
@@ -392,8 +402,6 @@ def _source_kind(source: Any) -> str:
         ``neuro_source_invalid`` for unsupported source types.
     """
 
-    from ..dataset_extraction import LoadedExtraction
-
     if isinstance(source, (LoadedExtraction, str, Path)):
         return "extraction"
     if hasattr(source, "layers") and is_live_trace(source):
@@ -470,8 +478,6 @@ def _record_site_key(record: Any) -> str:
         fabricating an identity.
     """
 
-    from ..errors._base import TorchLensError
-
     try:
         value = getattr(record, "site_key", None)
     except (TorchLensError, AttributeError, ValueError) as exc:
@@ -492,8 +498,6 @@ def _shape_payload(payload: torch.Tensor) -> tuple[torch.Tensor, tuple[int, ...]
     tuple[torch.Tensor, tuple[int, ...]]
         The 2-D matrix and the original per-stimulus shape.
     """
-
-    from ..features import as_matrix
 
     matrix, record = as_matrix(payload.detach().cpu())
     return matrix, tuple(record.input_shape[1:])
@@ -518,8 +522,6 @@ def _trace_site_payload(record: Any, key: str, requested: str, verb: str) -> Sit
     SitePayload
         The shaped payload with identity facts.
     """
-
-    from ..repgeom._annotation_gate import _raise_unsaved_activation
 
     out = getattr(record, "out", None) if getattr(record, "has_saved_activation", False) else None
     if not isinstance(out, torch.Tensor):
@@ -581,12 +583,6 @@ def enumerate_trace_sites(
     NeuroHandoffError
         ``neuro_site_ambiguous`` for a bare multi-pass layer lookup.
     """
-
-    from ..repgeom._annotation_gate import (
-        _expected_stimulus_counts,
-        _raise_ineligible_site,
-        _site_ineligibility,
-    )
 
     expected_counts = _expected_stimulus_counts(trace)
     if sites is None:
@@ -657,8 +653,6 @@ def _default_trace_sweep(
         Eligible shaped payloads and the full per-site ledger.
     """
 
-    from ..repgeom._annotation_gate import _site_ineligibility, _warn_skipped_sites
-
     payloads: list[SitePayload] = []
     ledger: list[SiteOutcome] = []
     skipped: OrderedDict[str, str] = OrderedDict()
@@ -703,8 +697,6 @@ def _safe_label(record: Any) -> str | None:
         The single op label, or ``None`` when the record aggregates
         several passes.
     """
-
-    from .._utils._multipass_access import get_multipass_attr
 
     label = get_multipass_attr(record, "label", None, multipass=None)
     return str(label) if label is not None else None
@@ -766,10 +758,6 @@ def enumerate_extraction_sites(
         For an explicitly requested stored output that is not
         stimulus-indexed.
     """
-
-    from ..dataset_extraction import LoadedExtraction, load_extraction
-    from ..features import site_matrix
-    from ..repgeom._annotation_gate import _raise_ineligible_site, _warn_skipped_sites
 
     loaded = source if isinstance(source, LoadedExtraction) else load_extraction(source)
     manifest_n = (loaded.manifest.get("stimulus_provenance") or {}).get("n_stimuli")
@@ -850,7 +838,6 @@ def base_descriptors(
     """
 
     from .._version import __version__
-    from ..features import SHAPING_OP
 
     descriptors: dict[str, Any] = {
         "source": "torchlens",

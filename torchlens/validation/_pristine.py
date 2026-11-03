@@ -57,7 +57,9 @@ from typing import TYPE_CHECKING, cast
 
 from torch import nn
 
+from .. import _state
 from .._capture._fused_attention_hold import hold_fused_attention_fastpath_off
+from ..backends.torch.wrappers import unwrap_torch, wrap_torch
 
 if TYPE_CHECKING:
     from ..backends.torch.wrappers import CompletenessWitnessMode, EscapeDetectorMode
@@ -84,8 +86,6 @@ def pristine_torch_oracle() -> Iterator[bool]:
         (``code="pristine_ledger_poisoned"``). Callers convert either into
         a fail-closed (never-bless) verdict.
     """
-
-    from .. import _state
 
     if not _state._is_decorated:
         yield True
@@ -121,8 +121,6 @@ def pristine_torch_oracle() -> Iterator[bool]:
     # the closed vocabularies, so the casts only restore the literal types.
     detector_mode = cast("EscapeDetectorMode", _state._escape_detector_mode)
     witness_mode = cast("CompletenessWitnessMode", _state._completeness_witness_mode)
-
-    from ..backends.torch.wrappers import unwrap_torch, wrap_torch
 
     unwrap_torch()
     try:
