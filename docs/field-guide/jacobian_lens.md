@@ -26,6 +26,45 @@ section here.
 pip install torchlens transformers
 ```
 
+## Minimal example on the running model
+
+This page uses [the decoder on the IOI
+prompt](running_examples.md#the-decoder-on-the-ioi-prompt). The logit lens is the
+Jacobian lens with `J_l = I`: decode a block's saved residual stream directly through
+the model's final norm and unembedding. The recipe below builds its own model and fits
+`J_l`.
+
+```python
+# recipe-test: tool=transformers expected=True
+import torch
+import transformers
+
+import torchlens as tl
+
+PROMPT = "When Mary and John went to the store, John gave a drink to"
+words = PROMPT.replace(",", " ,").split()
+vocab = sorted(set(words))
+x = torch.tensor([[vocab.index(word) for word in words]])
+torch.manual_seed(0)
+config = transformers.GPT2Config(
+    vocab_size=len(vocab),
+    n_positions=32,
+    n_embd=64,
+    n_layer=2,
+    n_head=4,
+    use_cache=False,
+    attn_implementation="eager",
+)
+model = transformers.GPT2LMHeadModel(config).eval()
+
+trace = tl.trace(model, x)
+
+with torch.no_grad():
+    residual = trace["transformer.h.0"].out
+    logits = model.lm_head(model.transformer.ln_f(residual))
+RESULT = logits.shape == trace["lm_head"].out.shape
+```
+
 ## Build the model and a fitting corpus
 
 ```python
