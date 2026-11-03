@@ -8704,11 +8704,19 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/receptive_field/_view.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "source_trace",
   "file": "torchlens/receptive_field/_view.py",
   "has_default": false,
-  "sites": 8,
+  "sites": 9,
   "via_getattr": false
  },
  {
