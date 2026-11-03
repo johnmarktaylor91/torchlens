@@ -220,7 +220,7 @@ _TRACE_REACHIN_LEDGER: dict[str, int] = {
     # `peek_buffer_write_tracker`, now reused by six call sites that were
     # each a separate string reach-in before this reconcile, net -7 there
     # alone), discharging all nine new sites plus six pre-existing ones.
-    "backends/torch": 116,
+    "backends/torch": 114,
     "bridge": 1,
     "bundle": 1,
     # 20 -> 22 (2026-08-16 l2 episode, f2228f46 S7 suite): the episode
