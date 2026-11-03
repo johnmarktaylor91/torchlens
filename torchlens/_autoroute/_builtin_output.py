@@ -125,7 +125,7 @@ def _decode_outputs_for_trace_unguarded(trace: Trace, outputs: Any) -> None:
 
     logits_info = _select_logits(outputs, resolved, meta)
     if logits_info is None:
-        if resolved.is_model_specific:
+        if resolved.verified:
             trace._provenance_output_postprocessor = replace(
                 resolved,
                 ambiguous=True,
@@ -285,8 +285,8 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
         id2label = meta.get("id2label")
         return ResolvedPostprocessing(
             source="user",
-            resolved_for=str(style),
-            is_model_specific=True,
+            identifier=str(style),
+            verified=True,
             config={"id2label": id2label} if isinstance(id2label, dict) else {},
             description=f"user-requested output decode: {style}",
             style="imagenet" if style in {"imagenet", "imagenet1k"} else "classification",
@@ -300,8 +300,8 @@ def _resolve_requested_style(meta: dict[str, Any]) -> ResolvedPostprocessing | N
     if style == "hf_text":
         return ResolvedPostprocessing(
             source="user",
-            resolved_for="hf_text",
-            is_model_specific=True,
+            identifier="hf_text",
+            verified=True,
             config={},
             description="user-requested Hugging Face text decode",
             style="hf_text",
@@ -480,8 +480,8 @@ def hf_config_classifier(outputs: Any, meta: dict[str, Any]) -> ResolvedPostproc
         return None
     resolved = ResolvedPostprocessing(
         source="hf_config",
-        resolved_for="config.id2label",
-        is_model_specific=True,
+        identifier="config.id2label",
+        verified=True,
         config={"num_labels": meta.get("num_classes"), "id2label": id2label},
         description="HF config labels",
         style="classification",
@@ -541,7 +541,7 @@ def imagenet_verified(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocess
     torchvision_meta = metadata.get("torchvision")
     timm_meta = metadata.get("timm")
     verified_sources: list[str] = []
-    resolved_for = "imagenet1k"
+    identifier = "imagenet1k"
     if isinstance(torchvision_meta, dict):
         model_module = torchvision_meta.get("model_module")
         if (
@@ -551,16 +551,16 @@ def imagenet_verified(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocess
             and torchvision_meta.get("categories_len") == 1000
         ):
             verified_sources.append("torchvision_weights")
-            resolved_for = str(torchvision_meta.get("weights_id"))
+            identifier = str(torchvision_meta.get("weights_id"))
     if isinstance(timm_meta, dict) and timm_meta.get("num_classes") == 1000:
         verified_sources.append("timm_default_cfg")
-        resolved_for = str(timm_meta.get("architecture") or resolved_for)
+        identifier = str(timm_meta.get("architecture") or identifier)
     if len(set(verified_sources)) != 1:
         return None
     return ResolvedPostprocessing(
         source=verified_sources[0],
-        resolved_for=resolved_for,
-        is_model_specific=True,
+        identifier=identifier,
+        verified=True,
         config={},
         description="verified ImageNet-1k output labels",
         style="imagenet",
@@ -596,8 +596,8 @@ def hf_text(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None
         head = head or "logits"
     return ResolvedPostprocessing(
         source="attached_tokenizer",
-        resolved_for="hf_text",
-        is_model_specific=True,
+        identifier="hf_text",
+        verified=True,
         config={},
         description="Hugging Face text decode with the attached tokenizer",
         style="hf_text",

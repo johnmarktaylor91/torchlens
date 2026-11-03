@@ -433,8 +433,8 @@ def test_resolved_postprocessing_roundtrips_through_tlspec(tmp_path: Path) -> No
     trace = _build_conv_log()
     trace._provenance_output_postprocessor = ResolvedPostprocessing(
         source="hf_config",
-        resolved_for="tiny-classifier",
-        is_model_specific=True,
+        identifier="tiny-classifier",
+        verified=True,
         config={"num_labels": 2},
         description="HF config labels",
         style="classification",

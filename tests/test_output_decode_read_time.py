@@ -256,8 +256,8 @@ def test_custom_detector_serves_the_read_time_style() -> None:
             return None
         return ResolvedPostprocessing(
             source="project",
-            resolved_for="walk_labels",
-            is_model_specific=True,
+            identifier="walk_labels",
+            verified=True,
             config={"id2label": {0: "a", 1: "b", 2: "c"}},
             description="test label bank",
             style="classification",

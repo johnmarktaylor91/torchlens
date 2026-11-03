@@ -79,8 +79,8 @@ def register_custom_decoder() -> None:
             return None
         return ResolvedPostprocessing(
             source="example",
-            resolved_for="demo_custom_labels",
-            is_model_specific=True,
+            identifier="demo_custom_labels",
+            verified=True,
             config={"id2label": {0: "red", 1: "green", 2: "blue"}},
             description="demo custom label bank",
             style="classification",

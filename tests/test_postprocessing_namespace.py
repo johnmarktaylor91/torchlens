@@ -53,8 +53,8 @@ def test_custom_detector_registered_publicly_decodes_on_demand() -> None:
                 return None
             return ResolvedPostprocessing(
                 source="project",
-                resolved_for="my_labels",
-                is_model_specific=True,
+                identifier="my_labels",
+                verified=True,
                 config={"id2label": {0: "cat", 1: "dog"}},
                 description="project label bank",
                 style="classification",

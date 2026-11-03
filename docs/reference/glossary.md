@@ -2862,14 +2862,6 @@ deprecation shim owed*
   receives `(outputs, meta)` and returns `ResolvedPostprocessing` or `None`;
   registering a name twice refuses `ValueError` naming `unregister`.
 
-**ResolvedPostprocessing fields** — *unstable — no deprecation shim owed*
-: `ResolvedPostprocessing.resolved_for` (`resolved_for=`): name of the model weights, label
-  bank or default policy the output decoding was resolved for (a torchvision weights id, a
-  timm architecture, `config.id2label`, `hf_text`, or a registered label-bank name).
-  `ResolvedPostprocessing.is_model_specific` (`is_model_specific=`): whether the decoding is
-  specific to this model (from its own metadata or the caller's choice) rather than a generic
-  default; the trace summary prints `unverified` when it is False.
-
 **image file path as `tl.trace` input** — *unstable — no deprecation shim owed*
 : A `str` or `os.PathLike` naming an existing file with an image suffix
   (`.jpg`, `.jpeg`, `.png`, `.bmp`, `.gif`, `.webp`, `.tif`, `.tiff`), or a
@@ -3650,7 +3642,7 @@ describe each surface in depth.
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
 | `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `registration_order`, `func`) |
-| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`); fields `source`, `resolved_for`, `is_model_specific`, `config`, `description`, `style`, `selected_output_head`, `label_source`, `label_source_version`, `confidence`, `top_n_captured`, `ambiguous`, filled by keyword (`resolved_for=`, `is_model_specific=`, `description=`, `selected_output_head=`, `label_source=`, `label_source_version=`, `top_n_captured=`) |
+| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`); fields `source`, `identifier`, `verified`, `config`, `description`, `style`, `selected_output_head`, `label_source`, `label_source_version`, `confidence`, `top_n_captured`, `ambiguous`, filled by keyword (`identifier=`, `description=`, `selected_output_head=`, `label_source=`, `label_source_version=`, `top_n_captured=`) |
 | `tl.postprocessing.info` | Describe one registered output detector by name |
 | `tl.postprocessing.list` | List registered output detectors, optionally filtered by name glob (`name_glob=`) |
 | `tl.postprocessing.register` | Decorator registering a custom output detector (`name=`, `priority=`; lower runs first) |
