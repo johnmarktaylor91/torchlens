@@ -35,7 +35,7 @@ def _foreign_module(namespace: str) -> nn.Module:
     [
         _with_config({"quant_method": "gptq", "bits": 4}),
     ],
-    ids=["hf-config-gptq", "hf-config-awq-enum", "awq-kernel-module", "gptqmodel-module"],
+    ids=["hf-config-gptq"],
 )
 def test_gptq_awq_row_fires_and_says_not_verified(model: nn.Module) -> None:
     row = report(model, torch.randn(1, 4)).check("gptq_awq_quantized")
