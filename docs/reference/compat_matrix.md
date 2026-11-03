@@ -22,7 +22,7 @@ version table, the limitations catalog) lives in
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1+cu126 | 5.19.0 | 3.11.2 | Linux x86_64 GPU host, CUDA hidden from the ranks | pass |
 | Router-logit outputs | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass (3 of 3) |
 | DTensor tensor parallelism, two-process CPU `gloo` mesh | as above | 2.14.1 | 5.19.0 | 3.11.14 | macOS arm64 (Apple silicon) | pass: typed refusal on both ranks (torch-native sharding) |
-| DTensor tensor parallelism loaded by transformers (`tp_plan="auto"`) | none | not run | not run | not run | none | not yet verified: no test in the suite loads a `tp_plan` model |
+| DTensor tensor parallelism loaded by transformers (`tp_plan="auto"`) | `test_transformers_tp_plan_load_on_a_two_process_cpu_mesh_refuses_typed` | 2.14.1+cpu | 5.19.0 | 3.11.15 | Linux x86_64 CPU worker | pass: typed refusal on both ranks; the sharded logits match the unsharded load |
 
 ### Router-logit outputs
 
@@ -47,8 +47,15 @@ record rank-local shims instead of the real ops. The planned capture design is
 capture a rank-local dense copy of the module.
 
 A model loaded by transformers with
-`distributed_config=transformers.DistributedConfig(tp_plan="auto")` is not yet
-verified: no test in the suite loads one, so this page makes no claim about it.
+`distributed_config=transformers.DistributedConfig(tp_plan="auto")` is the
+row's second half. A tiny random-weight Llama checkpoint, pinned by revision and
+digest in the test artifact registry, loads sharded on each rank (the attention
+projections are `DTensor`s), its logits match the same checkpoint loaded
+unsharded, and capture refuses with the same typed error and kinds. Transformers
+applies a `tp_plan` only when the rank layout is in the process environment
+(`RANK`, `WORLD_SIZE`, `LOCAL_RANK`); without it the checkpoint loads unsharded
+and there is no tensor parallelism to test. Transformers refuses a `tp_plan` on
+any machine with an MPS device, so this half does not run on macOS.
 On macOS, `gloo` needs the loopback interface for a local mesh
 (`GLOO_SOCKET_IFNAME=lo0`; the test sets it when unset), else the shard scatter
 waits out its timeout.

@@ -12,7 +12,9 @@ measured on.
   runs, and capture refuses with the typed ``DistributedCaptureUnsupportedError`` naming the
   ``dtensor`` and ``tensor_parallel`` kinds (the planned design is
   ``docs/internal/reference/tensor_parallel_design.md``). The sharding is torch-native
-  ``parallelize_module``; transformers' ``tp_plan="auto"`` loading is not yet verified here.
+  ``parallelize_module``. Transformers' ``tp_plan="auto"`` loading is the other half of the
+  row; it loads a pinned registry checkpoint, so it lives in the R1 venue
+  (``tests/real_model/r1/test_compat_matrix_hf_tp.py``).
 * ``flash_attention_4``: capture plus validation on a CUDA device that the FlashAttention 4
   package supports; skipped elsewhere with the reason. It is a known capture gap today (strict
   xfail), and a companion test pins that a witnessed trace is marked unverified, not silent.
