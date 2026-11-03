@@ -1592,10 +1592,7 @@ class Op(OpAtenMixin, _SelectionOperand):
         """Materialize lazy grads, copy shared groups, reject unsaved predicate outs."""
 
         if name not in _lazy_fields:
-            try:
-                return _getattribute(self, name)
-            except AttributeError as exc:  # a guessed name (op.activation) names the real field
-                _familiar_names.reraise_with_hint(exc, "Op", name)
+            return _familiar_names.lookup_with_hint(_getattribute, self, "Op", name)
         if name == "grad":
             slot = _object_getattribute(self, "_slot")
             records = slot("_grad_records")

@@ -11,7 +11,8 @@ nearest spelling, which for these names is often a different field
 
 from __future__ import annotations
 
-from typing import NoReturn
+from collections.abc import Callable
+from typing import Any, NoReturn
 
 _OUT = "use .out (the saved output tensor)"
 _PARENTS = "use .parents (labels of the ops feeding this one; .get_parents() returns objects)"
@@ -136,3 +137,11 @@ def reraise_with_hint(exc: AttributeError, owner: str, name: str) -> NoReturn:
     if type(exc) is AttributeError and familiar_name_hint(owner, name) is not None:
         raise missing_attribute_error(owner, name) from None
     raise exc
+
+
+def lookup_with_hint(getter: Callable[[Any, str], Any], obj: Any, owner: str, name: str) -> Any:
+    """Run ``getter(obj, name)``; a plain AttributeError for a guessed name re-raises with the real field named."""
+    try:
+        return getter(obj, name)
+    except AttributeError as exc:
+        reraise_with_hint(exc, owner, name)
