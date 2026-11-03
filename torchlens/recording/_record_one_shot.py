@@ -11,7 +11,6 @@ from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
 from .._deprecations import MISSING, MissingType
-from .._errors import KeywordConflictError
 from .._input_coerce import _coerce_input_args
 from .._robustness import check_model_and_input_variants
 from ..backends.registry import (
@@ -25,7 +24,11 @@ from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
-from ._validation import validate_postprocess
+from ._validation import (
+    refuse_episode_on_record,
+    refuse_storage_streaming_conflict,
+    validate_postprocess,
+)
 from .options import (
     ForwardErrorMode,
     GradPredicateFn,
@@ -106,6 +109,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     detach_saved_activations: bool | MissingType = MISSING,
+    episode: Any | None = None,
 ) -> Recording | GenerationRecording | tuple[Any, Recording | GenerationRecording]:
     """Record one model forward pass with capture predicates.
 
@@ -187,6 +191,8 @@ def record(
     postprocess:
         Optional postprocess enrichment preset.
 
+    episode:
+        Refused typed (``episode_unsupported_on_record``); episode capture runs on ``tl.trace``.
     Returns
     -------
     Recording | tuple[Any, Recording]
@@ -195,12 +201,8 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
-    if storage is not None and streaming is not None:
-        raise KeywordConflictError(
-            "Do not pass both `storage` and `streaming`",
-            code="storage_argument_conflict",
-            remedy="prefer storage=, or remove one of the two arguments",
-        )
+    refuse_storage_streaming_conflict(storage, streaming)
+    refuse_episode_on_record(episode)
     validate_postprocess(postprocess)
     input_args = _coerce_input_args(model, input_args)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
