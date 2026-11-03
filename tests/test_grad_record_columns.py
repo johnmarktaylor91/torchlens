@@ -94,10 +94,10 @@ def test_grad_records_round_trip(tmp_path: Path, lazy: bool) -> None:
     live_ops, loaded_ops = list(trace), list(loaded)
     assert [op.label for op in loaded_ops] == [op.label for op in live_ops]
     saved_grads = 0
-    for live_op, loaded_op in zip(live_ops, loaded_ops):
+    for live_op, loaded_op in zip(live_ops, loaded_ops, strict=True):
         live_records, loaded_records = _records(live_op), _records(loaded_op)
         assert len(loaded_records) == len(live_records), live_op.label
-        for live, record in zip(live_records, loaded_records):
+        for live, record in zip(live_records, loaded_records, strict=True):
             assert record.owner is loaded_op
             assert (record.ordinal, record.backward_pass_index) == (
                 live.ordinal,

@@ -278,7 +278,7 @@ def _read_payloads(sparse: Any, refs: Any, count: int, name: str) -> list[Any]:
     except UnicodeDecodeError as error:
         raise _corrupt(f"references {name!r} hold undecodable ids") from error
     positions = _read_column(packed_positions, len(blob_ids), _INT32[0], _INT32[1], name)
-    for position, blob_id in zip(positions, blob_ids):
+    for position, blob_id in zip(positions, blob_ids, strict=True):
         if not 0 <= position < count or values[position] is not None:
             raise _corrupt(f"references {name!r} name an invalid record")
         values[position] = BlobRef(blob_id=blob_id, kind=kind)
