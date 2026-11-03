@@ -668,6 +668,10 @@
 - **visualization**: Rendered graphs use the bundled font on machines without Arial installed.
 - **capture**: CPU peak memory is no longer under-reported on kernels whose high-water mark lags the
   exact resident size.
+- **capture**: `Tensor.to_sparse_csr`, `to_sparse_csc`, `to_sparse_bsr` and `to_sparse_bsc` are
+  recorded as ops, like `to_sparse`. torch does not route them through
+  `__torch_function__`, so a sparse tensor built in forward with one of them reached its consumer
+  (`torch.sparse.mm`, `torch.sparse.sampled_addmm`) with no provenance and capture warned.
 
 ### Performance Improvements
 
