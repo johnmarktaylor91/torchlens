@@ -3,7 +3,7 @@
 - U35.3: ``emit_nvtx=True`` on a host without CUDA refuses typed
   (``emit_nvtx_unavailable``), as ``torch.autograd.profiler.emit_nvtx`` does,
   instead of silently swallowing every range push.
-- U31.4: ``raise_on_nan`` must be a real bool (``raise_on_nan_type_invalid``);
+- U31.4: ``on_nonfinite`` must be one of its four modes (``on_nonfinite_invalid``);
   the Recorder's compiled-model refusal is typed (``compiled_model_unsupported``)
   and states the condition it checks.
 - U53.3: both compiled refusals name ``tl.bridge.depyf``.
@@ -66,13 +66,13 @@ def test_emit_nvtx_refusal_tracks_the_real_host() -> None:
 
 
 @pytest.mark.parametrize("value", [0.0, 1, "yes", None])
-def test_raise_on_nan_must_be_a_real_bool(value: object) -> None:
-    """U31.4: a non-bool (falsy ones used to disable the check) refuses typed."""
+def test_on_nonfinite_must_be_a_known_mode(value: object) -> None:
+    """U31.4: a value outside the closed vocabulary (bools included) refuses typed."""
 
-    with pytest.raises(ArgumentTypeError) as info:
-        tl.options.CaptureOptions(raise_on_nan=value)  # type: ignore[arg-type]
-    assert info.value.fields["code"] == "raise_on_nan_type_invalid"
-    assert info.value.fields["received_type"] == type(value).__name__
+    with pytest.raises(InvalidArgumentError) as info:
+        tl.options.CaptureOptions(on_nonfinite=value)  # type: ignore[arg-type]
+    assert info.value.fields["code"] == "on_nonfinite_invalid"
+    assert info.value.fields["argument"] == "on_nonfinite"
 
 
 def test_raise_on_nan_remedy_runs() -> None:
@@ -83,9 +83,9 @@ def test_raise_on_nan_remedy_runs() -> None:
             return torch.log(x - 10.0)
 
     with pytest.raises(Exception, match=r"(?i)nan|inf|non-finite"):
-        tl.trace(_NaN(), torch.zeros(2), capture=tl.options.CaptureOptions(raise_on_nan=True))
+        tl.trace(_NaN(), torch.zeros(2), capture=tl.options.CaptureOptions(on_nonfinite="raise"))
     clean = tl.trace(
-        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(raise_on_nan=False)
+        _Tiny(), torch.randn(2, 4), capture=tl.options.CaptureOptions(on_nonfinite="ignore")
     )
     assert len(clean._layer_list) > 0
 
@@ -129,7 +129,7 @@ def test_two_positional_inputs_refuse_before_dispatch_and_the_remedy_runs() -> N
 
     a, b = torch.randn(3), torch.randn(3)
     with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(_Pair(), a, b)  # type: ignore[arg-type]
+        tl.trace(_Pair(), a, input_kwargs=b)  # type: ignore[arg-type]
     assert info.value.fields["code"] == "input_kwargs_type_invalid"
     trace = tl.trace(_Pair(), (a, b))
     assert torch.equal(trace.output_ops[0].out, a + b)
@@ -139,7 +139,7 @@ def test_two_positional_inputs_refuse_for_an_explicit_non_torch_backend() -> Non
     """U11.2: the refusal fires before backend resolution, even with jax absent."""
 
     with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(lambda p, q: p + q, torch.randn(3), torch.randn(3), backend="jax")  # type: ignore[arg-type]
+        tl.trace(lambda p, q: p + q, torch.randn(3), input_kwargs=torch.randn(3), backend="jax")  # type: ignore[arg-type]
     assert info.value.fields["code"] == "input_kwargs_type_invalid"
 
 
@@ -149,7 +149,7 @@ def test_jax_two_positional_remedy_runs() -> None:
     jnp = pytest.importorskip("jax.numpy")
     x = jnp.ones(3)
     with pytest.raises(ArgumentTypeError) as info:
-        tl.trace(lambda p, q: p + q, x, x, backend="jax")  # type: ignore[arg-type]
+        tl.trace(lambda p, q: p + q, x, input_kwargs=x, backend="jax")  # type: ignore[arg-type]
     assert info.value.fields["code"] == "input_kwargs_type_invalid"
     trace = tl.trace(lambda p, q: p + q, (x, x), backend="jax")
     assert len(trace._layer_list) > 0

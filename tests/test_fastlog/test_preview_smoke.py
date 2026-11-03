@@ -26,10 +26,9 @@ def test_preview_fastlog_renders_on_mlp(tmp_path: Path) -> None:
     dot = trace.preview_fastlog(
         keep_op=lambda ctx: ctx.layer_type == "linear",
         path=str(tmp_path / "preview"),
-        vis_save_only=True,
     )
-    assert "digraph" in dot
-    assert "fastlog" in dot
+    assert "digraph" in dot.dot
+    assert "fastlog" in dot.dot
 
 
 def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> None:
@@ -51,7 +50,6 @@ def test_preview_fastlog_catches_record_context_field_error(tmp_path: Path) -> N
         predicate=bad_predicate,
         color_predicate_error="#FF7AB6",
         path=str(tmp_path / "preview_error"),
-        vis_save_only=True,
     )
-    assert "#FF7AB6" in dot
-    assert "RecordContext has no field" in dot
+    assert "#FF7AB6" in dot.dot
+    assert "RecordContext has no field" in dot.dot

@@ -39,7 +39,7 @@ def three_pass_log() -> Generator[tl.Trace, None, None]:
     log = tl.trace(
         ThreePassModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(layers_to_save=None),
+        save=None,
     )
     try:
         yield log

@@ -20,7 +20,7 @@ from torchlens._runnable import (
     StateSource,
 )
 from torchlens.errors import ReplayValueMismatchError
-from torchlens.options import CaptureOptions, SaveOptions
+from torchlens.options import CaptureOptions
 
 
 class ActivationPayloadModel(nn.Module):
@@ -538,11 +538,11 @@ def test_transformed_outputs_are_archived_without_overclaiming_attestation(
     trace = tl.trace(
         model,
         torch.ones(2, 3),
-        save=SaveOptions(activation_transform=lambda value: value.mean()),
         capture=CaptureOptions(
             replayable=True,
             capture_container_structure=True,
             cache=False,
+            activation_transform=lambda value: value.mean(),
         ),
     )
     path = tmp_path / "transformed.tlspec"
