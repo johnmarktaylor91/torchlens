@@ -68,6 +68,41 @@ def _set_grad_info_fields(self: "Trace", fields_dict: dict[str, Any]) -> None:
     fields_dict["transformed_gradient_memory"] = None
 
 
+def _set_arg_template_fields(
+    self: "Trace",
+    fields_dict: dict[str, Any],
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> None:
+    """Seed the replay argument templates and the portable function identity of one call."""
+    should_capture_template = bool(
+        getattr(self, "is_replayable", False) or self._options_save_arg_templates
+    )
+    if should_capture_template:
+        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
+        fields_dict["args_template"] = captured_template
+        fields_dict["kwargs_template"] = captured_template if kwargs else None
+        # The portable function identity is what lets a LOADED bundle resolve its
+        # callables for validation; a default capture records templates only for
+        # in-process replay, so it keeps the default bundle's identity-free contract.
+        fields_dict["func_id"] = (
+            captured_template.func_id
+            if getattr(self, "is_replayable", False) or self._options_save_args
+            else None
+        )
+    else:
+        fields_dict["args_template"] = None
+        fields_dict["kwargs_template"] = None
+        # A capture that saves arguments is replay-ready; its portable function
+        # identity lets replay validation resolve the callable on a loaded
+        # bundle (``validation/_loaded_callables.py``), which carries no callables.
+        fields_dict["func_id"] = (
+            _function_registry_key(func, func_name) if self._options_save_args else None
+        )
+
+
 def _build_shared_fields_dict(
     self: "Trace",
     func: Callable[..., Any],
@@ -132,30 +167,7 @@ def _build_shared_fields_dict(
     fields_dict["output_device"] = self._options_output_device
     fields_dict["_construction_done"] = False
     fields_dict["edits"] = []
-    should_capture_template = bool(
-        getattr(self, "is_replayable", False) or self._options_save_arg_templates
-    )
-    if should_capture_template:
-        captured_template = _build_args_template(func, args, kwargs, self, func_name=func_name)
-        fields_dict["args_template"] = captured_template
-        fields_dict["kwargs_template"] = captured_template if kwargs else None
-        # The portable function identity is what lets a LOADED bundle resolve its
-        # callables for validation; a default capture records templates only for
-        # in-process replay, so it keeps the default bundle's identity-free contract.
-        fields_dict["func_id"] = (
-            captured_template.func_id
-            if getattr(self, "is_replayable", False) or self._options_save_args
-            else None
-        )
-    else:
-        fields_dict["args_template"] = None
-        fields_dict["kwargs_template"] = None
-        # A capture that saves arguments is replay-ready; its portable function
-        # identity lets replay validation resolve the callable on a loaded
-        # bundle (``validation/_loaded_callables.py``), which carries no callables.
-        fields_dict["func_id"] = (
-            _function_registry_key(func, func_name) if self._options_save_args else None
-        )
+    _set_arg_template_fields(self, fields_dict, func, func_name, args, kwargs)
     fields_dict["container_path"] = ()
     fields_dict["container_spec"] = None
     fields_dict["multi_output_name"] = None

@@ -41,6 +41,7 @@ from ._option_receipt import (
     _set_frozen_fields,
 )
 from ._options_validation import (
+    _REMOVED_VISUALIZATION_OPTION_MEMBERS,
     _normalize_layout,
     _validate_buffer_visibility,
     _validate_capture_values,
@@ -918,20 +919,6 @@ class _SaveTransforms:
         _set_frozen_fields(instance, _SAVE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
-
-
-#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
-_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
-    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
-    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
-    "for_paper": 'use VisualizationOptions.theme="paper"',
-    "return_graph": "read Drawing.dot on the returned Drawing",
-    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
-    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
-    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
-    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
-}
 
 
 @dataclass(frozen=True, init=False)
