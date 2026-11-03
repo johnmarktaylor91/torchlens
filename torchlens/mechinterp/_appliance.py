@@ -15,14 +15,12 @@ The appliance name ``"mechinterp"`` and ``logit_lens`` on it are ruled spellings
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
+from .._semantic.logit_lens import LensFunc, LogitLens, logit_lens as _logit_lens
 from ._factored import FactoredMatrix
 from ._params import ov_circuit, qk_circuit
 from ._scores import FixedPeriodInduction, HeadScores, head_scores
-
-if TYPE_CHECKING:
-    from .._semantic.logit_lens import LensFunc, LogitLens
 
 __all__ = ["MechInterpAppliance"]
 
@@ -112,9 +110,6 @@ class MechInterpAppliance:
         LogitLens
             Per-block projections through the head.
         """
-
-        # Deferred: the lens module sits in the semantic layer below the kit.
-        from .._semantic.logit_lens import logit_lens as _logit_lens
 
         return _logit_lens(
             self._trace,

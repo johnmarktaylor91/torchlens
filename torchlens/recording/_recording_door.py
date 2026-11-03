@@ -11,11 +11,13 @@ of them on the bundle refuses instead of becoming a silent no-op.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
-from .options import RecordingOptions
+
+if TYPE_CHECKING:
+    from .options import RecordingOptions
 
 #: The ``RecordingOptions`` fields the recorder reads; an unset field stays
 #: ``MISSING`` so the recorder config resolves it.
