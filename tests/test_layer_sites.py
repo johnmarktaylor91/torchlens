@@ -44,6 +44,15 @@ class _ResBlock(nn.Module):
         return x
 
 
+class _ResModel(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.blk = _ResBlock()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.blk(x)
+
+
 class _BranchAct(nn.Module):
     """Applies a relu written on a different line for each branch."""
 
@@ -151,3 +160,16 @@ def test_shape_summary_format_matrix() -> None:
     for shapes in ([(2, 2), (2, 4), (2, 3)], [(2, 64, 8, 8), (2, 512, 4, 4)]):
         summary = layer_shape_summary(_StubLayer(shapes))
         assert summary is not None and set(summary) <= SHAPE_SUMMARY_CHARACTER_CLASS
+
+
+def test_site_key_refuses_typed_on_spanning_layer() -> None:
+    # I-S3': a silent single-key read on a site-spanning layer is the
+    # failure this tripwire exists to catch.
+    log = tl.trace(_ResModel(), torch.randn(2, 8))
+    layer = log["tanh_1_1"]
+    member_keys = [op.site_key for _, op in sorted(layer.ops.items())]
+    assert member_keys == ["s1|blk|tanh||1", "s1|blk|tanh||2"]
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        _ = layer_site_key(layer)
+    assert excinfo.value.fields["code"] == "layer_site_ambiguous"
+    assert ".ops[k].site_key" in str(excinfo.value)

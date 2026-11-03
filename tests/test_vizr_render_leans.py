@@ -27,7 +27,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._visualization import _fonts
+from torchlens._visualization import _fonts, render_execution
 from torchlens.errors._base import TorchLensWarning
 
 
@@ -348,3 +348,23 @@ def test_fk4_floor_residual_writes_manifest(
     assert manifest["readable_band_high"] == 1
     assert manifest["visible_count"] > 1
     assert all(entry["expansion_id"] and entry["expand"] for entry in manifest["entries"])
+
+
+def test_fk1_oversize_vector_warns_and_obeys(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Past the page ceiling the explicit render is still written, with a coded warning."""
+    monkeypatch.setattr(render_execution, "VECTOR_PAGE_CEILING_POINTS", 50.0)
+    trace = tl.trace(_Tiny(), torch.randn(2, 3))
+    try:
+        with warnings.catch_warnings(record=True) as records:
+            warnings.simplefilter("always")
+            trace.draw(path=str(tmp_path / "big"), file_format="svg")
+    finally:
+        trace.cleanup()
+    assert (tmp_path / "big.svg").stat().st_size > 0, "the oversize render was not written"
+    assert "render_vector_oversize" in _codes(records)
+    message = next(
+        str(record.message) for record in records if "render_vector_oversize" in _codes([record])
+    )
+    assert "50 pt" in message and "collapse='auto'" in message and "module=" in message

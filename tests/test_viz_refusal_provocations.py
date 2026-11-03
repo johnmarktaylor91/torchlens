@@ -41,3 +41,9 @@ def test_graphviz_render_failure_refuses_typed(
     with pytest.raises(GraphvizRenderError) as exc_info:
         small_trace.draw(path=str(tmp_path / "g"))
     assert exc_info.value.fields["code"] == "graphviz_render_failed"
+
+
+def test_backward_graph_unavailable_refuses_typed(small_trace) -> None:
+    with pytest.raises(Exception) as exc_info:
+        small_trace.draw(graph="backward")
+    assert getattr(exc_info.value, "fields", {}).get("code") == "backward_graph_unavailable"

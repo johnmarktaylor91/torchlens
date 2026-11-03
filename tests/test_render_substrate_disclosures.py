@@ -11,9 +11,11 @@ real ``OptimizerResult`` shaped like the fallback cases.
 
 from __future__ import annotations
 
+import pytest
 import torch
 
 from torchlens._visualization.render_execution import surface_layout_stderr
+from torchlens.errors import TorchLensWarning
 
 
 class _TwoBlockModel(torch.nn.Module):
@@ -53,3 +55,14 @@ def test_layout_engine_silence_stays_silent() -> None:
         assert surface_layout_stderr(None, engine="dot") == ""
         assert surface_layout_stderr(b"", engine="dot") == ""
         assert surface_layout_stderr("  \n", engine="dot") == ""
+
+
+def test_layout_engine_stderr_warning_carries_code() -> None:
+    """A non-silent layout engine surfaces a typed ``layout_engine_stderr``."""
+
+    message = b"Warning: graph is too large for one page; scaling by 0.5\n"
+    with pytest.warns(TorchLensWarning) as caught:
+        text = surface_layout_stderr(message, engine="dot")
+    assert "scaling by 0.5" in text
+    codes = [warning.message.fields["code"] for warning in caught]
+    assert "layout_engine_stderr" in codes

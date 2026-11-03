@@ -361,3 +361,9 @@ def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 # C2(b) writer discipline: width/height/fixedsize node-arg emission sites
 # ---------------------------------------------------------------------------
+
+
+def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    with pytest.raises(Exception) as excinfo:
+        _draw(mlp_log, tmp_path, size_scale="sqrt")
+    assert excinfo.value.fields["code"] == "scale_requires_size_by"

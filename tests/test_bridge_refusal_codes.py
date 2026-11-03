@@ -9,6 +9,7 @@ fakes, so they need none of the bridged packages installed.
 
 from __future__ import annotations
 
+import contextlib
 import sys
 import types
 from typing import Any
@@ -92,3 +93,11 @@ def test_mlflow_run_id_unsupported(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(KeywordConflictError) as info:
         _trackers.mlflow(object(), client=_FluentClient(), run_id="r1")
     _assert_code(info.value, "tracker_mlflow_run_id_unsupported")
+
+
+def test_depyf_nothing_dumped(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
+    _fake_depyf(monkeypatch, prepare_debug=lambda path, **kwargs: contextlib.nullcontext())
+    monkeypatch.setattr(torch, "compile", lambda model: model)
+    with pytest.raises(CaptureNotActiveError) as info:
+        bdepyf.dump(torch.nn.Linear(2, 2), torch.randn(1, 2), tmp_path)
+    _assert_code(info.value, "bridge_depyf_nothing_dumped")

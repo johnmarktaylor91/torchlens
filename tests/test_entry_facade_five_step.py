@@ -20,7 +20,7 @@ import pytest
 
 import torchlens as tl
 from torchlens._errors import FacadeTeachingError, MissingDependencyError
-from torchlens._utils.facade import resolve_facade_attr
+from torchlens._utils.facade import DependencyGate, resolve_facade_attr
 
 #: The notebook facade left the root surface (private package); its facade
 #: behaviour is still pinned through the module itself.
@@ -140,3 +140,21 @@ def test_bridge_and_callbacks_unknown_names_stay_plain() -> None:
     with pytest.raises(AttributeError) as excinfo:
         tl.callbacks.not_a_callback  # noqa: B018
     assert type(excinfo.value) is AttributeError
+
+
+def test_step4_missing_dependency_names_package_and_install() -> None:
+    """The per-name gate names the exact package and install command."""
+
+    with pytest.raises(MissingDependencyError) as excinfo:
+        _resolve(
+            "real",
+            dependencies={
+                "real": DependencyGate("not_a_real_pkg_xyz", 'pip install "torchlens[extra]"')
+            },
+        )
+    err = excinfo.value
+    assert err.fields["code"] == "facade_dependency_missing"
+    assert err.fields["dependency"] == "not_a_real_pkg_xyz"
+    assert "not_a_real_pkg_xyz" in str(err)
+    assert 'pip install "torchlens[extra]"' in str(err)
+    assert isinstance(err, AttributeError)

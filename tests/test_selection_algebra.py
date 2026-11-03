@@ -624,3 +624,13 @@ def test_internal_closed_set_guards_raise(log):
 
     with pytest.raises(NotImplementedError):
         _Bare().__selection__()
+
+
+def test_selector_subtraction_non_selector_operand_refuses_typed():
+    """`selector - <non-selector>` refuses with the documented code."""
+
+    from torchlens._errors import ArgumentTypeError
+
+    with pytest.raises(ArgumentTypeError) as excinfo:
+        _ = tl.func("relu") - 3
+    assert excinfo.value.fields["code"] == "selector_subtraction_operand_invalid"

@@ -9,6 +9,7 @@ output-gradient mount.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any
 
 import pytest
@@ -57,6 +58,18 @@ def test_sweep_refuses_a_tensor_loss() -> None:
             loss=torch.tensor(1.0),  # type: ignore[arg-type]
         )
     assert excinfo.value.fields["code"] == "do_loss_not_callable"
+
+
+@dataclass(frozen=True)
+class _GradKey:
+    """A hashable stand-in for a ``tl.grad`` metric key (kind ``"grad"``)."""
+
+    label: str
+    selector_kind: str = "grad"
+
+
+def _grad_key(label: str) -> _GradKey:
+    return _GradKey(label)
 
 
 def _loss(member: Any) -> torch.Tensor:
@@ -108,3 +121,14 @@ def test_aggregate_measures_activation_and_gradient_of_one_site() -> None:  # A3
     expected_grad = trace[relu].grad.mean()
     assert torch.allclose(torch.as_tensor(results[relu]), expected_out)
     assert torch.allclose(torch.as_tensor(results[repr(tl.grad(relu))]), expected_grad)
+
+
+def test_aggregate_gradient_key_needs_loss_fn() -> None:
+    model = _Net()
+    with pytest.raises(InvalidArgumentError) as excinfo:
+        tl.stats.aggregate(
+            model,
+            [_X],
+            {_relu_label(model): tl.stats.Mean(), _grad_key("relu_1_2"): tl.stats.Mean()},
+        )
+    assert excinfo.value.fields["code"] == "aggregate_loss_fn_required"
