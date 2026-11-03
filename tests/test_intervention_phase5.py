@@ -10,7 +10,7 @@ from torchlens.errors import MetadataInvariantError
 from torchlens.intervention.types import ParentRef, TupleIndex
 from torchlens.recording import RecordContext
 from torchlens.validation import check_metadata_invariants
-from torchlens.validation.invariants import check_func_call_id_invariant
+from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
 
 class _SplitModel(torch.nn.Module):
@@ -172,23 +172,23 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     log1 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     log2 = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     log3 = tl.trace(
         _DifferentGraphModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    assert log1.graph_shape_hash is not None
-    assert len(log1.graph_shape_hash) == 64
-    assert log1.graph_shape_hash == log2.graph_shape_hash
-    assert log3.graph_shape_hash != log1.graph_shape_hash
+    assert log1.provenance.fingerprint is not None
+    assert len(log1.provenance.fingerprint) == 64
+    assert log1.provenance.fingerprint == log2.provenance.fingerprint
+    assert log3.provenance.fingerprint != log1.provenance.fingerprint
 
 
 def test_graph_shape_hash_is_referentially_transparent() -> None:
@@ -197,9 +197,9 @@ def test_graph_shape_hash_is_referentially_transparent() -> None:
     log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    target = next(layer for layer in log.layer_list if layer.module is not None)
+    target = next(layer for layer in log._layer_list if layer.module is not None)
     target._address_normalized = "sentinel"
 
     first = compute_graph_shape_hash(log)
@@ -216,13 +216,13 @@ def test_graph_shape_hash_address_free_variant_ignores_module_names() -> None:
     left = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     torch.manual_seed(123)
     right = tl.trace(
         _RenamedLinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
     assert compute_graph_shape_hash(left) != compute_graph_shape_hash(right)
@@ -237,16 +237,16 @@ def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert len({layer.func_call_id for layer in split_layers}) == 1
     assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
 
     final_labels = set(log.layer_labels)
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         for edge in layer._edge_uses:
             assert edge.parent_label in final_labels
             assert edge.child_label in final_labels
@@ -262,10 +262,10 @@ def test_selective_save_preserves_replay_call_group_siblings() -> None:
         _SplitModel(),
         torch.randn(2, 3),
         save=_save_only_outputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     assert len(split_layers) == 2
     assert not all(layer.has_saved_activation for layer in split_layers)
     assert len({layer.func_call_id for layer in split_layers}) == 1
@@ -278,10 +278,10 @@ def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
     log = tl.trace(
         _RecurrentReluModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
-    relu_layers = [layer for layer in log.layer_list if layer.func_name == "relu"]
+    relu_layers = [layer for layer in log._layer_list if layer.func_name == "relu"]
     assert len(relu_layers) == 3
     assert len({layer.func_call_id for layer in relu_layers}) == 3
     assert check_metadata_invariants(log) is True
@@ -293,9 +293,9 @@ def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
     log = tl.trace(
         _SplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    split_layers = [layer for layer in log.layer_list if layer.func_name == "split"]
+    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
     split_layers[1].container_path = split_layers[0].container_path
 
     try:
@@ -312,9 +312,9 @@ def test__address_normalized_strips_pass_qualifiers() -> None:
     log = tl.trace(
         _LinearSplitModel(),
         torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
-    linear_layers = [layer for layer in log.layer_list if layer.module is not None]
+    linear_layers = [layer for layer in log._layer_list if layer.module is not None]
 
     assert linear_layers
     assert any(layer._address_normalized == "linear" for layer in linear_layers)

@@ -19,6 +19,8 @@ from typing import Any
 
 import torch
 
+from torchlens._errors import InvalidArgumentError
+
 __tl_layer__ = "L5"
 
 #: Schema id of the manifest input-preprocessing block (tvscope B4).
@@ -138,7 +140,6 @@ def coerce_input_preprocessing(
         ``input_transform``.
     """
 
-    from torchlens._errors import InvalidArgumentError
     from torchlens.preprocessing import PreprocessingComparison, Resolution, compare as _audit
 
     transform_callable: Any = None
@@ -301,8 +302,6 @@ def apply_input_transform(fn: Any, batch: Any) -> Any:
     else:
         result = fn(batch)
     if n_rows is not None and isinstance(result, torch.Tensor) and int(result.shape[0]) != n_rows:
-        from torchlens._errors import InvalidArgumentError
-
         raise InvalidArgumentError(
             f"input_transform changed the stimulus-row count ({n_rows} in, "
             f"{int(result.shape[0])} out); every downstream row would be "

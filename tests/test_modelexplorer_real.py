@@ -46,7 +46,7 @@ def _bare_site_key_collisions(model: Any, inputs: torch.Tensor) -> int:
     """
 
     log = tl.trace(model, inputs)
-    counts = collections.Counter(getattr(entry, "site_key", None) for entry in log.layer_list)
+    counts = collections.Counter(getattr(entry, "site_key", None) for entry in log._layer_list)
     return sum(count - 1 for key, count in counts.items() if key and count > 1)
 
 

@@ -16,7 +16,6 @@ to wrapped versions.
 
 import copy
 import threading
-import warnings
 import weakref
 from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager
@@ -52,7 +51,7 @@ SAVE_MODES: frozenset[str] = frozenset(get_args(SaveMode))
 #   fp32, a mild tightening of the former 1e-4 literal's ~840 ULP) -- far
 #   below any real corruption (a sign flip, a zeroed value, a stale buffer
 #   all read as many thousands of ULPs) while comfortably above observed
-#   reorder noise (~4 ULP on eval MHA, see _runnable_path_faithfulness.py).
+#   reorder noise (~4 ULP on eval MHA, see _runnable/path_faithfulness.py).
 # * fp16 / bf16 payloads accumulate in fp32 and round ONCE to storage, so the
 #   replay difference is storage-rounding dominated: a few ULPs of the
 #   storage dtype. Headroom 4 ULP -- a MODEL bound (unmeasured), unlike the
@@ -248,64 +247,7 @@ def layer_grad_tolerances_for_dtype(dtype: torch.dtype) -> tuple[float, float]:
     )
 
 
-# Cached result of torch.cuda.is_available().  Evaluated once per process
-# because CUDA availability cannot change at runtime.  Avoids repeated
-# calls into the CUDA runtime (which involve driver queries).
-_cuda_available: bool | None = None
-
 _TensorSizeMethod = Callable[[torch.Tensor], int]
-
-
-def _is_cuda_available() -> bool:
-    """Return True if CUDA is available (cached after first call).
-
-    The result is cached in a module-level global because CUDA availability
-    is fixed for the lifetime of the process, and ``torch.cuda.is_available()``
-    involves a non-trivial driver query.
-
-    ``torch.cuda.is_available()`` normally swallows driver failures and returns
-    False, but a visible-but-unusable CUDA stack (stale driver, mismatched
-    build) can make the probe itself raise.  A failed *probe* is treated as
-    "no CUDA": TorchLens' CUDA uses are all opportunistic (cache release,
-    device-side RNG snapshots), so a broken accelerator must degrade a CPU
-    capture, never abort it.  The failure is surfaced as a warning, once per
-    process, rather than silently.
-    """
-    global _cuda_available
-    if _cuda_available is None:
-        try:
-            _cuda_available = bool(torch.cuda.is_available())
-        except Exception as exc:  # noqa: BLE001 - any driver/runtime probe failure
-            # Cache BEFORE warning: under a caller's warnings-as-errors policy the
-            # warn() itself raises, and the answer must still be latched so the
-            # broken probe is not repeated on the next call.
-            _cuda_available = False
-            warnings.warn(
-                "torch.cuda.is_available() raised "
-                f"{type(exc).__name__}: {exc}. Treating CUDA as unavailable for "
-                "this process; CPU capture continues unaffected.",
-                stacklevel=2,
-            )
-    return _cuda_available
-
-
-def _is_cuda_initialized() -> bool:
-    """Return True if this process has already initialized the CUDA runtime.
-
-    Unlike :func:`_is_cuda_available` this is a pure read of torch's own
-    module-level init flag: it never queries the driver, never initializes a
-    device, and is therefore NOT cached (it flips from False to True the first
-    time anything in the process touches CUDA).
-
-    Callers use it to distinguish "CUDA state exists and may have been
-    consumed" from "nothing in this process has ever touched CUDA", so that
-    opportunistic CUDA bookkeeping can be skipped instead of force-initializing
-    every visible device.
-    """
-    try:
-        return bool(torch.cuda.is_initialized())
-    except Exception:  # noqa: BLE001 - torch build without CUDA support
-        return False
 
 
 def _tolerances_for_dtype(dtype: torch.dtype) -> tuple[float, float]:
@@ -1101,7 +1043,7 @@ def _paused_internal_reads() -> Iterator[None]:
     would register as user raw-pointer escapes on witness-armed captures.
     """
     from .._state import pause_logging
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._internal_read import internal_scalar_read
 
     with pause_logging(), internal_scalar_read():
         yield
@@ -1209,7 +1151,7 @@ def _try_defer_payload_alias(
     state_ptrs = _DEFER_STATE_PTRS
     if state_ptrs is None:
         return None
-    from ..backends.torch.completeness_witness import internal_scalar_read
+    from ..backends.torch._internal_read import internal_scalar_read
 
     with internal_scalar_read():
         key = _deferred_storage_key(x)
@@ -1555,7 +1497,7 @@ def _capture_observed_cuda_device(trace: Any) -> bool | None:
     """
 
     saw_device_fact = False
-    for source in (trace, getattr(trace, "layer_list", None)):
+    for source in (trace, trace._layer_list):
         if source is None:
             continue
         source_saw_fact = False
@@ -1612,7 +1554,7 @@ def capture_touched_cuda(trace: Any) -> bool:
         evidence, was stamped with a KNOWN non-CUDA backend.
     """
 
-    backend = getattr(trace, "forward_memory_backend", None)
+    backend = trace._provenance_forward_memory_backend
     if backend == "cuda":
         return True
     observed = _capture_observed_cuda_device(trace)

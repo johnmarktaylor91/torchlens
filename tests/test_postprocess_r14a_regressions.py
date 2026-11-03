@@ -50,27 +50,28 @@ class _ConditionalBuildTrace:
     def __init__(self) -> None:
         """Populate only the fields used by conditional finalization."""
 
-        self.conditional_records = [
+        self._graph_conditional_records = [
             _make_conditional_event(0, "gt_1_3", 7),
             _make_conditional_event(1, "gt_1_3", 12),
         ]
-        self.conditional_arm_entry_edges = {
+        self._graph_conditional_arm_entry_edges = {
             (0, "then"): [("gt_1_3", "then_1")],
             (1, "then"): [("gt_1_3", "then_2")],
         }
-        self.layer_list = [
+        self._layer_list = [
             _make_layer_stub("gt_1_3:1", "gt_1_3", terminal_conditional_id=0),
             _make_layer_stub("then_1:1", "then_1"),
             _make_layer_stub("gt_1_3:2", "gt_1_3", terminal_conditional_id=1),
             _make_layer_stub("then_2:1", "then_2"),
         ]
-        self.layer_dict_all_keys = {
+        self._layer_dict_all_keys = {
             "gt_1_3": SimpleNamespace(
                 bool_value=True,
                 parents=[],
                 has_output_descendant=True,
             )
         }
+        self._layer_logs: dict[str, object] = {}
 
 
 def _make_conditional_event(event_id: int, bool_label: str, source_line: int) -> ConditionalEvent:
@@ -203,19 +204,19 @@ def test_equivalent_ops_are_renamed_to_final_labels() -> None:
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
     repeated_ops = [
         op
-        for op in trace.layer_list
-        if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        for op in trace._layer_list
+        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     ]
 
     assert repeated_ops
     for op in repeated_ops:
-        expected_group = trace.op_equivalence_classes[op.equivalence_class]
+        expected_group = trace.graph.op_equivalence_classes[op.equivalence_class]
         assert op.equivalent_ops == expected_group
         assert all(not label.endswith("_raw") for label in op.equivalent_ops)
 
     repeated_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if len(getattr(layer, "equivalent_ops", set())) > 1
     ]
     assert repeated_layers
@@ -231,11 +232,11 @@ def test_equivalence_invariant_rejects_stale_per_op_views() -> None:
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
     target_op = next(
         op
-        for op in trace.layer_list
-        if len(trace.op_equivalence_classes.get(op.equivalence_class, set())) > 1
+        for op in trace._layer_list
+        if len(trace.graph.op_equivalence_classes.get(op.equivalence_class, set())) > 1
     )
     target_op.equivalent_ops = {"linear_1_2_raw"}
-    trace.layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
+    trace._layer_logs[target_op.layer_label].equivalent_ops = {"linear_1_2_raw"}
 
     with pytest.raises(MetadataInvariantError, match="equivalence_symmetry"):
         trace.check_metadata_invariants()
@@ -245,7 +246,7 @@ def test_synthetic_output_node_resets_equivalent_ops() -> None:
     """Synthetic output nodes should not inherit their parent equivalence set."""
 
     trace = tl.trace(_EquivalentOpsModel(), torch.randn(1, 4))
-    output_op = next(op for op in trace.layer_list if op.is_output)
+    output_op = next(op for op in trace._layer_list if op.is_output)
 
     assert output_op.equivalent_ops == {output_op.label}
 
@@ -256,17 +257,17 @@ def test_build_conditional_records_disambiguates_colliding_bool_layers() -> None
     trace = _ConditionalBuildTrace()
     _build_conditional_records(trace)
 
-    conditionals = list(trace.conditionals)
+    conditionals = list(trace._graph_conditionals)
     assert [conditional.id for conditional in conditionals] == [
         "cond_gt_1_3__event_0",
         "cond_gt_1_3__event_1",
     ]
-    assert trace.layer_list[0].terminal_bool_for == ("cond_gt_1_3__event_0", 0)
-    assert trace.layer_list[2].terminal_bool_for == ("cond_gt_1_3__event_1", 0)
-    assert {role.conditional_id for role in trace.layer_list[1].in_conditionals} == {
+    assert trace._layer_list[0].terminal_bool_for == ("cond_gt_1_3__event_0", 0)
+    assert trace._layer_list[2].terminal_bool_for == ("cond_gt_1_3__event_1", 0)
+    assert {role.conditional_id for role in trace._layer_list[1].in_conditionals} == {
         "cond_gt_1_3__event_0"
     }
-    assert {role.conditional_id for role in trace.layer_list[3].in_conditionals} == {
+    assert {role.conditional_id for role in trace._layer_list[3].in_conditionals} == {
         "cond_gt_1_3__event_1"
     }
 
@@ -296,9 +297,9 @@ def test_conditional_invariant_rejects_duplicate_public_ids(tmp_path: Path) -> N
         """,
         torch.ones(2, 2),
     )
-    conditionals = list(trace.conditionals)
+    conditionals = list(trace.graph.conditionals)
     conditionals[1].id = conditionals[0].id
-    trace.conditionals = ConditionalAccessor(conditionals)
+    trace._graph_conditionals = ConditionalAccessor(conditionals)
 
     with pytest.raises(MetadataInvariantError, match="conditional_invariants"):
         trace.check_metadata_invariants()
@@ -326,7 +327,7 @@ def test_loop_conditionals_clear_ambiguous_fired_arm_summary(tmp_path: Path) -> 
         """,
         torch.tensor([[1.0], [-1.0]]),
     )
-    conditional = trace.conditionals[0]
+    conditional = trace.graph.conditionals[0]
 
     assert [arm.fired for arm in conditional.arms] == [True, True]
     assert conditional.fired_arm_index is None
@@ -356,8 +357,8 @@ def test_conditional_invariant_rejects_ambiguous_fired_arm_summary(tmp_path: Pat
         """,
         torch.tensor([[1.0], [-1.0]]),
     )
-    trace.conditionals[0].fired_arm_index = 0
-    trace.conditionals[0].fired_arm_kind = "then"
+    trace.graph.conditionals[0].fired_arm_index = 0
+    trace.graph.conditionals[0].fired_arm_kind = "then"
 
     with pytest.raises(MetadataInvariantError, match="conditional_invariants"):
         trace.check_metadata_invariants()

@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import pytest
 import torch
+from support.sampling import sampling_draws
 from torch import nn
 
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import population
-from torchlens.intervention.stochastic import sampling_records
 
 
 class _Toy(nn.Module):
@@ -33,7 +33,7 @@ def _toy_trace() -> tl.Trace:
     torch.manual_seed(0)
     model = _Toy()
     x = torch.randn(5, 4)
-    return tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    return tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
 
 
 _SITE = "relu_1_2"
@@ -107,14 +107,14 @@ def test_door_flags_match_the_old_helpers() -> None:
     self_global, self_axis = tl.mean_ablate(dim=None), tl.mean_ablate(dim=0)
     pop_elementwise, pop_axis = tl.mean_ablate(donors, dim=None), tl.mean_ablate(donors, dim=0)
     for spec in (self_global, self_axis):
-        assert spec.batch_independent is False and spec.portability == "builtin"
+        assert spec.is_batch_independent is False and spec.portability == "builtin"
         assert dict(spec.metadata)["batch_coherent"] is True
     for spec in (pop_elementwise, pop_axis):
-        assert spec.batch_independent is True and spec.portability == "opaque_audit"
+        assert spec.is_batch_independent is True and spec.portability == "opaque_audit"
         assert "batch_coherent" not in dict(spec.metadata)
         assert dict(spec.kwargs)["population_identity"] == donors.identity
     for spec in (self_global, self_axis, pop_elementwise, pop_axis):
-        assert spec.helper_name == "mean_ablate"
+        assert spec.name == "mean_ablate"
         assert dict(spec.metadata)["stochastic"] is False
     assert dict(self_global.kwargs)["dim"] is None
     assert dict(self_axis.kwargs)["dim"] == (0,)
@@ -146,11 +146,11 @@ def test_named_axis_refuses_until_evidence(token: str) -> None:
 @pytest.mark.smoke
 def test_derived_flags() -> None:
     donors = population(torch.randn(3, 5, 4), origin="pop")
-    assert tl.mean_ablate(dim=None).batch_independent is False
-    assert tl.mean_ablate(dim=0).batch_independent is False
+    assert tl.mean_ablate(dim=None).is_batch_independent is False
+    assert tl.mean_ablate(dim=0).is_batch_independent is False
     assert dict(tl.mean_ablate(dim=None).metadata)["batch_coherent"] is True
-    assert tl.mean_ablate(source=torch.ones(4), dim=None).batch_independent is True
-    assert tl.mean_ablate(donors, dim=None).batch_independent is True
+    assert tl.mean_ablate(source=torch.ones(4), dim=None).is_batch_independent is True
+    assert tl.mean_ablate(donors, dim=None).is_batch_independent is True
     assert tl.mean_ablate(donors, dim=None).portability == "opaque_audit"
     assert dict(tl.mean_ablate(dim=(1, 0)).kwargs)["dim"] == (1, 0)
     assert dict(tl.mean_ablate(dim=1).kwargs)["dim"] == (1,)
@@ -174,10 +174,9 @@ def test_population_mean_records_a_deterministic_note() -> None:
     fork = log.fork()
     fork.do(tl.label(_SITE), tl.mean_ablate(donors, dim=None))
     assert torch.allclose(fork[_SITE].out, baseline + 1.0)
-    record = sampling_records(fork)[-1]
-    assert record["stochastic"] is False
-    assert record["base_seed"] is None
-    assert record["replacement_mode"] == "evidence_mean"
+    record = sampling_draws(fork)[-1]
+    assert record.draw_indices == (), "a mean draws nothing"
+    assert record.base_seed is None
 
 
 def test_saved_mean_fill_spec_refuses_as_renamed() -> None:

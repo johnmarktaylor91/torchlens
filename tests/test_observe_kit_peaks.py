@@ -26,8 +26,8 @@ class _FakeTrace:
     """Minimal trace stub carrying the two publication-gated fields."""
 
     def __init__(self, backend: str | None, peak: int | None) -> None:
-        self.forward_memory_backend = backend
-        self.forward_peak_memory = peak
+        self._provenance_forward_memory_backend = backend
+        self._cost_forward_peak_memory = peak
 
 
 def test_cuda_zero_renders_as_high_water_fact() -> None:

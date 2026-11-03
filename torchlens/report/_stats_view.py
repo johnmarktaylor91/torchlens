@@ -109,6 +109,8 @@ def _with_identity(columns: tuple[str, ...]) -> tuple[str, ...]:
 
 
 def _refuse_column(item: Any) -> None:
+    """Refuse an unknown stats column, naming the columns the view has."""
+
     raise InvalidArgumentError(
         f"summary(view='stats') has no column {item!r}; the stats columns are "
         f"{', '.join(STATS_COLUMNS)}.",
@@ -118,6 +120,8 @@ def _refuse_column(item: Any) -> None:
 
 
 def _number(value: Any, *, sampled: bool = False) -> str:
+    """Format one numeric cell; blank for no value, ``~`` prefix for a sampled family."""
+
     if value is None:
         return ""
     text = f"{value:.4g}" if isinstance(value, float) else str(value)

@@ -86,9 +86,7 @@ class MidGraphContainerModel(nn.Module):
 def _trace(model: nn.Module) -> Any:
     """Trace a model with final-output structure enabled."""
 
-    return tl.trace(
-        model, torch.ones(2), capture=tl.options.CaptureOptions(intervention_ready=True)
-    )
+    return tl.trace(model, torch.ones(2), capture=tl.options.CaptureOptions(replayable=True))
 
 
 def test_show_containers_false_is_default_dot_identity(tmp_path: Path) -> None:
@@ -131,19 +129,45 @@ def test_show_containers_labels_adds_key_labeled_midpoint_edges(tmp_path: Path) 
     assert "labelangle=" not in source
 
 
-def test_show_containers_cluster_falls_back_without_single_owner(tmp_path: Path) -> None:
-    """Cluster mode falls back to labels when leaves have no one module owner."""
+def test_show_containers_nodes_boxes_only_single_owner_leaves(tmp_path: Path) -> None:
+    """Nodes mode keeps the key labels but draws no dotted box without one module owner."""
 
     trace = _trace(DictOutputModel())
     source = trace.draw(
-        show_containers="cluster",
+        show_containers="nodes",
         vis_save_only=True,
         file_format="dot",
-        path=str(tmp_path / "cluster"),
+        path=str(tmp_path / "nodes_no_owner"),
     )
 
     assert '<FONT POINT-SIZE="8">a</FONT>' in source
     assert "cluster_container_" not in source
+
+
+@pytest.mark.parametrize(
+    ("removed", "replacement"),
+    [("auto", "collapsed"), ("cluster", "labels")],
+)
+def test_show_containers_removed_spellings_refuse_naming_the_replacement(
+    tmp_path: Path, removed: str, replacement: str
+) -> None:
+    """``"auto"`` and ``"cluster"`` are gone; the refusal names what draws their picture."""
+
+    from torchlens._errors import InvalidArgumentError
+
+    trace = _trace(DictOutputModel())
+    with pytest.raises(InvalidArgumentError, match="was removed") as excinfo:
+        trace.draw(
+            show_containers=removed,  # type: ignore[arg-type]
+            vis_save_only=True,
+            file_format="dot",
+            path=str(tmp_path / removed),
+        )
+
+    assert excinfo.value.fields["code"] == "visualization_show_containers_invalid"
+    assert f"show_containers={replacement!r}" in excinfo.value.fields["remedy"]
+    if removed == "cluster":
+        assert "'nodes'" in excinfo.value.fields["remedy"]
 
 
 def test_show_containers_collapsed_only_for_identical_shapes(tmp_path: Path) -> None:
@@ -278,7 +302,7 @@ def test_show_containers_nodes_draw_then_save_round_trips(tmp_path: Path) -> Non
     trace.save(save_path)
     loaded = tl.load(save_path)
 
-    assert loaded.input_structure.kind == "dict"
+    assert loaded.provenance.input_structure.kind == "dict"
     assert not hasattr(loaded, "_pending_container_collapse_nodes")
 
 
@@ -313,7 +337,7 @@ class RecurrentDictOutputModel(nn.Module):
 
 
 @pytest.mark.parametrize("vis_mode", ["rolled", "unrolled"])
-@pytest.mark.parametrize("show_containers", ["labels", "cluster", "collapsed", "auto", "nodes"])
+@pytest.mark.parametrize("show_containers", ["labels", "collapsed", "nodes"])
 def test_show_containers_survives_multipass_layers(
     tmp_path: Path, vis_mode: str, show_containers: str
 ) -> None:

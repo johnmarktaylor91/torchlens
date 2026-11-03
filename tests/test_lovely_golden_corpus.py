@@ -113,7 +113,7 @@ def _elementwise_trace() -> tl.Trace:
     return tl.trace(
         _Elementwise().eval(),
         _arange(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -145,8 +145,8 @@ def test_trace_and_records_ascii_sweep() -> None:
 
     trace = _elementwise_trace()
     surfaces = [repr(trace), str(trace), repr(trace.layers), str(trace.layers)]
-    surfaces.extend(repr(op) for op in trace.layer_list)
-    surfaces.extend(str(op) for op in trace.layer_list)
+    surfaces.extend(repr(op) for op in trace._layer_list)
+    surfaces.extend(str(op) for op in trace._layer_list)
     surfaces.append(str(trace.summary(view="stats")))
     for text in surfaces:
         assert text.isascii(), text[:80]

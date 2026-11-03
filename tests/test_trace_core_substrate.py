@@ -750,13 +750,13 @@ def test_fork_shares_one_equivalent_ops_view_per_class() -> None:
     fork = trace.fork()
     multi_member = {
         equivalence_class
-        for equivalence_class, members in fork.op_equivalence_classes.items()
+        for equivalence_class, members in fork.graph.op_equivalence_classes.items()
         if len(members) >= 2
     }
     assert multi_member, "test model must produce a shared equivalence class"
     views_by_class: dict = {}
     members_checked: dict = {}
-    for layer in fork.layer_logs.values():
+    for layer in fork._layer_logs.values():
         equivalence_class = getattr(layer, "equivalence_class", None)
         view = layer.__dict__.get("equivalent_ops")
         if equivalence_class not in multi_member or view is None:
@@ -794,7 +794,7 @@ def test_rehydrate_mixed_ownership_aborts_with_zero_mutations() -> None:
         clone = pickle.loads(payload)  # genuine coreless island
     assert clone.__dict__.get("_trace_core") is None
 
-    ops = list(clone.layer_list)
+    ops = list(clone._layer_list)
     assert len(ops) >= 2
     # Tamper: bind ONE later op to a foreign shared store (mixed ownership).
     foreign = OpRowStore(_OP_STORE_LAYOUT)
@@ -839,7 +839,7 @@ def test_rehydrate_rollback_after_relation_freeze_is_atomic() -> None:
 
     # Clean-load control: the public relation topology every op must keep.
     control = pickle.loads(payload)
-    expected = {op.layer_label: (op.parents, op.children) for op in control.layer_list}
+    expected = {op.layer_label: (op.parents, op.children) for op in control._layer_list}
 
     real_freeze = relation_views.freeze_trace_relation_views
 
@@ -855,7 +855,7 @@ def test_rehydrate_rollback_after_relation_freeze_is_atomic() -> None:
         clone = pickle.loads(payload)  # load must survive (best-effort)
 
     assert clone.__dict__.get("_trace_core") is None, "rollback must stay coreless"
-    for op in clone.layer_list:
+    for op in clone._layer_list:
         bound = object.__getattribute__(op, "_core")
         assert isinstance(bound, DetachedOpStore), (
             f"{op.layer_label} not rolled back to its detached store"
@@ -866,7 +866,7 @@ def test_rehydrate_rollback_after_relation_freeze_is_atomic() -> None:
                 f"freeze sentinel leaked into detached cell {name}"
             )
             assert value.__class__ is not GroupRef, f"GroupRef leaked into detached cell {name}"
-    for op in clone.layer_list:
+    for op in clone._layer_list:
         assert (op.parents, op.children) == expected[op.layer_label], (
             f"detached topology corrupted for {op.layer_label}"
         )
@@ -890,33 +890,33 @@ def test_loaded_partial_capture_stays_staging() -> None:
     from unittest import mock
 
     import torchlens as tl
-    import torchlens._postprocess as postprocess
+    import torchlens._postprocess.finalization as finalization
     from torchlens._trace_core.op_store import DetachedOpStore
 
     model = torch.nn.Sequential(torch.nn.Linear(3, 4), torch.nn.ReLU())
 
     # Fail LATE in postprocess (after layer logs exist) so the partial has
     # reachable ops — the case where an unguarded rehydrate would freeze.
-    with mock.patch.object(postprocess, "_build_module_logs", side_effect=RuntimeError("boom")):
+    with mock.patch.object(finalization, "_build_module_logs", side_effect=RuntimeError("boom")):
         with pytest.raises(Exception) as exc_info:
             tl.trace(model, torch.randn(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    partial = exc_info.value.partial_trace
     assert partial is not None
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False
-    assert len(source.layer_list) > 0, "late failure must leave reachable ops"
+    assert len(source._layer_list) > 0, "late failure must leave reachable ops"
 
     clone = pickle.loads(pickle.dumps(source))
     assert clone.__dict__.get("_tracing_finished") is False
     assert clone.__dict__.get("_trace_core") is None, "partial captures must stay coreless on load"
-    for staged in clone.layer_list:
+    for staged in clone._layer_list:
         bound = object.__getattribute__(staged, "_core")
         assert isinstance(bound, DetachedOpStore), (
             f"partial op re-bound to {type(bound).__name__} on load"
         )
         assert not bound.frozen
         assert bound.dataflow_edges is None, "no relation-freeze artifacts"
-    op = clone.layer_list[0]
+    op = clone._layer_list[0]
     # Group cells stay raw (no GroupRef conversion) on a loaded partial.
     store = object.__getattribute__(op, "_core")
     fid = store.layout.fid_by_name.get("equivalent_ops")
@@ -962,7 +962,7 @@ def test_tlspec_load_adopts_every_record_kind() -> None:
 
     def op_cell_fcls(t: object) -> list:
         found = []
-        for op in t.layer_list:
+        for op in t._layer_list:
             for item in getattr(op, "code_context", None) or ():
                 if type(item).__name__ == "FuncCallLocation":
                     found.append(item)

@@ -232,7 +232,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
 
     products: dict[str, Any] = {}
     products["trace_live"] = tl.trace(
-        model, example, capture=tl.options.CaptureOptions(intervention_ready=True)
+        model, example, capture=tl.options.CaptureOptions(replayable=True)
     )
     save_path = tmp_path_factory.mktemp("m1") / "live.tlspec"
     products["trace_live"].save(str(save_path))
@@ -253,7 +253,7 @@ def m1_products(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
     try:
         tl.trace(_Boom(), example)
     except Exception as exc:  # noqa: BLE001 - the partial product IS the payload
-        products["partial_trace"] = exc.partial_log
+        products["partial_trace"] = exc.partial_trace
     trace = products["trace_live"]
     products["trace_slice"] = trace.between([trace.layer_labels[0]], [trace.layer_labels[-1]])
     products["bundle"] = tl.sweep(

@@ -254,7 +254,7 @@ every spelling here is DOCUMENTED-UNSTABLE pending the naming session):
 
 ## Discoverability
 
-`trace.capture_kind` reads `"episode"` on episode-declared products and
+`trace.provenance.kind` reads `"episode"` on episode-declared products and
 `"plain"` otherwise (including fresh re-execution products whose evidence
 the travel policy dropped, below). `trace.episode` is the public step
 access: the parsed ledger with `header`, ordered per-step `rows`,
@@ -267,8 +267,8 @@ root `tl.EpisodeOptions` spelling awaits the surface-table amendment).
 
 A settlement refusal (`episode_ledger_incoherent`, the declaration-mismatch
 derivation refusals) fires AFTER the capture ran and postprocessed, so the exception
-carries the settled product on `exc.partial_log` — recover it with
-`tl._partial.from_failed_capture(exc)` instead of paying the forward again.
+carries the settled product on `exc.partial_trace` — inspect it there instead of paying the
+forward again.
 
 ## Evidence never rides a fresh execution (the travel policy)
 
@@ -354,12 +354,12 @@ shape):
   COMPLETE — the closed-episode claim is what breaks.
 - FORK-4 arm (b) (`on_feed_break="refuse"`): the settlement write raises
   `episode_feed_break_exogenous` typed, carrying the settled product (with
-  its measured envelope) on `exc.partial_log` — recoverable partial
+  its measured envelope) on `exc.partial_trace` — recoverable partial
   evidence, nothing discarded.
 - STRICT (`feed="closed"`): the feed is declared closed (direct
   continuation). An UNDECLARED crossing halts capture at the next step
   entry (`episode_feed_closed_violation`; rows 0..k-1 complete, row k
-  interrupted, later rows absent, all on `exc.partial_log`) — or settles
+  interrupted, later rows absent, all on `exc.partial_trace`) — or settles
   typed over the completed capture in the residual case where the break is
   only measurable against the settlement evidence column (a single-position
   injection is live-indistinguishable from an emission). A DECLARED
@@ -465,7 +465,7 @@ the LOAD itself, not on the first `trace.episode_coupling` read (which
 still re-derives against the attached payload). Any failure quarantines
 `episode_ledger_incoherent` with the failed anchor named in the note's
 `detail`; the product still loads, its rows stop being claims, and
-`Trace.capture_kind` keeps reading `episode` (a quarantined ledger is a
+`Trace.provenance.kind` keeps reading `episode` (a quarantined ledger is a
 declaration in doubt, not an absent one — the per-op `episode_step` stamps
 of a corrupted genuine artifact must stay loadable).
 

@@ -1,6 +1,6 @@
 # Containers
 
-TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are provisional for review: `torchlens.types.Container`, `torchlens.types.register_container`, and the `capture_container_structure` option.
+TorchLens records input and output container structure for supported Python containers and exposes it as a lightweight runtime view. The public names in this guide are stable: `torchlens.types.Container`, `op.container`, the `input_at` and `output_at` selectors, `torchlens.types.register_container`, `Container.reconstruct`, `Trace.reconstruct_output`, `show_containers` (including `"nodes"`) and the `capture_container_structure` option.
 
 ## Runtime View
 
@@ -41,11 +41,24 @@ output = trace.reconstruct_output()
 
 The FINAL model-output snapshot is recorded on every capture (one `ContainerSpec` per capture), so `trace.reconstruct_output()` and a live `trace.run()` rebuild the exact tuple/dict/namedtuple/dataclass/`ModelOutput` the model returned on a default capture too; the output op records still carry `container_spec=None` unless the structure opt-in below is set. A container holding a tensor-bearing object the codec cannot represent (for example a HuggingFace `DynamicCache`) is recorded as `opaque`: `reconstruct_output()` refuses typed and the runnable save refuses at preflight instead of advertising a contract it cannot fill.
 
-Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `intervention_ready=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
+Input-container reconstruction and module-boundary container records require container structure to be captured. Use `capture_container_structure=True` when you need nested inputs or per-op container specs recorded after capture or after `.tlspec` load without enabling intervention replay metadata. `replayable=True` also captures that structure as part of its broader replay-template metadata. (The former `capture_output_structure=` alias is removed.)
 
 ## Visualization
 
-Container visualization is opt-in so default graph output remains unchanged.
+Container visualization is opt-in so default graph output remains unchanged. `show_containers` takes
+one of four settings; each one adds to the one before it.
+
+| Setting | What is drawn |
+| --- | --- |
+| `False` (default) | The plain graph. Container paths already sit on the node labels (`@output.hidden.1`, `@input.inputs.mask`). |
+| `"labels"` | The key or index of each container leaf as a small label on the edge into that leaf (`logits`, `0`, `1`). |
+| `"collapsed"` | `"labels"`, plus: in the unrolled view, a container with more than `container_max_inline` leaves (default 12) of identical shape folds into one dashed summary box (`tuple x16`). |
+| `"nodes"` | `"collapsed"`, plus one dashed record node per container, grey source and sink edges carrying the keys, dashed member-of ties for mid-graph containers, and a dotted box around an op-returned tuple whose leaves share one module. |
+
+Any string setting forces the Graphviz `dot` engine. `container_max_inline` matters only under
+`"collapsed"` and `"nodes"`. The former `"auto"` spelling drew exactly what `"collapsed"` draws and
+`"cluster"` drew `"labels"` plus the dotted tuple box that `"nodes"` draws; both are refused with the
+replacement named.
 
 ```python
 trace.draw(show_containers="nodes")
@@ -55,7 +68,7 @@ trace.draw(show_containers="nodes")
 
 For mid-graph containers, TorchLens does not route tensor dataflow through the container node. The key label stays on the real producer-to-consumer edge, and a light dashed arrowless member-of tie associates producer ops with the collapsed container node. Single-owner module clusters and large homogeneous-container collapse still apply as visual enhancers.
 
-Existing modes are unchanged: `False`, `"labels"`, `"cluster"`, `"collapsed"`, and `"auto"` keep their prior rendering behavior.
+A container that is the model's input or output is drawn as that boundary container even when a submodule built it: its node carries the model-input or model-output role and its leaves connect only through the keyed source or sink edges, never through member-of ties. When the homogeneous-container collapse already summarizes every leaf of a container, the summary node is the container node: it carries the role (for example `tuple x16 (model output)`) and no second node is drawn.
 
 Container membership is a per-pass fact. On a rolled graph, a multi-pass (recurrent) layer aggregates passes that generally differ in container membership — typically only the final pass feeds the output container — so the rolled aggregate node carries no container decoration rather than projecting one pass's membership onto all of them. Unrolled per-pass nodes keep their exact labels.
 

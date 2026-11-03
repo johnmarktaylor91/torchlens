@@ -215,7 +215,7 @@ def test_census_names_only_the_stale_relu_in_iql_shape(monkeypatch: pytest.Monke
     operators = [row["operator"] for row in trace.completeness_diagnostics]
     assert "aten.relu.default" in operators
     assert "aten.tanh.default" not in operators
-    assert trace.capture_verified is False
+    assert trace.provenance.verified is False
 
 
 _ATEN = torch.ops.aten
@@ -389,5 +389,5 @@ def test_attribute_held_originals_are_rebound_and_validate(
     assert "relu" in func_names
     assert forward_runs(trace, model) == 1
     assert provenance_warnings(caught) == []
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert _validate(build(), grad=grad), tl.validation.last_validation_failure()

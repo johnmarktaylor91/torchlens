@@ -92,7 +92,7 @@ def test_fork_do_edits_are_disclosed(model_and_x) -> None:
     """Fork-side ``do()`` (ACT and PARAM kinds) is disclosed through the same block."""
 
     model, x = model_and_x
-    trace = tl.trace(model, x, capture=CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=CaptureOptions(replayable=True))
     fork = trace.fork()
     fork.do(tl.units("relu_1_2", [(0, 0)]), tl.zero_ablate())
     block = intervention_facts(fork)
@@ -113,7 +113,7 @@ def test_default_capture_verification_reads_not_checked(model_and_x) -> None:
 
     model, x = model_and_x
     trace = tl.trace(model, x)
-    assert trace.capture_verified is None
+    assert trace.provenance.verified is None
     explained = trace.explain()
     assert "no ceiling recorded" not in explained
     assert "Capture verification: not checked" in explained

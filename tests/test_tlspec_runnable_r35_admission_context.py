@@ -41,9 +41,7 @@ def _save(model: nn.Module, args: Any, path: Path, **save_kwargs: Any) -> Path:
     trace = tl.trace(
         model,
         args,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(str(path), level="runnable", **save_kwargs)
     return path
@@ -108,7 +106,7 @@ def test_r35_dense_inputs_keep_transaction_behavior(tmp_path: Path) -> None:
 def test_r35_digest_helper_refuses_exotic_typed() -> None:
     """I5 defense in depth: the digest helper itself rejects exotic tensors."""
 
-    from torchlens._runnable_state import runnable_tensor_byte_digest
+    from torchlens._runnable.state import runnable_tensor_byte_digest
 
     for value in _exotic_inputs().values():
         with pytest.raises(RunPreconditionError):
@@ -187,7 +185,7 @@ def test_r35_original_physical_input_stays_attested(tmp_path: Path) -> None:
 def test_r35_matmul_carveout_unchanged_no_conv_sdpa_extension() -> None:
     """H_B_RESOLUTION: NO conv/transpose-conv/SDPA extension of the ULP carve-out."""
 
-    from torchlens._runnable_execution import _LAYOUT_SENSITIVE_BLAS_QUALNAMES
+    from torchlens._runnable.execution import _LAYOUT_SENSITIVE_BLAS_QUALNAMES
 
     assert (
         frozenset(
@@ -232,9 +230,7 @@ def test_r35_autocast_capture_replays_outside_autocast(tmp_path: Path) -> None:
         trace = tl.trace(
             model,
             x,
-            capture=CaptureOptions(
-                intervention_ready=True, capture_container_structure=True, cache=False
-            ),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
     path = tmp_path / "autocast.tlspec"
     trace.save(str(path), level="runnable", include_weights=True)

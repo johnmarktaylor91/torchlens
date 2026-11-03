@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._selection import (
+from torchlens._selection.selection import (
     _FLIP,
     _RELATIONS,
     Selection,
@@ -34,8 +34,8 @@ from torchlens._selection import (
     _join_relation,
     _meet_relation,
 )
+from torchlens._selection.selectors import CompositeSelector, NotSelector
 from torchlens.errors import SelectionError
-from torchlens.intervention.selectors import CompositeSelector, NotSelector
 
 
 class _TwoConv(nn.Module):
@@ -386,7 +386,7 @@ def test_kind_matrix_edge_cells_pinned_for_stage3():
     ACT x EDGE / PARAM x EDGE refuse via the same closed matrix when the
     edge-term producer lands (trace.graph.edges, stage 3)."""
 
-    from torchlens._selection import _SELECTION_KINDS
+    from torchlens._selection.selection import _SELECTION_KINDS
 
     assert _SELECTION_KINDS == ("ACT", "PARAM", "EDGE")
 
@@ -559,7 +559,7 @@ def test_multi_site_value_type(log):
     resolved = log[(tl.func("relu") | tl.func("conv2d")).__selection__()]
     keys = [entry.key for entry in resolved]
     execution_order = {
-        (op.layer_label, op.pass_index): index for index, op in enumerate(log.layer_list)
+        (op.layer_label, op.pass_number): index for index, op in enumerate(log._layer_list)
     }
     steps = [execution_order[key] for key in keys]
     assert steps == sorted(steps), "resolved ACT entries must read in execution order"
@@ -627,7 +627,7 @@ def test_resolver_refusals_no_index_space_and_non_tensor(log, monkeypatch):
         layer_label = "tuple_1_1"
         out = ("not", "a", "tensor")
 
-    import torchlens._selection as selection_module
+    import torchlens._selection.selection as selection_module
 
     monkeypatch.setattr(
         selection_module, "_forward_ops", lambda trace: (_NoShapeOp(), _NonTensorOp())
@@ -792,7 +792,7 @@ def test_internal_closed_set_guards_raise(log):
     hiding these behind ``pragma: no cover``.
     """
 
-    from torchlens._selection import (
+    from torchlens._selection.selection import (
         _compose_resolved,
         _resolve_node,
         _SelectionOperand,

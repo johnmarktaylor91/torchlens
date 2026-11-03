@@ -379,3 +379,121 @@ def test_a_moved_member_pairs_on_its_spelling_and_keeps_retired_owners_as_residu
     assert [(f.change, f.location) for f in findings if f.problem == "stale"] == [
         ("moved", "examples/demo.py:2")
     ]
+
+
+# --- string literals and other callables' keywords in code -----------------------------
+
+TRANSFORM_PARAM = _row(
+    "param:transform",
+    "param",
+    "transform",
+    "transform=",
+    "f-transform",
+    uses=["tl.preprocessing.Resolution"],
+)
+
+
+def test_a_foreign_callables_keyword_is_not_the_gone_keyword(tmp_path: Path) -> None:
+    """``fig.text(..., transform=...)`` is matplotlib's keyword, not ``Resolution``'s."""
+
+    base, head = _inventory(TRACE, TRANSFORM_PARAM), _inventory(TRACE)
+    corpus = _corpus(
+        tmp_path,
+        glossary="Nothing.\n",
+        example="""
+        import matplotlib.pyplot as plt
+        fig = plt.figure()
+        fig.text(
+            0.5,
+            0.5,
+            "caption",
+            transform=fig.transFigure,
+        )
+        """,
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == set()
+
+
+def test_the_gone_keyword_passed_to_its_own_callable_still_reports(tmp_path: Path) -> None:
+    """``Resolution(transform=...)`` on one line, split, or in the glossary still reports."""
+
+    base, head = _inventory(TRACE, TRANSFORM_PARAM), _inventory(TRACE)
+    corpus = _corpus(
+        tmp_path,
+        glossary="Pass `transform=` to the resolution.\n",
+        example="""
+        res = tl.preprocessing.Resolution(transform=fn)
+        res = Resolution(
+            transform=fn,
+        )
+        """,
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {
+        "docs/reference/glossary.md:1",
+        "examples/demo.py:1",
+        "examples/demo.py:3",
+    }
+
+
+def test_a_leaf_inside_a_string_literal_is_not_residue_but_code_is(tmp_path: Path) -> None:
+    """A label ``"example.transform"`` is text; ``res.transform`` is the gone member."""
+
+    old = _member("tl.preprocessing._records", "Resolution", "transform", "f-rt")
+    new = _member("tl.preprocessing._records", "Resolution", "input_transform", "f-rt")
+    base, head = _inventory(TRACE, old), _inventory(TRACE, new)
+    corpus = _corpus(
+        tmp_path,
+        glossary="`Resolution.input_transform` is the callable.\n",
+        example='''
+        record = Record(source="example.transform")
+        """Docstring naming res.transform is text too."""
+        fn = res.transform
+        ''',
+    )
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {"examples/demo.py:3"}
+
+
+def test_notebook_code_strings_are_text_but_code_and_markdown_still_report(
+    tmp_path: Path,
+) -> None:
+    """In a notebook a key ``'n_heads'`` or f-string text is skipped; a call or prose is not."""
+
+    old = _row("param:n_heads", "param", "n_heads", "n_heads=", "f-h", uses=["FacetSpec.heads"])
+    new = _row(
+        "param:num_heads", "param", "num_heads", "num_heads=", "f-h", uses=["FacetSpec.heads"]
+    )
+    base, head = _inventory(TRACE, old), _inventory(TRACE, new)
+    notebook = textwrap.dedent(
+        """
+        {
+         "cells": [
+          {
+           "cell_type": "code",
+           "metadata": {},
+           "source": [
+            "print(f\\"n_heads = {fv.get('n_heads')}\\")\\n",
+            "spec = spec.heads(n_heads=4)\\n"
+           ]
+          },
+          {
+           "cell_type": "markdown",
+           "metadata": {},
+           "source": [
+            "Pass `n_heads=4` to split the heads.\\n"
+           ]
+          }
+         ]
+        }
+        """
+    ).lstrip("\n")
+    (tmp_path / "notebooks/audit").mkdir(parents=True)
+    (tmp_path / "notebooks/audit/a.ipynb").write_text(notebook, encoding="utf-8")
+    corpus = _corpus(tmp_path, glossary="`num_heads=` splits the heads.\n", example="x = 1\n")
+    findings = check.check_lockstep(diff_inventories(base, head), corpus, head)
+    assert _stale_locations(findings) == {
+        "notebooks/audit/a.ipynb:8",
+        "notebooks/audit/a.ipynb:15",
+    }

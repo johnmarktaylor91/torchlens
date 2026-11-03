@@ -1,9 +1,7 @@
 """Trace export mixin."""
 
-from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any, cast
-
-import torch
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -13,196 +11,7 @@ if TYPE_CHECKING:
     _TraceMixinBase = Trace
 else:
     _TraceMixinBase = object
-from .._constants import LAYER_PASS_LOG_FIELD_ORDER
-from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavailableError
-from .interface import _format_conditional_branch_stack
-
-
-def _output_role_from_container_path(path: Any) -> str | None:
-    """Return the final output-container role for a dataframe row.
-
-    Parameters
-    ----------
-    path:
-        Captured typed container path.
-
-    Returns
-    -------
-    str | None
-        Last key/index/field component, or ``None`` for non-container rows.
-    """
-
-    components = tuple(path or ())
-    if not components:
-        return None
-    component = components[-1]
-    for attr_name in ("index", "key", "name"):
-        if hasattr(component, attr_name):
-            return str(getattr(component, attr_name))
-    return str(component)
-
-
-def _is_batch_topk_decoded(value: Any) -> bool:
-    """Return whether ``value`` is the typed decoded batch top-k representation.
-
-    Parameters
-    ----------
-    value:
-        Candidate decoded output value.
-
-    Returns
-    -------
-    bool
-        Whether the value has ``{"kind": "batch_topk", "rows": [...]}`` shape.
-    """
-
-    return (
-        isinstance(value, Mapping)
-        and value.get("kind") == "batch_topk"
-        and isinstance(value.get("rows"), list)
-    )
-
-
-def _decoded_batch_topk_rows(value: Any) -> list[dict[str, Any]] | None:
-    """Return decoded batch top-k rows from typed or legacy representations.
-
-    Parameters
-    ----------
-    value:
-        Decoded output value.
-
-    Returns
-    -------
-    list[dict[str, Any]] | None
-        Batch top-k rows, or ``None`` when the decoded value is another kind.
-    """
-
-    if _is_batch_topk_decoded(value):
-        rows = value["rows"]
-    elif isinstance(value, list):
-        rows = value
-    else:
-        return None
-    if all(
-        isinstance(row, dict) and {"batch_item", "rank", "label", "prob"} <= set(row)
-        for row in rows
-    ):
-        return cast(list[dict[str, Any]], rows)
-    return None
-
-
-def _normalize_batch_items(
-    batch_items: int | Sequence[int] | None, rows: Sequence[Mapping[str, Any]]
-) -> set[int] | None:
-    """Normalize an output-table batch item selector.
-
-    Parameters
-    ----------
-    batch_items:
-        ``None``, a count, or explicit batch item indices.
-    rows:
-        Decoded rows used to infer available item indices.
-
-    Returns
-    -------
-    set[int] | None
-        Selected batch item indices, or ``None`` for all.
-    """
-
-    if batch_items is None:
-        return None
-    available = sorted({int(row.get("batch_item", 0)) for row in rows})
-    if isinstance(batch_items, int):
-        if batch_items < 0:
-            raise InvalidArgumentError(
-                f"batch_items count must be >= 0; received {batch_items!r}",
-                code="batch_items_invalid",
-                remedy="pass a non-negative integer batch_items count",
-                argument="batch_items",
-            )
-        return set(available[:batch_items])
-    return {int(item) for item in batch_items}
-
-
-def _retained_output_logits(trace: "Trace") -> torch.Tensor | None:
-    """Return a retained output tensor suitable for classification re-decode.
-
-    Parameters
-    ----------
-    trace:
-        Trace to inspect.
-
-    Returns
-    -------
-    torch.Tensor | None
-        Retained logits tensor, if exactly one output tensor is available.
-    """
-
-    tensors = [
-        getattr(op, "out", None)
-        for op in getattr(trace, "output_ops", [])
-        if isinstance(getattr(op, "out", None), torch.Tensor)
-    ]
-    if len(tensors) != 1:
-        return None
-    return tensors[0]
-
-
-# Op fields deliberately omitted from ``Trace.to_pandas()`` columns. Every
-# field in ``LAYER_PASS_LOG_FIELD_ORDER`` must either appear as a dataframe
-# column or be listed here -- ``tests/test_io_pandas.py`` enforces this so new
-# Op fields can never silently fail to reach the layer-pass table again
-# (regression gate for TO-PANDAS-NEW-FIELDS).
-_TO_PANDAS_EXCLUDED_OP_FIELDS: frozenset[str] = frozenset(
-    {
-        # Internal / private bookkeeping (not part of the user-facing table):
-        "_label_raw",
-        "_layer_label_raw",
-        "_tracing_finished",
-        "_construction_done",
-        "_param_barcodes",
-        "_param_logs",
-        "_edge_uses",
-        "_address_normalized",
-        "source_trace",
-        # Tensor payloads (bulk data; access via ``layer.out`` / ``layer.grad``):
-        "out",
-        "transformed_out",
-        "transformed_grad",
-        "input_activations",
-        "saved_args",
-        "saved_kwargs",
-        "out_versions_by_child",
-        # Live objects, callables, and rich records (not scalar table cells):
-        "input_ops",  # live accessor over parent Op records; needs an attached
-        # source trace and raises on disk-loaded logs -- the `parents` label
-        # column already carries the relationship.
-        "func",
-        "grad_fn",
-        "grad_fn_handle",
-        "grad_fn_object_id",
-        "activation_transform",
-        "interventions",
-        "code_context",
-        "transform_fn_source",
-        "args_template",
-        "kwargs_template",
-        "container_spec",
-        "parent_param_ops",
-        "atomic_module_call",
-        "module_entry_arg_keys",
-        "annotations",
-        # Live-trace-derived views (raise on detached/rehydrated logs; the
-        # ``parents`` column plus parent rows carry the same information):
-        "input_shapes",
-        "input_dtypes",
-        "input_memory",
-        # Bulky state snapshots and internal viz paths:
-        "func_rng_states",
-        "func_autocast_state",
-        "visualizer_path",
-    }
-)
+from . import _doors
 
 
 class TraceExportMixin(_TraceMixinBase):
@@ -252,9 +61,18 @@ class TraceExportMixin(_TraceMixinBase):
             schema.
         """
 
-        from ..report._agent_json import build_agent_json
+        return _doors.report()._agent_json.build_agent_json(self, max_ops=max_ops)
 
-        return build_agent_json(self, max_ops=max_ops)
+    def _attach_dataframe_honesty(self: "Trace", frame: Any) -> Any:
+        """Stamp ``frame.attrs`` with this trace's capture-honesty facts.
+
+        The one place the records reach ``_capture_honesty`` for tabular exports:
+        ``to_pandas`` here and ``_accessor_base.attach_source_honesty`` both call it.
+        """
+
+        from .._capture_honesty import attach_dataframe_honesty
+
+        return attach_dataframe_honesty(frame, self)
 
     def to_pandas(self: "Trace", include_decoded_output_summary: bool = False) -> "pd.DataFrame":
         """Return a dataframe containing one row per layer pass.
@@ -278,194 +96,67 @@ class TraceExportMixin(_TraceMixinBase):
             If an exported field such as ``grad`` is ambiguous across multiple
             backward passes and must be accessed through a pass-specific record.
         """
-        from .._runnable import refuse_poisoned_trace
 
-        refuse_poisoned_trace(self, "tabular export")
-        if not self._tracing_finished:
-            raise CaptureNotActiveError(
-                "to_pandas() cannot be called before the forward pass is complete",
-                code="trace_not_finished",
-                remedy="wait until trace(...) has returned before exporting",
-                operation="to_pandas",
-            )
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise ImportError(
-                "pandas is required for this feature. Install with "
-                "`pip install torchlens[tabular]`."
-            ) from e
-
-        # Identity columns lead the table; the remaining columns follow the
-        # canonical Op field order minus the documented exclusions, plus the
-        # handful of property-backed convenience columns that are not stored
-        # fields. ``dict.fromkeys`` removes duplicates while keeping the lead
-        # block's positions.
-        lead_columns = [
-            "layer_label",
-            "label",
-            "layer_label_short",
-            "label_short",
-            "layer_type",
-        ]
-        property_columns = [
-            "has_parents",
-            "siblings",
-            "has_siblings",
-            "co_parents",
-            "has_co_parents",
-            "has_params",
-            "is_module_input",
-            "output_role",
-            "num_saved_grads",
-        ]
-        if include_decoded_output_summary:
-            property_columns.append("decoded_output_summary")
-        fields_for_df = list(
-            dict.fromkeys(
-                lead_columns
-                + [
-                    field_name
-                    for field_name in LAYER_PASS_LOG_FIELD_ORDER
-                    if field_name not in _TO_PANDAS_EXCLUDED_OP_FIELDS
-                ]
-                + property_columns
-            )
+        return _doors.export()._trace_tables.to_pandas(
+            self, include_decoded_output_summary=include_decoded_output_summary
         )
 
-        fields_to_change_type = {
-            "type_index": int,
-            "step_index": int,
-            "num_passes": int,
-            "pass_index": int,
-            "is_inplace": bool,
-            "is_input": bool,
-            "is_output": bool,
-            "is_buffer": bool,
-            "in_multi_output": bool,
-            "has_parents": bool,
-            "has_children": bool,
-            "has_siblings": bool,
-            "has_co_parents": bool,
-            "has_params": bool,
-            "num_params": int,
-            "param_memory": int,
-            "activation_memory": int,
-            "is_module_input": bool,
-            "is_module_output": bool,
-            "conditional_branch_depth": int,
-            "is_terminal_conditional_bool": bool,
-        }
+    def decode_output(
+        self: "Trace",
+        k: int | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
+        tokenizer: Any | None = None,
+    ) -> Any:
+        """Return decoded output rows: the captured rows, or a decode on demand.
 
-        model_df_dictlist: list[dict[str, Any]] = []
-        for layer_entry in self.layer_list:
-            layer_dict: dict[str, Any] = {}
-            for field_name in fields_for_df:
-                if field_name == "conditional_branch_stack":
-                    layer_dict[field_name] = _format_conditional_branch_stack(
-                        layer_entry.conditional_branch_stack
-                    )
-                elif field_name == "grad":
-                    layer_dict[field_name] = getattr(layer_entry, "grad")
-                elif field_name == "num_saved_grads":
-                    layer_dict[field_name] = len(getattr(layer_entry, "_grad_records", ()))
-                elif field_name == "output_role":
-                    layer_dict[field_name] = _output_role_from_container_path(
-                        getattr(layer_entry, "container_path", ())
-                    )
-                elif field_name == "decoded_output_summary":
-                    layer_dict[field_name] = (
-                        self._decoded_output_summary()
-                        if bool(getattr(layer_entry, "is_output", False))
-                        else None
-                    )
-                else:
-                    layer_dict[field_name] = getattr(layer_entry, field_name)
-            model_df_dictlist.append(layer_dict)
-        model_df = pd.DataFrame(model_df_dictlist)
-
-        for column_name in fields_to_change_type:
-            model_df[column_name] = model_df[column_name].astype(fields_to_change_type[column_name])
-        model_df["terminal_conditional_id"] = model_df["terminal_conditional_id"].astype("Int64")
-
-        from .._capture_honesty import attach_dataframe_honesty
-
-        return attach_dataframe_honesty(model_df, self)
-
-    def decode_output(self: "Trace", k: int | None = None) -> Any:
-        """Return captured decoded output rows when available.
+        With no keywords this returns the rows the automatic capture-time
+        decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
+        decodes again from the retained output tensors (the output ops'
+        values), the persisted ``output_id2label`` and the shipped ImageNet
+        bank, without touching ``decoded_output``.
 
         Parameters
         ----------
         k:
             Optional maximum rank to return per batch item.
+        style:
+            Decode style: ``"classification"``, ``"imagenet"``,
+            ``"imagenet1k"``, ``"hf_text"`` or a registered custom style.
+            ``None`` lets the registered detectors pick one.
+        head:
+            Output head to decode, as an output container path such as
+            ``"logits"``, ``"0"`` or ``"0.logits"``.
+        tokenizer:
+            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
 
         Returns
         -------
         Any
-            JSON-primitive decoded output captured during tracing.
+            JSON-primitive decoded output.
 
         Raises
         ------
         ValueError
             If decoded output was not captured or the requested ``k`` exceeds
-            the capture-time bound.
+            the capture-time bound (``decoded_output_unavailable``); a style
+            no detector resolves (``decode_style_unknown``); a head that is
+            not an output head (``decode_head_unknown``) or an ambiguous head
+            (``decode_head_ambiguous``).
         """
 
-        # Capability gate (quickstart memo D7, F17): decoded labels on
-        # synthesized input values would be a statement about random numbers
-        # presented as a statement about data. One chokepoint for every
-        # decode door (output_table, to_pandas decoded summary, direct calls).
-        from .._quickstart._gate import require_gold
-
-        require_gold(self, "decoded output labels")
-        if self.decoded_output is None:
-            recomputed = self._recompute_decoded_output(top_n=k)
-            if recomputed is None:
-                raise PayloadUnavailableError(
-                    "logits not retained; re-decode unavailable",
-                    code="decoded_output_unavailable",
-                    remedy=(
-                        "capture with semantic output decoding enabled and retained "
-                        "logits to recompute"
-                    ),
-                )
-            return recomputed
-        if k is None:
-            return self.decoded_output
-        captured_top_n = getattr(self.output_postprocessor, "top_n_captured", None)
-        if captured_top_n is not None and k > captured_top_n:
-            recomputed = self._recompute_decoded_output(top_n=k)
-            if recomputed is not None:
-                return recomputed
-            raise PayloadUnavailableError(
-                f"logits not retained; re-decode unavailable above captured top_n={captured_top_n}",
-                code="decoded_output_unavailable",
-                remedy=(
-                    f"request top_n <= {captured_top_n} or capture with retained logits "
-                    "to recompute"
-                ),
-                captured_top_n=captured_top_n,
-            )
-        if _is_batch_topk_decoded(self.decoded_output):
-            return {
-                "kind": "batch_topk",
-                "rows": [
-                    row
-                    for row in self.decoded_output["rows"]
-                    if isinstance(row, dict) and int(row.get("rank", 1)) <= k
-                ],
-            }
-        if not isinstance(self.decoded_output, list):
-            return self.decoded_output
-        return [
-            row
-            for row in self.decoded_output
-            if not isinstance(row, dict) or int(row.get("rank", 1)) <= k
-        ]
+        return _doors.export()._trace_tables.decode_output(
+            self, k=k, style=style, head=head, tokenizer=tokenizer
+        )
 
     def output_table(
-        self: "Trace", k: int = 5, batch_items: int | Sequence[int] | None = None
+        self: "Trace",
+        k: int = 5,
+        batch_items: int | Sequence[int] | None = None,
+        *,
+        style: str | None = None,
+        head: str | None = None,
     ) -> "pd.DataFrame":
         """Return decoded output as a batch top-k dataframe.
 
@@ -477,6 +168,10 @@ class TraceExportMixin(_TraceMixinBase):
             ``None`` returns all captured batch items, an integer returns the
             first ``N`` batch items, and a sequence selects explicit batch item
             indices.
+        style:
+            Optional decode style for a decode on demand (see ``decode_output``).
+        head:
+            Optional output head for a decode on demand (see ``decode_output``).
 
         Returns
         -------
@@ -489,90 +184,6 @@ class TraceExportMixin(_TraceMixinBase):
             If classification logits were not decoded or cannot be recomputed.
         """
 
-        try:
-            import pandas as pd
-        except ImportError as e:
-            raise ImportError(
-                "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
-            ) from e
-
-        if k < 1:
-            raise InvalidArgumentError(
-                f"top_n must be >= 1; received {k!r}",
-                code="top_n_invalid",
-                remedy="pass a positive integer top_n",
-                argument="top_n",
-            )
-        decoded = self.decode_output(k=k)
-        rows = _decoded_batch_topk_rows(decoded)
-        if rows is None:
-            raise PayloadUnavailableError(
-                "decoded output is not a batch top-k classification table",
-                code="decoded_output_not_classification",
-                remedy=(
-                    "capture with output_style='classification' to produce a batch top-k table"
-                ),
-            )
-        selected_items = _normalize_batch_items(batch_items, rows)
-        filtered_rows = [
-            {
-                "batch_item": int(row["batch_item"]),
-                "rank": int(row["rank"]),
-                "label": str(row["label"]),
-                "prob": float(row["prob"]),
-            }
-            for row in rows
-            if int(row.get("rank", 0)) <= k
-            and (selected_items is None or int(row.get("batch_item", -1)) in selected_items)
-        ]
-        return pd.DataFrame(filtered_rows, columns=["batch_item", "rank", "label", "prob"])
-
-    def _recompute_decoded_output(self: "Trace", top_n: int | None) -> Any | None:
-        """Best-effort decoded-output recompute from retained output logits.
-
-        Parameters
-        ----------
-        top_n:
-            Requested number of top rows per batch item.
-
-        Returns
-        -------
-        Any | None
-            Typed decoded representation when recompute succeeds, otherwise
-            ``None``.
-        """
-
-        postprocessor = getattr(self, "output_postprocessor", None)
-        if postprocessor is None or getattr(postprocessor, "style", None) == "hf_text":
-            return None
-        logits = _retained_output_logits(self)
-        if logits is None:
-            return None
-        from .._autoroute._builtin_output import _decode_classification, _labels_for_resolved
-
-        labels = _labels_for_resolved(postprocessor)
-        if labels is None:
-            return None
-        rows = _decode_classification(logits, labels, top_n=top_n or 5)
-        if rows is None:
-            return None
-        return {"kind": "batch_topk", "rows": rows}
-
-    def _decoded_output_summary(self: "Trace") -> str | None:
-        """Return a compact decoded-output summary for gated dataframe export.
-
-        Returns
-        -------
-        str | None
-            First decoded row summary, or ``None`` when unavailable.
-        """
-
-        rows = _decoded_batch_topk_rows(getattr(self, "decoded_output", None))
-        if not rows:
-            return None
-        first_item = int(rows[0].get("batch_item", 0))
-        item_rows = [row for row in rows if int(row.get("batch_item", -1)) == first_item][:3]
-        return "; ".join(
-            f"{int(row.get('rank', 0))}. {row.get('label')} ({float(row.get('prob', 0.0)):.1%})"
-            for row in item_rows
+        return _doors.export()._trace_tables.output_table(
+            self, k=k, batch_items=batch_items, style=style, head=head
         )

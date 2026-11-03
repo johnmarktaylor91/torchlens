@@ -10,7 +10,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
-from typing import Any, Final, cast
+from typing import Any, Final, NamedTuple, cast
 
 from ..._capture._nonfinite_prefix import strip_raw_label_suffix
 from ..._capture.outcome import stamp_backend_finalized
@@ -34,7 +34,6 @@ from ..._ir.events import (
     OpEvent,
     OutputRef,
     ParentEdge,
-    is_control_edge_use,
 )
 from ..._ir.op_record import amend_preview_output_parent_rebind
 from ..._ir.predicate import RecordContext
@@ -89,6 +88,29 @@ from .._options import (
 )
 from .._validation_shared import float_replay_tolerances
 from ._site_dialect import jax_site_keys
+from ._trace_graph_helpers import (
+    _control_parent_labels,
+    _data_parent_arg_positions,
+    _data_parent_labels,
+    _jax_dict_keys,
+    _ordered_jax_data_parent_labels,
+    _parent_perturbations_change_output,
+    _path_to_components,
+    _path_to_string,
+    _perturb_candidates,
+    _relabel_jax_edge_use,
+    _relabel_jax_parent_arg_positions,
+    _saved_op_outputs,
+    _saved_region_boundary_outputs,
+    _saved_single_output,
+    _values_close,
+)
+from ._validation_log import (
+    _JaxValidationLog,
+    _JaxVerdict,
+    _record_jax_constant_leaves,
+    _record_jax_decision,
+)
 from .jaxpr import (
     ALL_JAX_EQUATION_KINDS,
     JaxCaptureResult,
@@ -252,6 +274,148 @@ class _JaxIntermediateTapSpec:
 _UNSUPPORTED_CONTAINER_SPEC: Final = object()
 
 
+def _stamp_jaxpr_results(trace: Trace, closed_jaxpr: Any, result: Any, static_argnums: Any) -> None:
+    """Record the interpreted jaxpr and its captures on the trace."""
+
+    trace._provenance_jax_closed_jaxpr = closed_jaxpr
+    trace.jax_equation_captures = result.equations
+    trace.jax_ordered_captures = result.captures
+    trace.jax_region_captures = tuple(
+        capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
+    )
+    trace._provenance_jax_inlined_call_primitives = result.inlined_call_primitives
+    trace._options_jax_static_argnums = static_argnums
+
+
+def _jax_pre_replay_failure_status(
+    trace: Trace, log: _JaxValidationLog, exc: BaseException
+) -> ValidationStatus:
+    """The failed status recorded when validation raised before any replay verdict."""
+
+    _record_jax_decision(
+        log,
+        "<trace>",
+        "",
+        _JaxVerdict("metadata", "failed", "metadata_invariant_exception"),
+    )
+    status_result = ValidationStatus.result(
+        passed=False,
+        backend="jax",
+        source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
+        payload_load_status=getattr(trace, "payload_load_status", None),
+        num_failed_ops=1,
+        decisions=tuple(log.decisions),
+    )
+    return replace(
+        status_result,
+        message=f"Replay validation failed before replay: {type(exc).__name__}: {exc}",
+    )
+
+
+def _jax_captures_consistent(
+    captures: tuple[Any, ...], equation_ops: Sequence[Any], log: _JaxValidationLog
+) -> bool:
+    """Equation captures and equation ops agree in count and in kind multiset."""
+
+    if len(captures) != len(equation_ops):
+        _record_jax_decision(
+            log,
+            "<trace>",
+            "",
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+            f"{len(captures)} equation captures for {len(equation_ops)} equation ops",
+        )
+        return False
+    capture_kind_counts = Counter(capture.kind for capture in captures)
+    op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
+    if capture_kind_counts != op_kind_counts:
+        _record_jax_decision(
+            log,
+            "<trace>",
+            "",
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+            "equation capture kinds differ from op capture kinds",
+        )
+        return False
+    return True
+
+
+def _jax_ops_by_label(trace: Trace) -> dict[str, Any]:
+    """Index ops by raw, final and (for single-pass ops) bare labels."""
+
+    # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
+    # resolve through the CONDITIONAL label map -- a single-pass op's bare
+    # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
+    # lookup keyed only by raw/final-qualified labels misses every
+    # single-pass parent reference. Index the bare label too (safe: a
+    # single-pass op's bare label is unambiguous).
+    ops_by_label: dict[str, Any] = {}
+    for op in trace._layer_list:
+        labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
+        if getattr(op, "num_passes", 1) == 1:
+            labels.append(getattr(op, "layer_label", None))
+        for label in labels:
+            if isinstance(label, str):
+                ops_by_label[label] = op
+    return ops_by_label
+
+
+def _validate_one_jax_equation(
+    jax: Any,
+    capture: Any,
+    op: Any,
+    ops_by_label: dict[str, Any],
+    hidden_outputs_by_label: dict[str, tuple[Any, ...]],
+    log: _JaxValidationLog,
+) -> bool:
+    """Replay one equation against its saved outputs and record the verdict."""
+
+    op_label = str(getattr(op, "label", getattr(op, "_label_raw", "")))
+    func_name = str(getattr(op, "func_name", capture.primitive))
+    if capture.kind != _jax_op_capture_kind(op):
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+        )
+        return False
+    try:
+        inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
+        replayed = replay_equation(capture, inputs)
+        saved_outputs = _saved_op_outputs(
+            op,
+            len(replayed),
+            hidden_outputs_by_label=hidden_outputs_by_label,
+        )
+    except Exception as exc:  # noqa: BLE001 - name the op, then fail closed
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("replay", "failed", "replay_mismatch"),
+            f"{type(exc).__name__}: {exc}",
+        )
+        return False
+    if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
+        _record_jax_decision(
+            log, op_label, func_name, _JaxVerdict("replay", "failed", "replay_mismatch")
+        )
+        return False
+    if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+        _record_jax_decision(
+            log,
+            op_label,
+            func_name,
+            _JaxVerdict("perturbation", "failed", "perturbation_insensitive"),
+        )
+        return False
+    _record_jax_decision(
+        log, op_label, func_name, _JaxVerdict("replay", "validated", "replay_match")
+    )
+    return True
+
+
 class JAXBackend:
     """JAX adapter that captures forward graphs from closed jaxprs."""
 
@@ -384,7 +548,7 @@ class JAXBackend:
         grad_options
             Optional JAX derived-gradient configuration. This runs a second
             pure functional ``jax.value_and_grad`` pass and populates
-            ``trace.derived_grads``.
+            ``trace.autograd.derived_grads``.
         capture
             Grouped ``CaptureOptions``. The sole post-sprint spelling for the
             flat capture kwargs above; an explicit field here is merged in
@@ -549,7 +713,7 @@ class JAXBackend:
             save_transformed_output=cast(str | bool, save_raw_output),
         )
         trace.capture_events = CaptureEvents()
-        trace.capture_start_time = time.time()
+        trace._provenance_start_time = time.time()
         if use_pytree_module:
             if module_tree is None:
                 raise AssertionError("pytree_module mode requires JAX module metadata.")
@@ -560,6 +724,7 @@ class JAXBackend:
                 _raise_nnx_trace_context_error(module_tree, exc)
                 raise
             reject_attributed_module_strict_control_flow(closed_jaxpr)
+            closure_consts = ()
             module_tree.call_counts.clear()
             module_tree.forward_args_by_call.clear()
             try:
@@ -570,7 +735,7 @@ class JAXBackend:
                 raise
         else:
             closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
-            reject_undeclared_consts(closed_jaxpr)
+            closure_consts = _readable_closure_consts(closed_jaxpr)
             output = model(*args)
         flat_args, _args_treedef = flatten_dynamic_args(args, static_argnums)
         result = interpret_closed_jaxpr_with_inlining(
@@ -581,9 +746,10 @@ class JAXBackend:
         )
         output_leaf_paths = self._output_leaf_paths(output)
         output_container_spec = self._builtin_output_container_spec(output)
-        trace.forward_duration = Duration(time.time() - trace.capture_start_time)
-        trace.raw_output = output_transform(output) if callable(output_transform) else None
+        trace._cost_forward_duration = Duration(time.time() - trace._provenance_start_time)
+        trace.transformed_output = output_transform(output) if callable(output_transform) else None
         self._emit_arg_sources(trace, args)
+        self._emit_const_sources(trace, closure_consts)
         self._emit_equations(trace, result)
         trace.jax_outvar_key_to_capture_index = dict(result.outvar_key_to_capture_index)
         self._mark_output_events(trace, result.outputs, output_leaf_paths, output_container_spec)
@@ -600,14 +766,7 @@ class JAXBackend:
             module_tree if use_pytree_module else None,
             result.equations,
         )
-        trace.jax_closed_jaxpr = closed_jaxpr
-        trace.jax_equation_captures = result.equations
-        trace.jax_ordered_captures = result.captures
-        trace.jax_region_captures = tuple(
-            capture for capture in result.captures if isinstance(capture, JaxRegionCapture)
-        )
-        trace.jax_inlined_call_primitives = result.inlined_call_primitives
-        trace.jax_static_argnums = static_argnums
+        _stamp_jaxpr_results(trace, closed_jaxpr, result, static_argnums)
         apply_static_label_save_policy(trace, save_predicate, backend_name="JAX")
         if grad_options is not None:
             self._attach_derived_grads(
@@ -653,36 +812,66 @@ class JAXBackend:
 
         status = trace.validation_replay_status
         if not status.is_available:
-            setattr(trace, "_validation_replay_status", status)
+            trace._validation_replay_status = status
             return status
+        status_result = self.validation_status(
+            trace, validate_metadata=bool(kwargs.get("validate_metadata", True))
+        )
+        return status_result if status_result.state == "unverified" else status_result.passed
+
+    def validation_status(
+        self, trace: Trace, *, validate_metadata: bool = True
+    ) -> ValidationStatus:
+        """The protocol's ``validate``: always a ``ValidationStatus``, never a bool.
+
+        Parameters
+        ----------
+        trace
+            Trace produced by this backend.
+        validate_metadata
+            Whether backend-neutral invariant checks run first.
+
+        Returns
+        -------
+        ValidationStatus
+            ``unavailable`` when runtime captures were stripped; otherwise the
+            replay result with per-op ``decisions`` and, on failure, a message
+            naming the first offending op.
+        """
+
+        status = trace.validation_replay_status
+        if not status.is_available:
+            trace._validation_replay_status = status
+            return status
+        log = _JaxValidationLog()
         try:
-            if kwargs.get("validate_metadata", True):
+            if validate_metadata:
                 from ...validation.invariants import check_metadata_invariants
 
                 check_metadata_invariants(trace)
-            passed = self._validate_jax_equations(trace) and self._validate_jax_regions(trace)
-            status_result = self._validation_status_from_counts(trace, passed=passed)
-        except Exception:
-            passed = False
-            status_result = ValidationStatus.result(
-                passed=False,
-                backend="jax",
-                source="loaded" if getattr(trace, "_loaded_from_bundle", False) else "live",
-                payload_load_status=getattr(trace, "payload_load_status", None),
-                num_failed_ops=1,
-            )
-        setattr(
-            trace,
-            "_validation_replay_status",
-            status_result,
-        )
-        return status_result if status_result.state == "unverified" else passed
+            passed = self._validate_jax_equations(trace, log)
+            _record_jax_constant_leaves(trace, log)
+            if passed and not self._validate_jax_regions(trace):
+                passed = False
+                _record_jax_decision(
+                    log,
+                    "<trace>",
+                    "",
+                    _JaxVerdict("metadata", "failed", "capture_inconsistent"),
+                    "importer-owned region boundary or seam check failed",
+                )
+            status_result = self._validation_status_from_counts(trace, passed=passed, log=log)
+        except Exception as exc:  # noqa: BLE001 - the tripwire reports, never raises
+            status_result = _jax_pre_replay_failure_status(trace, log, exc)
+        trace._validation_replay_status = status_result
+        return status_result
 
     def _validation_status_from_counts(
         self,
         trace: Trace,
         *,
         passed: bool,
+        log: _JaxValidationLog | None = None,
     ) -> ValidationStatus:
         """Build aggregate replay status from JAX replay and region counts.
 
@@ -707,16 +896,33 @@ class JAXBackend:
         payload_load_status = getattr(trace, "payload_load_status", None)
         replayed_node_count = len(_jax_equation_ops(trace)) if passed else 0
         unverified_node_count = count_importer_region_annotations(trace) if passed else 0
-        return ValidationStatus.from_replay_counts(
+        decisions = tuple(log.decisions) if log is not None else ()
+        status = ValidationStatus.from_replay_counts(
             backend="jax",
             source=source,
             num_replayed_ops=replayed_node_count,
             num_unverified_ops=unverified_node_count,
             num_failed_ops=0 if passed else 1,
             payload_load_status=payload_load_status,
+            unverified_reason_counts=(
+                {"effectful_region": unverified_node_count} if unverified_node_count else {}
+            ),
+            exempted_reason_counts=dict(log.exempted_reason_counts) if log is not None else {},
+            decisions=decisions,
         )
+        first_failure = log.first_failure if log is not None else None
+        if status.state == "failed" and first_failure is not None:
+            label, func_name, reason = first_failure
+            status = replace(
+                status,
+                message=(
+                    f"Replay validation failed at {label} ({func_name}): {reason}; "
+                    f"{len(_jax_equation_ops(trace))} equation op(s) in the trace."
+                ),
+            )
+        return status
 
-    def _validate_jax_equations(self, trace: Trace) -> bool:
+    def _validate_jax_equations(self, trace: Trace, log: _JaxValidationLog | None = None) -> bool:
         """Validate JAX equation captures against materialized trace payloads.
 
         Parameters
@@ -732,28 +938,13 @@ class JAXBackend:
 
         import jax
 
+        if log is None:
+            log = _JaxValidationLog()
         captures = tuple(getattr(trace, "jax_equation_captures", ()))
         equation_ops = _jax_equation_ops(trace)
-        if len(captures) != len(equation_ops):
+        if not _jax_captures_consistent(captures, equation_ops, log):
             return False
-        capture_kind_counts = Counter(capture.kind for capture in captures)
-        op_kind_counts = Counter(_jax_op_capture_kind(op) for op in equation_ops)
-        if capture_kind_counts != op_kind_counts:
-            return False
-        # TORCH PARITY: ``parent_arg_positions`` (and ``parents``/``children``)
-        # resolve through the CONDITIONAL label map -- a single-pass op's bare
-        # ``layer_label``, a multi-pass op's pass-qualified ``label`` -- so a
-        # lookup keyed only by raw/final-qualified labels misses every
-        # single-pass parent reference. Index the bare label too (safe: a
-        # single-pass op's bare label is unambiguous).
-        ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
-            labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
-            if getattr(op, "num_passes", 1) == 1:
-                labels.append(getattr(op, "layer_label", None))
-            for label in labels:
-                if isinstance(label, str):
-                    ops_by_label[label] = op
+        ops_by_label = _jax_ops_by_label(trace)
         hidden_outputs_by_label: dict[str, tuple[Any, ...]] = {
             label: value if isinstance(value, tuple) else (value,)
             for label, value in getattr(trace, "_selective_save_hidden_payloads", {}).items()
@@ -761,18 +952,9 @@ class JAXBackend:
         # The len(captures) != len(equation_ops) guard above already returned
         # False, so these pair exactly.
         for capture, op in zip(captures, equation_ops, strict=True):
-            if capture.kind != _jax_op_capture_kind(op):
-                return False
-            inputs = _inputs_from_trace_graph(capture, op, ops_by_label, hidden_outputs_by_label)
-            replayed = replay_equation(capture, inputs)
-            saved_outputs = _saved_op_outputs(
-                op,
-                len(replayed),
-                hidden_outputs_by_label=hidden_outputs_by_label,
-            )
-            if not jax.tree.all(jax.tree.map(_values_close, replayed, saved_outputs)):
-                return False
-            if not _parent_perturbations_change_output(capture, op, inputs, saved_outputs):
+            if not _validate_one_jax_equation(
+                jax, capture, op, ops_by_label, hidden_outputs_by_label, log
+            ):
                 return False
         return True
 
@@ -809,7 +991,7 @@ class JAXBackend:
         # single-pass parent reference. Index the bare label too (safe: a
         # single-pass op's bare label is unambiguous).
         ops_by_label: dict[str, Any] = {}
-        for op in getattr(trace, "layer_list", []):
+        for op in trace._layer_list:
             labels = [getattr(op, "_label_raw", None), getattr(op, "label", None)]
             if getattr(op, "num_passes", 1) == 1:
                 labels.append(getattr(op, "layer_label", None))
@@ -838,13 +1020,11 @@ class JAXBackend:
             )
             if any(op is None for op in projection_ops):
                 return False
+            seam = _RegionSeam(
+                boundary, boundary_op, projections, cast(tuple[Any, ...], projection_ops)
+            )
             if not _validate_region_boundary(
-                boundary=boundary,
-                boundary_op=boundary_op,
-                projections=projections,
-                projection_ops=cast(tuple[Any, ...], projection_ops),
-                ops_by_label=ops_by_label,
-                hidden_outputs_by_label=hidden_outputs_by_label,
+                seam, ops_by_label=ops_by_label, hidden_outputs_by_label=hidden_outputs_by_label
             ):
                 return False
         return True
@@ -960,6 +1140,36 @@ class JAXBackend:
                 annotations={"jax_container_path": path},
             )
 
+    def _emit_const_sources(self, trace: Trace, consts: Sequence[Any]) -> None:
+        """Emit ``constant`` source events for closed-jaxpr closure constants.
+
+        The shared constants rule (SPEC section 2, rule 1): a closure array
+        the forward used is a source op ``constant`` with a saved payload, and
+        the equations that read it list it as a parent. Parent resolution is
+        by value identity, the same mechanism input leaves use, because the
+        interpreter binds the very ``closed_jaxpr.consts`` objects.
+
+        Parameters
+        ----------
+        trace
+            Trace receiving events.
+        consts
+            Readable closure constants in ``closed_jaxpr.consts`` order.
+        """
+
+        for index, value in enumerate(consts):
+            self._append_event(
+                trace=trace,
+                kind="source",
+                layer_type="constant",
+                func_name="constant",
+                output=value,
+                parents=(),
+                parent_arg_positions={"args": {}, "kwargs": {}},
+                container_path=(),
+                annotations={"jax_closure_const_index": index},
+            )
+
     def _emit_equations(self, trace: Trace, result: JaxCaptureResult) -> None:
         """Emit operation events for interpreted JAX equations and regions.
 
@@ -994,7 +1204,7 @@ class JAXBackend:
                 )
                 continue
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(equation.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1002,7 +1212,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=label_by_capture_index[control_index],
                     arg_position=f"control:{control_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 )
                 for control_index in equation.control_capture_indices
                 if control_index in label_by_capture_index
@@ -1081,7 +1291,7 @@ class JAXBackend:
         if capture.kind == "region":
             trace.annotations[REGION_REPLAY_PROVENANCE_KEY] = REGION_REPLAY_IMPORTER_PROVENANCE
             data_parents = tuple(
-                ParentEdge(parent_label_raw=label, arg_position=index, edge_use="arg")
+                ParentEdge(parent_label_raw=label, arg_position=index, _edge_use="arg")
                 for index, value in enumerate(capture.input_values)
                 if (label := label_by_value_id.get(id(value))) is not None
             )
@@ -1129,7 +1339,7 @@ class JAXBackend:
                 ParentEdge(
                     parent_label_raw=boundary_label,
                     arg_position=f"region_output:{capture.output_index}",
-                    edge_use="control",
+                    _edge_use="control",
                 ),
             )
             output = capture.output_values[0]
@@ -1296,7 +1506,7 @@ class JAXBackend:
             parents=parents,
             parent_arg_positions=parent_arg_positions,
             _edge_uses=tuple(
-                (edge.parent_label_raw, edge.arg_position, edge.edge_use) for edge in parents
+                (edge.parent_label_raw, edge.arg_position, edge._edge_use) for edge in parents
             ),
             params=(),
             parent_params=(),
@@ -1336,7 +1546,7 @@ class JAXBackend:
             is_scalar_bool=None,
             bool_value=None,
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=self._record_context(reserved, output, func_name),
@@ -1399,7 +1609,7 @@ class JAXBackend:
             kind="op",
             label=reserved.label,
             raw_label=reserved.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=reserved.raw_index,
             step_index=None,
             layer_type=reserved.layer_type,
@@ -1408,7 +1618,7 @@ class JAXBackend:
             func_name=func_name,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=(),
             recent_events=(),
             recent_ops=(),
@@ -1534,13 +1744,13 @@ class JAXBackend:
             param._param_ref = None
             param.trace = trace
             param_logs[address] = param
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = trace.num_params
         trace.num_params_frozen = 0
-        trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._num_layers_with_params = 0
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_pytree_params(
         self,
@@ -1566,15 +1776,15 @@ class JAXBackend:
             param_logs = equinox_param_logs(tree, trace)
         else:
             param_logs = nnx_param_logs(tree, trace)
-        trace.param_logs = ParamAccessor(param_logs)
-        trace.num_param_tensors = len(param_logs)
+        trace._param_logs = ParamAccessor(param_logs)
+        trace._num_param_tensors = len(param_logs)
         trace.num_params = sum(param.num_params for param in param_logs.values())
         trace.num_params_trainable = sum(
             param.num_params for param in param_logs.values() if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = 0
-        trace.param_source = "pytree-derived" if param_logs else "none"
+        trace._num_layers_with_params = 0
+        trace._provenance_param_source = "pytree-derived" if param_logs else "none"
 
     def _attach_derived_grads(
         self,
@@ -1615,7 +1825,7 @@ class JAXBackend:
         Returns
         -------
         None
-            ``trace.derived_grads`` and unambiguous param gradient slots are populated.
+            ``trace.autograd.derived_grads`` and unambiguous param gradient slots are populated.
         """
 
         import jax
@@ -1685,7 +1895,7 @@ class JAXBackend:
         if not jax.tree.all(jax.tree.map(_values_close, aux_output, captured_output)):
             raise ValueError(
                 "JAX derived gradient run raw output diverged from captured raw output; "
-                "refusing to expose trace.derived_grads."
+                "refusing to expose trace.autograd.derived_grads."
             )
         final_closed_jaxpr = derive_closed_jaxpr(model, args, static_argnums)
         reject_undeclared_consts(final_closed_jaxpr)
@@ -1714,11 +1924,11 @@ class JAXBackend:
                     },
                 )
             )
-        trace.derived_grads = DerivedGradAccessor(records)
+        trace._autograd_derived_grads = DerivedGradAccessor(records)
         mirror_param_derived_grads(trace, records)
         if grad_options.intermediate_grads:
             try:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(
                     trace,
@@ -1739,7 +1949,7 @@ class JAXBackend:
             except BackendUnsupportedError:
                 raise
             except Exception as exc:
-                from ..._data_classes._trace_stats import set_intermediate_derived_grads
+                from ..._data_classes.derived_grad import set_intermediate_derived_grads
 
                 set_intermediate_derived_grads(trace, IntermediateDerivedGradAccessor())
                 trace.jax_intermediate_derived_grad_status = {
@@ -1949,9 +2159,9 @@ class JAXBackend:
         """
 
         assignments = self._jax_recurrence_assignments(trace)
-        trace.grouping_policy = build_grouping_policy_stamp(
-            ran_recurrence_grouping=bool(trace.recurrence_detection),
-            requested=getattr(trace, "grouping", "structural"),
+        trace._options_grouping_policy = build_grouping_policy_stamp(
+            ran_recurrence_grouping=bool(trace._options_recurrence_detection),
+            requested=trace._options_grouping,
         )
         raw_labels = tuple(trace._raw_graph_ws.raw_layer_labels_list)
         raw_to_final_op_label: dict[str, str] = {}
@@ -1965,13 +2175,13 @@ class JAXBackend:
         # this sibling mapping feeds ``_relabel_jax_graph_edges`` instead.
         raw_to_final_layer_label: dict[str, str] = {}
 
-        trace.layer_list = []
-        trace.layer_dict_main_keys.clear()
-        trace.layer_dict_all_keys.clear()
-        trace.layer_logs.clear()
+        trace._layer_list = []
+        trace._layer_dict_main_keys.clear()
+        trace._layer_dict_all_keys.clear()
+        trace._layer_logs.clear()
         trace.op_labels = []
         trace.layer_labels = []
-        trace.layer_num_calls.clear()
+        trace._layer_num_calls.clear()
         trace._lookup_keys_to_layer_num_dict.clear()
         trace._layer_num_to_lookup_keys_dict.clear()
 
@@ -1992,10 +2202,10 @@ class JAXBackend:
             op_log._label_raw = label
             op_log._layer_label_raw = assignment.layer_label
             op_log.label = pass_label
-            op_log.label_short = pass_label
+            op_log.short_label = pass_label
             op_log.layer_label = layer_label
-            op_log.layer_label_short = layer_label
-            op_log.pass_index = assignment.pass_index
+            op_log.short_layer_label = layer_label
+            op_log.pass_number = assignment.pass_index
             op_log.num_passes = assignment.num_passes
             op_log.equivalence_class = assignment.equivalence_key
             op_log.site_key = assignment.site_key
@@ -2040,28 +2250,28 @@ class JAXBackend:
             # ``Module.layer_labels``, tripping the ``module_attribution``
             # metadata invariant.
             op_log.lookup_keys = [label, op_log.label, op_log.layer_label]
-            trace.layer_list.append(op_log)
-            trace.layer_dict_main_keys[op_log.label] = op_log
+            trace._layer_list.append(op_log)
+            trace._layer_dict_main_keys[op_log.label] = op_log
             for lookup_key in op_log.lookup_keys:
-                if lookup_key not in trace.layer_dict_all_keys:
-                    trace.layer_dict_all_keys[lookup_key] = op_log
+                if lookup_key not in trace._layer_dict_all_keys:
+                    trace._layer_dict_all_keys[lookup_key] = op_log
                     trace._lookup_keys_to_layer_num_dict[lookup_key] = raw_index
                 trace._layer_num_to_lookup_keys_dict[raw_index].append(lookup_key)
             if op_log.num_passes > 1:
                 # Incidental raw-index artifact, not a contract: every pass
                 # overwrites the bare layer label (last wins, torch parity).
-                trace.layer_dict_all_keys[op_log.layer_label] = op_log
+                trace._layer_dict_all_keys[op_log.layer_label] = op_log
                 trace._lookup_keys_to_layer_num_dict[op_log.layer_label] = raw_index
             trace.op_labels.append(op_log.label)
             if op_log.layer_label not in trace.layer_labels:
                 trace.layer_labels.append(op_log.layer_label)
-            trace.layer_num_calls[op_log.layer_label] = op_log.num_passes
-            layer_log = trace.layer_logs.get(op_log.layer_label)
+            trace._layer_num_calls[op_log.layer_label] = op_log.num_passes
+            layer_log = trace._layer_logs.get(op_log.layer_label)
             if layer_log is None:
                 layer_log = Layer(op_log)
-                trace.layer_logs[op_log.layer_label] = layer_log
+                trace._layer_logs[op_log.layer_label] = layer_log
             layer_log.num_passes = op_log.num_passes
-            layer_log.ops[op_log.pass_index] = op_log
+            layer_log.ops[op_log.pass_number] = op_log
             layer_log.call_labels.append(op_log.label)
             layer_log.dtype_ref = op_log.dtype_ref
             layer_log.device_ref = op_log.device_ref
@@ -2071,11 +2281,11 @@ class JAXBackend:
         if module_tree is not None:
             self._attach_pytree_op_params(trace, module_tree, captures)
 
-        trace.op_equivalence_classes.clear()
-        trace.op_equivalence_classes.update(equivalent_labels_by_key)
-        trace.num_ops = sum(
+        trace._graph_op_equivalence_classes.clear()
+        trace._graph_op_equivalence_classes.update(equivalent_labels_by_key)
+        trace._num_ops = sum(
             1
-            for op_log in trace.layer_list
+            for op_log in trace._layer_list
             if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
         )
         if module_tree is None:
@@ -2086,7 +2296,7 @@ class JAXBackend:
             # takes the param as an operand). Matching on it directly (as
             # the old code did) attaches params to the input-echo op
             # instead of the op that genuinely uses them, so
-            # ``has_params``/``used_by_ops``/``num_layers_with_params``
+            # ``has_params``/``used_by_ops``/``_num_layers_with_params``
             # never reflect real param usage. Mirror
             # ``_attach_pytree_op_params`` above (and the equivalent
             # ``torch``/``mlx``/``paddle`` param attribution): resolve each
@@ -2101,22 +2311,22 @@ class JAXBackend:
             # ``_relabel_jax_graph_edges``), and a source op is always
             # single-pass, so both keys point at the one param.
             param_log_by_source_label: dict[str, Param] = {}
-            for op_log in trace.layer_list:
+            for op_log in trace._layer_list:
                 path = getattr(op_log, "annotations", {}).get("jax_container_path")
                 if not isinstance(path, str) or not path.startswith("0."):
                     continue
                 param_address = path.removeprefix("0.")
-                if param_address not in trace.param_logs:
+                if param_address not in trace._param_logs:
                     continue
-                param_log_by_source_label[op_log.label] = trace.param_logs[param_address]
+                param_log_by_source_label[op_log.label] = trace._param_logs[param_address]
                 if op_log.num_passes == 1:
-                    param_log_by_source_label[op_log.layer_label] = trace.param_logs[param_address]
+                    param_log_by_source_label[op_log.layer_label] = trace._param_logs[param_address]
 
             if param_log_by_source_label:
                 from .._finalize import _attach_param_usage
 
                 usage_membership: dict[int, tuple[set[str], set[str], set[str]]] = {}
-                for op_log in trace.layer_list:
+                for op_log in trace._layer_list:
                     seen_barcodes: set[str] = set()
                     consumed_params: list[Param] = []
                     for parent_label in op_log.parents:
@@ -2153,8 +2363,8 @@ class JAXBackend:
             # unused params and fails ``check_metadata_invariants``'
             # ``trace_self_consistency`` check (which independently
             # recomputes the same dedup-by-layer sum from ``layer_list``).
-            trace.num_layers_with_params = len(
-                {op.layer_label for op in trace.layer_list if op.has_params}
+            trace._num_layers_with_params = len(
+                {op.layer_label for op in trace._layer_list if op.has_params}
             )
             # Parameter-identity basis, not a per-layer-label dedup sum: a
             # param reused across more than one op/layer (a tied weight, or a
@@ -2164,10 +2374,10 @@ class JAXBackend:
             # ``trace_self_consistency`` invariant's
             # ``num_param_tensors != len(param_logs)`` check (same fix as
             # ``backends/_finalize.py``'s ``_update_param_totals_from_layers``).
-            trace.num_param_tensors = len(trace.param_logs)
-            trace.num_params = sum(param.num_params for param in trace.param_logs)
+            trace._num_param_tensors = len(trace._param_logs)
+            trace.num_params = sum(param.num_params for param in trace._param_logs)
             trace.num_params_trainable = sum(
-                param.num_params for param in trace.param_logs if param.is_trainable
+                param.num_params for param in trace._param_logs if param.is_trainable
             )
             trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2205,14 +2415,14 @@ class JAXBackend:
         trace.input_layers = [_final_label(label) for label in trace.input_layers]
         trace._layers_logged = True
         trace._layers_saved = True
-        trace.has_backward_pass = False
-        trace.capture_end_time = time.time()
-        trace.backend = cast(BackendName, self.name)
+        trace._autograd_has_backward_pass = False
+        trace._provenance_end_time = time.time()
+        trace._provenance_backend = cast(BackendName, self.name)
         if module_tree is None:
-            trace.module_identity_mode = "function_root"
+            trace._options_module_identity_mode = "function_root"
             attach_function_root_module(trace)
         else:
-            trace.module_identity_mode = "pytree_module"
+            trace._options_module_identity_mode = "pytree_module"
             self._attach_pytree_module_logs(trace, module_tree)
         trace._tracing_finished = True
         compact_op_metadata(trace)
@@ -2222,8 +2432,8 @@ class JAXBackend:
         # Layer objects, not the ops the flood must mutate); running it after
         # the finished flag flips is still required so relabeled child edges
         # are present on the ops the index collects.
-        trace.mark_layer_depths = bool(getattr(trace, "mark_layer_depths", False))
-        if trace.mark_layer_depths:
+        trace._options_mark_layer_depths = bool(trace._options_mark_layer_depths)
+        if trace._options_mark_layer_depths:
             from .._finalize import compute_preview_input_output_distances
 
             compute_preview_input_output_distances(trace)
@@ -2268,7 +2478,7 @@ class JAXBackend:
                     param_addresses.append(address)
             if not param_addresses:
                 continue
-            params = [trace.param_logs[address] for address in param_addresses]
+            params = [trace._param_logs[address] for address in param_addresses]
             op_log._param_barcodes = [param.barcode for param in params]
             op_log._param_logs = params
             op_log.param_shapes = [param.shape for param in params]
@@ -2281,17 +2491,17 @@ class JAXBackend:
             # Set-memoized usage cross-links (the bare list scans were
             # O(m^2) for a param consumed by m ops).
             _attach_param_usage(trace, op_log, usage_membership)
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
+        trace._num_layers_with_params = len(
+            {op.layer_label for op in trace._layer_list if op.has_params}
         )
         # Parameter-identity basis (see the identical note in
         # ``_jax_recurrence_assignments``'s sibling counter block above):
         # a per-layer-label dedup sum still double-counts a param shared
         # across more than one layer.
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
+        trace._num_param_tensors = len(trace._param_logs)
+        trace.num_params = sum(param.num_params for param in trace._param_logs)
         trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
+            param.num_params for param in trace._param_logs if param.is_trainable
         )
         trace.num_params_frozen = trace.num_params - trace.num_params_trainable
 
@@ -2330,7 +2540,7 @@ class JAXBackend:
             if address != "self" and "." not in address:
                 mbd["top_level_modules"].append(address)
 
-        for param in trace.param_logs:
+        for param in trace._param_logs:
             owner = param.module_address
             mbd["module_nparams"][owner] += param.num_params
             if param.is_trainable:
@@ -2363,7 +2573,7 @@ class JAXBackend:
         seen_pass_children: dict[str, set[str]] = defaultdict(set)
         seen_addresses = set(mbd["addresses"])
 
-        for op_log in trace.layer_list:
+        for op_log in trace._layer_list:
             normalized_calls = normalize_op_module_calls(op_log.modules)
             op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
             op_log.module = op_log.modules[-1] if op_log.modules else None
@@ -2439,7 +2649,7 @@ class JAXBackend:
         """
 
         site_keys = self._jax_site_keys(trace)
-        if not trace.recurrence_detection:
+        if not trace._options_recurrence_detection:
             return {
                 label: self._jax_singleton_assignment(label, op_log, site_keys.get(label))
                 for label, op_log in trace._raw_graph_ws.raw_layer_dict.items()
@@ -3591,8 +3801,6 @@ def _finite_difference_directional_check(
 
     import jax.numpy as jnp
 
-    from .._validation_shared import float_replay_tolerances
-
     direction = jnp.sign(grad)
     if not bool(jnp.any(direction)):
         direction = jnp.ones_like(grad)
@@ -3744,6 +3952,43 @@ def _grad_path_for_argnum(argnum: int, local_path: str) -> str:
     return f"inputs.{argnum - 1}{suffix}"
 
 
+def _readable_closure_consts(closed_jaxpr: Any) -> tuple[Any, ...]:
+    """Closure constants of a function-root jaxpr, each with a readable buffer.
+
+    Parameters
+    ----------
+    closed_jaxpr
+        The derived closed jaxpr.
+
+    Returns
+    -------
+    tuple[Any, ...]
+        ``closed_jaxpr.consts`` in order (possibly empty).
+
+    Raises
+    ------
+    BackendUnsupportedError
+        ``constant_unrealizable`` when a constant is not a concrete array
+        (a tracer or a deleted buffer): it could not be recorded with a
+        payload, and the rule never records a parentless op without one.
+    """
+
+    import jax
+    import numpy as np
+
+    consts = tuple(getattr(closed_jaxpr, "consts", ()))
+    tracer_type = getattr(getattr(jax, "core", None), "Tracer", ())
+    for index, value in enumerate(consts):
+        if isinstance(value, tracer_type) or not isinstance(value, (jax.Array, np.ndarray)):
+            raise BackendUnsupportedError(
+                f"JAX closure constant {index} of type {type(value).__name__} has no readable "
+                "buffer, so it cannot be recorded as a constant op with a payload.",
+                code="constant_unrealizable",
+                remedy="pass the value as an explicit pytree leaf of fn(params, *inputs)",
+            )
+    return consts
+
+
 def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
     """Return materialized operation logs that correspond to JAX replay captures.
 
@@ -3760,7 +4005,7 @@ def _jax_equation_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in trace._layer_list
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in ALL_JAX_EQUATION_KINDS
     )
@@ -3782,7 +4027,7 @@ def _jax_region_ops(trace: Trace) -> tuple[Any, ...]:
 
     return tuple(
         op
-        for op in getattr(trace, "layer_list", ())
+        for op in trace._layer_list
         if isinstance(getattr(op, "annotations", None), Mapping)
         and op.annotations.get("jax_capture_kind") in {"region", "region_output"}
     )
@@ -3811,16 +4056,8 @@ def _jax_op_capture_kind(op: Any) -> str:
     return kind
 
 
-def _validate_region_boundary(
-    *,
-    boundary: JaxRegionCapture,
-    boundary_op: Any,
-    projections: tuple[JaxRegionCapture, ...],
-    projection_ops: tuple[Any, ...],
-    ops_by_label: Mapping[str, Any],
-    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
-) -> bool:
-    """Validate one JAX region boundary and its projection seams.
+class _RegionSeam(NamedTuple):
+    """One JAX region boundary with its projections, runtime and materialized.
 
     Parameters
     ----------
@@ -3832,6 +4069,26 @@ def _validate_region_boundary(
         Runtime projection captures for the boundary outputs.
     projection_ops
         Materialized projection ops aligned with ``projections``.
+    """
+
+    boundary: JaxRegionCapture
+    boundary_op: Any
+    projections: tuple[JaxRegionCapture, ...]
+    projection_ops: tuple[Any, ...]
+
+
+def _validate_region_boundary(
+    seam: _RegionSeam,
+    *,
+    ops_by_label: Mapping[str, Any],
+    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
+) -> bool:
+    """Validate one JAX region boundary and its projection seams.
+
+    Parameters
+    ----------
+    seam
+        The boundary, its op and the aligned projections.
     ops_by_label
         Materialized operations keyed by raw and final labels.
     hidden_outputs_by_label
@@ -3845,6 +4102,7 @@ def _validate_region_boundary(
 
     import jax
 
+    boundary, boundary_op, projections, projection_ops = seam
     if boundary.kind != "region":
         return False
     if _jax_region_capture_kind(boundary_op) != "region":
@@ -4111,508 +4369,3 @@ def _inputs_from_trace_graph(
         parent_op = ops_by_label[parent_label]
         inputs[position] = _saved_single_output(parent_op, hidden_outputs_by_label)
     return tuple(inputs)
-
-
-def _saved_op_outputs(
-    op: Any,
-    expected_count: int,
-    *,
-    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
-) -> tuple[Any, ...]:
-    """Return saved output payloads from a materialized JAX operation.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-    expected_count
-        Number of primitive outputs expected by replay.
-    hidden_outputs_by_label
-        Runtime-only replay outputs keyed by raw and final op labels.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Saved output payloads.
-    """
-
-    output = _saved_single_output(op, hidden_outputs_by_label)
-    if expected_count == 1:
-        return (output,)
-    if not isinstance(output, tuple) or len(output) != expected_count:
-        raise ValueError("JAX multi-output payload does not match primitive replay.")
-    return output
-
-
-def _saved_region_boundary_outputs(
-    op: Any,
-    expected_count: int,
-    *,
-    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]],
-) -> tuple[Any, ...]:
-    """Return the saved output tuple from a JAX region boundary op.
-
-    Parameters
-    ----------
-    op
-        Materialized region boundary op.
-    expected_count
-        Number of boundary outputs expected by the runtime capture.
-    hidden_outputs_by_label
-        Runtime-only replay outputs keyed by raw and final op labels.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Saved boundary output tuple.
-    """
-
-    output = _saved_single_output(op, hidden_outputs_by_label)
-    if not isinstance(output, tuple) or len(output) != expected_count:
-        raise ValueError("JAX region boundary payload does not match output arity.")
-    return output
-
-
-def _saved_single_output(
-    op: Any,
-    hidden_outputs_by_label: Mapping[str, tuple[Any, ...]] | None = None,
-) -> Any:
-    """Return one operation's saved payload, failing when it was dropped.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-    hidden_outputs_by_label
-        Runtime-only replay outputs keyed by raw and final op labels.
-
-    Returns
-    -------
-    Any
-        Saved output payload.
-    """
-
-    if not getattr(op, "has_saved_activation", False):
-        for label in (getattr(op, "_label_raw", None), getattr(op, "label", None)):
-            if (
-                isinstance(label, str)
-                and hidden_outputs_by_label
-                and label in hidden_outputs_by_label
-            ):
-                outputs = hidden_outputs_by_label[label]
-                return outputs[0] if len(outputs) == 1 else outputs
-        raise ValueError("JAX validation requires every equation payload to be saved.")
-    output = op.out
-    if output is None:
-        raise ValueError("JAX validation found a missing saved payload.")
-    return output
-
-
-def _parent_perturbations_change_output(
-    capture: JaxEquationCapture,
-    op: Any,
-    inputs: tuple[Any, ...],
-    saved_outputs: tuple[Any, ...],
-) -> bool:
-    """Return whether a recorded parent perturbation affects child replay output.
-
-    Parameters
-    ----------
-    capture
-        Captured JAX equation metadata.
-    op
-        Materialized TorchLens operation for the equation.
-    inputs
-        Replay inputs derived from trace graph parents.
-    saved_outputs
-        Saved child output payloads.
-
-    Returns
-    -------
-    bool
-        True when at least one graph parent perturbation changes the child output.
-    """
-
-    import jax
-
-    if capture.kind in {"cond_decision", "while_decision"}:
-        return True
-    graph_positions = _data_parent_arg_positions(op)
-    if not graph_positions:
-        return True
-    positions_by_parent: dict[str, list[int]] = {}
-    for position, parent_label in graph_positions.items():
-        positions_by_parent.setdefault(parent_label, []).append(position)
-    for positions in positions_by_parent.values():
-        first_position = positions[0]
-        for candidate in _perturb_candidates(inputs[first_position]):
-            perturbed_inputs = list(inputs)
-            for position in positions:
-                perturbed_inputs[position] = candidate
-            try:
-                perturbed_outputs = replay_equation(capture, perturbed_inputs)
-            except ValueError:
-                if capture.kind in {"cond_decision", "while_decision"}:
-                    return True
-                raise
-            if not jax.tree.all(jax.tree.map(_values_close, perturbed_outputs, saved_outputs)):
-                return True
-    return False
-
-
-def _control_parent_labels(op: Any) -> set[str]:
-    """Return graph parents that express control dependencies.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-
-    Returns
-    -------
-    set[str]
-        Parent labels whose edge-use metadata is marked ``"control"``.
-    """
-
-    return _parent_labels_by_control_class(op)[0]
-
-
-def _data_parent_labels(op: Any) -> set[str]:
-    """Return graph parents that participate in value replay.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-
-    Returns
-    -------
-    set[str]
-        Parent labels excluding control-only dependencies.
-    """
-
-    return _parent_labels_by_control_class(op)[1]
-
-
-def _data_parent_arg_positions(op: Any) -> dict[int, str]:
-    """Return positional parent-argument mappings for data parents only.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-
-    Returns
-    -------
-    dict[int, str]
-        Positional replay inputs keyed by primitive argument position.
-    """
-
-    data_labels = _data_parent_labels(op)
-    graph_positions = getattr(op, "parent_arg_positions", {}).get("args", {})
-    return {
-        position: parent_label
-        for position, parent_label in graph_positions.items()
-        if isinstance(position, int)
-        and isinstance(parent_label, str)
-        and parent_label in data_labels
-    }
-
-
-def _ordered_jax_data_parent_labels(op: Any, raw_label_set: set[str]) -> tuple[str, ...]:
-    """Return raw data-parent labels in recorded parent order.
-
-    Parameters
-    ----------
-    op
-        Materialized JAX operation log.
-    raw_label_set
-        Raw labels present in the materialized trace.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Deduplicated data-parent labels that belong to the raw graph.
-    """
-
-    data_parent_set = _data_parent_labels(op)
-    ordered: list[str] = []
-    seen: set[str] = set()
-    for parent in getattr(op, "parents", ()):
-        if parent in data_parent_set and parent in raw_label_set and parent not in seen:
-            ordered.append(parent)
-            seen.add(parent)
-    return tuple(ordered)
-
-
-def _relabel_jax_parent_arg_positions(
-    parent_arg_positions: Mapping[str, Mapping[Any, Any]],
-    raw_to_final: Mapping[str, str],
-) -> dict[str, dict[Any, Any]]:
-    """Return parent-argument positions with raw labels replaced.
-
-    Parameters
-    ----------
-    parent_arg_positions
-        Existing parent-position metadata.
-    raw_to_final
-        Mapping from raw op labels to final op labels.
-
-    Returns
-    -------
-    dict[str, dict[Any, Any]]
-        Relabeled parent-position metadata.
-    """
-
-    return {
-        arg_kind: {
-            position: raw_to_final.get(parent_label, parent_label)
-            if isinstance(parent_label, str)
-            else parent_label
-            for position, parent_label in positions.items()
-        }
-        for arg_kind, positions in parent_arg_positions.items()
-    }
-
-
-def _relabel_jax_edge_use(edge: Any, raw_to_final: Mapping[str, str]) -> Any:
-    """Return an edge-use record with raw endpoint labels replaced.
-
-    Parameters
-    ----------
-    edge
-        Edge-use record or legacy tuple.
-    raw_to_final
-        Mapping from raw op labels to final op labels.
-
-    Returns
-    -------
-    Any
-        Relabeled edge-use record.
-    """
-
-    parent_label = getattr(edge, "parent_label", None)
-    child_label = getattr(edge, "child_label", None)
-    if isinstance(parent_label, str) and isinstance(child_label, str):
-        return replace(
-            edge,
-            parent_label=raw_to_final.get(parent_label, parent_label),
-            child_label=raw_to_final.get(child_label, child_label),
-        )
-    if isinstance(edge, tuple) and len(edge) >= 3 and isinstance(edge[0], str):
-        return (raw_to_final.get(edge[0], edge[0]), *edge[1:])
-    return edge
-
-
-def _parent_labels_by_control_class(op: Any) -> tuple[set[str], set[str]]:
-    """Split operation parents into control and value-replay sets.
-
-    Parameters
-    ----------
-    op
-        Materialized TorchLens operation.
-
-    Returns
-    -------
-    tuple[set[str], set[str]]
-        ``(control_parent_labels, data_parent_labels)``.
-    """
-
-    parents = {label for label in getattr(op, "parents", ()) if isinstance(label, str)}
-    control = {
-        parent_label
-        for edge in getattr(op, "_edge_uses", ())
-        if (parent_label := _edge_parent_label(edge)) is not None and is_control_edge_use(edge)
-    }
-    return control & parents, parents - control
-
-
-def _edge_parent_label(edge: Any) -> str | None:
-    """Return the parent label from an edge-use record or legacy tuple.
-
-    Parameters
-    ----------
-    edge
-        Edge-use record or tuple.
-
-    Returns
-    -------
-    str | None
-        Parent label when present.
-    """
-
-    parent_label = getattr(edge, "parent_label", None)
-    if isinstance(parent_label, str):
-        return parent_label
-    if isinstance(edge, tuple) and edge and isinstance(edge[0], str):
-        return edge[0]
-    return None
-
-
-def _perturb_candidates(value: Any) -> tuple[Any, ...]:
-    """Return deterministic perturbation candidates for a JAX value.
-
-    Parameters
-    ----------
-    value
-        Parent payload to perturb.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Perturbed values with the same shape and dtype family.
-    """
-
-    import jax
-    import jax.numpy as jnp
-
-    array = jnp.asarray(value)
-    if str(array.dtype).startswith("key<"):
-        if not array.shape:
-            return (jax.random.fold_in(value, 1),)
-        flat = jnp.reshape(array, (-1,))
-        folded = jax.vmap(lambda key: jax.random.fold_in(key, 1))(flat)
-        return (jnp.reshape(folded, array.shape),)
-    if array.dtype == jnp.bool_:
-        return (jnp.logical_not(array),)
-    if jnp.issubdtype(array.dtype, jnp.integer):
-        info = jnp.iinfo(array.dtype)
-        base_candidates = [
-            array + jnp.asarray(1, dtype=array.dtype),
-            array - jnp.asarray(1, dtype=array.dtype),
-            jnp.zeros_like(array),
-            jnp.full_like(array, info.max),
-        ]
-        if info.min < 0:
-            base_candidates.append(jnp.full_like(array, info.min))
-        return (
-            *base_candidates,
-            jnp.bitwise_xor(array, jnp.asarray(info.max, dtype=array.dtype)),
-        )
-    if jnp.issubdtype(array.dtype, jnp.complexfloating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.real.dtype)
-        return (
-            array + jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-            array - jnp.asarray(magnitude + 0.125j, dtype=array.dtype),
-        )
-    if jnp.issubdtype(array.dtype, jnp.floating):
-        magnitude = jnp.max(jnp.abs(array)) + jnp.asarray(1.0, dtype=array.dtype)
-        return (array + magnitude, array - magnitude)
-    return (array,)
-
-
-def _values_close(left: Any, right: Any) -> bool:
-    """Return whether two JAX values are numerically close.
-
-    Parameters
-    ----------
-    left
-        Left value.
-    right
-        Right value.
-
-    Returns
-    -------
-    bool
-        True when values are close.
-    """
-
-    import jax.numpy as jnp
-
-    left_array = jnp.asarray(left)
-    right_array = jnp.asarray(right)
-    if left_array.shape != right_array.shape or left_array.dtype != right_array.dtype:
-        return False
-    if left_array.dtype == jnp.bool_ or jnp.issubdtype(left_array.dtype, jnp.integer):
-        return bool(jnp.array_equal(left_array, right_array, equal_nan=True))
-    if jnp.issubdtype(left_array.dtype, jnp.floating) or jnp.issubdtype(
-        left_array.dtype, jnp.complexfloating
-    ):
-        # Per-dtype ULP-derived bands (ported paddle/mlx validation-oracle
-        # derivation); ``jnp.finfo`` reports component precision for complex
-        # and covers the extended ml_dtypes floats (bfloat16, fp8).
-        rtol, atol = float_replay_tolerances(jnp.finfo(left_array.dtype))
-        return bool(jnp.allclose(left_array, right_array, rtol=rtol, atol=atol, equal_nan=True))
-    return bool(jnp.array_equal(left_array, right_array))
-
-
-def _path_to_string(path: Sequence[Any]) -> str:
-    """Convert a JAX pytree path to a stable dotted string.
-
-    Parameters
-    ----------
-    path
-        JAX pytree path entries.
-
-    Returns
-    -------
-    str
-        Dotted path string.
-    """
-
-    if not path:
-        return "root"
-    parts: list[str] = []
-    for entry in path:
-        name = getattr(entry, "name", None)
-        key = getattr(entry, "key", None)
-        idx = getattr(entry, "idx", None)
-        if name is not None:
-            parts.append(str(name))
-        elif key is not None:
-            parts.append(str(key))
-        elif idx is not None:
-            parts.append(str(idx))
-        else:
-            parts.append(str(entry).strip("[]'"))
-    return ".".join(parts)
-
-
-def _jax_dict_keys(value: Mapping[Any, Any]) -> tuple[Any, ...]:
-    """Return dict keys in JAX builtin pytree traversal order.
-
-    Parameters
-    ----------
-    value
-        Builtin dict output.
-
-    Returns
-    -------
-    tuple[Any, ...]
-        Keys sorted when possible, matching JAX's dict pytree order.
-    """
-
-    try:
-        return tuple(sorted(value.keys()))
-    except TypeError:
-        return tuple(value.keys())
-
-
-def _path_to_components(path: Sequence[Any]) -> tuple[object, ...]:
-    """Convert a JAX pytree path to TorchLens output-path components.
-
-    Parameters
-    ----------
-    path
-        JAX pytree path entries.
-
-    Returns
-    -------
-    tuple[object, ...]
-        Backend-neutral container path components.
-    """
-
-    components: list[object] = []
-    for entry in path:
-        name = getattr(entry, "name", None)
-        key = getattr(entry, "key", None)
-        idx = getattr(entry, "idx", None)
-        if name is not None:
-            components.append(str(name))
-        elif key is not None:
-            components.append(DictKey(key))
-        elif idx is not None:
-            components.append(TupleIndex(int(idx)))
-        else:
-            components.append(str(entry).strip("[]'"))
-    return tuple(components)

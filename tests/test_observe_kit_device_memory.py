@@ -21,6 +21,7 @@ from torchlens._observe._device_memory import (
     device_memory_samples,
     flat_field_projection,
 )
+from torchlens.errors import TraceCaptureError
 
 
 class _ScriptedProvider:
@@ -62,7 +63,7 @@ def test_default_off_and_swept_fields_are_none_not_zero() -> None:
     assert tl.options.CaptureOptions().track_device_memory is False
     captured = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
     try:
-        for op in captured.layer_list:
+        for op in captured._layer_list:
             assert op.bytes_delta_at_call is None, op.layer_label
             assert op.bytes_peak_at_call is None, op.layer_label
         assert device_memory_samples(captured) == {}
@@ -155,7 +156,7 @@ def test_unsupported_devices_produce_typed_absence(monkeypatch) -> None:
     )
     try:
         assert device_memory_samples(captured) == {}
-        for op in captured.layer_list:
+        for op in captured._layer_list:
             assert op.bytes_delta_at_call is None
     finally:
         captured.cleanup()
@@ -202,10 +203,10 @@ def test_pass_peak_observation_independent_of_sampling(monkeypatch) -> None:
     provider = _ScriptedProvider({"fake:0": [_reading(1000, 1000)]})
     sampled = _capture_with_provider(monkeypatch, provider, model, x)
     try:
-        assert plain.forward_memory_backend == sampled.forward_memory_backend
+        assert plain.provenance.forward_memory_backend == sampled.provenance.forward_memory_backend
         # forks.13: a CPU delta of 0 reads None (with a reason); either reading
         # is the same measurement kind, so compare the kind, not the RSS luck.
-        for peak in (plain.forward_peak_memory, sampled.forward_peak_memory):
+        for peak in (plain.cost.forward_peak_memory, sampled.cost.forward_peak_memory):
             assert peak is None or isinstance(peak, tl.types.Bytes)
     finally:
         plain.cleanup()
@@ -240,13 +241,14 @@ def test_oom_settles_an_attempted_call_row(monkeypatch) -> None:
             y = torch.tanh(x)  # a committed op precedes the OOM
             return torch.sigmoid(y.as_subclass(_OomOnSigmoid))
 
-    with pytest.raises(torch.cuda.OutOfMemoryError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         tl.trace(
             _OomModel(),
             torch.randn(2, 4),
             capture=tl.options.CaptureOptions(track_device_memory=True),
         )
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    assert isinstance(excinfo.value.__cause__, torch.cuda.OutOfMemoryError)
+    partial = excinfo.value.partial_trace
     samples = device_memory_samples(partial.trace)
     attempted = [label for label in samples if label.startswith("attempted:")]
     assert attempted, f"no attempted-call row settled: {sorted(samples)}"

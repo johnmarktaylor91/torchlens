@@ -58,7 +58,7 @@ _DEFERRED_CODE_CEILINGS: dict[str, int] = {
     # 102 -> 101 (2026-10-05 rung-1 splittests): the two 2026-10-04 test
     # sites got explicit strict/pairwise fixes and one older site had burned
     # down (same pinned ruff 0.15.4, isolated mode, CI scope).
-    "B905": 101,
+    "B905": 100,
     "B028": 2,
     # 2026-08-16 fixwave-7: all 17 B023 sites fixed (loop vars bound via
     # keyword defaults / class attributes at definition time) -- the
@@ -495,6 +495,11 @@ def _measure_deferred_codes() -> Counter[str]:
         assert completed.returncode in (0, 1), (
             f"ruff invocation failed ({scope_name}): {completed.stderr[-1000:]}"
         )
+        # A missing ruff module also exits 1 with empty stdout; a zero count from
+        # that would pass every ceiling vacuously, so refuse it outright.
+        assert "No module named" not in completed.stderr, (
+            f"ruff is not importable by {sys.executable} ({scope_name}): {completed.stderr[-300:]}"
+        )
         counts.update(_count_by_code(completed.stdout))
     return counts
 
@@ -564,7 +569,7 @@ def check_ignored_codes_all_carry_ceilings() -> None:
 #: File-level blanket ruff-noqa directives ("# ruff" + ": noqa") in
 #: torchlens/ (b9 R70 round
 #: 5, F/O pair): each one is a whole-file blind spot no per-code ceiling can
-#: see — a NEW dead import in ops.py / _runnable_execution.py /
+#: see — a NEW dead import in ops.py / _runnable/execution.py /
 #: completeness_witness.py (three of the most change-heavy capture files) is
 #: permanently invisible to F401. SHRINK-ONLY: converting a blanket to
 #: per-line noqa (the repo's own preferred pattern, see

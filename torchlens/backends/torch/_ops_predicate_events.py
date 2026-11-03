@@ -68,17 +68,6 @@ from .tensor_tracking import (
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
 
-if TYPE_CHECKING:
-    from .ops import (
-        TRANSFORM_FUNC_NAMES,
-        _is_default_ram_payload,
-        _iter_loggable_live_outputs,
-        _live_output_index,
-        _predicate_backend_semantics,
-        _predicate_function_ref,
-        _record_predicate_output,
-        _snapshot_exhaustive_module_stack,
-    )
 
 __all__ = (
     "_emit_predicate_operation_events",
@@ -143,12 +132,12 @@ def _emit_predicate_operation_events(
                 pass_index=state.pass_index,
                 event_index=state.event_index,
                 step_index=state.step_index,
-                capture_start_time=self.capture_start_time,
+                capture_start_time=self._provenance_start_time,
                 include_source_events=state.options.include_source_events,
                 sample_id=state.sample_id,
                 address=module_frame.address if module_frame else None,
                 module_type=module_frame.module_type if module_frame else None,
-                module_pass_index=module_frame.pass_index if module_frame else None,
+                module_pass_number=module_frame.pass_number if module_frame else None,
                 is_transform=bool(getattr(func, "__tl_is_transform_boundary__", False))
                 or func_name in TRANSFORM_FUNC_NAMES,
                 transform_kind=getattr(func, "__tl_transform_kind__", None)
@@ -264,7 +253,7 @@ def _emit_predicate_operation_events(
                         ctx,
                         tensor=out,
                         trace=self,
-                        intervened=bool(getattr(committed_event, "intervention_replaced", False)),
+                        intervened=bool(getattr(committed_event, "is_edited", False)),
                     )
                 state.append_context(ctx)
 
@@ -454,8 +443,8 @@ def _build_param_fields(
             continue
         param_meta = get_param_meta(param)
         addr = None if param_meta is None else param_meta.param_address
-        if addr is not None and addr in self.param_logs:
-            param_log = self.param_logs[addr]
+        if addr is not None and addr in self._param_logs:
+            param_log = self._param_logs[addr]
             if getattr(param_log, "_param_ref", None) is not param:
                 # Offload rebind rung (lane F37): accelerate offload hooks
                 # replace the prep-stamped meta parameter with a fresh
@@ -514,3 +503,23 @@ def _build_module_context_fields(
     fields_dict["is_module_output"] = False
     fields_dict["is_atomic_module"] = False
     fields_dict["atomic_module_call"] = None
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_capture_records import (  # noqa: E402
+    _snapshot_exhaustive_module_stack,
+)
+from ._ops_interventions import (  # noqa: E402
+    _iter_loggable_live_outputs,
+    _live_output_index,
+)
+from ._ops_predicates import (  # noqa: E402
+    _is_default_ram_payload,
+    _predicate_backend_semantics,
+    _predicate_function_ref,
+    _record_predicate_output,
+)
+from .ops import (  # noqa: E402
+    TRANSFORM_FUNC_NAMES,
+)

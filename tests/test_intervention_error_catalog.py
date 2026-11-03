@@ -89,7 +89,7 @@ CATALOG_EXERCISE_MANIFEST: dict[str, str] = {
     "OpaqueCallableError": "tests/test_intervention_phase10.py::test_portable_save_rejects_opaque_callable",
     "TraceMutationWarning": "tests/test_intervention_phase8b.py::test_mutate_warning_fires_once_and_can_be_suppressed",
     "DirectActivationWriteWarning": "tests/test_intervention_phase8b.py::test_direct_out_write_warns_once_and_marks_dirty",
-    "MultiMatchWarning": "tests/test_intervention_phase2.py::test_resolution_errors_strict_mode_and_warnings",
+    "MultiMatchWarning": "tests/test_intervention_phase10.py::test_save_intervention_allows_more_than_eight_matching_sites",
     "ControlFlowDivergenceWarning": "tests/test_intervention_phase7.py::test_rerun_non_strict_divergence_warns_and_swaps",
     "BatchNormTrainModeWarning": "tests/test_intervention_phase12.py::test_append_batchnorm_train_mode_warns",
 }
@@ -205,7 +205,7 @@ def _capture(model: torch.nn.Module | None = None, x: torch.Tensor | None = None
     return tl.trace(
         _ReluAdd() if model is None else model,
         torch.tensor([[-1.0, 2.0, 3.0]]) if x is None else x,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
 
 
@@ -330,7 +330,7 @@ def test_axis_a_public_verbs_success_paths() -> None:
     assert do_log.state is TraceState.SPEC_STALE
 
     fork = do_log.fork("phase14")
-    assert fork.parent_run() is do_log
+    assert fork._parent_run() is do_log
 
     model = _LinearRelu()
     x = torch.randn(2, 3)
@@ -449,7 +449,7 @@ def test_axis_i_list_logs_snapshot_survives_concurrent_log_creation() -> None:
     assert errors == []
     assert snapshots
     assert all(isinstance(snapshot, tuple) for snapshot in snapshots)
-    assert all(hasattr(log, "layer_list") for snapshot in snapshots for log in snapshot)
+    assert all(hasattr(log, "_layer_list") for snapshot in snapshots for log in snapshot)
 
 
 def _weak_log_reference() -> tuple[int, weakref.ReferenceType[tl.Trace]]:
@@ -521,12 +521,12 @@ def test_intervention_ready_composes_with_deferred_selective_grads() -> None:
         _ReluAdd(),
         torch.randn(1, 3, requires_grad=True),
         capture=tl.options.CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             save_grads=["relu"],
         ),
     )
     trace[trace.output_layers[0]].out.sum().backward()
-    assert {op.layer_type for op in trace.layer_list if op.has_grad} == {"relu"}
+    assert {op.type for op in trace._layer_list if op.has_grad} == {"relu"}
 
 
 def test_splice_module_device_error_raised_for_device_mismatch() -> None:
@@ -537,7 +537,7 @@ def test_splice_module_device_error_raised_for_device_mismatch() -> None:
             _ReluAdd(),
             torch.randn(1, 3),
             capture=tl.options.CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 hooks={tl.func("relu"): tl.splice_module(_MetaReturn())},
             ),
         )
@@ -547,7 +547,7 @@ def test_direct_write_executable_save_error_raised(tmp_path: Path) -> None:
     """Executable intervention saves reject direct activation writes by default."""
 
     log = _capture()
-    relu = next(layer for layer in log.layer_list if layer.func_name == "relu")
+    relu = next(layer for layer in log._layer_list if layer.func_name == "relu")
     with pytest.warns(terrors.DirectActivationWriteWarning, match="direct Op out writes"):
         relu.out = relu.out
 

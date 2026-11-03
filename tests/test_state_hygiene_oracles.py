@@ -35,7 +35,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
-from torchlens.errors import RunCapabilityUnavailableError
+from torchlens.errors import RunCapabilityUnavailableError, TraceCaptureError
 from torchlens.intervention.errors import (
     ControlFlowDivergenceError,
     ControlFlowDivergenceWarning,
@@ -337,7 +337,7 @@ def test_rerun_engine_do_composes_once_per_call(mlp) -> None:
     """Seat 2 F5: ``do(engine="rerun")`` adds one edit per call (1x, 2x, 3x), never 1x, 3x, 7x."""
 
     model, x, _ = mlp
-    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
+    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
     rerun = tl.options.InterventionOptions(engine="rerun")
     for k in (1.0, 2.0, 3.0):
         fork.do(tl.module("fc2"), _steer(), model=model, inputs=x, intervention=rerun)
@@ -350,7 +350,7 @@ def test_replay_engine_do_composes_once_per_call(mlp) -> None:
     """A replay ``do()`` composes once per call and leaves its parent untouched."""
 
     model, x, _ = mlp
-    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     parent_out = parent.output_ops[0].out.clone()
     fork = parent.fork()
     for k in (1.0, 2.0):
@@ -388,7 +388,7 @@ def test_callable_set_rerun_repeat_equals_fresh(net) -> None:
     """F5: a callable ``set`` replacement applies once per rerun, never compounds."""
 
     model, x, expected = net
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     # set() only stages the replacement; each run applies it.
     trace.set(tl.module("fc1"), lambda out: out * 2.0, confirm_mutation=True)
     staged = _staged(trace)
@@ -458,7 +458,7 @@ def test_middle_module_edit_agrees_on_every_door(mlp) -> None:
     want = _hooked(model, {"fc2": lambda out: out * 0.5}, x)
     with torch.no_grad():
         bound = tl.when(tl.module("fc2"), tl.scale(0.5)).bind(model)(x)
-    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
+    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
     fork.do(tl.module("fc2"), tl.scale(0.5))
     rerun = tl.trace(model, x)
     rerun.attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
@@ -524,7 +524,7 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
     """Seat 3 F5: a failed ``fork().do(engine="rerun")`` leaves nothing; a retry steers once."""
 
     model, x, expected = net
-    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     baseline = _readout(parent).clone()
     rerun = tl.options.InterventionOptions(engine="rerun")
     original = model.fc2.forward
@@ -532,8 +532,13 @@ def test_failed_rerun_engine_do_then_retry_applies_once(net, failure: type[BaseE
     for fork in forks:
         model.fc2.forward = _failing_forward(failure)
         try:
-            with pytest.raises(failure):
+            # An ordinary forward exception escapes as the capture's
+            # TraceCaptureError chained from it; interrupts are never wrapped.
+            raised = TraceCaptureError if issubclass(failure, Exception) else failure
+            with pytest.raises(raised) as excinfo:
                 fork.do(tl.module("fc1"), tl.scale(2.0), model=model, inputs=x, intervention=rerun)
+            if raised is TraceCaptureError:
+                assert type(excinfo.value.__cause__) is failure
         finally:
             model.fc2.forward = original
         assert len(fork._intervention_spec.hook_specs) == 0, "a failed do() left a hook staged"
@@ -566,7 +571,7 @@ def test_fork_leaves_parent_spec_untouched(net) -> None:
     """F8: ``fork()`` never creates or changes the parent's staged spec."""
 
     model, x, expected = net
-    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    parent = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     parent_spec = parent._intervention_spec
     staged = _staged(parent)
     fork = parent.fork()
@@ -688,7 +693,7 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         with torch.no_grad():
             _scale_fc1().bind(model)(x)
     elif door == "fork_do":
-        fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
+        fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
         fork.do(tl.module("fc1"), tl.scale(2.0))
         fork.run(model, x)
     elif door == "attach_detach":
@@ -701,8 +706,9 @@ def test_entry_point_leaves_model_and_globals_pristine(net, door: str) -> None:
         def boom(_out: torch.Tensor, *, ctx: Any) -> torch.Tensor:
             raise ValueError("boom")
 
-        with pytest.raises(ValueError):
+        with pytest.raises(TraceCaptureError) as _tce_info:
             tl.trace(model, x, intervene=tl.when(tl.module("fc1"), boom))
+        assert isinstance(_tce_info.value.__cause__, ValueError)
     assert _model_state(model) == before
     assert _process_state() == before_process
 
@@ -738,7 +744,7 @@ def test_every_rerun_of_a_correct_graph_is_silent(net, door: str) -> None:
     """Seat 2 F7: a staged edit is a value change, never a control-flow divergence."""
 
     model, x, expected = net
-    ready = tl.options.CaptureOptions(intervention_ready=True)
+    ready = tl.options.CaptureOptions(replayable=True)
     handle = None
     if door == "intervene":
         trace = tl.trace(model, x, intervene=_scale_fc1())
@@ -870,7 +876,7 @@ def _intervened_trace(model: nn.Module, x: torch.Tensor, origin: str) -> Any:
         trace.attach_hooks(tl.module("fc2"), tl.scale(0.5), confirm_mutation=True)
         trace.run(model, x)
         return trace
-    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True)).fork()
+    fork = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True)).fork()
     fork.do(tl.module("fc2"), tl.scale(0.5))
     return fork
 

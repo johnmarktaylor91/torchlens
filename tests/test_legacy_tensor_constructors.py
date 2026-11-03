@@ -19,6 +19,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 DTYPE_CLASS_NAMES = (
     "FloatTensor",
@@ -46,7 +47,7 @@ def _func_names(model: nn.Module, x: torch.Tensor) -> list[str]:
 
     torch.manual_seed(0)
     trace = tl.trace(model, x)
-    return [op.func_name for op in trace.layer_list]
+    return [op.func_name for op in trace._layer_list]
 
 
 def _outcome(fn) -> tuple[object, str]:
@@ -311,8 +312,9 @@ def test_variable_on_non_tensor_raises_inside_capture() -> None:
             return x + Variable(3)
 
     expected_type, expected_message = _error_of(lambda: Variable(3))
-    with pytest.raises(expected_type, match="Variable data has to be a tensor"):
+    with pytest.raises(TraceCaptureError, match="Variable data has to be a tensor") as excinfo:
         tl.trace(BadVariable(), torch.randn(2, 4))
+    assert type(excinfo.value.__cause__) is expected_type
     assert "Variable data has to be a tensor" in expected_message
 
 
@@ -374,7 +376,7 @@ def test_legacy_constructor_ops_never_become_runnable(tmp_path) -> None:
         SylvesterReparam().eval(),
         x,
         capture=tl.options.CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
+            replayable=True, capture_container_structure=True, cache=False
         ),
     )
     report, attachments = preflight_sparse_run_descriptor(build_sparse_run_descriptor(trace))

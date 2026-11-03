@@ -76,7 +76,7 @@ def test_classes_sum_to_gross_band_per_op_and_total() -> None:
         for band in bands.values():
             class_sum = band["saved_parameter"] + band["saved_buffer"] + band["saved_activation"]
             class_total += class_sum
-        assert class_total == total_gross == int(captured.total_autograd_memory)
+        assert class_total == total_gross == int(captured.cost.total_autograd_memory)
     finally:
         captured.cleanup()
 
@@ -194,7 +194,7 @@ def test_phantom_stack_regression_params_never_double_stack() -> None:
         param_band = sum(
             parameter.numel() * parameter.element_size() for parameter in model.parameters()
         )
-        gross = int(captured.total_autograd_memory)
+        gross = int(captured.cost.total_autograd_memory)
         newly_param = sum(band["newly_saved_parameter"] for band in bands.values())
         newly_activation = sum(band["newly_saved_activation"] for band in bands.values())
         newly_buffer = sum(band["newly_saved_buffer"] for band in bands.values())

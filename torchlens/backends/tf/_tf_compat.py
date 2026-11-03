@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import importlib.machinery
+import importlib.util
+import sys
 import warnings
+from pathlib import Path
 from typing import Any
 
 from ..._utils._torch_compat import TorchCapabilityWarning
-from ..registry import BackendUnsupportedError
+from .._errors import BackendUnsupportedError
 
 TFCapabilitySnapshot = dict[str, bool]
 """Stable mapping from TensorFlow capability flag name to availability."""
@@ -31,15 +35,38 @@ def _import_op_callbacks_module() -> Any | None:
 
 
 def _probe_op_callbacks() -> bool:
-    """Return whether TensorFlow exposes eager op callbacks.
+    """Return whether TensorFlow exposes eager op callbacks, without importing it.
+
+    The module-level flag is read by ``doctor()`` and ``compat.report()``,
+    which must never import a preview framework. When TensorFlow is already
+    loaded the real import is free and decides; otherwise the private module
+    is located on disk through TensorFlow's package spec (``find_spec`` on the
+    top-level name imports nothing). A located module that later fails to
+    import is caught at use time: ``get_op_callbacks_module`` flips the flag
+    through ``mark_tf_capability_missing``.
 
     Returns
     -------
     bool
-        True when ``tensorflow.python.framework.op_callbacks`` imports.
+        True when ``tensorflow.python.framework.op_callbacks`` imports (TF
+        loaded) or its source ships in the installed package (TF not loaded).
     """
 
-    return _import_op_callbacks_module() is not None
+    if "tensorflow" in sys.modules:
+        return _import_op_callbacks_module() is not None
+    try:
+        spec = importlib.util.find_spec("tensorflow")
+    except (ImportError, ValueError):
+        return False
+    locations = getattr(spec, "submodule_search_locations", None) if spec is not None else None
+    if not locations:
+        return False
+    suffixes = importlib.machinery.all_suffixes()
+    return any(
+        (Path(location) / "python" / "framework" / f"op_callbacks{suffix}").is_file()
+        for location in locations
+        for suffix in suffixes
+    )
 
 
 HAS_TF_OP_CALLBACKS: bool = _probe_op_callbacks()
@@ -90,8 +117,6 @@ def get_tf_capability_snapshot() -> TFCapabilitySnapshot:
         snapshot -- a false degradation alarm for an optional backend the user
         never installed.
     """
-
-    import importlib.util
 
     try:
         tf_installed = importlib.util.find_spec("tensorflow") is not None

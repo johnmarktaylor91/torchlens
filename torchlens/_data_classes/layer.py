@@ -50,14 +50,40 @@ from .._io import (
     default_fill_state,
     read_tlspec_version,
 )
+from .._io.state_keys import refuse_callable_shadowing_state_keys
 from .._ir.refs import DtypeRef
 from .._quantities import Bytes, Duration, Flops, Macs
-from .._selection import _SelectionOperand
+from .._selection.selection import _SelectionOperand
+from .._trace_core.op_store import DetachedOpStore
+from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
+from . import _doors
 
 # LayerAccessor is re-exported (not used here) so every historical
 # ``from .layer import ...`` site and pickle qualname keeps resolving.
 from ._layer_accessors import LayerAccessor, OpAccessor  # noqa: F401
+from ._layer_mirror import _layer_mirror_read, _layer_rep_op
+from ._layer_sites import layer_shape_summary, layer_site_peers
+from ._layer_views import (  # noqa: F401  (materialize_layer_mirrors is re-exported)
+    _layer_log_to_row,
+    layer_child_ops_per_layer,
+    layer_children,
+    layer_children_per_pass,
+    layer_co_parents,
+    layer_edges_vary_across_ops,
+    layer_get_children,
+    layer_get_parents,
+    layer_leaf_module_ops,
+    layer_parent_arg_positions,
+    layer_parent_ops_per_layer,
+    layer_parents,
+    layer_parents_per_pass,
+    layer_siblings,
+    layer_total_macs_forward,
+    materialize_layer_mirrors,
+)
 from ._repr import format_config_items, format_shape_list
+from ._state_adapter import state_items
+from ._value_repr import layer_card, layer_repr_line
 from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
 
 if TYPE_CHECKING:
@@ -69,21 +95,6 @@ if TYPE_CHECKING:
 
 
 _LAYER_DELEGATED_PASS_FIELDS = frozenset((*LAYER_PASS_LOG_FIELD_ORDER, "out_ref", "grad_ref"))
-
-# Per-pass fields that ``Layer`` resolves via ``_single_pass_or_error``: they
-# describe ONE op/pass and deliberately raise ``ValueError`` on a multi-pass
-# (recurrent) Layer, directing the user to a specific ``layer.ops[i]`` pass.
-# The field-order-driven ``to_pandas`` row builders cannot let that raise, so
-# they report these as None for multi-pass Layers -- mirroring
-# ``_MULTI_CALL_PER_PASS_MODULE_FIELDS`` one level up in module.py. No
-# information is lost: the per-pass value remains reachable via
-# ``layer.ops[i].transformed_out`` / ``.transformed_grad``.
-_MULTI_PASS_PER_CALL_LAYER_FIELDS: frozenset[str] = frozenset(
-    {
-        "transformed_out",
-        "transformed_grad",
-    }
-)
 
 # Typed container defaults for every non-Optional container field Layer
 # stores directly (as opposed to delegating to ``self.ops[i]``). Same defect
@@ -160,11 +171,6 @@ from ._layer_spec import (  # noqa: E402
 def _build_layer_view_types() -> dict[str, type]:
     """Map each Layer stored relation field to its immutable view type."""
 
-    from .._trace_core.relation_views import (
-        LAYER_FROZENSET_VIEW_FIELDS,
-        LAYER_TUPLE_VIEW_FIELDS,
-    )
-
     view_types: dict[str, type] = dict.fromkeys(LAYER_TUPLE_VIEW_FIELDS, tuple)
     view_types.update(dict.fromkeys(LAYER_FROZENSET_VIEW_FIELDS, frozenset))
     view_types["equivalent_ops"] = frozenset
@@ -199,8 +205,6 @@ def _layer_relations_finished(layer: "Layer") -> bool:
         store = core.ops if core is not None else None
     if store is None:
         return True
-    from .._trace_core.op_store import DetachedOpStore
-
     return bool(
         getattr(store, "frozen", False)
         or getattr(store, "dataflow_edges", None) is not None
@@ -233,37 +237,6 @@ def _layer_normalize_relation_write(layer: "Layer", name: str, value: Any) -> An
     return view_type(value)
 
 
-def _layer_rep_op(layer: "Layer") -> "Op | None":
-    """Return the representative (first-pass) op backing one Layer's mirrors.
-
-    Reads raw ``__dict__`` storage so descriptor bodies never re-enter the
-    attribute protocol. ``OpAccessor._list`` is pass-index sorted, so index 0
-    is the first pass — the op the former ``__init__`` copied from.
-    """
-
-    ops = layer.__dict__.get("ops")
-    if ops is None:
-        return None
-    item_list = ops.__dict__.get("_list")
-    return item_list[0] if item_list else None
-
-
-def _layer_mirror_read(layer: "Layer", name: str) -> Any:
-    """Return the mirror value for ``name`` (no shadow consulted).
-
-    Raises ``AttributeError`` when the layer has no representative op yet or
-    the op's source cell is unset — the caller (descriptor or state
-    enumeration) translates that into the historical missing-field behavior.
-    """
-
-    rep = _layer_rep_op(layer)
-    if rep is None:
-        raise AttributeError(name)
-    source, normalize = _LAYER_MIRROR_SPEC[name]
-    value = getattr(rep, source)
-    return normalize(value) if normalize is not None else value
-
-
 class _LayerMirrorField:
     """Data descriptor for one Layer field mirrored from the first-pass op."""
 
@@ -278,7 +251,6 @@ class _LayerMirrorField:
 
     def __repr__(self) -> str:
         """Return a debugging repr naming the mirrored field."""
-
         return f"<Layer mirror descriptor {self._name!r}>"
 
     def __get__(self, layer: Any, objtype: Any = None) -> Any:
@@ -317,60 +289,6 @@ class _LayerMirrorField:
         instance_dict[self._name] = _LAYER_DELETED
 
 
-def materialize_layer_mirrors(layer_log: "Layer") -> None:
-    """Materialize every unmaterialized mirror field into ``__dict__``.
-
-    Called before the backing ops are husked (``Trace.cleanup()``, log-entry
-    removal): a user-held Layer keeps exactly the readable state the dict-era
-    copies would have kept. Tombstoned and already-shadowed fields are left
-    untouched; unreadable mirrors (an already-scrubbed op cell) stay absent,
-    matching a field the dict era had already deleted.
-    """
-
-    instance_dict = layer_log.__dict__
-    for field_name in _LAYER_MIRROR_SPEC:
-        if field_name in instance_dict:
-            continue
-        try:
-            instance_dict[field_name] = _layer_mirror_read(layer_log, field_name)
-        except AttributeError:
-            continue
-    if "equivalent_ops" not in instance_dict:
-        rep = _layer_rep_op(layer_log)
-        if rep is not None:
-            try:
-                instance_dict["equivalent_ops"] = rep.equivalent_ops
-            except AttributeError:
-                pass
-
-
-def _layer_log_to_row(layer_log: "Layer") -> dict[str, Any]:
-    """Convert a Layer into one DataFrame row.
-
-    Parameters
-    ----------
-    layer_log:
-        Layer metadata entry to export.
-
-    Returns
-    -------
-    Dict[str, Any]
-        Mapping from canonical field name to exported value, ordered by
-        ``LAYER_LOG_FIELD_ORDER``. Per-pass fields
-        (``_MULTI_PASS_PER_CALL_LAYER_FIELDS``) are reported as ``None`` for
-        multi-pass Layers so the table never raises.
-    """
-
-    multi_pass = layer_log.num_passes > 1
-    row: dict[str, Any] = {}
-    for field_name in LAYER_LOG_FIELD_ORDER:
-        if multi_pass and field_name in _MULTI_PASS_PER_CALL_LAYER_FIELDS:
-            row[field_name] = None
-            continue
-        row[field_name] = getattr(layer_log, field_name)
-    return row
-
-
 class Layer(_SelectionOperand):
     """Aggregate per-layer metadata for a logged model operation.
 
@@ -391,7 +309,7 @@ class Layer(_SelectionOperand):
         # (``_install_layer_mirror_descriptors``); declared here so static
         # analysis sees the public surface.
         layer_label: Any
-        layer_label_short: Any
+        short_layer_label: Any
         layer_type: Any
         type_index: Any
         step_index: Any
@@ -430,7 +348,7 @@ class Layer(_SelectionOperand):
         output_device: Any
         visualizer_path: Any
         activation_transform: Any
-        intervention_replaced: Any
+        is_edited: Any
         detach_saved_activations: Any
         save_grads: Any
         transformed_grad_shape: Any
@@ -479,7 +397,7 @@ class Layer(_SelectionOperand):
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "_is_in_conditional_body": FieldPolicy.KEEP,
         "layer_label": FieldPolicy.KEEP,
-        "layer_label_short": FieldPolicy.KEEP,
+        "short_layer_label": FieldPolicy.KEEP,
         "layer_type": FieldPolicy.KEEP,
         "type_index": FieldPolicy.KEEP,
         "step_index": FieldPolicy.KEEP,
@@ -522,7 +440,7 @@ class Layer(_SelectionOperand):
         "visualizer_path": FieldPolicy.KEEP,
         "activation_transform": FieldPolicy.DROP,
         "annotations": FieldPolicy.KEEP,
-        "intervention_replaced": FieldPolicy.KEEP,
+        "is_edited": FieldPolicy.KEEP,
         "detach_saved_activations": FieldPolicy.KEEP,
         "save_grads": FieldPolicy.KEEP,
         "transformed_grad": FieldPolicy.DROP,
@@ -578,10 +496,10 @@ class Layer(_SelectionOperand):
         "ops": FieldPolicy.KEEP,
         "call_labels": FieldPolicy.KEEP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         LAYER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="layer"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     #: Aggregate-facade mirror contract (state-contract service): a pickled
     #: Layer's state carries the Op-shaped mirror fields the facade reads
@@ -716,10 +634,7 @@ class Layer(_SelectionOperand):
         under a total's name would silently under-claim.
         """
 
-        per_op = [op.macs_forward for op in self.ops.values()]
-        if any(value is None for value in per_op):
-            return None
-        return Macs(sum(int(value) for value in per_op if value is not None))
+        return layer_total_macs_forward(self)
 
     @property
     def total_macs_backward(self) -> Macs | None:
@@ -1016,12 +931,10 @@ class Layer(_SelectionOperand):
 
     def __getstate__(self) -> dict[str, Any]:
         """Return pickle state with weakrefs and raw autograd handles stripped."""
-        from ._state_adapter import state_items
-
         state = dict(state_items(self))
         state["_source_trace_ref"] = None
         # `grad_fn_handle` holds the live torch autograd `Node` (e.g.
-        # `AddmmBackward0`), which is not picklable. `Layer.FIELD_POLICY`
+        # `AddmmBackward0`), which is not picklable. `Layer._FIELD_POLICY`
         # declares it `FieldPolicy.DROP` for exactly this reason; enforce that
         # here (mirroring `Op.__getstate__`) so plain `pickle.dumps(trace)` of
         # any model with trainable params does not crash. `grad_fn` (a picklable
@@ -1082,8 +995,6 @@ class Layer(_SelectionOperand):
         ):
             if state.get(field_name) is not None:
                 state[field_name] = Bytes(state[field_name])
-        from .._io.state_keys import refuse_callable_shadowing_state_keys
-
         refuse_callable_shadowing_state_keys(type(self), state)
         self.__dict__.update(state)
 
@@ -1116,8 +1027,7 @@ class Layer(_SelectionOperand):
 
     def __selection__(self) -> object:
         """Lift this layer's whole output as an ACT selection term (ALL passes)."""
-
-        from .._selection import _selection_from_layer
+        from .._selection.selection import _selection_from_layer
 
         return _selection_from_layer(self)
 
@@ -1131,54 +1041,23 @@ class Layer(_SelectionOperand):
             If this logical layer contains multiple executed passes.
         """
 
-        if self.num_passes != 1 or len(self.ops) != 1:
-            from ..receptive_field._errors import AmbiguousPassError
-
-            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops)
-            raise AmbiguousPassError(
-                f"Layer {self.layer_label!r} has {self.num_passes} passes: {passes}."
-            )
-        return self.ops[0].receptive_field
+        return _doors.receptive_field()._layer_fields.layer_receptive_field(self)
 
     @property
     def projective_field(self) -> "ReceptiveFieldView":
         """Return the only pass's projective field or reject pass ambiguity."""
 
-        if self.num_passes != 1 or len(self.ops) != 1:
-            from ..receptive_field._errors import AmbiguousPassError
-
-            passes = ", ".join(f"layer.ops[{index}]" for index in self.ops)
-            raise AmbiguousPassError(
-                f"Layer {self.layer_label!r} has {self.num_passes} passes: {passes}."
-            )
-        return self.ops[0].projective_field
-
-    @property
-    def site_key(self) -> str:
-        """Single structural site key, or a typed refusal on spanning/legacy.
-
-        Site-uniformity and pass-uniformity are DIFFERENT axes: a multi-pass
-        reused-module layer has ONE key; a within-call recurrence group
-        spans several (read those via ``.ops[k].site_key``).
-        """
-
-        from ._layer_sites import layer_site_key
-
-        return layer_site_key(self)
+        return _doors.receptive_field()._layer_fields.layer_projective_field(self)
 
     @property
     def site_peers(self) -> tuple["Layer", ...]:
         """Layers sharing any of this layer's site keys (live index)."""
-
-        from ._layer_sites import layer_site_peers
 
         return layer_site_peers(self)
 
     @property
     def shape_summary(self) -> str | None:
         """Across-pass output-shape summary string (derived, not persisted)."""
-
-        from ._layer_sites import layer_shape_summary
 
         return layer_shape_summary(self)
 
@@ -1199,7 +1078,7 @@ class Layer(_SelectionOperand):
             trace = ops[0].trace
         except Exception:  # noqa: BLE001 - detached/cleaned records have no trace
             return
-        record = getattr(trace, "input_preprocessor", None)
+        record = trace._provenance_input_preprocessor
         if (
             record is None
             or getattr(record, "verified", True)
@@ -1265,6 +1144,11 @@ class Layer(_SelectionOperand):
     def grad(self) -> Any:
         """Return the saved grad for a single-pass layer.
 
+        The gradient of the layer's output for the latest backward pass, as
+        it leaves this trace's edit chain: a ``tl.grad(site)`` edit that fired
+        is what this read shows. A site the backward never reached has no
+        grad (``has_grad`` is ``False``); TorchLens never fills in zeros.
+
         Returns
         -------
         Any
@@ -1281,6 +1165,8 @@ class Layer(_SelectionOperand):
     @property
     def has_grad(self) -> bool:
         """Return whether the single pass has a saved grad.
+
+        ``False`` when no backward pass reached the layer's output.
 
         Returns
         -------
@@ -1337,7 +1223,7 @@ class Layer(_SelectionOperand):
         int
             Pass number from the only pass.
         """
-        return cast(int, self._single_pass_or_error("pass_index"))
+        return cast(int, self._single_pass_or_error("pass_number"))
 
     @property
     def lookup_keys(self) -> list[str]:
@@ -1366,15 +1252,7 @@ class Layer(_SelectionOperand):
         returned container could never reach stored state anyway; the tuple
         makes that contract explicit and matches the Op relation surface.
         """
-        result = []
-        seen = set()
-        for pass_log in self.ops.values():
-            for label in pass_log.children:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in seen:
-                    seen.add(no_pass)
-                    result.append(no_pass)
-        return tuple(result)
+        return layer_children(self)
 
     @property
     def parents(self) -> tuple[str, ...]:
@@ -1382,15 +1260,7 @@ class Layer(_SelectionOperand):
 
         Immutable view (M6, FORK-1); see ``children``.
         """
-        result = []
-        seen = set()
-        for pass_log in self.ops.values():
-            for label in pass_log.parents:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in seen:
-                    seen.add(no_pass)
-                    result.append(no_pass)
-        return tuple(result)
+        return layer_parents(self)
 
     @property
     def has_children(self) -> bool:
@@ -1422,36 +1292,7 @@ class Layer(_SelectionOperand):
         layer is a per-op sibling, but at the aggregate level it folds back to
         this layer's own no-pass label, and a layer is never its own sibling.
         """
-        result = []
-        seen = {self.layer_label}
-        for pass_log in self.ops.values():
-            for label in pass_log.siblings:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in seen:
-                    seen.add(no_pass)
-                    result.append(no_pass)
-        return result
-
-    def _relation_no_pass_label(self, label: str) -> str | None:
-        """Resolve one per-op relation label to its no-pass layer label.
-
-        Mirrors the op-level orphan tolerance (r3 b3-fable R05-N1): the
-        per-op ``siblings``/``co_parents`` properties deliberately resolve
-        relation labels through the ``orphans`` fallback on
-        ``keep_orphans=True`` traces, so the Layer aggregate must fold the
-        same labels instead of crashing on a bare mainline lookup. A label
-        resolvable through neither surface is skipped, matching the op-level
-        behavior.
-        """
-
-        trace = self.source_trace
-        try:
-            return trace[label].layer_label
-        except (KeyError, ValueError):
-            try:
-                return trace.graph.orphans[label].layer_label
-            except KeyError:
-                return None
+        return layer_siblings(self)
 
     @property
     def has_siblings(self) -> bool:
@@ -1471,15 +1312,7 @@ class Layer(_SelectionOperand):
         Every pass spelling of THIS layer is excluded, mirroring ``siblings``:
         a layer is never its own co-parent at the aggregate level.
         """
-        result = []
-        seen = {self.layer_label}
-        for pass_log in self.ops.values():
-            for label in pass_log.co_parents:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in seen:
-                    seen.add(no_pass)
-                    result.append(no_pass)
-        return result
+        return layer_co_parents(self)
 
     @property
     def has_co_parents(self) -> bool:
@@ -1555,9 +1388,9 @@ class Layer(_SelectionOperand):
         return cast(str, self._single_pass_or_error("label"))
 
     @property
-    def label_short(self) -> str:
+    def short_label(self) -> str:
         """For single-pass layers, return the short pass-qualified label."""
-        return cast(str, self._single_pass_or_error("label_short"))
+        return cast(str, self._single_pass_or_error("short_label"))
 
     @property
     def params(self) -> Any:
@@ -1577,73 +1410,32 @@ class Layer(_SelectionOperand):
     @property
     def children_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: child layer labels (no-pass) for each pass."""
-        result = {}
-        for call_index, pass_log in self.ops.items():
-            children = []
-            for label in pass_log.children:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in children:
-                    children.append(no_pass)
-            result[call_index] = children
-        return result
+        return layer_children_per_pass(self)
 
     @property
     def parents_per_pass(self) -> dict[int, list[str]]:
         """Dict[int, List[str]]: parent layer labels (no-pass) for each pass."""
-        result = {}
-        for call_index, pass_log in self.ops.items():
-            parents = []
-            for label in pass_log.parents:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and no_pass not in parents:
-                    parents.append(no_pass)
-            result[call_index] = parents
-        return result
+        return layer_parents_per_pass(self)
 
     @property
     def child_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each child layer, which ops connect to it."""
-        from collections import defaultdict
-
-        result: defaultdict[str, list[int]] = defaultdict(list)
-        for call_index, pass_log in self.ops.items():
-            for label in pass_log.children:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and call_index not in result[no_pass]:
-                    result[no_pass].append(call_index)
-        return dict(result)
+        return layer_child_ops_per_layer(self)
 
     @property
     def parent_ops_per_layer(self) -> dict[str, list[int]]:
         """Dict[str, List[int]]: for each parent layer, which ops connect from it."""
-        from collections import defaultdict
-
-        result: defaultdict[str, list[int]] = defaultdict(list)
-        for call_index, pass_log in self.ops.items():
-            for label in pass_log.parents:
-                no_pass = self._relation_no_pass_label(label)
-                if no_pass is not None and call_index not in result[no_pass]:
-                    result[no_pass].append(call_index)
-        return dict(result)
+        return layer_parent_ops_per_layer(self)
 
     @property
     def edges_vary_across_ops(self) -> bool:
         """Whether graph edges differ across ops."""
-        if self.num_passes <= 1:
-            return False
-        all_pass_lists = list(self.child_ops_per_layer.values()) + list(
-            self.parent_ops_per_layer.values()
-        )
-        return any(len(ops) < self.num_passes for ops in all_pass_lists)
+        return layer_edges_vary_across_ops(self)
 
     @property
     def leaf_module_ops(self) -> set[Any]:
         """Set of module ops exited across all ops."""
-        result = set()
-        for pass_log in self.ops.values():
-            if pass_log.is_atomic_module:
-                result.add(pass_log.atomic_module_call)
-        return result
+        return layer_leaf_module_ops(self)
 
     @property
     def parent_arg_positions(self) -> dict[str, dict[Any, str]]:
@@ -1652,17 +1444,7 @@ class Layer(_SelectionOperand):
         For single-pass layers, delegates to ops[0].
         For multi-pass, merges arg locs using set-union of no-pass labels.
         """
-        if self.num_passes == 1:
-            return cast(dict[str, dict[Any, str]], self.ops[0].parent_arg_positions)
-
-        result: dict[str, dict[Any, str]] = {"args": {}, "kwargs": {}}
-        for pass_log in self.ops.values():
-            for arg_type in ["args", "kwargs"]:
-                for arg_key, layer_label in pass_log.parent_arg_positions[arg_type].items():
-                    no_pass = self.source_trace[layer_label].layer_label
-                    if arg_key not in result[arg_type]:
-                        result[arg_type][arg_key] = no_pass
-        return result
+        return layer_parent_arg_positions(self)
 
     # ********************************************
     # ******* Fallback __getattr__ ***************
@@ -1700,26 +1482,6 @@ class Layer(_SelectionOperand):
     # ************ User-facing custom_methods ***********
     # ********************************************
 
-    def _resolve_relation_record(self, label: str) -> "Layer | None":
-        """Resolve one relation label through the mainline, then orphans.
-
-        Mirrors the op-level orphan tolerance (b3 R05-N2): the aggregates on
-        a ``keep_orphans=True`` trace include orphan relation labels, so the
-        object-resolving surfaces must fold the ``orphans`` fallback instead
-        of crashing on the bare mainline lookup. An orphan label resolves to
-        its retained orphan Op record (the only record that exists for it),
-        presented through the shared record surface.
-        """
-
-        trace = self.source_trace
-        try:
-            return cast("Layer", trace[label])
-        except (KeyError, ValueError):
-            try:
-                return cast("Layer", trace.graph.orphans[label])
-            except KeyError:
-                return None
-
     def get_children(self) -> list["Layer"]:
         """Return child Layer objects for this layer.
 
@@ -1730,8 +1492,7 @@ class Layer(_SelectionOperand):
             relation labels resolve through ``trace.graph.orphans`` (unresolvable
             skipped).
         """
-        resolved = (self._resolve_relation_record(label) for label in self.children)
-        return [record for record in resolved if record is not None]
+        return layer_get_children(self)
 
     def get_parents(self) -> list["Layer"]:
         """Return parent Layer objects for this layer.
@@ -1743,8 +1504,7 @@ class Layer(_SelectionOperand):
             relation labels resolve through ``trace.graph.orphans`` (unresolvable
             skipped).
         """
-        resolved = (self._resolve_relation_record(label) for label in self.parents)
-        return [record for record in resolved if record is not None]
+        return layer_get_parents(self)
 
     def show(
         self,
@@ -1919,8 +1679,6 @@ class Layer(_SelectionOperand):
             raise ImportError(
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
-        from .._constants import LAYER_LOG_FIELD_ORDER
-
         row = _layer_log_to_row(self)
         return pd.DataFrame([row], columns=LAYER_LOG_FIELD_ORDER)
 
@@ -1946,8 +1704,6 @@ class Layer(_SelectionOperand):
         if self._detached_from_trace():
             label = getattr(self, "layer_label", None) or "<unbound>"
             return f"<Layer {label}: detached from its Trace>"
-        from ._value_repr import layer_card
-
         try:
             return layer_card(self)
         except RecordBindingError:
@@ -1996,8 +1752,6 @@ class Layer(_SelectionOperand):
         if self._detached_from_trace():
             label = getattr(self, "layer_label", None) or "<unbound>"
             return f"<Layer {label}: detached from its Trace>"
-        from ._value_repr import layer_repr_line
-
         try:
             return layer_repr_line(self)
         except RecordBindingError:

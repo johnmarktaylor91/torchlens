@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
 
 class _Poisoned(nn.Module):
@@ -203,12 +204,14 @@ def test_partial_trace_report_is_first_class(tmp_path: Path) -> None:
             torch.relu(self.a(x))
             raise RuntimeError("cluster boom")
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(Dies(), torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     try:
         tl.trace(Dies(), torch.randn(2, 4))
-    except RuntimeError as error:
-        partial = tl._partial.from_failed_capture(error)
+    except TraceCaptureError as error:
+        assert isinstance(error.__cause__, RuntimeError)
+        partial = error.partial_trace
     assert partial is not None
     text = _write(partial, tmp_path / "p.html")
     assert "FAILED CAPTURE" in text

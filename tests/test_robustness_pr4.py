@@ -22,11 +22,12 @@ from torch import nn
 import torchlens as tl
 from torchlens import _visualization
 from torchlens._capture_state_helpers import (
+    _reject_opaque_wrappers,
     reset_compiled_model_unwrap_warning_state,
     unwrap_compiled_submodules,
 )
-from torchlens._user_funcs import _reject_opaque_wrappers
 from torchlens._utils._torch_compat import get_dynamo_optimized_module_type
+from torchlens.errors import TraceCaptureError
 
 
 class _Tiny(nn.Module):
@@ -132,8 +133,8 @@ def test_torch_compile_top_level_unwrap_matches_eager_trace() -> None:
         eager_twin, input_tensor, capture=tl.options.CaptureOptions(layers_to_save="none")
     )
 
-    assert [op.layer_label for op in compiled_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in compiled_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(compiled_trace.modules) == len(eager_trace.modules)
 
@@ -213,8 +214,8 @@ def test_torch_compile_nested_submodule_traces_and_restores_parent() -> None:
     assert parent.child is child
     assert isinstance(parent.child, optimized_module_type)
     assert parent(input_tensor).shape == (2, 4)
-    assert [op.layer_label for op in nested_trace.layer_list] == [
-        op.layer_label for op in eager_trace.layer_list
+    assert [op.layer_label for op in nested_trace._layer_list] == [
+        op.layer_label for op in eager_trace._layer_list
     ]
     assert len(nested_trace.modules) == len(eager_trace.modules)
 
@@ -359,8 +360,9 @@ def test_compiled_submodule_restored_after_forward_exception(parent_raises: bool
     else:
         model = _ParentWithChild(compiled_child)
 
-    with pytest.raises(RuntimeError, match="forward failure"):
+    with pytest.raises(TraceCaptureError, match="forward failure") as _tce_info:
         tl.trace(model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none"))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert model.child is compiled_child
 
@@ -401,7 +403,7 @@ def test_torch_jit_unwrap_suggestion_matches_reality() -> None:
     log = tl.trace(
         model, torch.randn(2, 4), capture=tl.options.CaptureOptions(layers_to_save="none")
     )
-    assert len(log.layer_logs) > 0
+    assert len(log._layer_logs) > 0
 
 
 # ---------------------------------------------------------------------------

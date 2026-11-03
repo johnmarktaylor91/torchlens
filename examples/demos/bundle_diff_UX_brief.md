@@ -14,8 +14,8 @@ demo contract.
 ## Layout
 
 - Render as two columns: clean on the left, intervention on the right.
-- Align rows vertically with `bundle.show_diff(layout="paired")`.
-- Use `bundle.delta_map(...)` for per-node color values.
+- Align rows vertically with `bundle.draw(graph="diff")` (the paired layout).
+- Per-node colour values are the baseline comparison `bundle.compare(...)` reads per site.
 - Unmatched nodes receive a gray border on the side where their pair is missing.
 
 ## Color Scale

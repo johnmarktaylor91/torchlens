@@ -29,6 +29,8 @@ from typing import Any, Final
 
 import torch
 
+from .._errors import WeightsfreeIntegrityError
+
 __all__ = [
     "MetaAdmissionRecord",
     "admission_record_for",
@@ -123,7 +125,6 @@ def self_test_meta_identity() -> None:
         _IDENTITY_SELF_TEST_RESULT = _run_identity_self_test()
     if _IDENTITY_SELF_TEST_RESULT == "ok":
         return
-    from .._errors import WeightsfreeIntegrityError
 
     raise WeightsfreeIntegrityError(
         "Weights-free admission requires a storage-identity primitive that "
@@ -209,7 +210,6 @@ def enforce_settlement_invariants(trace: Any) -> None:
     violation = _first_settlement_violation(trace)
     if violation is None:
         return
-    from .._errors import WeightsfreeIntegrityError
 
     raise WeightsfreeIntegrityError(
         f"Weights-free settlement invariant violated: {violation}. An "
@@ -223,11 +223,11 @@ def enforce_settlement_invariants(trace: Any) -> None:
 def _first_settlement_violation(trace: Any) -> str | None:
     """The first violated D22 invariant, or ``None`` when coherent."""
 
-    if not bool(getattr(trace, "structure_only", False)):
+    if not bool(trace._options_structure_only):
         return "admitted meta capture lost its structure_only marker (fails closed)"
-    if bool(getattr(trace, "capture_verified", False)):
+    if bool(trace._provenance_verified):
         return "capture_verified is True on a value-free capture"
-    for layer in getattr(trace, "layer_list", ()):
+    for layer in trace._layer_list:
         if getattr(layer, "out", None) is not None:
             return f"value payload populated at {getattr(layer, 'label', '?')!r}"
     total = getattr(trace, "num_params", None)
@@ -453,8 +453,6 @@ def _absorbed_ambient_device_context() -> Iterator[None]:
         return
     surgery = get_torch_function_stack_surgery()
     if surgery is None:
-        from .._errors import WeightsfreeIntegrityError
-
         raise WeightsfreeIntegrityError(
             "A torch device context (with torch.device(...)) is active at an "
             "admitted weights-free capture, and this torch build offers no "

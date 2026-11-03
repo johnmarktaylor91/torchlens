@@ -70,7 +70,7 @@ class CudaAllocatorProvider:
 
         import torch
 
-        from .._utils.tensor_utils import _is_cuda_initialized
+        from .._utils._cuda_probe import _is_cuda_initialized
 
         if not (_is_cuda_initialized() and torch.cuda.is_available()):
             return ()

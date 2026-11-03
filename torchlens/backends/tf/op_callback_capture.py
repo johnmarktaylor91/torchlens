@@ -22,6 +22,16 @@ from ..._ir.predicate import RecordContext
 from ..._ir.refs import DtypeRef, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ...recording.types import CaptureSpec
+from ._tensor_probe import (
+    _bool_value,
+    _classify_source_tensor,
+    _is_scalar_bool_tensor_ref,
+    _is_tf_tensor,
+    _iter_tf_tensors,
+    _nbytes_from_tensor,
+    _shape_tuple,
+    _tensor_ref_key,
+)
 from ._tf_compat import get_op_callbacks_module
 from .modules import TFModuleTree, device_ref_from_tf_device, patched_tf_module_stack
 
@@ -35,6 +45,10 @@ _INIT_OP_TYPES = frozenset(
     }
 )
 _MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024
+
+#: Source kinds materialized as source ops with a saved payload: model inputs
+#: and (SPEC section 2, rule 1) array-valued closure constants.
+_MATERIALIZED_SOURCE_KINDS = frozenset({"input", "constant"})
 
 
 @dataclass(frozen=True)
@@ -535,7 +549,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
             record_context=record_context,
@@ -576,7 +590,7 @@ class TFEagerCaptureSession:
             {
                 "address": frame.address,
                 "module_type": frame.module_type,
-                "pass_index": frame.call_index,
+                "pass_number": frame.call_index,
             }
             for frame in self.module_stack
         )
@@ -584,7 +598,7 @@ class TFEagerCaptureSession:
             kind="op",
             label=label.label,
             raw_label=label.label_raw,
-            pass_index=1,
+            pass_number=1,
             event_index=label.raw_index,
             step_index=label.raw_index,
             layer_type=label.layer_type,
@@ -593,7 +607,7 @@ class TFEagerCaptureSession:
             func_name=op_type_text,
             address=None,
             module_type=None,
-            module_pass_index=None,
+            module_pass_number=None,
             module_stack=module_frames,
             recent_events=(),
             recent_ops=(),
@@ -755,7 +769,9 @@ class TFEagerCaptureSession:
         if existing is not None:
             return existing
         kind = _classify_source_tensor(tensor, consumer_op_type)
-        label_raw = self._emit_source_event(kind, tensor) if kind in {"input"} else None
+        label_raw = (
+            self._emit_source_event(kind, tensor) if kind in _MATERIALIZED_SOURCE_KINDS else None
+        )
         record = TFSourceRecord(kind=kind, ref_key=ref_key, tensor=tensor, label_raw=label_raw)
         self.source_by_ref[ref_key] = record
         self.source_records.append(record)
@@ -778,7 +794,16 @@ class TFEagerCaptureSession:
         """
 
         label = self.events.reserve_label(kind)
-        tensor_ref = self._tensor_ref(tensor=tensor, label_raw=label.label_raw, save_payload=True)
+        # Constants rule item 5: a constant payload obeys ``save=`` like any
+        # saved activation; model inputs are always kept.
+        save_payload = kind != "constant" or self._should_save_payload(
+            self._record_context(
+                label=label, op_type_text=kind, output=tensor, output_index=0, parents=()
+            )
+        )
+        tensor_ref = self._tensor_ref(
+            tensor=tensor, label_raw=label.label_raw, save_payload=save_payload
+        )
         event = OpEvent(
             kind="source",
             label_raw=label.label_raw,
@@ -791,31 +816,11 @@ class TFEagerCaptureSession:
             source_trace_id=None,
             tracing_finished=False,
             construction_done=True,
-            function=FunctionCallRef(
-                func=None,
-                func_name=kind,
-                func_qualname=kind,
-                func_call_id=label.raw_index,
-                code_context=(),
-                func_duration=None,
-                flops_forward=None,
-                flops_backward=None,
-                func_rng_states=None,
-                func_autocast_state=None,
-                arg_names=(),
-                num_args_total=0,
-                num_pos_args=0,
-                num_kwargs=0,
-                non_tensor_pos_args=(),
-                non_tensor_kwargs=(),
-                func_non_tensor_args=(),
-                is_inplace=False,
-                func_config=(),
-            ),
+            function=_source_function_ref(kind, label.raw_index),
             output=OutputRef(
                 tensor=tensor_ref,
                 transformed_tensor=None,
-                has_saved_activation=True,
+                has_saved_activation=save_payload,
                 output_device="same",
                 activation_transform=None,
                 detach_saved_activations=False,
@@ -833,7 +838,13 @@ class TFEagerCaptureSession:
             params=(),
             parent_params=(),
             module_stack=tuple(self.module_stack),
-            modules=(),
+            # A constant read inside a module call is attributed to that call,
+            # like the ops around it; model inputs keep no attribution.
+            modules=(
+                tuple((frame.address, frame.call_index) for frame in self.module_stack)
+                if kind == "constant"
+                else ()
+            ),
             backend_semantics=BackendSemantics(
                 backend_grad_handle=None,
                 grad_fn_class_name=None,
@@ -846,10 +857,10 @@ class TFEagerCaptureSession:
                 bytes_peak_at_call=None,
             ),
             policy=CapturePolicy(
-                save_payload=True,
+                save_payload=save_payload,
                 save_grad=False,
             ),
-            predicate_matched=True,
+            predicate_matched=save_payload,
             pass_index=1,
             grad_fn_class_qualname=None,
             grad_fn_handle=None,
@@ -871,7 +882,7 @@ class TFEagerCaptureSession:
             is_scalar_bool=_is_scalar_bool_tensor_ref(tensor_ref),
             bool_value=_bool_value(tensor_ref.payload),
             intervention_fired=False,
-            intervention_replaced=False,
+            is_edited=False,
             fire_results=(),
             intervention_template_ref=None,
         )
@@ -960,6 +971,32 @@ def warm_up_tf_callable(callable_obj: Any, args: tuple[Any, ...], kwargs: dict[s
     """
 
     return callable_obj(*args, **kwargs)
+
+
+def _source_function_ref(kind: str, raw_index: int) -> FunctionCallRef:
+    """Function reference of a source event: the source kind stands in for a call."""
+
+    return FunctionCallRef(
+        func=None,
+        func_name=kind,
+        func_qualname=kind,
+        func_call_id=raw_index,
+        code_context=(),
+        func_duration=None,
+        flops_forward=None,
+        flops_backward=None,
+        func_rng_states=None,
+        func_autocast_state=None,
+        arg_names=(),
+        num_args_total=0,
+        num_pos_args=0,
+        num_kwargs=0,
+        non_tensor_pos_args=(),
+        non_tensor_kwargs=(),
+        func_non_tensor_args=(),
+        is_inplace=False,
+        func_config=(),
+    )
 
 
 def _normalize_op_type(op_type: Any) -> str:
@@ -1058,191 +1095,3 @@ def _snapshot_tensor(tensor: Any) -> object | None:
     if isinstance(value, np.ndarray):
         return value.copy()
     return value
-
-
-def _nbytes_from_tensor(tensor: Any) -> int | None:
-    """Return TensorFlow tensor byte size when available.
-
-    Parameters
-    ----------
-    tensor
-        TensorFlow tensor.
-
-    Returns
-    -------
-    int | None
-        Byte size, or ``None``.
-    """
-
-    shape = _shape_tuple(tensor)
-    dtype = getattr(tensor, "dtype", None)
-    size = getattr(dtype, "size", None)
-    if shape is None or size is None:
-        return None
-    numel = 1
-    for dim in shape:
-        numel *= int(dim)
-    return numel * int(size)
-
-
-def _shape_tuple(tensor: Any) -> tuple[int, ...] | None:
-    """Return a TensorFlow tensor shape tuple.
-
-    Parameters
-    ----------
-    tensor
-        TensorFlow tensor.
-
-    Returns
-    -------
-    tuple[int, ...] | None
-        Shape tuple, or ``None``.
-    """
-
-    shape = getattr(tensor, "shape", None)
-    if shape is None:
-        return None
-    try:
-        return tuple(int(dim) for dim in shape)
-    except (TypeError, ValueError):
-        return None
-
-
-def _tensor_ref_key(tensor: Any) -> object | None:
-    """Return TensorFlow eager tensor identity key from ``tensor.ref()``.
-
-    Parameters
-    ----------
-    tensor
-        TensorFlow tensor.
-
-    Returns
-    -------
-    object | None
-        Hashable TensorFlow reference key.
-    """
-
-    ref = getattr(tensor, "ref", None)
-    if not callable(ref):
-        return None
-    try:
-        return ref()
-    except TypeError:
-        return None
-
-
-def _is_tf_tensor(value: Any, tf: Any) -> bool:
-    """Return whether ``value`` is a TensorFlow tensor-like object.
-
-    Parameters
-    ----------
-    value
-        Candidate value.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    bool
-        True for tensors and variables.
-    """
-
-    tensor_type = getattr(tf, "Tensor", None)
-    variable_type = getattr(tf, "Variable", None)
-    return bool(
-        (tensor_type is not None and isinstance(value, tensor_type))
-        or (variable_type is not None and isinstance(value, variable_type))
-    )
-
-
-def _iter_tf_tensors(value: Any, tf: Any) -> list[Any]:
-    """Return TensorFlow tensor leaves nested inside ``value``.
-
-    Parameters
-    ----------
-    value
-        Candidate nested value.
-    tf
-        Imported TensorFlow module.
-
-    Returns
-    -------
-    list[Any]
-        Tensor leaves.
-    """
-
-    if _is_tf_tensor(value, tf):
-        return [value]
-    if isinstance(value, (list, tuple)):
-        tensors: list[Any] = []
-        for item in value:
-            tensors.extend(_iter_tf_tensors(item, tf))
-        return tensors
-    if isinstance(value, dict):
-        tensors = []
-        for item in value.values():
-            tensors.extend(_iter_tf_tensors(item, tf))
-        return tensors
-    return []
-
-
-def _classify_source_tensor(tensor: Any, consumer_op_type: str) -> str:
-    """Classify a non-produced TensorFlow callback input source.
-
-    Parameters
-    ----------
-    tensor
-        Source tensor.
-    consumer_op_type
-        Consuming op type.
-
-    Returns
-    -------
-    str
-        Typed source kind.
-    """
-
-    dtype_text = str(getattr(tensor, "dtype", ""))
-    if "resource" in dtype_text:
-        return "resource"
-    if consumer_op_type in {"Reshape", "Shape", "StridedSlice", "Pack", "ConcatV2"}:
-        return "shape/axis"
-    return "constant/factory"
-
-
-def _is_scalar_bool_tensor_ref(tensor_ref: TensorRef) -> bool:
-    """Return whether a tensor ref describes a scalar bool.
-
-    Parameters
-    ----------
-    tensor_ref
-        Tensor metadata.
-
-    Returns
-    -------
-    bool
-        True for scalar bool tensors.
-    """
-
-    return tensor_ref.shape == () and "bool" in str(tensor_ref.dtype)
-
-
-def _bool_value(payload: object | None) -> bool | None:
-    """Return scalar bool payload as Python bool when possible.
-
-    Parameters
-    ----------
-    payload
-        Snapshotted payload.
-
-    Returns
-    -------
-    bool | None
-        Boolean value, or ``None``.
-    """
-
-    if isinstance(payload, np.ndarray) and payload.shape == () and payload.dtype == np.bool_:
-        return bool(payload.item())
-    if isinstance(payload, bool):
-        return payload
-    return None

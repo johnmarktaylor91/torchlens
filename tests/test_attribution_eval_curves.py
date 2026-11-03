@@ -119,7 +119,7 @@ def test_curve_steps_replay_to_their_scores_on_small_cnn(kind: str) -> None:
 
     assert curve.settings["features"] == "pixels"
     assert len(curve.steps) == 9
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     for step in curve.steps:
         fork = trace.fork()
         for selection, edit in step.build_interventions:

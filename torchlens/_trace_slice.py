@@ -36,20 +36,20 @@ from __future__ import annotations
 from collections.abc import Iterator
 from typing import Any
 
-from torchlens._selection import SelectionError
+from torchlens._selection.errors import SelectionError
 
-from ._selection import (
-    Selector,
-    _lift,
-    _SelectionOperand,
-)
-from ._selection_graph import (
+from ._selection.graph import (
     _edge_partition,
     _lift_region_group,
     _region_labels,
     _resolve_region,
     _TraceGraph,
     resolve_between_labels,
+)
+from ._selection.selection import (
+    Selector,
+    _lift,
+    _SelectionOperand,
 )
 
 __all__ = [
@@ -117,7 +117,7 @@ class TraceSlice(_SelectionOperand):
     # Membership --------------------------------------------------------------
 
     @property
-    def source_trace(self) -> Any:
+    def _source_trace(self) -> Any:
         """Return the trace this slice views (the single truth; never copied)."""
 
         return self._trace
@@ -337,12 +337,12 @@ class TraceSlice(_SelectionOperand):
         space (``non_tensor_site`` / ``no_index_space``).
         """
 
-        from ._selection_graph import _SliceMembersTerm
+        from ._selection.graph import _SliceMembersTerm
 
         sites = tuple(
             (
                 getattr(self._graph.ops[label], "layer_label", None) or label,
-                getattr(self._graph.ops[label], "pass_index", 1) or 1,
+                getattr(self._graph.ops[label], "pass_number", 1) or 1,
             )
             for label in self._labels
         )
@@ -353,7 +353,7 @@ def build_slice_between(trace: Any, sources: Any, sinks: Any) -> TraceSlice:
     """Build the influence-region slice for ``trace.between(sources, sinks)``.
 
     Shares the exact member-set machinery with the ``tl.between`` producer
-    (:func:`torchlens._selection_graph.resolve_between_labels`): the
+    (:func:`torchlens._selection.graph.resolve_between_labels`): the
     presenter and the Selection denote the same region.
     """
 
@@ -368,14 +368,15 @@ def build_slice_from_selection(trace: Any, selection_like: Any) -> TraceSlice:
 
     The general door: whatever produced the region — ``tl.neighborhood``,
     ``tl.between``, explicit ``tl.units``, or a future motif matcher — its
-    touched-site FAMILY becomes the member set (element masks never shrink
-    a graph region; the family level of the two-level denotation).
+    sites that carry at least one selected element become the member set,
+    each as a whole node (a partial mask never shrinks a node; a site whose
+    mask is empty, as ``-`` or ``~`` can leave it, is not a member).
     """
 
     lifted = _lift(selection_like)
     if lifted is None:
         if isinstance(selection_like, str):
-            from ._selection import _WholeSiteTerm
+            from ._selection.selection import _WholeSiteTerm
 
             lifted = Selector(
                 _WholeSiteTerm(site_label=selection_like, pass_index=None), kind="ACT"

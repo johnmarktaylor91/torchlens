@@ -39,7 +39,7 @@ from torchlens._runnable import NumericAttestationStatus, PathFaithfulness
 from torchlens.options import CaptureOptions
 
 _CAPTURE = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -245,7 +245,7 @@ def test_dead_sink_and_escape_free_models_unchanged(tmp_path: Path) -> None:
 def test_escape_source_recorded_by_census(tmp_path: Path) -> None:
     # The dispatch census records the source op of a scalar escape even when the
     # escaped value is transformed before use (value-equality would find nothing).
-    from torchlens.backends.torch.completeness_witness import host_escape_source_labels
+    from torchlens.backends.torch._completeness_escape_state import host_escape_source_labels
 
     trace = tl.trace(TransformedScalar(), torch.tensor([2.0, 2.0]), capture=_CAPTURE)
     assert host_escape_source_labels(trace), "census must record the .item() escape source"
@@ -331,7 +331,7 @@ class DataAliasScalarEscape(nn.Module):
 
 
 def test_r10_data_alias_escape_attributes_source_label() -> None:
-    from torchlens.backends.torch.completeness_witness import (
+    from torchlens.backends.torch._completeness_escape_state import (
         host_escape_has_unattributable_opaque,
         host_escape_source_labels,
     )

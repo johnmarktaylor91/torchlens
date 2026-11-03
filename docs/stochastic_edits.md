@@ -4,7 +4,7 @@ Causal scrubbing, resampling ablation and mean ablation replace an activation wi
 from, or averaged over, other inputs. TorchLens builds them from one population noun and one
 sampling plan, records every draw, and makes each draw reproducible from its seed. Every name on
 this page lives in `torchlens.intervention` (not at the `tl.` root), except `tl.mean_ablate` (the root
-helper) and `sampling_records`, which imports from `torchlens.intervention.stochastic`. All are
+helper) and `SamplingRecord`, which imports from `torchlens.intervention.types`. All are
 DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 
 ## The pieces
@@ -19,7 +19,7 @@ DOCUMENTED-UNSTABLE: the spellings may change without a deprecation shim.
 | `set_direction_mean(direction, population, dim=...)` | Replaces the component along `direction` with the population's mean coefficient and keeps the orthogonal part. |
 | `scramble_elements(...)` | An elementwise random scramble. It is not a resampling ablation: each element moves on its own, so rows are no longer coherent inputs. |
 | `at_step(*steps)` | A selector qualifier for episode captures: `tl.when(site & at_step(2), edit)` edits only decoding step 2. |
-| `sampling_records(trace)` | The recorded draws of every stochastic edit on a trace: seeds, donor ids, permutations. |
+| `FireRecord.sampling` | The recorded draws of one firing, saved with the trace: a tuple of `SamplingRecord` (seeds, share rule, firing coordinate, population counts and identity, the full draw indices, the draw digest). Read it from the op's `edits`. |
 
 One spelling is a false friend. The removed `resample_ablate` was renamed `scramble_elements`
 because it never resampled whole inputs; resampling ablation is `resample_rows_from`.
@@ -47,7 +47,6 @@ import torch
 from torch import nn
 import torchlens as tl
 from torchlens.intervention import population, resample_rows_from
-from torchlens.intervention.stochastic import sampling_records
 
 
 class Toy(nn.Module):
@@ -61,14 +60,14 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 site = tl.label("relu_1_2")
 donors = population(torch.randn(3, 4), origin="three donor rows from another dataset")
 
 resampled = trace.fork("resampled")
 resampled.do(site, resample_rows_from(donors, seed=2, axis=0))
-donor_ids = sampling_records(resampled)[-1]["donor_ids"]
+donor_ids = resampled.ops["relu_1_2"].edits[-1].sampling[-1].draw_indices
 oracle = torch.stack([donors.members[index] for index in donor_ids])
 
 again = trace.fork("again")
@@ -104,7 +103,7 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 site = tl.label("relu_1_2")
 clean = trace["relu_1_2"].out
@@ -158,7 +157,7 @@ class Toy(nn.Module):
 
 torch.manual_seed(0)
 trace = tl.trace(
-    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(intervention_ready=True)
+    Toy(), torch.randn(5, 4), capture=tl.options.CaptureOptions(replayable=True)
 )
 donors = population(torch.randn(6, 5, 4), origin="six recorded activations of this site")
 patched = trace.fork("patched")

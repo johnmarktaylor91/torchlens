@@ -3,8 +3,8 @@
 Venue-gated exactly like ``tests/real_model/r1`` (GATE-ID R1_OFFLINE_VENUE):
 runs only under the offline preflighted cache env, loads THROUGH the artifact
 registry's checkpoint-evidence hook (pinned revision, never a bare model id),
-and skips with the gate id everywhere else. The R0 rows in
-``test_sem_resid_a02.py`` carry the structural gate; this row proves the same
+and skips with the gate id everywhere else. The random-init rows under
+``tests/real_model/r0`` carry the structural gate; this row proves the same
 anchors on the actual 12-layer, 768-dim checkpoint.
 """
 

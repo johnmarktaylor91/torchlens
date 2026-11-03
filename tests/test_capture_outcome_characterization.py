@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._postprocess as pp
+from torchlens.errors import TraceCaptureError
 from torchlens.recording import Recorder
 from torchlens.recording._halt import StopSignal
 
@@ -104,17 +105,18 @@ def test_tracing_finished_writer_inventory_is_exact() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_planted_step1_failure_survives_with_partial_log(monkeypatch) -> None:
-    """A pre-seam postprocess failure propagates and attaches partial_log."""
+def test_planted_step1_failure_survives_with_partial_trace(monkeypatch) -> None:
+    """A pre-seam postprocess failure propagates and attaches partial_trace."""
 
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted step1")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
-    with pytest.raises(ValueError, match="planted step1") as exc_info:
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
+    with pytest.raises(TraceCaptureError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    assert hasattr(exc_info.value, "partial_log")
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    assert hasattr(exc_info.value, "partial_trace")
+    partial = exc_info.value.partial_trace
     assert partial.trace.__dict__.get("_tracing_finished") is False
 
 
@@ -133,8 +135,9 @@ def test_planted_freeze_failure_propagates_original(monkeypatch) -> None:
         raise ValueError("planted freeze")
 
     monkeypatch.setattr(pp, "_freeze_relation_views", _boom)
-    with pytest.raises(ValueError, match="planted freeze"):
+    with pytest.raises(TraceCaptureError, match="planted freeze") as _tce_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
 
 
 def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
@@ -146,8 +149,9 @@ def test_planted_step20_failure_propagates_original(monkeypatch) -> None:
         raise ValueError("planted step20")
 
     monkeypatch.setattr(Trace, "_release_param_refs", _boom)
-    with pytest.raises(ValueError, match="planted step20"):
+    with pytest.raises(TraceCaptureError, match="planted step20") as _tce_info2:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info2.value.__cause__, ValueError)
 
 
 # ---------------------------------------------------------------------------
@@ -161,7 +165,7 @@ def test_halted_postprocess_failure_propagates_with_halt_context(monkeypatch) ->
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted halted-pp")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
@@ -195,9 +199,9 @@ def test_halted_trace_basic_shape() -> None:
     """A halted capture finishes postprocess: finished truthy, halted truthy."""
 
     trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
-    assert trace.halted is True
+    assert trace.is_stopped is True
     assert trace._tracing_finished is True
-    assert trace.halt_frontier == trace.halt_reason
+    assert trace.graph.stop_frontier == trace.stop_reason
 
 
 def test_halted_trace_has_no_transient_attribution_leak() -> None:
@@ -293,8 +297,8 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
     trace_halt = tl.trace(model_halt, x, halt=_halt_on_linear)
 
     assert list(trace_full.buffer_layers) == list(trace_halt.buffer_layers)
-    full_labels = [entry.layer_label for entry in trace_full.layer_list]
-    halt_labels = [entry.layer_label for entry in trace_halt.layer_list]
+    full_labels = [entry.layer_label for entry in trace_full._layer_list]
+    halt_labels = [entry.layer_label for entry in trace_halt._layer_list]
     # The halted graph is the complete graph's prefix plus its own output node.
     assert halt_labels[:-1] == [
         label for label in full_labels if label not in ("relu_1_4", "output_1")
@@ -311,11 +315,11 @@ def test_halted_bn_buffer_topology_matches_complete_prefix() -> None:
 
 
 def test_keyboard_interrupt_propagates_without_partial_banner() -> None:
-    """BaseException escapes propagate bare: no partial_log, no banner."""
+    """BaseException escapes propagate bare: no partial_trace, no banner."""
 
     with pytest.raises(KeyboardInterrupt) as exc_info:
         tl.trace(FailingForwardModel(KeyboardInterrupt()), torch.ones(1, 3))
-    assert not hasattr(exc_info.value, "partial_log")
+    assert not hasattr(exc_info.value, "partial_trace")
 
 
 @pytest.mark.smoke
@@ -348,7 +352,7 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
             return torch.relu(self.linear(x))
 
     def _halt_second_pass(ctx: object) -> bool:
-        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_index >= 2
+        return ctx.kind == "op" and ctx.func_name == "relu" and ctx.pass_number >= 2
 
     x = torch.ones(1, 3)
     with Recorder(
@@ -373,20 +377,22 @@ def test_recorder_mixed_multipass_halt_pins() -> None:
 def test_failed_partial_pickle_loads_coreless() -> None:
     """A pickled falsy-finished partial loads coreless (staging surface)."""
 
-    with pytest.raises(RuntimeError, match="user forward boom"), torch.no_grad():
+    with pytest.raises(TraceCaptureError, match="user forward boom") as _tce_info3, torch.no_grad():
         tl.trace(
             FailingForwardModel(RuntimeError("user forward boom")),
             torch.ones(1, 3),
         )
-    # from_failed_capture needs the live exception object.
+    assert isinstance(_tce_info3.value.__cause__, RuntimeError)
+    # The partial rides the live exception object.
     try:
         with torch.no_grad():
             tl.trace(
                 FailingForwardModel(RuntimeError("user forward boom")),
                 torch.ones(1, 3),
             )
-    except RuntimeError as exc:
-        partial = tl._partial.from_failed_capture(exc)
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        partial = exc.partial_trace
     source = partial.trace
     assert source.__dict__.get("_tracing_finished") is False
     clone = pickle.loads(pickle.dumps(source))

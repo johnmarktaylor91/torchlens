@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._utils._multipass_access import get_multipass_attr
 from .._vocab.node_spec import INTERVENTION_SITE_COLOR
 from ._render_utils import html_escape
@@ -177,7 +178,7 @@ def _stand_in(value: Any) -> str:
         name = getattr(value, "name", None)
         if isinstance(name, str) and name and len(name) <= _MAX_LITERAL_CHARS:
             literal = name
-        elif hasattr(value, "layer_list"):
+        elif is_live_trace(value):
             literal = "trace"
         elif isinstance(value, Mapping) and isinstance(value.get("label"), str):
             literal = _literal(value["label"])
@@ -228,12 +229,12 @@ def short_edit_text(edit: Edit) -> str:
 
     from ..intervention.helpers import builtin_helper_constructor
 
-    constructor = builtin_helper_constructor(edit.helper_name)
+    constructor = builtin_helper_constructor(edit.name)
     parts = [_stand_in(value) for value in edit.args]
     parts.extend(_shown_kwargs(edit, constructor))
     if not parts:
-        return edit.helper_name
-    return f"{edit.helper_name}({', '.join(parts)})"
+        return edit.name
+    return f"{edit.name}({', '.join(parts)})"
 
 
 def _hook_mark(hook: Any, *, full: str | None, detail: str) -> EditMark:
@@ -262,12 +263,12 @@ def _value_mark(value: Any, *, detail: str) -> EditMark:
 
 
 def _fire_mark(record: FireRecord) -> EditMark:
-    """Return the mark for one fire record (``FireRecord.helper`` first, then its name)."""
+    """Return the mark for one fire record (``FireRecord.edit`` first, then its name)."""
 
     detail = ", ".join(str(part) for part in (record.engine, record.timing) if part)
-    if record.helper is not None:
-        return _helper_mark(record.helper, detail=detail)
-    name = str(record.helper_name or "hook")
+    if record.edit is not None:
+        return _helper_mark(record.edit, detail=detail)
+    name = str(record.edit_name or "hook")
     if any(marker in name for marker in _SET_HOOK_MARKERS):
         return EditMark(short="set(v)", full="set(v)", detail=detail)
     leaf = name.rsplit(".", 1)[-1]
@@ -331,11 +332,11 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
     spec = trace._intervention_spec
     if spec is None:
         return {}
-    from ..intervention.resolver import _resolve_sites
+    from .._selection.resolver import _resolve_sites
     from .node_spec import _forward_site
 
     marks: dict[str, list[EditMark]] = {}
-    fanout = max(1, len(getattr(trace, "layer_list", ()) or ()))
+    fanout = max(1, len(trace._layer_list or ()))
     for target, build in _staged_entries(spec):
         try:
             table = _resolve_sites(trace, target, max_fanout=fanout)
@@ -353,7 +354,7 @@ def _staged_marks(trace: Trace) -> dict[str, list[EditMark]]:
 def edit_marks_by_site(trace: Trace, sites: Sequence[Op]) -> dict[str, tuple[EditMark, ...]]:
     """Return each site's edit marks in firing order, keyed by pass-qualified label.
 
-    An op whose ``interventions`` (its ``FireRecord`` list) is non-empty is
+    An op whose ``edits`` (its ``FireRecord`` list) is non-empty is
     named from those records, ordered by their timestamps; a site that has not
     fired is named from the staged recipe entries that resolve to it. A site
     with neither is marked ``edit``.
@@ -370,7 +371,7 @@ def edit_marks_by_site(trace: Trace, sites: Sequence[Op]) -> dict[str, tuple[Edi
     result: dict[str, tuple[EditMark, ...]] = {}
     for site in sites:
         key = _op_key(site)
-        records = list(getattr(site, "interventions", None) or ())
+        records = list(getattr(site, "edits", None) or ())
         if records:
             ordered = sorted(
                 enumerate(records),

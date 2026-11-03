@@ -1,7 +1,7 @@
 """The column-offset map build enters no Python frame (r16 tap-budget fix).
 
 ``_build_col_offset_map`` is often first called inside an
-``intervention_ready`` capture, where the RNG monitor's profile hook snapshots
+``replayable`` capture, where the RNG monitor's profile hook snapshots
 NumPy RNG state on every Python frame entry. The old ``dis``-based build
 entered several helper frames per instruction, so one cold build of a large
 code object cost seconds under the hook (98% of the full-tier time of
@@ -148,7 +148,7 @@ class _ReluBranch(torch.nn.Module):
 
 
 def test_cold_map_build_in_hooked_capture_triggers_no_rng_frame_snapshots() -> None:
-    """A cold map build inside an intervention_ready capture costs no RNG snapshots.
+    """A cold map build inside an replayable capture costs no RNG snapshots.
 
     Positive control: the monitor still snapshots the user model's forward frame
     in the same window, so the witness itself is untouched.
@@ -185,7 +185,7 @@ def test_cold_map_build_in_hooked_capture_triggers_no_rng_frame_snapshots() -> N
         hooked = tl.trace(
             model,
             torch.tensor([[-1.0, 2.0]]),
-            capture=tl.options.CaptureOptions(intervention_ready=True, hooks=tap),
+            capture=tl.options.CaptureOptions(replayable=True, hooks=tap),
         )
 
     assert tap.values()

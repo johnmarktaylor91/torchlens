@@ -31,19 +31,6 @@ if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
     from ..._ir.op_record import OpRecord
 
-if TYPE_CHECKING:
-    from .ops import (
-        _SAFE_DEFAULT_FACTORIES,
-        _build_container_spec,
-        _build_edge_use_records,
-        _exhaustive_capture_policy,
-        _exhaustive_freeze_refs,
-        _exhaustive_output_ref,
-        _literal_value_supported,
-        _param_refs_from_fields,
-        _parent_edges_from_fields,
-        _resolve_call_function_ref,
-    )
 
 __all__ = (
     "_op_record_from_log",
@@ -105,7 +92,7 @@ def _op_record_from_log(
         raw_index=fields_dict["raw_index"],
         type_index=fields_dict["type_index"],
         step_index=fields_dict["step_index"] or 0,
-        pass_index=fields_dict["pass_index"],
+        pass_index=fields_dict["pass_number"],
         parents=_parent_edges_from_fields(fields_dict),
         output=_exhaustive_output_ref(fields_dict, tensor_ref, transformed_ref),
         is_bottom_level=True,
@@ -134,7 +121,7 @@ def _op_record_from_log(
     parent_params = tuple(fields_dict["parent_params"])
     is_scalar_bool = fields_dict["is_scalar_bool"]
     bool_value = fields_dict["bool_value"]
-    intervention_replaced = fields_dict["intervention_replaced"]
+    is_edited = fields_dict["is_edited"]
     return OpRecord(
         core=core,
         function=_resolve_call_function_ref(fields_dict, call_ref_box),
@@ -234,10 +221,10 @@ def _op_record_from_log(
         intervention=(
             InterventionFacet(
                 intervention_fired=bool(fire_results),
-                intervention_replaced=intervention_replaced,
+                is_edited=is_edited,
                 fire_results=fire_results,
             )
-            if (bool(fire_results) or intervention_replaced or fire_results)
+            if (bool(fire_results) or is_edited or fire_results)
             else None
         ),
     )
@@ -497,3 +484,25 @@ def _leaf_is_reconstructable(item: Any) -> bool:
     if isinstance(item, torch.Tensor):
         return True
     return bool(_literal_value_supported(item) or isinstance(item, torch.Size))
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._ops_arguments import (  # noqa: E402
+    _build_edge_use_records,
+    _literal_value_supported,
+)
+from ._ops_capture_records import (  # noqa: E402
+    _exhaustive_capture_policy,
+    _exhaustive_freeze_refs,
+    _exhaustive_output_ref,
+    _param_refs_from_fields,
+    _parent_edges_from_fields,
+    _resolve_call_function_ref,
+)
+from ._ops_containers import (  # noqa: E402
+    _build_container_spec,
+)
+from .ops import (  # noqa: E402
+    _SAFE_DEFAULT_FACTORIES,
+)

@@ -142,7 +142,7 @@ def test_changed_content_at_same_path_is_not_served_stale(artifact: Path, tmp_pa
     shutil.move(str(other_path), str(artifact))
     trace_b, _, _ = _artifacts.load_trace(str(artifact))
     assert trace_b is not trace_a
-    assert trace_b.model_class_name == "Sequential"
+    assert trace_b.source.class_name == "Sequential"
     assert int(trace_b.num_params) == int(other.num_params)
 
 
@@ -158,10 +158,8 @@ def test_served_schema_field_parity() -> None:
     served = {declaration["name"]: declaration for declaration in list_tools()}
     specs = {spec.name: spec for spec in tool_specs()}
     assert set(served) == set(specs)
-    # The handler map carries the registry plus the bridge-local
-    # experiment-ledger extension (raw torchlens.experiment.read_ledger payloads).
-    ledger_names = {spec["name"] for spec in mcp.LEDGER_TOOL_SPECS}
-    assert set(mcp.TOOL_HANDLERS) == set(specs) | ledger_names
+    # The handler map carries exactly the registry.
+    assert set(mcp.TOOL_HANDLERS) == set(specs)
     for name, spec in specs.items():
         declaration = served[name]
         assert declaration["description"] == spec.description
@@ -175,9 +173,8 @@ def test_served_schema_field_parity() -> None:
         assert declaration["default_limits"] == dict(spec.default_limits)
         assert spec.input_schema["additionalProperties"] is False
         assert mcp.TOOL_HANDLERS[name] is spec.handler
-    # The bridge's frozen TOOL_SPECS snapshot cannot drift from the registry:
-    # the registry rows lead verbatim, the ledger extension trails.
-    assert list(mcp.TOOL_SPECS) == list_tools() + list(mcp.LEDGER_TOOL_SPECS)
+    # The bridge's frozen TOOL_SPECS snapshot cannot drift from the registry.
+    assert list(mcp.TOOL_SPECS) == list_tools()
 
 
 def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
@@ -195,7 +192,7 @@ def test_memory_shaped_stats_reads_do_not_attach(artifact: Path) -> None:
         for _ in range(200):
             mcp.call_tool("torchlens_payload_stats", {"path": str(artifact), "metrics": ["mean"]})
         resident = sum(
-            1 for op in trace.layer_list if callable(op._slot) and op._slot("out") is not None
+            1 for op in trace._layer_list if callable(op._slot) and op._slot("out") is not None
         )
         assert resident == 0, (
             f"{resident} payloads attached to the cached trace -- the stats "

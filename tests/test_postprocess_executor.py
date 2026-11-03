@@ -1,13 +1,16 @@
-"""Behaviour tests for the postprocess step executor.
+"""Behaviour tests for the postprocess pipeline and its step executor.
 
-Steps 1-20 run in registry order through ``run_pipeline``; each step body
-resolves its callable through the ``torchlens._postprocess`` namespace at call
-time. These tests pin the order, the one-evaluation-per-step gate invariant,
-the patch seams, and the observable effects of steps 17.5 and 19.
+The named steps run in ``PIPELINE`` order through ``run_pipeline``; each step
+adapter calls its function through the function's home module
+(``graph_traversal``, ``labeling``, ``finalization``, ...). These tests pin
+the order, the record contract (names, home modules, declared writes), the
+one-evaluation-per-step gate invariant, the home-module seams, and the
+observable effects of the container-adoption and streamed-out eviction steps.
 """
 
 from __future__ import annotations
 
+import importlib
 from pathlib import Path
 from typing import Any
 
@@ -16,35 +19,39 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.errors import TraceCaptureError
 
-#: Steps 1-20 in run order. Reordering steps is a reviewed semantic change.
-REGISTRY_ORDER = (
-    "1",
-    "2",
-    "3",
-    "4",
-    "5",
-    "6",
-    "7",
-    "8",
-    "9",
-    "10",
-    "11",
-    "11.5",
-    "11.75",
-    "12",
-    "13",
-    "14",
-    "15",
-    "15.5",
-    "16",
-    "16.5",
-    "17",
-    "17.5",
-    "18",
-    "19",
-    "20",
+#: The pipeline in run order. Reordering steps is a reviewed semantic change.
+PIPELINE_ORDER = (
+    "add_output_layers",
+    "find_output_ancestors",
+    "remove_orphan_nodes",
+    "mark_layer_depths",
+    "mark_conditional_branches",
+    "fix_buffer_layers",
+    "group_recurrent_layers",
+    "map_final_labels",
+    "log_final_layer_info",
+    "rename_layer_references",
+    "build_lookup_keys",
+    "populate_source_var_names",
+    "resolve_deferred_retention",
+    "undecorate_saved_tensors",
+    "clear_cuda_cache",
+    "log_time_elapsed",
+    "finalize_param_logs",
+    "build_layer_logs",
+    "build_module_logs",
+    "hash_graph_shape",
+    "mark_tracing_finished",
+    "adopt_containers_and_drop_workspaces",
+    "finalize_streamed_bundle",
+    "evict_streamed_outs",
+    "release_param_refs",
 )
+
+#: Fields every timed step rewrites through ``_vtimed``; not a per-step write.
+_TIMING_FIELDS = frozenset({"_phase_timings"})
 
 
 class _TinyModel(nn.Module):
@@ -58,32 +65,123 @@ class _TinyModel(nn.Module):
         return torch.relu(self.linear(x))
 
 
-def test_registry_runs_steps_in_the_pinned_order() -> None:
-    """The executor registry lists steps 1-20 in the pinned run order."""
+def test_pipeline_runs_steps_in_the_pinned_order() -> None:
+    """``PIPELINE`` lists the named steps in the pinned run order."""
 
-    from torchlens._postprocess import _executor as ex
+    from torchlens._postprocess import _pipeline
 
-    assert tuple(spec.step for spec in ex.STEP_REGISTRY) == REGISTRY_ORDER
+    assert tuple(step.name for step in _pipeline.PIPELINE) == PIPELINE_ORDER
+
+
+def test_pipeline_step_names_are_unique_snake_case_without_ranks() -> None:
+    """Steps are identified by name alone: unique snake_case, no digits, no ranks.
+
+    No record carries a rank or fractional id; the tuple position is the order.
+    """
+
+    from torchlens._postprocess import _pipeline
+
+    names = [step.name for step in _pipeline.PIPELINE]
+    assert len(set(names)) == len(names)
+    for name in names:
+        assert name.isidentifier() and name == name.lower(), name
+        assert not any(ch.isdigit() for ch in name), name
+    assert {f.name for f in _pipeline.PipelineStep.__dataclass_fields__.values()} == {
+        "name",
+        "module",
+        "run",
+        "reads",
+        "writes",
+        "should_run",
+        "postcondition",
+    }
+
+
+def test_pipeline_step_modules_resolve_and_own_the_adapter_or_body() -> None:
+    """Every record's home module imports under ``torchlens``.
+
+    A step implemented inline names the executor; every other step's module is
+    the home module its adapter calls through.
+    """
+
+    from torchlens._postprocess import _pipeline
+
+    for step in _pipeline.PIPELINE:
+        module = importlib.import_module(f"torchlens.{step.module}")
+        assert module is not None, step.name
+        assert step.run.__name__ == f"_run_{step.name}", step.name
+        assert step.run.__module__ == "torchlens._postprocess._executor", step.name
+        if step.should_run is not _pipeline._always:
+            assert step.should_run.__name__ == f"_should_run_{step.name}", step.name
+        if step.postcondition is not None:
+            assert step.postcondition.__name__ == f"_{step.name}_violation", step.name
+        assert step.reads == tuple(sorted(set(step.reads))), step.name
+        assert step.writes == tuple(sorted(set(step.writes))), step.name
+
+
+def test_pipeline_declared_writes_cover_observed_trace_rebinding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each step's ``writes`` covers every trace attribute it adds, drops or rebinds.
+
+    The check watches ``trace.__dict__``: keys added or removed by a step and
+    keys whose value object was replaced (``is`` identity) must be declared.
+    In-place mutation of a list or dict is not observable this way, so the
+    declared set may be wider than what this test sees, never narrower.
+    """
+
+    import dataclasses
+
+    from torchlens._postprocess import _pipeline
+
+    undeclared: dict[str, set[str]] = {}
+
+    def observing(step: _pipeline.PipelineStep) -> _pipeline.PipelineStep:
+        inner = step.run
+
+        def run(ctx: _pipeline.StepContext) -> None:
+            before = dict(ctx.trace.__dict__)
+            inner(ctx)
+            after = ctx.trace.__dict__
+            changed = {
+                key
+                for key in set(before) | set(after)
+                if key not in before or key not in after or before[key] is not after[key]
+            }
+            extra = changed - set(step.writes) - _TIMING_FIELDS
+            if extra:
+                undeclared[step.name] = extra
+
+        return dataclasses.replace(step, run=run)
+
+    monkeypatch.setattr(
+        _pipeline, "PIPELINE", tuple(observing(step) for step in _pipeline.PIPELINE)
+    )
+    trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    try:
+        assert undeclared == {}, undeclared
+    finally:
+        trace.cleanup()
 
 
 def test_executor_seam_patched_step_executes(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A monkeypatched step function still executes.
+    """A step function replaced on its home module executes.
 
-    The executor resolves step callables through the module namespace at CALL
-    time; a registry of imported references would silently break every
-    monkeypatch seam.
+    The executor calls each step through its home module (here
+    ``graph_traversal``) at call time; a registry of imported references
+    would silently break every home-module seam.
     """
 
     import torchlens._postprocess as pp
 
     calls: list[str] = []
-    real_step2 = pp._find_output_ancestors
+    real_step2 = pp.graph_traversal._find_output_ancestors
 
     def patched_step2(trace: object) -> None:
         calls.append("ran")
         real_step2(trace)
 
-    monkeypatch.setattr(pp, "_find_output_ancestors", patched_step2)
+    monkeypatch.setattr(pp.graph_traversal, "_find_output_ancestors", patched_step2)
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
         assert calls == ["ran"], "the patched step body must have executed"
@@ -96,33 +194,35 @@ def test_executor_should_run_called_exactly_once(
 ) -> None:
     """Executor invariant: should_run evaluates once per step, in order.
 
-    Step 18's predicate is deliberately context-writing (THE streaming
-    snapshot point); a re-evaluated step-19 predicate after 18 cleared
-    _out_writer would always be false and streamed outs would never be
-    evicted.
+    The ``finalize_streamed_bundle`` gate is deliberately context-writing (THE
+    streaming snapshot point); a re-evaluated ``evict_streamed_outs`` gate
+    after that step cleared _out_writer would always be false and streamed
+    outs would never be evicted.
     """
 
-    from torchlens._postprocess import _executor as ex
+    import dataclasses
+
+    from torchlens._postprocess import _pipeline
 
     counts: dict[str, int] = {}
     seen_order: list[str] = []
-    original_registry = ex.STEP_REGISTRY
+    original = _pipeline.PIPELINE
 
-    def counting(spec: ex.StepSpec) -> ex.StepSpec:
-        inner = spec.should_run
+    def counting(step: _pipeline.PipelineStep) -> _pipeline.PipelineStep:
+        inner = step.should_run
 
-        def counted(ctx: ex.StepContext) -> bool:
-            counts[spec.step] = counts.get(spec.step, 0) + 1
-            seen_order.append(spec.step)
+        def counted(ctx: _pipeline.StepContext) -> bool:
+            counts[step.name] = counts.get(step.name, 0) + 1
+            seen_order.append(step.name)
             return inner(ctx)
 
-        return ex.StepSpec(spec.step, spec.run, counted)
+        return dataclasses.replace(step, should_run=counted)
 
-    monkeypatch.setattr(ex, "STEP_REGISTRY", tuple(counting(spec) for spec in original_registry))
+    monkeypatch.setattr(_pipeline, "PIPELINE", tuple(counting(step) for step in original))
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     try:
-        assert counts == {spec.step: 1 for spec in original_registry}
-        assert seen_order == list(REGISTRY_ORDER)
+        assert counts == {step.name: 1 for step in original}
+        assert seen_order == list(PIPELINE_ORDER)
     finally:
         trace.cleanup()
 
@@ -138,9 +238,10 @@ def test_executor_failing_step_propagates(monkeypatch: pytest.MonkeyPatch) -> No
     def exploding_step9(trace: object) -> None:
         raise _StepBoom("step 9 exploded")
 
-    monkeypatch.setattr(pp, "_log_final_info_for_layers", exploding_step9)
-    with pytest.raises(_StepBoom):
+    monkeypatch.setattr(pp.labeling, "_log_final_info_for_layers", exploding_step9)
+    with pytest.raises(TraceCaptureError) as _tce_info:
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
+    assert isinstance(_tce_info.value.__cause__, _StepBoom)
 
 
 def test_phase_timing_bucket_names_default_capture() -> None:
@@ -148,8 +249,8 @@ def test_phase_timing_bucket_names_default_capture() -> None:
 
     The surface oracle normalizes timing fields, so a drift in WHICH
     buckets exist would pass the byte gate silently; this pins the set
-    (step 13 and 17.5 are deliberately unwrapped; conditional steps absent
-    when skipped).
+    (clear_cuda_cache and adopt_containers_and_drop_workspaces are deliberately
+    unwrapped; conditional steps absent when skipped).
     """
 
     trace = tl.trace(_TinyModel().eval(), torch.randn(2, 3))
@@ -193,19 +294,19 @@ class _DictOutputModel(nn.Module):
 
 
 @pytest.mark.smoke
-def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
-    """Step 17.5's one NON-redundant effect: adopt container records onto the trace.
+def test_adopt_containers_step_adopts_records_before_the_registry_clears() -> None:
+    """The adopt_containers_and_drop_workspaces step's one NON-redundant effect: adopt container records onto the trace.
 
     Mutation-margin arming (W2, lane L3 triage step 21): a first version of
     this test asserted the per-phase workspace attrs it also pops
     (``_raw_graph_ws`` etc.) were gone -- but ``_drop_transient_capture_state``
     (``_postprocess/__init__.py``) unconditionally pops those SAME fields right
-    after ``run_pipeline`` returns, for every capture, step 17.5 included or
+    after ``run_pipeline`` returns, for every capture, the adopt step included or
     not. That made the first version vacuously true either way (empirically
-    proven: a whole-function return-None disarm of ``_run_step_17_5``
-    survived it). The one thing ONLY step 17.5 does is copy
+    proven: a whole-function return-None disarm of ``_run_adopt_containers_and_drop_workspaces``
+    survived it). The one thing ONLY this step does is copy
     ``container_registry.records`` into ``trace._containers`` BEFORE that
-    later scrub clears the registry's live state; skip step 17.5 and the
+    later scrub clears the registry's live state; skip it and the
     records are lost, never adopted, with no second chance to recover them.
     """
 
@@ -222,14 +323,14 @@ def test_step17_5_adopts_container_records_before_the_registry_clears() -> None:
 
 
 @pytest.mark.smoke
-def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None:
-    """Step 19 (and its gate) must drop in-memory ``out`` once streamed.
+def test_evict_streamed_outs_step_and_gate_evict_from_memory(tmp_path: Path) -> None:
+    """evict_streamed_outs (and its gate) must drop in-memory ``out`` once streamed.
 
-    Mutation-margin arming (W2): ``_run_step_19`` return-None and
-    ``_should_run_step_19`` forced-False both leave every streamed op's
+    Mutation-margin arming (W2): ``_run_evict_streamed_outs`` return-None and
+    ``_should_run_evict_streamed_outs`` forced-False both leave every streamed op's
     ``out`` resident in memory despite ``out_ref`` already pointing at the
     on-disk blob -- the exact observable effect this test pins. Neither
-    mutant is visible to the phase-timing bucket golden above (step 19 is
+    mutant is visible to the phase-timing bucket golden above (the step is
     conditional and absent from that axis's expected set either way).
     """
 
@@ -239,10 +340,14 @@ def test_step19_and_gate_evict_streamed_outs_from_memory(tmp_path: Path) -> None
         storage=tl.to_disk(tmp_path / "step19.tlspec"),
     )
     try:
-        streamed = [op for op in trace.layer_list if getattr(op, "out_ref", None) is not None]
+        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
+        assert streamed, (
+            "no op streamed an out_ref; the axis setup is not exercising the eviction step"
+        )
+        streamed = [op for op in trace._layer_list if getattr(op, "out_ref", None) is not None]
         assert streamed, "no op streamed an out_ref; the axis setup is not exercising step 19"
         assert all(op.out is None for op in streamed), (
-            "a streamed op's out survived step 19's eviction"
+            "a streamed op's out survived the eviction step"
         )
     finally:
         trace.cleanup()
@@ -290,13 +395,13 @@ def test_buffer_duplicate_axis_actually_merges(
         # only for a pass of a multi-pass one. Under call-site grouping the
         # buffer's versions are grouped by the place that wrote them
         # (docs/guides/grouping.md), so the survivor can be single-pass.
-        survivor = next(op for op in trace.layer_list if op._label_raw == survivor_label)
+        survivor = next(op for op in trace._layer_list if op._label_raw == survivor_label)
         survivor_final = survivor.layer_label if survivor.num_passes == 1 else survivor.label
         repointed = [
-            op for op in trace.layer_list if op.is_buffer and op.buffer_source == survivor_final
+            op for op in trace._layer_list if op.is_buffer and op.buffer_source == survivor_final
         ]
         assert repointed, "the scalar buffer_source repoint must have fired"
-        assert all(op.buffer_source not in (removed_label,) for op in trace.layer_list), (
+        assert all(op.buffer_source not in (removed_label,) for op in trace._layer_list), (
             "no surviving op may still reference the merged-away buffer"
         )
     finally:
@@ -333,11 +438,11 @@ def _clear_op_label_map(trace: Any) -> None:
 
 
 def _drop_first_lookup_keys(trace: Any) -> None:
-    trace.layer_list[0].lookup_keys = []
+    trace._layer_list[0].lookup_keys = []
 
 
 def _clear_layer_logs(trace: Any) -> None:
-    trace.layer_logs.clear()
+    trace._layer_logs.clear()
 
 
 def _null_module_logs(trace: Any) -> None:
@@ -345,7 +450,7 @@ def _null_module_logs(trace: Any) -> None:
 
 
 def _postcondition_breakers() -> list[Any]:
-    """(step, patched attribute, factory of the breaking replacement, message)."""
+    """(step name, patched attribute, factory of the breaking replacement, message)."""
 
     import torchlens._postprocess as pp
 
@@ -354,65 +459,71 @@ def _postcondition_breakers() -> list[Any]:
 
     return [
         pytest.param(
-            "1",
+            "add_output_layers",
             "_add_output_layers",
-            lambda: _wrap_then(pp._add_output_layers, _empty_output_layers),
+            lambda: _wrap_then(pp.graph_traversal._add_output_layers, _empty_output_layers),
             "registered 0, expected 1",
             id="1-missing",
         ),
         pytest.param(
-            "1",
+            "add_output_layers",
             "_add_output_layers",
-            lambda: _wrap_then(pp._add_output_layers, _duplicate_output_layer),
+            lambda: _wrap_then(pp.graph_traversal._add_output_layers, _duplicate_output_layer),
             "registered 2, expected 1",
             id="1-extra",
         ),
         pytest.param(
-            "8",
+            "map_final_labels",
             "_map_raw_labels_to_final_labels",
-            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_layer_label_map),
+            lambda: _wrap_then(pp.labeling._map_raw_labels_to_final_labels, _clear_layer_label_map),
             "raw-to-final layer labels",
             id="8-layer",
         ),
         pytest.param(
-            "8",
+            "map_final_labels",
             "_map_raw_labels_to_final_labels",
-            lambda: _wrap_then(pp._map_raw_labels_to_final_labels, _clear_op_label_map),
+            lambda: _wrap_then(pp.labeling._map_raw_labels_to_final_labels, _clear_op_label_map),
             "raw-to-final op labels",
             id="8-op",
         ),
         pytest.param(
-            "11",
+            "build_lookup_keys",
             "_build_lookup_keys_and_finalize_retained_layers",
             lambda: _wrap_then(
-                pp._build_lookup_keys_and_finalize_retained_layers, _drop_first_lookup_keys
+                pp.labeling._build_lookup_keys_and_finalize_retained_layers, _drop_first_lookup_keys
             ),
             "without lookup keys",
             id="11",
         ),
         pytest.param(
-            "15.5",
+            "build_layer_logs",
             "_build_layer_logs",
-            lambda: _wrap_then(pp._build_layer_logs, _clear_layer_logs),
+            lambda: _wrap_then(pp.finalization._build_layer_logs, _clear_layer_logs),
             "aggregate layer logs",
             id="15.5",
         ),
         pytest.param(
-            "16",
+            "build_module_logs",
             # The step's last call, so nothing inside step 16 reads the nulled field.
             "refresh_saved_module_call_count",
-            lambda: _wrap_then(pp.refresh_saved_module_call_count, _null_module_logs),
+            lambda: _wrap_then(pp.saved_summary.refresh_saved_module_call_count, _null_module_logs),
             "module logs",
             id="16",
         ),
         pytest.param(
-            "16.5",
+            "hash_graph_shape",
             "compute_graph_shape_hash",
             lambda: lambda *_args, **_kwargs: None,
             "graph_shape_hash",
             id="16.5",
         ),
-        pytest.param("17", "_set_tracing_finished", lambda: noop, "tracing finished", id="17"),
+        pytest.param(
+            "mark_tracing_finished",
+            "_set_tracing_finished",
+            lambda: noop,
+            "tracing finished",
+            id="17",
+        ),
     ]
 
 
@@ -435,22 +546,40 @@ def test_unmet_step_postcondition_raises_typed_error(
     import re
 
     import torchlens._postprocess as pp
+    from torchlens._utils import hashing
     from torchlens.errors import MetadataInvariantError
 
-    monkeypatch.setattr(pp, attribute, make_breaker())
+    homes = {
+        "_add_output_layers": pp.graph_traversal,
+        "_map_raw_labels_to_final_labels": pp.labeling,
+        "_build_lookup_keys_and_finalize_retained_layers": pp.labeling,
+        "_build_layer_logs": pp.finalization,
+        "refresh_saved_module_call_count": pp.saved_summary,
+        "compute_graph_shape_hash": hashing,
+        "_set_tracing_finished": pp.finalization,
+    }
+    monkeypatch.setattr(homes[attribute], attribute, make_breaker())
     with pytest.raises(MetadataInvariantError) as excinfo:
         tl.trace(_TinyModel().eval(), torch.randn(2, 3))
     assert excinfo.value.check_name == "postprocess_step_postcondition"
     assert excinfo.value.fields["code"] == "postprocess_step_postcondition"
     text = str(excinfo.value)
-    assert re.search(rf"\bStep {re.escape(step)} ", text), text
+    assert re.search(rf"\b{re.escape(step)} ", text), text
     assert message in text, text
 
 
 def test_step_postconditions_cover_the_seven_steps() -> None:
-    """The executor checks exactly the seven postcondition steps, all registered."""
+    """Exactly the seven postcondition steps declare a postcondition."""
 
-    from torchlens._postprocess import _executor as ex
+    from torchlens._postprocess import _pipeline
 
-    assert set(ex.STEP_POSTCONDITIONS) == {"1", "8", "11", "15.5", "16", "16.5", "17"}
-    assert set(ex.STEP_POSTCONDITIONS) <= {spec.step for spec in ex.STEP_REGISTRY}
+    checked = {step.name for step in _pipeline.PIPELINE if step.postcondition is not None}
+    assert checked == {
+        "add_output_layers",
+        "map_final_labels",
+        "build_lookup_keys",
+        "build_layer_logs",
+        "build_module_logs",
+        "hash_graph_shape",
+        "mark_tracing_finished",
+    }

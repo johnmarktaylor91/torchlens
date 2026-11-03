@@ -26,13 +26,13 @@ import torch
 
 import torchlens as tl
 from torchlens.bundle import _distance_value
-from torchlens.intervention.save import (
-    SaveLevel,
+from torchlens.intervention._spec_values import (
     _deserialize_value,
     _is_reserved_wrapper_key,
     _serialize_value,
     _SerializedState,
 )
+from torchlens.intervention.save import SaveLevel
 
 
 def _new_state() -> _SerializedState:
@@ -157,8 +157,8 @@ def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
     x = torch.randn(2, 4)
     model_a = torch.nn.Linear(4, 4)
     model_b = torch.nn.Linear(4, 4)
-    log_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-    log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    log_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(replayable=True))
+    log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(replayable=True))
     bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
 
     rows = bundle.rank_changes()

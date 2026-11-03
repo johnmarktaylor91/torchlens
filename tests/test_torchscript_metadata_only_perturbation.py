@@ -159,7 +159,7 @@ def _trace_and_validate(model: nn.Module, x: torch.Tensor) -> tuple[tl.Trace, bo
 def _boundary_op(trace: tl.Trace):
     """Return the trace's one ``jitscript`` op."""
 
-    (op,) = [op for op in trace.layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
+    (op,) = [op for op in trace._layer_list if op.func_name == SCRIPT_FUNCTION_FUNC_NAME]
     return op
 
 
@@ -316,9 +316,9 @@ def test_plain_eager_capture_is_unaffected() -> None:
     trace, result = _trace_and_validate(model, torch.randn(3, 4))
 
     assert result is True
-    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace.layer_list)
+    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace._layer_list)
     assert _metadata_decisions(trace) == []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         for parent in op.parents:
             assert script_metadata_only_proof(op, [parent]) is None
 
@@ -577,7 +577,7 @@ def test_attack_in_place_call_is_not_collapsed_into_a_boundary_op() -> None:
     """A scripted call that writes its argument in place never becomes a ``jitscript`` op."""
 
     trace, _ = _trace_and_validate(_HelperModel(in_place_then_size), torch.randn(3, 4))
-    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace.layer_list)
+    assert not any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace._layer_list)
     assert _metadata_decisions(trace) == []
 
 
@@ -593,7 +593,7 @@ def test_attack_value_dependent_call_validates_without_the_exemption() -> None:
 
     trace, result = _trace_and_validate(_HelperModel(value_times_size), torch.randn(3, 4))
     assert result is True
-    assert any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace.layer_list)
+    assert any(op.func_name == SCRIPT_FUNCTION_FUNC_NAME for op in trace._layer_list)
     assert _metadata_decisions(trace) == []
 
 

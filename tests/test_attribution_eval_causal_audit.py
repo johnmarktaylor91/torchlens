@@ -218,7 +218,7 @@ def test_recorded_ablations_replay_to_their_measured_effects(case: str) -> None:
         model, x, layer = SmallCnn().eval(), torch.randn(2, 1, 4, 4), "conv"
     claim = attribution.layer_attribution(model, x, target=1, layer=layer)
     result = attribution.causal_audit(model, x, claim=claim, target=1, k=3, num_random_draws=2)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     assert trace[result.site].out.shape == claim.values.shape
     for point in (*result.units, *result.sets):
         fork = trace.fork()

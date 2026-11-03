@@ -44,13 +44,13 @@ class SrpSizing:
     Attributes
     ----------
     num_components:
-        The sized output width.
+        Number of output components: the sized projection width.
     formula:
         Formula id (``"dense_jl_l2_heuristic"``).
     version:
         Formula version.
     num_samples:
-        Row count the bound was sized for.
+        Number of samples (rows) the bound was sized for.
     eps:
         Requested maximum pairwise-L2 distortion.
     note:
@@ -333,7 +333,7 @@ class ProbeReport:
 
 def srp_fidelity_probe(
     features: torch.Tensor,
-    num_components: Sequence[int],
+    candidate_num_components: Sequence[int],
     seed: int = 0,
     construction: str = "very_sparse_fixed",
 ) -> ProbeReport:
@@ -344,8 +344,9 @@ def srp_fidelity_probe(
     features:
         Pilot activations, ``(n, ...)`` with the stimulus axis leading
         (flattened per row); ``n >= 4`` so the RDMs have enough pairs.
-    num_components:
-        Candidate output widths to probe.
+    candidate_num_components:
+        Candidate numbers of output components (projection widths k) to probe;
+        the report has one row per entry.
     seed:
         Base seed for the probe projections.
     construction:
@@ -370,10 +371,10 @@ def srp_fidelity_probe(
             code="transform_params_invalid",
             remedy="cast the pilot batch to a float dtype",
         )
-    widths = list(num_components)
+    widths = list(candidate_num_components)
     if not widths:
         raise TransformContractError(
-            "srp_fidelity_probe needs at least one candidate n_components.",
+            "srp_fidelity_probe needs at least one entry in candidate_num_components.",
             code="transform_params_invalid",
             remedy="pass candidate widths, e.g. (256, 1024, 4096)",
         )

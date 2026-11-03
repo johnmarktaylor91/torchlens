@@ -19,6 +19,8 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   honesty rows, capture-verification banner, call tree). `forward_peak_memory`
   is NOT a profile column — it lives on the Trace itself. pandas is an optional
   dependency resolved lazily via `_require_pandas()` — never import it at module top.
+- `_environment.py` — the environment health checks and capability snapshot behind
+  `tl.report.doctor()` (`_doctor.py` imports them lazily).
 - `__init__.py` — public surface (`ExplainReport`, `ProfileReport`, `profile`, `HealthReport`, `FlopsCrossCheck`);
   `log_value(name, value)` lives in `torchlens.observers` (capture-time writers live
   with the observers; this package holds the readers).
@@ -26,6 +28,11 @@ Reporting helpers over finished captures and observer metadata (`tl.report`).
   substrate: FactCore (params/compute/memory/counts/identity), the canonical
   compute aggregation (the ONE reader of raw per-op compute fields), and the
   three-state health facts. Every summary/profile number is a projection.
+- `_trace_facts.py` — bodies of the `Trace` fact properties and methods
+  (`factcore`, `health_facts`, `nonfinite_verdict`, FLOP/MAC rollups,
+  `profile`, `explain`, `bill_of_materials`, `capabilities`, episode facts) as
+  `f(trace, ...)` functions, reached from the record through
+  `_data_classes._doors.report()`.
 - `_summary_report.py` — `SummaryReport(str)`: the detached typed result
   `summary()` returns (rows/totals/capture + the F08 result API:
   `render`/`print`/`details`/`to_pandas`/`to_markdown`/`to_html` + scalar

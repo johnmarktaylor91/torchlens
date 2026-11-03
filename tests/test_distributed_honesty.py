@@ -48,6 +48,7 @@ from torchlens.backends.torch._ops_interventions import (
     _set_tensor_live_fire_results,
 )
 from torchlens.distributed import is_vetted_build
+from torchlens.report import _environment
 
 DISTRIBUTED_ROW_KEYS = ("dtensor", "device_mesh", "tensor_parallel", "pipeline_parallel")
 
@@ -699,7 +700,7 @@ def test_doctor_reports_distributed_capability_flags() -> None:
     flag is served through the full snapshot accessor the row points at.
     """
 
-    snapshot = tl._utils.capability_snapshot()
+    snapshot = _environment.capability_snapshot()
     text = str(tl.report.doctor())
     for flag in ("HAS_DTENSOR", "HAS_DEVICE_MESH", "HAS_PIPELINING"):
         assert flag in snapshot

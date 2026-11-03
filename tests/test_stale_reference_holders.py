@@ -46,6 +46,7 @@ from torchlens._errors import CaptureGapWarning
 from torchlens.backends.torch import rescue
 from torchlens.backends.torch._tl import is_decorated_function
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 from torchlens.types import AttributeWrite
 
@@ -236,9 +237,9 @@ def test_rebindable_stale_reference_captures_in_one_forward(
 
     assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
-    assert trace.rescue_rerun is None
-    assert trace.capture_verified is not False
+    assert "internalsource" not in [layer.type for layer in trace._layer_list]
+    assert trace._rescue_rerun is None
+    assert trace.provenance.verified is not False
 
 
 @pytest.mark.parametrize("holder", sorted(_UNREBINDABLE))
@@ -256,11 +257,11 @@ def test_unrebindable_stale_reference_is_disclosed_and_rescued(
     # pre-capture attributes, so the record holds ONE forward's write.
     assert forward_runs(trace, model) == 1
     assert "gelu" in [op.func_name for op in trace.ops]
-    assert "internalsource" not in [layer.layer_type for layer in trace.layer_list]
-    assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
-    assert trace.rescue_rerun["forward_runs"] == 2
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert "internalsource" not in [layer.type for layer in trace._layer_list]
+    assert trace._rescue_rerun is not None and trace._rescue_rerun["recovered"] is True
+    assert trace._rescue_rerun["forward_runs"] == 2
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_capture_leaves_every_held_reference_identical(raw: types.SimpleNamespace) -> None:
@@ -342,7 +343,7 @@ def test_transformers_activation_built_before_capture_needs_no_rescue(
 
     assert forward_runs(trace, model) == 1
     assert [op.func_name for op in trace.ops].count("gelu") == 1
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert act.act is held_before
 
 
@@ -374,8 +375,9 @@ def test_held_reference_is_restored_when_the_forward_raises(
     model = Boom()
     held = model.act
     wrap_torch()
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TraceCaptureError, match="boom") as _tce_info:
         tl.trace(model, torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     assert model.act is held
     assert held.func is raw.gelu
@@ -441,8 +443,8 @@ def test_rescue_rerun_starts_from_the_pre_capture_attribute_state(
 
     func_names = [op.func_name for op in trace.ops]
     assert "gelu" in func_names and "tanh" not in func_names
-    assert trace.rescue_rerun is not None and trace.rescue_rerun["recovered"] is True
-    assert trace.rescue_rerun["forward_runs"] == 2
+    assert trace._rescue_rerun is not None and trace._rescue_rerun["recovered"] is True
+    assert trace._rescue_rerun["forward_runs"] == 2
     assert trace.modules["self"].attribute_writes["calls"] == AttributeWrite("replaced", 1)
     assert model.calls == (1 if carry else 0)
 
@@ -526,7 +528,7 @@ def test_iql_output_activation_returned_by_the_root_is_rescued(
         trace = tl.trace(model, torch.randn(2, 4))
 
     assert "tanh" in [op.func_name for op in trace.ops]
-    assert trace.capture_verification_reason == "mode_rescue_rerun"
+    assert trace.provenance.verification_reason == "mode_rescue_rerun"
 
 
 def test_clean_module_return_stays_quiet() -> None:
@@ -537,8 +539,8 @@ def test_clean_module_return_stays_quiet() -> None:
     trace = tl.trace(model, torch.randn(2, 4))
 
     assert "gelu" in [op.func_name for op in trace.ops]
-    assert trace.rescue_rerun is None
-    assert trace.capture_verification_reason != "mode_rescue_rerun"
+    assert trace._rescue_rerun is None
+    assert trace.provenance.verification_reason != "mode_rescue_rerun"
 
 
 def test_foreign_callable_returned_from_a_module_stays_quiet() -> None:
@@ -551,7 +553,7 @@ def test_foreign_callable_returned_from_a_module_stays_quiet() -> None:
     act = _GELUActivationLike(my_gelu)
     trace = tl.trace(_Holder(act), torch.randn(2, 4))
 
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
     assert act.act is my_gelu
 
 
@@ -578,7 +580,7 @@ def test_model_owned_tensor_returned_by_a_module_is_not_an_escape() -> None:
     wrap_torch()
     trace = tl.trace(Outer(), torch.randn(2, 4))
 
-    assert trace.rescue_rerun is None
+    assert trace._rescue_rerun is None
 
 
 class _ReturnsOwnTensor(nn.Module):
@@ -621,9 +623,9 @@ def test_module_returning_its_own_parameter_or_buffer_is_not_an_escape(kind: str
         warnings.simplefilter("error", UserWarning)
         trace = tl.trace(Outer(), torch.randn(2, 4))
 
-    assert trace.rescue_rerun is None
-    assert trace.capture_verified is not False
-    assert trace.capture_verification_reason is None
+    assert trace._rescue_rerun is None
+    assert trace.provenance.verified is not False
+    assert trace.provenance.verification_reason is None
 
 
 def test_opaque_module_return_is_disclosed_adopted_and_fails_validation(

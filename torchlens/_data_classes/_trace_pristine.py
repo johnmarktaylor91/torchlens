@@ -60,8 +60,8 @@ TOUCH_STATES = frozenset(
 
 #: Op fields that record an intervention on the graph itself.
 OP_TOUCH_FIELDS = (
-    "interventions",
-    "intervention_replaced",
+    "edits",
+    "is_edited",
     "edge_substitutions",
     "edge_replacement_stamps",
 )
@@ -94,7 +94,7 @@ def pristine_touch_evidence(trace: Any) -> tuple[str, ...]:
         found.append("state")
     if trace._has_direct_writes:
         found.append("direct_writes")
-    if _any_op_marked(trace.layer_list or ()):
+    if _any_op_marked(trace._layer_list or ()):
         found.append("op_marks")
     # Read the staged spec without creating one (the accessor creates it lazily).
     if _spec_has_entries(trace.__dict__.get("_intervention_spec")):
@@ -132,7 +132,7 @@ def _evidence_recorded(trace: Any) -> bool:
     # Deferred: backends sit above data_classes in the layer map.
     from ..backends._intervention_evidence import records_intervention_evidence
 
-    if not records_intervention_evidence(str(trace.backend)):
+    if not records_intervention_evidence(str(trace._provenance_backend)):
         return False
     version = trace.tlspec_version
     return isinstance(version, int) and version >= PRISTINE_EVIDENCE_MIN_TLSPEC

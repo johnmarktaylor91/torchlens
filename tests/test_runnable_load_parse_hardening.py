@@ -42,7 +42,7 @@ def runnable_manifest(tmp_path: Path) -> tuple[Path, Path, dict]:
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -156,7 +156,7 @@ def test_encode_literal_exact_type_discipline() -> None:
     from collections import OrderedDict, namedtuple
 
     from torchlens._io.runnable import _encode_literal, _UnsupportedLiteralError
-    from torchlens._runnable_verification import _decode_literal
+    from torchlens._runnable.verification import _decode_literal
 
     # Exact builtins and the ratified torch.Size allowlist still encode.
     assert _decode_literal(_encode_literal([1, 2])) == [1, 2]
@@ -223,7 +223,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -240,7 +240,7 @@ def test_runnable_resave_refusal_is_honest_and_code_bearing(tmp_path: Path) -> N
         TinyModel(),
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),

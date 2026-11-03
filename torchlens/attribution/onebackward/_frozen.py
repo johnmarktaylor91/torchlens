@@ -175,7 +175,7 @@ def _resolve_explicit(
     masks freeze exactly the masked elements of the slot).
     """
 
-    from ..._selection import Selection, Selector
+    from ..._selection.selection import Selection, Selector
 
     sites: dict[str, SiteEdge] = {}
     masks: dict[str, torch.Tensor | None] = {}

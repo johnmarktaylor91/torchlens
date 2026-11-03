@@ -54,7 +54,7 @@ def _runnable_artifact(model: nn.Module, inputs: torch.Tensor, path: Path) -> Pa
             model,
             inputs,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -116,7 +116,7 @@ def test_fast_run_layout_twin_never_verified(tmp_path: Path) -> None:
             LayoutPredicateModel(),
             original,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),
@@ -183,7 +183,7 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
 
     model = BufferGainModel().eval()
     captured = tl.trace(model, torch.ones(2, 3), save=lambda op: True)
-    saved_before = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_before = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert "buffer_1:1" in saved_before
     del model.second
 
@@ -191,9 +191,9 @@ def test_fast_live_module_refusal_fires_before_activation_wipe() -> None:
         captured.run(inputs=torch.ones(2, 3), fast=True)
     assert excinfo.value.fields["detection_stage"] == "fast_live_module_plan"
 
-    saved_after = {op.label for op in captured.layer_list if op.has_saved_activation}
+    saved_after = {op.label for op in captured._layer_list if op.has_saved_activation}
     assert saved_after == saved_before
-    assert captured.layer_dict_all_keys["buffer_1:1"].out is not None
+    assert captured._layer_dict_all_keys["buffer_1:1"].out is not None
 
 
 @pytest.mark.smoke
@@ -345,7 +345,9 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     guard failure was indistinguishable from inputs-match.
     """
 
-    import torchlens._runnable_execution as execution
+    import torchlens._fast_run as fast_run_module
+    import torchlens._runnable.input_sites as input_sites
+    import torchlens._runnable.transaction as transaction
     from torchlens.errors import RunCapabilityUnavailableError
 
     model = _PlainLinear().eval()
@@ -355,7 +357,9 @@ def test_fast_live_admission_guard_failure_refuses_not_fail_open(monkeypatch) ->
     def _boom(*args, **kwargs):
         raise RuntimeError("injected classifier failure")
 
-    monkeypatch.setattr(execution, "_live_runtime_input_leaves", _boom)
+    # The home module and every module that bound the walker by import.
+    for module in (transaction, input_sites, fast_run_module):
+        monkeypatch.setattr(module, "_live_runtime_input_leaves", _boom)
     with pytest.raises(RunCapabilityUnavailableError):
         captured.run(inputs=torch.ones(2, 3), fast=True)
 
@@ -414,7 +418,7 @@ def _saved_all_runnable(model: nn.Module, inputs: torch.Tensor, path: Path) -> P
             model,
             inputs,
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 layers_to_save="all",
                 cache=False,
             ),
@@ -543,7 +547,7 @@ def test_fast_sparse_runs_post_execution_contract_checks(tmp_path: Path) -> None
             model,
             box_a(t=tensor),
             capture=CaptureOptions(
-                intervention_ready=True,
+                replayable=True,
                 capture_container_structure=True,
                 cache=False,
             ),

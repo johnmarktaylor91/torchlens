@@ -24,7 +24,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._trace_viz import TraceVisualizationMixin
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization._render_utils import direction_to_rankdir
 
@@ -57,7 +56,7 @@ def _shipped_draw_default() -> Iterator[None]:
     and the caller ``chdir``s into its own ``tmp_path``.
     """
 
-    func = TraceVisualizationMixin.draw
+    func = tl.Trace.draw
     saved = func.__defaults__
     positional = [
         p
@@ -136,7 +135,7 @@ def test_two_bare_draws_write_two_files_and_print_both(
     """Two bare ``draw()`` calls in one directory write two files and print both paths."""
     monkeypatch.chdir(tmp_path)
     trace = _trace()
-    assert not trace.verbose
+    assert not trace.options.verbose
     try:
         with _shipped_draw_default():
             trace.draw(vis_save_only=True, file_format="svg")

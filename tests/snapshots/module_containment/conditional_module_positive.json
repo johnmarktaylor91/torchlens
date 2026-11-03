@@ -428,7 +428,7 @@
         "positive:1",
         "positive.0:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -466,7 +466,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -496,7 +496,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": true,
       "is_internal_source": false,
@@ -528,7 +528,7 @@
       "input_to_modules": [
         "positive.1:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -573,7 +573,7 @@
       "input_to_modules": [
         "positive.2:1"
       ],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -616,7 +616,7 @@
       "fx_call_index": 0,
       "fx_qualpath": "positive.2.linear",
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": true,
       "is_internal_sink": false,
       "is_internal_source": false,
@@ -659,7 +659,7 @@
       "fx_call_index": 0,
       "fx_qualpath": null,
       "input_to_modules": [],
-      "intervention_replaced": false,
+      "is_edited": false,
       "is_atomic_module": false,
       "is_internal_sink": false,
       "is_internal_source": false,

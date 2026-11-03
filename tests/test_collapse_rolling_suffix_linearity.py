@@ -78,7 +78,7 @@ def _rolled_layer_count(trace: tl.Trace) -> int:
 
     return sum(
         1
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if isinstance(layer, Layer) and layer.num_passes > 1
     )
 
@@ -115,7 +115,7 @@ def _historical_rolling_suffix(trace: tl.Trace, address: str) -> str:
     """The pre-wave-19 per-address scan, verbatim, as the oracle."""
 
     candidate_groups: tuple[tuple[int, ...], ...] = ()
-    for layer_log in trace.layer_logs.values():
+    for layer_log in trace._layer_logs.values():
         if not isinstance(layer_log, Layer) or layer_log.num_passes <= 1:
             continue
         layer_addresses = {
@@ -290,7 +290,7 @@ def test_union_find_components_match_historical_reachability(steps: int) -> None
     trace = tl.trace(CellLoop(steps=steps), torch.rand(2, 8))
     rolled_layers = [
         layer
-        for layer in trace.layer_logs.values()
+        for layer in trace._layer_logs.values()
         if isinstance(layer, Layer) and layer.num_passes > 1
     ]
     assert rolled_layers
@@ -307,7 +307,7 @@ def test_union_find_partition_is_children_order_invariant() -> None:
     layer = max(
         (
             candidate
-            for candidate in trace.layer_logs.values()
+            for candidate in trace._layer_logs.values()
             if isinstance(candidate, Layer) and candidate.num_passes > 1
         ),
         key=lambda candidate: candidate.num_passes,

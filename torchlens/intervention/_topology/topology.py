@@ -32,6 +32,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from ...errors import BundleComparisonError  # the public errors namespace, outside the import cycle
+
 if TYPE_CHECKING:
     from ..._data_classes.layer import Layer
     from ..._data_classes.trace import Trace
@@ -91,7 +93,7 @@ def _ordered_layers(trace: Trace) -> list[Layer]:
         Ordered layer list.
     """
 
-    return list(trace.layer_logs.values())
+    return list(trace._layer_logs.values())
 
 
 def _structural_parent_labels(layer: Layer, layers_by_label: dict[str, Layer]) -> set[str]:
@@ -288,8 +290,10 @@ def _preferential_topological_order(
 
     Raises
     ------
-    ValueError
-        If the merged supergraph is cyclic.
+    BundleComparisonError
+        If the ordering edges are cyclic: the members contradict each other
+        on the order of two operations, so no single topological order is
+        true for every member (``code="bundle_gate_model_axis_unmet"``).
     """
 
     indegree = dict.fromkeys(node_names, 0)
@@ -315,12 +319,49 @@ def _preferential_topological_order(
                 heapq.heappush(queue, (preferred_positions.get(child, fallback_start), child))
 
     if len(ordered) != len(node_names):
-        cyclic_edges = sorted(f"{parent}->{child}" for parent, child in edges)
-        raise ValueError(
-            "Merged bundle supergraph is cyclic; refusing to emit a false topological order. "
-            f"Edges: {cyclic_edges}"
-        )
+        raise _cycle_refusal(node_names - set(ordered), edges, code="bundle_gate_model_axis_unmet")
     return ordered
+
+
+def _cycle_refusal(
+    unresolved: set[str],
+    edges: dict[tuple[str, str], set[str]],
+    *,
+    code: str,
+) -> BundleComparisonError:
+    """Return the typed refusal for ordering edges that form a cycle.
+
+    Parameters
+    ----------
+    unresolved:
+        Nodes the topological sort could not place (the cycle participants).
+    edges:
+        Ordering edge map, each edge naming the members that carry it.
+    code:
+        The refusal code, passed at the raise site (``bundle_gate_model_axis_unmet``).
+
+    Returns
+    -------
+    BundleComparisonError
+        ``code="bundle_gate_model_axis_unmet"`` naming the contradictory
+        edges and their members.
+    """
+
+    cyclic_edges = sorted(
+        f"{parent}->{child} ({', '.join(sorted(members))})"
+        for (parent, child), members in edges.items()
+        if parent in unresolved and child in unresolved
+    )
+    return BundleComparisonError(
+        "Bundle supergraph refuses: the members contradict each other on "
+        "operation order, so no single topological order is true for every "
+        f"member. Contradictory first-pass edges: {cyclic_edges}. Remedy: "
+        "bundle captures of the same model computation (see "
+        "Bundle.comparability), or use per-member reads such as Bundle.map.",
+        code=code,
+        operation="supergraph",
+        cyclic_edges=cyclic_edges,
+    )
 
 
 def _unique_canonical_name(
@@ -534,6 +575,92 @@ def _module_type_for_layer(trace: Trace, layer: Layer) -> str | None:
     return str(module_type) if module_type else None
 
 
+def _parent_layer(trace: Trace, parent_label: str) -> Layer | None:
+    """Return the layer a parent label names, seeing through pass-qualified labels.
+
+    Parameters
+    ----------
+    trace:
+        Member trace.
+    parent_label:
+        Parent label as recorded on the child layer.
+
+    Returns
+    -------
+    Layer | None
+        The parent layer, or ``None`` when the label resolves to no layer.
+    """
+
+    parent_layer = trace._layer_logs.get(parent_label)
+    if parent_layer is not None:
+        return parent_layer
+    try:
+        ref = trace[parent_label]
+    except (KeyError, IndexError):
+        return None
+    parent_no_pass = getattr(ref, "layer_label", None)
+    if parent_no_pass is None:
+        return None
+    return trace._layer_logs.get(parent_no_pass)
+
+
+def _member_edges(
+    traces: list[Trace],
+    names: list[str],
+    canonical_by_trace: list[dict[str, str]],
+    ordered_layers_by_trace: list[list[Layer]],
+) -> tuple[dict[tuple[str, str], set[str]], dict[tuple[str, str], set[str]]]:
+    """Rebuild every member's layer adjacency through canonical names.
+
+    Parameters
+    ----------
+    traces:
+        Member traces.
+    names:
+        Member names, parallel to ``traces``.
+    canonical_by_trace:
+        Per member, layer label to canonical supergraph node name.
+    ordered_layers_by_trace:
+        Per member, its layers in stored (first-pass) order.
+
+    Returns
+    -------
+    tuple[dict, dict]
+        ``(edges, ordering_edges)``: every layer-level edge with the members
+        carrying it, and the forward subset that may order the merged graph.
+    """
+
+    # A layer folds its passes together, so a multi-pass layer consuming its
+    # own earlier pass yields a self-edge and a recurrent loop a cycle between
+    # layers; neither contradicts the member's execution order. ``edges`` keeps
+    # them all (drawing wants the feedback); ``ordering_edges`` keeps only the
+    # forward ones (parent's first-pass position before the child's).
+    edges: dict[tuple[str, str], set[str]] = {}
+    ordering_edges: dict[tuple[str, str], set[str]] = {}
+    for trace_idx, trace in enumerate(traces):
+        trace_name = names[trace_idx]
+        canonical_for_layer = canonical_by_trace[trace_idx]
+        member_layers = ordered_layers_by_trace[trace_idx]
+        positions = {str(layer.layer_label): idx for idx, layer in enumerate(member_layers)}
+        for child_position, layer in enumerate(member_layers):
+            child_canonical = canonical_for_layer.get(str(layer.layer_label))
+            if child_canonical is None:
+                continue
+            for parent_label in layer.parents:
+                parent_layer = _parent_layer(trace, parent_label)
+                if parent_layer is None:
+                    continue
+                parent_canonical = canonical_for_layer.get(str(parent_layer.layer_label))
+                if parent_canonical is None:
+                    continue
+                edge = (parent_canonical, child_canonical)
+                edges.setdefault(edge, set()).add(trace_name)
+                parent_position = positions.get(str(parent_layer.layer_label))
+                if parent_position is not None and parent_position < child_position:
+                    ordering_edges.setdefault(edge, set()).add(trace_name)
+    return edges, ordering_edges
+
+
 def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
     """Build the union supergraph from N Traces.
 
@@ -628,36 +755,17 @@ def build_supergraph(traces: list[Trace], names: list[str]) -> Supergraph:
             )
             last_preferred_index = insertion_pos
 
-    # Pass 3a: edges. Rebuild each trace's adjacency through canonical names.
-    for trace_idx, trace in enumerate(traces):
-        trace_name = names[trace_idx]
-        canonical_for_layer = canonical_by_trace[trace_idx]
-        for layer in ordered_layers_by_trace[trace_idx]:
-            child_canonical = canonical_for_layer.get(str(layer.layer_label))
-            if child_canonical is None:
-                continue
-            for parent_label in layer.parents:
-                parent_layer = trace.layer_logs.get(parent_label)
-                if parent_layer is None:
-                    try:
-                        ref = trace[parent_label]
-                    except (KeyError, IndexError):
-                        continue
-                    parent_no_pass = getattr(ref, "layer_label", None)
-                    if parent_no_pass is None:
-                        continue
-                    parent_layer = trace.layer_logs.get(parent_no_pass)
-                if parent_layer is None:
-                    continue
-                parent_canonical = canonical_for_layer.get(str(parent_layer.layer_label))
-                if parent_canonical is None:
-                    continue
-                super_g.edges.setdefault((parent_canonical, child_canonical), set()).add(trace_name)
+    # Pass 3a: edges (all of them, for drawing) and the forward subset that
+    # orders the merged graph.
+    super_g.edges, ordering_edges = _member_edges(
+        traces, names, canonical_by_trace, ordered_layers_by_trace
+    )
 
-    # Pass 3b: derive a valid topological order or fail loudly on cycles.
+    # Pass 3b: derive a valid topological order from the forward edges, or
+    # refuse (typed) when the members contradict each other on the order.
     super_g.topological_order = _preferential_topological_order(
         set(super_g.nodes),
-        super_g.edges,
+        ordering_edges,
         preferred_order,
     )
     return super_g

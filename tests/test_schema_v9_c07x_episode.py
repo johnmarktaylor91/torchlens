@@ -339,12 +339,12 @@ def test_root_entry_point_written_unconditionally() -> None:
 
     model = _Greedy()
     plain = tl.trace(model, torch.randn(2, 4))
-    assert plain.root_entry_point is not None
-    assert plain.root_entry_point.startswith("module_call:")
-    assert plain.root_entry_point.endswith("_Greedy.forward")
+    assert plain.provenance.root_entry_point is not None
+    assert plain.provenance.root_entry_point.startswith("module_call:")
+    assert plain.provenance.root_entry_point.endswith("_Greedy.forward")
     episode_log = _capture_episode()
-    assert episode_log.root_entry_point is not None
-    assert episode_log.root_entry_point.endswith("_EpisodeRoot.forward")
+    assert episode_log.provenance.root_entry_point is not None
+    assert episode_log.provenance.root_entry_point.endswith("_EpisodeRoot.forward")
 
 
 def test_root_entry_point_round_trips(tmp_path) -> None:
@@ -353,8 +353,8 @@ def test_root_entry_point_round_trips(tmp_path) -> None:
     target = tmp_path / "plain.tlspec"
     log.save(target)
     loaded = tl.load(target)
-    assert loaded.root_entry_point == log.root_entry_point
-    assert loaded.root_entry_point.startswith("module_call:")
+    assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
+    assert loaded.provenance.root_entry_point.startswith("module_call:")
 
 
 def _roundtrip(log, tmp_path, name: str):
@@ -368,7 +368,7 @@ def test_root_entry_point_grammar_refuses_at_load(tmp_path) -> None:
 
     model = _Greedy()
     log = tl.trace(model, torch.randn(2, 4))
-    log.root_entry_point = "teleport:_Greedy.forward"
+    log._provenance_root_entry_point = "teleport:_Greedy.forward"
     with pytest.raises(ArtifactError) as excinfo:
         _roundtrip(log, tmp_path, "root_bad")
     assert excinfo.value.fields["code"] == "artifact_root_entry_point_invalid"

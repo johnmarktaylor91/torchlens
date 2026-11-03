@@ -46,6 +46,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._trace_core import record_rows, relation_views
+from .._trace_core.core import TraceCore
+from .._trace_core.op_store import DetachedOpStore, OpRowStore
+from .._trace_core.record_rows import CORE_KEY, BackwardEpoch
+
 if TYPE_CHECKING:
     from .trace import Trace
 
@@ -109,10 +114,8 @@ def _adopt_backward_primitive_rows(trace: Trace, core: Any) -> None:
         row for row in primitive_profile.primitive_ops if row.capture_phase == "backward"
     ]
     if backward_primitive_rows:
-        from .._trace_core.record_rows import BackwardEpoch, adopt_rows
-
         epoch = BackwardEpoch()
-        adopt_rows(epoch.stores, "primitive_op", backward_primitive_rows)
+        record_rows.adopt_rows(epoch.stores, "primitive_op", backward_primitive_rows)
         core.backward_epochs = [epoch]
 
 
@@ -131,10 +134,6 @@ def rehydrate_trace_core(trace: Trace) -> bool:
         # Partial/failed captures keep their documented staging surface:
         # no relation freeze, no seal, no core.
         return False
-    from .._trace_core.core import TraceCore
-    from .._trace_core.op_store import DetachedOpStore, OpRowStore
-    from .._trace_core.record_rows import CORE_KEY, adopt_records, detach_record
-    from .._trace_core.relation_views import freeze_trace_relation_views
     from ._trace_fork import _iter_parent_ops, _iter_parent_records
     from .op import _OP_STORE_LAYOUT, _object_setattr
 
@@ -186,11 +185,11 @@ def rehydrate_trace_core(trace: Trace) -> bool:
             records_by_kind.setdefault("func_call_location", {}).setdefault(id(record), record)
         _collect_forward_primitive_rows(trace, records_by_kind)
         for kind, records in records_by_kind.items():
-            adopt_records(core, kind, records.values())
+            record_rows.adopt_records(core, kind, records.values())
         _adopt_backward_primitive_rows(trace, core)
 
         trace.__dict__["_trace_core"] = core
-        freeze_trace_relation_views(trace)
+        relation_views.freeze_trace_relation_views(trace)
         store.freeze()
         # Register the loaded core as a payload-lifetime owner, exactly like the
         # capture freeze seam (_postprocess/__init__.py) and TraceCore.fork().
@@ -213,7 +212,7 @@ def rehydrate_trace_core(trace: Trace) -> bool:
             for record in records.values():
                 record_store = record.__dict__.get(CORE_KEY)
                 if record_store is not None and not isinstance(record_store, DetachedOpStore):
-                    detach_record(record)
+                    record_rows.detach_record(record)
         trace.__dict__.pop("_trace_core", None)
         return False
     return True

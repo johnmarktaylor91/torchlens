@@ -14,6 +14,7 @@ import torchlens as tl  # noqa: E402
 from torchlens.debug import count_compiles, hot_path  # noqa: E402
 from torchlens.debug._audit import audit_trace  # noqa: E402
 from torchlens.debug._cost import theoretical_op_bytes  # noqa: E402
+from torchlens.errors import TraceCaptureError  # noqa: E402
 
 
 class _TwoLineModel(nn.Module):
@@ -119,10 +120,11 @@ class _MidwayFailModel(nn.Module):
 def test_audit_trace_on_failed_partial_reports_exception_with_context() -> None:
     """A failed capture audits to a critical finding naming the exception."""
 
-    with pytest.raises(RuntimeError, match="midway boom") as excinfo:
+    with pytest.raises(TraceCaptureError, match="midway boom") as excinfo:
         tl.trace(_MidwayFailModel(), torch.ones(2, 3))
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
 
-    partial = tl._partial.from_failed_capture(excinfo.value)
+    partial = excinfo.value.partial_trace
     audit = audit_trace(partial)
 
     by_check = {finding.check: finding for finding in audit.findings}

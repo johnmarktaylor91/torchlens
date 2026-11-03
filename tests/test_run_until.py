@@ -17,6 +17,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
+from torchlens._record_type import record_type
 from torchlens._runnable import (
     NumericAttestationStatus,
     PathFaithfulness,
@@ -54,7 +55,7 @@ class _EvalBnChain(nn.Module):
 
 
 def _type_label(log, layer_type):
-    return next(layer.layer_label for layer in log.layer_list if layer.layer_type == layer_type)
+    return next(layer.layer_label for layer in log._layer_list if layer.type == layer_type)
 
 
 def _live_until_relu(model_cls=_Chain):
@@ -73,7 +74,7 @@ def _loaded_runnable(tmp_path, model=None):
     log = tl.trace(
         model,
         x,
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "until.tlspec"
     log.save(str(path), level="runnable", include_weights=True)
@@ -89,7 +90,7 @@ def test_live_truncated_fork_output_proof_fails_closed():
     first assertion.
     """
 
-    from torchlens._runnable_execution import _fresh_bare_tensor_root
+    from torchlens._runnable.call_outputs import _fresh_bare_tensor_root
 
     _model, log, result = _live_until_relu()
     assert log._runnable.output_losslessness is not None  # the source stamp IS positive
@@ -214,7 +215,7 @@ def test_seeded_prefix_bug_still_fails_under_until(tmp_path: Path) -> None:
     from torchlens.errors import PathDivergenceError
 
     loaded, x = _loaded_runnable(tmp_path)
-    descriptor = loaded.runnable_descriptor
+    descriptor = loaded._sparse_run_descriptor
     assert descriptor is not None
     # Plant the contradiction INSIDE the guard machinery: retain the real
     # runtime input but forge the descriptor's recorded model-input shape.
@@ -299,8 +300,8 @@ def test_until_x_eval_bn_prefix_tamper_refuses_typed():
     model.eval()
     log = tl.trace(model, torch.randn(2, 4))
     for label in log.internal_sink_ops:
-        layer = log.layer_dict_all_keys[label]
-        if layer.layer_type == "buffer":
+        layer = log._layer_dict_all_keys[label]
+        if record_type(layer) == "buffer":
             layer._internal_set("buffer_value_changed", None)
     with pytest.raises(BufferSinkRoutingError):
         log.run(inputs=torch.randn(2, 4), until=_type_label(log, "relu"))
@@ -345,7 +346,7 @@ def test_until_requires_full_inputs(tmp_path):
     log = tl.trace(
         model,
         [x, y],
-        capture=CaptureOptions(intervention_ready=True, capture_container_structure=True),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True),
     )
     path = tmp_path / "two.tlspec"
     log.save(str(path), level="runnable", include_weights=True)

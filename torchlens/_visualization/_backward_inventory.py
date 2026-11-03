@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 __all__ = [
     "BackwardStyleInventory",
+    "_backward_dot_call_node_name",
+    "_backward_dot_node_name",
     "_backward_pass_row",
     "compute_backward_style_inventory",
 ]
@@ -70,7 +72,7 @@ def compute_backward_style_inventory(
     orders = [getattr(grad_fn_handle, "order", None) for grad_fn_handle in visible]
     has_higher_order = any(order is not None and order > 1 for order in orders)
     grad_shapes = [_format_backward_output_shape(grad_fn_handle) for grad_fn_handle in visible]
-    num_passes = int(getattr(trace, "num_backward_passes", 1) or 1)
+    num_passes = int(trace._num_backward_passes or 1)
     return BackwardStyleInventory(
         has_higher_order=has_higher_order,
         has_intervening=any(not grad_fn_handle.has_op for grad_fn_handle in visible),
@@ -122,3 +124,42 @@ def _backward_pass_row(
     if pass_index is not None:
         return [f"bwd {pass_index}"]
     return []
+
+
+def _backward_dot_node_name(grad_fn_handle: GradFn) -> str:
+    """Return a DOT-safe node name for a grad_fn_handle log.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn to name.
+
+    Returns
+    -------
+    str
+        DOT-safe node identifier.
+    """
+
+    return f"grad_fn_{grad_fn_handle.grad_fn_object_id}"
+
+
+def _backward_dot_call_node_name(grad_fn_handle: GradFn, call: Any) -> str:
+    """Return a DOT-safe node name for one GradFnCall.
+
+    Parameters
+    ----------
+    grad_fn_handle:
+        GradFn owning the call.
+    call:
+        GradFnCall-like record.
+
+    Returns
+    -------
+    str
+        DOT-safe node identifier.
+    """
+
+    return (
+        f"grad_fn_{grad_fn_handle.grad_fn_object_id}_"
+        f"bwd{getattr(call, 'backward_pass_index', 0)}_call{getattr(call, 'call_index', 0)}"
+    )

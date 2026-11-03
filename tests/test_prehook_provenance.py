@@ -15,7 +15,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._io import BlobRef
 from torchlens.backends.torch import prehook_provenance as provenance
-from torchlens.errors import PredicateError
+from torchlens.errors import PredicateError, TraceCaptureError
 from torchlens.validation.core import validate_saved_outs
 
 
@@ -129,7 +129,7 @@ def test_observational_hook_records_unchanged_without_dedicated_payload() -> Non
     call = _call(trace)
 
     assert seen == [torch.Size([2])]
-    assert call.forward_pre_hook_effects[0].changed is False
+    assert call.forward_pre_hook_effects[0].has_changes is False
     assert call.inputs_before_pre_hooks.tensor_observations[0].payload_origin == (
         "immutable_producer_snapshot"
     )
@@ -231,13 +231,13 @@ def test_opaque_object_tensor_mutation_downgrades_provenance_fail_closed() -> No
     call = _call(trace)
     effect = call.forward_pre_hook_effects[0]
 
-    assert effect.changed is None
+    assert effect.has_changes is None
     assert effect.change_kinds == ()
     assert effect.incomplete_reasons == ("opaque_object_untraversed",)
     assert call.inputs_before_pre_hooks is not None
-    assert call.inputs_before_pre_hooks.capture_complete is False
+    assert call.inputs_before_pre_hooks.is_capture_complete is False
     assert call.inputs_before_pre_hooks.incomplete_reasons == ("opaque_object_untraversed",)
-    assert call.inputs_after_pre_hooks.capture_complete is False
+    assert call.inputs_after_pre_hooks.is_capture_complete is False
     assert call.inputs_after_pre_hooks.incomplete_reasons == ("opaque_object_untraversed",)
 
 
@@ -274,8 +274,9 @@ def test_kwargs_transition_paths_and_invalid_return_are_canonical() -> None:
     expected = "forward pre-hook must return None"
     with pytest.raises(RuntimeError, match=expected):
         bad_model(torch.ones(1))
-    with pytest.raises(RuntimeError, match=expected):
+    with pytest.raises(TraceCaptureError, match=expected) as _tce_info2:
         tl.trace(bad_model, torch.ones(1))
+    assert isinstance(_tce_info2.value.__cause__, RuntimeError)
 
 
 def test_global_prepend_append_order_and_per_hook_attribution() -> None:
@@ -409,9 +410,10 @@ def test_hook_exception_records_partial_and_restores_every_interposition() -> No
 
     handle = model.child.register_forward_pre_hook(explode)
     before = _interposition_state(model)
-    with pytest.raises(LookupError, match="hook exploded") as exc_info:
+    with pytest.raises(TraceCaptureError, match="hook exploded") as exc_info:
         tl.trace(model, torch.ones(1))
-    assert hasattr(exc_info.value, "partial_log")
+    assert isinstance(exc_info.value.__cause__, LookupError)
+    assert hasattr(exc_info.value, "partial_trace")
     assert _interposition_state(model) == before
 
     handle.remove()
@@ -426,7 +428,7 @@ def test_spectral_norm_module_state_hook_is_not_input_change() -> None:
     trace = tl.trace(model, torch.ones(1, 2))
     effect = _call(trace, "0:1").forward_pre_hook_effects[0]
 
-    assert effect.changed is False
+    assert effect.has_changes is False
     assert effect.change_kinds == ()
 
 
@@ -617,7 +619,7 @@ def test_version_edges_and_alias_deduplication() -> None:
     call = _call(trace)
     observations = call.inputs_before_pre_hooks.tensor_observations
 
-    assert call.forward_pre_hook_effects[0].changed is True
+    assert call.forward_pre_hook_effects[0].has_changes is True
     assert call.forward_pre_hook_effects[0].change_kinds == ("in_place_tensor",)
     assert len({item.alias_group for item in observations}) == 1
     assert observations[0].payload.data_ptr() == observations[1].payload.data_ptr()
@@ -716,8 +718,9 @@ def test_restoration_matrix_success_forward_error_halt_and_predicate_error() -> 
     assert _interposition_state(model) == before
 
     model.fail = True
-    with pytest.raises(ArithmeticError, match="forward failed"):
+    with pytest.raises(TraceCaptureError, match="forward failed") as _tce_info3:
         tl.trace(model, torch.ones(1))
+    assert isinstance(_tce_info3.value.__cause__, ArithmeticError)
     assert _interposition_state(model) == before
     model.fail = False
 
@@ -746,8 +749,9 @@ def test_preparation_failure_rolls_back_partial_transaction(
         raise RuntimeError("prep injection")
 
     monkeypatch.setattr(provenance, "install_prehook_provenance", fail_after_install)
-    with pytest.raises(RuntimeError, match="prep injection"):
+    with pytest.raises(TraceCaptureError, match="prep injection") as _tce_info4:
         tl.trace(model, torch.ones(1))
+    assert isinstance(_tce_info4.value.__cause__, RuntimeError)
     assert _interposition_state(model) == before
 
 
@@ -797,7 +801,7 @@ def test_requires_grad_metadata_mutation_is_detected_without_version_increment()
     trace = tl.trace(model, torch.ones(1))
     effect = _call(trace, "self:1").forward_pre_hook_effects[0]
 
-    assert effect.changed is True
+    assert effect.has_changes is True
     assert effect.change_kinds == ("tensor_metadata",)
 
 
@@ -818,7 +822,7 @@ def test_full_backward_hook_rewrap_does_not_redefine_snapshot_b() -> None:
 
     call = _call(trace, "self:1")
     assert torch.equal(call.inputs_after_pre_hooks.args[0], torch.tensor([3.0]))
-    assert call.forward_pre_hook_effects[0].changed is True
+    assert call.forward_pre_hook_effects[0].has_changes is True
 
 
 def test_registration_bypass_downgrades_but_keeps_after_snapshot_truthful() -> None:
@@ -852,7 +856,7 @@ def test_registration_bypass_downgrades_but_keeps_after_snapshot_truthful() -> N
 
     assert call.inputs_before_pre_hooks is None
     assert torch.equal(call.inputs_after_pre_hooks.args[0], torch.tensor([8.0]))
-    assert call.inputs_after_pre_hooks.capture_complete is False
+    assert call.inputs_after_pre_hooks.is_capture_complete is False
     assert "registration_interposition_bypassed" in (call.inputs_after_pre_hooks.incomplete_reasons)
     assert call.forward_pre_hook_effects == ()
-    assert call.had_pre_hook_input_change is None
+    assert call.has_pre_hook_input_change is None

@@ -27,11 +27,11 @@ or the diff test fails (alias-or-fail, MEMO 3.3).
 
 from __future__ import annotations
 
-import hashlib
 import json
 from importlib import resources
 from typing import Any
 
+from .._utils.hashing import sha256_canonical_json
 from . import MIN_TLSPEC_VERSION, MIN_TORCHLENS_VERSION_TEXT, TLSPEC_VERSION
 from ._json import loads_bounded
 from .field_registry import registry_snapshot
@@ -68,7 +68,7 @@ def _manifest_schema_ids() -> dict[str, str]:
         if not entry.name.startswith("tlspec_manifest_") or not entry.name.endswith(".json"):
             continue
         parsed = loads_bounded(entry.read_text(encoding="utf-8"))
-        ids[entry.name] = hashlib.sha256(_canonical_json(parsed).encode("utf-8")).hexdigest()
+        ids[entry.name] = sha256_canonical_json(parsed, default=None)
     return ids
 
 
@@ -148,4 +148,4 @@ def writer_contract_digest(contract: dict[str, Any] | None = None) -> str:
 
     if contract is None:
         contract = writer_contract()
-    return hashlib.sha256(_canonical_json(contract).encode("utf-8")).hexdigest()
+    return sha256_canonical_json(contract, default=None)

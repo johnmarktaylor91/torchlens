@@ -13,7 +13,7 @@ historical spelling + pickle-visible identity):
 
 PUBLISHED-CLOSURE HANDOFF (move not executed in C01): the intervention
 triple (``intervention/types`` + ``errors`` + ``selectors``) drags
-``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection``
+``SelectionError`` and ``_SelectionOperand`` out of ``torchlens._selection.selection``
 -- "six modules move" vs "drag the selection substrate too" is exactly the
 decision Rule V2 requires publishing, and lane C03 is concurrently
 rewriting those same modules (immutable InterventionSpec). The move rides a
@@ -26,6 +26,7 @@ from __future__ import annotations
 import ast
 import importlib
 import pickle
+import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
@@ -126,18 +127,30 @@ class TestInterventionTripleHandoff:
     """The published-closure facts for the deferred intervention-triple move."""
 
     def test_closure_still_drags_the_selection_substrate(self) -> None:
-        """The blocker is real: types/errors eagerly import torchlens._selection.
+        """The blocker is real: types eagerly imports torchlens._selection.
 
-        If this test starts failing, the closure shrank (C03 or a later lane
-        broke the selection dependency) and the triple move is unblocked --
-        execute it as the C01/F35 amendment instead of deleting this pin.
+        The substrate is a package (``torchlens/_selection/``), so the eager
+        import is spelled per submodule (``from .._selection.selection import``,
+        ``from .._selection.target import``). ``intervention/errors.py`` left the
+        closure with the capture batch: it takes ``SelectionError`` from
+        ``torchlens._errors`` and re-exports the site-error family from the leaf
+        ``_selection/errors.py`` (which imports only ``_errors`` and
+        ``errors._base``); ``types.py`` still drags the substrate. If this test
+        starts failing, the closure shrank (C03 or a later lane broke the
+        selection dependency) and the triple move is unblocked -- execute it as
+        the C01/F35 amendment instead of deleting this pin.
         """
 
         types_source = (REPO / "torchlens/intervention/types.py").read_text()
         errors_source = (REPO / "torchlens/intervention/errors.py").read_text()
-        assert "from .._selection import" in types_source
-        assert "from .._selection import" in errors_source
+        eager = re.compile(r"^from \.\._selection(\.\w+)? import", re.MULTILINE)
+        assert eager.search(types_source)
+        assert "from .._selection import" not in errors_source
+        assert "from .._selection.errors import" in errors_source
+        assert "from .._errors import" in errors_source
 
     def test_selectors_depend_on_types(self) -> None:
-        selectors_source = (REPO / "torchlens/intervention/selectors.py").read_text()
-        assert "from .types import" in selectors_source
+        """Selectors take their target vocabulary from the substrate's own target module."""
+
+        selectors_source = (REPO / "torchlens/_selection/selectors.py").read_text()
+        assert "from .target import" in selectors_source

@@ -1,7 +1,8 @@
 """Removed public methods and attributes raise a typed redirect naming the replacement.
 
 The 2026-10-01 shim removal deleted the alias members outright (remove-and-
-rename, no alias), and lane F12 deleted ``VisualizationTheme.legend_items``.
+rename, no alias), lane F12 deleted ``VisualizationTheme.legend_items``, and the
+1 Nov 2026 experiment-ledger removal deleted the ``torchlens.experiment`` ledger names.
 A lookup of any of them must raise ``FacadeTeachingError`` (code
 ``facade_redirect``, ``AttributeError`` lineage) whose message names the
 replacement, never a bare ``AttributeError``. Every other missing name keeps
@@ -11,6 +12,7 @@ failing plainly, and ``getattr`` with a default still degrades.
 from __future__ import annotations
 
 import ast
+import functools
 from pathlib import Path
 from typing import Any
 
@@ -57,10 +59,10 @@ REMOVED_MEMBERS: list[tuple[str, str, str]] = [
     ("Trace", "replay_from", "push_from"),
     ("Trace", "rerun", "run"),
     ("Trace", "validate_saved_outs", "validate_forward_pass"),
-    ("Trace", "conditional_then_entry_edges", "conditional_arm_entry_edges"),
-    ("Trace", "conditional_elif_entry_edges", "conditional_arm_entry_edges"),
-    ("Trace", "conditional_else_entry_edges", "conditional_arm_entry_edges"),
-    ("Bundle", "replay", "push"),
+    ("Trace", "conditional_then_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "conditional_elif_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Trace", "conditional_else_entry_edges", "graph.conditional_arm_entry_edges"),
+    ("Bundle", "replay", "do"),
     ("Bundle", "rerun", "run"),
     ("VisualizationOptions", "mode", "view"),
     ("VisualizationOptions", "max_module_depth", "depth"),
@@ -83,7 +85,7 @@ def test_removed_member_raises_typed_redirect(
     assert removed in str(excinfo.value)
     assert replacement in str(excinfo.value)
     assert getattr(instance, removed, "absent") == "absent"
-    getattr(instance, replacement)  # the named replacement is live
+    functools.reduce(getattr, replacement.split("."), instance)  # the named replacement is live
 
 
 #: (public module, removed module-level name, the live replacement's public spelling)
@@ -94,6 +96,11 @@ REMOVED_MODULE_NAMES: list[tuple[str, str, str]] = [
     ("torchlens.observers", "record_span", "torchlens.observers.span"),
     ("torchlens.intervention", "intervening", "torchlens.without_op"),
     ("torchlens.intervention", "replay_from", "Trace.do"),
+    ("torchlens.experiment", "ledger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "ExperimentLedger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "LedgerEntry", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "active_ledger", "torchlens.experiment.sweep_sites"),
+    ("torchlens.experiment", "read_ledger", "torchlens.experiment.sweep_sites"),
 ]
 
 
@@ -138,6 +145,7 @@ _GUARDED_HOOKS: list[tuple[str, str | None]] = [
     ("torchlens/validation/__init__.py", None),
     ("torchlens/io/__init__.py", None),
     ("torchlens/observers.py", None),
+    ("torchlens/experiment/__init__.py", None),
     ("torchlens/options.py", "VisualizationOptions"),
     ("torchlens/_visualization/themes.py", "VisualizationTheme"),
 ]

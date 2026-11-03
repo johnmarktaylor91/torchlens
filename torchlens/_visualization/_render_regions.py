@@ -3,7 +3,8 @@
 Extracted verbatim from ``_render_dot.py`` (renderer-thinning pass): these
 helpers turn the decision-complete :class:`RenderIR` region records plus the
 legacy module-cluster payloads into nested Graphviz subgraphs, including the
-empty-subtree pruning and rank-group parity tripwire.
+empty-subtree pruning and rank-group parity tripwire. The nodes-mode container
+summaries and overlays the forward pass prepares before emission live here too.
 """
 
 from __future__ import annotations
@@ -13,12 +14,16 @@ from typing import TYPE_CHECKING, cast
 
 import graphviz
 
+from ._boundary_bundle import bundle_member_nodes
 from ._render_common import (
     GRADIENT_ARROW_COLOR,
     ContainerClusterSpec,
     SiblingOrderChain,
+    render_lines_to_html,
 )
 from ._render_flow import (
+    _collapsed_container_leaf_nodes,
+    _container_nodes_and_overlay_edges,
     _emit_container_cluster,
     _emit_sibling_rank_group,
     _get_max_call_depth,
@@ -32,7 +37,9 @@ if TYPE_CHECKING:
 
     from .._data_classes.internal_types import VisualizationOverrides
     from .._data_classes.trace import Trace
+    from ._render_common import ContainerOverlayEdge, ContainerOverlayNode, GraphNode
     from .render_ir import RenderIROrderingConstraint
+    from .request import ResolvedRenderRequest
 
 
 def _queue_container_clusters(
@@ -362,11 +369,132 @@ def _setup_subgraphs_recurse(
         return emitted_rank_groups
 
 
+def _collapsed_container_nodes_for_draw(
+    trace: Trace,
+    request: ResolvedRenderRequest,
+    entries_to_plot: Mapping[str, GraphNode],
+    pending_nodes: list[dict[str, Any]],
+    summary_label_lines: dict[str, list[str]],
+) -> dict[str, str]:
+    """Return leaf-to-summary node names for homogeneous collapse and boundary bundles.
+
+    Parameters
+    ----------
+    trace:
+        Trace being drawn.
+    request:
+        Resolved draw request.
+    entries_to_plot:
+        Rendered graph nodes by label.
+    pending_nodes:
+        Sink for the collapse-summary node args, emitted later.
+    summary_label_lines:
+        Sink for each summary's label lines by node name.
+
+    Returns
+    -------
+    dict[str, str]
+        Rendered leaf or bundle-member node names mapped to the node drawn for them.
+    """
+
+    collapsed_container_nodes = _collapsed_container_leaf_nodes(
+        trace,
+        entries_to_plot,
+        vis_mode=request.vis_mode,
+        show_containers=request.show_containers,
+        container_max_inline=request.container_max_inline,
+        pending_nodes=pending_nodes,
+        summary_label_lines=summary_label_lines,
+    )
+    collapsed_container_nodes.update(
+        bundle_member_nodes(trace, entries_to_plot, request, request.collapse_fn)
+    )
+    return collapsed_container_nodes
+
+
+def _container_overlay_parts(
+    trace: Trace,
+    request: ResolvedRenderRequest,
+    collapsed_container_nodes: dict[str, str],
+    summary_label_lines: dict[str, list[str]],
+    pending_nodes: list[dict[str, Any]],
+) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], list[dict[str, Any]]]:
+    """Return nodes-mode container overlay nodes and edges, and the summary node args.
+
+    Parameters
+    ----------
+    trace:
+        Trace being drawn.
+    request:
+        Resolved draw request.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    summary_label_lines:
+        Each homogeneous-collapse summary's label lines by node name.
+    pending_nodes:
+        Pending collapse-summary node args.
+
+    Returns
+    -------
+    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], list[dict[str, Any]]]
+        Overlay nodes, overlay edges and the summary node args to emit; outside
+        unrolled nodes mode, no overlays and ``pending_nodes`` unchanged.
+    """
+
+    if not (request.show_containers == "nodes" and request.vis_mode == "unrolled"):
+        return [], [], pending_nodes
+    # Before the summaries are emitted: a summary standing for a whole
+    # container record carries that record's role instead of a twin node.
+    overlay_nodes, overlay_edges, summary_roles = _container_nodes_and_overlay_edges(
+        trace,
+        collapsed_container_nodes,
+        vis_call_depth=request.vis_call_depth,
+        collapse_fn=request.collapse_fn,
+        summary_nodes=frozenset(summary_label_lines),
+    )
+    pending_nodes = [
+        _summary_args_with_role(args, summary_label_lines, summary_roles) for args in pending_nodes
+    ]
+    return overlay_nodes, overlay_edges, pending_nodes
+
+
+def _summary_args_with_role(
+    args: dict[str, Any],
+    label_lines: Mapping[str, list[str]],
+    roles: Mapping[str, str],
+) -> dict[str, Any]:
+    """Return collapse-summary node args, with the container role added when it has one.
+
+    Parameters
+    ----------
+    args:
+        Pending Graphviz node args of one homogeneous-collapse summary.
+    label_lines:
+        Each summary's label lines by node name.
+    roles:
+        Role text of each summary that stands for a whole container record.
+
+    Returns
+    -------
+    dict[str, Any]
+        ``args`` unchanged, or a copy whose first label line ends with the role.
+    """
+
+    role = roles.get(args["name"])
+    lines = label_lines.get(args["name"])
+    if role is None or not lines:
+        return args
+    return {**args, "label": render_lines_to_html([f"{lines[0]} ({role})", *lines[1:]])}
+
+
 __all__ = [
     "_assert_rank_group_parity",
+    "_collapsed_container_nodes_for_draw",
+    "_container_overlay_parts",
     "_module_subtree_payload_empty",
     "_queue_container_clusters",
     "_setup_combined_special_clusters",
     "_setup_subgraphs",
     "_setup_subgraphs_recurse",
+    "_summary_args_with_role",
 ]

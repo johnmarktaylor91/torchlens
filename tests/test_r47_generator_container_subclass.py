@@ -29,13 +29,11 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._runnable import PathFaithfulness
-from torchlens._utils.rng import (
-    _rng_exempt_instances,
-    host_nondeterminism_monitor,
-)
+from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng.inventory_types import _rng_exempt_instances
 from torchlens.options import CaptureOptions
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 # --- Container SUBCLASSES holding a generator as an ATTRIBUTE (not an element) -----------------

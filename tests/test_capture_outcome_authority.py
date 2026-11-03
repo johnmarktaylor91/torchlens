@@ -28,6 +28,7 @@ from torchlens._capture.outcome import (
     require_capture_capability,
     resolve_loaded_outcome,
 )
+from torchlens.errors import TraceCaptureError
 
 # ---------------------------------------------------------------------------
 # Vocabulary + record
@@ -151,13 +152,13 @@ def test_coherence_matrix(
 @pytest.mark.parametrize(
     ("state", "expected"),
     [
-        ({"_tracing_finished": True, "halted": True}, CaptureStatus.STOPPED),
-        ({"_tracing_finished": True, "halted": False}, CaptureStatus.UNATTESTED),
+        ({"_tracing_finished": True, "is_stopped": True}, CaptureStatus.STOPPED),
+        ({"_tracing_finished": True, "is_stopped": False}, CaptureStatus.UNATTESTED),
         ({"_tracing_finished": True}, CaptureStatus.UNATTESTED),
-        ({"_tracing_finished": False, "halted": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": None, "halted": True}, CaptureStatus.UNKNOWN),
-        ({"halted": True}, CaptureStatus.UNKNOWN),
-        ({"_tracing_finished": False, "halted": False}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": False, "is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": None, "is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"is_stopped": True}, CaptureStatus.UNKNOWN),
+        ({"_tracing_finished": False, "is_stopped": False}, CaptureStatus.UNKNOWN),
         ({"_tracing_finished": None}, CaptureStatus.UNKNOWN),
         ({}, CaptureStatus.UNKNOWN),
     ],
@@ -174,9 +175,9 @@ def test_derivation_carries_halt_detail() -> None:
     outcome = derive_outcome_from_structural_state(
         {
             "_tracing_finished": True,
-            "halted": True,
-            "halt_reason": "relu_1_2_raw",
-            "halt_frontier": "relu_1_2_raw",
+            "is_stopped": True,
+            "stop_reason": "relu_1_2_raw",
+            "_graph_stop_frontier": "relu_1_2_raw",
         }
     )
     assert outcome.status is CaptureStatus.STOPPED
@@ -194,7 +195,7 @@ def test_resolve_loaded_adopts_coherent_attestation() -> None:
     state = {
         "_capture_outcome": attested.to_payload(),
         "_tracing_finished": True,
-        "halted": False,
+        "is_stopped": False,
     }
     assert resolve_loaded_outcome(state) == attested
 
@@ -204,7 +205,7 @@ def test_resolve_loaded_degrades_incoherent_attestation_to_unknown() -> None:
     state = {
         "_capture_outcome": attested.to_payload(),
         "_tracing_finished": False,
-        "halted": False,
+        "is_stopped": False,
     }
     with pytest.warns(RuntimeWarning, match="contradicts"):
         resolved = resolve_loaded_outcome(state)
@@ -217,7 +218,7 @@ def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
     state = {
         "_capture_outcome": {"status": "not_in_vocabulary"},
         "_tracing_finished": True,
-        "halted": False,
+        "is_stopped": False,
     }
     with pytest.warns(RuntimeWarning, match="could not parse"):
         resolved = resolve_loaded_outcome(state)
@@ -226,7 +227,7 @@ def test_resolve_loaded_degrades_unparseable_attestation_to_unknown() -> None:
 
 
 def test_resolve_loaded_without_attestation_uses_lattice() -> None:
-    resolved = resolve_loaded_outcome({"_tracing_finished": True, "halted": False})
+    resolved = resolve_loaded_outcome({"_tracing_finished": True, "is_stopped": False})
     assert resolved.status is CaptureStatus.UNATTESTED
 
 
@@ -337,8 +338,13 @@ def test_origin_user_forward_failure_classifies_user_op() -> None:
 
     try:
         tl.trace(Exploding(), torch.ones(1, 3))
-    except RuntimeError as exc:
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
+        assert exc.origin is FailureOrigin.USER_OP
         assert classify_failure_origin(exc) is FailureOrigin.USER_OP
+        assert "The model's own code raised this error" in str(exc)
+    else:
+        pytest.fail("the failing forward did not raise")
 
 
 def test_origin_c_backed_op_failure_classifies_user_op() -> None:
@@ -350,9 +356,13 @@ def test_origin_c_backed_op_failure_classifies_user_op() -> None:
 
     try:
         tl.trace(ShapeMismatch(), torch.ones(1, 3))
-    except RuntimeError as exc:
+    except TraceCaptureError as exc:
+        assert isinstance(exc.__cause__, RuntimeError)
         origin = classify_failure_origin(exc)
         assert origin is FailureOrigin.USER_OP, origin
+        assert exc.origin is FailureOrigin.USER_OP
+    else:
+        pytest.fail("the failing forward did not raise")
 
 
 def test_origin_torchlens_frame_classifies_torchlens() -> None:

@@ -18,8 +18,10 @@ from fixtures.capture_outcome_models import ThreeStageModel, halt_on_relu
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.run as capture_run
 import torchlens._postprocess as pp
 from torchlens._capture.outcome import CapturePhase, CaptureStatus, FailureOrigin
+from torchlens.errors import TraceCaptureError
 from torchlens.recording import Recorder
 from torchlens.recording._halt import StopSignal
 
@@ -68,8 +70,8 @@ def test_halted_capture_settles_attested_halted() -> None:
     assert outcome.status is CaptureStatus.STOPPED
     assert outcome.is_derived is False
     assert outcome.is_partial is True
-    assert outcome.reason == trace.halt_reason
-    assert outcome.boundary_label == trace.halt_reason
+    assert outcome.reason == trace.stop_reason
+    assert outcome.boundary_label == trace.stop_reason
     # Frontier labels are the FINAL post-postprocess output labels.
     assert outcome.frontier_labels == tuple(trace.output_layers)
     session = trace.__dict__.get("_capture_session")
@@ -90,8 +92,8 @@ def test_halted_trace_analysis_save_round_trips(tmp_path) -> None:
     bundle = tmp_path / "halted_analysis.tlspec"
     trace.save(bundle, overwrite=True)
     loaded = tl.load(bundle)
-    assert loaded.halted is True
-    assert loaded.halt_reason == trace.halt_reason
+    assert loaded.is_stopped is True
+    assert loaded.stop_reason == trace.stop_reason
 
 
 # ---------------------------------------------------------------------------
@@ -138,9 +140,10 @@ def test_forward_failure_settles_failed_forward_user_op() -> None:
             _ = self.linear(x)
             raise RuntimeError("user forward boom")
 
-    with pytest.raises(RuntimeError, match="user forward boom") as exc_info:
+    with pytest.raises(TraceCaptureError, match="user forward boom") as exc_info:
         tl.trace(Exploding(), torch.ones(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, RuntimeError)
+    partial = exc_info.value.partial_trace
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -157,9 +160,10 @@ def test_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
         raise ValueError("planted finalize failure")
 
     monkeypatch.setattr(TorchBackend, "finalize_forward_session", _boom)
-    with pytest.raises(ValueError, match="planted finalize failure") as exc_info:
+    with pytest.raises(TraceCaptureError, match="planted finalize failure") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    partial = tl._partial.from_failed_capture(exc_info.value)
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    partial = exc_info.value.partial_trace
     outcome = partial.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -170,10 +174,11 @@ def test_postprocess_failure_settles_failed_postprocess(monkeypatch) -> None:
     def _boom(*args: object, **kwargs: object) -> None:
         raise ValueError("planted step1")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
-    with pytest.raises(ValueError, match="planted step1") as exc_info:
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
+    with pytest.raises(TraceCaptureError, match="planted step1") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
+    assert isinstance(exc_info.value.__cause__, ValueError)
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
     assert outcome.phase is CapturePhase.POSTPROCESS
@@ -196,8 +201,9 @@ def test_freeze_failure_stamps_failed_postprocess(monkeypatch) -> None:
         raise ValueError("planted freeze")
 
     monkeypatch.setattr(pp, "_freeze_relation_views", _boom)
-    with pytest.raises(ValueError, match="planted freeze"):
+    with pytest.raises(TraceCaptureError, match="planted freeze") as _tce_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
+    assert isinstance(_tce_info.value.__cause__, ValueError)
     assert captured
     outcome = captured[0].outcome
     assert outcome is not None
@@ -229,7 +235,7 @@ def test_nonfinite_abort_settles_aborted_nonfinite() -> None:
             torch.ones(1, 3),
             capture=tl.options.CaptureOptions(raise_on_nan=True),
         )
-    outcome = tl._partial.from_failed_capture(exc_info.value).trace.outcome
+    outcome = exc_info.value.partial_trace.trace.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.ABORTED_NONFINITE
     assert outcome.boundary_kind == "op"
@@ -285,7 +291,7 @@ def test_halted_postprocess_failure_settles_failed_postprocess(monkeypatch) -> N
         captured.append(trace)
         raise ValueError("planted halted-pp")
 
-    monkeypatch.setattr(pp, "_add_output_layers", _boom)
+    monkeypatch.setattr(pp.graph_traversal, "_add_output_layers", _boom)
     with pytest.raises(ValueError, match="planted halted-pp") as exc_info:
         tl.trace(ThreeStageModel(), torch.ones(1, 3), halt=halt_on_relu)
     assert isinstance(exc_info.value.__context__, StopSignal)
@@ -322,7 +328,6 @@ def test_halted_finalize_failure_settles_failed_finalize(monkeypatch) -> None:
 
 
 def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
-    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -330,7 +335,7 @@ def test_teardown_failure_demotes_settled_outcome(monkeypatch) -> None:
         captured.append(trace)
         raise RuntimeError("planted teardown failure")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     # F5: user_funcs' failed-forward handler tolerates the popped
     # ``_out_writer``, so the teardown exception propagates unmasked.
     with pytest.raises(RuntimeError, match="planted teardown failure"):
@@ -387,7 +392,7 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
     exhaustive path's 'op'), and its single ``reason`` parameter received the
     Recording-space RAW label (e.g. ``relu_1_3_raw``) while
     ``frontier_labels`` was final -- one outcome mixing label spaces, and
-    ``outcome.reason != trace.halt_reason``, the invariant the exhaustive
+    ``outcome.reason != trace.stop_reason``, the invariant the exhaustive
     path pins above.
     """
 
@@ -403,8 +408,8 @@ def test_cooked_halted_outcome_matches_exhaustive_settlement() -> None:
 
     assert outcome.boundary_kind == exhaustive.outcome.boundary_kind == "op"
     # Coherence with the trace's own remapped halt fields (final label space).
-    assert outcome.reason == cooked.halt_reason
-    assert outcome.boundary_label == cooked.halt_frontier
+    assert outcome.reason == cooked.stop_reason
+    assert outcome.boundary_label == cooked.graph.stop_frontier
     assert "_raw" not in str(outcome.reason)
     assert "_raw" not in str(outcome.boundary_label)
 
@@ -452,7 +457,8 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
 
     latched = CaptureError("nan in relu_1_1")
     unrelated = CaptureError("event stream desync")
-    trace = SimpleNamespace()
+    # settle_failed reads the inference-only store directly (a real Trace sets it).
+    trace = SimpleNamespace(_options_inference_only=False)
     trace.__dict__["_stop_requested"] = StopRequest(
         kind="nonfinite",
         reason="nan in relu_1_1",
@@ -467,7 +473,7 @@ def test_unrelated_capture_error_after_swallowed_nonfinite_settles_failed() -> N
     assert outcome.reason == "event stream desync"
 
     # The exact latched exception still classifies the clean abort.
-    trace2 = SimpleNamespace()
+    trace2 = SimpleNamespace(_options_inference_only=False)
     trace2.__dict__["_stop_requested"] = trace.__dict__["_stop_requested"]
     aborted = settle_failed(trace2, None, latched, num_committed_ops=0)
     assert aborted.status is CaptureStatus.ABORTED_NONFINITE
@@ -532,13 +538,14 @@ def test_hostile_str_forward_keeps_identity_and_settles_failed() -> None:
     Before the fix ``settle_failed``'s ``reason=str(exc)`` re-raised inside the
     guaranteed-settlement ``finally``: the secondary RuntimeError escaped, the
     user exception survived only as ``__context__``, and no settled product or
-    ``partial_log`` existed.
+    ``partial_trace`` existed.
     """
 
-    with pytest.raises(_HostileStrError) as exc_info:
+    with pytest.raises(TraceCaptureError) as exc_info:
         tl.trace(_HostileStrModel(), torch.ones(1, 3))
+    assert isinstance(exc_info.value.__cause__, _HostileStrError)
     exc = exc_info.value
-    partial = tl._partial.from_failed_capture(exc)
+    partial = exc.partial_trace
     outcome = partial.outcome
     assert outcome is not None
     assert outcome.status is CaptureStatus.FAILED
@@ -580,18 +587,17 @@ def test_hostile_repr_fastlog_return_partial_records_fallback_repr() -> None:
 def test_hostile_str_fastlog_raise_path_keeps_identity() -> None:
     """The default raise disposition aborts storage without a secondary raise."""
 
-    with pytest.raises(_HostileStrError):
+    with pytest.raises(TraceCaptureError) as _tce_info2:
         tl.record(
             _HostileStrModel(),
             torch.ones(1, 3),
             save=lambda ctx: ctx.kind == "op",
         )
+    assert isinstance(_tce_info2.value.__cause__, _HostileStrError)
 
 
 def test_hostile_str_teardown_failure_still_demotes(monkeypatch) -> None:
     """The demotion note survives a hostile-__str__ teardown exception."""
-
-    import torchlens._capture.trace as capture_trace
 
     captured: list = []
 
@@ -599,7 +605,7 @@ def test_hostile_str_teardown_failure_still_demotes(monkeypatch) -> None:
         captured.append(trace)
         raise _HostileStrError("planted hostile teardown")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     with pytest.raises(_HostileStrError):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     trace = captured[0]
@@ -619,15 +625,13 @@ def test_teardown_demotion_carries_the_teardown_error_type(monkeypatch) -> None:
     had to string-parse the free-text reason.
     """
 
-    import torchlens._capture.trace as capture_trace
-
     captured: list = []
 
     def _boom(trace: object) -> None:
         captured.append(trace)
         raise KeyError("planted teardown failure")
 
-    monkeypatch.setattr(capture_trace, "_clear_saved_activation_dedup_caches", _boom)
+    monkeypatch.setattr(capture_run, "_clear_saved_activation_dedup_caches", _boom)
     with pytest.raises(KeyError):
         tl.trace(ThreeStageModel(), torch.ones(1, 3))
     outcome = captured[0].outcome
@@ -650,12 +654,10 @@ def test_teardown_double_fault_never_swallows_an_unwinding_interrupt(monkeypatch
 
     import warnings as warnings_module
 
-    from torchlens._capture import trace as trace_module
-
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")
 
-    monkeypatch.setattr(trace_module, "_cleanup_forward_memory_once", _teardown_bug)
+    monkeypatch.setattr(capture_run, "_cleanup_forward_memory_once", _teardown_bug)
 
     class Interrupting(nn.Module):
         def __init__(self) -> None:
@@ -684,12 +686,10 @@ def test_teardown_failure_on_ordinary_paths_still_propagates(monkeypatch) -> Non
     """Pin: with no control-flow exception unwinding, a post-settlement
     teardown failure itself propagates (the demote-and-raise contract)."""
 
-    from torchlens._capture import trace as trace_module
-
     def _teardown_bug(*args: object, **kwargs: object) -> None:
         raise ValueError("injected teardown failure")
 
-    monkeypatch.setattr(trace_module, "_cleanup_forward_memory_once", _teardown_bug)
+    monkeypatch.setattr(capture_run, "_cleanup_forward_memory_once", _teardown_bug)
 
     class Clean(nn.Module):
         def __init__(self) -> None:

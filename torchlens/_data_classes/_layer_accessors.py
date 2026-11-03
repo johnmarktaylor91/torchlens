@@ -2,11 +2,10 @@
 
 Split out of ``layer.py`` under the R43 file-size ratchet (the ``_layer_spec.py``
 precedent). The accessors are a self-contained lookup surface: this module
-never imports ``layer.py`` at module level (the one shared helper,
-``_layer_log_to_row``, is imported inside ``LayerAccessor.to_pandas``), so the
-split introduces no import cycle. ``layer.py`` re-exports both names, keeping
-every historical import site (``from .layer import OpAccessor``) and pickle
-qualname resolution working.
+never imports ``layer.py`` (the one shared helper, ``_layer_log_to_row``,
+lives in ``_layer_views.py``), so the split introduces no import cycle.
+``layer.py`` re-exports both names, keeping every historical import site
+(``from .layer import OpAccessor``) and pickle qualname resolution working.
 """
 
 import weakref
@@ -18,6 +17,7 @@ from .._constants import LAYER_LOG_FIELD_ORDER
 from .._errors import AmbiguousOpLookupError
 from .._io import FieldPolicy
 from ._accessor_base import Accessor, attach_source_honesty
+from ._layer_views import _layer_log_to_row
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -103,7 +103,7 @@ class OpAccessor(Accessor["Op"]):
         is the 0-based position while this write is the 1-based pass index,
         so ``ops[1] = op`` is read back as ``ops[0]``. The write basis is
         load-bearing for the finalization callers
-        (``layer_log.ops[op_log.pass_index] = op_log``); flipping it to the
+        (``layer_log.ops[op_log.pass_number] = op_log``); flipping it to the
         read basis is a coordinated change across those callers.
         """
 
@@ -152,7 +152,7 @@ class OpAccessor(Accessor["Op"]):
             only_op = next(iter(self._dict.values()))
             if key in {
                 only_op.layer_label,
-                only_op.layer_label_short,
+                only_op.short_layer_label,
                 only_op._label_raw,
                 only_op.raw_label,
             }:
@@ -160,7 +160,7 @@ class OpAccessor(Accessor["Op"]):
         parent_matches = [
             op_log
             for op_log in self._dict.values()
-            if key in {op_log.layer_label, op_log.layer_label_short}
+            if key in {op_log.layer_label, op_log.short_layer_label}
         ]
         if len(parent_matches) > 1:
             parent_label = parent_matches[0].layer_label
@@ -174,7 +174,7 @@ class OpAccessor(Accessor["Op"]):
         for op_log in self._dict.values():
             if key in {
                 op_log.label,
-                op_log.label_short,
+                op_log.short_label,
                 op_log._label_raw,
                 op_log.raw_label,
             }:
@@ -242,7 +242,7 @@ class LayerAccessor(Accessor["Layer"]):
         if key in self._dict:
             return self._dict[key]
         matches = [
-            layer for layer in self._list if key in {layer.layer_label, layer.layer_label_short}
+            layer for layer in self._list if key in {layer.layer_label, layer.short_layer_label}
         ]
         if len(matches) == 1:
             return matches[0]
@@ -337,8 +337,6 @@ class LayerAccessor(Accessor["Layer"]):
             raise ImportError(
                 "pandas is required for this feature. Install with `pip install torchlens[tabular]`."
             ) from e
-        from .layer import _layer_log_to_row
-
         if not self._list:
             return pd.DataFrame(columns=LAYER_LOG_FIELD_ORDER)
         rows = [_layer_log_to_row(ll) for ll in self._list]

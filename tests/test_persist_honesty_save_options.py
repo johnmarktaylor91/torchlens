@@ -76,7 +76,7 @@ def test_omitted_flags_keep_level_defaults(trace, tmp_path):
     assert _blob_count(tmp_path / "exec") > _blob_count(tmp_path / "portable")
     for name in ("portable", "audit", "exec"):
         loaded = tl.load(tmp_path / name)
-        assert loaded.num_ops == trace.num_ops
+        assert loaded._num_ops == trace._num_ops
 
 
 def test_explicit_flags_matching_level_defaults_stay_accepted(trace, tmp_path):

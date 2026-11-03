@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import inspect
 import sys
+from collections.abc import Iterator
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import torch
 import torch.utils.dlpack  # noqa: F401  (ensure torch.utils.dlpack.to_dlpack is importable to patch)
 
 from ... import _state
+from ..._utils.tensor_utils import _is_uninitialized_lazy_tensor
 from ._tl import (
     get_tensor_label,
     get_tensor_meta,
@@ -20,33 +23,6 @@ from .escape_detection import (
     ExpectedOriginalToken,
 )
 
-if TYPE_CHECKING:
-    from .completeness_witness import (
-        _BUFFER_STATE_VIEW_OPERATORS,
-        _DISPATCH_TENSOR_ORIGINS,
-        _FRAMEWORK_FILENAME_VERDICTS,
-        _FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES,
-        _HOST_ESCAPE_BOOL_SOURCE_LABELS,
-        _HOST_ESCAPE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_LABELS,
-        _HOST_ESCAPE_STATE_SOURCE_NAMES,
-        _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
-        _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
-        _ORIGIN_LABEL_PREFIX,
-        _ORIGIN_RNG,
-        _ORIGIN_STATE_PREFIX,
-        _ORIGIN_UNINIT,
-        _ORIGIN_UNKNOWN,
-        _TORCH_ROOT,
-        _TORCHLENS_ROOT,
-        _DispatchCallsite,
-        _escape_source_is_torchlens_internal,
-        _operand_origins,
-        _param_derived_addresses,
-        _record_escape_label_fallback,
-        internal_scalar_read,
-    )
-
 __all__ = (
     "_resolved_dispatch_origins",
     "_record_escape_source_tensor",
@@ -56,6 +32,9 @@ __all__ = (
     "_is_mutating_operator",
     "_is_buffer_state_view_dispatch",
     "_dispatch_callsite",
+    "_first_scalar_escape_source",
+    "_external_warning_stacklevel",
+    "_iter_dispatch_tensors",
 )
 
 
@@ -393,6 +372,12 @@ def _is_buffer_state_view_dispatch(
     * ``args[0]`` is a REGISTERED BUFFER whose stamp is SESSION-VALIDATED (r81:
       current-session object + live storage identity -- a stale or input-rebound
       stamp is never credited as a benign state view).
+    * or ``args[0]`` is a PENDING LAZY slot (``UninitializedParameter`` /
+      ``UninitializedBuffer``): torch's in-place materialization reads the slot's
+      ``.data`` for its device and dtype before assigning storage, and the wrapper
+      passes those calls through unlogged (they are constructor plumbing, not model
+      dataflow). A pending slot holds no value, so the view can carry nothing that a
+      dropped op could have produced (wave-3 stress F3).
 
     Parameters
     ----------
@@ -420,10 +405,11 @@ def _is_buffer_state_view_dispatch(
     if not args:
         return False
     source = args[0]
-    return (
-        isinstance(source, torch.Tensor)
-        and session_validated_buffer_address(trace, source) is not None
-    )
+    if not isinstance(source, torch.Tensor):
+        return False
+    if _is_uninitialized_lazy_tensor(source):
+        return True
+    return session_validated_buffer_address(trace, source) is not None
 
 
 def _dispatch_callsite() -> _DispatchCallsite:
@@ -463,3 +449,104 @@ def _dispatch_callsite() -> _DispatchCallsite:
         fallback.f_lineno,
         fallback.f_code.co_name,
     )
+
+
+def _first_scalar_escape_source() -> tuple[str | None, int | None]:
+    """Return the first non-TorchLens frame for a scalar escape call.
+
+    Returns
+    -------
+    tuple[str | None, int | None]
+        Source filename and line, or ``(None, None)`` if no user frame is visible.
+    """
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame is not None else None
+        while frame is not None:
+            filename = Path(frame.f_code.co_filename).resolve()
+            try:
+                filename.relative_to(_TORCHLENS_ROOT)
+            except ValueError:
+                return str(filename), frame.f_lineno
+            frame = frame.f_back
+    finally:
+        del frame
+    return None, None
+
+
+def _external_warning_stacklevel() -> int:
+    """Return a warning stack level that resolves outside the TorchLens package.
+
+    Returns
+    -------
+    int
+        Stack level suitable for :func:`warnings.warn`.
+    """
+    level = 1
+    frame = inspect.currentframe()
+    try:
+        frame = frame.f_back if frame is not None else None
+        while frame is not None:
+            try:
+                Path(frame.f_code.co_filename).resolve().relative_to(_TORCHLENS_ROOT)
+            except ValueError:
+                return level
+            level += 1
+            frame = frame.f_back
+    finally:
+        del frame
+    return level
+
+
+def _iter_dispatch_tensors(
+    args: tuple[Any, ...], kwargs: dict[str, Any] | None
+) -> Iterator[torch.Tensor]:
+    """Yield every ``torch.Tensor`` operand of a dispatch, flattening list/tuple containers.
+
+    Aten operands are tensors, scalars, or (for ``cat`` / ``stack`` / ``_foreach_*``) lists/tuples
+    of tensors; this walks those one-deep-or-more without importing a pytree so the per-consumption
+    watch can see every tensor an op reads.
+    """
+
+    stack: list[Any] = list(args)
+    if kwargs:
+        stack.extend(kwargs.values())
+    while stack:
+        item = stack.pop()
+        if isinstance(item, torch.Tensor):
+            yield item
+        elif isinstance(item, (list, tuple)):
+            stack.extend(item)
+
+
+# Late imports: the split modules of this package import one another (cycles), so each
+# imports its siblings once every definition above exists.
+from ._completeness_escape_state import (  # noqa: E402
+    _record_escape_label_fallback,
+)
+from ._completeness_origins import (  # noqa: E402
+    _escape_source_is_torchlens_internal,
+    _operand_origins,
+    _param_derived_addresses,
+    internal_scalar_read,
+)
+from .completeness_witness import (  # noqa: E402
+    _BUFFER_STATE_VIEW_OPERATORS,
+    _DISPATCH_TENSOR_ORIGINS,
+    _FRAMEWORK_FILENAME_VERDICTS,
+    _FRAMEWORK_FILENAME_VERDICTS_MAX_ENTRIES,
+    _HOST_ESCAPE_BOOL_SOURCE_LABELS,
+    _HOST_ESCAPE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_LABELS,
+    _HOST_ESCAPE_STATE_SOURCE_NAMES,
+    _HOST_ESCAPE_UNATTRIBUTABLE_BOOL,
+    _HOST_ESCAPE_UNATTRIBUTABLE_OPAQUE,
+    _ORIGIN_LABEL_PREFIX,
+    _ORIGIN_RNG,
+    _ORIGIN_STATE_PREFIX,
+    _ORIGIN_UNINIT,
+    _ORIGIN_UNKNOWN,
+    _TORCH_ROOT,
+    _TORCHLENS_ROOT,
+    _DispatchCallsite,
+)

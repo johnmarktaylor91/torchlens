@@ -23,7 +23,7 @@ from torchlens import _state
 from torchlens._capture._weightsfree_admission import enforce_settlement_invariants
 from torchlens._capture_honesty import honesty_preamble_lines
 from torchlens._errors import WeightsfreeIntegrityError
-from torchlens.backends.torch import completeness_witness, rescue
+from torchlens.backends.torch import _completeness_finalize, rescue
 from torchlens.backends.torch.wrappers import unwrap_torch, wrap_torch
 from torchlens.options import CaptureOptions
 
@@ -90,11 +90,11 @@ def test_witness_leaves_a_value_free_capture_unverified(device: str) -> None:
 
     trace = _structure_only_trace(device)
 
-    assert trace.structure_only is True
-    assert trace.completeness_witness_mode == "shadow"
-    assert trace.completeness_witness_verified is True
-    assert trace.capture_verified is None
-    assert trace.capture_verification_reason is None
+    assert trace.options.structure_only is True
+    assert trace.health.completeness_mode == "shadow"
+    assert trace.health.completeness_verified is True
+    assert trace.provenance.verified is None
+    assert trace.provenance.verification_reason is None
     preamble = honesty_preamble_lines(trace)
     assert preamble[0].endswith("verified=not_recorded")
     assert any("structure-only (value-free) capture is never verified" in line for line in preamble)
@@ -112,9 +112,9 @@ def test_detector_and_witness_leave_a_value_free_capture_unverified() -> None:
     wrap_torch(escape_detector="shadow", completeness_witness=True)
     trace = _structure_only_trace("cpu")
 
-    assert trace.escape_detector_verified is True
-    assert trace.capture_verified is None
-    assert trace.capture_verification_reason is None
+    assert trace.health.escape_detector_verified is True
+    assert trace.provenance.verified is None
+    assert trace.provenance.verification_reason is None
 
 
 @pytest.mark.filterwarnings("ignore:TorchLens completeness witness observed:UserWarning")
@@ -139,9 +139,9 @@ def test_witness_gap_still_ceilings_a_value_free_capture(
         capture=CaptureOptions(structure_only=True),
     )
 
-    assert trace.completeness_witness_verified is False
-    assert trace.capture_verified is False
-    assert trace.capture_verification_reason == "dispatch_witness_unaccounted_ops"
+    assert trace.health.completeness_verified is False
+    assert trace.provenance.verified is False
+    assert trace.provenance.verification_reason == "dispatch_witness_unaccounted_ops"
 
 
 @pytest.mark.usefixtures("_witness_armed")
@@ -150,17 +150,17 @@ def test_witness_still_verifies_a_valued_capture() -> None:
 
     trace = tl.trace(_LinearRelu().eval(), torch.randn(2, 4))
 
-    assert trace.completeness_witness_verified is True
-    assert trace.capture_verified is True
-    assert trace.capture_verification_reason == "dispatch_witness_verified"
+    assert trace.health.completeness_verified is True
+    assert trace.provenance.verified is True
+    assert trace.provenance.verification_reason == "dispatch_witness_verified"
 
 
 @pytest.mark.usefixtures("_witness_armed")
 def test_incoherent_value_free_settlement_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     """With the carve-out removed the witness settles True and the invariant fires."""
 
-    # The finalizer runs rebound into completeness_witness, so patch that namespace.
-    monkeypatch.setattr(completeness_witness, "_is_value_free_capture", lambda trace: False)
+    # The finalizer reads the predicate from its own module, so patch it there.
+    monkeypatch.setattr(_completeness_finalize, "_is_value_free_capture", lambda trace: False)
 
     with pytest.raises(WeightsfreeIntegrityError) as excinfo:
         _structure_only_trace("meta")
@@ -173,7 +173,7 @@ def test_settlement_invariant_rejects_a_verified_value_free_trace() -> None:
     """The invariant itself is unchanged: a value-free trace claiming True is refused."""
 
     trace = _structure_only_trace("meta")
-    trace.capture_verified = True
+    trace._provenance_verified = True
 
     with pytest.raises(WeightsfreeIntegrityError) as excinfo:
         enforce_settlement_invariants(trace)
@@ -200,6 +200,6 @@ def test_attribute_held_original_relu_is_rebound_and_witnessed(device: str) -> N
     )
 
     assert "relu" in [op.func_name for op in trace.ops]
-    assert trace.rescue_rerun is None
-    assert trace.completeness_witness_verified is True
+    assert trace._rescue_rerun is None
+    assert trace.health.completeness_verified is True
     assert model.stale_relu is stale_relu

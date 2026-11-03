@@ -40,7 +40,7 @@ def _x() -> torch.Tensor:
 def sweep_trace() -> Any:
     import torchlens as tl
 
-    trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(_model(), _x(), capture=tl.options.CaptureOptions(replayable=True))
     yield trace
     trace.cleanup()
 

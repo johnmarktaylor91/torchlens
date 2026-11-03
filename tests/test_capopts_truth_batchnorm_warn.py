@@ -24,7 +24,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-import torchlens._user_funcs as user_funcs
+import torchlens._capture.prepare.door as prepare_door
 from torchlens.errors import TorchLensWarning
 from torchlens.options import CaptureOptions
 
@@ -42,7 +42,7 @@ class BNNet(nn.Module):
 
 
 def _arm(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(user_funcs, "_BATCHNORM_TRAIN_STATS_WARNED", False)
+    monkeypatch.setattr(prepare_door, "_BATCHNORM_TRAIN_STATS_WARNED", False)
 
 
 def _running_mean(model: BNNet) -> torch.Tensor:
@@ -74,7 +74,7 @@ def test_default_train_mode_capture_restores_stats_and_stays_silent(
     hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8))
     assert hits == []
     assert torch.equal(mean_before, _running_mean(model))
-    assert user_funcs._BATCHNORM_TRAIN_STATS_WARNED is False
+    assert prepare_door._BATCHNORM_TRAIN_STATS_WARNED is False
 
 
 def test_train_mode_bn_warns_coded_and_stats_really_mutate(
@@ -101,7 +101,7 @@ def test_warn_is_once_per_process(monkeypatch: pytest.MonkeyPatch) -> None:
     x = torch.randn(2, 3, 8, 8)
     assert len(_capture_batchnorm_warnings(BNNet().train(), x, carry_state=True)) == 1
     assert len(_capture_batchnorm_warnings(BNNet().train(), x, carry_state=True)) == 0
-    assert user_funcs._BATCHNORM_TRAIN_STATS_WARNED is True
+    assert prepare_door._BATCHNORM_TRAIN_STATS_WARNED is True
 
 
 def test_eval_mode_never_warns_and_keeps_the_latch_unarmed(
@@ -115,7 +115,7 @@ def test_eval_mode_never_warns_and_keeps_the_latch_unarmed(
     hits = _capture_batchnorm_warnings(model, torch.randn(2, 3, 8, 8))
     assert hits == []
     assert torch.equal(mean_before, _running_mean(model))
-    assert user_funcs._BATCHNORM_TRAIN_STATS_WARNED is False, (
+    assert prepare_door._BATCHNORM_TRAIN_STATS_WARNED is False, (
         "a non-mutating capture burned the once-per-process latch; a later "
         "mutating capture would then stay silent"
     )

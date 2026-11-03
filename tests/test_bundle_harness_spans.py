@@ -476,9 +476,9 @@ def _statement(source: str, head: str) -> str:
     return source[start : source.index("]", start) + 1]
 
 
-def test_members_render_refuses_a_backward_direction(model: _TinyLM) -> None:
-    with pytest.raises(ValueError, match="direction"):
-        _visualization.show_bundle_graph(_harness(model), nodes="members", direction="backward")
+def test_members_render_refuses_a_backward_signal(model: _TinyLM) -> None:
+    with pytest.raises(ValueError, match="signal"):
+        _visualization.show_bundle_graph(_harness(model), nodes="members", signal="backward")
     with pytest.raises(ValueError, match="nodes"):
         _visualization.show_bundle_graph(_harness(model), nodes="layers")  # type: ignore[arg-type]
 
@@ -494,7 +494,7 @@ def test_lazy_load_reaches_bundle_members(tmp_path: Path, model: _TinyLM) -> Non
     for name in ("draft", "critique"):
         assert lazy[name].payload_load_status == "loaded_lazy"
         assert eager[name].payload_load_status != "loaded_lazy"
-        pairs = zip(lazy[name].layer_list, eager[name].layer_list, strict=True)
+        pairs = zip(lazy[name]._layer_list, eager[name]._layer_list, strict=True)
         lazy_op, eager_op = next((a, b) for a, b in pairs if a.has_saved_activation)
         assert lazy_op.out_ref is not None  # the payload stayed on disk until read
         assert torch.equal(lazy_op.out, eager_op.out)

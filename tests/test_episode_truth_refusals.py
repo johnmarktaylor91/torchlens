@@ -1,5 +1,5 @@
 """Episode honesty refusals (lane F40a): pre-execution intervene refusal,
-declared-step cost ceiling, partial_log on settlement refusals, and the
+declared-step cost ceiling, partial_trace on settlement refusals, and the
 discoverability seam (capture_kind / episode step access)."""
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from torchlens._capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
     resolve_episode_declaration,
 )
-from torchlens._partial import from_failed_capture
 from torchlens.errors.episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeOptions
 from torchlens.types import PartialTrace
@@ -163,15 +162,13 @@ def test_entry_refusal_via_trace_keeps_root_unexecuted():
 def _assert_settlement_refusal_keeps_product(excinfo: pytest.ExceptionInfo) -> None:
     """Shared assertions: settlement refusals carry the settled product."""
 
-    partial = getattr(excinfo.value, "partial_log", None)
+    partial = getattr(excinfo.value, "partial_trace", None)
     assert isinstance(partial, PartialTrace)
     assert partial.trace is not None
-    assert len(partial.trace.layer_list) > 0
-    recovered = from_failed_capture(excinfo.value)
-    assert recovered is partial
+    assert len(partial.trace._layer_list) > 0
 
 
-def test_settlement_count_mismatch_carries_partial_log():
+def test_settlement_count_mismatch_carries_partial_trace():
     """episode_ledger_incoherent at settlement keeps the settled product."""
 
     model = _Greedy()
@@ -243,7 +240,7 @@ def test_prompt_plus_completion_matches_emitted_only_column():
 
 
 def test_capture_kind_and_public_step_access():
-    """Discoverability seam: Trace.capture_kind and Trace.episode."""
+    """Discoverability seam: Trace.provenance.kind and Trace.episode."""
 
     model = _Greedy()
     episode_trace = tl.trace(
@@ -251,7 +248,7 @@ def test_capture_kind_and_public_step_access():
         torch.tensor([[1]]),
         episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
     )
-    assert episode_trace.capture_kind == "episode"
+    assert episode_trace.provenance.kind == "episode"
     ledger = episode_trace.episode
     assert ledger is not None
     assert ledger.steps_completed == N_STEPS
@@ -260,9 +257,9 @@ def test_capture_kind_and_public_step_access():
     assert ledger.header.stepped_module == "step"
 
     plain_trace = tl.trace(model, torch.tensor([[1]]))
-    assert plain_trace.capture_kind == "plain"
+    assert plain_trace.provenance.kind == "plain"
     assert plain_trace.episode is None
 
     product = episode_trace.run(inputs=torch.tensor([[9]]))
-    assert product.trace.capture_kind == "plain"
+    assert product.trace.provenance.kind == "plain"
     assert product.trace.episode is None

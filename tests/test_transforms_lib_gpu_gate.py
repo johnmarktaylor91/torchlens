@@ -111,6 +111,7 @@ def _paths_agree_on_device(device: torch.device) -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_generation_is_bit_identical_to_cpu() -> None:
     """O3's on-device leg: the reasoned claim, finally measured (16.4)."""
 
@@ -118,6 +119,7 @@ def test_cuda_generation_is_bit_identical_to_cpu() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_chain_executes_on_device() -> None:
     """Chain execution stays on CUDA; outputs match CPU within tolerance."""
 
@@ -125,6 +127,7 @@ def test_cuda_chain_executes_on_device() -> None:
 
 
 @_CUDA
+@pytest.mark.cuda
 def test_cuda_multiply_paths_agree() -> None:
     """dense / sparse_csr / dense_chunked parity on CUDA."""
 

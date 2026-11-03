@@ -31,7 +31,7 @@ _TO_PANDAS_EXCLUDED_BUFFER_FIELDS: frozenset[str] = frozenset(
         # List of live Op child records, not a scalar table cell -- same
         # "list of child records" exclusion category as BackwardPass
         # .grad_fn_calls / GradFn.calls / Module.ops. Per-version scalars are
-        # already flattened into sibling columns (buffer_pass, shape, dtype,
+        # already flattened into sibling columns (overwrite_index, shape, dtype,
         # etc.) via the most recent version.
         "versions",
     }
@@ -70,10 +70,10 @@ class Buffer:
         "_initial_value": FieldPolicy.KEEP,
         "_source_ref": FieldPolicy.WEAKREF_STRIP,
     }
-    FIELD_POLICY = build_record_field_policy_table(
+    _FIELD_POLICY = build_record_field_policy_table(
         BUFFER_LOG_FIELD_ORDER, _PORTABLE_STATE_SPEC, schema_key="buffer"
     )
-    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(FIELD_POLICY)
+    _PORTABLE_STATE_SPEC = portable_state_spec_from_policy(_FIELD_POLICY)
 
     def __init__(
         self,
@@ -225,14 +225,8 @@ class Buffer:
         return [version for version in self.versions if version.buffer_write_kind is not None]
 
     @property
-    def buffer_overwrite_index(self) -> int | None:
-        """Return the most recent version's overwrite index."""
-
-        return self.buffer_pass
-
-    @property
-    def buffer_pass(self) -> int | None:
-        """Return the most recent graph version pass index."""
+    def overwrite_index(self) -> int | None:
+        """Return the most recent graph version's overwrite index (its buffer pass)."""
 
         return None if not self.versions else self.versions[-1].buffer_pass
 
@@ -240,7 +234,7 @@ class Buffer:
     def call_index(self) -> int | None:
         """Return the most recent graph version call index."""
 
-        return self.buffer_pass
+        return self.overwrite_index
 
     @property
     def layer_label(self) -> str | None:
@@ -291,13 +285,13 @@ class Buffer:
         return None if not self.versions else self.versions[-1].grad_dtype
 
     @property
-    def gradient_memory(self) -> Any:
+    def grad_memory(self) -> Any:
         """Return final observed gradient memory."""
 
         return None if not self.versions else self.versions[-1].gradient_memory
 
     @property
-    def buffer_source(self) -> str | None:
+    def writer_label(self) -> str | None:
         """Return the most recent write producer label, if any."""
 
         for version in reversed(self.versions):

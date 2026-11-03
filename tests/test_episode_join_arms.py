@@ -321,7 +321,7 @@ def test_default_arm_per_segment_facts_stay_usable() -> None:
     assert all(isinstance(row.step_output, tuple) for row in ledger.rows)
     output_op = log.output_ops[0]
     assert output_op.out is not None
-    assert len(log.layer_list) > 0
+    assert len(log._layer_list) > 0
     assert log["argmax_1_5"].parents  # graph edges readable
 
 
@@ -343,7 +343,7 @@ def test_refuse_arm_raises_at_settlement_with_partial_evidence() -> None:
     assert "2 positions entered this loop from outside the capture" in str(exc)
     # Recoverable partial evidence: the settled product rides the refusal
     # WITH its measured envelope and full ledger.
-    partial = exc.partial_log
+    partial = exc.partial_trace
     assert partial is not None
     payload = partial.trace.annotations["episode"]
     assert payload["header"]["step_join"]["break_step"] == 2
@@ -377,7 +377,7 @@ def test_closed_feed_halts_at_next_step_entry_with_verbatim_text() -> None:
     assert "Re-run without `feed='closed'`" in message
     # The partial product's ledger pins the halt geometry: the break step
     # ENTERED (its input arrived) and stopped; later steps never started.
-    payload = exc.partial_log.trace.annotations["episode"]
+    payload = exc.partial_trace.trace.annotations["episode"]
     assert [row["status"] for row in payload["rows"]] == [
         "complete",
         "complete",
@@ -414,7 +414,7 @@ def test_closed_feed_with_declared_crossing_stops_before_entry() -> None:
     exc = excinfo.value
     assert exc.fields["code"] == "episode_declared_crossing_stop"
     assert exc.fields["break_step"] == 2
-    payload = exc.partial_log.trace.annotations["episode"]
+    payload = exc.partial_trace.trace.annotations["episode"]
     assert payload["header"]["step_join"]["grades"][2] == "declared"
 
 

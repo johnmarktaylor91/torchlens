@@ -16,7 +16,7 @@ BOTH fork arms are built):
   graph, audit, and per-segment replay remain usable.
 - FORK-4 arm (b) (``on_feed_break="refuse"``): the settlement write raises
   typed ``episode_feed_break_exogenous`` carrying the settled product on
-  ``exc.partial_log`` -- recoverable partial evidence, nothing discarded.
+  ``exc.partial_trace`` -- recoverable partial evidence, nothing discarded.
 - STRICT (``EpisodeOptions(feed="closed")``): for an undeclared crossing the
   capture HALTS at the next step entry -- the first point where the break is
   observable (one-step detection latency; a live check cannot see a break
@@ -746,19 +746,19 @@ def _graph_connected(trace: Any, address: str, from_call: int, to_call: int) -> 
     if not source_labels or not target:
         return None
 
-    # The walk is OP-level and pass-qualified throughout (the pass-blind
-    # Layer walk conflates recurrence passes: a bare multi-pass label's
-    # children span every pass). ModuleCall.ops/output_ops entries and
-    # Op.label are always pass-qualified; Op.children spell single-pass
+    # The walk is OP-level and pass-qualified throughout (a pass-blind Layer
+    # walk conflates recurrence passes). Op.children spell single-pass
     # neighbours bare, so each child resolves through the trace lookup and
     # is re-keyed by its own Op.label.
     def _resolve(label: str) -> Any | None:
         """Resolve a (possibly bare) label to its single Op, else ``None``."""
-
         try:
-            ops = trace[label].ops
+            record = trace[label]
         except (LookupError, AttributeError, TypeError, ValueError):
             return None
+        ops = getattr(record, "ops", None)
+        if ops is None:  # a pass-qualified label resolves to the Op, its own pass
+            return record
         return ops[0] if len(ops) == 1 else None
 
     seen: set[str] = set()
@@ -1153,7 +1153,7 @@ def _validated_join_declaration(
             "closed vocabulary ['disclose', 'refuse']: 'disclose' (default) "
             "returns the one Trace with the break marked and episode-"
             "dependent claims refused across it; 'refuse' raises typed at "
-            "settlement with the settled product on exc.partial_log.",
+            "settlement with the settled product on exc.partial_trace.",
             code="episode_declaration_invalid",
         )
     try:

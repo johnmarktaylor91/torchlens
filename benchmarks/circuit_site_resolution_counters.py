@@ -57,11 +57,11 @@ for _path in (REPO_ROOT, REPO_ROOT / "tests"):
 import torchlens as tl  # noqa: E402
 import torchlens.mechinterp as mi  # noqa: E402
 
-_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", intervention_ready=True)
+_CAPTURE = tl.options.CaptureOptions(layers_to_save="all", replayable=True)
 
 #: (path suffix, function name) of each counted function, by report key.
 COUNTED: dict[str, tuple[str, str]] = {
-    "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
+    "resolve_sites": ("torchlens/_selection/resolver.py", "resolve_sites"),
     "selector_eval_evaluate": ("torchlens/_ir/selector_eval.py", "evaluate"),
     "op_getattribute": ("torchlens/_data_classes/op.py", "__getattribute__"),
     "op_store_cell_get": ("torchlens/_trace_core/op_store.py", "cell_get"),
@@ -138,7 +138,7 @@ def output_digest(trace: tl.Trace) -> dict[str, Any]:
 
     digest = hashlib.sha256()
     tensors = 0
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         out = op.out
         digest.update(str(op.label).encode())
         if isinstance(out, torch.Tensor):
@@ -148,7 +148,7 @@ def output_digest(trace: tl.Trace) -> dict[str, Any]:
             digest.update(value.reshape(-1).view(torch.uint8).numpy().tobytes())
         else:
             digest.update(repr(type(out)).encode())
-    return {"sha256": digest.hexdigest(), "ops": len(trace.layer_list), "tensors": tensors}
+    return {"sha256": digest.hexdigest(), "ops": len(trace._layer_list), "tensors": tensors}
 
 
 def reference_gap(
@@ -178,11 +178,11 @@ def reference_gap(
 #: is reported as context (never a gate; cProfile inflates call-heavy code).
 TIMED: dict[str, tuple[str, str]] = {
     "patch_edges": ("torchlens/mechinterp/_edge_patch.py", "patch_edges"),
-    "resolve_sites": ("torchlens/intervention/resolver.py", "resolve_sites"),
+    "resolve_sites": ("torchlens/_selection/resolver.py", "resolve_sites"),
     "origin_sites_for_hooks": ("torchlens/intervention/replay.py", "_origin_sites_for_hooks"),
     "hook_targets_by_label": ("torchlens/intervention/replay.py", "_hook_targets_by_label"),
     "group_for_site": ("torchlens/intervention/replay.py", "_group_for_site"),
-    "build_selection_do_plan": ("torchlens/_selection.py", "build_selection_do_plan"),
+    "build_selection_do_plan": ("torchlens/_selection/selection.py", "build_selection_do_plan"),
     "run_replay": ("torchlens/intervention/replay.py", "_run_replay"),
 }
 
@@ -225,7 +225,7 @@ def _counts(stats: pstats.Stats) -> dict[str, int]:
 def _counting_selector_kinds(kinds: Counter[str]) -> Iterator[None]:
     """Count the normalized selector kind of every ``resolve_sites`` query."""
 
-    from torchlens.intervention import resolver
+    from torchlens._selection import resolver
 
     original = resolver.resolve_sites
 
@@ -267,7 +267,7 @@ def run(case_name: str, *, wall: bool) -> dict[str, Any]:
             "case": case_name,
             "edges": len(edges),
             "receivers": len({edge.receiver.name for edge in edges}),
-            "baseline_ops": len(clean.layer_list),
+            "baseline_ops": len(clean._layer_list),
             "counters": _counts(pstats.Stats(profiler)),
             "profile_cumulative_s": _profile_seconds(pstats.Stats(profiler)),
             "output_digest": output_digest(patched),

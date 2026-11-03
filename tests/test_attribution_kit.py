@@ -293,7 +293,7 @@ def test_occlusion_routes_named_baselines_through_selection_do() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = tl.units(trace.input_ops[0].label, [(0, 0, 1, 1)])
@@ -323,7 +323,7 @@ def test_occlusion_rejects_an_implicit_or_invalid_baseline() -> None:
     trace = tl.trace(
         _ImageScale(),
         inputs,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     try:
         selection = trace.input_ops[0]
@@ -361,8 +361,8 @@ def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> N
         )
     }
     stage4a_files = (
-        "torchlens/_selection.py",
-        "torchlens/_selection_align.py",
+        "torchlens/_selection/selection.py",
+        "torchlens/_selection/align.py",
         "tests/test_selection_algebra.py",
         "tests/test_selection_do.py",
         "tests/test_selection_align.py",

@@ -5,7 +5,7 @@ user-held Trace, and validation ENTRY unconditionally writes the failure side
 channel: ``reset_validation_failure`` sets ``_last_validation_failure = None``
 on every run (``validation/core.py``), and non-failing diagnostics accumulate
 in ``_validation_diagnostics``. Neither name had a ``_PORTABLE_STATE_SPEC`` /
-``FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
+``_FIELD_POLICY`` row, so the portable scrub's undeclared-field audit rejected
 them and a plain validate-then-save sequence died with
 
     ArtifactError: Trace._last_validation_failure is missing from
@@ -58,7 +58,7 @@ def _traced() -> tuple[tl.Trace, torch.Tensor]:
 def test_both_side_channel_attrs_are_declared_drop() -> None:
     """The declaration is the fix; the names are session-time, not portable."""
 
-    policy = tl.Trace.FIELD_POLICY
+    policy = tl.Trace._FIELD_POLICY
     for name in _SIDE_CHANNEL_ATTRS:
         assert name in policy, name
         assert policy[name].portable_policy is FieldPolicy.DROP, name

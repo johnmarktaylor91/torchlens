@@ -28,11 +28,19 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._selection.selectors import CompositeSelector
 from torchlens._utils._torch_compat import TorchCapabilityWarning
-from torchlens.backends.torch import _ops_interventions, ops as torch_ops
-from torchlens.intervention import runtime as intervention_runtime
+from torchlens.backends.torch import (
+    _ops_exhaustive,
+    _ops_interventions,
+    _ops_shared_fields,
+    ops as torch_ops,
+)
+from torchlens.intervention import (
+    hooks as _intervention_hooks,
+    runtime as intervention_runtime,
+)
 from torchlens.intervention.hooks import NormalizedHookEntry
-from torchlens.intervention.selectors import CompositeSelector
 from torchlens.intervention.spec import Recipe
 
 _MAGNITUDE = 2.0
@@ -161,8 +169,8 @@ def _fire_row(record: Any) -> tuple[Any, ...]:
         record.engine,
         record.site_label,
         record.timing,
-        record.direction,
-        record.helper_name,
+        record.signal,
+        record.edit_name,
         record.seed,
     )
 
@@ -254,9 +262,9 @@ def _trace_fingerprint(spec_name: str, *, force_legacy: bool) -> dict[str, Any]:
         "labels": [str(op.label) for op in trace.ops],
         "saved": saved,
         "fire_records": {
-            str(op.label): [_fire_row(record) for record in op.interventions]
+            str(op.label): [_fire_row(record) for record in op.edits]
             for op in trace.ops
-            if op.interventions
+            if op.edits
         },
         "fires": fires,
         "output": _thash(trace[trace.output_layers[0]].out),
@@ -404,7 +412,7 @@ _INPUT_SPLICE = SimpleNamespace(name="splice_module", metadata={"input_route": "
         pytest.param(_entry(tl.label("relu_1_3")), True, id="label_post_hook"),
         pytest.param(_entry(~tl.module("block1")), True, id="negated_module"),
         pytest.param(
-            _entry(tl.func("relu"), metadata={"direction": "backward"}),
+            _entry(tl.func("relu"), metadata={"signal": "backward"}),
             False,
             id="backward_entry",
         ),
@@ -488,12 +496,22 @@ def test_validation_verdicts_unchanged_by_the_door() -> None:
 # 3. Deterministic per-op call counts
 # ---------------------------------------------------------------------------
 
-_COUNTED = ("make_live_site_proxy", "_build_shared_fields_dict", "_evaluate_intervene_op")
+# Each hot-path function's home module first, then every module that bound it
+# by from-import (callers call their own copy, so the counter wraps each one).
+# These are per-op path counts. The module-boundary door builds module sites and
+# evaluates the module-kind predicate at module exits, through its own copy of
+# make_live_site_proxy and a call-time import of _evaluate_intervene_op from its
+# home; neither is a per-op call, so that copy and that home stay uncounted.
+_COUNTED: dict[str, tuple[Any, ...]] = {
+    "make_live_site_proxy": (_intervention_hooks, _ops_interventions, torch_ops),
+    "_build_shared_fields_dict": (_ops_shared_fields, _ops_exhaustive, _ops_interventions),
+    "_evaluate_intervene_op": (_ops_interventions, torch_ops),
+}
 
 
 @contextmanager
 def _call_counter() -> Iterator[dict[str, int]]:
-    """Count calls to the per-op hot-path functions as bound in the torch ops module.
+    """Count calls to the per-op hot-path functions wherever they are bound.
 
     Yields
     ------
@@ -502,7 +520,7 @@ def _call_counter() -> Iterator[dict[str, int]]:
     """
 
     counts = dict.fromkeys(_COUNTED, 0)
-    originals = {name: getattr(torch_ops, name) for name in _COUNTED}
+    originals = {name: getattr(modules[0], name) for name, modules in _COUNTED.items()}
 
     def counting(name: str) -> Callable[..., Any]:
         """Wrap one function with a counter."""
@@ -517,13 +535,16 @@ def _call_counter() -> Iterator[dict[str, int]]:
 
         return wrapper
 
-    for name in _COUNTED:
-        setattr(torch_ops, name, counting(name))
+    for name, modules in _COUNTED.items():
+        wrapper = counting(name)
+        for module in modules:
+            setattr(module, name, wrapper)
     try:
         yield counts
     finally:
-        for name, original in originals.items():
-            setattr(torch_ops, name, original)
+        for name, modules in _COUNTED.items():
+            for module in modules:
+                setattr(module, name, originals[name])
 
 
 def _trace_counts(spec_name: str | None) -> tuple[dict[str, int], int]:

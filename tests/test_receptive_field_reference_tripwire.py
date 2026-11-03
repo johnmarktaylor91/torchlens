@@ -20,7 +20,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes import op as op_module
+from torchlens._data_classes import _op_save as op_save_module
 from torchlens.options import CaptureOptions
 
 _X = torch.tensor([[1.0, -2.0, 0.5, 0.25], [0.5, 1.5, -1.0, 2.0], [-0.5, 0.0, 1.0, -1.5]])
@@ -142,7 +142,7 @@ def test_train_mode_batchnorm_is_refused_in_receptive_field_scope() -> None:
 def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPatch) -> None:
     """The version node's stored copy reads cleanly, then raises once mutated."""
 
-    monkeypatch.setattr(op_module, "_WARNED_REFERENCE_SAVE_MODE", True)
+    monkeypatch.setattr(op_save_module, "_WARNED_REFERENCE_SAVE_MODE", True)
     torch.manual_seed(3)
     trace = tl.trace(
         _BatchNormModel().eval(),
@@ -150,7 +150,7 @@ def test_buffer_version_node_copy_is_still_guarded(monkeypatch: pytest.MonkeyPat
         save_mode="reference",
         capture=CaptureOptions(layers_to_save="all"),
     )
-    version_nodes = [op for op in trace.layer_list if op._slot("buffer_write_kind") == "fused"]
+    version_nodes = [op for op in trace._layer_list if op._slot("buffer_write_kind") == "fused"]
     assert version_nodes, "eval BatchNorm logged no buffer version node"
     for node in version_nodes:
         assert isinstance(node.out, torch.Tensor)

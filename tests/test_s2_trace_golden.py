@@ -126,12 +126,12 @@ def _projection(trace: tl.Trace) -> tuple[dict[str, Any], ...]:
     """
 
     rows: list[dict[str, Any]] = []
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         rows.append(
             {
                 "label": op.layer_label,
                 "raw": op._label_raw,
-                "type": op.layer_type,
+                "type": op.type,
                 "func": "none" if op.func_name is None else op.func_name,
                 "parents": tuple(op.parents),
                 "shape": tuple(op.shape) if op.shape is not None else None,

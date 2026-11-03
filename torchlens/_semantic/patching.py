@@ -12,9 +12,10 @@ from typing import Any
 import torch
 from torch import nn
 
+from .._record_type import record_type
+from .._selection.selectors import facet
 from .._user_funcs import trace
 from ..errors._base import TorchLensError, TorchLensWarning
-from ..intervention.selectors import facet
 from ..options import CaptureOptions
 from .facets import Facet, MissingGrad
 
@@ -63,10 +64,7 @@ class _CounterfactualStateGuard:
             (tensor, tensor.detach().clone()) for tensor in _stateful_tensors(model)
         ]
         self._grads: list[tuple[torch.Tensor, torch.Tensor | None]] = [
-            (
-                tensor,
-                None if tensor.grad is None else tensor.grad.detach().clone(),
-            )
+            (tensor, None if tensor.grad is None else tensor.grad.detach().clone())
             for tensor, _saved in self._tensors
         ]
         self._rng: dict[str, Any] = _snapshot_rng()
@@ -173,7 +171,7 @@ def _fork_rng_devices() -> list[int]:
     pre-fix gate ``utils/rng.py`` documents.
     """
 
-    from .._utils.tensor_utils import _is_cuda_initialized
+    from .._utils._cuda_probe import _is_cuda_initialized
 
     if _is_cuda_initialized() and torch.cuda.is_available():
         return list(range(torch.cuda.device_count()))
@@ -1008,8 +1006,8 @@ def _require_effective_patch(
     if isinstance(started_at, (int, float)):
         # Fire records are minted DURING the run, so they are filtered by the
         # run's start time; the run's end ``timestamp`` would exclude them all.
-        for layer in getattr(patched_log, "layer_list", []) or []:
-            for record in getattr(layer, "interventions", []) or []:
+        for layer in patched_log._layer_list or []:
+            for record in getattr(layer, "edits", []) or []:
                 record_timestamp = getattr(record, "timestamp", None)
                 if isinstance(record_timestamp, (int, float)) and record_timestamp >= started_at:
                     records.append(record)
@@ -1084,7 +1082,7 @@ def _model_input_home_role(log: Any, facet_name: str, address: str) -> str | Non
     except (AttributeError, KeyError, RuntimeError, ValueError):
         return None
     home = getattr(spec, "home", None)
-    if home is None or getattr(home, "layer_type", None) != "input":
+    if home is None or record_type(home, None) != "input":
         return None
     home_label = str(getattr(home, "label", ""))
     home_op = next(

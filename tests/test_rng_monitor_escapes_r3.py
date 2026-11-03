@@ -28,10 +28,8 @@ import pytest
 import torch
 from torch import nn
 
-from torchlens._utils.rng import (
-    _UNCERTAIN_DETAIL_CAP,
-    host_nondeterminism_monitor,
-)
+from torchlens._utils.rng import host_nondeterminism_monitor
+from torchlens._utils.rng.inventory_types import _UNCERTAIN_DETAIL_CAP
 
 
 def test_uuid1_c_path_is_marked_and_restored() -> None:
@@ -213,7 +211,7 @@ def test_random_subclass_draw_override_fail_closes_to_uncertain() -> None:
             return self.lin(x) * self.rng.random()
 
     capture = CaptureOptions(
-        intervention_ready=True,
+        replayable=True,
         capture_container_structure=True,
         cache=False,
         seed=7,
@@ -255,7 +253,7 @@ def test_library_rng_subclasses_do_not_over_trigger() -> None:
             return self.lin(x)
 
     capture = CaptureOptions(
-        intervention_ready=True,
+        replayable=True,
         capture_container_structure=True,
         cache=False,
         seed=7,

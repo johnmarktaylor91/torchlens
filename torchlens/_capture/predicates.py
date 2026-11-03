@@ -19,8 +19,8 @@ from .._ir.selector_eval import (
     selector_contains_kind,
     split_followed_by_conjunction,
 )
+from .._selection.selectors import BaseSelector
 from ..intervention.predicates import as_intervention_decision
-from ..intervention.selectors import BaseSelector
 from ..intervention.types import InterventionDecision
 from ..recording.exceptions import PredicateError
 from ..recording.types import CaptureSpec, ModuleStackFrame, RecordContext
@@ -468,7 +468,7 @@ def build_op_record_context(
     sample_id: str | int | None,
     address: str | None = None,
     module_type: str | None = None,
-    module_pass_index: int | None = None,
+    module_pass_number: int | None = None,
     is_transform: bool = False,
     transform_kind: str | None = None,
 ) -> RecordContext:
@@ -512,7 +512,7 @@ def build_op_record_context(
         Whether source events should appear in ``recent_ops``.
     sample_id:
         Optional sample id for batched predicate runs.
-    address, module_type, module_pass_index:
+    address, module_type, module_pass_number:
         Nearest module context fields, when known.
 
     Returns
@@ -539,7 +539,7 @@ def build_op_record_context(
             "is_bottom_level_func": is_bottom_level_func,
             "address": address,
             "module_type": module_type,
-            "module_pass_index": module_pass_index,
+            "module_pass_number": module_pass_number,
             "is_transform": is_transform,
             "transform_kind": transform_kind,
         },

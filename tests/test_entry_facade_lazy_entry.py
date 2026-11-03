@@ -20,9 +20,9 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable_state import snapshot_capture_state
+from torchlens._runnable.state import snapshot_capture_state
 from torchlens._utils.lazy_state import has_uninitialized_lazy_state, pending_lazy_state
-from torchlens.errors import CaptureNotActiveError
+from torchlens.errors import CaptureNotActiveError, TraceCaptureError
 
 
 def _lazy_mlp() -> nn.Sequential:
@@ -64,9 +64,9 @@ def test_trace_tolerates_lazy_buffer_model() -> None:
 
     model = _lazy_bn()
     log = tl.trace(model, torch.randn(3, 4))
-    assert log.num_ops >= 2
+    assert log._num_ops >= 2
     assert not _pending(model), "the captured forward materializes the buffers"
-    labels = " ".join(op.label for op in log.layer_list)
+    labels = " ".join(op.label for op in log._layer_list)
     assert "batchnorm" in labels
     # The materialized running stats registered as first-class buffer
     # sources (the late-index path), so the pre-hook init ops carry real
@@ -94,7 +94,7 @@ def test_self_prime_remedy_unlocks_capture() -> None:
         model(x)
     assert not _pending(model)
     log = tl.trace(model, x)
-    assert log.num_ops >= 2
+    assert log._num_ops >= 2
     log.cleanup()
 
 
@@ -157,9 +157,10 @@ def test_capture_failure_advisory_scopes_the_restoration_claim() -> None:
 
     with (
         pytest.warns(Warning) as caught,
-        pytest.raises(RuntimeError, match="mid-forward failure"),
+        pytest.raises(TraceCaptureError, match="mid-forward failure") as _tce_info,
     ):
         tl.trace(_Boom(), torch.randn(2, 4))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
     advisories = [
         str(w.message) for w in caught if "TorchLens capture attempt failed" in str(w.message)
     ]

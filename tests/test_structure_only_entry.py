@@ -70,7 +70,7 @@ def test_non_torch_backend_refuses_explicit_structure_only_typed() -> None:
     """The capability-gate row: a backend without structure_only_capture
     refuses the explicit option instead of silently ignoring it."""
 
-    from torchlens._user_funcs import _enforce_capability_option_gates
+    from torchlens._capture.prepare.dispatch import _enforce_capability_option_gates
     from torchlens.backends.registry import BackendUnsupportedError
 
     mlx_spec = get_backend_spec("mlx")
@@ -94,19 +94,19 @@ def test_torch_declares_and_binds_the_structure_only_capability() -> None:
 
 def test_e1_all_real_flag_on_capture_is_marked_gated_and_payload_free() -> None:
     log = _structure_capture()
-    assert log.structure_only is True
+    assert log.options.structure_only is True
     # No value payloads are retained anywhere: the contract records structure
     # and shape/dtype hypotheses only.
-    for layer in log.layer_list:
+    for layer in log._layer_list:
         assert getattr(layer, "out", None) is None
     # The structural record itself is intact.
-    assert len(log.layer_list) >= 3  # input + linear + relu
+    assert len(log._layer_list) >= 3  # input + linear + relu
     assert tuple(log["relu_1_2"].shape) == (2, 4)
 
 
 def test_e6_flag_off_default_capture_is_zero_diff() -> None:
     log = tl.trace(TwoLayer(), torch.randn(2, 4))
-    assert log.structure_only is False
+    assert log.options.structure_only is False
     assert log["relu_1_2"].out is not None
 
 
@@ -134,10 +134,10 @@ def test_intervention_ready_conflicts_at_entry() -> None:
         tl.trace(
             TwoLayer(),
             torch.randn(2, 4),
-            capture=CaptureOptions(structure_only=True, intervention_ready=True),
+            capture=CaptureOptions(structure_only=True, replayable=True),
         )
     assert excinfo.value.fields["code"] == "structure_only_option_conflict"
-    assert "intervention_ready" in excinfo.value.fields["arguments"]
+    assert "replayable" in excinfo.value.fields["arguments"]
 
 
 def test_value_touching_halt_predicates_conflict_at_entry() -> None:
@@ -155,7 +155,7 @@ def test_value_free_structured_halt_stays_legal() -> None:
     value-free (structured selectors)."""
 
     log = _structure_capture(halt=tl.func("relu"))
-    assert log.structure_only is True
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +172,6 @@ def test_value_free_structured_halt_stays_legal() -> None:
         ("save_args", {}, {"save_args": True}),
         ("save_raw_input", {}, {"save_raw_input": True}),
         ("save_transformed_output", {}, {"save_transformed_output": True}),
-        ("output_style", {}, {"output_style": "classification"}),
         ("lookback payloads", {"lookback": 4, "lookback_payload_policy": "detached_raw"}, {}),
     ],
 )
@@ -201,7 +200,7 @@ def test_explicit_metadata_only_save_stays_legal() -> None:
         torch.randn(2, 4),
         capture=CaptureOptions(structure_only=True, layers_to_save="none"),
     )
-    assert log.structure_only is True
+    assert log.options.structure_only is True
 
 
 # ---------------------------------------------------------------------------
@@ -219,6 +218,6 @@ def test_mode_marker_persists_and_left_the_prerelease_registrar() -> None:
     the marker persists, and nothing still gates it.
     """
 
-    assert Trace._PORTABLE_STATE_SPEC["structure_only"] is FieldPolicy.KEEP
+    assert Trace._PORTABLE_STATE_SPEC["_options_structure_only"] is FieldPolicy.KEEP
     inventory = registered_prerelease_fields()
-    assert "structure_only" not in inventory.get("Trace", ())
+    assert "_options_structure_only" not in inventory.get("Trace", ())

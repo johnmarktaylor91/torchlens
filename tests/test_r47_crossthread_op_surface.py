@@ -40,17 +40,21 @@ from _forward_stash import stashed
 from torch import nn
 
 import torchlens as tl
+import torchlens.backends.torch._completeness_cross_thread
+import torchlens.backends.torch._completeness_patches
+import torchlens.backends.torch.wrappers as wrappers_module
 from torchlens import _state
 from torchlens._runnable import PathFaithfulness
-from torchlens.backends.torch import completeness_witness as cw
-from torchlens.backends.torch.completeness_witness import (
+from torchlens.backends.torch._completeness_cross_thread import (
     _torch_ops_call_classes,
-    host_escape_has_cross_thread_captured_tensor,
     host_escape_observer_install_failed,
+)
+from torchlens.backends.torch._completeness_escape_state import (
+    host_escape_has_cross_thread_captured_tensor,
 )
 from torchlens.options import CaptureOptions
 
-_CAP = {"intervention_ready": True, "capture_container_structure": True, "cache": False}
+_CAP = {"replayable": True, "capture_container_structure": True, "cache": False}
 
 
 def _gate_pos() -> torch.Tensor:
@@ -311,13 +315,15 @@ def test_disarmed_torch_ops_call_is_pure_passthrough(monkeypatch: pytest.MonkeyP
     never invokes the operand observer."""
 
     calls = {"n": 0}
-    real = cw.observe_nonowner_operands
+    real = torchlens.backends.torch._completeness_cross_thread.observe_nonowner_operands
 
     def _spy(args: Any, kwargs: Any) -> None:
         calls["n"] += 1
         real(args, kwargs)
 
-    monkeypatch.setattr(cw, "observe_nonowner_operands", _spy)
+    # The home module and every module that binds the name by import.
+    for module in (torchlens.backends.torch._completeness_cross_thread, wrappers_module):
+        monkeypatch.setattr(module, "observe_nonowner_operands", _spy)
     assert _state._nonowner_belt_armed is False
     out = torch.ops.aten.mul.Tensor(torch.ones(2), torch.tensor(3.0))
     assert out.tolist() == [3.0, 3.0]
@@ -359,7 +365,12 @@ def test_install_failure_marks_observer_incomplete(monkeypatch: pytest.MonkeyPat
     """An empty scan (install failure surrogate) fails CLOSED: the observer-install-failed flag is
     set so the descriptor is INCOMPLETE, never a silent 'no non-owner op touch'."""
 
-    monkeypatch.setattr(cw, "_torch_ops_call_classes", lambda: ())
+    # The home module and every module that binds the name by import.
+    for module in (
+        torchlens.backends.torch._completeness_cross_thread,
+        torchlens.backends.torch._completeness_patches,
+    ):
+        monkeypatch.setattr(module, "_torch_ops_call_classes", lambda: ())
 
     class _M(nn.Module):
         def __init__(self) -> None:

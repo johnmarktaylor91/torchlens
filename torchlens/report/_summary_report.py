@@ -26,6 +26,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from .._errors import InvalidArgumentError
 from ._summary_charset import degrade
 
 if TYPE_CHECKING:
@@ -182,8 +183,6 @@ class SummaryReport(str):
         """The rebuilt payload, or a typed teaching refusal when there is none."""
 
         if self._rebuilt is None:
-            from .._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 f"{method}() serves rebuilt-grammar summaries; this report "
                 "carries no rebuilt-grammar payload (it was assembled from text).",
@@ -207,7 +206,6 @@ class SummaryReport(str):
             from ._summary_result import render_result_html
 
             return render_result_html(payload)
-        from .._errors import InvalidArgumentError
 
         raise InvalidArgumentError(
             f"render() style must be 'ascii', 'unicode', or 'html'; got {style!r}.",
@@ -225,8 +223,6 @@ class SummaryReport(str):
         stream = file if file is not None else sys.stdout
         resolved = detect_style(stream) if style == "auto" else style
         if resolved not in ("ascii", "unicode"):
-            from .._errors import InvalidArgumentError
-
             raise InvalidArgumentError(
                 f"print() style must be 'auto', 'ascii', or 'unicode'; got {style!r}.",
                 code="summary_option_invalid",
@@ -438,7 +434,7 @@ def _summary_rows(trace: Trace) -> tuple[SummaryRow, ...]:
     rows: list[SummaryRow] = []
     params_by_label: dict[str, int | None] = {}
     shapes_by_label: dict[str, tuple[int, ...] | None] = {}
-    for op in getattr(trace, "layer_list", ()) or ():
+    for op in trace._layer_list or ():
         label = str(getattr(op, "layer_label", "?"))
         num_params = getattr(op, "num_params", None)
         params_by_label[label] = None if num_params is None else int(num_params)
@@ -520,11 +516,11 @@ def build_summary_data(
     )
     outcome = getattr(trace, "outcome", None)
     capture = CaptureFacts(
-        backend=getattr(trace, "backend", None),
-        model_class_name=getattr(trace, "model_class_name", None),
+        backend=trace._provenance_backend,
+        model_class_name=trace._source_class_name,
         outcome_status=getattr(getattr(outcome, "status", None), "value", None),
-        is_verified=getattr(trace, "capture_verified", None),
-        is_structure_only=bool(getattr(trace, "structure_only", False)),
+        is_verified=trace._provenance_verified,
+        is_structure_only=bool(trace._options_structure_only),
         health_verdict=facts.verdict,
         capture_fingerprint=core.capture_fingerprint,
         advisories=len(

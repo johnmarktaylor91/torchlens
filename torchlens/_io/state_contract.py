@@ -2,7 +2,7 @@
 
 ONE service shared by load, inspect, and digest generation: it enumerates the
 known fields per record contract (through the field registry, which derives
-them from the same ``FIELD_POLICY`` / ``_PORTABLE_STATE_SPEC`` tables the
+them from the same ``_FIELD_POLICY`` / ``_PORTABLE_STATE_SPEC`` tables the
 serializers use), partitions incoming state into known/unknown BEFORE any
 object mutation, and refuses unknown fields TYPED and SYMMETRICALLY -- the
 refusal fires whether the writer is newer than the reader (additive field)
@@ -39,7 +39,8 @@ from contextlib import contextmanager
 from functools import cache
 from typing import Any
 
-from . import TLSPEC_VERSION, UnknownPersistedFieldError
+from .format_contract import TLSPEC_VERSION
+from .format_errors import UnknownPersistedFieldError
 
 #: Cap on unknown names spelled out in one refusal/inventory row (the full
 #: count always reports; a hostile million-key state must not build a

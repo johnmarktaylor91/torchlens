@@ -8,7 +8,7 @@ from enum import Enum
 from fractions import Fraction
 from typing import TYPE_CHECKING, ClassVar, Literal, cast
 
-from .._selection import _SelectionOperand
+from .._selection.selection import _SelectionOperand
 from ._errors import ReceptiveFieldError, ReceptiveFieldValidationError
 
 if TYPE_CHECKING:
@@ -432,7 +432,7 @@ class ReceptiveFieldBox(_SelectionOperand):
         never a fuzzy mask.
         """
 
-        from .._selection import _selection_from_box
+        from .._selection.selection import _selection_from_box
 
         return _selection_from_box(self)
 
@@ -575,7 +575,7 @@ class GradReceptiveField(_SelectionOperand):
         (relation=``exact`` w.r.t. the empirical mask), unchanged by lifting.
         """
 
-        from .._selection import _selection_from_gradient
+        from .._selection.selection import _selection_from_gradient
 
         return _selection_from_gradient(self)
 

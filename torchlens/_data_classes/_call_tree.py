@@ -9,7 +9,8 @@ count its scoped graph edges. ``module.py`` consumes
 are internal to the printer.
 """
 
-from typing import TYPE_CHECKING, TextIO
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, TextIO, cast
 
 from .._errors import RecordBindingError
 
@@ -38,8 +39,8 @@ def _display_call_label(call: "ModuleCall", show_call_index: bool) -> str:
     """
 
     if show_call_index:
-        return call.call_label
-    return call.call_label.rsplit(":", 1)[0]
+        return call.label
+    return call.label.rsplit(":", 1)[0]
 
 
 def _module_call_summary(call: "ModuleCall") -> str:
@@ -239,3 +240,39 @@ def _print_call_tree_from_root(
             print_node(child, child_prefix, index == len(children) - 1, depth + 1)
 
     print_node(call, "", True, 0)
+
+
+def root_call(trace: "Trace") -> "ModuleCall":
+    """Body of ``Trace._root_call``; the record keeps the thin spelling and docstring."""
+
+    for call in trace.module_calls:
+        if call.call_parent is None:
+            return cast("ModuleCall", call)
+    raise RuntimeError("Trace has no root ModuleCall")
+
+
+def walk_calls(trace: "Trace") -> Iterator["ModuleCall"]:
+    """Body of ``Trace.walk_calls``; the record keeps the thin spelling and docstring."""
+
+    if not trace.module_calls:
+        return
+    yield from root_call(trace).walk_descendants(include_self=True)
+
+
+def show_call_tree(
+    trace: "Trace",
+    max_depth: int | None = None,
+    include_atomic: bool = True,
+    show_call_index: bool = True,
+    file: TextIO | None = None,
+) -> None:
+    """Body of ``Trace.show_call_tree``; the record keeps the thin spelling and docstring."""
+
+    if not trace.module_calls:
+        return
+    root_call(trace).show_call_tree(
+        max_depth=max_depth,
+        include_atomic=include_atomic,
+        show_call_index=show_call_index,
+        file=file,
+    )

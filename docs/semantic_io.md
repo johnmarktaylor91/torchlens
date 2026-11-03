@@ -19,27 +19,35 @@ trace.output_table(k=5)
 trace.decode_output(k=3)
 ```
 
-Use `output_style=` and `output_head=` when auto-detection should be
-overridden or when a multi-output model needs an explicit logits head:
+Decoding is not a capture option. When auto-detection should be overridden,
+or a multi-output model needs an explicit logits head, decode again at read
+time from the retained output tensors:
 
 ```python
-trace = tl.trace(
-    model,
-    x,
-    capture=tl.options.CaptureOptions(
-        output_style="classification",
-        output_head="logits",
-    ),
-)
+trace = tl.trace(model, x)
+trace.decode_output(style="imagenet")  # force a style
+trace.decode_output(head="logits")  # pick the head of a multi-output model
+trace.output_table(k=5, style="classification", head="0")
+trace.decode_output(style="hf_text", tokenizer=tok)
 ```
 
-An `output_style` that no detector resolves refuses typed
-(`output_style_unknown`) with a did-you-mean over the built-in styles
-(`classification`, `imagenet`, `imagenet1k`, `hf_text`): before the forward
-when no custom detector is registered, after the capture when the
-registered custom detectors all declined it.
+The read-time decode returns rows in the same shape as `trace.decoded_output`
+and never rewrites the captured record. It needs the output activations
+retained (the default save policy); a structure-only or output-excluding
+capture refuses with `decoded_output_unavailable`. A `style` that no
+detector resolves refuses typed (`decode_style_unknown`) with a did-you-mean
+over the built-in styles (`classification`, `imagenet`, `imagenet1k`,
+`hf_text`); a `head` that is not an output head refuses `decode_head_unknown`
+with the available heads, and several qualifying heads with none named
+refuse `decode_head_ambiguous`.
 
-`trace.output_postprocessor` records the resolver source, selected style,
+Text models traced through `tl.bridge.transformers.trace_text` decode as text
+automatically: the bridge attaches the tokenizer for the span of the capture
+and the `hf_text` detector fires on it, decoding only a head named `logits`
+(or one bare output tensor). A text classifier with `config.id2label` gets its
+labels instead.
+
+`trace.provenance.output_postprocessor` records the resolver source, selected style,
 selected head, label source, confidence, ambiguity flag, and captured top-N
 bound. `trace.output_table(top_n, batch_items)` returns a dataframe with
 `batch_item`, `rank`, `label`, and `prob`. `batch_items=None` returns all
@@ -63,8 +71,12 @@ The default `trace.to_pandas()` schema is unchanged.
 ## Custom Output Detectors
 
 Register custom output detectors through `tl._autoroute.output.register(...)`.
-The detector receives the live model output object plus TorchLens metadata and
-returns a `ResolvedPostprocessing` record or `None`.
+A detector runs twice: automatically at the end of every capture, with the
+live model output object and `meta["style"] is None`, and on demand from
+`trace.decode_output(style="my_labels")`, with the retained output tensors
+keyed by head (`{"logits": tensor}`, or the one bare tensor) and
+`meta["style"]` set to the requested style. It returns a
+`ResolvedPostprocessing` record or `None`.
 
 ```python
 from typing import Any
@@ -74,9 +86,9 @@ from torchlens._data_classes.trace import ResolvedPostprocessing
 
 @tl._autoroute.output.register(name="my_labels", priority=5)
 def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | None:
-    """Resolve a local label bank for output_style='my_labels'."""
+    """Resolve a local label bank for decode_output(style='my_labels')."""
 
-    if meta.get("output_style") != "my_labels":
+    if meta.get("style") != "my_labels":
         return None
     return ResolvedPostprocessing(
         source="project",
@@ -85,14 +97,15 @@ def my_labels(outputs: Any, meta: dict[str, Any]) -> ResolvedPostprocessing | No
         config={"id2label": {0: "cat", 1: "dog"}},
         description="project label bank",
         style="classification",
-        selected_output_head=meta.get("output_head"),
+        selected_output_head=meta.get("head"),
         label_source="project-local",
         label_source_version="v1",
         confidence=1.0,
     )
 
 
-trace = tl.trace(model, x, capture=tl.options.CaptureOptions(output_style="my_labels"))
+trace = tl.trace(model, x)
+rows = trace.decode_output(style="my_labels")
 ```
 
 The registration API is intentionally fail-closed: return `None` for non-matches,
@@ -103,7 +116,7 @@ and unregister a temporary detector with
 
 Pass raw user input through `transform=` when the model expects tensors but the
 human-readable input is text, images, or another object. TorchLens stores the
-original value in `trace.raw_input` and can show it on the input node. The
+original value in `trace.input` and can show it on the input node. The
 portable save policy is controlled by `save_raw_input`.
 
 ```python
@@ -118,14 +131,14 @@ trace = tl.trace(
 trace.draw(show_input_transform_summary=True)
 ```
 
-Auto-route bridges populate `trace.input_preprocessor` when they resolve a
+Auto-route bridges populate `trace.provenance.input_preprocessor` when they resolve a
 known preprocessing pipeline. For local transforms, attach the same provenance
 record shape when documenting the transform in a demo or integration:
 
 ```python
 from torchlens._data_classes.trace import ResolvedPreprocessing
 
-trace.input_preprocessor = ResolvedPreprocessing(
+trace._provenance_input_preprocessor = ResolvedPreprocessing(
     source="project.transform",
     identifier="comma-vector-v1",
     verified=True,
@@ -168,14 +181,13 @@ trace = tl.trace(
     image_list,
     capture=tl.options.CaptureOptions(
         input_transform=image_batch_to_tensor,
-        output_style="classification",
         save_raw_input=True,
     ),
 )
 trace.model_profile
 ```
 
-For local transforms, set `trace.input_preprocessor` to a
+For local transforms, set `trace.provenance.input_preprocessor` to a
 `ResolvedPreprocessing` record before presenting the profile. This keeps demos
 and integrations honest about where preprocessing came from without adding a
 new persisted field.
@@ -198,7 +210,6 @@ trace = tl.trace(
     capture=tl.options.CaptureOptions(
         input_transform=image_batch_to_tensor,
         save_raw_input=True,
-        output_style="classification",
     ),
 )
 coords_by_layer = tl.repgeom.mds_evolution(trace, save=mds_layers, min_stimuli=8)
@@ -219,7 +230,7 @@ trace.draw(
 ```
 
 The hook reads coordinate tensors from `_annotation_blobs` and raw PIL stimuli
-from `trace.raw_input` at draw time, then embeds a fresh PNG in the rendered
+from `trace.input` at draw time, then embeds a fresh PNG in the rendered
 node. If raw images are missing or the batch size no longer matches the
 coordinates, it renders an explicit point-cloud fallback.
 
@@ -254,7 +265,7 @@ trace.draw(node_spec_fn=tl.viz.nodes.rdm(max_stimuli=8))
 `rdm_evolution(...)` stores an `N x N` representational dissimilarity matrix
 for each selected saved activation site. `rdm_node_spec(...)` renders the
 stored matrix as a heatmap, optionally with symmetric raw-input thumbnails on
-both axes when the captured `trace.raw_input` still matches the stimulus batch.
+both axes when the captured `trace.input` still matches the stimulus batch.
 
 Feature and activation map annotations live under `tl.viz` because they are
 activation displays, not representation-geometry numerics:
@@ -306,7 +317,6 @@ trace = tl.trace(
     capture=tl.options.CaptureOptions(
         input_transform=image_batch_to_tensor,
         save_raw_input=True,
-        output_style="classification",
     ),
 )
 
@@ -329,9 +339,9 @@ template. It demonstrates:
 
 - auto-detected label tables from `config.id2label`;
 - `output_table()`, `decode_output()`, and gated pandas summaries;
-- `output_style=` override and `tl._autoroute.output.register(...)`;
+- the read-time `decode_output(style=, head=)` override and `tl._autoroute.output.register(...)`;
 - original text input display with `show_input_transform_summary=True`;
-- `trace.raw_input` and `trace.input_preprocessor` provenance.
+- `trace.input` and `trace.provenance.input_preprocessor` provenance.
 
 See `notebooks/semantic_io_keystone_demo.ipynb` for the Sprint B keystone demo.
 It uses a tiny deterministic image classifier and synthetic PIL stimuli so the
@@ -339,17 +349,16 @@ core flow runs without downloading external model weights.
 
 ## Provisional Public Names
 
-- `tl.trace(..., capture=CaptureOptions(output_style=..., output_head=...))`
-- `Trace.output_table(k=5, batch_items=None)`
-- `Trace.decode_output(k=None)`
-- `Trace.output_postprocessor`
+- `Trace.output_table(k=5, batch_items=None, *, style=None, head=None)`
+- `Trace.decode_output(k=None, *, style=None, head=None, tokenizer=None)`
+- `Trace.provenance.output_postprocessor`
 - `tl._autoroute.output.register(...)`
 - `tl._autoroute.output.unregister(...)`
 - `tl._autoroute.output.list()`
 - `tl._autoroute.output.info(...)`
 - `tl.trace(..., capture=CaptureOptions(input_transform=..., save_raw_input=..., batch_render=...))`
-- `Trace.raw_input`
-- `Trace.input_preprocessor`
+- `Trace.input`
+- `Trace.provenance.input_preprocessor`
 - `Trace.draw(show_input_transform_summary=True)`
 - `Trace.to_pandas(include_decoded_output_summary=True)`
 - `Trace.annotate(selector, data=..., image=..., max_fanout=..., copy=...)`

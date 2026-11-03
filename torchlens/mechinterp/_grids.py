@@ -23,6 +23,7 @@ from typing import Any
 
 import torch
 
+from .._selection.selectors import facet as facet_selector
 from .._semantic.patching import (
     _baseline_traces,
     _CounterfactualStateGuard,
@@ -34,7 +35,6 @@ from .._semantic.patching import (
     _warn_if_campaign_all_identical,
 )
 from ..errors._base import TorchLensWarning
-from ..intervention.selectors import facet as facet_selector
 from ._errors import refuse
 from ._records import _pandas_frame
 

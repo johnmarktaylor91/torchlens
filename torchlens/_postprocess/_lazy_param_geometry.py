@@ -23,7 +23,7 @@ def _finalize_lazy_param_geometry(self: "Trace") -> None:
     from .._quantities import Bytes as _Bytes
     from .._utils.tensor_utils import get_memory_amount as _get_memory_amount
 
-    for pl in self.param_logs:
+    for pl in self._param_logs:
         if not getattr(pl, "_lazy_at_prep", False):
             continue
         live_param = getattr(pl, "_param_ref", None)

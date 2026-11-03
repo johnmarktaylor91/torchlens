@@ -27,6 +27,7 @@ from _forward_stash import stashed
 import torchlens as tl
 import torchlens.backends.torch.wrappers as _wrappers
 from torchlens._utils import tensor_utils as _tu
+from torchlens.errors import TraceCaptureError
 
 
 @contextlib.contextmanager
@@ -160,8 +161,8 @@ def _live_pending_aliases() -> int:
 def test_explicit_inference_only_grad_enabled_payloads_byte_identical():
     _, log_eager = _explicit_inference_only_zoo_trace(defer=False)
     _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
-    assert log_eager.inference_only is True
-    assert log_defer.inference_only is True
+    assert log_eager.options.inference_only is True
+    assert log_defer.options.inference_only is True
     _assert_payloads_identical(log_eager, log_defer)
 
 
@@ -174,7 +175,7 @@ def test_explicit_inference_only_grad_enabled_defers_and_kill_switch_holds():
     assert _live_pending_aliases() == baseline_live, "kill switch left a deferred alias"
     _, log_defer = _explicit_inference_only_zoo_trace(defer=True)
     assert _live_pending_aliases() > baseline_live, "no payload was deferred"
-    assert log_eager.inference_only is True and log_defer.inference_only is True
+    assert log_eager.options.inference_only is True and log_defer.options.inference_only is True
 
 
 def test_post_hoc_inplace_edit_isolation():
@@ -485,8 +486,9 @@ def test_custom_function_view_genuinely_modified_inplace_still_raises(use_tensor
         x = torch.randn(2, 4)
         with pytest.raises(RuntimeError, match="modified inplace"):
             model(x)
-        with pytest.raises(RuntimeError, match="modified inplace"):
+        with pytest.raises(TraceCaptureError, match="modified inplace") as _tce_info2:
             tl.trace(model, x)
+        assert isinstance(_tce_info2.value.__cause__, RuntimeError)
 
 
 def test_kill_switch_restores_eager_clones():

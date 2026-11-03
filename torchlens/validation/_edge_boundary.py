@@ -38,7 +38,7 @@ def _check_edge_intervention_boundary(
       "exempted". A wrong stored output under a corroborated entry FAILS
       (skip-shaped acceptance is impossible by construction).
 
-    Node-level ``intervention_replaced`` corroboration never fires for edges:
+    Node-level ``is_edited`` corroboration never fires for edges:
     edge substitution replaces no node's output.
     """
 
@@ -62,7 +62,7 @@ def _fail_uncorroborated_edge_entries(
     stamps = getattr(target_op, "edge_replacement_stamps", None) or {}
     fire_addresses = {
         tuple(getattr(record, "edge_address", ()) or ())
-        for record in (getattr(target_op, "interventions", None) or ())
+        for record in (getattr(target_op, "edits", None) or ())
         if getattr(record, "edge_address", None) is not None
     }
     from ..intervention.edge_substitution import tensor_content_digest
@@ -277,7 +277,7 @@ def _parent_arg_evidence(
         return ValidationCheckResult.unverified("replay_recomputed_parent_unattested")
     parent_outs = _saved_out_payload(parent_layer)
     if parent_outs is None:
-        return ValidationCheckResult.unverified("missing_saved_parent_payload")
+        return ValidationCheckResult.unverified("parent_payload_missing")
     return parent_outs, capture_digest
 
 

@@ -28,7 +28,7 @@ from torchlens.options import CaptureOptions
 from torchlens.validation import _validate_runnable_payload_entries, validate_tlspec
 
 _CAP = CaptureOptions(
-    intervention_ready=True,
+    replayable=True,
     capture_container_structure=True,
     cache=False,
 )
@@ -167,7 +167,7 @@ def test_archived_activation_digest_is_verified_against_the_loaded_tensor(
     members[0]["byte_digest"] = honest_digest
     _write_manifest(path, manifest)
     loaded = tl.load(path)
-    from torchlens._runnable_state import runnable_tensor_byte_digest
+    from torchlens._runnable.state import runnable_tensor_byte_digest
 
     archived = loaded._runnable.archived_activations
     assert archived

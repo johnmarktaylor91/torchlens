@@ -64,7 +64,7 @@ def _quiet_validate(model: nn.Module, args: Any) -> bool:
 def _op_with_func_name(trace: Any, func_name: str) -> Any:
     """Return the first op in ``trace`` whose ``func_name`` matches."""
 
-    return next(op for op in trace.layer_list if op.func_name == func_name)
+    return next(op for op in trace._layer_list if op.func_name == func_name)
 
 
 def _freeze_op_replay(op: Any) -> None:
@@ -237,7 +237,7 @@ def test_integer_mod_outside_unit_proof_still_fails_when_frozen(kind: str) -> No
 
     torch.manual_seed(0)
     trace = _capture(_ZeroMaskMod(kind), torch.randn(5))
-    op = next(op for op in trace.layer_list if op.func_name in ("__mod__", "remainder"))
+    op = next(op for op in trace._layer_list if op.func_name in ("__mod__", "remainder"))
     _assert_frozen_edge_fails(trace, op, 0)
 
 
@@ -334,7 +334,7 @@ def test_same_parent_in_value_and_shape_slot_still_fails_when_frozen(method: str
 
     torch.manual_seed(0)
     trace = _capture(_SameParentShapeAs(method), torch.randn(6))
-    op = next(op for op in trace.layer_list if op.func_name in (method, method.replace("_", "")))
+    op = next(op for op in trace._layer_list if op.func_name in (method, method.replace("_", "")))
     _assert_frozen_edge_fails(trace, op, 0)
 
 

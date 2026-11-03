@@ -8,8 +8,8 @@ independent same-process oracles, the absence-claim adjudicator against the
 enumerated known-false manifest, and the flagship logit_lens failure pinned
 enumerated-red. The single highest value-to-cost item in the memo (A4).
 
-One explicit test function per model family: the smoke duration tripwire
-budgets aggregate cost per test-function family, and each family's
+One explicit test function per model family: the smoke duration budget
+(``scripts/tier_durations.py``) bounds the slowest test per file, and each family's
 build+trace cost must land in its own budget, not the first test's.
 """
 
@@ -188,9 +188,9 @@ def _deep_sweep(family, impl, r0_capture):
             )
         golden_n_ops = expected_n_ops(expected)
         # The golden counts every captured row (input, output and buffer rows
-        # included), which is ``trace.layer_list``; ``trace.ops`` counts only
+        # included), which is ``trace._layer_list``; ``trace.ops`` counts only
         # the counted ops since sumfam F1.
-        n_rows = len(cap.trace.layer_list)
+        n_rows = len(cap.trace._layer_list)
         assert n_rows == golden_n_ops, (
             f"{family}/{impl}: op count {n_rows} != golden"
             f" {golden_n_ops} under an UNCHANGED resolved-config"

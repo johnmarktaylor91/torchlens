@@ -20,6 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .._capture_honesty import capture_honesty_facts
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._errors import ArgumentTypeError
 from .._literals import BufferVisibilityLiteral
 from .._options_validation import _validate_buffer_visibility
@@ -194,7 +195,9 @@ def _metadata_props(
     outcome = _capture_outcome_marker(log)
     if outcome:
         rows.append(("torchlens.capture_outcome", outcome))
-    rows.append(("torchlens.model_class", str(getattr(log, "model_class_name", ""))))
+    rows.append(
+        ("torchlens.model_class", str(log._source_class_name if is_live_trace(log) else ""))
+    )
     rows.append(("torchlens.granularity", projection.granularity))
     if projection.module_depth is not None:
         rows.append(("torchlens.module_depth", str(projection.module_depth)))
@@ -376,7 +379,7 @@ def netron(  # noqa: PLR0913 -- the memo-ruled public exporter surface (D-11..D-
     projection = _build_projection(trace, granularity, depth, show_buffers)
     _warn_extent(projection)
     baseline_text, diff = _baseline_slot(trace, baseline, projection)
-    graph_name = str(getattr(trace, "model_class_name", "TorchLens graph"))
+    graph_name = str(trace._source_class_name if is_live_trace(trace) else "TorchLens graph")
     text = emit_model_json(
         projection,
         graph_name=graph_name,

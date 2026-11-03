@@ -15,7 +15,7 @@ from torch import nn
 from torchlens._ir.capture_events import CaptureEvents
 
 from .. import _state
-from .._capture.config import InternalCaptureConfig
+from .._capture.finalize.settle import _extract_and_mark_outputs
 from .._capture.outcome import safe_exception_repr, safe_exception_str
 from .._capture.predicates import _save_selector_matches, validate_followed_by_capability
 from .._capture.projections import (
@@ -23,17 +23,19 @@ from .._capture.projections import (
     _empty_recording,
     active_recording_state,
 )
+from .._capture.stages import InternalCaptureConfig
 from .._capture.stop import StopDirective, stop_directive_for_trace
-from .._capture.trace import _extract_and_mark_outputs
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._data_classes.trace import Trace
 from .._deprecations import MISSING, MissingType
-from .._errors import CaptureNotActiveError, KeywordConflictError
+from .._errors import CaptureNotActiveError, KeywordConflictError, original_exception
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
 from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
+from ._recorder_streaming import _rank_prefixed_streaming_options
 from ._validation import validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -46,43 +48,6 @@ from .options import (
     merge_recording_options,
 )
 from .types import CaptureSpec, Recording, _mark_recording_halted
-
-
-def _rank_prefixed_streaming_options(
-    streaming: StorageOptions | None | MissingType,
-) -> StorageOptions | None | MissingType:
-    """Return streaming options with a rank-local directory prefix.
-
-    Parameters
-    ----------
-    streaming:
-        Caller-supplied streaming options.
-
-    Returns
-    -------
-    StorageOptions | None | MissingType
-        Options with ``path`` rewritten to include ``rank_NN`` when a
-        bundle path is configured.
-    """
-
-    if isinstance(streaming, MissingType) or streaming is None or streaming.path is None:
-        return streaming
-    rank = 0
-    if torch.distributed.is_available() and torch.distributed.is_initialized():
-        rank = torch.distributed.get_rank()
-    bundle_path = Path(streaming.path)
-    # Rewrite ONLY bundle_path: rebuilding from defaults silently dropped the
-    # R62 include_* opt-outs (and now the async-write routing) for rank-split
-    # recordings.
-    return StorageOptions(
-        path=bundle_path.parent / f"rank_{rank:02d}" / bundle_path.name,
-        retain_in_memory=streaming.retain_in_memory,
-        on_save=streaming.on_save,
-        include_custom_attributes=streaming.include_custom_attributes,
-        include_buffer_values=streaming.include_buffer_values,
-        async_writes=streaming.async_writes,
-        max_pending_bytes=streaming.max_pending_bytes,
-    )
 
 
 def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
@@ -99,7 +64,8 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
         Emits at most one warning for each configured selector slot.
     """
 
-    from ..intervention.selectors import BaseSelector
+    from .._selection.selectors import BaseSelector
+    from ..intervention.hooks import site_universe
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -114,10 +80,9 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 stacklevel=3,
             )
     intervene_selector = getattr(state.options.intervene, "selector", None)
-    intervene_decision = getattr(state.options.intervene, "decision", None)
     if (
         isinstance(intervene_selector, BaseSelector)
-        and getattr(intervene_decision, "direction", None) == "forward"
+        and site_universe(intervene_selector) == "activation"
         and state.intervene_selector_fire_count == 0
     ):
         warnings.warn(
@@ -199,6 +164,34 @@ def _resolve_train_mode_default(
     return value
 
 
+def _settle_recording_outcome(recording: Recording, state: RecordingState) -> None:
+    """Stamp the finalized recording with its capture outcome when none is present."""
+
+    from .._capture.outcome import (
+        CaptureOutcome,
+        CaptureStatus,
+        stamp_recording_outcome,
+    )
+
+    if getattr(recording, "_outcome", None) is not None:
+        return
+    inference_only = bool(
+        state.runtime_trace._options_inference_only
+        if state.runtime_trace is not None and is_live_trace(state.runtime_trace)
+        else False
+    )
+    if recording.is_stopped:
+        stamped = CaptureOutcome(
+            status=CaptureStatus.STOPPED,
+            reason=recording.stop_reason,
+            boundary_label=recording.stop_reason,
+            inference_only=inference_only,
+        )
+    else:
+        stamped = CaptureOutcome(status=CaptureStatus.COMPLETE, inference_only=inference_only)
+    stamp_recording_outcome(recording, stamped)
+
+
 class Recorder:
     """Context manager for explicitly captured fastlog forwards."""
 
@@ -242,11 +235,10 @@ class Recorder:
         on_predicate_error, storage, streaming, seed:
             Fastlog recording options.
         on_forward_error:
-            Controls failed-forward handling. ``"raise"`` preserves the
-            historical behavior. ``"attach_partial"`` attaches a failed partial
-            ``Recording`` to ``exc.partial_recording`` and re-raises.
-            ``"return_partial"`` returns ``None`` from the failed ``log()`` and
-            exposes the failed partial on ``recorder.recording``.
+            Controls failed-forward handling: ``"raise"`` raises the capture's ``TraceCaptureError``;
+            ``"attach_partial"`` also hangs the failed partial ``Recording`` on it as
+            ``exc.partial_recording`` before re-raising. ``"return_partial"`` returns ``None`` from
+            the failed ``log()`` and exposes the failed partial on ``recorder.recording``.
         halt:
             Optional predicate evaluated after each event's save decision. Returning
             ``True`` stops the active forward pass and marks the recording halted.
@@ -359,7 +351,7 @@ class Recorder:
         # A shared module's alias spelling cannot select one call site; refuse
         # it before any forward, with the error every other door raises.
         # Deferred: intervention sits above fastlog in the layer map.
-        from ..intervention._module_alias_guard import refuse_model_alias_spellings
+        from .._selection.module_alias_guard import refuse_model_alias_spellings
 
         refuse_model_alias_spellings(
             self.model, self.options.keep_op, self.options.intervene, self.options.halt
@@ -421,27 +413,7 @@ class Recorder:
             self._recording = Recording.from_capture_events(session)
             # Settle the finalized product (path 14). A construction failure
             # above propagates productless -- the raise is the signal.
-            from .._capture.outcome import (
-                CaptureOutcome,
-                CaptureStatus,
-                stamp_recording_outcome,
-            )
-
-            if getattr(self._recording, "_outcome", None) is None:
-                recording = self._recording
-                inference_only = bool(getattr(self._state.runtime_trace, "inference_only", False))
-                if recording.is_stopped:
-                    stamped = CaptureOutcome(
-                        status=CaptureStatus.STOPPED,
-                        reason=recording.stop_reason,
-                        boundary_label=recording.stop_reason,
-                        inference_only=inference_only,
-                    )
-                else:
-                    stamped = CaptureOutcome(
-                        status=CaptureStatus.COMPLETE, inference_only=inference_only
-                    )
-                stamp_recording_outcome(recording, stamped)
+            _settle_recording_outcome(self._recording, self._state)
         else:
             self._state.abort_storage(safe_exception_str(exc_value))
         self._entered = False
@@ -523,7 +495,7 @@ class Recorder:
             backward_ready=True,
             inference_only=inference_only,
         )
-        trace.capture_mode = "predicate"
+        trace._options_mode = "predicate"
         trace._fastlog_recording = self._state.recording
         trace._predicate_save_options = self.options
         trace._stop_directive = StopDirective(
@@ -577,7 +549,7 @@ class Recorder:
                 max(self._state.recording.num_ops, self._next_pass_index),
             )
             self._mark_halted_pass(
-                self._next_pass_index, halt_exc, inference_only=trace.inference_only
+                self._next_pass_index, halt_exc, inference_only=trace._options_inference_only
             )
             if self._echo_session is not None:
                 # Halted is not failed: no crash tail, one typed disclosure.
@@ -598,11 +570,11 @@ class Recorder:
                     if add_note is not None:
                         add_note(echo_note)
             if forward_disposition == "raise":
-                self._state.abort_storage(safe_exception_str(exc))
+                self._state.abort_storage(safe_exception_str(original_exception(exc)))
                 raise
             partial_build_failed = False
             try:
-                partial = self._mark_recording_failed(trace, exc)
+                partial = self._mark_recording_failed(trace, original_exception(exc))
                 self._failed = True
                 self._recording = partial
                 if forward_disposition == "attach_partial":

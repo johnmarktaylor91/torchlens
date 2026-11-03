@@ -114,7 +114,7 @@ def test_forward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_pa
     _assert_round_trip(op, ["label", "layer_label", "type"], tmp_path)
     _assert_round_trip(layer, ["layer_label", "layer_type", "num_passes"], tmp_path)
     _assert_round_trip(module, ["layer_label", "layer_type", "num_ops"], tmp_path)
-    _assert_round_trip(module_call, ["address", "call_index", "call_label"], tmp_path)
+    _assert_round_trip(module_call, ["address", "call_index", "label"], tmp_path)
     _assert_round_trip(param, ["address", "name", "num_params"], tmp_path)
     _assert_round_trip(buffer, ["address", "name", "call_index"], tmp_path)
 
@@ -131,4 +131,4 @@ def test_backward_record_exports_round_trip(record_export_trace: tl.Trace, tmp_p
     assert list(grad_fn_call.to_pandas().columns) == GRAD_FN_PASS_LOG_FIELD_ORDER
 
     _assert_round_trip(grad_fn, ["label", "class_name", "num_calls"], tmp_path)
-    _assert_round_trip(grad_fn_call, ["call_index", "call_label"], tmp_path)
+    _assert_round_trip(grad_fn_call, ["call_index", "label"], tmp_path)

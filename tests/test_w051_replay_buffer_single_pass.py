@@ -39,7 +39,7 @@ def buffered():
     torch.manual_seed(0)
     model = _Buf().eval()
     x = torch.randn(2, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         yield model, x, trace
     finally:
@@ -49,7 +49,7 @@ def buffered():
 def _written_buffer_op(trace: tl.Trace):
     return next(
         op
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_buffer", False) and getattr(op, "parents", ())
     )
 
@@ -121,7 +121,7 @@ def test_proven_unchanged_fused_buffer_write_in_cone_is_silent() -> None:
         model.bn.running_mean.uniform_(-1, 1)
         model.bn.running_var.uniform_(0.5, 2)
     x = torch.randn(2, 2, 4, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         written = _written_buffer_op(trace)
         assert written.buffer_write_kind == "fused"
@@ -150,12 +150,14 @@ def test_unproven_fused_buffer_write_in_cone_still_discloses(value_changed) -> N
     torch.manual_seed(0)
     model = _EvalNorm().eval()
     x = torch.randn(2, 2, 4, 4)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
     try:
         written = _written_buffer_op(trace)
         assert written.buffer_write_kind == "fused"
         fork = trace.fork()
-        fork.layer_dict_all_keys[written.label]._internal_set("buffer_value_changed", value_changed)
+        fork._layer_dict_all_keys[written.label]._internal_set(
+            "buffer_value_changed", value_changed
+        )
         with pytest.warns(BufferThreadGapWarning, match="does not prove"):
             fork.do(tl.label("conv2d_1_1"), tl.zero_ablate())
     finally:

@@ -418,7 +418,7 @@ ARTIFACT_TOKEN_KEYS: dict[str, str] = {"op_kind": "tl_barcode_derived"}
 # Metadata keys whose dict KEYS are volatile tokens.
 ARTIFACT_TOKEN_KEYED_DICTS: dict[str, str] = {
     "op_equivalence_classes": "tl_barcode_derived",
-    "grad_fn_logs": "grad_fn_object_id",
+    "_grad_fn_logs": "grad_fn_object_id",
 }
 
 # Field/key segments that hold a single token value wherever they appear.
@@ -497,7 +497,7 @@ def _canon_manifest(canonizer: _Canonicalizer, value: Any, path: str) -> Any:
             rendered = _stable_key(key)
             if rendered in ARTIFACT_VOLATILE_KEYS or rendered in _ARTIFACT_TIMING_KEYS:
                 out[rendered] = _presence_marker(value[key])
-            elif rendered == "trace_label" and isinstance(value[key], str):
+            elif rendered == "name" and isinstance(value[key], str):
                 # per-process model-instance counter suffix; the semantic stem
                 # still compares strictly
                 out[rendered] = re.sub(r"_\d+$", "_<n>", value[key])

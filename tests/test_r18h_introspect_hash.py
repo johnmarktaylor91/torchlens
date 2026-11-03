@@ -135,7 +135,7 @@ def _graph(parents_of_c: list[str]) -> SimpleNamespace:
     """Two input layers feeding a noncommutative op with the given parent order."""
 
     return SimpleNamespace(
-        layer_list=[
+        _layer_list=[
             _mk_layer("a", [], func="input"),
             _mk_layer("b", [], func="input"),
             _mk_layer("c", parents_of_c),
@@ -286,9 +286,9 @@ def _shape_hash_sorted(trace: SimpleNamespace) -> str:
     import hashlib
     import json
 
-    order_by_label = {layer.layer_label: i for i, layer in enumerate(trace.layer_list)}
+    order_by_label = {layer.layer_label: i for i, layer in enumerate(trace._layer_list)}
     records = []
-    for index, layer in enumerate(trace.layer_list):
+    for index, layer in enumerate(trace._layer_list):
         parent_indices = sorted(order_by_label[p] for p in layer.parents if p in order_by_label)
         records.append(
             {

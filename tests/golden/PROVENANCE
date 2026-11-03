@@ -178,3 +178,11 @@ env: py3.10-torch2.13.0
 torch: 2.13.0+cpu
 source: 61db603166df4ab51afd7fc0489921930abb69b7 (dirty)
 recorded: 2026-10-30T02:07:25.692724+00:00
+---
+generator: tests/test_selector_semantics_matrix.py
+flag: TORCHLENS_UPDATE_SELECTOR_MATRIX=1
+reason: gradient sites: tl.grad cases, universe keys, node-and-bare compositions refuse
+env: py3.10-torch2.13.0
+torch: 2.13.0+cpu
+source: 1173a2ed1 (merge preview of the gradient-site packets)
+recorded: 2026-11-01T02:35:31.052658+00:00

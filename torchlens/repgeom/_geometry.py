@@ -895,7 +895,7 @@ def classical_mds(
     data:
         Pairwise distance matrix or row-wise coordinate/feature data.
     num_components:
-        Number of embedding axes to return.
+        Number of embedding components (output axes) to return.
     min_stimuli:
         Minimum number of stimuli required for visualization-oriented MDS.
     input_kind:

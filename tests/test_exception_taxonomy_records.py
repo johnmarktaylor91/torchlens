@@ -84,11 +84,6 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
         lambda log: log.stack("no_such_selector_xyz"),
     ),
     (
-        "intervention_direction_invalid",
-        ValueError,
-        lambda log: log.set(log.op_labels[0], torch.zeros(1), direction="sideways"),
-    ),
-    (
         "run_legacy_arguments_conflict",
         TypeError,
         lambda log: log.run(object(), torch.randn(1, 4), inputs=torch.randn(1, 4)),
@@ -113,7 +108,6 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
 
 @pytest.mark.smoke_cells(
     "test_record_refusals_carry_codes_and_remedies[annotation_not_json_serializable]",
-    "test_record_refusals_carry_codes_and_remedies[intervention_direction_invalid]",
 )
 @pytest.mark.parametrize(
     ("expected_code", "builtin", "trigger"),
@@ -230,9 +224,9 @@ def test_trace_predicate_type_doors_carry_codes_and_remedies(
 def test_intervention_doors_carry_codes_and_remedies() -> None:
     """Converted intervention-family doors expose codes and remedies."""
 
+    from torchlens.intervention._resolver_registry import resolve_import_ref
+    from torchlens.intervention._spec_codec import _validate_format_version
     from torchlens.intervention.errors import ReplayPreconditionError
-    from torchlens.intervention.resolver import resolve_import_ref
-    from torchlens.intervention.save import _validate_format_version
 
     with pytest.raises(errors.TorchLensError) as exc_info:
         ReplayPreconditionError("message", selector="both")  # args + fields conflict

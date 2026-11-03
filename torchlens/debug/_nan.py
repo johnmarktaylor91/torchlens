@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 
 import torch
 
+from .._data_classes._trace_missing_attrs import is_live_trace
 from .._debug_report import FoundReport, Report
 from ..errors import CaptureError
 
@@ -441,7 +442,7 @@ def find_nan(model: Any, x: Any, **trace_kwargs: Any) -> FindNanReport:
         fields = exc.fields
         if "op" not in fields or "layer" not in fields:
             raise
-        partial = getattr(exc, "partial_log", None)
+        partial = getattr(exc, "partial_trace", None)
         partial_trace = getattr(partial, "trace", None)
         finalized = bool(
             partial_trace is not None
@@ -765,7 +766,7 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
 
     from .._data_classes._nonfinite import nonfinite_coverage
 
-    if hasattr(subject, "layer_dict_main_keys") or hasattr(subject, "ops"):
+    if is_live_trace(subject) or hasattr(subject, "ops"):
         trace = subject
         finding = find_nan_in_trace(trace)
         cost_tier = "free (post-hoc on the capture you already ran)"
@@ -790,9 +791,8 @@ def nonfinite_origin(subject: Any, x: Any = None, **trace_kwargs: Any) -> Nonfin
 
     amp_disclosure: str | None = None
     if trace is not None:
-        low_precision = {
-            str(getattr(op, "dtype", "")) for op in getattr(trace, "layer_list", ())
-        } & {
+        layers = trace._layer_list if is_live_trace(trace) else ()
+        low_precision = {str(getattr(op, "dtype", "")) for op in layers} & {
             "torch.float16",
             "torch.bfloat16",
         }

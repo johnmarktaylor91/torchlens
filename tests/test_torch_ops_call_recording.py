@@ -27,6 +27,20 @@ from torchlens.validation import last_validation_failure
 from torchlens.validation._source_provenance import source_provenance_gaps
 
 _GLOBAL_TABLE = torch.randn(4)
+
+
+def _unseen(t: torch.Tensor) -> torch.Tensor:
+    """Copy ``t`` with logging paused: a tensor the capture never sees.
+
+    A pre-forward closure or global tensor is recorded as a ``constant`` source
+    op, so a genuine provenance gap is planted with a tensor first built
+    mid-forward while logging is paused.
+    """
+
+    with _state.pause_logging():
+        return t.clone()
+
+
 _HAS_CUSTOM_OP = hasattr(torch.library, "custom_op")
 
 
@@ -155,14 +169,14 @@ def test_cpp_extension_torch_library_op_is_recorded_and_validates(tmp_path: Path
 
 class _GlobalIntoRawAten(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.ops.aten.mul.Tensor(x, _GLOBAL_TABLE) + 1.0
+        return torch.ops.aten.mul.Tensor(x, _unseen(_GLOBAL_TABLE)) + 1.0
 
 
 class _ClosureIntoCustomOp(nn.Module):
     def __init__(self) -> None:
         super().__init__()
         table = torch.randn(4)
-        self.forward = lambda x: torch.ops.aten.add.Tensor(x, table) * 2.0  # type: ignore[method-assign]
+        self.forward = lambda x: torch.ops.aten.add.Tensor(x, _unseen(table)) * 2.0  # type: ignore[method-assign]
 
 
 @pytest.mark.parametrize(

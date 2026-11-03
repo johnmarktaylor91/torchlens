@@ -16,7 +16,6 @@ from __future__ import annotations
 from collections import defaultdict
 from types import SimpleNamespace
 
-import pytest
 import torch
 import torch.nn as nn
 
@@ -29,12 +28,12 @@ def _stub_trace() -> SimpleNamespace:
     """Return a minimal trace stub with the lookup indexes finalize touches."""
 
     return SimpleNamespace(
-        layer_list=[],
-        layer_dict_main_keys={},
-        layer_dict_all_keys={},
+        _layer_list=[],
+        _layer_dict_main_keys={},
+        _layer_dict_all_keys={},
         op_labels=[],
         layer_labels=[],
-        layer_num_calls={},
+        _layer_num_calls={},
         _lookup_keys_to_layer_num_dict={},
         _layer_num_to_lookup_keys_dict=defaultdict(list),
     )
@@ -62,10 +61,10 @@ def test_neutral_finalizer_bare_label_is_last_pass_and_on_every_pass() -> None:
     _finalize_single_op(trace, first, "cell_raw_0", 0, _assignment(1))
     _finalize_single_op(trace, second, "cell_raw_1", 1, _assignment(2))
 
-    assert trace.layer_dict_all_keys["cell:1"] is first
-    assert trace.layer_dict_all_keys["cell:2"] is second
+    assert trace._layer_dict_all_keys["cell:1"] is first
+    assert trace._layer_dict_all_keys["cell:2"] is second
     # Incidental raw-index artifact: last pass wins, matching torch.
-    assert trace.layer_dict_all_keys["cell"] is second
+    assert trace._layer_dict_all_keys["cell"] is second
     # Torch parity: EVERY pass lists the bare label among its lookup keys.
     assert "cell" in first.lookup_keys
     assert "cell" in second.lookup_keys
@@ -95,20 +94,19 @@ def test_torch_bare_label_artifact_is_last_pass() -> None:
     log = tl.trace(Loop(), torch.randn(2, 4))
     multi_pass_bare = [
         key
-        for key, record in log.layer_dict_all_keys.items()
+        for key, record in log._layer_dict_all_keys.items()
         if isinstance(key, str) and ":" not in key and record.num_passes > 1
     ]
     assert multi_pass_bare, "expected multi-pass layers in the loop trace"
     for key in multi_pass_bare:
-        record = log.layer_dict_all_keys[key]
+        record = log._layer_dict_all_keys[key]
         if key != record.layer_label:
             continue  # raw/address spellings, not the bare layer label
-        assert record.pass_index == record.num_passes, (
+        assert record.pass_number == record.num_passes, (
             f"torch bare-label artifact for {key!r} no longer resolves to the last pass"
         )
 
 
-@pytest.mark.smoke
 def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     """N5: the ``assignment=None`` singleton fallback must not leak ``_raw``.
 
@@ -128,7 +126,7 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     _finalize_single_op(trace, op_log, "input_1_1_raw", 0, None)
 
     assert op_log.layer_label == "input_1_1"
-    assert op_log.layer_label_short == "input_1_1"
+    assert op_log.short_layer_label == "input_1_1"
     assert op_log.label == "input_1_1:1"
     assert op_log._label_raw == "input_1_1_raw"
     # Torch parity (second-pass convention): ``_layer_label_raw`` carries the
@@ -138,10 +136,9 @@ def test_singleton_fallback_strips_raw_capture_sentinel() -> None:
     assert trace.layer_labels == ["input_1_1"]
     # Raw labels stay resolvable through the lookup keys, just not as the
     # presented layer label.
-    assert trace.layer_dict_all_keys["input_1_1_raw"] is op_log
+    assert trace._layer_dict_all_keys["input_1_1_raw"] is op_log
 
 
-@pytest.mark.smoke
 def test_grouped_leader_strips_raw_capture_sentinel() -> None:
     """A multi-pass group's leader label must also lose its ``_raw`` suffix.
 
@@ -168,7 +165,6 @@ def test_grouped_leader_strips_raw_capture_sentinel() -> None:
     assert trace.layer_labels == ["cell_1_1"]
 
 
-@pytest.mark.smoke
 def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     """N5: every op's edges must be relabeled, not just multi-pass members.
 
@@ -217,7 +213,7 @@ def test_relabel_epilogue_fixes_children_even_without_grouping() -> None:
     raw_dict = {"producer_1_1_raw": producer, "consumer_1_2_raw": consumer}
     trace = SimpleNamespace(
         _raw_graph_ws=SimpleNamespace(raw_layer_dict=raw_dict),
-        op_equivalence_classes={},
+        _graph_op_equivalence_classes={},
         input_layers=["producer_1_1_raw"],
         output_layers=["consumer_1_2_raw"],
     )

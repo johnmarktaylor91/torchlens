@@ -33,7 +33,7 @@ def test_mlx_validation_healthy_two_layer_mlp_passes() -> None:
     """Validate a healthy MLX MLP with per-op replay and perturbation."""
 
     trace = _healthy_trace()
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
     status = trace.validation_replay_status
     assert status.state == "passed"
     assert status.num_replayed_ops >= 1
@@ -44,18 +44,18 @@ def test_mlx_validation_registered_spec_dispatches() -> None:
 
     spec = tl.backends.spec("mlx")
     assert spec.capabilities.has_validation_replay is True
-    assert spec.validate_trace(_healthy_trace()) is True
+    assert spec.validate_trace(_healthy_trace()).passed is True
 
 
 def test_mlx_validation_fails_corrupted_saved_output() -> None:
     """Fail validation when a saved MLX op output payload is corrupted."""
 
     trace = _healthy_trace()
-    victim = next(op for op in trace.layer_list if op.out is not None and op.has_params)
+    victim = next(op for op in trace._layer_list if op.out is not None and op.has_params)
     with pytest.warns(UserWarning):
         victim.out = victim.out + 1.0
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_fails_dropped_capture_material() -> None:
@@ -64,7 +64,7 @@ def test_mlx_validation_fails_dropped_capture_material() -> None:
     trace = _healthy_trace()
     trace._mlx_op_captures = []
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_fails_partial_capture_deletion() -> None:
@@ -75,7 +75,7 @@ def test_mlx_validation_fails_partial_capture_deletion() -> None:
         assert len(trace._mlx_op_captures) == 3
         del trace._mlx_op_captures[index]
 
-        assert MLXBackend().validate_trace(trace) is False
+        assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_fails_inventory_tamper() -> None:
@@ -84,7 +84,7 @@ def test_mlx_validation_fails_inventory_tamper() -> None:
     trace = _healthy_trace()
     trace._mlx_replay_inventory = trace._mlx_replay_inventory[:-1]
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_fails_missing_inventory() -> None:
@@ -93,7 +93,7 @@ def test_mlx_validation_fails_missing_inventory() -> None:
     trace = _healthy_trace()
     del trace._mlx_replay_inventory
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 class _BranchMergeNet(nn.Module):
@@ -120,7 +120,7 @@ def test_mlx_validation_fails_incoherent_wrong_parent_attribution() -> None:
 
     trace, add_index, relu_label, sigmoid_label = _branch_trace_and_add_tamper_material()
     add_label = trace._mlx_op_captures[add_index].labels_raw[0]
-    add_op = next(op for op in trace.layer_list if op._label_raw == add_label)
+    add_op = next(op for op in trace._layer_list if op._label_raw == add_label)
     # add_op.parents holds FINAL labels (bare layer_label for these
     # single-pass ops, torch parity); relu_label/sigmoid_label are RAW
     # capture labels, so resolve them to final form before rewiring.
@@ -128,7 +128,7 @@ def test_mlx_validation_fails_incoherent_wrong_parent_attribution() -> None:
     sigmoid_final = trace[sigmoid_label].layer_label
     add_op.parents = [sigmoid_final if p == relu_final else p for p in add_op.parents]
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_fails_coherent_wrong_parent_attribution() -> None:
@@ -151,10 +151,10 @@ def test_mlx_validation_fails_coherent_wrong_parent_attribution() -> None:
             for slot in capture.arg_leaf_labels
         ),
     )
-    add_op = next(op for op in trace.layer_list if op._label_raw == capture.labels_raw[0])
+    add_op = next(op for op in trace._layer_list if op._label_raw == capture.labels_raw[0])
     add_op.parents = [sigmoid_label if p == relu_label else p for p in add_op.parents]
 
-    assert MLXBackend().validate_trace(trace) is False
+    assert MLXBackend().validate_trace(trace).state == "failed"
 
 
 def test_mlx_validation_branch_merge_healthy_passes() -> None:
@@ -162,7 +162,7 @@ def test_mlx_validation_branch_merge_healthy_passes() -> None:
 
     trace = tl.trace(_BranchMergeNet(), mx.ones((1, 4)), backend="mlx")
 
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_end_to_end_bare_streaming_flip_refuses_typed() -> None:
@@ -216,13 +216,13 @@ def test_mlx_split_container_outputs_wire_into_graph() -> None:
     """
 
     trace = tl.trace(_SplitMergeNet(), mx.ones((1, 4)), backend="mlx")
-    split_ops = [op for op in trace.layer_list if op._label_raw.startswith("split")]
+    split_ops = [op for op in trace._layer_list if op._label_raw.startswith("split")]
     assert len(split_ops) == 2, "both split output arrays must materialize as ops"
-    add_op = next(op for op in trace.layer_list if op._label_raw.startswith("add"))
+    add_op = next(op for op in trace._layer_list if op._label_raw.startswith("add"))
     # add_op.parents holds FINAL labels (bare layer_label for these
     # single-pass split ops, torch parity), not the raw capture labels.
     assert set(add_op.parents) == {op.layer_label for op in split_ops}
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_validation_fails_stripped_leaf_label_provenance() -> None:
@@ -244,10 +244,10 @@ def test_mlx_validation_fails_stripped_leaf_label_provenance() -> None:
         capture,
         arg_leaf_labels=tuple(tuple(None for _ in slot) for slot in capture.arg_leaf_labels),
     )
-    relu_op = next(op for op in trace.layer_list if op._label_raw == capture.labels_raw[0])
+    relu_op = next(op for op in trace._layer_list if op._label_raw == capture.labels_raw[0])
     relu_op.parents = []
 
-    assert MLXBackend().validate_trace(trace, validate_metadata=False) is False
+    assert MLXBackend().validate_trace(trace, validate_metadata=False).state == "failed"
 
 
 class _ConstantProducerNet(nn.Module):
@@ -303,7 +303,7 @@ def test_mlx_capture_records_slot_labeled_leaves_instead_of_retaining() -> None:
                 else:
                     assert isinstance(leaf, mx.array)
     assert slotted >= 1, "at least one labeled intermediate must be slotted"
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_perturbation_scan_includes_kwargs() -> None:
@@ -330,7 +330,7 @@ def test_mlx_perturbation_scan_includes_kwargs() -> None:
         args=(),
         kwargs={"a": value},
     )
-    assert _perturbation_evidence(capture, baseline) == PERTURBATION_PROVED
+    assert _perturbation_evidence(capture, baseline)[0] == PERTURBATION_PROVED
 
     def no_tensor() -> mx.array:
         return mx.ones((2, 2))
@@ -343,7 +343,7 @@ def test_mlx_perturbation_scan_includes_kwargs() -> None:
         kwargs={},
     )
     assert (
-        _perturbation_evidence(constant_capture, (no_tensor(),))
+        _perturbation_evidence(constant_capture, (no_tensor(),))[0]
         == PERTURBATION_NO_PERTURBABLE_INPUT
     )
 
@@ -369,7 +369,7 @@ def test_mlx_validation_dead_relu_init_passes() -> None:
     """A healthy capture whose ReLU input is all strongly negative validates."""
 
     trace = tl.trace(_DeadReluMLP(), mx.ones((1, 4)), backend="mlx")
-    assert MLXBackend().validate_trace(trace) is True
+    assert MLXBackend().validate_trace(trace).passed is True
 
 
 def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> None:
@@ -389,7 +389,7 @@ def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> N
         saturated = MLXOpCapture(
             labels_raw=("relu_1_raw",), op_name="relu", func=nn.relu, args=(value,)
         )
-        assert _perturbation_evidence(saturated, baseline) == PERTURBATION_PROVED
+        assert _perturbation_evidence(saturated, baseline)[0] == PERTURBATION_PROVED
 
         def ignores_argument(x: mx.array) -> mx.array:
             return mx.zeros((1, 3))
@@ -397,4 +397,33 @@ def test_mlx_perturbation_proves_saturated_dependency_and_rejects_vacuous() -> N
         vacuous = MLXOpCapture(
             labels_raw=("vacuous_1_raw",), op_name="vacuous", func=ignores_argument, args=(value,)
         )
-        assert _perturbation_evidence(vacuous, (mx.zeros((1, 3)),)) == PERTURBATION_UNPROVED
+        assert _perturbation_evidence(vacuous, (mx.zeros((1, 3)),))[0] == PERTURBATION_UNPROVED
+
+
+def test_mlx_validation_never_returns_a_bool() -> None:
+    """``validate_trace`` returns the status object for passes and failures alike."""
+
+    trace = _healthy_trace()
+    status = MLXBackend().validate_trace(trace)
+    assert isinstance(status, ValidationStatus) and status.state == "passed"
+    trace._mlx_op_captures = []
+    failed = MLXBackend().validate_trace(trace)
+    assert isinstance(failed, ValidationStatus) and failed.state == "failed"
+
+
+def test_mlx_validation_failure_names_op_and_reason() -> None:
+    """A failed status names the offending op and a closed-list reason in its message."""
+
+    from torchlens.backends._backend_protocol import VALIDATION_REASONS
+
+    trace = _healthy_trace()
+    victim = next(op for op in trace._layer_list if op.out is not None and op.has_params)
+    with pytest.warns(UserWarning):
+        victim.out = victim.out + 1.0
+    status = MLXBackend().validate_trace(trace)
+    assert status.state == "failed"
+    failed = [d for d in status.decisions if d["decision"] == "failed"]
+    assert failed, status.decisions
+    assert failed[0]["reason"] in VALIDATION_REASONS
+    assert failed[0]["op_label"] in status.message
+    assert all(d["reason"] is None or d["reason"] in VALIDATION_REASONS for d in status.decisions)

@@ -7,7 +7,7 @@ generator output and lives in ``scripts/checks/schema_lockstep.py``. What stays
 here captures a model and inspects live records:
 
 1. **Runtime == declared.** Every attribute a live captured record actually
-   carries must be declared in that record's ``FIELD_POLICY``. This derivation
+   carries must be declared in that record's ``_FIELD_POLICY``. This derivation
    is SOURCE-FREE (no ``inspect.getsource``), so unlike the older
    ``test_internals.py::TestFieldOrderSync`` checks it cannot go red for
    environment reasons (stale bytecode, zipped/installed source, missing
@@ -188,7 +188,7 @@ def undeclared_runtime_attributes(
     instance_attrs:
         Attribute names present in the instance ``__dict__``.
     policy:
-        The record class's declared ``FIELD_POLICY`` table.
+        The record class's declared ``_FIELD_POLICY`` table.
     allowed:
         Facade plumbing that legitimately owns no declared field.
 
@@ -221,7 +221,7 @@ _RECORD_NAMES = (
 )
 @pytest.mark.parametrize("record_name", _RECORD_NAMES)
 def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_name: str) -> None:
-    """Every attribute a captured record carries is declared in FIELD_POLICY.
+    """Every attribute a captured record carries is declared in _FIELD_POLICY.
 
     The derivation is runtime-only -- no source reading -- so this check is
     immune to the environment failure modes (stale bytecode, source-less
@@ -236,10 +236,10 @@ def test_live_record_attributes_are_all_declared(lockstep_trace: Trace, record_n
     # yielded an empty set there, so an undeclared dynamic slot could never
     # have been caught. Every record family carries fields at runtime.
     assert runtime_names, f"{record_name}: runtime attribute derivation is vacuous"
-    undeclared = undeclared_runtime_attributes(runtime_names, type(record).FIELD_POLICY)
+    undeclared = undeclared_runtime_attributes(runtime_names, type(record)._FIELD_POLICY)
     assert not undeclared, (
         f"{record_name} carries undeclared attributes at runtime "
-        f"(add them to FIELD_POLICY): {sorted(undeclared)}"
+        f"(add them to _FIELD_POLICY): {sorted(undeclared)}"
     )
 
 
@@ -250,7 +250,7 @@ def test_runtime_attribute_derivation_catches_an_undeclared_op_slot(lockstep_tra
     names = runtime_attribute_names(op)
     assert len(names) > 100, "Op's stored-field universe must be enumerated, not vars()"
     assert "_source_trace_ref" in names, "dynamic slots are part of the runtime universe"
-    flagged = undeclared_runtime_attributes(names | {"a_new_dynamic_slot"}, Op.FIELD_POLICY)
+    flagged = undeclared_runtime_attributes(names | {"a_new_dynamic_slot"}, Op._FIELD_POLICY)
     assert flagged == {"a_new_dynamic_slot"}
 
 
@@ -300,13 +300,13 @@ def test_live_record_attributes_are_declared_on_every_capture_axis(axis_name: st
                     continue
                 undeclared = undeclared_runtime_attributes(
                     set(vars(instance)),
-                    type(instance).FIELD_POLICY,
+                    type(instance)._FIELD_POLICY,
                 )
                 if undeclared:
                     offenders.setdefault(family, set()).update(undeclared)
         assert not offenders, (
             f"capture axis {axis_name!r} carries undeclared attributes at "
-            f"runtime (add them to FIELD_POLICY): "
+            f"runtime (add them to _FIELD_POLICY): "
             f"{ {family: sorted(names) for family, names in sorted(offenders.items())} }"
         )
     finally:
@@ -371,7 +371,7 @@ class TestMechanismIsRedCapable:
         """An attribute outside the policy and the allowance is reported."""
 
         undeclared = undeclared_runtime_attributes(
-            {"label", "_tl_core", "smuggled_field"}, dict(Op.FIELD_POLICY)
+            {"label", "_tl_core", "smuggled_field"}, dict(Op._FIELD_POLICY)
         )
         assert undeclared == {"smuggled_field"}
 

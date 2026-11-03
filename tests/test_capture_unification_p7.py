@@ -10,11 +10,12 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._captured_run import _ActivationLookup
-from torchlens.validation.invariants import (
+from torchlens._record_type import record_type
+from torchlens.validation._invariants_topology import (
     _check_special_layer_lists,
     _check_trace_self_consistency,
-    check_metadata_invariants,
 )
+from torchlens.validation.invariants import check_metadata_invariants
 
 
 class ConvReluAdd(nn.Module):
@@ -87,8 +88,7 @@ def _module_call_stacks(trace: tl.Trace) -> dict[str, list[str]]:
     """Return each module call's reconstructed ``module_call_stack``."""
 
     return {
-        module_call.call_label: list(module_call.module_call_stack)
-        for module_call in trace.module_calls
+        module_call.label: list(module_call.module_call_stack) for module_call in trace.module_calls
     }
 
 
@@ -97,12 +97,12 @@ def _structure(trace: tl.Trace) -> list[tuple[str, str, tuple[str, ...], tuple[s
 
     return [
         (
-            op.layer_type,
+            record_type(op),
             op.layer_label,
             tuple(op.parents),
             tuple(op.children),
         )
-        for op in trace.layer_list
+        for op in trace._layer_list
     ]
 
 
@@ -137,11 +137,11 @@ def test_recording_to_trace_matches_trace_structure_and_unsaved_out_fails() -> N
     # postprocess but records its true origin; a live capture carries no marker.
     assert getattr(cooked, "_cooked_from", None) == "recording"
     assert getattr(full, "_cooked_from", None) is None
-    saved = [op for op in cooked.layer_list if op.has_saved_activation]
+    saved = [op for op in cooked._layer_list if op.has_saved_activation]
     assert saved
-    assert {op.layer_type for op in saved} == {"conv2d"}
+    assert {record_type(op) for op in saved} == {"conv2d"}
 
-    unsaved = next(op for op in cooked.layer_list if op.layer_type == "relu")
+    unsaved = next(op for op in cooked._layer_list if op.type == "relu")
     with pytest.raises(ValueError, match="no saved payload.*save="):
         _ = unsaved.out
 
@@ -179,17 +179,17 @@ def test_recording_to_trace_materializes_input_layers_and_backfills_timing() -> 
 
     # capture_start_time must be a real, in-window wall-clock timestamp, not
     # the dataclass default of 0 (epoch).
-    assert before <= cooked.capture_start_time <= after
+    assert before <= cooked.provenance.start_time <= after
 
     # cleanup_duration must be a small, real duration -- not the
     # `time.time() - 0 - 0 - 0` garbage value (effectively "now", i.e. ~56
     # years for a 2026 run) the missing back-fill used to produce.
-    assert 0 <= cooked.cleanup_duration < 60.0
+    assert 0 <= cooked.provenance.cleanup_duration < 60.0
 
     # input_layers must be symmetrically back-filled just like output_layers
     # already was, and must match the set of Ops actually flagged is_input.
     assert cooked.input_layers
-    expected_inputs = {op.layer_label for op in cooked.layer_list if op.is_input}
+    expected_inputs = {op.layer_label for op in cooked._layer_list if op.is_input}
     assert set(cooked.input_layers) == expected_inputs
 
     # The two invariant groups this fix targets must pass cleanly.
@@ -262,7 +262,7 @@ def test_recording_to_trace_passes_full_metadata_invariants(model_factory) -> No
     check_metadata_invariants(cooked)
 
     # graph_ordering specifics: raw_index unique AND monotonically increasing.
-    raw_indices = [op.raw_index for op in cooked.layer_list]
+    raw_indices = [op.raw_index for op in cooked._layer_list]
     assert len(raw_indices) == len(set(raw_indices)), "raw_index values must be unique"
     assert raw_indices == sorted(raw_indices), "raw_index must be monotonically increasing"
 
@@ -472,10 +472,10 @@ def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     cooked = tl.record(_HaltNested().eval(), x, save=tl.func("relu"), halt=halt, seed=9).to_trace()
 
     # .halted must be TRUE (not silently False) and match exhaustive exactly.
-    assert cooked.halted is True
-    assert cooked.halted == exhaustive.halted
-    assert cooked.halt_reason == exhaustive.halt_reason
-    assert cooked.halt_frontier == exhaustive.halt_frontier
+    assert cooked.is_stopped is True
+    assert cooked.is_stopped == exhaustive.is_stopped
+    assert cooked.stop_reason == exhaustive.stop_reason
+    assert cooked.graph.stop_frontier == exhaustive.graph.stop_frontier
     assert list(cooked.output_layers) == list(exhaustive.output_layers)
 
     # And it must pass the FULL invariant chain rather than crashing.
@@ -545,10 +545,10 @@ def test_recording_to_trace_reuse_does_not_corrupt_frozen_recording() -> None:
     rec = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"))
     trace1 = rec.to_trace()
     trace2 = rec.to_trace()
-    assert [op.layer_label for op in trace1.layer_list] == [
-        op.layer_label for op in trace2.layer_list
+    assert [op.layer_label for op in trace1._layer_list] == [
+        op.layer_label for op in trace2._layer_list
     ]
-    assert trace1.num_ops == trace2.num_ops
+    assert trace1._num_ops == trace2._num_ops
     check_metadata_invariants(trace1)
     check_metadata_invariants(trace2)
 
@@ -621,8 +621,8 @@ def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() ->
 
     assert trace1.output_layers == trace2.output_layers
     assert len(trace1.output_layers) == 2
-    assert [op.layer_label for op in trace1.layer_list] == [
-        op.layer_label for op in trace2.layer_list
+    assert [op.layer_label for op in trace1._layer_list] == [
+        op.layer_label for op in trace2._layer_list
     ]
     check_metadata_invariants(trace1)
     check_metadata_invariants(trace2)
@@ -636,7 +636,7 @@ def test_recording_to_trace_reuse_survives_output_tensor_label_undecoration() ->
 def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None:
     """cert8 MAJOR-1: halt provenance matches exhaustive when a buffer op precedes halt.
 
-    ``halt_reason`` / ``halt_frontier`` used to store raw capture-time labels,
+    ``stop_reason`` / ``halt_frontier`` used to store raw capture-time labels,
     which diverge between capture modes because exhaustive counts buffer ops that
     predicate mode skips. Both paths now remap them to FINAL labels in postprocess
     Step 10. For an eval-mode BatchNorm model (buffer READS only, matched node
@@ -654,11 +654,11 @@ def test_recording_to_trace_halt_labels_match_exhaustive_across_buffer() -> None
         seed=11,
     ).to_trace()
 
-    assert cooked.halted is True
+    assert cooked.is_stopped is True
     # Final labels (not raw) -- and they match exhaustive exactly.
-    assert cooked.halt_reason == exhaustive.halt_reason
-    assert cooked.halt_frontier == exhaustive.halt_frontier
-    assert not cooked.halt_reason.endswith("_raw")
+    assert cooked.stop_reason == exhaustive.stop_reason
+    assert cooked.graph.stop_frontier == exhaustive.graph.stop_frontier
+    assert not cooked.stop_reason.endswith("_raw")
     check_metadata_invariants(cooked)
     check_metadata_invariants(exhaustive)
 
@@ -701,4 +701,4 @@ def test_recording_to_trace_backfills_random_seed() -> None:
 
     x = torch.randn(2, 4)
     cooked = tl.record(NestedBlocks().eval(), x, save=tl.func("relu"), seed=4242).to_trace()
-    assert cooked.random_seed == 4242
+    assert cooked.options.seed == 4242

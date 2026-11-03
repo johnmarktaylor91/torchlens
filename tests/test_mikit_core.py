@@ -250,7 +250,7 @@ def test_head_scores_plan_from_a_structure_only_capture(r0_models):
     assert [site.op_label for site in plan.sites] == [str(op.label) for op in meta.input_ops]
     selective = tl.trace(model, doubled, save=plan.predicate)
     full = tl.trace(model, doubled, capture=tl.options.CaptureOptions(layers_to_save="all"))
-    assert selective.num_saved_layers < full.num_saved_layers
+    assert len(selective.saved_layers) < len(full.saved_layers)
     got = mi.head_scores(selective, kind="induction")
     want = mi.head_scores(full, kind="induction")
     assert got.scores == want.scores and got.eligible_rows == want.eligible_rows

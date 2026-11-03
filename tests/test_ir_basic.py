@@ -7,7 +7,6 @@ import subprocess
 import sys
 from dataclasses import FrozenInstanceError, fields, is_dataclass
 from typing import get_type_hints
-from unittest.mock import patch
 
 import pytest
 
@@ -128,7 +127,7 @@ def _build_ir_instances() -> dict[str, object]:
     parent_edge = ParentEdge(
         parent_label_raw="input_1_0_raw",
         arg_position=0,
-        edge_use="arg",
+        _edge_use="arg",
     )
     param_ref = ParamRef(
         barcode="param-0",
@@ -277,7 +276,7 @@ def _build_ir_instances() -> dict[str, object]:
         is_scalar_bool=False,
         bool_value=None,
         intervention_fired=True,
-        intervention_replaced=False,
+        is_edited=False,
         fire_results=(fire_result,),
         intervention_template_ref=intervention_template_ref,
     )
@@ -307,7 +306,7 @@ def _build_ir_instances() -> dict[str, object]:
         kind="op",
         label="linear_1_1",
         raw_label="linear_1_1_raw",
-        pass_index=1,
+        pass_number=1,
         event_index=1,
         step_index=1,
         layer_type="linear",
@@ -316,7 +315,7 @@ def _build_ir_instances() -> dict[str, object]:
         func_name="linear",
         address="layer",
         module_type="Linear",
-        module_pass_index=1,
+        module_pass_number=1,
         module_stack=(module_frame,),
         recent_events=(),
         recent_ops=(),
@@ -524,9 +523,10 @@ def test_capture_events_mutation_and_label_reservation() -> None:
     assert events.raw_layer_type_counter == {"linear": 2, "relu": 1}
 
 
-def test_ir_imports_without_torch_module() -> None:
+def test_ir_imports_without_torch_module(monkeypatch: pytest.MonkeyPatch) -> None:
     """Assert importing IR succeeds when torch is absent from sys.modules."""
-    with patch.dict(sys.modules, {"torch": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "torch", None)
         module = importlib.import_module("torchlens._ir")
 
     assert module.TensorRef is TensorRef

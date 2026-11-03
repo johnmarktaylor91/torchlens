@@ -13,7 +13,8 @@ from typing import Any
 import pytest
 from _source_corpus import package_ast, package_files
 
-from torchlens import _user_funcs as user_funcs, errors
+from torchlens import errors
+from torchlens._capture import run_entry
 from torchlens._io.tlspec import coerce_tlspec_save_level
 from torchlens.errors import (
     AmbiguousBackendError,
@@ -49,6 +50,7 @@ OLD_EXCEPTION_MAPPING: tuple[tuple[str, str, type[BaseException], str], ...] = (
     ("torchlens._errors", "KeywordConflictError", errors.ConfigurationError, "subclass"),
     ("torchlens._errors", "CaptureNotActiveError", errors.CaptureError, "subclass"),
     ("torchlens._errors", "UserTransformError", errors.CaptureError, "subclass"),
+    ("torchlens._errors", "TraceCaptureError", errors.CaptureError, "subclass"),
     ("torchlens._errors", "ParamReleasedError", errors.CaptureError, "subclass"),
     ("torchlens._io", "ArtifactError", errors.CompatibilityError, "subclass"),
     (
@@ -464,7 +466,6 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ReplayValueMismatchError": ("RuntimeError",),
     "OpaqueCallableError": ("ValueError",),
     "OutputAttributionError": ("RuntimeError",),
-    "PartialCaptureLookupError": ("ValueError",),
     "PathDivergenceError": ("ValueError", "RuntimeError"),
     "PayloadUnavailableError": ("ValueError",),
     "PoisonedRunError": ("RuntimeError",),
@@ -515,6 +516,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "ArtifactError": ("RuntimeError",),
     "TorchLensInterventionError": ("RuntimeError",),
     "InterventionWarning": ("Warning",),
+    "TraceCaptureError": (),
     "TransformContractError": ("RuntimeError",),
     "UserTransformError": ("RuntimeError",),
     "TorchLensWarning": ("Warning",),
@@ -587,7 +589,7 @@ BUILTIN_LINEAGE_GOLDEN: dict[str, tuple[str, ...]] = {
     "FittedArtifactError": ("RuntimeError",),
     "RenderError": ("RuntimeError",),
     "RankRenderEndpointError": ("RuntimeError",),
-    "OutputStyleUnknownError": ("ValueError",),
+    "DecodeStyleUnknownError": ("ValueError",),
     "PluginLoadWarning": ("Warning",),
     "SynthesizedValueReadWarning": ("Warning",),
     "TensorSubclassUnsupportedError": ("RuntimeError",),
@@ -864,7 +866,7 @@ def test_top_refusal_messages_name_a_remedy(
     (
         (
             "register_tensor_connection",
-            lambda: user_funcs.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
+            lambda: run_entry.register_tensor_connection(object(), object()),  # type: ignore[arg-type]
         ),
     ),
 )
@@ -1013,8 +1015,8 @@ def test_save_argument_door_is_typed_and_names_runnable_spellings() -> None:
     x = torch.randn(2)
     saved_all = tl.trace(nn.Identity(), x, save="all")
     default = tl.trace(nn.Identity(), x)
-    assert [op.label for op in saved_all.layer_list if op.has_saved_activation] == [
-        op.label for op in default.layer_list if op.has_saved_activation
+    assert [op.label for op in saved_all._layer_list if op.has_saved_activation] == [
+        op.label for op in default._layer_list if op.has_saved_activation
     ]
 
 
@@ -1128,31 +1130,10 @@ def test_option_group_conflict_doors_split_by_site_history() -> None:
     assert not isinstance(keyword_info.value, ValueError)
 
 
-def test_intervention_direction_doors_split_by_site_history() -> None:
-    """Predicate-side direction refusal keeps its historical TypeError lineage.
-
-    The door raised a raw ``TypeError`` since the 2.16 intervention era, and
-    the live capture-path callers catch ``TypeError`` to convert a bad
-    predicate result into ``PredicateError``. Its code is distinct from the
-    ValueError-lineage trace-side ``intervention_direction_invalid`` doors so
-    ``fields["code"]`` determines the catchable builtin.
-    """
-
-    from torchlens.intervention.predicates import as_intervention_decision
-
-    with pytest.raises(errors.ArgumentTypeError) as exc_info:
-        as_intervention_decision(lambda out: out, direction="sideways")  # type: ignore[arg-type]
-
-    assert exc_info.value.fields["code"] == "intervention_action_direction_invalid"
-    assert isinstance(exc_info.value, TypeError)
-    assert not isinstance(exc_info.value, ValueError)
-    assert "Remedy:" in str(exc_info.value)
-
-
 def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     """Backward intervention normalization propagates typed selector refusals."""
 
-    def _raise_typed_refusal(selector: object) -> str:
+    def _raise_typed_refusal(selector: object) -> tuple[tuple[str, object], ...]:
         """Raise the typed selector refusal used to probe the former broad catch."""
 
         del selector
@@ -1164,12 +1145,12 @@ def test_selector_direction_refusal_is_not_swallowed(monkeypatch: pytest.MonkeyP
         del context
 
     predicate.selector = object()  # type: ignore[attr-defined]
-    predicate.decision = InterventionDecision(action="transform")  # type: ignore[attr-defined]
-    from torchlens import _capture_intervention
-
-    monkeypatch.setattr(
-        _capture_intervention, "_selector_resolution_direction", _raise_typed_refusal
+    predicate.decision = InterventionDecision(  # type: ignore[attr-defined]
+        action="transform", hook=lambda out, *, ctx: out
     )
+    from torchlens._capture.prepare import resolve as _capture_intervention
+
+    monkeypatch.setattr(_capture_intervention, "split_site_branches", _raise_typed_refusal)
 
     with pytest.raises(SiteResolutionError) as exc_info:
         _capture_intervention._backward_intervention_spec_from_predicate(predicate)
@@ -1204,6 +1185,21 @@ _BUILTIN_EXCEPTION_ROOTS = frozenset(
 # current: a stale entry (class deleted or later registered) fails the gate
 # just like a missing one.
 _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
+    # Metadata unpickler pre-scan control flow: private signals between the dry run and
+    # the load path, never raised to a caller (the load path catches both and either runs
+    # the pure-Python machine or refuses with the boundary's UnpicklingError).
+    "torchlens._io._pickle_prescan.StreamNeedsInterpreter": (
+        "private hand-off from the pre-scan to the pure-Python machine; caught by "
+        "SafeBundleUnpickler.load, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._NotStatic": (
+        "private signal that a construction's arguments are only known at run time; "
+        "caught inside the pre-scan, never escapes"
+    ),
+    "torchlens._io._pickle_prescan._StopDryRun": (
+        "private signal that the policy refused a global; caught inside the pre-scan, "
+        "the refusal itself is re-raised by the real run"
+    ),
     # Changed-parameter replay refusal: a private ReplayPreconditionError subclass
     # whose only job is carrying prose plus the coded fields (callers catch the base).
     "torchlens.intervention._param_fingerprint.ParamChangedSinceCaptureError": (
@@ -1231,7 +1227,7 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
     # L4 declared-state restore bracket: an INTERNAL carrier converted into
     # the typed run_state_restore_failed refusal at the transaction boundary
     # (never user-facing; parked by the L6 merge train post-merge repair).
-    "torchlens._runnable_state_live.LiveStateRestoreFailure": (
+    "torchlens._runnable.state_live.LiveStateRestoreFailure": (
         "internal mid-bracket carrier; surfaced as run_state_restore_failed"
     ),
     # tl.stats.aggregate(cache=True) key builder: raised while hashing a run's inputs
@@ -1298,6 +1294,11 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "registered in torchlens.errors under the preserved runtime home "
         "torchlens._io; this row records the post-split defining file"
     ),
+    "torchlens.bundle._labels.AmbiguousLabelError": (
+        "registered in torchlens.errors under the preserved runtime home "
+        "torchlens.bundle; this row records the defining file (moved into the "
+        "label leaf so the leaf stops importing the package)"
+    ),
     "torchlens._registry.kernel.RegistryError": (
         "private registry-kernel refusal (C01); surfaced through typed "
         "domain-door errors, never caught by kernel class in user code — "
@@ -1319,25 +1320,25 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "internal control-flow cut signal (BaseException) for trace.run(fast=True, until=); "
         "raised and caught inside the fast live session, never escapes _fast_run"
     ),
-    "torchlens._runnable_execution._ProjectionCountExceeded": (
+    "torchlens._runnable.execution._ProjectionCountExceeded": (
         "private internal bound signal; caught inside the projection walk"
     ),
-    "torchlens._runnable_execution._UnreadableProjectedOutput": (
+    "torchlens._runnable.execution._UnreadableProjectedOutput": (
         "private allocation-preflight signal (grind-r5 b7 R22); raised when a "
         "projected output's size cannot be read and converted by the caller to "
         "the typed op_allocation_preflight refusal"
     ),
-    "torchlens._user_funcs._CaptureCacheEntryOverCeilingError": (
+    "torchlens._capture.prepare.cache._CaptureCacheEntryOverCeilingError": (
         "private mid-stream byte-ceiling abort signal; raised and caught inside the "
-        "capture-cache writer, never escapes user_funcs"
+        "capture-cache writer, never escapes the capture cache module"
     ),
-    "torchlens._utils.rng._NotADigestableRng": (
+    "torchlens._utils.rng.inventory_types._NotADigestableRng": (
         "private RNG-classifier signal; caught inside the witness classifier"
     ),
     "torchlens._io.runnable._UnsupportedLiteralError": (
         "private save-time literal-classifier signal; converted to typed refusals"
     ),
-    "torchlens._utils._dynamo_explain_shapes._DynamoExplainOutputError": (
+    "torchlens.debug._dynamo_explain_shapes._DynamoExplainOutputError": (
         "private dynamo-explain probe failure; caught inside the capability probe"
     ),
     "torchlens._capture.projections.LiveOpViewFieldNotYetWritten": (
@@ -1439,6 +1440,14 @@ _TAXONOMY_INTERNAL_ALLOWLIST: dict[str, str] = {
         "S2-gated weights-free admission/settlement refusal (CaptureError "
         "subclass); errors-namespace registration rides the S2 ratification "
         "PR with its structure-only siblings above"
+    ),
+    # Aliased output slots (net-f26): the flat leaf stream ran dry while a
+    # container spec was being rebuilt; an internal signal that carries the
+    # slot path up the recursion and is turned into the public ValueError by
+    # ``rebuild_container_from_spec`` once the full path is known.
+    "torchlens._ir.container._LeafStreamDry": (
+        "internal recursion signal carrying the dry slot path; caught by "
+        "rebuild_container_from_spec, which raises the public ValueError"
     ),
 }
 

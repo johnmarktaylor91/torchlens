@@ -22,6 +22,8 @@ from .._postprocess.finalization import _build_module_logs, _build_root_module_l
 from .._postprocess.loop_grouping_adapter import RecurrenceAssignment
 from .._quantities import Bytes
 from .._utils.hashing import compute_graph_shape_hash, populate_normalized_layer_addresses
+from ._constants import ConstantLedger, apply_constants_rule
+from ._finalize_totals import _count_trace_ops, _update_param_totals_from_layers
 from .registry import BackendName
 
 OpHook: TypeAlias = Callable[[Any, Trace, set[str]], None]
@@ -34,6 +36,28 @@ MetadataTopLevelPredicate: TypeAlias = Callable[
 ]
 OpTopLevelPredicate: TypeAlias = Callable[[str], bool]
 TrainingModeResolver: TypeAlias = Callable[[dict[str, Any]], bool]
+_ParamSource: TypeAlias = Literal["native-module", "pytree-derived", "none"]
+
+
+def _attach_op_to_layer(
+    trace: Trace,
+    op_log: Any,
+    enrich_layer: LayerEnrichmentHook | None,
+) -> None:
+    """Attach one finalized op to its layer log, creating the layer on first sight."""
+
+    layer_log = trace._layer_logs.get(op_log.layer_label)
+    layer_created = layer_log is None
+    if layer_log is None:
+        layer_log = Layer(op_log)
+    layer_log.ops[op_log.pass_number] = op_log
+    layer_log.call_labels.append(op_log.label)
+    if op_log.num_passes != 1:
+        layer_log.num_passes = op_log.num_passes
+    if layer_created:
+        if enrich_layer is not None:
+            enrich_layer(layer_log, op_log)
+        trace._layer_logs[op_log.layer_label] = layer_log
 
 
 def finalize_single_pass_trace(
@@ -53,6 +77,7 @@ def finalize_single_pass_trace(
     compute_input_output_distances: bool | None = None,
     recurrence_detection: bool = False,
     relabel_sidecar_labels: SidecarRelabelHook | None = None,
+    constants: ConstantLedger | None = None,
 ) -> None:
     """Finalize raw single-pass op logs into public trace accessors.
 
@@ -61,7 +86,7 @@ def finalize_single_pass_trace(
     trace:
         Trace whose ``_raw_layer_dict`` contains backend-created op logs.
     backend_name:
-        Canonical backend name written to ``trace.backend``.
+        Canonical backend name written to ``trace.provenance.backend``.
     module_tree:
         Optional object-module discovery tree for object-module traces.
     attach_function_root_module:
@@ -79,14 +104,14 @@ def finalize_single_pass_trace(
     update_param_totals_from_layers:
         Whether trace parameter counters should be recomputed from finalized layers.
     count_layers_with_attached_params:
-        Whether to compute ``trace.num_layers_with_params`` from attached params.
+        Whether to compute ``trace._num_layers_with_params`` from attached params.
     finish_before_module_logs:
         Whether to set ``_tracing_finished`` before module logs are attached.
     compute_input_output_distances:
         Whether to run the neutral input/output distance flood (torch Step 4)
         over the finalized single-pass graph. ``None`` reads the request the
-        backend stored on ``trace.mark_layer_depths``; the effective value is
-        written back to ``trace.mark_layer_depths`` either way.
+        backend stored on ``trace.options.mark_layer_depths``; the effective value is
+        written back to ``trace.options.mark_layer_depths`` either way.
     recurrence_detection:
         Whether to run the neutral recurrence grouper over the raw graph and
         apply its assignments (multi-pass layers, pass-qualified op labels,
@@ -100,6 +125,12 @@ def finalize_single_pass_trace(
         may ignore the hook. Called unconditionally (N5: every op's raw label
         differs from its final label now, not only multi-pass group members),
         not only when ``recurrence_detection`` is on.
+    constants:
+        The capture's :class:`~torchlens.backends._constants.ConstantLedger`
+        when the backend keeps one. The shared constants rule audits the raw
+        graph against it first (closure constants are parentless source ops
+        with payload evidence, literal producers stay parentless); the rule
+        runs with or without a ledger.
 
     Returns
     -------
@@ -107,6 +138,10 @@ def finalize_single_pass_trace(
         The trace is updated in place.
     """
 
+    # The shared constants rule runs first, on raw labels: a constant op
+    # recorded with parents or without payload evidence refuses here, before
+    # any op is finalized or relabelled.
+    apply_constants_rule(trace, backend_name=backend_name, ledger=constants)
     _mint_preview_site_keys(trace)
     assignments: dict[str, RecurrenceAssignment] | None = None
     if recurrence_detection:
@@ -124,31 +159,16 @@ def finalize_single_pass_trace(
             attach_op_params(op_log, trace, seen_param_barcodes)
             if not isinstance(op_log.param_memory, Bytes):
                 op_log.param_memory = Bytes(int(op_log.param_memory))
-        if getattr(op_log, "_param_logs", []):
+        if op_log._param_logs:
             layers_with_params_seen.add(op_log.layer_label)
         if update_param_usage:
             _attach_param_usage(trace, op_log, param_usage_membership)
-        layer_log = trace.layer_logs.get(op_log.layer_label)
-        layer_created = layer_log is None
-        if layer_log is None:
-            layer_log = Layer(op_log)
-        layer_log.ops[op_log.pass_index] = op_log
-        layer_log.call_labels.append(op_log.label)
-        if op_log.num_passes != 1:
-            layer_log.num_passes = op_log.num_passes
-        if layer_created:
-            if enrich_layer is not None:
-                enrich_layer(layer_log, op_log)
-            trace.layer_logs[op_log.layer_label] = layer_log
+        _attach_op_to_layer(trace, op_log, enrich_layer)
 
-    trace.num_ops = sum(
-        1
-        for op_log in trace.layer_list
-        if not (op_log.is_input or op_log.is_output or op_log.is_buffer)
-    )
+    trace._num_ops = _count_trace_ops(trace)
     if compute_input_output_distances is None:
-        compute_input_output_distances = bool(getattr(trace, "mark_layer_depths", False))
-    trace.mark_layer_depths = bool(compute_input_output_distances)
+        compute_input_output_distances = bool(trace._options_mark_layer_depths)
+    trace._options_mark_layer_depths = bool(compute_input_output_distances)
     if compute_input_output_distances:
         # The flood runs BEFORE the relabel epilogue: edges and the trace-side
         # input/output label lists are still uniformly raw here, so every seed
@@ -163,28 +183,27 @@ def finalize_single_pass_trace(
     # grouper actually ran over this graph, so an ungrouped finalize can never
     # claim grouping that never happened. (JAX finalizes through its own
     # recurrence-grouping path and keeps the request.)
-    trace.recurrence_detection = assignments is not None
-    trace.grouping_policy = build_grouping_policy_stamp(
-        ran_recurrence_grouping=assignments is not None,
-        requested=getattr(trace, "grouping", "structural"),
+    trace._options_recurrence_detection = assignments is not None
+    trace._options_grouping_policy = build_grouping_policy_stamp(
+        ran_recurrence_grouping=assignments is not None, requested=trace._options_grouping
     )
     if update_param_totals_from_layers:
         _update_param_totals_from_layers(trace)
     if count_layers_with_attached_params:
-        trace.num_layers_with_params = len(layers_with_params_seen)
+        trace._num_layers_with_params = len(layers_with_params_seen)
     trace._layers_logged = True
     trace._layers_saved = True
-    trace.has_backward_pass = False
-    trace.capture_end_time = time.time()
-    trace.backend = cast(BackendName, backend_name)
+    trace._autograd_has_backward_pass = False
+    trace._provenance_end_time = time.time()
+    trace._provenance_backend = cast(BackendName, backend_name)
     if finish_before_module_logs:
         trace._tracing_finished = True
         _set_per_op_tracing_finished(trace)
     if module_tree is None:
-        trace.module_identity_mode = "function_root"
+        trace._options_module_identity_mode = "function_root"
         attach_function_root_module(trace)
     else:
-        trace.module_identity_mode = "object_module"
+        trace._options_module_identity_mode = "object_module"
         attach_object_module_logs(trace, module_tree)
     if not finish_before_module_logs:
         trace._tracing_finished = True
@@ -194,7 +213,7 @@ def finalize_single_pass_trace(
 
 
 def stamp_preview_graph_shape_hash(trace: Trace) -> None:
-    """Compute ``trace.graph_shape_hash`` for a finalized preview trace.
+    """Compute ``trace.provenance.fingerprint`` for a finalized preview trace.
 
     Torch traces get the hash in postprocess Step 16.5; preview backends
     finalize through this module and used to leave it ``None``. The hash
@@ -208,7 +227,7 @@ def stamp_preview_graph_shape_hash(trace: Trace) -> None:
     """
 
     populate_normalized_layer_addresses(trace)
-    trace.graph_shape_hash = compute_graph_shape_hash(trace)
+    trace._provenance_fingerprint = compute_graph_shape_hash(trace)
 
 
 def _set_per_op_tracing_finished(trace: Trace) -> None:
@@ -222,7 +241,7 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
     Returns
     -------
     None
-        Every op reachable via ``trace.layer_dict_main_keys`` is mutated in place.
+        Every op reachable via ``trace._layer_dict_main_keys`` is mutated in place.
 
     Notes
     -----
@@ -233,8 +252,8 @@ def _set_per_op_tracing_finished(trace: Trace) -> None:
     on non-torch tensors.
     """
 
-    for layer_label in trace.layer_dict_main_keys:
-        op_log = trace.layer_dict_main_keys[layer_label]
+    for layer_label in trace._layer_dict_main_keys:
+        op_log = trace._layer_dict_main_keys[layer_label]
         op_log._tracing_finished = True
 
 
@@ -258,8 +277,8 @@ def attach_function_root_module(trace: Trace) -> None:
     trace._module_capture_ws.module_metadata = {
         "self": {
             "cls": None,
-            "class_name": trace.model_class_name,
-            "class_qualname": trace.model_class_qualname,
+            "class_name": trace._source_class_name,
+            "class_qualname": trace._source_class_qualname,
             "all_addresses": ["self"],
             "training": False,
         }
@@ -325,7 +344,7 @@ def attach_object_module_logs(
         if metadata_top_level(address, metadata, metadata_by_address):
             mbd["top_level_modules"].append(address)
 
-    for param in trace.param_logs:
+    for param in trace._param_logs:
         owner = param.module_address
         mbd["module_nparams"][owner] += param.num_params
         if param.is_trainable:
@@ -371,7 +390,7 @@ def populate_object_module_build_data(
     seen_top_level_ops: set[str] = set()
     seen_pass_children: dict[str, set[str]] = defaultdict(set)
     seen_addresses = set(mbd["addresses"])
-    for op_log in trace.layer_list:
+    for op_log in trace._layer_list:
         normalized_calls = normalize_module_calls(op_log.modules)
         op_log.modules = [f"{address}:{call_index}" for address, call_index in normalized_calls]
         op_log.module = op_log.modules[-1] if op_log.modules else None
@@ -432,7 +451,7 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
 
     Notes
     -----
-    This mirrors ``postprocess.graph_traversal._mark_layer_depths`` but
+    This mirrors ``postprocess._layer_depths._mark_layer_depths`` but
     resolves labels through an explicit op index instead of
     ``Trace.__getitem__`` (whose finished-mode lookup returns ``Layer``
     objects, not the ops the flood must mutate). Lineage sets are normalized
@@ -441,7 +460,7 @@ def compute_preview_input_output_distances(trace: Trace) -> None:
     """
 
     ops_by_label: dict[str, Any] = {}
-    for op_log in trace.layer_list:
+    for op_log in trace._layer_list:
         for field_name in ("input_ancestors", "output_descendants"):
             value = getattr(op_log, field_name, None)
             if not isinstance(value, set):
@@ -610,24 +629,24 @@ def _finalize_single_op(
     op_log._label_raw = label
     op_log._layer_label_raw = layer_label
     op_log.label = pass_label
-    op_log.label_short = pass_label
+    op_log.short_label = pass_label
     op_log.layer_label = layer_label
-    op_log.layer_label_short = layer_label
+    op_log.short_layer_label = layer_label
     op_log.lookup_keys = [label, pass_label]
-    op_log.pass_index = pass_index
+    op_log.pass_number = pass_index
     op_log.num_passes = num_passes
     if assignment is not None:
         op_log.equivalence_class = assignment.equivalence_key
-    trace.layer_list.append(op_log)
+    trace._layer_list.append(op_log)
     # Torch parity: layer_dict_main_keys is ALWAYS keyed by the pass-qualified
     # op.label (_postprocess/labeling.py's
-    # ``self.layer_dict_main_keys[layer_entry.label] = layer_entry``), never
+    # ``self._layer_dict_main_keys[layer_entry.label] = layer_entry``), never
     # the raw backend label -- a single-pass op's raw label was never a valid
     # main key, so any lookup of a relabeled (bare or pass-qualified) final
     # label through this dict raised KeyError for every single-pass op.
-    trace.layer_dict_main_keys[pass_label] = op_log
-    trace.layer_dict_all_keys[label] = op_log
-    trace.layer_dict_all_keys[pass_label] = op_log
+    trace._layer_dict_main_keys[pass_label] = op_log
+    trace._layer_dict_all_keys[label] = op_log
+    trace._layer_dict_all_keys[pass_label] = op_log
     # Torch parity: always register the bare layer label (not just for
     # multi-pass groups). Without this, single-pass ops -- the common case --
     # were never resolvable by bare layer_label through layer_dict_all_keys,
@@ -636,12 +655,12 @@ def _finalize_single_op(
     # layer up by its bare label via this exact dict) of every single-pass
     # op, leaving Module.layer_labels empty for any module whose ops never
     # recur and tripping the module_layer_containment invariant.
-    trace.layer_dict_all_keys[layer_label] = op_log
+    trace._layer_dict_all_keys[layer_label] = op_log
     op_log.lookup_keys.append(layer_label)
     trace.op_labels.append(pass_label)
-    if layer_label not in trace.layer_num_calls:
+    if layer_label not in trace._layer_num_calls:
         trace.layer_labels.append(layer_label)
-    trace.layer_num_calls[layer_label] = num_passes
+    trace._layer_num_calls[layer_label] = num_passes
     trace._lookup_keys_to_layer_num_dict[label] = raw_index
     trace._layer_num_to_lookup_keys_dict[raw_index].append(label)
 
@@ -747,8 +766,8 @@ def _apply_recurrence_relabel_epilogue(
         op_log.recurrent_ops = [
             raw_to_final_op[member] for member in recurrent_labels if member in raw_to_final_op
         ]
-    trace.op_equivalence_classes.clear()
-    trace.op_equivalence_classes.update(equivalent_labels_by_key)
+    trace._graph_op_equivalence_classes.clear()
+    trace._graph_op_equivalence_classes.update(equivalent_labels_by_key)
 
     if relabel_sidecar_labels is not None:
         relabel_sidecar_labels(dict(raw_to_final_op))
@@ -783,7 +802,7 @@ def _attach_param_usage(
 
     if membership_by_param is None:
         membership_by_param = {}
-    for param in getattr(op_log, "_param_logs", []):
+    for param in op_log._param_logs:
         membership = membership_by_param.get(id(param))
         if membership is None:
             membership = (
@@ -802,43 +821,6 @@ def _attach_param_usage(
         if op_log.layer_label not in layer_membership:
             trace.layers_with_params[param.barcode].append(op_log.layer_label)
             layer_membership.add(op_log.layer_label)
-
-
-def _update_param_totals_from_layers(trace: Trace) -> None:
-    """Recompute trace parameter totals on a parameter-identity basis.
-
-    Parameters
-    ----------
-    trace:
-        Trace whose ``param_logs`` registry is already populated.
-
-    Returns
-    -------
-    None
-        Trace-level parameter counters are updated when parameters are present.
-
-    Notes
-    -----
-    Totals derive from ``trace.param_logs`` (the deduped-by-identity param
-    registry), not from summing each op's own ``num_param_tensors`` across
-    unique layer labels: a param reused by more than one op/layer (a tied
-    weight, or a composite op decomposed into several primitive ops that
-    each separately attach it) is counted once per referencing layer by the
-    per-op sum, inflating the total past the true unique-param count and
-    tripping the ``trace_self_consistency`` invariant's parameter-identity
-    check (``num_param_tensors != len(param_logs)``).
-    """
-
-    if trace.param_source != "none":
-        trace.num_param_tensors = len(trace.param_logs)
-        trace.num_params = sum(param.num_params for param in trace.param_logs)
-        trace.num_params_trainable = sum(
-            param.num_params for param in trace.param_logs if param.is_trainable
-        )
-        trace.num_params_frozen = trace.num_params - trace.num_params_trainable
-        trace.num_layers_with_params = len(
-            {op.layer_label for op in trace.layer_list if op.has_params}
-        )
 
 
 def numel_from_shape(shape: Any) -> int:
@@ -999,7 +981,7 @@ def mirror_param_derived_grads(trace: Trace, records: Any) -> None:
         param.has_grad = True
         param.grad_shape = tuple(getattr(record.grad, "shape", ()))
         param.grad_dtype = cast(Any, str(getattr(record.grad, "dtype", "")))
-        param.gradient_memory = value_nbytes(record.grad) or 0
+        param.grad_memory = value_nbytes(record.grad) or 0
 
 
 def normalize_op_module_calls(value: Any) -> tuple[tuple[str, int], ...]:
@@ -1143,7 +1125,7 @@ def attach_module_owned_op_params(
     owner = module_calls[-1][0]
     params = [
         param
-        for param in trace.param_logs
+        for param in trace._param_logs
         if param.module_address == owner and param.barcode not in seen_param_barcodes
     ]
     if not params:
@@ -1240,7 +1222,7 @@ def new_preview_function_trace(
         module_filter=None,
         emit_nvtx=False,
         input_transform=None,
-        raw_input=raw_input,
+        input=raw_input,
         save_raw_input=save_raw_input,
         batch_render=batch_render,
         output_transform=cast("Callable[[Any], Any] | None", output_transform),
@@ -1248,16 +1230,16 @@ def new_preview_function_trace(
         layer_visualizers=None,
         save_visualizations=False,
     )
-    trace.trace_label = name
-    trace.backend = cast(BackendName, backend_name)
-    trace.module_identity_mode = "function_root"
-    trace.param_source = cast("Literal['native-module', 'pytree-derived', 'none']", param_source)
-    trace.model_label = trace.model_class_name
-    trace.model_class_qualname = getattr(model, "__qualname__", trace.model_class_name)
+    trace.name = name
+    trace._provenance_backend = cast(BackendName, backend_name)
+    trace._options_module_identity_mode = "function_root"
+    trace._provenance_param_source = cast(_ParamSource, param_source)
+    trace.model_name = trace._source_class_name
+    trace._source_class_qualname = getattr(model, "__qualname__", trace._source_class_name)
     # Root entry-point identity fact (C07X item (iv)): preview backends
     # capture a function/module-like root under module_identity_mode
     # "function_root", so the honest closed-kind token is function_call.
-    trace.root_entry_point = f"function_call:{trace.model_class_qualname}"
+    trace._provenance_root_entry_point = f"function_call:{trace._source_class_qualname}"
     trace._pre_forward_rng_states = None
     return trace
 

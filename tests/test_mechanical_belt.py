@@ -260,8 +260,7 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
     the row -- r-b4 R26-4).
     """
 
-    import torchlens._utils as tl_utils
-    from torchlens.report import doctor as compat_report
+    from torchlens.report import _environment, doctor as compat_report
 
     real = belt.belt_report()
     assert real is not None
@@ -269,7 +268,7 @@ def test_clean_belt_reports_pass_not_false_alarm() -> None:
 
     # Direct probe call: the full doctor() sweep (graphviz subprocess, extras
     # imports) is exercised by the failure test and is too slow to repeat here.
-    doctor_row = tl_utils._probe_mechanical_belt()
+    doctor_row = _environment._probe_mechanical_belt()
     assert doctor_row.status == "PASS"
     assert "unprobed_candidates=" in doctor_row.detail
 

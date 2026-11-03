@@ -140,7 +140,7 @@ def test_field_source_and_nonnumeric_refusal(net_log: Any, net_payload: dict[str
     graphs_data, coverage = build_node_data(net_log, net_payload, "field:num_params")
     assert coverage["resolved"] > 0
     with pytest.raises(Exception) as excinfo:
-        build_node_data(net_log, net_payload, "field:layer_type")
+        build_node_data(net_log, net_payload, "field:type")
     assert excinfo.value.fields["code"] == "model_explorer_overlay_value_invalid"
 
 

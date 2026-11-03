@@ -163,7 +163,7 @@ def _op_dict(op: Any) -> dict[str, Any]:
         "func_name": func_name,
         "fx_call_index": op.fx_call_index,
         "fx_qualpath": op.fx_qualpath,
-        "intervention_replaced": getattr(op, "intervention_replaced", False),
+        "is_edited": getattr(op, "is_edited", False),
         "is_atomic_module": op.is_atomic_module,
         "is_internal_sink": op.is_internal_sink,
         "is_internal_source": op.is_internal_source,
@@ -265,7 +265,7 @@ def _call_dict(call: Any) -> dict[str, Any]:
 
     return {
         "address": call.address,
-        "call_label": call.call_label,
+        "call_label": call.label,
         "forward_args_summary": call.forward_args_summary,
         "forward_kwargs_summary": call.forward_kwargs_summary,
         "input_layers": list(call.input_layers),
@@ -275,7 +275,7 @@ def _call_dict(call: Any) -> dict[str, Any]:
 
 
 def _equivalence_partition(trace: Any) -> list[list[str]]:
-    """Serialize Trace.op_equivalence_classes as a deterministic partition.
+    """Serialize Trace.graph.op_equivalence_classes as a deterministic partition.
 
     Parameters
     ----------
@@ -289,7 +289,8 @@ def _equivalence_partition(trace: Any) -> list[list[str]]:
     """
 
     partition = [
-        sorted(str(label) for label in members) for members in trace.op_equivalence_classes.values()
+        sorted(str(label) for label in members)
+        for members in trace.graph.op_equivalence_classes.values()
     ]
     return sorted(partition)
 
@@ -318,7 +319,7 @@ def build_snapshot(trace: Any, fixture_name: str) -> dict[str, Any]:
             _call_dict(call) for module in trace.modules for call in module.ops.values()
         ],
         "modules": [_module_dict(module) for module in trace.modules],
-        "ops": [_op_dict(op) for op in trace.layer_list],
+        "ops": [_op_dict(op) for op in trace._layer_list],
         "trace_summary": {
             "total_flops_forward": trace.cost.total_flops_forward,
             "uncalled_modules": sorted(str(value) for value in trace.uncalled_modules),

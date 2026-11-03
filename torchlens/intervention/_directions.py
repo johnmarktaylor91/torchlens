@@ -19,7 +19,7 @@ Methods (rows are ``[n_pairs, hidden]``, ``D = positive - negative``):
   (steering-vectors' ``logistic_aggregator`` with its scikit-learn defaults).
 
 The provenance record is the subspace producer's
-:class:`~torchlens._selection_subspace.BasisProvenance` (origin, method,
+:class:`~torchlens._selection.subspace.BasisProvenance` (origin, method,
 geometry and the sha256 content digest of the canonical float64 vector); the
 origin also records the site, pair count, read position and a digest of the
 rows the direction was fitted on.
@@ -39,7 +39,7 @@ from typing import TYPE_CHECKING, Any
 import torch
 
 from .._errors import InvalidArgumentError, PayloadUnavailableError
-from .._selection_subspace import BasisProvenance, _basis_digest
+from .._selection.subspace import BasisProvenance, _basis_digest
 
 if TYPE_CHECKING:
     from .types import Edit
@@ -400,7 +400,7 @@ def _site_label(record: Any) -> str:
 
     label = str(record.layer_label)
     num_passes = getattr(record, "num_passes", None)
-    pass_index = getattr(record, "pass_index", None)
+    pass_index = getattr(record, "pass_number", None)
     if isinstance(num_passes, int) and num_passes > 1 and isinstance(pass_index, int):
         return f"{label}:{pass_index}"
     return label
@@ -433,7 +433,7 @@ def _saved_out(trace: Any, site: Any, side: str) -> torch.Tensor:
 def _captured_mask(trace: Any) -> torch.Tensor | None:
     """Return the saved ``attention_mask`` input of a trace, if any."""
 
-    for layer in getattr(trace, "layer_list", []):
+    for layer in trace._layer_list:
         role = getattr(layer, "io_role", None)
         if not getattr(layer, "is_input", False) or not isinstance(role, str):
             continue

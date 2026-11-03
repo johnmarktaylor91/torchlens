@@ -51,6 +51,7 @@ _LEGACY_EXCEPTION_PATHS = {
     "CaptureGapWarning": ("torchlens._errors", "CaptureGapWarning"),
     "ParamReleasedError": ("torchlens._errors", "ParamReleasedError"),
     "ShapeInferenceError": ("torchlens._errors", "ShapeInferenceError"),
+    "TraceCaptureError": ("torchlens._errors", "TraceCaptureError"),
     "UserTransformError": ("torchlens._errors", "UserTransformError"),
     "ArtifactError": ("torchlens._io", "ArtifactError"),
     "UnsupportedTensorVariantError": (
@@ -156,7 +157,7 @@ _LEGACY_EXCEPTION_PATHS = {
         "BatchNormTrainModeWarning",
     ),
     "SpecMutationError": ("torchlens.intervention.errors", "SpecMutationError"),
-    "SelectionError": ("torchlens._selection", "SelectionError"),
+    "SelectionError": ("torchlens._selection.selection", "SelectionError"),
     "SiteResolutionError": ("torchlens.intervention.errors", "SiteResolutionError"),
     "SelectorCompositionError": (
         "torchlens.intervention.errors",
@@ -279,7 +280,7 @@ _LAZY_EXCEPTION_PATHS = {
         "DistributedCaptureUnsupportedError",
     ),
     "SaveBudgetExceededError": ("torchlens._save_budget", "SaveBudgetExceededError"),
-    "CaptureOutcomeError": ("torchlens._capture.outcome", "CaptureOutcomeError"),
+    "CaptureOutcomeError": ("torchlens._capture._outcome_types", "CaptureOutcomeError"),
     "GraphvizRenderError": (
         "torchlens._visualization._render_common",
         "GraphvizRenderError",
@@ -292,8 +293,7 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._visualization.renderers.base",
         "UnsupportedRendererCapabilityError",
     ),
-    "StopSignalSwallowedError": ("torchlens._capture.outcome", "StopSignalSwallowedError"),
-    "PartialCaptureLookupError": ("torchlens._partial", "PartialCaptureLookupError"),
+    "StopSignalSwallowedError": ("torchlens._capture._outcome_types", "StopSignalSwallowedError"),
     # Taxonomy closure: user-reachable typed refusals defined in subpackage
     # error modules, bound lazily so every user-facing class has one public
     # catch spelling. The defining module stays the import home.
@@ -353,10 +353,10 @@ _LAZY_EXCEPTION_PATHS = {
         "torchlens._visualization._rank_layout_internal.layout",
         "RankRenderEndpointError",
     ),
-    # -- semantic output decode: an output_style= no detector resolves --
-    "OutputStyleUnknownError": (
+    # -- semantic output decode: a read-time decode style no detector resolves --
+    "DecodeStyleUnknownError": (
         "torchlens._autoroute._builtin_output",
-        "OutputStyleUnknownError",
+        "DecodeStyleUnknownError",
     ),
     "AmbiguousLabelError": ("torchlens.bundle", "AmbiguousLabelError"),
     "DatasetExtractionResumeError": (

@@ -11,7 +11,6 @@ from .._errors import CaptureNotActiveError, InvalidArgumentError, PayloadUnavai
 from .._utils.display import user_stacklevel
 from ..errors._base import TorchLensWarning
 from . import _render_utils
-from ._boundary_bundle import bundle_member_nodes
 from ._draw_validation import _validate_draw_flag_options, _validate_draw_options
 from ._edit_highlighter import (
     HighlighterStyle,
@@ -39,6 +38,8 @@ from ._render_ordering import (
     _warn_sibling_order_fallback_once,
 )
 from ._render_regions import (
+    _collapsed_container_nodes_for_draw,
+    _container_overlay_parts,
     _queue_container_clusters,
     _setup_combined_special_clusters,
     _setup_subgraphs,
@@ -434,7 +435,7 @@ def _build_graphviz_shell(
     graph_caption = f"<<FONT COLOR='{theme.default_font}'>{caption_body}</FONT>>"
 
     dot = graphviz.Digraph(
-        name=trace.model_class_name,
+        name=trace._source_class_name,
         comment="Computational graph for the feedforward sweep",
         format=target.fileformat,
     )
@@ -611,19 +612,14 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
     emitted_segment_nodes: set[str] = set()
     captured_forward_edges: list[CapturedForwardEdge] = []
     pending_container_collapse_nodes: list[dict[str, Any]] = []
+    container_summary_lines: dict[str, list[str]] = {}
     container_clusters: list[ContainerClusterSpec] = []
-    collapsed_container_nodes = _collapsed_container_leaf_nodes(
+    collapsed_container_nodes = _collapsed_container_nodes_for_draw(
         trace,
+        request,
         context.source_graph.entries_to_plot,
-        vis_mode=request.vis_mode,
-        show_containers=request.show_containers,
-        container_max_inline=request.container_max_inline,
-        pending_nodes=pending_container_collapse_nodes,
-    )
-    collapsed_container_nodes.update(
-        bundle_member_nodes(
-            trace, context.source_graph.entries_to_plot, request, request.collapse_fn
-        )
+        pending_container_collapse_nodes,
+        container_summary_lines,
     )
     # Checked suppression (L5 M4, DEFAULT-ON): the trace-bearing prepass
     # proves which constructor-arg rows duplicate captured shapes on THIS
@@ -693,6 +689,16 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 suppressed_args=suppressed_args,
                 show_saved_for_backward=request.show_saved_for_backward,
             )
+    draw_container_nodes = request.show_containers == "nodes" and request.vis_mode == "unrolled"
+    container_overlay_nodes, container_overlay_edges, pending_container_collapse_nodes = (
+        _container_overlay_parts(
+            trace,
+            request,
+            collapsed_container_nodes,
+            container_summary_lines,
+            pending_container_collapse_nodes,
+        )
+    )
     for node_args in pending_container_collapse_nodes:
         forward_ir_builder.node(**node_args)
     from ._mutated_params import add_mutated_parameter_nodes
@@ -701,15 +707,8 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
         trace, context, forward_ir_builder, module_cluster_dict
     )
 
-    container_overlay_edges: list[ContainerOverlayEdge] = []
-    if request.show_containers == "nodes" and request.vis_mode == "unrolled":
+    if draw_container_nodes:
         context.dot.graph_attr.update({"pad": "0.20"})
-        container_overlay_nodes, container_overlay_edges = _container_nodes_and_overlay_edges(
-            trace,
-            collapsed_container_nodes,
-            vis_call_depth=request.vis_call_depth,
-            collapse_fn=request.collapse_fn,
-        )
         for overlay_node in container_overlay_nodes:
             if overlay_node.owner_key is None:
                 forward_ir_builder.node(**overlay_node.args)
@@ -717,7 +716,7 @@ def _populate_forward_ir(trace: "Trace", context: _ForwardRenderContext) -> _For
                 module_cluster_dict[overlay_node.owner_key].setdefault("nodes", []).append(
                     overlay_node.args
                 )
-    if request.show_containers in {"cluster", "nodes"}:
+    if request.show_containers == "nodes":
         container_clusters = _container_clusters_for_graphviz(
             trace,
             context.source_graph.entries_to_plot,

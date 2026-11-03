@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -9,6 +10,8 @@ import torch
 from torch import nn
 
 import torchlens as tl
+import torchlens._capture.prepare.door as door
+import torchlens._capture.run_entry as run_entry
 import torchlens._user_funcs as user_funcs
 from torchlens import _visualization
 from torchlens.options import VisualizationOptions
@@ -20,16 +23,20 @@ class _DummyLog:
     def __init__(self) -> None:
         """Initialize a capture object with the attributes the wrappers expect."""
         self.cleanup_calls = 0
-        self.layer_logs: dict[str, Any] = {}
-        self.num_saved_ops = 0
+        self._layer_logs: dict[str, Any] = {}
+        self._layer_list: list[Any] = []
+        self._num_saved_ops = 0
+        self.saved_ops: list[Any] = []
         self.render_calls: list[dict[str, Any]] = []
         self.summary_calls: list[dict[str, Any]] = []
         self.summary_result = "summary output"
-        self.total_activation_memory = "0 B"
+        self._cost_total_activation_memory = "0 B"
+        self._provenance_verified: Any = None
         self.validate_calls: list[dict[str, Any]] = []
-        self.verbose = False
+        self._options_verbose = False
+        self._options_structure_only = False
         # Save options a real ``Trace`` records from its capture call.
-        self.output_device = "same"
+        self._options_output_device = "same"
         self.save_budget: Any = "auto"
 
     def cleanup(self) -> None:
@@ -130,7 +137,7 @@ def stubbed_runner(
     captured_calls: list[dict[str, Any]] = []
     dummy_logs: list[_DummyLog] = []
 
-    def _fake_runner(**kwargs: Any) -> _DummyLog:
+    def _fake_runner(*args: Any, **kwargs: Any) -> _DummyLog:
         """Capture runner kwargs and return a fresh dummy log.
 
         Parameters
@@ -144,14 +151,24 @@ def stubbed_runner(
             Stand-in log instance for the wrapper under test.
         """
 
+        del args
         captured_calls.append(kwargs)
         dummy_log = _DummyLog()
-        dummy_log.output_device = kwargs.get("output_device", "same")
+        dummy_log._options_output_device = kwargs.get("output_device", "same")
         dummy_log.save_budget = kwargs.get("save_budget", "auto")
         dummy_logs.append(dummy_log)
         return dummy_log
 
+    def _fake_run_capture(request: Any) -> Any:
+        """Stand in for the RUN stage: record the request's run keywords."""
+
+        plan = run_entry._with_plan_defaults(request).plan
+        trace = _fake_runner(request.model, request.input_args, request.input_kwargs, **plan)
+        return SimpleNamespace(trace=trace)
+
+    monkeypatch.setattr(run_entry, "_run_model_and_save_specified_outs", _fake_runner)
     monkeypatch.setattr(user_funcs, "_run_model_and_save_specified_outs", _fake_runner)
+    monkeypatch.setattr(door, "run_capture", _fake_run_capture)
     return captured_calls, dummy_logs
 
 

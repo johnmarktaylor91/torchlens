@@ -311,7 +311,7 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     # No crash on a recurrent model.
     preview_fastlog(
         log,
-        predicate=lambda ctx: getattr(ctx, "pass_index", None) == 1,
+        predicate=lambda ctx: getattr(ctx, "pass_number", None) == 1,
         vis_save_only=True,
         path=str(tmp_path / "preview"),
     )
@@ -319,9 +319,9 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
     preview = _build_preview_nodes(log, lambda ctx: ctx.event_index == 3)
     relu_keys = sorted(k for k in preview if "relu" in k and ":" in k)
     assert relu_keys == ["relu_1_1:1", "relu_1_1:2", "relu_1_1:3"]
-    assert [preview[k].ctx.pass_index for k in relu_keys] == [0, 1, 2]
+    assert [preview[k].ctx.pass_number for k in relu_keys] == [0, 1, 2]
     # The event_index==3 predicate keeps ONLY the second recurrent call.
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     callback = _make_node_spec_fn(
         preview,
         color_kept="green",
@@ -342,20 +342,20 @@ def test_h5_preview_fastlog_recurrent_per_pass(tmp_path):
 
 @pytest.mark.smoke
 def test_h9_intervention_colors_only_intervened_pass():
+    from torchlens._selection import resolver
     from torchlens._visualization.node_spec import (
         NodeSpec,
         intervention_site_and_cone_labels,
         make_intervention_node_spec_fn,
     )
-    from torchlens.intervention import resolver
 
     log = tl.trace(RecurrentReLU(), torch.tensor([-1.0, 2.0]))
-    ops = list(log.layer_logs["relu_1_1"].ops.values())
+    ops = list(log._layer_logs["relu_1_1"].ops.values())
     fake = SimpleNamespace(
         _intervention_spec=SimpleNamespace(
             targets=("pass2",), target_value_specs=(), hook_specs=()
         ),
-        layer_list=ops,
+        _layer_list=ops,
     )
     # node_spec reads the private resolver at call time; patch it by name.
     original = resolver._resolve_sites
@@ -370,7 +370,7 @@ def test_h9_intervention_colors_only_intervened_pass():
         assert colors[0] is None and colors[2] is None
         # A rolled aggregate Layer node still colors (any pass is a site) and never
         # leaks the multi-pass tripwire.
-        aggregate = log.layer_logs["relu_1_1"]
+        aggregate = log._layer_logs["relu_1_1"]
         assert callback(aggregate, NodeSpec(lines=["relu_1_1"])).color is not None
         # Public helper contract is UNCHANGED: aggregate layer_labels only.
         site_labels, _ = intervention_site_and_cone_labels(fake, show_cone=False)

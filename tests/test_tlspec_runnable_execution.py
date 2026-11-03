@@ -22,13 +22,14 @@ from torchlens._runnable import (
     StateSource,
     WitnessCompleteness,
 )
-from torchlens._runnable_execution import _fresh_bare_tensor_root
-from torchlens._runnable_state import prepare_runnable_state
+from torchlens._runnable.call_outputs import _fresh_bare_tensor_root
+from torchlens._runnable.state import prepare_runnable_state
 from torchlens.errors import (
     PathDivergenceError,
     PoisonedRunError,
     RunCapabilityUnavailableError,
     RunPreconditionError,
+    TraceCaptureError,
 )
 from torchlens.options import CaptureOptions
 
@@ -325,7 +326,7 @@ def runnable_execution_artifact(
         model,
         torch.ones(2, 3),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -346,7 +347,7 @@ def honesty_artifact(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Path]
         HonestyControlModel(),
         torch.ones(2),
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -426,7 +427,7 @@ def test_loaded_sparse_sequential_runs_have_unique_fork_labels(
     first = loaded.run(inputs=torch.ones(2, 3))
     second = loaded.run(inputs=torch.ones(2, 3))
 
-    assert first.trace.trace_label != second.trace.trace_label
+    assert first.trace.name != second.trace.name
 
 
 @pytest.mark.smoke
@@ -474,7 +475,7 @@ def test_loaded_sparse_fast_run_reseeds_rng_after_verify_once(tmp_path: Path) ->
         RandomExecutionModel(),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             seed=31,
@@ -503,7 +504,7 @@ def test_loaded_sparse_fast_run_refuses_training_batchnorm_state_drift(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -535,7 +536,7 @@ def test_loaded_sparse_fast_run_refuses_counter_free_functional_batchnorm_state_
         FunctionalBatchNormStateMutationModel(composed_views=composed_views),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -561,7 +562,7 @@ def test_loaded_sparse_fast_run_keeps_eval_batchnorm_static_path(tmp_path: Path)
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -591,7 +592,7 @@ def test_loaded_sparse_fast_run_refuses_state_view_inplace_mutation(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -616,7 +617,7 @@ def test_loaded_sparse_fast_run_does_not_mutate_caller_input(tmp_path: Path) -> 
         InplaceInputModel(),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -673,7 +674,7 @@ def test_live_fast_run_refreshes_every_multipass_activation(plan_kind: str) -> N
         save = tl.module("shared")
     captured = tl.trace(model, torch.tensor([-5.0, 1.0]), save=save)
     selected = [
-        op for op in captured.layer_list if op.has_saved_activation and op.func_name == "relu"
+        op for op in captured._layer_list if op.has_saved_activation and op.func_name == "relu"
     ]
     captured_first = selected[0].out.clone()
 
@@ -686,7 +687,7 @@ def test_live_fast_run_refreshes_every_multipass_activation(plan_kind: str) -> N
 
     result = captured.run(inputs=runtime_input, fast=True)
     refreshed = [
-        op for op in result.trace.layer_list if op.has_saved_activation and op.func_name == "relu"
+        op for op in result.trace._layer_list if op.has_saved_activation and op.func_name == "relu"
     ]
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -743,7 +744,7 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -752,8 +753,8 @@ def test_loaded_sparse_inplace_call_does_not_corrupt_staged_activations(
     trace.save(path, level="runnable")
 
     result = tl.load(path).run(inputs=inputs.clone())
-    live_relu = next(op for op in trace.layer_list if op.func_name == "relu")
-    fork_relu = next(op for op in result.trace.layer_list if op.func_name == "relu")
+    live_relu = next(op for op in trace._layer_list if op.func_name == "relu")
+    fork_relu = next(op for op in result.trace._layer_list if op.func_name == "relu")
     fork_relu_before_output_edit = fork_relu.out.detach().clone()
 
     assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
@@ -792,7 +793,7 @@ def test_loaded_sparse_setitem_runs_and_verifies_on_original_input(
     trace = tl.trace(
         model,
         inputs.clone(),
-        capture=CaptureOptions(intervention_ready=True, cache=False),
+        capture=CaptureOptions(replayable=True, cache=False),
     )
     path = tmp_path / "slice-assign.tlspec"
     trace.save(path, level="runnable")
@@ -848,7 +849,7 @@ def test_torch_rng_driven_branch_is_unverifiable_never_attested(tmp_path: Path) 
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -884,7 +885,7 @@ def test_dead_torch_rng_draw_stays_verified_and_attested(tmp_path: Path) -> None
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -917,7 +918,7 @@ def test_loaded_sparse_preserves_output_container_kind_and_literal_leaves(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -958,7 +959,7 @@ def test_loaded_sparse_preserves_torch_structseq_outputs(
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -994,7 +995,7 @@ def test_loaded_sparse_verifies_container_wrapping_one_final_tensor_call(tmp_pat
         model,
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -1043,7 +1044,7 @@ def test_loaded_sparse_still_diverges_for_a_genuinely_changed_output_structure(
         TorchStructSeqOutputModel("max"),
         inputs,
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
         ),
@@ -1087,7 +1088,7 @@ def test_live_run_returns_unified_result_and_matches_save_new_outs_exactly(
     assert result.report.state_source is StateSource.LIVE_MODEL_STATE
     assert torch.equal(result.output, model(inputs))
     _assert_outs_equal(trace, source_outs)
-    for actual_op, expected_op in zip(result.trace.layer_list, expected.layer_list):
+    for actual_op, expected_op in zip(result.trace._layer_list, expected._layer_list):
         if expected_op.out is None:
             assert actual_op.out is None
         else:
@@ -1101,13 +1102,14 @@ def test_live_run_forward_failure_unregisters_transactional_fork() -> None:
     trace = tl.trace(model, torch.ones(3))
     prior_log_ids = {id(log) for log in _state.list_logs()}
 
-    with pytest.raises(RuntimeError, match="intentional live rerun failure"):
+    with pytest.raises(TraceCaptureError, match="intentional live rerun failure") as _tce_info:
         trace.run(inputs=-torch.ones(3))
+    assert isinstance(_tce_info.value.__cause__, RuntimeError)
 
     transactional_forks = tuple(
         log
         for log in _state.list_logs()
-        if callable(getattr(log, "parent_run", None)) and log.parent_run() is trace
+        if callable(getattr(log, "_parent_run", None)) and log._parent_run() is trace
     )
     assert transactional_forks == ()
     assert {id(log) for log in _state.list_logs()} <= prior_log_ids
@@ -1141,7 +1143,7 @@ def test_witness_divergence_raises_and_rolls_back_by_default(honesty_artifact: P
         loaded.run(inputs=-torch.ones(2), seed=19)
 
     mismatch = captured.value.fields["first_mismatch"]
-    assert mismatch.code.value == "loop_predicate_divergence"
+    assert mismatch.code.value == "loop_predicate_mismatch"
     assert mismatch.affected_op_labels
     _assert_outs_equal(loaded, source_outs)
     assert not bool(loaded._runnable.poisoned)
@@ -1223,7 +1225,7 @@ def test_poisoned_trace_is_refused_by_faithful_downstream_consumers(
     with pytest.raises(PoisonedRunError):
         tl.debug.compare(poisoned, poisoned)
     with pytest.raises(PoisonedRunError):
-        poisoned.push_from(poisoned.layer_list[0])
+        poisoned.push_from(poisoned._layer_list[0])
     with pytest.raises(PoisonedRunError):
         poisoned.save_intervention(tmp_path / "poisoned-intervention.tlspec")
 
@@ -1304,13 +1306,13 @@ def test_poison_mark_and_first_mismatch_are_monotonic(honesty_artifact: Path) ->
 def _clone_outs(trace: tl.Trace) -> tuple[torch.Tensor | None, ...]:
     """Clone one Trace's current activation payloads for mutation assertions."""
 
-    return tuple(None if op.out is None else op.out.detach().clone() for op in trace.layer_list)
+    return tuple(None if op.out is None else op.out.detach().clone() for op in trace._layer_list)
 
 
 def _assert_outs_equal(trace: tl.Trace, expected: tuple[torch.Tensor | None, ...]) -> None:
     """Assert that a Trace retains exactly the snapshotted activation values."""
 
-    for op, value in zip(trace.layer_list, expected):
+    for op, value in zip(trace._layer_list, expected):
         if value is None:
             assert op.out is None
         else:
@@ -1336,7 +1338,7 @@ class _C1FieldPair(NamedTuple):
 def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
     """A dunder / non-field attribute component raises AttributeError, never resolves."""
 
-    from torchlens._runnable_execution import _field_getattr, _value_at_path
+    from torchlens._runnable.verification import _field_getattr, _value_at_path
 
     pair = _C1FieldPair(torch.zeros(2), 3)
 
@@ -1360,7 +1362,7 @@ def test_c1_value_at_path_refuses_dunder_attribute_traversal() -> None:
 def test_c1_value_at_path_mapping_and_index_paths_unaffected() -> None:
     """Mapping-key and integer-index traversal still work (attr guard is scoped)."""
 
-    from torchlens._runnable_execution import _value_at_path
+    from torchlens._runnable.verification import _value_at_path
 
     root = {"weird__key__": torch.ones(3), "nested": [torch.zeros(1), {"k": 5}]}
     # Mapping keys use ``[]`` not getattr, so even a dunder-looking KEY is allowed.
@@ -1398,16 +1400,14 @@ def _save_alias_runnable(path: Path, *, aliased_capture: bool = True) -> Path:
         return tl.trace(
             _AliasInplaceModel(),
             inputs,
-            capture=CaptureOptions(
-                intervention_ready=True, capture_container_structure=True, cache=False
-            ),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
 
     if aliased_capture:
         with pytest.warns(CaptureGapWarning, match="sparse descriptor cannot encode"):
             trace = capture_call()
-        assert trace.capture_verified is False
-        assert trace.capture_verification_reason == "input_boundary_unverifiable"
+        assert trace.provenance.verified is False
+        assert trace.provenance.verification_reason == "input_boundary_unverifiable"
     else:
         trace = capture_call()
     trace.save(path, level="runnable", include_activations=True)
@@ -1465,11 +1465,9 @@ def test_h3_readonly_aliased_inputs_fail_closed(tmp_path: Path) -> None:
         trace = tl.trace(
             _ReadOnly(),
             [z, z],
-            capture=CaptureOptions(
-                intervention_ready=True, capture_container_structure=True, cache=False
-            ),
+            capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
         )
-    assert trace.capture_verified is False
+    assert trace.provenance.verified is False
     trace.save(tmp_path / "readonly.tlspec", level="runnable", include_activations=True)
 
     shared = torch.tensor([3.0, 4.0])
@@ -1523,9 +1521,7 @@ def test_h5_batchnorm_records_mode_and_verifies(train: bool, tmp_path: Path) -> 
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes == {
         "self": train,
@@ -1560,9 +1556,7 @@ def test_h5_dropout_model_in_eval_records_mode_and_verifies(tmp_path: Path) -> N
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes == {
         "self": False,
@@ -1587,21 +1581,19 @@ def test_h5_mode_sensitive_op_without_declared_mode_is_unverifiable(
     runtime belt behind the parse gate.
     """
 
-    import torchlens._capture.trace as capture_trace
+    import torchlens._capture.run as capture_run
     from torchlens.errors import RunnablePreflightError
 
     # Simulate an old bundle / capture gap: skip the mode recording entirely.
     monkeypatch.setattr(
-        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+        capture_run, "_record_runnable_module_training_modes", lambda trace, model: None
     )
     model = _BatchNormModel().eval()
     x = torch.randn(8, 4)
     trace = tl.trace(
         model,
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     assert trace._runnable.module_training_modes is None
     with pytest.raises(RunnablePreflightError) as excinfo:
@@ -1621,10 +1613,10 @@ def test_h5_mode_insensitive_model_without_mode_still_verifies(
 ) -> None:
     """A model with NO mode-sensitive op verifies even with no declared mode (no over-trigger)."""
 
-    import torchlens._capture.trace as capture_trace
+    import torchlens._capture.run as capture_run
 
     monkeypatch.setattr(
-        capture_trace, "_record_runnable_module_training_modes", lambda trace, model: None
+        capture_run, "_record_runnable_module_training_modes", lambda trace, model: None
     )
 
     class _Plain(nn.Module):
@@ -1639,9 +1631,7 @@ def test_h5_mode_insensitive_model_without_mode_still_verifies(
     trace = tl.trace(
         _Plain(),
         x,
-        capture=CaptureOptions(
-            intervention_ready=True, capture_container_structure=True, cache=False
-        ),
+        capture=CaptureOptions(replayable=True, capture_container_structure=True, cache=False),
     )
     trace.save(tmp_path / "plain_nomode.tlspec", level="runnable", include_activations=True)
     result = tl.load(tmp_path / "plain_nomode.tlspec").run(inputs=x)

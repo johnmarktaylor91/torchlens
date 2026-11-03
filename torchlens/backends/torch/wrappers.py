@@ -13,9 +13,9 @@ import time
 import types
 import warnings
 import weakref
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from contextlib import contextmanager, nullcontext
-from functools import partial, wraps
+from functools import wraps
 from typing import TYPE_CHECKING, Any, cast
 
 import torch
@@ -62,10 +62,34 @@ from ..._utils.tensor_utils import (
     print_override,
     safe_copy,
 )
-from ._callable_location import _callable_source_location
-from ._function_boundary import EXPORT_FUNC_NAMES, note_function_export
+from ._completeness_audited import LAZY_MODULE_MATERIALIZE_WRAPPER
+from ._completeness_boundaries import completeness_scope_for_wrapper
+from ._completeness_cross_thread import (
+    observe_nonowner_operands,
+    record_host_string_escape_source,
+    string_escape_is_owner_thread,
+)
+from ._completeness_dispatch import record_uncaptured_owner_callsite
+from ._completeness_escape_state import record_data_alias_mutation
+from ._completeness_origins import internal_scalar_read
+from ._function_boundary import (
+    _BARCODE_TRANSPARENT_FUNCS,
+    EXPORT_FUNC_NAMES,
+    funcs_not_to_log,
+    note_function_export,
+    print_funcs,
+)
 from ._modes import TensorSubclassUnsupportedError, pause_own_dispatch_modes
 from ._op_markers import _pop_op_markers, _push_op_markers
+from ._ops_autograd import register_call_input_container_snapshots
+from ._ops_capture_records import (
+    _is_inplace_augmented_assignment_dunder,
+    _record_label_version_snapshot,
+    _stamp_same_object_mutation,
+)
+from ._ops_containers import _walk_output_tensors_with_paths
+from ._ops_emission import apply_live_hooks_to_outputs, log_function_output_tensors
+from ._output_tensors import _collect_output_tensors
 from ._protocol_redispatch import STILL_DECLINED, redispatch_declined
 from ._storage_overlap import (
     _storage_overlap_byte_interval,
@@ -83,45 +107,46 @@ from ._tl import (
     propagate_detached_saved_activation,
     set_tensor_label,
 )
+from ._transform_wrappers import (  # noqa: F401  (re-exported by their pre-split spelling)
+    DIRECT_TRANSFORM_SITES,
+    TRANSFORM_BUILDER_SITES,
+    _callable_code_location,
+    _decorate_direct_transforms,
+    _decorate_transform_builders,
+    _set_transform_metadata,
+    _setattr_ignoring_advisories,
+    _transform_builder_config,
+    _transform_tags,
+    _warn_transform_boundary_collapse,
+    direct_transform_decorator,
+    transform_builder_decorator,
+)
 from ._weightsfree_ctx import active_factory_device as _active_factory_device
+from ._wrappers_refusals import _raise_if_subclass_ctor_under_dispatch_mode
 from .aliasing import _tensors_alias
+from .arg_names import get_arg_names
 from .buffer_writes import (
     record_op_buffer_writes,
     resolve_or_late_index_buffer_address,
     snapshot_buffer_args,
 )
-from .completeness_witness import (
-    CompletenessWitnessMode,
-    completeness_scope_for_wrapper,
-    internal_scalar_read,
-    observe_nonowner_operands,
-    record_data_alias_mutation,
-    record_host_string_escape_source,
-    record_uncaptured_owner_callsite,
-    string_escape_is_owner_thread,
-)
+from .completeness_witness import CompletenessWitnessMode
 from .escape_detection import (
     EscapeDetectorMode,
     expected_original_call,
     mark_expected_original_accounted,
     reset_detector_tables,
 )
-from .ops import (
-    _is_inplace_augmented_assignment_dunder,
-    _record_label_version_snapshot,
-    _stamp_same_object_mutation,
-    _walk_output_tensors_with_paths,
-    apply_live_hooks_to_outputs,
-    log_function_output_tensors,
-    register_call_input_container_snapshots,
-)
 from .param_mutation import (
     frozen_parameter_receiver_context as _frozen_parameter_receiver_context,
     is_prepared_parameter_receiver as _is_prepared_parameter_receiver,
+    late_register_forward_created_parameter,
+    materialized_lazy_slots,
+    note_lazy_slot_materializing,
     parameter_mutation_output_for_logging as _parameter_mutation_output_for_logging,
     receiver_kwarg_as_positional as _receiver_kwarg_as_positional,
 )
-from .sources import log_source_tensor
+from .sources import log_closure_constant_if_known, log_source_tensor
 
 if TYPE_CHECKING:
     pass
@@ -211,470 +236,6 @@ def _warn_functorch_region_not_logged() -> None:
         stacklevel=3,
     )
 
-
-def _warn_transform_boundary_collapse(transform_kind: str) -> None:
-    """Warn that a transform boundary was collapsed.
-
-    Parameters
-    ----------
-    transform_kind:
-        Transform kind whose inner operations are intentionally not logged.
-    """
-
-    import warnings
-
-    warnings.warn(
-        "TorchLens captured a "
-        f"{transform_kind} transform as a boundary op. Operations that run inside "
-        "the functorch/vmap/grad/jacfwd transform are not logged. The returned "
-        "Trace will only contain the transform boundary and operations that ran "
-        "outside the transform.",
-        UserWarning,
-        stacklevel=3,
-    )
-
-
-TRANSFORM_BUILDER_SITES: tuple[tuple[str, str, str], ...] = (
-    ("torch", "vmap", "vmap"),
-    ("torch.func", "vmap", "vmap"),
-    ("torch.func", "grad", "grad"),
-    ("torch._functorch.apis", "vmap", "vmap"),
-    ("torch._functorch.apis", "grad", "grad"),
-)
-"""Torch transform builders instrumented as returned-callable boundaries."""
-
-DIRECT_TRANSFORM_SITES: tuple[tuple[str, str, str, str], ...] = (
-    ("torch.autograd.functional", "jacobian", "autograd.jacobian", "autogradjacobian"),
-    ("torch.autograd.functional", "hessian", "autograd.hessian", "autogradhessian"),
-    ("torch.autograd.functional", "vjp", "autograd.vjp", "autogradvjp"),
-    ("torch.autograd.functional", "jvp", "autograd.jvp", "autogradjvp"),
-    ("torch.autograd.functional", "hvp", "autograd.hvp", "autogradhvp"),
-    ("torch.autograd.functional", "vhp", "autograd.vhp", "autogradvhp"),
-)
-"""Torch autograd.functional direct-call transform entry points."""
-
-
-def _transform_tags(callable_obj: Callable[..., Any]) -> tuple[str, ...]:
-    """Return TorchLens transform tags carried by a callable.
-
-    Parameters
-    ----------
-    callable_obj:
-        Callable or partial to inspect.
-
-    Returns
-    -------
-    tuple[str, ...]
-        Transform tags, outermost first, or an empty tuple when unavailable.
-    """
-
-    tags = getattr(callable_obj, "__tl_transform_tags__", ())
-    if tags:
-        return tuple(tags)
-    if isinstance(callable_obj, partial):
-        return _transform_tags(callable_obj.func)
-    return ()
-
-
-def _callable_code_location(callable_obj: Callable[..., Any]) -> str | None:
-    """Return a best-effort code-location fingerprint for a callable.
-
-    Parameters
-    ----------
-    callable_obj:
-        Callable, partial, or bound method to inspect.
-
-    Returns
-    -------
-    str | None
-        ``filename:firstlineno`` when available.
-    """
-
-    target = callable_obj
-    if isinstance(target, partial):
-        target = target.func
-    target = getattr(target, "__func__", target)
-    code = getattr(target, "__code__", None)
-    if code is None:
-        return None
-    return f"{code.co_filename}:{code.co_firstlineno}"
-
-
-def _transform_builder_config(
-    transform_kind: str,
-    builder_args: tuple[Any, ...],
-    builder_kwargs: dict[str, Any],
-    inner_fn: Callable[..., Any],
-) -> dict[str, Any]:
-    """Build serializable metadata for a transform builder invocation.
-
-    Parameters
-    ----------
-    transform_kind:
-        Transform kind being built.
-    builder_args:
-        Positional builder arguments after the inner function.
-    builder_kwargs:
-        Keyword builder arguments.
-    inner_fn:
-        User callable being transformed.
-
-    Returns
-    -------
-    dict[str, Any]
-        Best-effort transform configuration.
-    """
-
-    config = dict(builder_kwargs)
-    if transform_kind == "vmap":
-        if builder_args:
-            config.setdefault("in_dims", builder_args[0])
-        if len(builder_args) > 1:
-            config.setdefault("out_dims", builder_args[1])
-        config.setdefault("in_dims", 0)
-        config.setdefault("out_dims", 0)
-    elif transform_kind == "grad":
-        if builder_args:
-            config.setdefault("argnums", builder_args[0])
-        config.setdefault("argnums", 0)
-    code_location = _callable_code_location(inner_fn)
-    if code_location is not None:
-        config["fn_code_location"] = code_location
-    return config
-
-
-def _set_transform_metadata(
-    callable_obj: Callable[..., Any],
-    *,
-    transform_kind: str,
-    tags: tuple[str, ...],
-    transform_config: dict[str, Any],
-    inner_fn: Callable[..., Any],
-) -> None:
-    """Attach TorchLens transform metadata to a callable when possible.
-
-    Parameters
-    ----------
-    callable_obj:
-        Callable receiving metadata.
-    transform_kind:
-        Unsanitized transform kind.
-    tags:
-        Transform chain tags.
-    transform_config:
-        Captured transform configuration.
-    inner_fn:
-        User function being transformed.
-
-    Returns
-    -------
-    None
-        Metadata is attached best-effort.
-    """
-
-    metadata = {
-        "__tl_is_transform_boundary__": True,
-        "__tl_transform_tags__": tags,
-        "__tl_transform_kind__": transform_kind,
-        "__tl_transform_config__": transform_config,
-        "__tl_transform_fn_name__": getattr(inner_fn, "__name__", None),
-        "__tl_transform_fn_qualname__": getattr(inner_fn, "__qualname__", None),
-        "__tl_transform_fn_source__": _callable_source_location(inner_fn),
-    }
-    for name, value in metadata.items():
-        try:
-            setattr(callable_obj, name, value)
-        except (AttributeError, TypeError):
-            pass
-
-
-def transform_builder_decorator(
-    builder: Callable[..., Any],
-    transform_kind: str,
-) -> Callable[..., Any]:
-    """Wrap a torch.func-style transform builder.
-
-    Parameters
-    ----------
-    builder:
-        Original transform builder such as ``torch.func.vmap``.
-    transform_kind:
-        Unsanitized transform kind recorded on returned callables.
-
-    Returns
-    -------
-    Callable[..., Any]
-        Builder wrapper that instruments returned callables unconditionally.
-    """
-
-    @wraps(builder)
-    def wrapped_builder(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Build a transform callable and attach TorchLens boundary metadata."""
-        built = builder(func, *args, **kwargs)
-        if not callable(built):
-            return built
-
-        inner_tags = _transform_tags(func)
-        tags = (transform_kind, *inner_tags)
-        raw_built = built
-        transform_config = _transform_builder_config(transform_kind, args, kwargs, func)
-        _set_transform_metadata(
-            raw_built,
-            transform_kind=transform_kind,
-            tags=tags,
-            transform_config=transform_config,
-            inner_fn=func,
-        )
-
-        @wraps(raw_built)
-        def wrapped_transform(*call_args: Any, **call_kwargs: Any) -> Any:
-            """Record one call to a torch.func-style transform boundary."""
-            if not _state._logging_enabled or _state._active_trace is None:
-                return raw_built(*call_args, **call_kwargs)
-
-            trace = cast(Any, _state._active_trace)
-            capture_start_time = time.time()
-            save_rng = getattr(trace, "save_rng_states", False)
-            rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
-            autocast_state = log_current_autocast_state()
-            func_call_id = _state.next_func_call_id()
-            _warn_transform_boundary_collapse(transform_kind)
-            with _state.pause_logging():
-                out_orig = raw_built(*call_args, **call_kwargs)
-            exec_ctx = FuncExecutionContext(
-                time_elapsed=time.time() - capture_start_time,
-                rng_states=rng_states,
-                autocast_state=autocast_state,
-            )
-            out_orig = apply_live_hooks_to_outputs(
-                trace,
-                raw_built,
-                transform_kind,
-                call_args,
-                call_kwargs,
-                out_orig,
-                exec_ctx,
-                True,
-                func_call_id,
-            )
-            if _collect_output_tensors(out_orig):
-                # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
-                if _state._completeness_witness_mode == "shadow":
-                    with _state.pause_logging():
-                        log_function_output_tensors(
-                            trace,
-                            raw_built,
-                            transform_kind,
-                            call_args,
-                            call_kwargs,
-                            call_args,
-                            call_kwargs,
-                            out_orig,
-                            exec_ctx,
-                            True,
-                            func_call_id,
-                        )
-                else:
-                    log_function_output_tensors(
-                        trace,
-                        raw_built,
-                        transform_kind,
-                        call_args,
-                        call_kwargs,
-                        call_args,
-                        call_kwargs,
-                        out_orig,
-                        exec_ctx,
-                        True,
-                        func_call_id,
-                    )
-            return out_orig
-
-        _set_transform_metadata(
-            wrapped_transform,
-            transform_kind=transform_kind,
-            tags=tags,
-            transform_config=transform_config,
-            inner_fn=func,
-        )
-        return wrapped_transform
-
-    return wrapped_builder
-
-
-def direct_transform_decorator(
-    direct_func: Callable[..., Any],
-    transform_kind: str,
-    func_name: str,
-) -> Callable[..., Any]:
-    """Wrap an autograd.functional direct-call transform.
-
-    Parameters
-    ----------
-    direct_func:
-        Original direct-call transform.
-    transform_kind:
-        Unsanitized transform kind.
-    func_name:
-        Sanitized TorchLens label type.
-
-    Returns
-    -------
-    Callable[..., Any]
-        Toggle-gated direct transform wrapper.
-    """
-
-    @wraps(direct_func)
-    def wrapped_direct(user_fn: Callable[..., Any], inputs: Any, *args: Any, **kwargs: Any) -> Any:
-        """Record one direct-call transform as a boundary operation."""
-        if not _state._logging_enabled or _state._active_trace is None:
-            return direct_func(user_fn, inputs, *args, **kwargs)
-
-        trace = cast(Any, _state._active_trace)
-        call_args = (inputs,)
-        raw_replay = partial(direct_func, user_fn, *args, **kwargs)
-        transform_config = dict(kwargs)
-        transform_config["fn_code_location"] = _callable_code_location(user_fn)
-        _set_transform_metadata(
-            raw_replay,
-            transform_kind=transform_kind,
-            tags=(transform_kind,),
-            transform_config=transform_config,
-            inner_fn=user_fn,
-        )
-        capture_start_time = time.time()
-        save_rng = getattr(trace, "save_rng_states", False)
-        rng_states = log_current_rng_states(torch_only=True) if save_rng else {}
-        autocast_state = log_current_autocast_state()
-        func_call_id = _state.next_func_call_id()
-        _warn_transform_boundary_collapse(transform_kind)
-        with _state.pause_logging():
-            out_orig = direct_func(user_fn, inputs, *args, **kwargs)
-        exec_ctx = FuncExecutionContext(
-            time_elapsed=time.time() - capture_start_time,
-            rng_states=rng_states,
-            autocast_state=autocast_state,
-        )
-        out_orig = apply_live_hooks_to_outputs(
-            trace,
-            raw_replay,
-            func_name,
-            call_args,
-            {},
-            out_orig,
-            exec_ctx,
-            True,
-            func_call_id,
-        )
-        if _collect_output_tensors(out_orig):
-            # Hide TorchLens bookkeeping dispatches only from the opt-in user-op census.
-            if _state._completeness_witness_mode == "shadow":
-                with _state.pause_logging():
-                    log_function_output_tensors(
-                        trace,
-                        raw_replay,
-                        func_name,
-                        call_args,
-                        {},
-                        call_args,
-                        {},
-                        out_orig,
-                        exec_ctx,
-                        True,
-                        func_call_id,
-                    )
-            else:
-                log_function_output_tensors(
-                    trace,
-                    raw_replay,
-                    func_name,
-                    call_args,
-                    {},
-                    call_args,
-                    {},
-                    out_orig,
-                    exec_ctx,
-                    True,
-                    func_call_id,
-                )
-        return out_orig
-
-    return wrapped_direct
-
-
-def _decorate_transform_builders() -> None:
-    """Install transform-builder decorators listed in ``TRANSFORM_BUILDER_SITES``.
-
-    Returns
-    -------
-    None
-        Torch namespaces and decoration maps are updated in place.
-    """
-
-    for namespace_name, attr_name, transform_kind in TRANSFORM_BUILDER_SITES:
-        namespace = get_optional_torch_namespace(namespace_name)
-        if namespace is None:
-            continue
-        if not hasattr(namespace, attr_name):
-            continue
-        current = getattr(namespace, attr_name)
-        if id(current) in _state._decorated_to_orig:
-            continue
-        if id(current) in _state._orig_to_decorated:
-            decorated = _state._orig_to_decorated[id(current)]
-        else:
-            decorated = transform_builder_decorator(current, transform_kind)
-            mark_decorated_function(decorated)
-            _state._orig_to_decorated[id(current)] = decorated
-            _state._decorated_to_orig[id(decorated)] = current
-            _state._decorated_func_mapper[decorated] = current
-            _state._decorated_func_mapper[current] = decorated
-        try:
-            _setattr_ignoring_advisories(namespace, attr_name, decorated)
-        except (AttributeError, TypeError):
-            pass
-
-
-def _decorate_direct_transforms() -> None:
-    """Install direct-call transform decorators.
-
-    Returns
-    -------
-    None
-        Torch namespaces and decoration maps are updated in place.
-    """
-
-    for namespace_name, attr_name, transform_kind, func_name in DIRECT_TRANSFORM_SITES:
-        # r-b4 R26-5b: tolerant resolution, matching _decorate_transform_builders.
-        namespace = get_optional_torch_namespace(namespace_name)
-        if namespace is None or not hasattr(namespace, attr_name):
-            continue
-        current = getattr(namespace, attr_name)
-        if id(current) in _state._decorated_to_orig:
-            continue
-        if id(current) in _state._orig_to_decorated:
-            decorated = _state._orig_to_decorated[id(current)]
-        else:
-            decorated = direct_transform_decorator(current, transform_kind, func_name)
-            mark_decorated_function(decorated)
-            _state._orig_to_decorated[id(current)] = decorated
-            _state._decorated_to_orig[id(decorated)] = current
-            _state._decorated_func_mapper[decorated] = current
-            _state._decorated_func_mapper[current] = decorated
-        try:
-            _setattr_ignoring_advisories(namespace, attr_name, decorated)
-        except (AttributeError, TypeError):
-            pass
-
-
-# Functions that should never be logged — they are metadata queries, not
-# computational operations, and logging them would cause infinite recursion
-# (e.g. size() is called internally by logging code).
-funcs_not_to_log = ["numpy", "__array__", "size", "dim"]
-
-# Print functions get special handling: intercepted to add TorchLens label
-# info to the repr without creating a new logged operation.
-print_funcs = ["__repr__", "__str__", "_str"]
 
 # Names of torch factory functions that accept a ``device`` kwarg.
 # When a ``torch.device`` context manager is active (TorchFunctionMode),
@@ -844,34 +405,6 @@ def _collect_tensor_args(args: tuple[Any, ...], kwargs: dict[str, Any]) -> list[
     return tensors
 
 
-def _collect_output_tensors(out: Any) -> list[torch.Tensor]:
-    """Fast inline output tensor extraction.
-
-    Most torch functions return a single tensor. This handles that case
-    with a simple isinstance check, falling back to BFS for compound outputs.
-    """
-    if isinstance(out, torch.Tensor):
-        if isinstance(out, torch.nn.Parameter):
-            return []
-        return [out]
-    if isinstance(out, (list, tuple)):
-        tensors = []
-        for item in out:
-            if isinstance(item, torch.Tensor) and not isinstance(item, torch.nn.Parameter):
-                tensors.append(item)
-        return tensors
-    if out is None:
-        return []
-    if type(out) is torch.utils.hooks.RemovableHandle:
-        # ``register_hook``-family output: holds only ints and weakrefs
-        # (weakrefs are callable, so the BFS skips them) — provably tensor-free.
-        return []
-    # Rare: dict, custom object, etc. — fall back to BFS.
-    return get_vars_of_type_from_obj(
-        out, which_type=torch.Tensor, subclass_exceptions=[torch.nn.Parameter]
-    )
-
-
 def _label_mutated_prepared_parameter(
     trace: Any, param: torch.nn.Parameter, out_label: str | None
 ) -> None:
@@ -973,7 +506,7 @@ def _untyped_storage_key(t: torch.Tensor) -> tuple[int, int, str] | None:
     unreadable; callers must fail closed.
     """
 
-    from .completeness_witness import internal_scalar_read
+    from ._completeness_origins import internal_scalar_read
 
     try:
         with _state.pause_logging(), internal_scalar_read():
@@ -1015,12 +548,12 @@ def _cow_payload_state_ptrs(trace: Any) -> Any:
     ptrs: Any = None
     if (
         _COW_ENABLED
-        and not getattr(trace, "intervention_ready", False)
-        and not getattr(trace, "backward_ready", False)
-        and getattr(trace, "save_grads", None) in (None, False)
-        and getattr(trace, "activation_transform", None) is None
-        and getattr(trace, "capture_mode", None) != "predicate"
-        and getattr(trace, "save_mode", "copy") == "copy"
+        and not getattr(trace, "is_replayable", False)
+        and not trace._options_backward_ready
+        and trace._options_save_grads in (None, False)
+        and trace._options_activation_transform is None
+        and trace._options_mode != "predicate"
+        and trace._options_save_mode == "copy"
         and getattr(trace, "_out_writer", None) is None
     ):
         model_ref = getattr(trace, "_source_model_ref", None)
@@ -1207,8 +740,8 @@ def _propagate_mutation_label_to_storage_aliases(
         The mutating op's freshly issued raw label.
     """
 
+    from ._ops_capture_records import _record_label_version_snapshot
     from ._tl import session_storage_alias_candidates, storage_alias_index_key
-    from .ops import _record_label_version_snapshot
 
     # SCOPE (r26 reconcile): descriptor/grad-bound captures keep the HISTORICAL
     # topology. The runnable recipe + numeric attestation key payloads PER
@@ -1223,9 +756,9 @@ def _propagate_mutation_label_to_storage_aliases(
     # surface) get the mutation edge. Follow-up: teach the runnable reader
     # per-(label, consumer) payload keying, then lift this scope.
     if (
-        getattr(trace, "intervention_ready", False)
-        or getattr(trace, "backward_ready", False)
-        or getattr(trace, "save_grads", None) not in (None, False)
+        getattr(trace, "is_replayable", False)
+        or trace._options_backward_ready
+        or trace._options_save_grads not in (None, False)
     ):
         return
 
@@ -1277,35 +810,6 @@ def _propagate_mutation_label_to_storage_aliases(
                 set_tensor_label(alias, out_label)
                 _register_inplace_live_grad_hook(trace, alias, out_label)
                 _record_label_version_snapshot(alias, mutated_via=(mutated, alias_label))
-
-
-# Tensor getset properties whose SETTER mutates the receiver's forward data:
-# ``t.real = rhs`` / ``t.imag = rhs`` write through the receiver's storage,
-# ``t.data = rhs`` REBINDS the receiver onto ``rhs``'s storage. These execute
-# real dataflow yet return ``None``, so without receiver reconstruction no op
-# is ever emitted and consumers keep stale/absent parents (round-31 M6).
-# ``requires_grad`` / ``grad`` and similar setters change autograd bookkeeping,
-# not forward values, and are deliberately NOT listed.
-def _setattr_ignoring_advisories(namespace: Any, name: str, value: Any) -> None:
-    """Set a torch namespace attribute, suppressing ADVISORY warnings only.
-
-    Wrap/unwrap setattr over deprecated torch aliases legitimately fires
-    deprecation-family advisories, but the historical bare
-    ``simplefilter("ignore")`` also hid every OTHER warning category raised in
-    scope and invalidated the process ``__warningregistry__`` per entry
-    (B8-39). Only the advisory categories are ignored; a genuine torch
-    ``RuntimeWarning`` (or anything else) still reaches the user.
-    """
-
-    with warnings.catch_warnings():
-        for category in (
-            DeprecationWarning,
-            PendingDeprecationWarning,
-            FutureWarning,
-            UserWarning,
-        ):
-            warnings.simplefilter("ignore", category)
-        setattr(namespace, name, value)
 
 
 # Positional index of the target Tensor subclass ``cls`` argument for each
@@ -1360,6 +864,259 @@ _MUTATING_TENSOR_PROPERTY_SETTERS = frozenset({"real", "imag", "data"})
 # place. The mutation label must NOT propagate to other tensors on that (RHS)
 # storage: their bytes were never written.
 _STORAGE_REBINDING_PROPERTY_SETTERS = frozenset({"data"})
+
+_SUBCLASS_CTOR_REFUSAL_MARKER = "already associated to a python object"
+
+
+# ---------------------------------------------------------------------------
+# Cold arms of ``wrapped_func``. Each runs only on a path a plain forward never
+# takes (a strict Tensor-subclass constructor, a non-owner thread, a functorch
+# or Dynamo region, a print function, a ``.data=`` rebind, torch's own
+# subclass-construction crash), so the hot path pays no extra call per op.
+# ---------------------------------------------------------------------------
+
+
+def _call_subclass_ctor_unlogged(
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+    cls_index: int,
+) -> Any:
+    """Run a strict-subclass constructor with logging off, translating torch's refusal.
+
+    Translate-on-FAILURE, never a preemptive refusal: whether an active
+    TorchLens mode actually makes THIS construction crash depends on details
+    (e.g. ``torch.nn.Parameter`` construction via ``_make_subclass`` routinely
+    succeeds here even under an active mode) this gate cannot cheaply predict,
+    so it costs nothing extra on the common (succeeding) case and only
+    replaces torch's own cryptic error with a typed one when it actually raises.
+    """
+
+    try:
+        return func(*args, **kwargs)
+    except RuntimeError as exc:
+        if _SUBCLASS_CTOR_REFUSAL_MARKER in str(exc):
+            raise TensorSubclassUnsupportedError(
+                f"torchlens cannot construct the Tensor subclass "
+                f"{args[cls_index]!r} via {func_name!r} "
+                "while a TorchLens dispatch mode is active on this torch "
+                "build. Remedy: upgrade torch "
+                "(HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports False here) or "
+                "avoid constructing/converting into a custom Tensor subclass "
+                "inside a model forward, an intervention hook, or a "
+                "validate_forward_pass replay on this build.",
+                code="subclass_ctor_under_dispatch_mode_unsupported",
+                func_name=func_name,
+            ) from exc
+        raise
+
+
+def _call_unlogged_off_owner(
+    func: Callable[..., Any],
+    func_name: str,
+    wrapped_func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Run a wrapped call that no trace owns on this thread, unrecorded.
+
+    r45 hon2_1: while a runnable capture is armed, a NON-owner thread's op that
+    consumes a captured tensor as an operand ceilings replay proof to
+    ``unverifiable`` (the worker-DERIVED cross-thread escape sibling: fresh
+    worker-side storage the owner-only census never registered).
+    ``_nonowner_belt_armed`` is False for every plain trace and the whole
+    steady state, so the disarmed path pays one bool read.
+    """
+
+    if _state._nonowner_belt_armed and _state.active_capture()[0] is not None:
+        observe_nonowner_operands(args, kwargs)
+    if func_name in _DEVICE_CONSTRUCTOR_NAMES:
+        kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
+    try:
+        out = func(*args, **kwargs)
+    except TypeError as exc:
+        out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+        if out is STILL_DECLINED:
+            raise
+    if func_name in _DETACHED_ACTIVATION_PROPAGATION_FUNCS and has_detached_saved_activations():
+        propagate_detached_saved_activation(
+            func_name,
+            _collect_tensor_args(args, kwargs),
+            _collect_output_tensors(out),
+        )
+    return out
+
+
+def _call_inside_functorch_transform(
+    func: Callable[..., Any],
+    func_name: str,
+    wrapped_func: Callable[..., Any],
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Pass a call inside a functorch transform through unlogged, warning once per forward.
+
+    Internal TorchLens operations (``safe_copy``, ``torch.equal``, ``.item()``)
+    have no vmap batching rules and would crash; the original function is
+    already vmap-compatible. A raw transform interior is outside the witness
+    claim; the witness-off route retains its original logging state (declined
+    dispatches still redispatch).
+    """
+
+    if not _state._functorch_warning_emitted:
+        _state._functorch_warning_emitted = True
+        trace, _enabled = _state.active_capture()
+        if trace is not None:
+            trace._raw_transform_escape_detected = True
+        _warn_functorch_region_not_logged()
+    shadow_witness = _state._completeness_witness_mode == "shadow"
+    edge_ctx: Any = nullcontext()
+    if _state._escape_detector_mode == "shadow":
+        edge_ctx = expected_original_call(func, f"torch_func:{func_name}:functorch")
+    with _state.pause_logging() if shadow_witness else nullcontext(), edge_ctx:
+        try:
+            return func(*args, **kwargs)
+        except TypeError as exc:
+            out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
+            if out is STILL_DECLINED:
+                raise
+            return out
+
+
+def _call_inside_dynamo_region(
+    trace: Any, func: Callable[..., Any], args: tuple[Any, ...], kwargs: dict[str, Any]
+) -> Any:
+    """Pass a call inside a Dynamo-traced region through unlogged.
+
+    TorchLens's internal operations read tensor VALUES and the tensors flowing
+    through a compiled region are data-free FakeTensors, so logging there used
+    to die with a raw ``InternalTorchDynamoError``. Compiled *submodules* are
+    unwrapped before capture (``_capture_state_helpers.unwrap_compiled_submodules``);
+    a compiled *callable* held as a plain attribute cannot be swapped out, so
+    this is the boundary for those. ``_raw_dynamo_region_detected`` is the
+    specific cause and outranks every other verification reason;
+    ``_raw_transform_escape_detected`` additionally licenses the
+    unattributable-model-output tolerance the functorch boundary uses.
+    """
+
+    trace._raw_dynamo_region_detected = True
+    trace._raw_transform_escape_detected = True
+    if not _state._dynamo_warning_emitted:
+        _state._dynamo_warning_emitted = True
+        _warn_dynamo_region_not_logged()
+    if _state._completeness_witness_mode == "shadow":
+        with _state.pause_logging():
+            return func(*args, **kwargs)
+    return func(*args, **kwargs)
+
+
+def _call_print_func(
+    trace: Any,
+    func: Callable[..., Any],
+    func_name: str,
+    args: tuple[Any, ...],
+    kwargs: dict[str, Any],
+) -> Any:
+    """Format a captured tensor, recording the host string escape first.
+
+    r39 hon2_1: stringifying a captured tensor extracts its VALUES into the
+    returned string (a tensor-to-host value escape the user can fold back into
+    control flow). ``print_override`` runs that extraction under
+    ``pause_logging()``, blinding the ordinary escape observers, so the source
+    is recorded BEFORE the paused format. r43 hon2_4: a NON-OWNER thread must
+    never flip the global pause toggle mid-forward, so a worker calls the
+    original torch string function unchanged.
+    """
+
+    for stringified in _collect_tensor_args(args, kwargs):
+        record_host_string_escape_source(trace, stringified)
+    if string_escape_is_owner_thread(trace):
+        return print_override(args[0], func_name)
+    return func(*args, **kwargs)
+
+
+def _rebind_setter_swaps_storage(args: tuple[Any, ...]) -> bool:
+    """Whether a ``t.data = rhs`` rebind moves the receiver onto a foreign storage.
+
+    Whether the rebind SWAPS the storage object (rhs on foreign storage) or
+    PRESERVES it (rhs a view of the receiver's own storage) decides the
+    ancestry barrier after the call, and is only observable BEFORE the setter
+    runs. Fail closed: an unreadable storage on either side counts as a swap.
+    """
+
+    if (
+        len(args) < 2
+        or not isinstance(args[0], torch.Tensor)
+        or not isinstance(args[1], torch.Tensor)
+    ):
+        return False
+    receiver_storage_key = _untyped_storage_key(args[0])
+    rhs_storage_key = _untyped_storage_key(args[1])
+    return (
+        receiver_storage_key is None
+        or rhs_storage_key is None
+        or receiver_storage_key != rhs_storage_key
+    )
+
+
+def _call_lazy_slot_plumbing(
+    trace: Any, func: Callable[..., Any], func_name: str, args: tuple[Any, ...], kwargs: Any
+) -> Any:
+    """Pass one lazy-module materialization call on a pending slot through unlogged.
+
+    torch's lazy pre-hook materializes pending ``UninitializedBuffer`` /
+    ``UninitializedParameter`` slots through wrapped calls whose RECEIVER is the
+    pending tensor (``.data`` device read or setter, ``empty_like`` on the data
+    alias). A pending tensor has no shape or storage to log and the plumbing is
+    pre-forward materialization, not model dataflow: the materialized buffer
+    registers at the module-entry gate, the materialized parameter of a module
+    built inside forward at the wrapped call that first consumes it
+    (``late_register_forward_created_parameter``). The watched slot is recorded
+    by identity, and under the dispatch census the call runs as the audited
+    ``lazy_module:materialize`` expected-opaque owner, so its ``.data`` reads are
+    accounted constructor plumbing rather than unowned drops.
+    """
+
+    note_lazy_slot_materializing(trace, args[0])
+    if _diagnostic_edge_armed():
+        with expected_original_call(
+            func,
+            LAZY_MODULE_MATERIALIZE_WRAPPER,
+            func_name=func_name,
+            census_scope=completeness_scope_for_wrapper(LAZY_MODULE_MATERIALIZE_WRAPPER),
+        ):
+            return func(*args, **kwargs)
+    return func(*args, **kwargs)
+
+
+def _register_first_use_state(trace: Any, arg_tensorlike: Iterable[torch.Tensor]) -> None:
+    """Register buffers and late lazy Parameters among a call's tensor arguments.
+
+    Buffers are tagged with ``_tl.address`` during model prep but get no
+    ``_tl.label_raw`` until the first function actually uses them. A Parameter
+    torch materialized from a pending lazy slot earlier in THIS forward (a lazy
+    module built inside forward) registers late here, at its first consuming
+    call; the watched-slot set is ``None`` until such a slot was seen, so the
+    prepared-parameter path pays one attribute read.
+    """
+
+    watched_lazy_slots = materialized_lazy_slots(trace)
+    for t in arg_tensorlike:
+        if isinstance(t, torch.nn.Parameter):
+            if watched_lazy_slots is not None and t in watched_lazy_slots:
+                late_register_forward_created_parameter(trace, t)
+            continue
+        # The r81 identity ladder + F20 lazy late-index live in
+        # buffer_writes.resolve_or_late_index_buffer_address.
+        address = resolve_or_late_index_buffer_address(trace, t)
+        if address is not None and get_tensor_label(t) is None:
+            log_source_tensor(trace, t, "buffer", address)
+        elif address is None:
+            # A tensor the forward closes over (SPEC 2 rule 1) becomes a
+            # ``constant`` source op on first use; anything not proven
+            # pre-forward stays unattributed.
+            log_closure_constant_if_known(trace, t)
 
 
 def torch_func_decorator(
@@ -1481,7 +1238,7 @@ def torch_func_decorator(
     elif func_name != "data" or property_accessor == "del":
         canonical_capture_callable = (func, func_name)
     # See the barcode-transparency note inside ``wrapped_func`` (R16-5).
-    is_barcode_transparent = func_name == "as_subclass"
+    is_barcode_transparent = func_name in _BARCODE_TRANSPARENT_FUNCS
     # TorchLens's synthetic ``identity`` op (Identity modules, pass-through tensors)
     # never occurs in a native forward, so it stays out of the call fingerprint.
     fingerprint_token = None if func_name == "identity" else _state.call_token(func_name)
@@ -1525,31 +1282,9 @@ def torch_func_decorator(
             if _fast_path_subclass_cls_index is not None and _constructs_strict_subclass(
                 args, _fast_path_subclass_cls_index
             ):
-                # Translate-on-FAILURE, never a preemptive refusal: whether an
-                # active TorchLens mode actually makes THIS construction crash
-                # depends on details (e.g. torch.nn.Parameter construction via
-                # _make_subclass routinely succeeds here even under an active
-                # mode) this gate cannot cheaply predict, so it costs nothing
-                # extra on the common (succeeding) case and only replaces
-                # torch's own cryptic error with a typed one when it actually
-                # raises.
-                try:
-                    out = func(*args, **kwargs)
-                except RuntimeError as exc:
-                    if "already associated to a python object" in str(exc):
-                        raise TensorSubclassUnsupportedError(
-                            f"torchlens cannot construct the Tensor subclass "
-                            f"{args[_fast_path_subclass_cls_index]!r} via {func_name!r} "
-                            "while a TorchLens dispatch mode is active on this torch "
-                            "build. Remedy: upgrade torch "
-                            "(HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports False here) or "
-                            "avoid constructing/converting into a custom Tensor subclass "
-                            "inside a model forward, an intervention hook, or a "
-                            "validate_forward_pass replay on this build.",
-                            code="subclass_ctor_under_dispatch_mode_unsupported",
-                            func_name=func_name,
-                        ) from exc
-                    raise
+                out = _call_subclass_ctor_unlogged(
+                    func, func_name, args, kwargs, _fast_path_subclass_cls_index
+                )
             else:
                 try:
                     out = func(*args, **kwargs)
@@ -1559,7 +1294,7 @@ def torch_func_decorator(
                         raise
             fast_collector = _state._active_fast_run_collector
             if fast_collector is not None and fast_collector.wants_function(func_name):
-                fast_collector.capture_function(func_name, out)
+                fast_collector.capture_function(func_name, out, args, property_accessor)
             if is_detached_propagation_func and has_detached_saved_activations():
                 propagate_detached_saved_activation(
                     func_name,
@@ -1572,32 +1307,7 @@ def torch_func_decorator(
         owner_thread_id = _state._active_owner_thread_id
         current_thread_id = threading.get_ident()
         if active_trace is None or owner_thread_id != current_thread_id:
-            # r45 hon2_1: while a runnable capture is armed, a NON-owner thread's op that consumes
-            # a captured tensor as an operand ceilings replay proof to ``unverifiable`` (the
-            # worker-DERIVED cross-thread escape sibling: fresh worker-side storage the
-            # owner-only census never registered). ``_nonowner_belt_armed`` is False for every
-            # plain trace and the whole steady state, so the disarmed hot path pays one bool read.
-            if (
-                _state._nonowner_belt_armed
-                and active_trace is not None
-                and owner_thread_id != current_thread_id
-            ):
-                observe_nonowner_operands(args, kwargs)
-            if needs_device_injection:
-                kwargs = _maybe_inject_device_kwarg(func_name, kwargs)
-            try:
-                out = func(*args, **kwargs)
-            except TypeError as exc:
-                out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
-                if out is STILL_DECLINED:
-                    raise
-            if is_detached_propagation_func and has_detached_saved_activations():
-                propagate_detached_saved_activation(
-                    func_name,
-                    _collect_tensor_args(args, kwargs),
-                    _collect_output_tensors(out),
-                )
-            return out
+            return _call_unlogged_off_owner(func, func_name, wrapped_func, args, kwargs)
 
         trace = cast(Any, active_trace)
         if has_inplace_signature and not args:
@@ -1612,24 +1322,7 @@ def torch_func_decorator(
         # Warn once per forward pass so the user knows their Trace is
         # missing whatever runs inside the transform.
         if _is_inside_functorch_transform():
-            if not _state._functorch_warning_emitted:
-                _state._functorch_warning_emitted = True
-                trace._raw_transform_escape_detected = True
-                _warn_functorch_region_not_logged()
-            # A raw transform interior is outside the witness claim; the witness-off route
-            # retains its original logging state (declined dispatches still redispatch).
-            shadow_witness = _state._completeness_witness_mode == "shadow"
-            edge_ctx: Any = nullcontext()
-            if _state._escape_detector_mode == "shadow":
-                edge_ctx = expected_original_call(func, f"torch_func:{func_name}:functorch")
-            with _state.pause_logging() if shadow_witness else nullcontext(), edge_ctx:
-                try:
-                    return func(*args, **kwargs)
-                except TypeError as exc:
-                    out = redispatch_declined(exc, wrapped_func, func_name, args, kwargs)
-                    if out is STILL_DECLINED:
-                        raise
-                    return out
+            return _call_inside_functorch_transform(func, func_name, wrapped_func, args, kwargs)
 
         # Skip logging inside a Dynamo-traced region, for the same reason as the
         # functorch guard above: TorchLens' internal operations (safe_copy,
@@ -1644,33 +1337,13 @@ def torch_func_decorator(
         # Degrading to a pass-through matches the documented contract: log the
         # eager source module; torch.compile internals are not traced.
         if _is_inside_dynamo_compilation():
-            # ``_raw_dynamo_region_detected`` is the specific cause and outranks every
-            # other verification reason: a compiled region also spawns compile threads
-            # and leaves unaccounted aten dispatches, so without it the Trace reports a
-            # true-but-misleading reason such as ``owner_thread_tripwire_changed``.
-            # ``_raw_transform_escape_detected`` additionally licenses the
-            # unattributable-model-output tolerance the functorch boundary uses, which is
-            # what lets the forward finish at all when the output leaves the region.
-            trace._raw_dynamo_region_detected = True
-            trace._raw_transform_escape_detected = True
-            if not _state._dynamo_warning_emitted:
-                _state._dynamo_warning_emitted = True
-                _warn_dynamo_region_not_logged()
-            if _state._completeness_witness_mode == "shadow":
-                with _state.pause_logging():
-                    return func(*args, **kwargs)
-            return func(*args, **kwargs)
+            return _call_inside_dynamo_region(trace, func, args, kwargs)
 
-        # F20 lazy-buffer completion: torch's lazy pre-hook materializes
-        # pending UninitializedBuffer/Parameter slots through wrapped calls
-        # whose RECEIVER is the pending tensor (.data device read/setter,
-        # empty_like on the data alias). A pending tensor has no
-        # shape/storage to log and the plumbing is pre-forward
-        # materialization, not model dataflow (the materialized buffer
-        # registers at the module-entry gate); pass the call through
-        # unlogged, mirroring the functorch/dynamo region guards above.
+        # F20 lazy-module completion: torch's materialization plumbing on a
+        # pending slot receiver passes through unlogged (``_call_lazy_slot_plumbing``;
+        # the materialized state registers later), as the region guards above.
         if args and isinstance(args[0], torch.Tensor) and _is_uninitialized_param(args[0]):
-            return func(*args, **kwargs)
+            return _call_lazy_slot_plumbing(trace, func, func_name, args, kwargs)
 
         # Usage stats: count every decorated function call during logging.
         if _state._collect_usage_stats:
@@ -1721,45 +1394,19 @@ def torch_func_decorator(
             and mutates_receiver
         )
 
-        # Register buffer tensors on first encounter. Buffers are tagged with
-        # _tl.address during model prep but don't get _tl.label_raw
-        # until the first function actually uses them.
-        for t in arg_tensorlike:
-            if isinstance(t, torch.nn.Parameter):
-                continue
-            # The r81 identity ladder + F20 lazy late-index live in
-            # buffer_writes.resolve_or_late_index_buffer_address.
-            address = resolve_or_late_index_buffer_address(trace, t)
-            if address is not None and get_tensor_label(t) is None:
-                log_source_tensor(trace, t, "buffer", address)
+        # Register buffers (and a Parameter materialized from a pending lazy slot
+        # earlier in this forward) on first encounter.
+        _register_first_use_state(trace, arg_tensorlike)
 
         # Intercept print functions to show TorchLens label info in repr.
         if is_print_func and arg_tensorlike:
-            # r39 hon2_1: stringifying a captured tensor extracts its VALUES into the returned
-            # string (a genuine tensor->host value escape the user can fold back into control
-            # flow -- a string NaN guard). ``print_override`` runs that extraction under
-            # ``pause_logging()``, blinding the ordinary ``.numpy()``/``.item()`` escape
-            # observers, so record the source here BEFORE the paused format, through the same
-            # attribution ladder. A runnable capture then ceilings a changed-input run whose
-            # stringified source differs, exactly like a ``.numpy()`` escape.
-            for stringified in arg_tensorlike:
-                record_host_string_escape_source(trace, stringified)
-            # r43 hon2_4: ``print_override`` formats under a GLOBAL ``pause_logging()``; a
-            # NON-OWNER thread must NEVER flip that toggle mid-forward (it blinds owner op
-            # capture -> the observed crash). The owner keeps ``print_override``; a worker
-            # calls the original torch string function unchanged (the captured-tensor ceiling
-            # was already applied by ``record_host_string_escape_source`` above).
-            if string_escape_is_owner_thread(trace):
-                out = print_override(args[0], func_name)
-                return out
-            return func(*args, **kwargs)
+            return _call_print_func(trace, func, func_name, args, kwargs)
 
         # Snapshot args before the call in case in-place ops mutate them.
-        if trace.save_arg_values:
-            from ._ops_retention import _copy_saved_arg_tree
+        if trace._options_save_args:
+            from ._ops_arguments import _copy_saved_call_args
 
-            arg_copies = tuple([_copy_saved_arg_tree(arg) for arg in args])
-            kwarg_copies = {k: _copy_saved_arg_tree(v) for k, v in kwargs.items()}
+            arg_copies, kwarg_copies = _copy_saved_call_args(func_name, args, kwargs)
         else:
             arg_copies = args
             kwarg_copies = kwargs
@@ -1771,21 +1418,9 @@ def torch_func_decorator(
         # rebind SWAPS the storage object (rhs on foreign storage) or PRESERVES
         # it (rhs a view of the receiver's own storage) decides the ancestry
         # barrier below, and is only observable BEFORE the setter runs.
-        rebind_setter_swaps_storage = False
-        if (
-            is_storage_rebinding_setter
-            and len(args) >= 2
-            and isinstance(args[0], torch.Tensor)
-            and isinstance(args[1], torch.Tensor)
-        ):
-            receiver_storage_key = _untyped_storage_key(args[0])
-            rhs_storage_key = _untyped_storage_key(args[1])
-            # Fail closed: an unreadable storage on either side counts as a swap.
-            rebind_setter_swaps_storage = (
-                receiver_storage_key is None
-                or rhs_storage_key is None
-                or receiver_storage_key != rhs_storage_key
-            )
+        rebind_setter_swaps_storage = is_storage_rebinding_setter and _rebind_setter_swaps_storage(
+            args
+        )
 
         # ---- Deferred-clone interception (clone-on-write) ----
         # Any wrapped call that can WRITE through a tensor argument must first
@@ -1822,8 +1457,7 @@ def torch_func_decorator(
         # matching barcode => this is the bottom-level (leaf) function.
         func_call_barcode = make_random_barcode()
         trace._wrapper_runtime_ws.current_func_barcode = func_call_barcode
-        _save_rng = getattr(trace, "save_rng_states", False)
-        rng_states = log_current_rng_states(torch_only=True) if _save_rng else {}
+        rng_states = log_current_rng_states(torch_only=True) if trace._options_save_rng else {}
         autocast_state = log_current_autocast_state()
         func_call_id = _state.next_func_call_id()
         register_call_input_container_snapshots(
@@ -1914,21 +1548,7 @@ def torch_func_decorator(
             # help there, confirmed by direct instrumentation). Translate torch's
             # own crash into the same typed, disclosed refusal the fast path
             # raises, rather than let a cryptic RuntimeError escape.
-            if (
-                pauses_owned_modes
-                and not HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE
-                and "already associated to a python object" in str(exc)
-            ):
-                raise TensorSubclassUnsupportedError(
-                    f"torchlens could not construct the Tensor subclass via "
-                    f"{func_name!r} even after pausing its own dispatch mode on this "
-                    f"torch build (original torch error: {exc}). "
-                    "Remedy: upgrade torch (HAS_SUBCLASS_CTOR_IN_DISPATCH_MODE reports "
-                    "False here), or avoid this construction while other TorchLens "
-                    "instrumentation observes the same forward on this build.",
-                    code="subclass_ctor_under_dispatch_mode_unsupported",
-                    func_name=func_name,
-                ) from exc
+            _raise_if_subclass_ctor_under_dispatch_mode(exc, func_name, pauses_owned_modes)
             raise
         finally:
             # Markers close FIRST so the range covers the user op, not the
@@ -1969,7 +1589,6 @@ def torch_func_decorator(
 
         # ---- In-place detection and safe copy ----
         same_object_returned = len(args) > 0 and id(out_orig) == id(args[0])
-        record_is_inplace = get_tensor_label(out_orig) is not None
         # True in-place ops (add_, mul_, etc.) modify the tensor and return self.
         # No-op functions (to(same_dtype), contiguous() on contiguous tensor)
         # also return self but don't modify anything.
@@ -1982,6 +1601,15 @@ def torch_func_decorator(
             same_object_returned and _call_requests_inplace(inplace_param_index, args, kwargs)
         )
         was_inplace = same_object_returned and mutation_signature
+        # The live intervention site's in-place verdict. A replacement at a
+        # MUTATING site (``x.add_(1)``, ``torch.add(a, b, out=c)``) only takes
+        # effect when copied into the mutated receiver, so the hook runner
+        # needs the verdict; a NON-mutating same-object return (``x.to(device)``
+        # already there, ``x.contiguous()`` on a contiguous tensor) hands its
+        # replacement to the caller like any functional op. Label presence is
+        # not mutation: keying on it refused every replacement at an identity
+        # return and recorded ``replaced=False`` on a rule that had fired.
+        record_is_inplace = was_inplace or isinstance(kwargs.get("out"), torch.Tensor)
         # An in-place write to a prepared Parameter is a mutated-receiver site
         # too: a live intervention replacing its output must be copied into the
         # Parameter (``_apply_inplace_replacement_to_mutated_storage``) so later
@@ -1991,8 +1619,6 @@ def torch_func_decorator(
             and not is_storage_rebinding_setter
             and _is_prepared_parameter_receiver(trace, args[0])
         )
-        if mutates_prepared_parameter:
-            record_is_inplace = True
         # The internal identity-forcing decorator (_state._decorated_identity)
         # exists precisely to MINT a distinct logged tensor at module boundaries
         # (nn.Identity / pass-through outputs). Unlike user-visible no-ops such as
@@ -2068,7 +1694,7 @@ def torch_func_decorator(
 
         # Log all output tensors (excluding Parameters, which are source tensors).
         # Fast inline check for the common single-tensor output case.
-        if getattr(trace, "intervention_ready", False):
+        if getattr(trace, "is_replayable", False):
             output_tensors = [entry[0] for entry in _walk_output_tensors_with_paths(out_orig)]
         else:
             output_tensors = _collect_output_tensors(out_orig)
@@ -2159,7 +1785,7 @@ def torch_func_decorator(
                         # barrier so layout/witness rooting fails closed
                         # exactly like the pre-M6 unattributed break.
                         if is_storage_rebinding_setter and rebind_setter_swaps_storage:
-                            from .completeness_witness import record_storage_rebind_barrier
+                            from ._completeness_metadata import record_storage_rebind_barrier
 
                             record_storage_rebind_barrier(trace, out_label)
                         # W3 F1: the write may have gone through a VIEW; every
@@ -2305,81 +1931,6 @@ def torch_func_decorator(
     setattr(wrapped_func, "__prepare_scriptable__", lambda: func)
 
     return wrapped_func
-
-
-# ---------------------------------------------------------------------------
-# get_arg_names — now writes to _state._arg_names instead of self
-# ---------------------------------------------------------------------------
-
-
-def get_arg_names(orig_func: Callable[..., Any], func_name: str) -> None:
-    """Extract argument names for a function and store in ``_state._arg_names``.
-
-    Tries ``inspect.signature`` first (works for Python functions). Falls back
-    to docstring parsing for C builtins whose signature isn't introspectable.
-
-    Stores under the EXACT registered name: ``add``, ``add_``, and ``__add__``
-    have meaningfully different signatures (``__add__(self, other)`` is a
-    2-arg dunder; ``torch.add(input, other, *, alpha, out)`` is not), and the
-    historical underscore-stripped shared key (#82) let whichever registered
-    last overwrite the rest, recording wrong ``arg_names`` metadata (W3 audit
-    F9). Lookup falls back to the stripped key for names whose own
-    introspection stored nothing, preserving the old best-effort behavior.
-
-    Skipped for property-like attributes (``real``, ``imag``, ``T``, etc.) that
-    aren't callable in the normal sense.
-    """
-    if func_name in ["real", "imag", "T", "mT", "data", "H"]:
-        return
-
-    storage_key = func_name
-
-    try:
-        params = inspect.signature(orig_func).parameters
-        argnames = []
-        for name, param in params.items():
-            if name in ("cls", "self"):
-                continue
-            # #123: Use Parameter.kind instead of naive asterisk stripping
-            if param.kind == inspect.Parameter.VAR_POSITIONAL:
-                argnames.append(f"*{name}")
-            elif param.kind == inspect.Parameter.VAR_KEYWORD:
-                argnames.append(f"**{name}")
-            else:
-                argnames.append(name)
-        # A purely-variadic signature ((*args, **kwargs) on opaque C dunders)
-        # names nothing; prefer the docstring parse, and store nothing when
-        # that also fails -- honest-unknown beats a wrong borrowed signature.
-        # A genuinely empty signature (zero-arg methods) still stores ().
-        if not argnames or not all(name.startswith("*") for name in argnames):
-            _state._arg_names[storage_key] = tuple(argnames)
-            return
-    except (ValueError, TypeError):
-        # TypeError: Python 3.14+ deferred annotation evaluation (PEP 649)
-        # can fail when class-level names (e.g. Tensor.bool) shadow builtins
-        # during inspect.signature() annotation resolution. Falls back to
-        # docstring parsing below.
-        pass
-
-    # Fallback: parse argument names from the docstring's first line.
-    # C builtins typically have docstrings like "add(input, other, *, alpha=1)".
-    docstring = orig_func.__doc__
-    if (type(docstring) is not str) or (len(docstring) == 0):
-        return
-
-    paren_start, paren_end = docstring.find("("), docstring.find(")")
-    argstring = docstring[paren_start + 1 : paren_end]
-    arg_list = argstring.split(",")
-    arg_list = [arg.strip(" ") for arg in arg_list]
-    argnames = []
-    for arg in arg_list:
-        argname = arg.split("=")[0]
-        if argname in ["*", "/", "//", ""]:
-            continue
-        argname = argname.replace("*", "")
-        argnames.append(argname)
-    argnames = tuple([arg for arg in argnames if arg not in ["self", "cls"]])  # type: ignore[assignment]
-    _state._arg_names[storage_key] = argnames  # type: ignore[assignment]
 
 
 def _is_jit_incompatible_dtype_annotation(annotation: Any) -> bool:
@@ -2927,10 +2478,10 @@ def _refuse_unwrap_during_active_capture() -> None:
     if _state._active_trace is None and not _state._logging_enabled:
         return
     trace = _state._active_trace
-    model_label = getattr(trace, "model_label", None) or getattr(trace, "model_class_name", None)
+    model_name = (trace.model_name or trace._source_class_name) if trace is not None else None
     raise CaptureNotActiveError(
         "unwrap_torch() was called while a TorchLens capture is still active"
-        + (f" for model {model_label!r}" if model_label else ""),
+        + (f" for model {model_name!r}" if model_name else ""),
         code="unwrap_during_active_capture",
         remedy=(
             "let the capture finish before removing the wrappers (pass "

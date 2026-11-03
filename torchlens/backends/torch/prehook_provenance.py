@@ -632,7 +632,7 @@ def _snapshot_with_reasons(
         _kwargs=snapshot._kwargs,
         structure=snapshot.structure,
         tensor_observations=snapshot.tensor_observations,
-        capture_complete=not merged,
+        is_capture_complete=not merged,
         incomplete_reasons=merged,
         summary=snapshot.summary,
     )
@@ -713,7 +713,7 @@ def _make_pre_hook_wrapper(
                     hook=hook_info,
                     with_kwargs=with_kwargs,
                     outcome=outcome,
-                    changed=changed,
+                    has_changes=changed,
                     change_kinds=kinds,
                     changed_paths=paths,
                     before_fingerprint=_fingerprint(before),
@@ -971,8 +971,8 @@ def _snapshot_state(
             TensorInputObservation(
                 path=state.path,
                 source_op=state.source_op,
-                object_id=state.object_id,
-                version=state.version,
+                python_object_id=state.object_id,
+                mutation_version=state.version,
                 shape=state.shape,
                 dtype=state.dtype,
                 device=state.device,
@@ -989,7 +989,7 @@ def _snapshot_state(
         _kwargs=cloned_kwargs,
         structure=observation.structure,
         tensor_observations=tuple(tensor_observations),
-        capture_complete=not reasons,
+        is_capture_complete=not reasons,
         incomplete_reasons=tuple(sorted(reasons)),
         summary=f"args={len(args)}, kwargs={len(kwargs)}, tensors={len(observation.tensors)}",
     )

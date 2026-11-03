@@ -47,12 +47,12 @@ def test_counts_record_names_its_grains(loop_trace) -> None:
     counts = core.counts
     alias_rows = sum(
         1
-        for op in loop_trace.layer_list
+        for op in loop_trace._layer_list
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
         or getattr(op, "is_buffer", False)
     )
-    assert counts.tracked_tensor_rows == len(loop_trace.layer_list)
+    assert counts.tracked_tensor_rows == len(loop_trace._layer_list)
     assert counts.alias_rows == alias_rows
     assert counts.compute_ops == counts.tracked_tensor_rows - alias_rows
     assert counts.for_grain("op") == counts.compute_ops
@@ -209,7 +209,7 @@ def test_health_alias_rows_excluded_and_disclosed(loop_trace) -> None:
     facts = trace.health_facts
     alias_labels = {
         str(op.label)
-        for op in trace.layer_list
+        for op in trace._layer_list
         if getattr(op, "is_input", False)
         or getattr(op, "is_output", False)
         or getattr(op, "is_buffer", False)

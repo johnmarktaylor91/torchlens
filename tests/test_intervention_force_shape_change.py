@@ -68,8 +68,8 @@ _FLAG_HELPERS: dict[str, Callable[[], Edit]] = {
     "scramble_elements": lambda: tl.intervention.scramble_elements(seed=0, allow_shape_change=True),
     "add": lambda: tl.add(1.0, allow_shape_change=True),
     "splice_module": lambda: tl.splice_module(_ToDouble(), allow_shape_change=True),
-    "grad_zero": lambda: tl.zero_grad(allow_shape_change=True),
-    "grad_scale": lambda: tl.scale_grad(2.0, allow_shape_change=True),
+    "grad_zero": lambda: tl.zero_ablate(allow_shape_change=True),
+    "grad_scale": lambda: tl.scale(2.0, allow_shape_change=True),
 }
 
 
@@ -79,7 +79,10 @@ def test_helper_flag_reaches_entry_metadata(helper_name: str) -> None:
     """helper(force_shape_change=True) must stamp True on every plan entry."""
 
     helper = _FLAG_HELPERS[helper_name]()
-    entries = normalize_hook_plan(helper, default_site_target=tl.func("relu"))
+    site = tl.func("relu")
+    if helper_name.startswith("grad_"):
+        site = tl.grad(site)
+    entries = normalize_hook_plan(helper, default_site_target=site)
     assert entries, f"{helper_name} produced no hook-plan entries"
     for entry in entries:
         assert entry.metadata.get("allow_shape_change") is True, (
@@ -112,7 +115,7 @@ def test_intervene_shape_change_applies() -> None:
     assert float(_output_out(log)) == pytest.approx(8.0)
     relu = _relu_layer(log)
     assert tuple(relu.out.shape) == (1, 8)
-    assert relu.intervention_replaced is True
+    assert relu.is_edited is True
 
 
 def test_hooks_kwarg_shape_change_applies() -> None:
@@ -140,7 +143,7 @@ def test_replay_hooks_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     replayed = log.push(
         replay=tl.options.ReplayOptions(
@@ -160,7 +163,7 @@ def test_push_replay_options_shape_change_applies() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     pushed = log.push(
         replay=ReplayOptions(
@@ -206,7 +209,7 @@ def test_default_false_still_raises_on_shape_change_replay() -> None:
         model,
         x,
         save=lambda ctx: True,
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     with pytest.raises(HookValueError):
         log.push(

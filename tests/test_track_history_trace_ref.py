@@ -37,7 +37,7 @@ def _committed(step: int, trace_ref: str | None) -> CommittedBlock:
         stream="activation",
         phase="forward",
         presence="observed",
-        spine=spine.result(),
+        spine=spine.compute(),
     )
     record = StepBlockRecord(
         segment_id="seg-a", global_step=step, provenance="explicit", trace_ref=trace_ref

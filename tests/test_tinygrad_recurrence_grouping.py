@@ -59,7 +59,7 @@ def _grouped_ops(trace: Any, func_name: str) -> list[Any]:
         Multi-pass ops with that function name, in pass order.
     """
 
-    return [op for op in trace.layer_list if op.func_name == func_name and op.num_passes > 1]
+    return [op for op in trace._layer_list if op.func_name == func_name and op.num_passes > 1]
 
 
 def test_tinygrad_repeated_block_groups_into_passes() -> None:
@@ -72,14 +72,14 @@ def test_tinygrad_repeated_block_groups_into_passes() -> None:
     mul_ops = _grouped_ops(trace, "<lambda>")
     where_ops = _grouped_ops(trace, "where")
 
-    assert trace.recurrence_detection is True
+    assert trace.options.recurrence_detection is True
     assert mul_ops, "no grouped multi-pass ops found for the repeated body"
     assert where_ops
     assert {op.num_passes for op in where_ops} == {2}
-    assert [op.pass_index for op in where_ops] == [1, 2]
+    assert [op.pass_number for op in where_ops] == [1, 2]
     assert {op.layer_label for op in where_ops} == {where_ops[0].layer_label}
     assert list(where_ops[0].recurrent_ops) == [op.label for op in where_ops]
-    assert trace.layer_num_calls[where_ops[0].layer_label] == 2
+    assert trace._layer_num_calls[where_ops[0].layer_label] == 2
     assert TinygradBackend().validate_trace(trace) is True
 
 
@@ -93,7 +93,7 @@ def test_tinygrad_grouping_relabel_keeps_lookups_coherent() -> None:
     assert trace[pass2._label_raw] is pass2
     assert trace[pass2.label] is pass2
     assert pass2.label == f"{pass2.layer_label}:2"
-    addresses = [op.backend_address for op in trace.layer_list]
+    addresses = [op.backend_address for op in trace._layer_list]
     assert len(addresses) == len(set(addresses)), "backend addresses collided"
 
 
@@ -107,8 +107,8 @@ def test_tinygrad_recurrence_detection_off_preserves_single_pass_layout() -> Non
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert trace.recurrence_detection is False
-    assert all(op.num_passes == 1 for op in trace.layer_list)
+    assert trace.options.recurrence_detection is False
+    assert all(op.num_passes == 1 for op in trace._layer_list)
     assert TinygradBackend().validate_trace(trace) is True
 
 
@@ -199,14 +199,19 @@ def test_tinygrad_derived_grads_survive_grouping() -> None:
         capture=tl.options.CaptureOptions(recurrence_detection=False),
     )
 
-    assert set(grouped.derived_grads.keys()) == set(ungrouped.derived_grads.keys())
+    assert set(grouped.autograd.derived_grads.keys()) == set(
+        ungrouped.autograd.derived_grads.keys()
+    )
     # Records key on final op labels, which differ across the two layouts;
     # compare in raw-label space (the per-op capture identity). Accessors
     # iterate VALUES, not keys (see _data_classes/_accessor_base.py), so
     # iterate through .keys() to get label strings to look up.
-    grouped_raw = {grouped[label]._label_raw for label in grouped.intermediate_derived_grads.keys()}
+    grouped_raw = {
+        grouped[label]._label_raw for label in grouped.autograd.intermediate_derived_grads.keys()
+    }
     ungrouped_raw = {
-        ungrouped[label]._label_raw for label in ungrouped.intermediate_derived_grads.keys()
+        ungrouped[label]._label_raw
+        for label in ungrouped.autograd.intermediate_derived_grads.keys()
     }
     assert ungrouped_raw, "reference ungrouped trace produced no records"
     assert grouped_raw == ungrouped_raw

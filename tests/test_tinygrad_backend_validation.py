@@ -63,7 +63,7 @@ def _first_op(trace: Any, layer_type: str) -> Any:
         Matching operation.
     """
 
-    return next(op for op in trace.layer_list if op.layer_type == layer_type)
+    return next(op for op in trace._layer_list if op.type == layer_type)
 
 
 def test_tinygrad_validate_entry_and_trace_return_honest_bool() -> None:
@@ -117,5 +117,6 @@ def test_tinygrad_audit_only_payload_validation_raises() -> None:
     trace.tinygrad_uop_captures = ()
     trace.tinygrad_payload_policy = "audit_only"
 
-    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy"):
+    with pytest.raises(BackendUnsupportedError, match="audit-only|realized-copy") as info:
         trace.validate_forward_pass([_validation_block(Tensor([1.0, -2.0, 3.0]))])
+    assert info.value.code == "live_payloads_required"

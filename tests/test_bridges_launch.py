@@ -197,7 +197,7 @@ def test_sae_lens_bridge_reconstruct_matches_direct_sae() -> None:
     """SAE Lens bridge reconstruction should match a direct encode then decode.
 
     Measured at 11.2s wall (weekly leg, 2026-10-01), over the unmarked/smoke
-    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    7s budget (``scripts/tier_durations.py``); the heavy tier's 20s+grace budget covers
     it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
     the executed-floor count (11) is unaffected by the marker.
     """
@@ -276,7 +276,7 @@ def test_lightning_layer_profiler_callback_fires_and_saves_results(tmp_path: Pat
     """Lightning callback should profile one batch and persist a JSONL record.
 
     Measured at 10.1s wall (weekly leg, 2026-10-02), over the unmarked/smoke
-    7s budget (tests/conftest.py); the heavy tier's 20s+grace budget covers
+    7s budget (``scripts/tier_durations.py``); the heavy tier's 20s+grace budget covers
     it. The bridge-gate step (weekly.yml) runs this whole file unfiltered, so
     the executed-floor count (11) is unaffected by the marker.
     """

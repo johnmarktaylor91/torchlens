@@ -22,6 +22,7 @@ from torchlens import trace as trace_fn
 from torchlens._data_classes._trace_accessors import _TRACE_MODULE_CALL_ACCESSOR_ATTR
 from torchlens._data_classes.trace import Trace
 from torchlens._io import FieldPolicy
+from torchlens.errors import TraceCaptureError
 
 # Marks are PER-TEST: four session-state-scaling gc tests are re-tiered
 # `heavy` below (charged 9.4-19.3s min(wall, cpu) in the merged full
@@ -183,7 +184,7 @@ class TestTraceGC:
         """After cleanup, all Param._param_ref should be None."""
         model = _TwoLayerNet()
         trace = tl.trace(model, torch.randn(1, 5))
-        param_logs = list(trace.param_logs)
+        param_logs = list(trace._param_logs)
         trace.cleanup()
         for pl in param_logs:
             assert pl._param_ref is None
@@ -197,13 +198,13 @@ class TestTraceGC:
         out = model(x)
         out.sum().backward()
         # Access grad metadata to cache it
-        for pl in trace.param_logs:
+        for pl in trace._param_logs:
             pl._check_param_grad()
         # Now release
         trace._release_param_refs()
         # Grad metadata should still be accessible
         has_any_grad = False
-        for pl in trace.param_logs:
+        for pl in trace._param_logs:
             assert pl._param_ref is None
             if pl._has_grad:
                 has_any_grad = True
@@ -368,68 +369,6 @@ class TestTraceGC:
             "epilogue (class-metadata cache not released)"
         )
 
-    def test_failed_capture_registry_does_not_pin_a_dead_exception(self):
-        """The partial-recovery fallback table holds its exception weakly.
-
-        The table is keyed by ``id(exception)`` and was capped at 128 ENTRIES
-        with no byte bound and no time eviction — but each retained exception
-        keeps its ``__traceback__``, and that pins every frame local (the model,
-        the inputs, the partial outputs). Recovery only ever reaches an entry
-        through ``from_failed_capture(exc)``, which requires the caller to hold
-        that exception, so once it dies the entry is unreachable garbage.
-        """
-
-        from torchlens import _partial as partial_module
-
-        class _FrameLocalMarker:
-            """Stands in for the model/inputs a traceback frame keeps alive."""
-
-        class _RejectsAttachment(Exception):
-            """The realistic shape that reaches this fallback at all.
-
-            Builtin exceptions and ``__slots__`` subclasses both ACCEPT
-            ``exc.partial_log = ...`` (BaseException always carries a dict), so
-            the registry is only ever reached by types that refuse attribute
-            assignment outright — which are user-defined and weak-referenceable.
-            """
-
-            def __setattr__(self, name, value):
-                raise AttributeError("read-only exception")
-
-        def raise_holding_a_local():
-            """Raise an exception whose traceback frame holds a marker object."""
-
-            marker = _FrameLocalMarker()
-            marker_ref = weakref.ref(marker)
-            try:
-                raise _RejectsAttachment("registry retention probe")
-            except _RejectsAttachment as error:
-                return error, marker_ref
-
-        trace = tl.trace(_SimpleLinear(), torch.randn(1, 5))
-        exception, marker_ref = raise_holding_a_local()
-        partial_log = partial_module.PartialTrace(trace=trace, original_exception=exception)
-        key = id(exception)
-        partial_module._register_failed_capture(exception, partial_log)
-
-        # Recovery works for as long as the caller holds the exception, and
-        # repeated lookups hand back the same wrapper.
-        recovered = partial_module.from_failed_capture(exception)
-        assert recovered.original_exception is exception
-        assert recovered.trace is trace
-        assert partial_module.from_failed_capture(exception) is recovered
-        assert key in partial_module._FAILED_CAPTURE_REGISTRY
-
-        del exception, partial_log, recovered
-        gc.collect()
-
-        assert key not in partial_module._FAILED_CAPTURE_REGISTRY, (
-            "the registry kept an entry for a collected exception"
-        )
-        assert marker_ref() is None, (
-            "the registry pinned the dead exception's traceback frame locals"
-        )
-
     def test_type_keyed_caches_do_not_pin_model_classes(self):
         """Per-type caches keyed on a model class must not outlive that class.
 
@@ -501,103 +440,6 @@ class TestTraceGC:
         )
 
     @pytest.mark.smoke
-    def test_failed_capture_registry_falls_back_for_unweakrefable_exceptions(self):
-        """A non-weak-referenceable exception still recovers, under the entry cap.
-
-        Builtin exception instances cannot be weak-referenced. They never reach
-        this table (they accept ``partial_log`` attachment), but a C-extension
-        exception type could, so the fallback must keep working rather than
-        losing recovery.
-        """
-
-        from torchlens import _partial as partial_module
-
-        trace = tl.trace(_SimpleLinear(), torch.randn(1, 5))
-        exception = RuntimeError("unweakrefable probe")
-        with pytest.raises(TypeError):
-            weakref.ref(exception)  # the precondition this arm exists for
-        partial_log = partial_module.PartialTrace(trace=trace, original_exception=exception)
-        partial_module._register_failed_capture(exception, partial_log)
-        try:
-            assert partial_module.from_failed_capture(exception) is partial_log
-            assert len(partial_module._FAILED_CAPTURE_REGISTRY) <= (
-                partial_module._FAILED_CAPTURE_REGISTRY_LIMIT
-            )
-        finally:
-            partial_module._FAILED_CAPTURE_REGISTRY.pop(id(exception), None)
-
-    def test_nonweakrefable_entry_never_pins_the_exception_graph(self):
-        """A dropped locked+non-weakrefable exception must not pin its capture (R37).
-
-        An ``Exception`` subclass declaring ``__slots__`` is non-weakrefable,
-        and one that also refuses ``__setattr__`` rejects the ``partial_log``
-        attachment, so it reaches the registry fallback. The stub design
-        (fixwave-5 integration; supersedes the strong-retention fallback and
-        its refcount sweep) NEVER retains the exception: its graph --
-        traceback, frame locals, model, inputs -- frees the moment the
-        caller drops it, with NO later registry interaction needed. The
-        price, disclosed on the registry docstring, is that the partial
-        TRACE stays pinned by the entry until the registry cap; this test
-        pins that the registry entry is the ONLY thing retaining it.
-        """
-
-        from torchlens import _partial as partial_module
-
-        class _LockedSlots(Exception):
-            __slots__ = ()
-
-            def __setattr__(self, name, value):
-                raise AttributeError("locked")
-
-        with pytest.raises(TypeError):
-            weakref.ref(_LockedSlots("x"))  # the precondition this arm exists for
-
-        class _FrameLocalMarker:
-            pass
-
-        def raise_locked():
-            marker = _FrameLocalMarker()
-            marker_ref = weakref.ref(marker)
-            try:
-                raise _LockedSlots("stub retention probe")
-            except _LockedSlots as error:
-                return error, marker_ref
-
-        trace = tl.trace(_SimpleLinear(), torch.randn(1, 5))
-        exception, marker_ref = raise_locked()
-        partial_log = partial_module.PartialTrace(trace=trace, original_exception=exception)
-        key = id(exception)
-        partial_module._register_failed_capture(exception, partial_log)
-        del partial_log
-
-        # Recovery works while the caller holds the exception, and the sweep
-        # (which runs inside every lookup) never evicts a stub entry.
-        recovered = partial_module.from_failed_capture(exception)
-        assert recovered.trace is trace
-        del recovered
-        assert key in partial_module._FAILED_CAPTURE_REGISTRY
-
-        # The exception graph frees IMMEDIATELY on drop -- no sweep, no
-        # later registry interaction (stronger than the superseded strong
-        # fallback, which kept it until the next registration or lookup).
-        del exception
-        gc.collect()
-        assert marker_ref() is None, (
-            "the stub entry pinned the dead exception's traceback frame locals"
-        )
-
-        # The trace pin is the registry entry ALONE (cap-bounded): popping
-        # the entry must be the last strong reference standing.
-        trace_ref = weakref.ref(trace)
-        del trace
-        gc.collect()
-        assert trace_ref() is not None, "the cap-bounded registry entry should hold the trace"
-        partial_module._FAILED_CAPTURE_REGISTRY.pop(key, None)
-        gc.collect()
-        assert trace_ref() is None, (
-            "something besides the registry entry retained the partial trace"
-        )
-
     def test_live_run_after_model_collection_refuses_typed_and_names_the_weak_ref(self):
         """A collected source model refuses run() typed AND discloses why (R37).
 
@@ -735,11 +577,9 @@ class TestLifetimeCoverageGaps:
         The capture and the recovery MUST happen inside a helper whose frame is
         gone before the assertion: an ``except`` block in the test body leaves the
         exception reachable from the test frame (which pytest keeps alive), and
-        the partial trace hangs off ``exc.partial_log``. That is a measurement
+        the partial trace hangs off ``exc.partial_trace``. That is a measurement
         artifact, not a leak — this arm is structured so it cannot report one.
         """
-
-        from torchlens import _partial as partial_module
 
         class _Boom(nn.Module):
             def forward(self, x):
@@ -751,8 +591,9 @@ class TestLifetimeCoverageGaps:
 
             try:
                 tl.trace(_Boom(), torch.ones(2))
-            except ValueError as error:
-                return weakref.ref(partial_module.from_failed_capture(error).trace)
+            except TraceCaptureError as error:
+                assert isinstance(error.__cause__, ValueError)
+                return weakref.ref(error.partial_trace.trace)
             return None  # pragma: no cover - the model always raises
 
         partial_ref = capture_and_recover()
@@ -775,8 +616,10 @@ class TestLifetimeCoverageGaps:
         model = _TwoLayerNet()
         refs = []
         for _ in range(3):
-            with pytest.raises(ValueError, match="cycle probe"):
+            with pytest.raises(TraceCaptureError, match="cycle probe") as _tce_info:
                 tl.trace(_Boom(), torch.ones(2))
+            assert isinstance(_tce_info.value.__cause__, ValueError)
+            del _tce_info
             trace = tl.trace(model, torch.randn(1, 5))
             refs.append(weakref.ref(trace))
             del trace
@@ -792,9 +635,7 @@ class TestLifetimeCoverageGaps:
         trace = tl.trace(
             model,
             x,
-            capture=tl.options.CaptureOptions(
-                intervention_ready=True, cache=False, layers_to_save="all"
-            ),
+            capture=tl.options.CaptureOptions(replayable=True, cache=False, layers_to_save="all"),
         )
         path = tmp_path / "gc_archived.tlspec"
         trace.save(path, level="runnable", include_weights=True, include_activations=True)
@@ -865,7 +706,7 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
         assert exc_info.value.fields["remedy"], name
 
     # AttributeError lineage keeps hasattr/getattr-default degrade paths.
-    assert getattr(trace, "layer_list", None) is None
+    assert getattr(trace, "_layer_list", None) is None
     assert not hasattr(trace, "_tracing_finished")
 
     # The settled outcome is UNKNOWN (most restrictive), never None.
@@ -878,13 +719,13 @@ def test_cleaned_trace_refuses_typed_and_settles_unknown():
     assert trace.explain()
 
 
-def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
-    """The registry fallback stores an identity stub, never the exception.
+def test_attribute_locked_forward_exception_is_never_mutated_or_pinned():
+    """A forward exception that refuses attribute assignment is left untouched.
 
-    Regression (R37, REOPENED b2:C5): a non-weakrefable exception that also
-    rejected ``partial_log`` attachment was retained STRONGLY, pinning its
-    traceback's frame locals (model, inputs) until 128 unrelated failures
-    evicted it.
+    The capture door raises ``TraceCaptureError`` from the forward's exception
+    and carries the partial trace itself, so nothing is ever written onto the
+    user's exception and no global recovery table retains it: once the caller
+    drops the error, the model the traceback reached is collectible.
     """
 
     import warnings
@@ -893,9 +734,7 @@ def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
         __slots__ = ()
 
         def __setattr__(self, name: str, value: object) -> None:
-            if name == "partial_log":
-                raise AttributeError("locked")
-            super().__setattr__(name, value)
+            raise AttributeError("locked")
 
     class _FailingModel(nn.Module):
         def __init__(self) -> None:
@@ -912,15 +751,16 @@ def test_failed_capture_registry_never_pins_a_nonweakrefable_exception_graph():
         warnings.simplefilter("ignore")
         try:
             tl.trace(model, torch.ones(1, 3))
-        except _LockedError as exc:
-            partial = tl._partial.from_failed_capture(exc)
-            assert partial is not None
-            del exc, partial
+        except TraceCaptureError as exc:
+            assert isinstance(exc.__cause__, _LockedError)
+            assert exc.partial_trace is not None
+            assert exc.partial_trace.original_exception is exc.__cause__
+            del exc
 
     del model
     gc.collect()
     gc.collect()
-    assert model_ref() is None, "the failed-capture registry pinned the exception graph"
+    assert model_ref() is None, "a failed capture pinned the forward exception's graph"
 
 
 def test_static_attr_memo_releases_a_self_referencing_class():

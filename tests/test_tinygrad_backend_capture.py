@@ -149,7 +149,7 @@ def test_tinygrad_codec_fixture_loads_eager_payloads_as_tensors(tmp_path: Path) 
     loaded = tl.load(path)
     loaded_op = _first_saved_op(loaded)
 
-    assert loaded.backend == "tinygrad"
+    assert loaded.provenance.backend == "tinygrad"
     assert isinstance(loaded_op.out, Tensor)
     assert str(loaded_op.out.dtype) == expected_dtype
     assert str(loaded_op.out.device) == expected_device
@@ -429,7 +429,7 @@ def _mark_fixture_manifest_materialized(path: Path) -> None:
 def _first_saved_op(trace: Any) -> Any:
     """Return the first op with a saved activation."""
 
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.has_saved_activation:
             return op
     raise AssertionError("trace has no saved activation op")
@@ -442,7 +442,7 @@ def test_tinygrad_spec_registered() -> None:
     assert spec.capabilities.backward_capture is False
     assert spec.capabilities.has_validation_replay is True
     assert spec.capabilities.fastlog is False
-    assert spec.capabilities.interventions is False
+    assert spec.capabilities.can_intervene is False
     assert spec.capabilities.payload_materialization is True
     assert spec.capabilities.module_identity_modes == ("function_root", "object_module")
     assert spec.serialization_policy.payload_policy == "array_payloads"
@@ -457,16 +457,59 @@ def test_tinygrad_spec_registered() -> None:
     assert capabilities.trace_options == ("module_identity_mode", "grad_options")
 
 
+def test_unrealized_closure_constant_refuses_typed() -> None:
+    """A closure constant the forward never realized refuses ``constant_unrealizable``.
+
+    ``Tensor(ndarray)`` stays a host-side source buffer until something
+    realizes it; the per-uop payload copy of that buffer cannot be written
+    back to its device (tinygrad ``need copyin``). Until realize-once capture
+    lands the backend refuses typed, naming the op, instead of crashing.
+    """
+
+    weight = Tensor(np.asarray([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32))
+    bias = Tensor(np.asarray([0.5, -0.5], dtype=np.float32))
+    x = Tensor(np.asarray([[1.0, -1.0]], dtype=np.float32))
+
+    def forward(value: Any) -> Any:
+        return (value.matmul(weight) + bias).relu()
+
+    with pytest.raises(BackendUnsupportedError) as info:
+        tl.trace(forward, x, backend="tinygrad")
+
+    assert info.value.code == "constant_unrealizable"
+    assert "BUFFER" in str(info.value)
+
+
+def test_rng_bearing_graph_refuses_typed() -> None:
+    """A forward through a random-init ``tinygrad.nn`` layer refuses ``rng_state_in_graph``.
+
+    The lazy weight graph carries the Threefry generator; a per-op realization
+    would re-evaluate it and capture values that differ from eager (F11), so
+    the backend refuses before any payload is realized.
+    """
+
+    from tinygrad import nn
+
+    Tensor.manual_seed(0)
+    layer = nn.Linear(4, 3)
+    x = Tensor(np.ones((2, 4), dtype=np.float32))
+
+    with pytest.raises(BackendUnsupportedError) as info:
+        tl.trace(lambda value: layer(value).relu(), x, backend="tinygrad")
+
+    assert info.value.code == "rng_state_in_graph"
+
+
 def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
     """Capture a tinygrad forward graph from output UOp snapshots."""
 
     x = Tensor([1.0, -2.0, 3.0])
     trace = tl.trace(_tiny_block, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
-    assert trace.backend == "tinygrad"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "none"
+    layer_types = {op.type for op in trace._layer_list}
+    assert trace.provenance.backend == "tinygrad"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "none"
     assert "input" in layer_types
     assert "add" in layer_types
     assert "where" in layer_types
@@ -478,9 +521,9 @@ def test_tinygrad_forward_capture_from_uop_snapshots() -> None:
 
 
 def test_tinygrad_preview_rejects_random_seed() -> None:
-    """tinygrad preview rejects random_seed instead of storing inert metadata."""
+    """tinygrad preview refuses an explicit seed instead of storing inert metadata."""
 
-    with pytest.raises(BackendUnsupportedError, match="random_seed"):
+    with pytest.raises(BackendUnsupportedError, match="explicit seed is refused"):
         tl.trace(
             _tiny_block,
             Tensor([1.0, -2.0, 3.0]),
@@ -511,30 +554,74 @@ def test_tinygrad_wide_corpus_capture_and_validation() -> None:
     x = Tensor([1.0, -2.0, 3.0, 4.0, -5.0, 6.0, 7.0, -8.0, 9.0])
     trace = tl.trace(_wide_corpus, x, backend="tinygrad")
 
-    layer_types = {op.layer_type for op in trace.layer_list}
+    layer_types = {op.type for op in trace._layer_list}
     assert {"mul", "reduce", "where"} <= layer_types
     assert {"permute", "shrink"} & layer_types
     assert len(trace.output_layers) == 2
     assert trace.validate_forward_pass(list(_wide_corpus(x))) is True
 
 
+_EXECUTION_OR_MUTATION_CODES = frozenset(
+    {"mid_capture_execution_unsupported", "input_mutation_unsupported"}
+)
+
+
 @pytest.mark.parametrize(
-    ("fn", "pattern"),
+    ("fn", "pattern", "codes"),
     (
-        (_realize_inside, "Tensor\\.realize|lazy tinygrad expression"),
-        (_assign_inside, "Tensor\\.assign|lazy tinygrad expression"),
-        (_replace_inside, "Tensor\\.replace|pure lazy tinygrad expression"),
-        (_setitem_inside, "setitem input mutation|pure lazy tinygrad expression"),
+        (
+            _realize_inside,
+            "Tensor\\.realize|lazy tinygrad expression",
+            frozenset({"mid_capture_execution_unsupported"}),
+        ),
+        (
+            _assign_inside,
+            "Tensor\\.assign|lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
+        (
+            _replace_inside,
+            "Tensor\\.replace|pure lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
+        (
+            _setitem_inside,
+            "setitem input mutation|pure lazy tinygrad expression",
+            _EXECUTION_OR_MUTATION_CODES,
+        ),
     ),
 )
 def test_tinygrad_rejects_mid_capture_realize_and_mutation(
     fn: Any,
     pattern: str,
+    codes: frozenset[str],
 ) -> None:
-    """Reject tinygrad execution that can truncate lazy lineage during capture."""
+    """Reject tinygrad execution that can truncate lazy lineage during capture.
 
-    with pytest.raises(BackendUnsupportedError, match=pattern):
+    Assign, replace and setitem may be refused by the realization guard
+    (when tinygrad executes the mutation eagerly) or by the post-call input
+    identity check (when it stays lazy); either code names the case.
+    """
+
+    with pytest.raises(BackendUnsupportedError, match=pattern) as info:
         tl.trace(fn, Tensor([1.0, 2.0]), backend="tinygrad")
+    assert info.value.code in codes
+
+
+def test_tinygrad_refuses_callable_without_tensor_output() -> None:
+    """A traced callable that returns no tinygrad Tensor refuses typed."""
+
+    with pytest.raises(BackendUnsupportedError, match="Tensor output") as info:
+        tl.trace(lambda x: 3.0, Tensor([1.0, 2.0]), backend="tinygrad")
+    assert info.value.code == "tensor_output_required"
+
+
+def test_tinygrad_refuses_inputs_without_a_tinygrad_tensor() -> None:
+    """Positional inputs with no tinygrad Tensor leaf refuse typed."""
+
+    with pytest.raises(BackendUnsupportedError, match="Tensor inputs") as info:
+        TinygradBackend()._assert_tinygrad_inputs((1.0,))
+    assert info.value.code == "tinygrad_input_required"
 
 
 def test_tinygrad_rejects_tinyjit_callable() -> None:
@@ -560,8 +647,9 @@ def test_tinygrad_rejects_tinyjit_callable() -> None:
         return (x + 1.0).realize()
 
     x = Tensor([1.0, 2.0])
-    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit"):
+    with pytest.raises(BackendUnsupportedError, match="realize|assign|TinyJit") as info:
         tl.trace(jit_block, x, backend="tinygrad")
+    assert info.value.code == "mid_capture_execution_unsupported"
 
 
 @pytest.mark.parametrize(
@@ -592,15 +680,15 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
 
     trace = _trace(save=tl.func("where"))
     saved_ops = list(trace.saved_ops)
-    unsaved_ops = [op for op in trace.layer_list if not op.has_saved_activation]
+    unsaved_ops = [op for op in trace._layer_list if not op.has_saved_activation]
 
     assert saved_ops
     assert {op.func_name for op in saved_ops} == {"where"}
     assert unsaved_ops
     assert all(op.out is None and op.out_ref is None for op in unsaved_ops)
     assert all(op.shape is not None and op.dtype_ref is not None for op in unsaved_ops)
-    assert trace.num_saved_ops == len(saved_ops)
-    assert int(trace.saved_activation_memory) == sum(
+    assert len(trace.saved_ops) == len(saved_ops)
+    assert int(trace.cost.saved_activation_memory) == sum(
         int(op.activation_memory or 0) for op in saved_ops
     )
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
@@ -611,11 +699,11 @@ def test_tinygrad_static_label_save_filters_public_payloads(tmp_path: Path) -> N
     out_entries = [entry for entry in manifest["body_index"] if entry.get("intended_use") == "out"]
     loaded = tl.load(path)
 
-    assert len(out_entries) == trace.num_saved_ops
-    assert loaded.backend == "tinygrad"
-    assert len(list(loaded.saved_ops)) == trace.num_saved_ops
-    assert [op.has_saved_activation for op in loaded.layer_list] == [
-        op.has_saved_activation for op in trace.layer_list
+    assert len(out_entries) == len(trace.saved_ops)
+    assert loaded.provenance.backend == "tinygrad"
+    assert len(list(loaded.saved_ops)) == len(trace.saved_ops)
+    assert [op.has_saved_activation for op in loaded._layer_list] == [
+        op.has_saved_activation for op in trace._layer_list
     ]
     assert loaded.validation_replay_status.reason == "loaded_trace_runtime_capture_stripped"
 
@@ -652,7 +740,7 @@ def test_tinygrad_module_predicate_selects_function_root() -> None:
 
     trace = _trace(save=tl.in_module("self"))
 
-    assert trace.num_saved_ops == len(trace.layer_list)
+    assert len(trace.saved_ops) == len(trace._layer_list)
     assert trace.validate_forward_pass([_tiny_block(Tensor([1.0, -2.0, 3.0]))]) is True
 
 
@@ -682,8 +770,10 @@ def test_tinygrad_derived_grads_match_backward_oracle() -> None:
     oracle_x = Tensor([1.0, -2.0, 3.0])
     _tiny_square_loss(oracle_x).backward()
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx(oracle_x.grad.tolist())
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx(
+        oracle_x.grad.tolist()
+    )
     assert x.grad is None
 
 
@@ -698,7 +788,7 @@ def test_tinygrad_derived_grads_use_loss_fn_for_vector_output() -> None:
         grad_options=GradOptions(loss_fn=_tiny_vector_loss, input_grad_argnums=(0,)),
     )
 
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
     assert x.grad is None
 
 
@@ -730,7 +820,7 @@ def test_tinygrad_derived_grads_restore_preexisting_user_grad() -> None:
 
     assert x.grad is original_grad
     assert x.grad.tolist() == pytest.approx([10.0, 20.0, 30.0])
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
 
 def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
@@ -750,8 +840,10 @@ def test_tinygrad_derived_grads_repeat_without_accumulating_user_grad() -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    assert first.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
-    assert second.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert first.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert second.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx(
+        [2.0, -4.0, 6.0]
+    )
     assert x.grad is None
 
 
@@ -772,10 +864,10 @@ def test_tinygrad_intermediate_derived_grads_match_retained_backward_oracle() ->
     oracle_loss = oracle_scaled.sum()
     oracle_loss.backward()
 
-    hidden_op = next(op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,))
-    scaled_op = [op for op in trace.layer_list if op.layer_type == "mul" and op.shape == (3,)][-1]
+    hidden_op = next(op for op in trace._layer_list if op.type == "mul" and op.shape == (3,))
+    scaled_op = [op for op in trace._layer_list if op.type == "mul" and op.shape == (3,)][-1]
 
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
     assert x.grad is None
     assert len(trace.autograd.intermediate_derived_grads) > 0
     assert hidden_op.derived_grad.tolist() == pytest.approx(oracle_hidden.grad.tolist())
@@ -820,7 +912,7 @@ def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
     trace = tl.trace(_tiny_square_loss, x, backend="tinygrad")
     trace.tinygrad_payload_policy = "audit_only"
 
-    with pytest.raises(BackendUnsupportedError, match="audit-only|derived_grads"):
+    with pytest.raises(BackendUnsupportedError, match="audit-only|derived_grads") as info:
         backend._attach_derived_grads(
             trace=trace,
             model=_tiny_square_loss,
@@ -828,6 +920,7 @@ def test_tinygrad_derived_grads_reject_audit_only_payload_envelope() -> None:
             captured_output=_tiny_square_loss(x),
             grad_options=GradOptions(input_grad_argnums=(0,)),
         )
+    assert info.value.code == "live_payloads_required"
 
 
 def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
@@ -840,21 +933,21 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
         grad_options=GradOptions(input_grad_argnums=(0,)),
     )
 
-    assert trace.backend == "tinygrad"
+    assert trace.provenance.backend == "tinygrad"
     assert trace.validate_forward_pass([_tiny_square_loss(Tensor([1.0, -2.0, 3.0]))]) is True
     assert trace.validation_replay_status.state == "passed"
     assert trace.validation_replay_status.source == "live"
     assert isinstance(trace.summary(), str)
-    assert len(trace.to_pandas()) == len(trace.layer_list)
+    assert len(trace.to_pandas()) == len(trace._layer_list)
     assert trace.modules["self"].address == "self"
-    assert trace.module_identity_mode == "function_root"
-    assert trace.param_source == "none"
+    assert trace.options.module_identity_mode == "function_root"
+    assert trace.provenance.param_source == "none"
     assert list(trace.params.keys()) == []
-    assert trace.has_backward_pass is False
-    assert trace.num_backward_passes == 0
+    assert trace.autograd.has_backward_pass is False
+    assert len(trace.autograd.backward_passes) == 0
     assert trace.autograd.num_backward_edges is None
-    assert set(trace.derived_grads.keys()) == {"inputs.0"}
-    assert trace.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
+    assert set(trace.autograd.derived_grads.keys()) == {"inputs.0"}
+    assert trace.autograd.derived_grads["inputs.0"].grad.tolist() == pytest.approx([2.0, -4.0, 6.0])
 
     outpath = tmp_path / "tinygrad_graph"
     dot = trace.draw(path=str(outpath), vis_save_only=True, file_format="dot")
@@ -863,10 +956,10 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     audit_path = tmp_path / "tinygrad_audit.tlspec"
     trace.save(audit_path, level="audit")
     loaded = tl.load(audit_path)
-    assert loaded.backend == "tinygrad"
-    assert loaded.param_source == "none"
-    assert all(op.out is None for op in loaded.layer_list)
-    assert loaded.derived_grads["inputs.0"].grad is None
+    assert loaded.provenance.backend == "tinygrad"
+    assert loaded.provenance.param_source == "none"
+    assert all(op.out is None for op in loaded._layer_list)
+    assert loaded.autograd.derived_grads["inputs.0"].grad is None
 
     portable_path = tmp_path / "tinygrad_portable.tlspec"
     source_out = trace[trace.output_layers[0]].out
@@ -874,15 +967,15 @@ def test_tinygrad_public_surface_matrix(tmp_path: Path) -> None:
     trace.save(portable_path)
     loaded_portable = tl.load(portable_path)
     loaded_out = loaded_portable[loaded_portable.output_layers[0]].out
-    assert loaded_portable.backend == "tinygrad"
+    assert loaded_portable.provenance.backend == "tinygrad"
     assert getattr(loaded_portable, "payload_load_status") == "loaded_device_best_effort"
     assert isinstance(loaded_out, Tensor)
     assert loaded_out.shape == expected.shape
     assert str(loaded_out.dtype) == str(source_out.dtype)
     np.testing.assert_allclose(loaded_out.numpy(), expected)
     np.testing.assert_allclose(
-        loaded_portable.derived_grads["inputs.0"].grad.numpy(),
-        trace.derived_grads["inputs.0"].grad.numpy(),
+        loaded_portable.autograd.derived_grads["inputs.0"].grad.numpy(),
+        trace.autograd.derived_grads["inputs.0"].grad.numpy(),
     )
 
     loaded_status = loaded_portable.validate_forward_pass(
@@ -914,5 +1007,5 @@ def test_tinygrad_capture_options_does_not_reject_the_whole_object() -> None:
 
     trace = _trace(capture=tl.options.CaptureOptions(keep_orphans=True))
 
-    assert trace.backend == "tinygrad"
-    assert trace.num_ops > 0
+    assert trace.provenance.backend == "tinygrad"
+    assert trace._num_ops > 0

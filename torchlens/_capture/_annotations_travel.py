@@ -18,7 +18,7 @@ policy dimension); this is the sibling registry for the TRAVEL dimension.
 THE RULE (foldA D6, shed 0): capture-evidence annotations never ride a fresh
 execution. ``path_faithfulness=VERIFIED`` may NEVER coexist with foreign step
 evidence. The seam is the ONE provider settlement finalizer
-(``torchlens._runnable_providers._finalize_provider_run``), which every run
+(``torchlens._runnable.providers._finalize_provider_run``), which every run
 provider -- loaded sparse, live refresh, guarded-fast loaded, guarded-fast
 live -- settles through; the seam file takes a one-line policy call, never
 episode logic. A plain ``Trace.fork()`` is NOT a fresh execution (the fork's
@@ -202,7 +202,7 @@ def scrub_episode_step_stamps(trace: Any) -> int:
     """
 
     cleared = 0
-    for op in getattr(trace, "layer_list", None) or ():
+    for op in trace._layer_list or ():
         if getattr(op, "episode_step", None) is None:
             continue
         try:

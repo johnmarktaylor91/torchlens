@@ -90,7 +90,6 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "annotation_namespace_invalid",
         "annotation_tensor_not_portable",
         "backend_capability_conformance",
-        "backend_error",
         "backward_capture_conflict",
         "backward_pass_filter_invalid",
         "batch_items_invalid",
@@ -105,13 +104,11 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "code_panel_model_collected",
         "code_panel_side_invalid",
         "container_leaf_not_saved",
-        "container_not_reconstructable",
         "container_selector_requires_registry",
         "container_selector_unresolved",
         "container_value_source_invalid",
         "dagua_renderer_not_opted_in",
         "decoded_output_not_classification",
-        "decoded_output_unavailable",
         "fsdp_capture_unsupported",
         "gradient_not_saved",
         "gradient_pass_ambiguous",
@@ -130,12 +127,10 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "link_format_invalid",
         "max_pairs_invalid",
         "metric_name_invalid",
-        "metric_shape_mismatch",
         "metric_tensor_type_invalid",
         "metric_type_invalid",
         "module_call_ambiguous",
         "module_focus_empty",
-        "op_lookup_pass_out_of_range",
         "op_lookup_pass_required",
         "option_group_type_invalid",
         "output_device_invalid",
@@ -536,7 +531,7 @@ def test_every_enum_member_is_reachable_in_source() -> None:
     texts = _iter_python_texts(_PACKAGE_ROOT)
     dead: list[str] = []
     for enum_cls, declaring in (
-        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable.py"),
+        (RunnableErrorCode, _PACKAGE_ROOT / "_runnable/__init__.py"),
         (MergedErrorCode, _PACKAGE_ROOT / "merged" / "_enums.py"),
     ):
         for member in enum_cls:

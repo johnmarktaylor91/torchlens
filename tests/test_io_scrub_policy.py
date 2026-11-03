@@ -22,7 +22,7 @@ from torchlens._data_classes.module import Module, ModuleCall
 from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import Param
 from torchlens._data_classes.trace import Trace
-from torchlens._io.scrub import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
+from torchlens._io._small_raw import _RAW_IMAGE_SENTINEL, _RAW_INPUT_IMAGE_BYTES_LIMIT
 
 
 class _TinyIOModel(nn.Module):
@@ -211,15 +211,15 @@ def test_portable_state_specs_cover_every_live_attribute() -> None:
     live_log = _build_live_log()
     instances = {
         Trace: live_log,
-        Op: next(layer for layer in live_log.layer_list if type(layer) is Op),
-        Layer: next(iter(live_log.layer_logs.values())),
+        Op: next(layer for layer in live_log._layer_list if type(layer) is Op),
+        Layer: next(iter(live_log._layer_logs.values())),
         Module: next(iter(live_log.modules)),
         ModuleCall: next(iter(live_log.modules._pass_dict.values())),
-        Param: next(iter(live_log.param_logs)),
+        Param: next(iter(live_log._param_logs)),
         Buffer: next(iter(live_log.buffers)),
         FuncCallLocation: next(
             frame
-            for layer in live_log.layer_list
+            for layer in live_log._layer_list
             for frame in layer.code_context
             if layer.code_context
         ),
@@ -241,11 +241,11 @@ def _all_record_instances(live_log: Trace) -> list[Any]:
 
     return [
         live_log,
-        *live_log.layer_list,
-        *live_log.layer_logs.values(),
+        *live_log._layer_list,
+        *live_log._layer_logs.values(),
         *live_log.modules,
         *live_log.modules._pass_dict.values(),
-        *live_log.param_logs,
+        *live_log._param_logs,
         *live_log.buffers,
     ]
 
@@ -317,7 +317,7 @@ def test_intervention_ready_accessor_sweep_still_saves(tmp_path: Path) -> None:
     log = trace_fn(
         _TinyIOModel(),
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     _ = log.graph.edges
     for record in _all_record_instances(log):
@@ -401,7 +401,6 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
     out.mkdir(exist_ok=True)
     return {
         "summary": lambda t: t.summary(),
-        "provenance": lambda t: t.provenance(),
         "profile": lambda t: t.profile(),
         "to_pandas": lambda t: t.to_pandas(),
         # Plain draw AND an encoding-channel draw: the channel path is the
@@ -434,7 +433,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "modules_with_facet": lambda t: list(t.modules_with_facet("query")),
         "activations_by_pass": lambda t: t.activations_by_pass(1),
         "activations_by_address": lambda t: t.activations_by_address("linear"),
-        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t.layer_list[0].raw_label),
+        "activation_by_raw_label": lambda t: t.activation_by_raw_label(t._layer_list[0].raw_label),
         # Post-tour sprint additions. All five are pure reads, so they are SWEPT
         # rather than excluded: "analysis populated a cache with no persistence
         # policy" is precisely the draw()-then-save() poison this sweep exists to
@@ -459,7 +458,7 @@ def _trace_method_sweep(tmp_path: Path, sink: Any) -> dict[str, Any]:
         "show": lambda t: t.show(kind="graph", path=str(out / "shown")),
         "draw_backward": lambda t: t.draw_backward(path=str(out / "bwd")),
         "draw_combined": lambda t: t.draw_combined(path=str(out / "cmb")),
-        "animate_ops": lambda t: t.animate_ops(t.layer_list[0].layer_label),
+        "animate_ops": lambda t: t.animate_ops(t._layer_list[0].layer_label),
     }
 
 
@@ -534,13 +533,13 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         Op,
         _op_method_sweep,
         _OP_METHOD_EXCLUSIONS,
-        lambda log: [layer for layer in log.layer_list if type(layer) is Op],
+        lambda log: [layer for layer in log._layer_list if type(layer) is Op],
     ),
     (
         Layer,
         _layer_method_sweep,
         _LAYER_METHOD_EXCLUSIONS,
-        lambda log: list(log.layer_logs.values()),
+        lambda log: list(log._layer_logs.values()),
     ),
     (Module, _module_method_sweep, _MODULE_METHOD_EXCLUSIONS, lambda log: list(log.modules)),
     (
@@ -549,7 +548,7 @@ _METHOD_SWEEP_PLAN: list[tuple[type, Any, dict[str, str], Any]] = [
         _MODULE_CALL_METHOD_EXCLUSIONS,
         lambda log: list(log.modules._pass_dict.values()),
     ),
-    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log.param_logs)),
+    (Param, _param_method_sweep, _PARAM_METHOD_EXCLUSIONS, lambda log: list(log._param_logs)),
     (Buffer, _buffer_method_sweep, _BUFFER_METHOD_EXCLUSIONS, lambda log: list(log.buffers)),
 ]
 
@@ -772,7 +771,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         _NestedStr(),
         [torch.randn(3), {"mode": "fast"}],
         capture=CaptureOptions(
-            intervention_ready=True,
+            replayable=True,
             capture_container_structure=True,
             cache=False,
             save_raw_input=raw_policy,
@@ -785,11 +784,11 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
         trace.save(path, level="runnable")
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    assert metadata["raw_input"] is None
-    assert metadata["raw_output"] is None
+    assert metadata["input"] is None
+    assert metadata["transformed_output"] is None
     loaded = tl.load(path)
-    assert loaded.raw_input is None
-    assert loaded.raw_output is None
+    assert loaded.input is None
+    assert loaded.transformed_output is None
 
 
 def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
@@ -808,7 +807,7 @@ def test_r69_ordinary_analysis_save_retains_raw_values(tmp_path: Path) -> None:
     trace.save(path)
     with (path / "metadata.pkl").open("rb") as handle:
         metadata = pickle.load(handle)
-    raw = metadata["raw_input"]
+    raw = metadata["input"]
     assert isinstance(raw, list) and len(raw) == 2
     assert torch.is_tensor(raw[0])
     assert raw[1] == {"mode": "fast"}
@@ -832,20 +831,20 @@ def test_small_raw_input_pil_round_trips_bounded_image(tmp_path: Path) -> None:
         metadata = pickle.load(handle)
     loaded = tl.load(path)
 
-    raw_image_record = metadata["raw_input"]
+    raw_image_record = metadata["input"]
     assert raw_image_record[_RAW_IMAGE_SENTINEL] is True
     assert isinstance(raw_image_record["data"], bytes)
     assert len(raw_image_record["data"]) <= _RAW_INPUT_IMAGE_BYTES_LIMIT
-    assert loaded.raw_input is not None
-    assert loaded.raw_input.size[0] <= 256
-    assert loaded.raw_input.size[1] <= 256
+    assert loaded.input is not None
+    assert loaded.input.size[0] <= 256
+    assert loaded.input.size[1] <= 256
 
 
 @pytest.mark.smoke
 def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     """N5: a defaultdict ``op_equivalence_classes`` must not crash the scrub.
 
-    ``Trace.op_equivalence_classes`` starts life as ``defaultdict(set)``
+    ``Trace.graph.op_equivalence_classes`` starts life as ``defaultdict(set)``
     (``data_classes/trace.py``); the torch backend's postprocessing always
     reassigns it to a plain ``dict`` before save (``cleanup.py``,
     ``labeling.py``), but the neutral/preview backends (tf, jax, tinygrad,
@@ -865,11 +864,11 @@ def test_defaultdict_op_equivalence_classes_scrub_does_not_raise() -> None:
     groups = collections.defaultdict(set)
     groups["conv2d_param_000002_param_000001"] = {"conv2d_1_1"}
     groups["relu"] = {"relu_2_1"}
-    state: dict[str, Any] = {"op_equivalence_classes": groups}
+    state: dict[str, Any] = {"_graph_op_equivalence_classes": groups}
 
     _scrub_nondeterministic_identities(state)
 
-    rebuilt = state["op_equivalence_classes"]
+    rebuilt = state["_graph_op_equivalence_classes"]
     assert isinstance(rebuilt, collections.defaultdict)
     assert rebuilt.default_factory is set
     # No matching param barcode was registered (no params/ops/layers were

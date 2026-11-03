@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import functools
-import re
-from collections import Counter, OrderedDict
+from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
 
 import torch
 
-from ..errors.episode import BundleRelationError
-from ..intervention._metrics import is_scalar_like, relative_l1, resolve_metric
+from .._utils.facade import refuse_removed_member
 from ..intervention._super.super_logs import (
     SuperBufferAccessor,
     SuperGradFnAccessor,
@@ -27,19 +24,29 @@ from ..intervention._super.super_op import (
     SuperOp,
     SuperOpAccessor,
 )
-from ..intervention._topology.topology import Supergraph, build_supergraph
-from ..intervention.errors import (
-    BaselineUndeterminedError,
-    BundleMemberError,
-)
-from ..intervention.resolver import _resolve_sites
+from ..intervention._topology.topology import Supergraph
 from ..intervention.types import Relationship
-from ._aligned_sites import aligned_site_labels, resolve_aligned_site
+from . import (
+    _aligned_sites,
+    _card,
+    _comparisons,
+    _lookup,
+    _members,
+    _operations,
+    _relation_carriage,
+    _save,
+)
 from ._alternatives import (
     AlternativeCall as AlternativeCall,  # re-export: torchlens.bundle.AlternativeCall
     AlternativeReport as AlternativeReport,  # re-export: torchlens.bundle.AlternativeReport
+    _bundle_add_alternative,
 )
 from ._compare_gate import require_comparable
+from ._comparisons import (
+    _bundle_store_comparison,
+    _bundle_stored_comparison,
+    _bundle_stored_comparison_names,
+)
 
 # Re-exports (redundant aliases): _distance_value is imported from
 # torchlens.bundle by the cert7/cert8 hardening suites; the rest are the
@@ -49,15 +56,16 @@ from ._deltas import (
     _bundle_delta_map as _bundle_delta_map,
     _bundle_norm_delta as _bundle_norm_delta,
     _bundle_output_delta as _bundle_output_delta,
-    _bundle_show_diff as _bundle_show_diff,
     _distance_value as _distance_value,
     _metric_label as _metric_label,
     _resolve_member_name as _resolve_member_name,
     _tensor_field as _tensor_field,
-    dynamic_bundle_methods,
 )
+from ._draw import bundle_draw as _bundle_draw
+from ._labels import AmbiguousLabelError, label_view
 from ._lineage import BundleOperation, MemberEffectTable, mint_bundle_id
-from ._outcome_fold import _fold_member_outcomes
+from ._members import coerce_member_name, parse_members
+from ._outcome_fold import _fold_member_outcomes as _fold_member_outcomes  # re-export
 from ._provenance import (
     WhyReport as WhyReport,  # re-export: torchlens.bundle.WhyReport
     bundle_provenance as _bundle_provenance,
@@ -65,51 +73,26 @@ from ._provenance import (
 )
 from ._relation_carriage import (
     _bundle_derive_episode_status,
+    _bundle_downstream,
     _bundle_relate,
-    settle_relation_rows,
+    _bundle_upstream,
 )
 from ._relations import MemberRelationRow, MemberRelationTable, OpaqueRelationRow
 from ._token_divergence import (
     TokenDivergence as TokenDivergence,  # re-export: torchlens.bundle.TokenDivergence
+    _bundle_token_divergence,
 )
+from ._token_spans import _bundle_token_pairs
 from ._vary import bundle_vary as _bundle_vary
 
 if TYPE_CHECKING:
     from torch import nn
 
     from .._capture.outcome import CaptureOutcome
-    from .._data_classes.op import Op
     from .._data_classes.trace import Trace
-
-
-_OP_LABEL_RE = re.compile(r"^.+_\d+_\d+$")
-_BARE_LAYER_LABEL_RE = re.compile(r"^.+_\d+$")
-_PASS_CALL_RE = re.compile(r"^(.+):(\d+)$")
-_COMMON_PARAM_SUFFIXES = (".weight", ".bias")
-_COMMON_BUFFER_SUFFIXES = (".running_mean", ".running_var", ".num_batches_tracked")
-_BUNDLE_ACCESSOR_NAMES = (
-    "ops",
-    "layers",
-    "modules",
-    "params",
-    "buffers",
-    "grad_fns",
-    "module_calls",
-    "grad_fn_calls",
-)
-
-
-def _member_outcome_token(member: Any) -> str:
-    """One member's settled outcome-status token, degrading to ``unknown``."""
-
-    from .._utils.fail_open import fail_open
-
-    outcome = fail_open(lambda: getattr(member, "outcome", None), lambda _error: None)
-    return getattr(getattr(outcome, "status", None), "value", None) or "unknown"
-
-
-class AmbiguousLabelError(KeyError):
-    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
+    from .._literals import VisDirectionLiteral
+    from ._draw import BundleGraphLiteral
+    from ._token_spans import TokenPairs
 
 
 class _BundleAccessorClassView:
@@ -192,18 +175,9 @@ class _BundleStructuralProperty:
         return self._getter(instance)
 
 
-#: Per-kind name readers behind ``bundle.<kind>.shared`` / ``bundle.<kind>.divergent``.
-_KIND_NAME_GETTERS: dict[str, Callable[[Any], Any]] = {
-    "ops": lambda trace: getattr(trace, "op_labels", ()),
-    "layers": lambda trace: getattr(trace, "layer_labels", ()),
-    "modules": lambda trace: trace.modules.keys(),
-    "params": lambda trace: trace.params.keys(),
-    "buffers": lambda trace: trace.buffers.keys(),
-    "grad_fns": lambda trace: trace.autograd.grad_fns.keys(),
-}
-
-
 #: Public Bundle methods removed by the 2026-10-01 shim removal (no alias kept).
+
+
 _REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
     "replay": "use bundle.do(site, edit) -- do replays every member",
     "rerun": "use bundle.run(model, x) -- Bundle.rerun was renamed",
@@ -217,6 +191,11 @@ _REMOVED_BUNDLE_MEMBERS: dict[str, str] = {
     "help": "print(bundle) shows the bundle card",
     "cluster": "there is no bundle clustering; compute it over bundle.map(fn)",
     "member_construction": "read bundle.history for how members entered the bundle",
+    "show_diff": "use bundle.draw(graph='diff', members=(a, b), metric=...)",
+    "delta_map": "use bundle.compare(a, b, metric=..., on=...) per pair, bundle.rank_changes() across members",
+    "norm_delta": "use bundle.compare(baseline, member, metric='relative_l2')",
+    "output_delta": "use bundle.compare(member, target, metric=...) and read the output sites",
+    "aligned_pairs": "use bundle.supergraph, the structural alignment across members",
 }
 
 
@@ -284,7 +263,7 @@ class Bundle:
     ) -> None:
         """Initialize a flat bundle without eagerly building a supergraph."""
 
-        parsed = self._parse_members(members, names=names)
+        parsed = parse_members(members, names=names)
         self._members: OrderedDict[str, Trace] = OrderedDict(parsed)
         self._supergraph: Supergraph | None = None
         self._capacity: int | None = None
@@ -346,11 +325,7 @@ class Bundle:
     def _outcome_distribution(self) -> dict[str, int]:
         """Count member capture outcomes by settled status (F10)."""
 
-        counts: dict[str, int] = {}
-        for member in self._members.values():
-            token = _member_outcome_token(member)
-            counts[token] = counts.get(token, 0) + 1
-        return counts
+        return _card.outcome_distribution(self)
 
     def __repr__(self) -> str:
         """One-line bundle card: members, baseline, outcome distribution.
@@ -362,49 +337,12 @@ class Bundle:
         (lovely bug 17).
         """
 
-        distribution = self._outcome_distribution()
-        outcome_note = ""
-        if any(token != "complete" for token in distribution):
-            pairs = ", ".join(f"{token}={count}" for token, count in sorted(distribution.items()))
-            outcome_note = f", outcomes=({pairs})"
-        base = (
-            f"Bundle(n_members={len(self)}, names={self.names!r}, "
-            f"baseline={self._baseline_name!r}, "
-            f"structurally_consistent={self.is_structurally_consistent}"
-            f"{outcome_note})"
-        )
-        if not self._effect_tables:
-            return base
-        # D3c: silent truncation reading as "covered everything" is the
-        # failure mode this sprint keeps finding — an engine-built bundle
-        # states its candidate accounting and policy in its own repr.
-        table = next(reversed(self._effect_tables.values()))
-        counts: dict[str, int] = {}
-        for row in table.rows:
-            if row.candidate_id == "__baseline__":
-                continue
-            counts[row.status] = counts.get(row.status, 0) + 1
-        attempted = sum(counts.values())
-        summary = ", ".join(f"{status}={count}" for status, count in sorted(counts.items()))
-        return (
-            f"{base[:-1]}, effects=[attempted={attempted}, {summary}, "
-            f"retain={table.retain_policy}, lane={table.lane}])"
-        )
+        return _card.bundle_repr(self)
 
     def __str__(self) -> str:
         """Bounded bundle view: repr line + per-member one-liners (F10)."""
 
-        from ..stats._envelope import COLLECTION_MAX_CHILDREN
-
-        lines = [self.__repr__()]
-        names = list(self.names)
-        for name in names[:COLLECTION_MAX_CHILDREN]:
-            member = self._members[name]
-            marker = " (baseline)" if name == self._baseline_name else ""
-            lines.append(f"  {name}{marker}: {member!r}")
-        if len(names) > COLLECTION_MAX_CHILDREN:
-            lines.append(f"  ... {len(names) - COLLECTION_MAX_CHILDREN} more members")
-        return "\n".join(lines)
+        return _card.bundle_str(self)
 
     def __getitem__(self, name: str) -> Trace:
         """Return a member by name.
@@ -444,11 +382,7 @@ class Bundle:
             Derived worst-of-members fold over the current members.
         """
 
-        from .._capture.outcome import outcome_for
-
-        return _fold_member_outcomes(
-            [(name, outcome_for(member)) for name, member in self._members.items()]
-        )
+        return _card.bundle_outcome(self)
 
     def save(
         self,
@@ -470,46 +404,19 @@ class Bundle:
             Whether an existing destination may be replaced.
         """
 
-        from .._io.tlspec import _TlSpecWriter
-
-        _TlSpecWriter.write_bundle(
-            bundle=self,
-            path=path,
-            save_level=level,
-            overwrite=overwrite,
-        )
+        _save.save_bundle(self, path, level=level, overwrite=overwrite)
 
     def __getattr__(self, name: str) -> Any:
-        """Return budget-preserving dynamic bundle helper methods.
-
-        Parameters
-        ----------
-        name:
-            Requested attribute name.
-
-        Returns
-        -------
-        Any
-            Callable helper bound to this bundle.
+        """Refuse a removed Bundle member with the typed redirect naming its replacement.
 
         Raises
         ------
         AttributeError
-            If ``name`` is not a dynamic bundle helper.
+            If ``name`` is not a Bundle attribute.
         """
 
-        helper = dynamic_bundle_methods().get(name)
-        if helper is None:
-            from .._utils.facade import refuse_removed_member
-
-            refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
-            raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
-        return helper.__get__(self, type(self))
-
-    def __dir__(self) -> list[str]:
-        """List the class attributes plus the dynamic helper-table methods."""
-
-        return sorted({*super().__dir__(), *dynamic_bundle_methods()})
+        refuse_removed_member("Bundle", name, _REMOVED_BUNDLE_MEMBERS)
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {name!r}")
 
     @property
     def names(self) -> list[str]:
@@ -576,8 +483,7 @@ class Bundle:
             Whether every member has an equal ``graph_shape_hash`` value.
         """
 
-        hashes = {getattr(member, "graph_shape_hash", None) for member in self._members.values()}
-        return len(hashes) == 1
+        return _lookup.is_structurally_consistent(self)
 
     def _kind_names(self, kind: str, *, shared: bool) -> list[str]:
         """Return the names of one kind present in every member, or in some but not all.
@@ -597,8 +503,7 @@ class Bundle:
             The names. Read through ``bundle.<kind>.shared`` and ``bundle.<kind>.divergent``.
         """
 
-        getter = _KIND_NAME_GETTERS[kind]
-        return self._shared(getter) if shared else self._divergent(getter)
+        return _members.kind_names(self, kind, shared=shared)
 
     @property
     def id(self) -> str:
@@ -639,17 +544,9 @@ class Bundle:
         one container (foldB F03 brief-delta).
         """
 
-        previous = self._operations[-1] if self._operations else None
-        row = BundleOperation(
-            operation_id=mint_bundle_id(),
-            seq=(previous.seq + 1) if previous is not None else 1,
-            kind=kind,
-            member_names=tuple(member_names),
-            params=dict(params or {}),
-            prev_operation_digest=(previous.operation_digest if previous is not None else None),
+        return _operations.record_bundle_operation(
+            self, kind, member_names=member_names, params=params
         )
-        self._operations.append(row)
-        return row
 
     @property
     def baseline_name(self) -> str | None:
@@ -690,6 +587,75 @@ class Bundle:
     # is untouched forever.
     vary = _bundle_vary
 
+    def upstream(self, name: str | Trace) -> tuple[str, ...]:
+        """Return the members ``name`` transitively came after (what fed it), nearest first.
+
+        Walks the ordering relation kinds (``fed_by``, ``selected_by``,
+        ``successor_of``, ``forked_from``, ``escalates``) from the later
+        member to the earlier ones.
+        """
+
+        return _bundle_upstream(self, name)
+
+    def downstream(self, name: str | Trace) -> tuple[str, ...]:
+        """Return the members that transitively came after ``name`` (what it fed), nearest first.
+
+        Walks the same ordering relation kinds as :meth:`upstream` (``fed_by``,
+        ``selected_by``, ``successor_of``, ``forked_from``, ``escalates``) from
+        the earlier member to the later ones; the inverse of :meth:`upstream`.
+        """
+
+        return _bundle_downstream(self, name)
+
+    def token_pairs(self, reader: str | Trace, source: str | Trace) -> TokenPairs:
+        """Return the verified one-to-one token positions of ``reader`` fed by ``source``.
+
+        Parameters
+        ----------
+        reader:
+            The later member (name or Trace) whose prompt holds the fed text.
+        source:
+            The earlier member (name or Trace) that produced that text.
+        """
+
+        return _bundle_token_pairs(self, reader, source)
+
+    def token_divergence(self, original: str | Trace, rerun: str | Trace) -> TokenDivergence:
+        """Return where two members' prompts and completions part, by exact token ids.
+
+        Parameters
+        ----------
+        original:
+            The member (name or Trace) from the original run, the reference.
+        rerun:
+            The member (name or Trace) from the re-run compared against it,
+            typically its copy from a steered second run (``"cf_critique"``).
+        """
+
+        return _bundle_token_divergence(self, original, rerun)
+
+    def add_alternative(
+        self,
+        second_run: Bundle,
+        *,
+        steered: str | Sequence[str],
+        prefix: str = "cf_",
+    ) -> AlternativeReport:
+        """Merge a re-run of the harness with some calls steered; report what changed.
+
+        Parameters
+        ----------
+        second_run:
+            The bundle the same harness built with the ``steered`` calls captured
+            under their specs.
+        steered:
+            The steered call name, or a sequence of names.
+        prefix:
+            Prefix naming each second-run member's copy (default ``"cf_"``).
+        """
+
+        return _bundle_add_alternative(self, second_run, steered=steered, prefix=prefix)
+
     def effects(self, history_id: str | None = None) -> Any:
         """Serve the stored per-candidate effect table (F03 item 8).
 
@@ -698,24 +664,7 @@ class Bundle:
         id; this read never recomputes it.
         """
 
-        from ..experiment._engine import bundle_effects
-
-        return bundle_effects(self, history_id)
-
-    def measure_members(
-        self, *, metric: Callable[[Trace], Any], order: str = "member"
-    ) -> dict[str, Any]:
-        """Recompute a NEW metric over members that still exist — and say so.
-
-        Released candidates are reported ``unmeasured``, never silently
-        re-scored. ``order="chain"`` also orders the members by the bundle's
-        validated operation chain; members no operation recorded are listed
-        apart as ``unchained``, never placed by a guessed position.
-        """
-
-        from ..experiment._engine import bundle_measure_members
-
-        return bundle_measure_members(self, metric=metric, order=order)
+        return _operations.effects_table(self, history_id)
 
     @property
     def preserved_sections(self) -> dict[str, Any]:
@@ -769,26 +718,8 @@ class Bundle:
             ``validate_against_members``.
         """
 
-        rows: list[MemberRelationRow | OpaqueRelationRow] = list(existing_rows)
-        for row in new_rows:
-            if isinstance(row, (MemberRelationRow, OpaqueRelationRow)):
-                rows.append(row)
-                continue
-            try:
-                rows.append(MemberRelationRow.from_payload(row))
-            except BundleRelationError:
-                # Distinct-code refusals (evidence over budget) keep their
-                # own code; re-wrapping would flatten them to schema_invalid.
-                raise
-            except (TypeError, ValueError) as exc:
-                raise BundleRelationError(
-                    f"Bundle member-relation row is outside the closed S6 schema: {exc}",
-                    code="bundle_relation_schema_invalid",
-                ) from exc
-        table = MemberRelationTable(rows)
-        table.validate_against_members(self._members.keys())
-        return settle_relation_rows(
-            table, self._members, first_new=len(existing_rows), assess_unclaimed=assess_unclaimed
+        return _relation_carriage.build_relation_table(
+            self, existing_rows, new_rows, assess_unclaimed=assess_unclaimed
         )
 
     def _relation_table_for_removal(
@@ -817,25 +748,8 @@ class Bundle:
             (silent orphaning is forbidden).
         """
 
-        removed = set(removed_names)
-        related = sorted({name for name in removed if self._member_relations.rows_naming(name)})
-        if not related:
-            return None
-        if not cascade_relations:
-            raise BundleRelationError(
-                f"Bundle.{operation} would orphan member-relation rows naming "
-                f"{related}; pass cascade_relations=True to drop those rows "
-                "explicitly, or remove the relations first (S6 R5).",
-                code="bundle_member_has_relations",
-                operation=operation,
-                related_members=related,
-            )
-        return MemberRelationTable(
-            tuple(
-                row
-                for row in self._member_relations.rows
-                if not (set(row.named_members()) & removed)
-            )
+        return _relation_carriage.relation_table_for_removal(
+            self, removed_names, cascade_relations=cascade_relations, operation=operation
         )
 
     @property
@@ -885,305 +799,17 @@ class Bundle:
             If a selector-like site fails to resolve in some member.
         """
 
-        view = self._label_view(site) if isinstance(site, str) else self._site_view(site)
-        names = list(getattr(view, "members", {}))
-        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
-        view._compare_gate = functools.partial(self._require_comparable, "at.compare", pairs)
-        return view
+        return _lookup.bundle_at(self, site)
 
     def _site_view(self, site: Any) -> SuperOp:
         """Resolve a selector-like site to one op per member (the model-floor gated read)."""
 
-        names = list(self._members)
-        pairs = [(left, right) for index, left in enumerate(names) for right in names[index + 1 :]]
-        self._require_comparable("at", pairs=pairs)
-        self._ensure_supergraph()
-        layer_members: dict[str, Op] = {}
-        failures: dict[str, str] = {}
-        for name in names:
-            try:
-                table = _resolve_sites(self._members[name], site, max_fanout=1)
-                layer_members[name] = cast("Op", table.first())
-            except Exception as exc:  # noqa: BLE001 - rewrapped with member context
-                failures[name] = str(exc)
-        if failures:
-            detail = "; ".join(f"{name}: {message}" for name, message in failures.items())
-            raise BundleMemberError(f"site {site!r} failed to resolve for bundle members: {detail}")
-        return SuperOp.from_members(site, layer_members)
+        return _aligned_sites.site_view(self, site)
 
     def _label_view(self, site: str) -> Any:
         """Return the Super view for a label from any Bundle accessor family."""
 
-        preferred_names = self._preferred_accessor_names(site)
-        for accessor_name in preferred_names:
-            try:
-                return self._accessor_by_name(accessor_name)[site]
-            except KeyError:
-                continue
-
-        remaining_names = [
-            accessor_name
-            for accessor_name in _BUNDLE_ACCESSOR_NAMES
-            if accessor_name not in preferred_names
-        ]
-        matches = self._matching_accessor_names(site, remaining_names)
-        if len(matches) == 1:
-            return self._accessor_by_name(matches[0])[site]
-        if len(matches) > 1:
-            raise AmbiguousLabelError(self._ambiguous_label_message(site, matches))
-        raise KeyError(self._missing_label_message(site))
-
-    def _accessor_by_name(self, accessor_name: str) -> Any:
-        """Return one label accessor by public Bundle attribute name.
-
-        Parameters
-        ----------
-        accessor_name:
-            Accessor attribute name.
-
-        Returns
-        -------
-        Any
-            Accessor object.
-        """
-
-        return getattr(self, accessor_name)
-
-    def _preferred_accessor_names(self, label: str) -> list[str]:
-        """Return format-preferred accessors for ``label`` in dispatch order.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        list[str]
-            Accessor names to try before key-presence fallback.
-        """
-
-        call_base = self._pass_call_base(label)
-        if call_base is not None:
-            if self._looks_like_pass_qualified_op_label(call_base):
-                return ["ops"]
-            if self._looks_like_grad_fn_label(call_base):
-                return ["grad_fn_calls"]
-            return ["module_calls"]
-
-        if self._looks_like_pass_qualified_op_label(label):
-            return ["ops"]
-        if self._looks_like_bare_layer_label(label):
-            return ["layers"]
-        if self._looks_like_module_address(label):
-            return ["modules"]
-        if self._looks_like_param_name(label):
-            return ["params"]
-        if self._looks_like_buffer_name(label):
-            return ["buffers"]
-        if self._looks_like_grad_fn_label(label):
-            return ["grad_fns"]
-        return []
-
-    def _matching_accessor_names(
-        self,
-        label: str,
-        accessor_names: Sequence[str],
-    ) -> list[str]:
-        """Return accessors that contain ``label``.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-        accessor_names:
-            Accessor names to inspect.
-
-        Returns
-        -------
-        list[str]
-            Public accessor names where ``label`` resolves.
-        """
-
-        matches: list[str] = []
-        for accessor_name in accessor_names:
-            accessor = self._accessor_by_name(accessor_name)
-            if label in accessor:
-                matches.append(accessor_name)
-        return matches
-
-    def _missing_label_message(self, label: str) -> str:
-        """Build a missing-label error message with accessor suggestions.
-
-        Parameters
-        ----------
-        label:
-            Missing label.
-
-        Returns
-        -------
-        str
-            Error message.
-        """
-
-        suggestions: list[str] = []
-        seen: set[str] = set()
-        for accessor_name in _BUNDLE_ACCESSOR_NAMES:
-            accessor = self._accessor_by_name(accessor_name)
-            for suggestion in accessor._suggest(label):
-                if suggestion not in seen:
-                    seen.add(suggestion)
-                    suggestions.append(suggestion)
-        if suggestions:
-            suggestion_str = ", ".join(repr(suggestion) for suggestion in suggestions)
-            return f"Label {label!r} not found. Did you mean {suggestion_str}?"
-        return f"Label {label!r} not found."
-
-    def _ambiguous_label_message(self, label: str, matches: Sequence[str]) -> str:
-        """Build an ambiguity error message for ``Bundle.at``.
-
-        Parameters
-        ----------
-        label:
-            Ambiguous label.
-        matches:
-            Public accessor names that contain the label.
-
-        Returns
-        -------
-        str
-            Error message.
-        """
-
-        match_str = " and ".join(f"bundle.{name}" for name in matches)
-        disambiguators = " or ".join(f"bundle.{name}[{label!r}]" for name in matches)
-        return f"Label {label!r} matches {match_str}; use {disambiguators} explicitly."
-
-    @staticmethod
-    def _pass_call_base(label: str) -> str | None:
-        """Return the base label for ``base:N`` call labels.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        str | None
-            Base label when ``label`` has a numeric call suffix.
-        """
-
-        match = _PASS_CALL_RE.match(label)
-        return match.group(1) if match is not None else None
-
-    @staticmethod
-    def _looks_like_pass_qualified_op_label(label: str) -> bool:
-        """Return whether ``label`` has pass-qualified op label shape.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label resembles ``op_type_group_pass``.
-        """
-
-        return _OP_LABEL_RE.match(label) is not None
-
-    @staticmethod
-    def _looks_like_bare_layer_label(label: str) -> bool:
-        """Return whether ``label`` has aggregate layer label shape.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label resembles ``op_type_group`` but not an op label.
-        """
-
-        return _BARE_LAYER_LABEL_RE.match(label) is not None and _OP_LABEL_RE.match(label) is None
-
-    @staticmethod
-    def _looks_like_module_address(label: str) -> bool:
-        """Return whether ``label`` resembles a module address.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label has dotted or numeric module-address shape.
-        """
-
-        if ":" in label:
-            return False
-        if label.isdecimal():
-            return True
-        return "." in label and not (
-            label.endswith(_COMMON_PARAM_SUFFIXES) or label.endswith(_COMMON_BUFFER_SUFFIXES)
-        )
-
-    @staticmethod
-    def _looks_like_param_name(label: str) -> bool:
-        """Return whether ``label`` resembles a parameter path.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label has a common parameter suffix.
-        """
-
-        return label.endswith(_COMMON_PARAM_SUFFIXES)
-
-    @staticmethod
-    def _looks_like_buffer_name(label: str) -> bool:
-        """Return whether ``label`` resembles a buffer path.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label has a common buffer suffix.
-        """
-
-        return label.endswith(_COMMON_BUFFER_SUFFIXES)
-
-    @staticmethod
-    def _looks_like_grad_fn_label(label: str) -> bool:
-        """Return whether ``label`` resembles a grad-fn label.
-
-        Parameters
-        ----------
-        label:
-            Candidate label.
-
-        Returns
-        -------
-        bool
-            Whether the label has TorchLens backward grad-fn label shape.
-        """
-
-        return "_back_" in label
+        return label_view(self, site)
 
     def add(
         self,
@@ -1205,21 +831,7 @@ class Bundle:
             This bundle.
         """
 
-        logs = self._coerce_trace_list(traces, arg_name="log_or_logs")
-        member_names = self._coerce_optional_name_list(names, count=len(logs))
-        for index, log in enumerate(logs):
-            member_name = self._derive_name(
-                log,
-                name=member_names[index],
-                index=len(self._members),
-            )
-            if member_name in self._members:
-                raise ValueError(f"Bundle member names must be unique; duplicate {member_name!r}.")
-            self._members[member_name] = log
-            self._member_construction[member_name] = {"origin": "added"}
-        self._supergraph = None
-        self._enforce_capacity()
-        return self
+        return _members.add_members(self, traces, names)
 
     def remove(
         self,
@@ -1250,25 +862,7 @@ class Bundle:
             relation rows and ``cascade_relations`` is ``False`` (S6 R5).
         """
 
-        is_many = self._is_list_like(names)
-        names = self._coerce_member_name_list(names)
-        unknown = [name for name in names if name not in self._members]
-        if unknown:
-            raise KeyError(f"Unknown bundle member(s): {sorted(unknown)}")
-        new_table = self._relation_table_for_removal(
-            names, cascade_relations=cascade_relations, operation="remove"
-        )
-        removed: list[Trace] = []
-        for name in names:
-            log = self._members.pop(name)
-            removed.append(log)
-            self._member_construction.pop(name, None)
-            if self._baseline_name == name:
-                self._baseline_name = None
-        if new_table is not None:
-            self._member_relations = new_table
-        self._supergraph = None
-        return removed if is_many else removed[0]
+        return _members.remove_members(self, names, cascade_relations=cascade_relations)
 
     def remove_except(
         self,
@@ -1299,22 +893,7 @@ class Bundle:
             relation rows and ``cascade_relations`` is ``False`` (S6 R5).
         """
 
-        keep_set = set(self._coerce_member_name_list(keep))
-        unknown = keep_set - set(self._members)
-        if unknown:
-            raise KeyError(f"Unknown bundle member(s): {sorted(unknown)}")
-        removed_names = [name for name in self._members if name not in keep_set]
-        new_table = self._relation_table_for_removal(
-            removed_names, cascade_relations=cascade_relations, operation="remove_except"
-        )
-        self._members = OrderedDict(
-            (name, log) for name, log in self._members.items() if name in keep_set
-        )
-        if self._baseline_name is not None and self._baseline_name not in self._members:
-            self._baseline_name = None
-        if new_table is not None:
-            self._member_relations = new_table
-        self._supergraph = None
+        _members.remove_except(self, keep, cascade_relations=cascade_relations)
 
     @property
     def capacity(self) -> int | None:
@@ -1338,13 +917,7 @@ class Bundle:
             Maximum member count, or ``None`` to remove the cap.
         """
 
-        if n is None:
-            self._capacity = None
-            return
-        if n < 1:
-            raise ValueError("Bundle capacity must be at least 1.")
-        self._capacity = n
-        self._enforce_capacity()
+        _members.set_capacity(self, n)
 
     def clear(self, *, cascade_relations: bool = False) -> None:
         """Remove all non-baseline members.
@@ -1368,25 +941,7 @@ class Bundle:
             relation rows and ``cascade_relations`` is ``False`` (S6 R5).
         """
 
-        keep_baseline = self._baseline_name is not None and self._baseline_name in self._members
-        removed_names = [
-            name for name in self._members if not (keep_baseline and name == self._baseline_name)
-        ]
-        new_table = self._relation_table_for_removal(
-            removed_names, cascade_relations=cascade_relations, operation="clear"
-        )
-        if keep_baseline:
-            baseline_name = cast("str", self._baseline_name)
-            baseline = self._members[baseline_name]
-            self._members = OrderedDict([(baseline_name, baseline)])
-        else:
-            self._members.clear()
-            self._baseline_name = None
-        for removed_name in removed_names:
-            self._member_construction.pop(removed_name, None)
-        if new_table is not None:
-            self._member_relations = new_table
-        self._supergraph = None
+        _members.clear_members(self, cascade_relations=cascade_relations)
 
     def do(self, *args: Any, **kwargs: Any) -> Bundle:
         """Apply ``Trace.do`` to every member.
@@ -1397,9 +952,7 @@ class Bundle:
             This bundle.
         """
 
-        for member in self._members.values():
-            member.do(*args, **kwargs)
-        return self
+        return _operations.bundle_do(self, *args, **kwargs)
 
     def fork(self, name: str | None = None) -> Bundle:
         """Fork all member logs into a new bundle.
@@ -1423,37 +976,7 @@ class Bundle:
             New bundle containing forked logs.
         """
 
-        forked: OrderedDict[str, Trace] = OrderedDict()
-        for member_name, member in self._members.items():
-            fork_name = f"{name}_{member_name}" if name is not None else None
-            forked[member_name] = member.fork(name=fork_name)
-        child = Bundle(
-            forked,
-            baseline=self._baseline_name,
-            relations=self._member_relations.rows,
-            preserved_sections=self._preserved_sections,
-        )
-        child._forked_from_bundle_id = self._bundle_id
-        self._record_bundle_operation(
-            "fork",
-            member_names=tuple(forked),
-            params={"child_bundle_id": child._bundle_id},
-        )
-        child_row = child._record_bundle_operation(
-            "fork",
-            member_names=tuple(forked),
-            params={"source_bundle_id": self._bundle_id},
-        )
-        child._member_construction = {
-            member_name: {
-                "origin": "forked",
-                "source_bundle_id": self._bundle_id,
-                "source_member": member_name,
-                "operation_id": child_row.operation_id,
-            }
-            for member_name in forked
-        }
-        return child
+        return _operations.bundle_fork(self, name)
 
     def run(self, model: nn.Module, x: Any = None, **kwargs: Any) -> Bundle:
         """Run all member logs with a supplied model and input.
@@ -1471,33 +994,29 @@ class Bundle:
             This bundle.
         """
 
-        for member in self._members.values():
-            member.run(model, x, **kwargs)
-        return self
+        return _operations.bundle_run(self, model, x, **kwargs)
 
     def map(self, fn: Callable[..., Any]) -> dict[str, Any]:
-        """Apply a function independently to each member.
+        """Apply a function independently to each member; released members read ``"unmeasured"``.
 
         Parameters
         ----------
         fn:
             Callable receiving one member log. A callable that accepts a
             second positional parameter additionally receives the member's
-            NAME (the per-member idiom the ledger memo item 0 unblocks:
-            ``bundle.map(lambda log, name: ...)``); single-parameter
+            NAME (``bundle.map(lambda log, name: ...)``); single-parameter
             callables keep the historical contract unchanged.
 
         Returns
         -------
         dict[str, Any]
-            Results keyed by member name.
+            Results keyed by member name. A candidate the effect table
+            records that the bundle no longer holds (released, refused or
+            failed) is keyed too, with the value ``"unmeasured"``: it is
+            never silently re-scored and never silently dropped.
         """
 
-        pass_name = self._accepts_member_name(fn)
-        return {
-            name: (fn(member, name) if pass_name else fn(member))
-            for name, member in self._members.items()
-        }
+        return _operations.bundle_map(self, fn)
 
     @staticmethod
     def _accepts_member_name(fn: Callable[..., Any]) -> bool:
@@ -1508,23 +1027,7 @@ class Bundle:
         call that would raise mid-iteration.
         """
 
-        import inspect
-
-        try:
-            signature = inspect.signature(fn)
-        except (TypeError, ValueError):
-            return False
-        positional_kinds = (
-            inspect.Parameter.POSITIONAL_ONLY,
-            inspect.Parameter.POSITIONAL_OR_KEYWORD,
-        )
-        count = 0
-        for parameter in signature.parameters.values():
-            if parameter.kind is inspect.Parameter.VAR_POSITIONAL:
-                return True
-            if parameter.kind in positional_kinds:
-                count += 1
-        return count >= 2
+        return _operations.accepts_member_name(fn)
 
     def show(self, kind: str | None = None, **kwargs: Any) -> dict[str, str | None]:
         """Render each bundle member graph as a member-keyed strip.
@@ -1546,22 +1049,65 @@ class Bundle:
             rendering occurs, or ``None`` for skipped ``vis_mode='none'`` calls.
         """
 
-        if kwargs.get("vis_mode") == "none":
-            return dict.fromkeys(self._members)
+        return _operations.bundle_show(self, kind, **kwargs)
 
-        base_outpath = kwargs.get("path")
-        results: dict[str, str | None] = {}
-        for name, member in self._members.items():
-            member_kwargs = dict(kwargs)
-            if isinstance(base_outpath, str):
-                member_kwargs["path"] = f"{base_outpath}_{name}"
-            if kind == "repr":
-                results[name] = repr(member)
-            elif kind == "html":
-                results[name] = member._repr_html_()
-            else:
-                results[name] = member.draw(**member_kwargs)
-        return results
+    def draw(
+        self,
+        path: str | None = None,
+        *,
+        graph: BundleGraphLiteral = "forward",
+        nodes: Literal["ops", "members"] = "ops",
+        rolled: bool = False,
+        direction: VisDirectionLiteral | None = None,
+        theme: str | None = None,
+        show_legend: bool | None = None,
+        file_format: str | None = None,
+        open_viewer: bool = False,
+        graph_overrides: dict[str, Any] | None = None,
+        node_overrides: dict[str, Any] | None = None,
+        edge_overrides: dict[tuple[str, str], Any] | None = None,
+        members: tuple[str | Trace, str | Trace] | None = None,
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+        on: Literal["out", "grad"] = "out",
+    ) -> str:
+        """Draw the bundle as one picture and return its DOT source.
+
+        ``graph`` picks the picture: ``"forward"`` (default), ``"backward"`` or
+        ``"combined"`` draw the bundle's union op graph for that pass, and ``"diff"``
+        draws the ``members`` pair (default: the baseline and the next member) side by
+        side with their aligned sites coloured by ``metric`` distance over the ``on``
+        tensor field (``"out"`` or ``"grad"``). ``nodes="members"`` draws one node per
+        member and one edge per relation row (``graph`` must stay ``"forward"``);
+        ``rolled`` draws the rolled (per-layer) graph instead of every op.
+
+        ``path`` is the output file (a recognised extension picks the format); a bare
+        call writes a collision-safe ``bundle_modelgraph`` file (``bundle_diff`` for
+        ``graph="diff"``) in the working directory. ``file_format`` defaults to
+        ``"pdf"`` (``"svg"`` for diff), ``theme`` to ``"torchlens"`` (``"paper"`` for
+        diff; the names ``Trace.draw`` takes) and ``direction`` to ``"bottomup"``.
+        ``show_legend=True`` draws the key under the header; ``open_viewer`` opens the
+        rendered file. ``graph_overrides``, ``node_overrides`` (keyed by op label, or
+        member name under ``nodes="members"``) and ``edge_overrides`` (keyed by
+        ``(source, target)`` labels) pass Graphviz attributes through.
+        """
+        return _bundle_draw(
+            self,
+            path,
+            graph=graph,
+            nodes=nodes,
+            rolled=rolled,
+            direction=direction,
+            theme=theme,
+            show_legend=show_legend,
+            file_format=file_format,
+            open_viewer=open_viewer,
+            graph_overrides=graph_overrides,
+            node_overrides=node_overrides,
+            edge_overrides=edge_overrides,
+            members=members,
+            metric=metric,
+            on=on,
+        )
 
     def rank_changes(
         self,
@@ -1596,56 +1142,7 @@ class Bundle:
             ``(site_label, score)`` rows sorted descending.
         """
 
-        baseline_name = self._baseline_or_raise(baseline)
-        # SITE AXIS (ledger memo D3f): most_changed answers "WHERE did the
-        # bundle diverge" — per site it AVERAGES the metric from the baseline
-        # to every other member. The member axis ("WHICH candidate mattered")
-        # lives on the effect table, where most_changed is unambiguous.
-        # top_k caps the RETURNED rows after every site is scored (a display
-        # cap, never a compute bound or a coverage claim).
-        # Operand scoping (A-GATE item 3): most_changed compares baseline
-        # against every other member, never other members against each other,
-        # so only baseline pairs must pass the comparison gate. Site reads
-        # across all members still run the at() model-floor gate.
-        self._require_comparable(
-            "most_changed",
-            pairs=[(baseline_name, name) for name in self._members if name != baseline_name],
-        )
-        baseline_log = self._members[baseline_name]
-        metric_fn = resolve_metric(metric)
-        scored: list[tuple[str, float]] = []
-        baseline_sites = list(getattr(baseline_log, "layer_list", []))
-        if baseline_sites:  # the at() model-floor gate, once instead of per site
-            names = list(self._members)
-            pairs = [(a, b) for i, a in enumerate(names) for b in names[i + 1 :]]
-            self._require_comparable("at", pairs=pairs)
-        aligned = aligned_site_labels(self._ensure_supergraph(), baseline_name)
-        for site in baseline_sites:
-            members = resolve_aligned_site(self._members, str(site.layer_label), aligned)
-            if members is None:
-                continue
-            outs = {
-                name: getattr(member, "out", None)
-                for name, member in members.items()
-                if getattr(member, "has_saved_activation", False)
-            }
-            base = outs.get(baseline_name)
-            if not isinstance(base, torch.Tensor):
-                continue
-            distances: list[float] = []
-            for name, out in outs.items():
-                if name == baseline_name or not isinstance(out, torch.Tensor):
-                    continue
-                val = (
-                    relative_l1(base, out)
-                    if is_scalar_like(base) and is_scalar_like(out)
-                    else metric_fn(base, out)
-                )
-                distances.append(float(val.detach().item()))
-            if distances:
-                scored.append((str(site.layer_label), sum(distances) / len(distances)))
-        scored.sort(key=lambda row: row[1], reverse=True)
-        return scored[:k]
+        return _comparisons.rank_changes(self, baseline, k=k, metric=metric)
 
     def compare(
         self,
@@ -1684,8 +1181,7 @@ class Bundle:
             paired through the structural alignment (:attr:`supergraph`).
         """
 
-        self._require_comparable("diff", pairs=[(a, b)])
-        return self._diff_members(a, b, metric=metric, on=on)
+        return _comparisons.compare_members(self, a, b, metric=metric, on=on)
 
     def comparability(self, a: str, b: str) -> Relationship:
         """Return the derived relationship for a pair of members.
@@ -1704,6 +1200,46 @@ class Bundle:
         """
 
         return self._relationship_between(self._members[a], self._members[b])
+
+    def _delta_map(
+        self,
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+        *,
+        baseline: str | Trace | None = None,
+        on: Literal["out", "grad"] = "out",
+    ) -> dict[str, dict[str, float]]:
+        """Per-node ``metric`` distances of every member from the baseline (gated)."""
+
+        return _bundle_delta_map(self, metric, baseline=baseline, on=on)
+
+    def _norm_delta(
+        self, *, baseline: str | Trace | None = None, on: Literal["out", "grad"] = "out"
+    ) -> dict[str, dict[str, float]]:
+        """Per-node relative L2 distances of every member from the baseline (gated)."""
+
+        return _bundle_norm_delta(self, baseline=baseline, on=on)
+
+    def _output_delta(
+        self,
+        target: str | Trace,
+        *,
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+        on: Literal["out", "grad"] = "out",
+    ) -> dict[str, dict[str, float]]:
+        """Output-site ``metric`` distances of every member from ``target`` (gated)."""
+
+        return _bundle_output_delta(self, target, metric=metric, on=on)
+
+    def _aligned_pairs(
+        self,
+        left: str | Trace | None = None,
+        right: str | Trace | None = None,
+        *,
+        min_score: float = 0.45,
+    ) -> list[tuple[Any, Any]]:
+        """Best-match layer pairs across two members (the diff picture's rows)."""
+
+        return _bundle_aligned_pairs(self, left, right, min_score=min_score)
 
     def _diff_members(
         self,
@@ -1733,37 +1269,7 @@ class Bundle:
             paired through the structural alignment (:attr:`supergraph`).
         """
 
-        left_log = self._members[left_name]
-        right_log = self._members[right_name]
-        # Match every other caller of relative_l1 in this subsystem
-        # (_diff_row/_diff_matrix/most_changed/_distance_value): the scalar
-        # fallback fires ONLY when both operands are scalar-like; multi-element
-        # activations route through a real vector metric. Without this guard
-        # relative_l1 silently truncates each site to its first element.
-        metric_fn = resolve_metric(metric)
-        rows: list[tuple[str, float]] = []
-        aligned = aligned_site_labels(self._ensure_supergraph(), left_name)
-        for left_site in getattr(left_log, "layer_list", []):
-            label = str(left_site.layer_label)
-            right_label = aligned.get(label, {}).get(right_name, label)
-            try:
-                right_site = _resolve_sites(right_log, right_label, max_fanout=1).first()
-            except Exception:  # noqa: BLE001 - missing sites are not common sites
-                continue
-            left_out = getattr(left_site, on, None)
-            right_out = getattr(right_site, on, None)
-            if not isinstance(left_out, torch.Tensor) or not isinstance(
-                right_out,
-                torch.Tensor,
-            ):
-                continue
-            value = (
-                relative_l1(left_out, right_out)
-                if is_scalar_like(left_out) and is_scalar_like(right_out)
-                else metric_fn(left_out, right_out)
-            )
-            rows.append((label, float(value.detach().item())))
-        return rows
+        return _comparisons.diff_members(self, left_name, right_name, metric=metric, on=on)
 
     @property
     def comparability_table(self) -> dict[tuple[str, str], Relationship]:
@@ -1775,258 +1281,38 @@ class Bundle:
             Pairwise matrix keyed by member-name tuples.
         """
 
-        matrix: dict[tuple[str, str], Relationship] = {}
-        for left in self._members:
-            for right in self._members:
-                matrix[(left, right)] = self.comparability(left, right)
-        return matrix
+        return _comparisons.comparability_table(self)
 
-    @classmethod
-    def _parse_members(
-        cls,
-        members: Mapping[str, Trace] | Sequence[Trace] | Sequence[tuple[str, Trace]],
-        *,
-        names: Sequence[str] | None,
-    ) -> list[tuple[str, Trace]]:
-        """Normalize supported construction shapes.
-
-        Returns
-        -------
-        list[tuple[str, Trace]]
-            Ordered member pairs.
-        """
-
-        if isinstance(members, Mapping):
-            if names is not None:
-                raise ValueError("names= is not accepted when Bundle members are a mapping.")
-            pairs = [(str(name), log) for name, log in members.items()]
-        else:
-            values = list(members)
-            if names is not None:
-                if len(names) != len(values):
-                    raise ValueError("names length must match member count.")
-                named_logs = cast("Sequence[Trace]", values)
-                pairs = [(str(name), log) for name, log in zip(names, named_logs)]
-            elif values and all(cls._is_name_log_tuple(value) for value in values):
-                tuple_values = cast("Sequence[tuple[str, Trace]]", values)
-                pairs = [(str(member_name), log) for member_name, log in tuple_values]
-            else:
-                log_values = cast("Sequence[Trace]", values)
-                pairs = cls._dedupe_default_names(
-                    [
-                        (cls._derive_name(log, name=None, index=index), log)
-                        for index, log in enumerate(log_values)
-                    ]
-                )
-        for member_name, log in pairs:
-            cls._require_trace(log, arg_name=f"member {member_name!r}")
-        # O(n) duplicate detection (r8 R52): the prior per-member full
-        # name-list rebuild + count was quadratic (measured 4.1s at 8k
-        # members on the all-valid path).
-        name_counts = Counter(name for name, _ in pairs)
-        duplicate_names = sorted(name for name, count in name_counts.items() if count > 1)
-        if duplicate_names:
-            raise ValueError(f"Bundle member names must be unique; duplicates: {duplicate_names}")
-        return pairs
-
-    @staticmethod
-    def _is_list_like(value: Any) -> bool:
-        """Return whether ``value`` should be treated as a list input.
-
-        Parameters
-        ----------
-        value:
-            Candidate input value.
-
-        Returns
-        -------
-        bool
-            Whether the value is a non-string sequence.
-        """
-
-        return isinstance(value, Sequence) and not isinstance(value, str)
-
-    @classmethod
-    def _coerce_trace_list(cls, value: Trace | Sequence[Trace], *, arg_name: str) -> list[Trace]:
-        """Normalize a Trace-or-list input to a list.
-
-        Parameters
-        ----------
-        value:
-            Trace or sequence of Traces.
-        arg_name:
-            Argument name for error messages.
-
-        Returns
-        -------
-        list[Trace]
-            Normalized Trace list.
-        """
-
-        values = list(value) if cls._is_list_like(value) else [cast("Trace", value)]
-        for item in values:
-            cls._require_trace(item, arg_name=arg_name)
-        return cast(list["Trace"], values)
-
-    @staticmethod
-    def _require_trace(value: Any, *, arg_name: str) -> None:
-        """Refuse a non-Trace membership candidate, typed (ledger memo item 0).
-
-        An experiment container with unvalidated membership cannot carry a
-        provenance join (the measured defect: a dict silently became
-        ``member_3``). Legitimate members are capture products: ``Trace``
-        (live or loaded) and ``PartialTrace`` (failed-capture recovery — the
-        episode status fold reads failed partial members).
-
-        Raises
-        ------
-        BundleMemberError
-            ``bundle_member_type_invalid`` for any other value.
-        """
-
-        from .._data_classes.trace import Trace as _Trace
-        from .._partial import PartialTrace as _PartialTrace
-
-        if not isinstance(value, (_Trace, _PartialTrace)):
-            raise BundleMemberError(
-                f"Bundle {arg_name} must be a Trace or PartialTrace, got "
-                f"{type(value).__name__!r}. Bundle members are capture products "
-                "(live, loaded, or failed-partial); wrap other values in a "
-                "capture or keep them outside the bundle.",
-                code="bundle_member_type_invalid",
-                received_type=type(value).__name__,
-            )
-
-    @classmethod
-    def _coerce_optional_name_list(
-        cls,
-        names: str | Sequence[str] | None,
-        *,
-        count: int,
-    ) -> list[str | None]:
-        """Normalize optional Bundle names to match a log count.
-
-        Parameters
-        ----------
-        names:
-            Optional name or names.
-        count:
-            Number of logs being added.
-
-        Returns
-        -------
-        list[str | None]
-            Per-log names.
-        """
-
-        if names is None:
-            return [None] * count
-        if isinstance(names, str):
-            if count != 1:
-                raise ValueError("A single Bundle name can only be used with one Trace.")
-            return [names]
-        name_list: list[str | None] = [str(name) for name in names]
-        if len(name_list) != count:
-            raise ValueError("names length must match added log count.")
-        return name_list
-
-    def _coerce_member_name_list(
+    def store_comparison(
         self,
-        value: str | Trace | Sequence[str | Trace],
-    ) -> list[str]:
-        """Normalize Bundle member references to member names.
+        metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor] = "relative_l2",
+        *,
+        name: str | None = None,
+        baseline: str | Trace | None = None,
+        on: Literal["out", "grad"] = "out",
+    ) -> str:
+        """Compute one per-node comparison once and store it on the supergraph.
 
-        Parameters
-        ----------
-        value:
-            Member name, Trace object, or sequence of either.
-
-        Returns
-        -------
-        list[str]
-            Resolved member names.
+        Returns the stored name (the metric's name unless ``name`` is given);
+        :meth:`stored_comparison` reads it back without recomputing.
         """
 
-        values = list(value) if self._is_list_like(value) else [value]
-        # _is_list_like narrows the runtime type (sequence -> its elements, scalar -> [value]),
-        # but mypy can't follow that helper, so assert the element type the narrowing guarantees.
-        return [self._coerce_member_name(cast("str | Trace", item)) for item in values]
+        return _bundle_store_comparison(self, metric, name=name, baseline=baseline, on=on)
+
+    def stored_comparison(self, name: str) -> dict[str, dict[str, float]]:
+        """Return one stored per-node comparison by name, without recomputing."""
+
+        return _bundle_stored_comparison(self, name)
+
+    def stored_comparison_names(self) -> tuple[str, ...]:
+        """Return every comparison name stored on this bundle's supergraph, sorted."""
+
+        return _bundle_stored_comparison_names(self)
 
     def _coerce_member_name(self, value: str | Trace) -> str:
-        """Resolve one Bundle member reference to a member name.
+        """Resolve one member reference (a name or the member object) to its name."""
 
-        Parameters
-        ----------
-        value:
-            Member name or Trace object.
-
-        Returns
-        -------
-        str
-            Resolved member name.
-        """
-
-        if isinstance(value, str):
-            return value
-        for name, member in self._members.items():
-            if member is value:
-                return name
-        raise KeyError("Trace is not a member of this Bundle.")
-
-    @staticmethod
-    def _dedupe_default_names(pairs: list[tuple[str, Trace]]) -> list[tuple[str, Trace]]:
-        """Disambiguate automatically derived member names.
-
-        Parameters
-        ----------
-        pairs:
-            Derived name/log pairs from a sequence without explicit names.
-
-        Returns
-        -------
-        list[tuple[str, Trace]]
-            Pairs with ``_2``, ``_3`` suffixes for repeated names.
-        """
-
-        seen: dict[str, int] = {}
-        deduped: list[tuple[str, Trace]] = []
-        for member_name, log in pairs:
-            count = seen.get(member_name, 0) + 1
-            seen[member_name] = count
-            if count == 1:
-                deduped.append((member_name, log))
-            else:
-                deduped.append((f"{member_name}_{count}", log))
-        return deduped
-
-    @staticmethod
-    def _is_name_log_tuple(value: Any) -> bool:
-        """Return whether a value looks like a ``(name, log)`` pair.
-
-        Returns
-        -------
-        bool
-            Whether the value is a two-item name/log tuple.
-        """
-
-        return isinstance(value, tuple) and len(value) == 2 and isinstance(value[0], str)
-
-    @staticmethod
-    def _derive_name(log: Trace, *, name: str | None, index: int) -> str:
-        """Derive a member name from an explicit value or log metadata.
-
-        Returns
-        -------
-        str
-            Member name.
-        """
-
-        if name is not None:
-            return str(name)
-        log_name = getattr(log, "trace_label", None)
-        if log_name:
-            return str(log_name)
-        return f"member_{index}"
+        return coerce_member_name(self, value)
 
     def _resolve_baseline_name(self, baseline: str | Trace | None) -> str | None:
         """Resolve a baseline constructor argument to a member name.
@@ -2037,16 +1323,7 @@ class Bundle:
             Baseline member name.
         """
 
-        if baseline is None:
-            return self._auto_detect_baseline()
-        if isinstance(baseline, str):
-            if baseline not in self._members:
-                raise KeyError(f"Unknown baseline member {baseline!r}.")
-            return baseline
-        for name, member in self._members.items():
-            if member is baseline:
-                return name
-        raise KeyError("Baseline Trace is not a member of this Bundle.")
+        return _members.resolve_baseline_name(self, baseline)
 
     def _auto_detect_baseline(self) -> str | None:
         """Auto-detect a pristine baseline when exactly one candidate exists.
@@ -2060,12 +1337,7 @@ class Bundle:
             Baseline name or ``None`` when ambiguous/not needed yet.
         """
 
-        candidates = [
-            name
-            for name, member in self._members.items()
-            if getattr(member, "is_pristine", None) is True
-        ]
-        return candidates[0] if len(candidates) == 1 else None
+        return _members.auto_detect_baseline(self)
 
     def _baseline_or_raise(self, baseline: str | Trace | None) -> str:
         """Return a baseline name or raise for ambiguity.
@@ -2076,19 +1348,7 @@ class Bundle:
             Baseline member name.
         """
 
-        if baseline is not None:
-            resolved = self._resolve_baseline_name(baseline)
-            if resolved is not None:
-                return resolved
-        if self._baseline_name is not None:
-            return self._baseline_name
-        detected = self._auto_detect_baseline()
-        if detected is not None:
-            self._baseline_name = detected
-            return detected
-        raise BaselineUndeterminedError(
-            "Bundle operation requires a baseline, but no unique pristine baseline exists."
-        )
+        return _members.baseline_or_raise(self, baseline)
 
     def _ensure_supergraph(self) -> Supergraph:
         """Build and cache the supergraph lazily.
@@ -2099,9 +1359,7 @@ class Bundle:
             Cached supergraph.
         """
 
-        if self._supergraph is None:
-            self._supergraph = build_supergraph(list(self._members.values()), list(self._members))
-        return self._supergraph
+        return _lookup.ensure_supergraph(self)
 
     def _shared(self, key_fn: Callable[[Trace], Sequence[Any]]) -> list[str]:
         """Return keys common to every member, ordered by the first member.
@@ -2117,10 +1375,7 @@ class Bundle:
             Keys present in all members.
         """
 
-        member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys] or [set()]
-        shared = set.intersection(*key_sets)
-        return [key for key in (member_keys or [[]])[0] if key in shared]
+        return _members.shared_keys(self, key_fn)
 
     def _divergent(self, key_fn: Callable[[Trace], Sequence[Any]]) -> list[str]:
         """Return keys present in some members but not every member.
@@ -2136,19 +1391,7 @@ class Bundle:
             Keys present in at least one member and absent from at least one member.
         """
 
-        member_keys = self._member_key_lists(key_fn)
-        key_sets = [set(keys) for keys in member_keys] or [set()]
-        shared = set.intersection(*key_sets)
-        union = set.union(*key_sets)
-        divergent = union - shared
-        ordered: list[str] = []
-        seen: set[str] = set()
-        for keys in member_keys:
-            for key in keys:
-                if key in divergent and key not in seen:
-                    ordered.append(key)
-                    seen.add(key)
-        return ordered
+        return _members.divergent_keys(self, key_fn)
 
     def _member_key_lists(self, key_fn: Callable[[Trace], Sequence[Any]]) -> list[list[str]]:
         """Return normalized per-member key lists with duplicates removed.
@@ -2164,19 +1407,7 @@ class Bundle:
             String keys for each member in member order.
         """
 
-        member_keys: list[list[str]] = []
-        for member in self._members.values():
-            keys: list[str] = []
-            seen: set[str] = set()
-            for raw_key in key_fn(member):
-                if raw_key is None:
-                    continue
-                key = str(raw_key)
-                if key not in seen:
-                    keys.append(key)
-                    seen.add(key)
-            member_keys.append(keys)
-        return member_keys
+        return _members.member_key_lists(self, key_fn)
 
     def _enforce_capacity(self) -> None:
         """Evict oldest non-baseline members when above capacity.
@@ -2187,29 +1418,7 @@ class Bundle:
             The bundle is mutated in place.
         """
 
-        if self._capacity is None:
-            return
-        while len(self._members) > self._capacity:
-            evictable = next(
-                (name for name in self._members if name != self._baseline_name),
-                None,
-            )
-            if evictable is None:
-                break
-            if self._member_relations.rows_naming(evictable):
-                # R5: an IMPLICIT eviction may neither orphan relation rows
-                # nor cascade them silently — refuse typed, always.
-                raise BundleRelationError(
-                    f"Bundle capacity eviction would orphan member-relation "
-                    f"rows naming {evictable!r}; remove the member explicitly "
-                    "(cascade_relations=True) or raise the capacity (S6 R5).",
-                    code="bundle_member_has_relations",
-                    operation="eviction",
-                    related_members=[evictable],
-                )
-            self._members.pop(evictable)
-            self._member_construction.pop(evictable, None)
-            self._supergraph = None
+        _members.enforce_capacity(self)
 
     def _require_comparable(
         self,
@@ -2263,42 +1472,7 @@ class Bundle:
             Highest-confidence relationship.
         """
 
-        if left is right:
-            return Relationship.SAME_OBJECT
-
-        left_class = getattr(left, "model_class_qualname", None)
-        right_class = getattr(right, "model_class_qualname", None)
-        left_weight = cls._weight_fingerprint(left)
-        right_weight = cls._weight_fingerprint(right)
-
-        left_model = cls._weak_model(left)
-        right_model = cls._weak_model(right)
-        if (
-            left_model is not None
-            and left_model is right_model
-            and left_class is not None
-            and left_class == right_class
-        ):
-            if left_weight is not None and left_weight == right_weight:
-                return Relationship.SAME_OBJECT
-            return Relationship.SAME_MODEL_OBJECT_AT_CAPTURE
-
-        left_graph = getattr(left, "graph_shape_hash", None)
-        right_graph = getattr(right, "graph_shape_hash", None)
-        left_input = getattr(left, "input_signature_hash", None)
-        right_input = getattr(right, "input_signature_hash", None)
-        if left_graph is not None and left_graph == right_graph:
-            if left_input is not None and left_input == right_input:
-                return Relationship.SHARED_GRAPH_SAME_INPUT
-            return Relationship.SHARED_GRAPH_DIFFERENT_INPUT
-
-        if left_weight is not None and left_weight == right_weight:
-            return Relationship.SAME_PARAM_SHAPES
-        if left_class is not None and left_class == right_class:
-            return Relationship.SHARED_ARCHITECTURE
-        if left_class is not None and right_class is not None and left_class != right_class:
-            return Relationship.DIFF_MODEL
-        return Relationship.UNKNOWN
+        return _comparisons.relationship_between(left, right)
 
     @staticmethod
     def _weight_fingerprint(log: Trace) -> str | None:
@@ -2310,11 +1484,7 @@ class Bundle:
             Fingerprint value.
         """
 
-        return getattr(log, "param_hash_full", None) or getattr(
-            log,
-            "param_hash_quick",
-            None,
-        )
+        return _comparisons.weight_fingerprint(log)
 
     @staticmethod
     def _weak_model(log: Trace) -> Any | None:
@@ -2326,13 +1496,7 @@ class Bundle:
             Live model object, if available.
         """
 
-        ref = getattr(log, "_source_model_ref", None)
-        if ref is None:
-            return None
-        try:
-            return ref()
-        except TypeError:
-            return None
+        return _comparisons.weak_model(log)
 
 
 __all__ = ["AmbiguousLabelError", "SuperAtenOp", "SuperOp"]

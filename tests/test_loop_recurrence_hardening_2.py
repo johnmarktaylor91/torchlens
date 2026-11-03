@@ -250,7 +250,7 @@ def test_tied_distinct_modules_are_not_recurrent(direct_chain: bool) -> None:
     # Both semantic sites survive with their own module attribution; no layer's
     # pass ops disagree on module address.
     site_addresses = set()
-    for layer in traced.layer_logs.values():
+    for layer in traced._layer_logs.values():
         addresses = {_module_addresses(op) for op in layer.ops.values()}
         assert len(addresses) <= 1, f"layer {layer.layer_label} spans module addresses {addresses}"
         site_addresses.update(addresses)
@@ -323,7 +323,7 @@ def test_shared_kernel_divergent_args_stay_distinct(axis: str) -> None:
     # call 1 onto call 2.
     conv_shapes = {
         tuple(layer.shape)
-        for layer in traced.layer_logs.values()
+        for layer in traced._layer_logs.values()
         if layer.layer_label.startswith("conv2d")
     }
     assert len(conv_shapes) == 2, conv_shapes
@@ -349,7 +349,7 @@ def test_variable_length_recurrence_not_projected_from_pass_1() -> None:
     """
     torch.manual_seed(0)
     traced = trace_fn(_ShrinkingRecurrent(), torch.randn(4, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     op_shapes = [tuple(op.shape) for op in layer.ops.values()]
     assert op_shapes == [(4, 4), (3, 4), (2, 4)]
 
@@ -373,7 +373,7 @@ def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     """When passes GROW, the aggregate must differ from call 1's values."""
     torch.manual_seed(0)
     traced = trace_fn(_GrowingRecurrent(), torch.randn(2, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     # OpAccessor get/[] are 0-based positional (C02 basis fix, lovely bug 27).
     first_pass = layer.ops.get(0)
     last_pass = layer.ops.get(layer.num_passes - 1)
@@ -387,7 +387,7 @@ def test_uniform_multi_pass_layer_left_untouched() -> None:
     """Fixed-shape loops keep plain pass values and carry NO varying marker."""
     torch.manual_seed(0)
     traced = trace_fn(_FixedShapeLoop(), torch.randn(4, 4))
-    layer = traced.layer_logs["linear_1_1"]
+    layer = traced._layer_logs["linear_1_1"]
     assert layer.num_passes == 3
     assert tuple(layer.shape) == (4, 4)
     assert "varying_across_passes" not in layer.annotations
@@ -413,16 +413,16 @@ def test_rolled_unrolled_conservation(model_factory, model_input) -> None:
     """Expanding every rolled Layer through Layer.ops reconstructs the unrolled trace.
 
     The multiset of per-op structural records (label, parents, children, module
-    call, shape, dtype) reached through ``Trace.layer_logs[*].ops`` must equal
+    call, shape, dtype) reached through ``Trace._layer_logs[*].ops`` must equal
     the unrolled ``layer_list`` exactly: no op dropped, none duplicated, and no
     rolled aggregate replacing per-pass truth.
     """
     torch.manual_seed(0)
     traced = trace_fn(model_factory(), model_input)
 
-    unrolled_records = Counter(_op_record(op) for op in traced.layer_list)
+    unrolled_records = Counter(_op_record(op) for op in traced._layer_list)
     rolled_records: Counter = Counter()
-    for layer in traced.layer_logs.values():
+    for layer in traced._layer_logs.values():
         for op in layer.ops.values():
             rolled_records[_op_record(op)] += 1
 

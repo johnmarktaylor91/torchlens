@@ -104,14 +104,14 @@ def _intervened_trace(model_key: str):
     """Intervention-ready trace with a PLANNED zero intervention at every relu.
 
     The renderer marks planned intervention sites (trace.set on an
-    intervention_ready trace); live `intervene=` fire records are not what
+    replayable trace); live `intervene=` fire records are not what
     the site/cone styling visualizes.
     """
 
     def _build():
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
-        relu = next(layer for layer in trace.layer_list if layer.func_name == "relu")
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
+        relu = next(layer for layer in trace.ops if layer.func_name == "relu")
         trace.set(tl.func("relu"), torch.zeros(relu.shape))
         return trace
 
@@ -151,7 +151,7 @@ def _raw_input_first_trace(model_key: str):
 def _decoded_output_trace(model_key: str):
     """Trace with a decoded-output record (label-score rows on the output node).
 
-    In the wild trace.decoded_output is populated by output autorouting
+    In the wild trace._decoded_output is populated by output autorouting
     (classification labels / HF text decoding); injected here to demonstrate
     the output-node label grammar.
     """
@@ -159,7 +159,7 @@ def _decoded_output_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
+        trace._decoded_output = [("tabby cat", 0.87), ("tiger cat", 0.08), ("lynx", 0.03)]
         return trace
 
     return _build
@@ -172,7 +172,7 @@ def _ablation_bundle(model_key: str):
         import warnings
 
         m, x = MODELS[model_key]()
-        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        trace = tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
         fork = trace.fork("ablated")
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
@@ -207,7 +207,7 @@ def _preprocessed_trace(model_key: str):
 
         m, x = MODELS[model_key]()
         trace = tl.trace(m, x)
-        trace.input_preprocessor = ResolvedPreprocessing(
+        trace._provenance_input_preprocessor = ResolvedPreprocessing(
             source="visual-audit demo",
             identifier="demo-normalize",
             verified=False,
@@ -233,11 +233,11 @@ def _raw_input_trace(model_key: str):
 
 
 def _container_trace(model_key: str):
-    """Trace with final-output container structure enabled (intervention_ready)."""
+    """Trace with final-output container structure enabled (replayable)."""
 
     def _build():
         m, x = MODELS[model_key]()
-        return tl.trace(m, x, capture=tl.options.CaptureOptions(intervention_ready=True))
+        return tl.trace(m, x, capture=tl.options.CaptureOptions(replayable=True))
 
     return _build
 
@@ -323,7 +323,7 @@ def _skip_relus(layer_log):
 
 def _custom_overlay_kwargs(trace) -> dict:
     """Custom node_overlay mapping: score = op position in the graph."""
-    labels = [layer.layer_label for layer in trace.layer_list]
+    labels = [layer.layer_label for layer in trace.ops]
     return {"node_overlay": {lab: float(i) for i, lab in enumerate(labels)}}
 
 
@@ -376,14 +376,6 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         _container_trace("tuple_output"),
     ),
     VacuousDemoGuard(
-        "show_containers:cluster",
-        "nested_containers",
-        {},
-        {"show_containers": "cluster"},
-        "nested-cluster",
-        _container_trace("nested_containers"),
-    ),
-    VacuousDemoGuard(
         "show_containers:nodes",
         "nested_containers",
         {},
@@ -394,8 +386,8 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard(
         "container_max_inline",
         "tuple_output",
-        {"show_containers": "auto", "container_max_inline": 12},
-        {"show_containers": "auto", "container_max_inline": 2},
+        {"show_containers": "collapsed", "container_max_inline": 12},
+        {"show_containers": "collapsed", "container_max_inline": 2},
         "tuple-inline",
         _container_trace("tuple_output"),
     ),
@@ -622,9 +614,7 @@ AXES: dict[str, str] = {
     "buffers:meaningful": "show_buffers='meaningful' (default)",
     "buffers:always": "show_buffers='always'",
     "containers:labels": "show_containers='labels'",
-    "containers:cluster": "show_containers='cluster' (single-owner required; falls back to labels)",
     "containers:collapsed": "show_containers='collapsed' homogeneous-container merge",
-    "containers:auto": "show_containers='auto'",
     "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
@@ -997,18 +987,17 @@ SECTIONS: list[Section] = [
         [
             Page(
                 label="c1_containers",
-                title="show_containers: labels / collapsed / nodes (and the cluster fallback)",
+                title="show_containers: labels / collapsed / nodes",
                 caption=(
                     "Container structure (dict/tuple inputs and outputs) is captured when the trace enables "
-                    "it (intervention_ready=True for final-output structure, capture_container_structure="
+                    "it (replayable=True for final-output structure, capture_container_structure="
                     "True for the full registry). 'labels' annotates edges into container leaves with their "
-                    "key/index. 'collapsed' merges a HOMOGENEOUS container bigger than container_max_inline "
-                    "into one dashed summary node ('tuple x4'). 'nodes' (renderer-internal mode, not yet in "
-                    "the public option list -- FINDINGS F4) draws explicit container overlay nodes "
-                    "('dict[2] (model input)', 'dict[2] (call output)') tied to their members by dashed, "
-                    "non-constraining edges. 'cluster' requires all leaves to share one module owner and "
-                    "otherwise FALLS BACK to labels -- no known model currently produces a cluster box "
-                    "(FINDINGS F3), so the fallback is what you will actually see.\n"
+                    "key/index. 'collapsed' adds the HOMOGENEOUS-container merge: a container bigger than "
+                    "container_max_inline folds into one dashed summary node ('tuple x4'). 'nodes' adds "
+                    "explicit container overlay nodes ('dict[2] (model input)', 'dict[2] (call output)') "
+                    "tied to their members by dashed, non-constraining edges, plus a dotted box around an "
+                    "op-returned tuple whose leaves share one module owner (none of these models has one, "
+                    "so no box appears here; the GPT-2 split tuple is the known case).\n"
                     "CHECK: dict keys ('a'/'b', 'payload.a'/'payload.b') and tuple indices are correct; dashed "
                     "container ties must not be mistaken for data flow (no arrowheads, no layout pull)."
                 ),
@@ -1042,16 +1031,15 @@ SECTIONS: list[Section] = [
                         trace_builder=_structure_trace("nested_containers"),
                     ),
                     Panel(
-                        "dict output -- 'cluster' (falls back to labels)",
+                        "dict output -- 'nodes' (no single module owner, so no dotted box)",
                         "dict_output",
-                        kwargs={"show_containers": "cluster"},
+                        kwargs={"show_containers": "nodes"},
                         trace_variant="container",
                         trace_builder=_container_trace("dict_output"),
                     ),
                 ],
                 covers=[
                     "containers:labels",
-                    "containers:cluster",
                     "containers:collapsed",
                     "containers:nodes",
                     "node:container",
@@ -1061,9 +1049,9 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="c2_container_max_inline",
-                title="container_max_inline: when 'auto' stops inlining",
+                title="container_max_inline: when 'collapsed' stops inlining",
                 caption=(
-                    "With show_containers='auto' (or 'collapsed'), homogeneous containers with at most "
+                    "With show_containers='collapsed' (or 'nodes'), homogeneous containers with at most "
                     "container_max_inline leaves stay inline; larger ones merge into a dashed summary node. "
                     "LEFT: default threshold (12) keeps the 4-tuple's leaves inline with index labels. "
                     "RIGHT: threshold 2 forces the same 4-tuple to merge.\n"
@@ -1074,19 +1062,19 @@ SECTIONS: list[Section] = [
                     Panel(
                         "container_max_inline=12 (default) -- inline",
                         "tuple_output",
-                        kwargs={"show_containers": "auto", "container_max_inline": 12},
+                        kwargs={"show_containers": "collapsed", "container_max_inline": 12},
                         trace_variant="container",
                         trace_builder=_container_trace("tuple_output"),
                     ),
                     Panel(
                         "container_max_inline=2 -- merged",
                         "tuple_output",
-                        kwargs={"show_containers": "auto", "container_max_inline": 2},
+                        kwargs={"show_containers": "collapsed", "container_max_inline": 2},
                         trace_variant="container",
                         trace_builder=_container_trace("tuple_output"),
                     ),
                 ],
-                covers=["container_max_inline", "containers:auto"],
+                covers=["container_max_inline"],
             ),
             Page(
                 label="c3_module_focus",
@@ -1848,7 +1836,7 @@ SECTIONS: list[Section] = [
                     "practice). MIDDLE: batch_render='first' renders only the first batch item -- the other "
                     "policies ('auto' shows up to 4 with a '+N more' note, 'all' up to 16, 'first_n:<N>', "
                     "and 'shape_only' which disables thumbnails entirely) tune the same montage. RIGHT: the "
-                    "OUTPUT side -- when trace.decoded_output carries decoded predictions (populated by "
+                    "OUTPUT side -- when trace._decoded_output carries decoded predictions (populated by "
                     "output autorouting for classifiers/HF text; injected here), the output node renders "
                     "label-score rows instead of a bare shape.\n"
                     "CHECK: montage items are individually visible; the 'first' panel shows exactly one "
@@ -2401,13 +2389,13 @@ SECTIONS: list[Section] = [
                 label="m3_stack_by",
                 title="stack_by: rank columns from an annotation (the classic timestep diagram)",
                 caption=(
-                    "stack_by=True derives pass_index on multi-pass ops under the LOCKSTEP LICENSE "
+                    "stack_by=True derives pass_number on multi-pass ops under the LOCKSTEP LICENSE "
                     "(globally monotone execution windows -- non-monotone traces refuse "
                     "stack_by_auto_underivable and an explicit field/callable bypasses). Nodes sharing "
                     "an annotation value pin to one rank; with direction='leftright' the ranks read as "
                     "timestep columns. The graph caption and legend disclose the annotation used.\n"
                     "CHECK: each recurrent pass forms one column; the stem/head ops hang free (not "
-                    "pinned to column 1); the caption line 'stacked by: pass_index (auto)' is present."
+                    "pinned to column 1); the caption line 'stacked by: pass_number (auto)' is present."
                 ),
                 panels=[
                     Panel(

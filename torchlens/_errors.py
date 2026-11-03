@@ -553,6 +553,86 @@ class OutputAttributionError(CaptureError, RuntimeError):
     """
 
 
+class TraceCaptureError(CaptureError):
+    """Raised when the model's forward raises during a TorchLens capture.
+
+    Every capture door raises this one typed error when the code it runs
+    (the model's forward, a user hook, or a torch op the forward calls) raises
+    an exception that is not a TorchLens error. The original exception is
+    chained as ``__cause__`` (``raise TraceCaptureError(...) from exc``), so its
+    type, text and traceback stay intact and unmodified. TorchLens's own typed
+    errors keep propagating as themselves.
+
+    Attributes
+    ----------
+    partial_trace:
+        The :class:`~torchlens.types.PartialTrace` holding what was captured
+        before the failure, or ``None`` when it could not be built.
+    origin:
+        The :class:`~torchlens.types.FailureOrigin` the capture outcome
+        recorded: ``user_op`` when the model's own code raised, ``torchlens``
+        when the innermost attributable frame was TorchLens, else ``unknown``.
+    """
+
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        partial_trace: Any = None,
+        origin: Any = None,
+        **payload: Any,
+    ) -> None:
+        """Initialize the failed-forward error.
+
+        Parameters
+        ----------
+        message:
+            Human-readable failure description.
+        partial_trace:
+            Partial capture recovered from the failed forward, if any.
+        origin:
+            Diagnostic failure origin from the capture outcome.
+        **payload:
+            Structured context retained on ``fields``.
+        """
+
+        super().__init__(message, **payload)
+        self.partial_trace = partial_trace
+        self.origin = origin
+
+
+def original_exception(error: BaseException) -> BaseException:
+    """The exception the forward raised: a :class:`TraceCaptureError`'s ``__cause__``, else ``error``."""
+
+    if isinstance(error, TraceCaptureError) and error.__cause__ is not None:
+        return error.__cause__
+    return error
+
+
+def attach_partial_trace(error: BaseException, partial: Any) -> None:
+    """Attach the partial capture to the escaping error.
+
+    Parameters
+    ----------
+    error:
+        Exception the capture door is about to raise.
+    partial:
+        Partial capture built from the failed session.
+
+    Raises
+    ------
+    Exception
+        Whatever the exception's attribute assignment raises; the caller
+        reports it without masking ``error``.
+    """
+
+    if isinstance(error, TraceCaptureError):
+        error.partial_trace = partial
+        return
+    if getattr(error, "partial_trace", None) is None:
+        error.partial_trace = partial  # type: ignore[attr-defined]
+
+
 class UserTransformError(CaptureError, RuntimeError):
     """Raised when activation_transform or grad_transform raises."""
 
@@ -600,3 +680,13 @@ class AmbiguousOpLookupError(_ActionableErrorMixin, ConfigurationError, ValueErr
 
 class ShapeInferenceError(ConfigurationError, RuntimeError):
     """Raised when debug input-shape inference cannot produce a valid input."""
+
+
+class SelectionError(ConfigurationError, ValueError):
+    """Carrier class for the closed ``selection_*`` refusal codes.
+
+    Branch on ``exc.fields["code"]`` (``selection_trace_mismatch`` /
+    ``selection_bool_ambiguous`` / ``selection_kind_incompatible`` /
+    ``selection_unresolvable`` / ``selection_apply_invalid`` /
+    ``selection_alignment_invalid``), never on message text.
+    """

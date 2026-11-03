@@ -18,7 +18,7 @@ import torchlens as tl
 from torchlens.intervention.errors import HookValueError, MultiMatchWarning
 
 RERUN = tl.options.InterventionOptions(engine="rerun")
-READY = tl.options.CaptureOptions(intervention_ready=True)
+READY = tl.options.CaptureOptions(replayable=True)
 
 
 class _RmsHead(nn.Module):

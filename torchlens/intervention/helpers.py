@@ -10,22 +10,34 @@ import torch
 from torch import nn
 
 from .._errors import InvalidArgumentError
+from ._helper_internals import (
+    _align_direction,
+    _enqueue_nondeterminism_note,
+    _first_non_executable_arg,
+    _helper_spec,
+    _live_capture_donor,
+    _make_generator,
+    _mean_ablate_axes,
+    _non_executable_builtin_placeholder,
+    _patch_source_identity,
+    _resolve_swap_value,
+    _source_tensor_or_out,
+    _splice_module_spec,
+    _swap_with_spec,
+)
 from .errors import (
-    AmbiguousAxisError,
     HookValueError,
-    NonExecutableSpecError,
     SpliceModuleDeviceError,
     SpliceModuleDtypeError,
 )
-from .hooks import HookContext, normalize_hook
+from .hooks import HookContext
 from .population import Population
 from .stochastic import (
-    _NAMED_AXIS_TOKENS,
     _prove_event_geometry,
     _record_sampling,
     _resolve_over_axes,
 )
-from .types import Edit, HelperDirection, HelperPortability
+from .types import Edit
 
 HELPER_REGISTRY_VERSION = "1"
 
@@ -64,32 +76,9 @@ def zero_ablate(*, allow_shape_change: bool = False) -> Edit:
         "zero_ablate",
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
-
-
-def _mean_ablate_axes(dim: Any) -> Literal["all"] | tuple[int, ...] | None:
-    """Resolve ``mean_ablate(dim=)`` at construction time.
-
-    Returns ``"all"`` for ``None``, the explicit axes as a tuple of ints, or
-    ``None`` when the spelling is outside the vocabulary (the caller refuses).
-    A semantic axis name resolves through the axis ladder, which refuses
-    ``axis_semantics_unknown`` until axis-role evidence exists.
-    """
-
-    if dim is None:
-        return "all"
-    if isinstance(dim, str) and dim in _NAMED_AXIS_TOKENS:
-        return _resolve_over_axes(dim, None, verb="mean_ablate")
-    axes: Any = (dim,) if isinstance(dim, int) and not isinstance(dim, bool) else dim
-    if (
-        isinstance(axes, (tuple, list))
-        and axes
-        and all(isinstance(axis, int) and not isinstance(axis, bool) for axis in axes)
-    ):
-        return tuple(int(axis) for axis in axes)
-    return None
 
 
 def mean_ablate(
@@ -105,9 +94,9 @@ def mean_ablate(
     source:
         What is averaged. ``None`` averages the site's own value at hook
         fire time (a value that couples every batch row, so the spec derives
-        ``batch_independent=False`` and the append gate refuses). A tensor or
+        ``is_batch_independent=False`` and the append gate refuses). A tensor or
         an Op-like object exposing ``out`` is averaged instead of the site,
-        and never reads the traced batch (``batch_independent=True``). A
+        and never reads the traced batch (``is_batch_independent=True``). A
         :class:`~torchlens.intervention.Population` averages its members
         elementwise first (a reduction, never a draw: no seed, prepared at
         construction), and ``dim`` then names the further site axes.
@@ -118,7 +107,7 @@ def mean_ablate(
         elementwise across-member mean and axes reduce that mean further. A
         semantic axis name refuses ``axis_semantics_unknown`` until axis-role
         evidence exists; any other spelling refuses ``intervention_over_invalid``
-        at construction (a typo can never flip ``batch_independent`` open).
+        at construction (a typo can never flip ``is_batch_independent`` open).
     allow_shape_change:
         Stored escape-hatch metadata for execution.
 
@@ -127,7 +116,7 @@ def mean_ablate(
     Edit
         Built-in forward helper spec (``opaque_audit`` when the source is a
         population, whose members are not portable) with a DERIVED
-        ``batch_independent`` flag: ``True`` iff the fill value provably never
+        ``is_batch_independent`` flag: ``True`` iff the fill value provably never
         reads the traced batch.
     """
 
@@ -188,8 +177,9 @@ def _source_mean_spec(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=batch_independent,
-        compatible_with_append=not allow_shape_change,
+        signal="forward",
+        is_batch_independent=batch_independent,
+        is_compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False, **({} if batch_independent else {"batch_coherent": True})},
     )
 
@@ -237,7 +227,7 @@ def _population_mean_spec(
                     "realized_draw_digest": None,
                     "replacement_mode": "evidence_mean",
                     "donor_grad": "detached",
-                    "recomputation": bool(ctx.run_ctx.get("recomputation", False)),
+                    "recomputation": bool(ctx.run_state.get("recomputation", False)),
                 },
             )
             return value.clone()
@@ -254,8 +244,8 @@ def _population_mean_spec(
         },
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
         metadata={"stochastic": False},
     )
 
@@ -379,8 +369,8 @@ def scramble_elements(
         args=(source_value,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=False,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=False,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -442,8 +432,8 @@ def steer(
             "allow_shape_change": allow_shape_change,
         },
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -484,8 +474,8 @@ def scale(factor: float, *, allow_shape_change: bool = False) -> Edit:
         args=(factor,),
         kwargs={"allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -535,8 +525,8 @@ def clamp(
         "clamp",
         kwargs={"low": low, "high": high, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -599,8 +589,8 @@ def add_noise(
         args=(std,),
         kwargs={"seed": seed, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -659,8 +649,8 @@ def project_onto(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -716,8 +706,8 @@ def project_out(
         args=(direction,),
         kwargs={"dim": dim, "allow_shape_change": allow_shape_change},
         factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
+        is_batch_independent=True,
+        is_compatible_with_append=not allow_shape_change,
     )
 
 
@@ -789,14 +779,7 @@ def swap_with(
 
         return _hook
 
-    return _helper_spec(
-        "swap_with",
-        args=(other_label,),
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        batch_independent=True,
-        compatible_with_append=not allow_shape_change,
-    )
+    return _swap_with_spec(other_label, factory, allow_shape_change=allow_shape_change)
 
 
 def splice_module(
@@ -874,377 +857,60 @@ def splice_module(
 
         return _hook
 
-    return _helper_spec(
-        "splice_module",
-        args=(module,),
-        kwargs={
-            "input_route": input_route,
-            "output_route": output_route,
-            "allow_shape_change": allow_shape_change,
-        },
-        factory=factory,
-        metadata={"input_route": input_route, "output_route": output_route},
-        batch_independent=False,
-        compatible_with_append=False,
+    return _splice_module_spec(
+        module,
+        factory,
+        input_route=input_route,
+        output_route=output_route,
+        allow_shape_change=allow_shape_change,
     )
 
 
-def hook_grad(fn: Callable[..., torch.Tensor]) -> Edit:
-    """Create a live/rerun-only backward hook helper.
+def clip_norm(max_norm: float, norm_type: float = 2.0) -> Edit:
+    """Create a neutral edit that rescales a tensor so its norm is at most ``max_norm``.
 
-    Parameters
-    ----------
-    fn:
-        Gradient hook callable. The first positional argument may be named
-        ``g``; the keyword-only ``hook`` argument is still required.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    normalize_hook(fn, direction="backward")
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the configured backward hook.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Backward hook callable.
-        """
-
-        return fn
-
-    return _helper_spec(
-        "hook_grad",
-        args=(fn,),
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def zero_grad(*, allow_shape_change: bool = False) -> Edit:
-    """Create a live/rerun-only helper that zeros a grad tensor.
-
-    Parameters
-    ----------
-    allow_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for zeroing grads.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that replaces a grad with zeros.
-        """
-
-        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Return a zero grad."""
-
-            return torch.zeros_like(g)
-
-        return _hook
-
-    return _helper_spec(
-        "zero_grad",
-        kind="backward",
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def scale_grad(factor: float, *, allow_shape_change: bool = False) -> Edit:
-    """Create a live/rerun-only helper that scales a grad tensor.
-
-    Parameters
-    ----------
-    factor:
-        Multiplicative grad factor.
-    allow_shape_change:
-        Stored escape-hatch metadata for later execution phases.
-
-    Returns
-    -------
-    Edit
-        Built-in backward helper spec.
-    """
-
-    def factory() -> Callable[..., torch.Tensor]:
-        """Return the runtime hook for grad scaling.
-
-        Returns
-        -------
-        Callable[..., torch.Tensor]
-            Hook callable that multiplies a grad by ``factor``.
-        """
-
-        def _hook(g: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
-            """Scale the grad."""
-
-            return g * factor
-
-        return _hook
-
-    return _helper_spec(
-        "scale_grad",
-        args=(factor,),
-        kind="backward",
-        kwargs={"allow_shape_change": allow_shape_change},
-        factory=factory,
-        metadata={"live_rerun_only": True},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def clip_grad(max_norm: float, norm_type: float = 2.0) -> Edit:
-    """Create a grad_fn_handle helper that clips each grad_input tensor norm.
+    The edit is a function of one tensor, so it applies to whichever tensor
+    the site names: the activation at a bare site, or the output gradient at
+    ``tl.grad(site)``. The norm is taken over the whole tensor (one site, one
+    tensor).
 
     Parameters
     ----------
     max_norm:
-        Maximum per-tensor norm.
+        Largest allowed ``norm_type`` norm.
     norm_type:
         Norm order passed to ``torch.linalg.vector_norm``.
 
     Returns
     -------
     Edit
-        Built-in backward grad_fn_handle helper spec.
+        Built-in neutral helper spec.
     """
 
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...] | None]:
-        """Return the runtime grad_fn_handle hook for clipping gradients."""
+    if not max_norm > 0:
+        raise HookValueError(f"clip_norm max_norm must be positive; got {max_norm!r}")
 
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...] | None:
-            """Clip each tensor in a grad_input tuple."""
+    def factory() -> Callable[..., torch.Tensor]:
+        """Return the runtime hook for norm clipping."""
 
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            clipped: list[torch.Tensor | None] = []
-            changed = False
-            for grad in grad_input:
-                if grad is None:
-                    clipped.append(None)
-                    continue
-                norm = torch.linalg.vector_norm(grad, ord=norm_type)
-                if norm > max_norm:
-                    scale_value = max_norm / (norm + torch.finfo(grad.dtype).eps)
-                    clipped.append(grad * scale_value)
-                    changed = True
-                else:
-                    clipped.append(grad)
-            return tuple(clipped) if changed else None
+        def _hook(out: torch.Tensor, *, ctx: HookContext) -> torch.Tensor:
+            """Rescale ``out`` when its norm exceeds ``max_norm``."""
+
+            del ctx
+            norm = torch.linalg.vector_norm(out, ord=norm_type)
+            if not bool(norm > max_norm):
+                return out
+            return out * (max_norm / norm)
 
         return _hook
 
     return _helper_spec(
-        "clip_grad",
+        "clip_norm",
         args=(max_norm,),
         kwargs={"norm_type": norm_type},
-        kind="backward",
         factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def add_grad_noise(std: float, *, seed: int | None = None) -> Edit:
-    """Create a grad_fn_handle helper that adds Gaussian noise to grad_input tensors.
-
-    Parameters
-    ----------
-    std:
-        Noise standard deviation.
-    seed:
-        Optional hook-local seed.
-
-    Returns
-    -------
-    Edit
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for noisy gradients."""
-
-        generator = _make_generator(seed)
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Add Gaussian noise to each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index
-            noisy: list[torch.Tensor | None] = []
-            for grad in grad_input:
-                if grad is None:
-                    noisy.append(None)
-                    continue
-                if seed is None:
-                    run_ctx.setdefault("ledger_notes", []).append("grad_noise used unseeded RNG")
-                    sample = torch.randn(grad.shape, device=grad.device, dtype=grad.dtype)
-                else:
-                    sample = torch.randn(grad.shape, generator=generator, dtype=grad.dtype).to(
-                        grad.device
-                    )
-                noisy.append(grad + sample * std)
-            return tuple(noisy)
-
-        return _hook
-
-    return _helper_spec(
-        "add_grad_noise",
-        args=(std,),
-        kwargs={"seed": seed},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def clamp_grad(low: float | None = None, high: float | None = None) -> Edit:
-    """Create a grad_fn_handle helper that clamps grad_input tensors elementwise.
-
-    Parameters
-    ----------
-    low:
-        Optional lower bound.
-    high:
-        Optional upper bound.
-
-    Returns
-    -------
-    Edit
-        Built-in backward grad_fn_handle helper spec.
-    """
-
-    if low is None and high is None:
-        raise HookValueError("grad_clamp requires min, max, or both")
-
-    def factory() -> Callable[..., tuple[torch.Tensor | None, ...]]:
-        """Return the runtime grad_fn_handle hook for clamping gradients."""
-
-        def _hook(
-            grad_input: tuple[torch.Tensor | None, ...],
-            *,
-            grad_output: tuple[torch.Tensor | None, ...] | None,
-            grad_fn_handle: Any,
-            call_index: int,
-            run_ctx: dict[str, Any],
-        ) -> tuple[torch.Tensor | None, ...]:
-            """Clamp each tensor in a grad_input tuple."""
-
-            del grad_output, grad_fn_handle, call_index, run_ctx
-            return tuple(
-                None if grad is None else torch.clamp(grad, min=low, max=high)
-                for grad in grad_input
-            )
-
-        return _hook
-
-    return _helper_spec(
-        "clamp_grad",
-        kwargs={"low": low, "high": high},
-        kind="backward",
-        factory=factory,
-        metadata={"live_rerun_only": True, "mount_shape": "tuple"},
-        direction="backward",
-        batch_independent=False,
-        compatible_with_append=False,
-    )
-
-
-def _helper_spec(
-    helper_name: str,
-    *,
-    args: tuple[Any, ...] = (),
-    kwargs: dict[str, Any] | None = None,
-    kind: str = "forward",
-    portability: HelperPortability = "builtin",
-    factory: Callable[[], Callable[..., Any]],
-    metadata: dict[str, Any] | None = None,
-    direction: HelperDirection | None = None,
-    batch_independent: bool = False,
-    compatible_with_append: bool = False,
-) -> Edit:
-    """Build a Edit with stable tuple metadata.
-
-    Parameters
-    ----------
-    helper_name:
-        Helper name.
-    args:
-        Positional helper arguments.
-    kwargs:
-        Keyword helper arguments.
-    kind:
-        Forward or backward helper class.
-    portability:
-        Portability tag.
-    factory:
-        Runtime hook factory.
-    metadata:
-        Extra helper metadata.
-    direction:
-        Optional default signal direction requested by legacy helpers.
-    batch_independent:
-        Whether this helper can be applied independently to each batch item.
-    compatible_with_append:
-        Whether this helper opts into append when it changes out shape.
-
-    Returns
-    -------
-    Edit
-        Helper spec.
-    """
-
-    return Edit(
-        helper_name=helper_name,
-        args=args,
-        kwargs=tuple(sorted((kwargs or {}).items())),
-        kind=kind,  # type: ignore[arg-type]
-        portability=portability,
-        factory=factory,
-        metadata=tuple(sorted((metadata or {}).items())),
-        direction=direction,
-        batch_independent=batch_independent,
-        compatible_with_append=compatible_with_append,
+        is_batch_independent=False,
+        is_compatible_with_append=True,
     )
 
 
@@ -1296,18 +962,18 @@ def helper_from_serialized(
             return import_resolver(import_path)()
 
         return Edit(
-            helper_name=str(data.get("name", "import_ref")),
+            name=str(data.get("name", "import_ref")),
             portability="import_ref",
             factory=factory,
             metadata=(("import_path", import_path),),
         )
     if portability == "opaque_audit":
         return Edit(
-            helper_name=data.get("name", "opaque_audit"),
+            name=data.get("name", "opaque_audit"),
             portability="opaque_audit",
             metadata=(("repr", data.get("repr", "")), ("executable", False)),
-            batch_independent=bool(data.get("batch_independent", False)),
-            compatible_with_append=bool(data.get("compatible_with_append", False)),
+            is_batch_independent=bool(data.get("is_batch_independent", False)),
+            is_compatible_with_append=bool(data.get("is_compatible_with_append", False)),
         )
 
     name = data["name"]
@@ -1367,12 +1033,7 @@ def _builtin_constructors() -> dict[str, Callable[..., Edit]]:
         "project_out": project_out,
         "swap_with": swap_with,
         "splice_module": splice_module,
-        "hook_grad": hook_grad,
-        "clamp_grad": clamp_grad,
-        "clip_grad": clip_grad,
-        "add_grad_noise": add_grad_noise,
-        "zero_grad": zero_grad,
-        "scale_grad": scale_grad,
+        "clip_norm": clip_norm,
         # Projection-valued subspace edit (a learned rotation's rows travel here).
         "subspace_edit": rebuild_subspace_edit,
         # Its source verb (LoReFT's W h + b); saved only inside subspace_edit.
@@ -1395,6 +1056,19 @@ def builtin_helper_constructor(name: str) -> Callable[..., Edit] | None:
     """
 
     return _builtin_constructors().get(name)
+
+
+def _builtin_constructor_lookup(name: str) -> tuple[dict[str, Callable[..., Edit]], str | None]:
+    """Return the builtin constructor table and ``name``'s rename target.
+
+    A removed gradient helper (or ``bwd_hook``) refuses here with its own
+    coded error before any lookup.
+    """
+
+    constructors = _builtin_constructors()
+    if name in _REMOVED_GRADIENT_HELPERS or name == "bwd_hook":
+        _refuse_removed_gradient_helper(name)
+    return constructors, _RENAMED_HELPER_NAMES.get(name)
 
 
 def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Edit:
@@ -1428,8 +1102,7 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
         renamed one (a clean break: a saved spec naming it no longer loads).
     """
 
-    constructors = _builtin_constructors()
-    renamed_to = _RENAMED_HELPER_NAMES.get(name)
+    constructors, renamed_to = _builtin_constructor_lookup(name)
     if name not in constructors and renamed_to is None:
         raise InvalidArgumentError(
             f"Builtin intervention helper {name!r} is unknown",
@@ -1468,270 +1141,6 @@ def rebuild_builtin_helper(name: str, args: tuple[Any, ...], kwargs: Mapping[str
     return constructor(*args, **kwargs)
 
 
-def _is_non_executable_placeholder(value: Any) -> bool:
-    """Whether a decoded argument is a non-executable ``opaque_audit`` placeholder.
-
-    Parameters
-    ----------
-    value:
-        Decoded helper argument.
-
-    Returns
-    -------
-    bool
-        ``True`` when ``value`` is a Edit that was reconstructed as an
-        ``opaque_audit`` (audit-only, factory-less) placeholder.
-    """
-
-    return isinstance(value, Edit) and value.portability == "opaque_audit"
-
-
-def _first_non_executable_arg(args: tuple[Any, ...], kwargs: Mapping[str, Any]) -> Any | None:
-    """Return the first non-executable placeholder in ``args``/``kwargs``, if any.
-
-    Recurses into lists, tuples, and dict values so a placeholder nested inside a
-    container argument is still detected.
-
-    Parameters
-    ----------
-    args:
-        Decoded positional helper arguments.
-    kwargs:
-        Decoded keyword helper arguments.
-
-    Returns
-    -------
-    Any | None
-        The offending placeholder, or ``None`` when every argument is executable.
-    """
-
-    def _scan(value: Any) -> Any | None:
-        """Depth-first search for the first non-executable placeholder in one value."""
-
-        if _is_non_executable_placeholder(value):
-            return value
-        if isinstance(value, (list, tuple)):
-            for item in value:
-                found = _scan(item)
-                if found is not None:
-                    return found
-        elif isinstance(value, Mapping):
-            for item in value.values():
-                found = _scan(item)
-                if found is not None:
-                    return found
-        return None
-
-    for value in args:
-        found = _scan(value)
-        if found is not None:
-            return found
-    for value in kwargs.values():
-        found = _scan(value)
-        if found is not None:
-            return found
-    return None
-
-
-def _non_executable_builtin_placeholder(
-    name: str, opaque_arg: Any, data: Mapping[str, Any]
-) -> Edit:
-    """Build a non-executable placeholder for a builtin helper with opaque args.
-
-    Parameters
-    ----------
-    name:
-        Builtin helper name.
-    opaque_arg:
-        The decoded ``opaque_audit`` placeholder that made the helper
-        non-executable.
-    data:
-        Original serialized helper payload (used to preserve identity metadata).
-
-    Returns
-    -------
-    Edit
-        An ``opaque_audit`` spec whose factory raises ``NonExecutableSpecError``
-        when fired, so a corrupted argument fails loudly at use time rather than
-        several frames downstream.
-    """
-
-    def factory() -> Callable[..., Any]:
-        """Refuse to build a runtime hook for a non-executable helper.
-
-        Raises
-        ------
-        NonExecutableSpecError
-            Always -- the helper carries an audit-only opaque argument.
-        """
-
-        raise NonExecutableSpecError(
-            f"Builtin helper {name!r} was loaded with a non-executable "
-            f"(audit-only) argument {opaque_arg!r} and cannot be run. Re-save the "
-            "intervention at level='executable_with_callables' (or 'portable') "
-            "with a reconstructible argument to obtain an executable spec."
-        )
-
-    return Edit(
-        helper_name=name,
-        portability="opaque_audit",
-        kind=cast(Any, data.get("kind", "forward")),
-        direction=cast(Any, data.get("direction")),
-        factory=factory,
-        metadata=(
-            ("repr", f"<non-executable {name} helper (audit-only argument)>"),
-            ("executable", False),
-        ),
-        batch_independent=bool(data.get("batch_independent", False)),
-        compatible_with_append=bool(data.get("compatible_with_append", False)),
-    )
-
-
-def _make_generator(seed: int | None) -> torch.Generator | None:
-    """Create a hook-local CPU generator when a seed is provided.
-
-    Parameters
-    ----------
-    seed:
-        Optional seed.
-
-    Returns
-    -------
-    torch.Generator | None
-        Seeded generator or ``None`` for global RNG use.
-    """
-
-    if seed is None:
-        return None
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-    return generator
-
-
-def _enqueue_nondeterminism_note(ctx: HookContext, helper_name: str) -> None:
-    """Record that an unseeded stochastic helper consumed global RNG.
-
-    Parameters
-    ----------
-    ctx:
-        Hook context.
-    helper_name:
-        Helper name.
-    """
-
-    # Name the site only when the fire-time spelling is a PUBLIC label. On the
-    # live door only the internal raw label exists (its ordinal need not match
-    # the final label, so suffix-stripping would name the WRONG site); the
-    # FireRecord's attachment op carries the location either way.
-    site = ctx.op.get("label") or ctx.op.get("layer_label")
-    if isinstance(site, str) and site and not site.endswith("_raw"):
-        note = f"{helper_name} used unseeded stochastic RNG at {site}"
-    else:
-        note = f"{helper_name} used unseeded stochastic RNG"
-    ctx.run_ctx.setdefault("ledger_notes", []).append(note)
-    state_history = ctx.run_ctx.get("state_history")
-    if isinstance(state_history, list):
-        state_history.append(note)
-
-
-def _source_tensor_or_out(source: Any, out: torch.Tensor) -> torch.Tensor:
-    """Resolve a helper source object to a tensor.
-
-    Parameters
-    ----------
-    source:
-        Source object.
-    out:
-        Fallback out.
-
-    Returns
-    -------
-    torch.Tensor
-        Source tensor.
-    """
-
-    if source is None:
-        return out
-    if isinstance(source, torch.Tensor):
-        return source
-    candidate = getattr(source, "out", None)
-    if isinstance(candidate, torch.Tensor):
-        return candidate
-    raise HookValueError(f"unsupported tensor source for helper: {type(source).__name__}")
-
-
-def _align_direction(
-    direction: torch.Tensor,
-    out: torch.Tensor,
-    *,
-    dim: int | None,
-) -> torch.Tensor:
-    """Align a direction tensor with an out tensor.
-
-    Parameters
-    ----------
-    direction:
-        Direction tensor.
-    out:
-        Activation tensor.
-    dim:
-        Axis receiving a vector direction.
-
-    Returns
-    -------
-    torch.Tensor
-        Broadcast-compatible direction.
-    """
-
-    if tuple(direction.shape) == tuple(out.shape):
-        return direction
-    if direction.ndim == 1 and out.ndim > 1:
-        if dim is None:
-            raise AmbiguousAxisError(
-                "vector directions require explicit dim to avoid axis ambiguity"
-            )
-        normalized_axis = dim % out.ndim
-        if direction.shape[0] != out.shape[normalized_axis]:
-            raise HookValueError(
-                f"direction length {direction.shape[0]} does not match "
-                f"out axis {normalized_axis} size {out.shape[normalized_axis]}"
-            )
-        shape = [1] * out.ndim
-        shape[normalized_axis] = direction.shape[0]
-        return direction.reshape(shape)
-    try:
-        cast(Callable[..., object], torch.broadcast_shapes)(
-            tuple(direction.shape), tuple(out.shape)
-        )
-    except RuntimeError as exc:
-        raise HookValueError(
-            f"direction shape {tuple(direction.shape)} cannot broadcast to "
-            f"out shape {tuple(out.shape)}"
-        ) from exc
-    return direction
-
-
-def _resolve_swap_value(other_label: Any) -> Any:
-    """Resolve a swap source for helper execution.
-
-    Parameters
-    ----------
-    other_label:
-        Tensor or Op-like object with a resolved ``out`` attribute. String
-        labels are rejected earlier, in ``swap_with``, before a ``Edit``
-        is ever built -- there is no fire-time lookup table for them.
-
-    Returns
-    -------
-    Any
-        Resolved tensor or unresolved object.
-    """
-
-    if isinstance(other_label, torch.Tensor):
-        return other_label
-    return getattr(other_label, "out", other_label)
-
-
 #: The one remedy text for the retired ``resample_ablate`` spelling, shared by
 #: this module and ``torchlens.intervention``. The root package keeps a literal
 #: copy (it must not import torch); tests/test_removed_member_redirects.py pins
@@ -1750,17 +1159,60 @@ _REDIRECTS: dict[str, str] = {"resample_ablate": _RESAMPLE_ABLATE_REDIRECT}
 #: stay under ``torchlens.intervention``.
 _ROOT_HOMED_RENAMED_HELPERS: frozenset[str] = frozenset(
     {
-        "hook_grad",
-        "clamp_grad",
-        "clip_grad",
-        "add_grad_noise",
-        "scale_grad",
-        "zero_grad",
+        "zero_ablate",
+        "scale",
+        "clamp",
+        "clip_norm",
         "add_noise",
         "project_out",
         "mean_ablate",
     }
 )
+
+#: Removed gradient-only helpers -> the neutral edit that replaces them. The
+#: gradient is now addressed by the site (``tl.grad(site)``), not by the edit,
+#: so a saved spec naming one refuses typed with that two-part remedy. A saved
+#: ``hook_grad`` maps to ``None``: its replacement is the user callable itself.
+_REMOVED_GRADIENT_HELPERS: dict[str, str | None] = {
+    "zero_grad": "zero_ablate",
+    "scale_grad": "scale",
+    "clamp_grad": "clamp",
+    "add_grad_noise": "add_noise",
+    "clip_grad": "clip_norm",
+    "hook_grad": None,
+}
+
+
+def _refuse_removed_gradient_helper(name: str) -> None:
+    """Raise the typed refusal for a saved spec naming a removed gradient helper.
+
+    Parameters
+    ----------
+    name:
+        Saved builtin helper name (``zero_grad``, ``hook_grad``, ...).
+
+    Raises
+    ------
+    InvalidArgumentError
+        Always, ``intervention_helper_renamed`` naming the neutral replacement.
+    """
+
+    replacement = _REMOVED_GRADIENT_HELPERS.get(name)
+    edit_spelling = (
+        "the callable itself" if replacement is None else f"torchlens.{replacement}(...)"
+    )
+    raise InvalidArgumentError(
+        f"The saved intervention names the removed gradient helper {name!r}; gradients "
+        "are addressed by the site now, so the edit is the ordinary one and the site is "
+        "wrapped in tl.grad(...). The spec does not load",
+        code="intervention_helper_renamed",
+        remedy=(
+            f"rebuild the rule as trace.do(tl.grad(site), {edit_spelling}) or "
+            f"tl.when(tl.grad(site), {edit_spelling}) and save it again"
+        ),
+        argument="name",
+        renamed_to=replacement if replacement is not None else "callable",
+    )
 
 
 def _public_helper_spelling(name: str) -> str:
@@ -1773,12 +1225,11 @@ def _public_helper_spelling(name: str) -> str:
 
 _RENAMED_HELPER_NAMES: dict[str, str] = {
     "resample_ablate": "scramble_elements",
-    "bwd_hook": "hook_grad",
-    "grad_clamp": "clamp_grad",
-    "grad_clip": "clip_grad",
-    "grad_noise": "add_grad_noise",
-    "grad_scale": "scale_grad",
-    "grad_zero": "zero_grad",
+    "grad_clamp": "clamp",
+    "grad_clip": "clip_norm",
+    "grad_noise": "add_noise",
+    "grad_scale": "scale",
+    "grad_zero": "zero_ablate",
     "noise": "add_noise",
     "project_off": "project_out",
     "affine_source": "set_affine_coordinates",
@@ -1813,13 +1264,8 @@ if not TYPE_CHECKING:
 
 __all__ = [
     "HELPER_REGISTRY_VERSION",
-    "hook_grad",
     "clamp",
-    "scale_grad",
-    "clamp_grad",
-    "clip_grad",
-    "add_grad_noise",
-    "zero_grad",
+    "clip_norm",
     "helper_from_serialized",
     "mean_ablate",
     "add_noise",
@@ -1832,48 +1278,6 @@ __all__ = [
     "swap_with",
     "zero_ablate",
 ]
-
-
-def _live_capture_donor(source: Any, context: Mapping[str, Any]) -> tuple[Any, Any]:
-    """Map a live capture-time firing to the source op captured at the same position.
-
-    A hook fired during a live forward (the rerun engine, a bound model) sees the
-    provisional capture label ``<type>_<n>_<raw index>_raw``: final labels and passes
-    are assigned only after the forward ends, so that spelling never names a site of a
-    finished trace. The source trace keeps the same provisional label for each op
-    (``_raw_to_final_op_labels``), and one provisional label is one pass of one layer,
-    so the mapping never guesses a pass. The provisional label spells the operation
-    type, so a source op found under it has the firing site's type; its shape must also
-    match. Anything else returns ``(None, None)`` and the caller refuses.
-
-    Parameters
-    ----------
-    source:
-        Patch source trace.
-    context:
-        Fire-time site snapshot.
-
-    Returns
-    -------
-    tuple[Any, Any]
-        ``(pass-qualified source label, source op)``, or ``(None, None)``.
-    """
-
-    raw_to_final = getattr(source, "_raw_to_final_op_labels", None) or {}
-    for spelling in (context.get("label"), context.get("layer_label")):
-        if not isinstance(spelling, str):
-            continue
-        raw_label = spelling.split(":", 1)[0]
-        if not raw_label.endswith("_raw"):
-            continue
-        final_label = raw_to_final.get(raw_label)
-        donor = None if final_label is None else source.layer_dict_all_keys.get(final_label)
-        if donor is None:
-            return None, None
-        if tuple(getattr(donor, "shape", None) or ()) != tuple(context.get("shape") or ()):
-            return None, None
-        return final_label, donor
-    return None, None
 
 
 def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
@@ -1890,7 +1294,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
     context = layer_log if layer_log else {}
     qualified = context.get("label")
     bare = context.get("layer_label")
-    pass_index = context.get("pass_index")
+    pass_index = context.get("pass_number")
 
     site_label: Any = None
     if isinstance(qualified, str) and ":" in qualified:
@@ -1902,7 +1306,7 @@ def _resolve_patch_donor_site(source: Any, layer_log: Any) -> tuple[Any, Any]:
 
     source_site = None
     if site_label is not None:
-        source_site = source.layer_dict_all_keys.get(site_label)
+        source_site = source._layer_dict_all_keys.get(site_label)
     if source_site is None:
         live_label, source_site = _live_capture_donor(source, context)
         if source_site is not None:
@@ -2006,16 +1410,7 @@ def patch_from(
         return plan_patch_helper(source)
 
     pairs = normalize_positions(positions)
-    identity = {
-        "source_trace_label": str(getattr(source, "trace_label", "") or ""),
-        "source_model_class": str(getattr(source, "model_class_qualname", "") or ""),
-        "source_object_id": str(id(source)),
-    }
-    if source_site is not None:
-        identity["source_site"] = repr(source_site)
-    if pairs is not None:
-        identity["positions"] = repr(pairs)
-        identity["position_axis"] = str(int(position_axis))
+    identity = _patch_source_identity(source, source_site, pairs, position_axis)
 
     def factory() -> Callable[..., torch.Tensor]:
         """Return the runtime hook binding source values at fire time."""
@@ -2056,5 +1451,6 @@ def patch_from(
         kwargs=identity,
         factory=factory,
         portability="opaque_audit",
-        batch_independent=True,
+        signal="forward",
+        is_batch_independent=True,
     )

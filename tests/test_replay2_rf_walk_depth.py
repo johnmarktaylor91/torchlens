@@ -92,7 +92,7 @@ class _Diamond(nn.Module):
 
 
 def _final_conv(trace: tl.Trace) -> tl.Op:
-    return [op for op in trace.layer_list if op.func_name == "conv1d"][-1]
+    return [op for op in trace._layer_list if op.func_name == "conv1d"][-1]
 
 
 def test_deep_chain_receptive_field_matches_closed_form() -> None:
@@ -193,7 +193,7 @@ def test_explicit_stack_walk_equals_recursive_walk(
 
     monkeypatch.setattr(_query, "_run_memoized_walk", compare)
     monkeypatch.setattr(_forward_query, "_run_memoized_walk", compare)
-    for op in trace.layer_list:
+    for op in trace._layer_list:
         if op.func_name not in {"conv1d", "conv2d", "max_pool2d", "avg_pool2d", "__add__"}:
             continue
         center = tuple(int(size) // 2 for size in op.shape[2:])

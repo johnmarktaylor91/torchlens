@@ -8,6 +8,7 @@ from ._render_common import *
 from ._render_edges import *
 from ._render_leaf import *
 from ._render_nodes import *
+from ._typography import DEFAULT_TYPOGRAPHY
 
 
 def _decode_graphviz_stderr(error: subprocess.CalledProcessError) -> str:
@@ -63,50 +64,6 @@ def _code_panel_composition_available(file_format: str, engine: str) -> bool:
     return True
 
 
-def _svg_attrs_to_dict(attrs_text: str) -> dict[str, str]:
-    """Parse simple SVG tag attributes into a dictionary.
-
-    Parameters
-    ----------
-    attrs_text:
-        Raw attribute text from an SVG tag.
-
-    Returns
-    -------
-    dict[str, str]
-        Attribute values keyed by attribute name.
-    """
-
-    return {
-        match.group("name"): html.unescape(match.group("value"))
-        for match in _SVG_ATTR_RE.finditer(attrs_text)
-    }
-
-
-def _is_non_file_svg_href(href: str) -> bool:
-    """Return whether an SVG href should not be treated as a local file.
-
-    Parameters
-    ----------
-    href:
-        SVG image href value.
-
-    Returns
-    -------
-    bool
-        True for data URIs, fragments, and network URLs.
-    """
-
-    lowered = href.lower()
-    return (
-        lowered.startswith("data:")
-        or lowered.startswith("#")
-        or lowered.startswith("http://")
-        or lowered.startswith("https://")
-        or lowered.startswith("file:")
-    )
-
-
 def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
     """Resolve an SVG href to a local path.
 
@@ -135,104 +92,6 @@ def _resolve_svg_image_path(href: str, image_root: Path | None = None) -> Path:
         if rooted.exists():
             return rooted
     return Path.cwd() / candidate
-
-
-def _replace_svg_attr_value(tag: str, attr_name: str, value: str) -> str:
-    """Replace an attribute value in an SVG tag.
-
-    Parameters
-    ----------
-    tag:
-        SVG tag text.
-    attr_name:
-        Attribute name to replace.
-    value:
-        Replacement attribute value.
-
-    Returns
-    -------
-    str
-        Updated SVG tag.
-    """
-
-    escaped_value = html.escape(value, quote=True)
-    pattern = re.compile(
-        rf"""(?P<prefix>\b{re.escape(attr_name)}\s*=\s*)(?P<quote>["']).*?(?P=quote)"""
-    )
-    return pattern.sub(rf"\g<prefix>\g<quote>{escaped_value}\g<quote>", tag, count=1)
-
-
-def _svg_image_mime_type(path: Path) -> str:
-    """Return the data-URI MIME type for an SVG image file.
-
-    Parameters
-    ----------
-    path:
-        Local image path.
-
-    Returns
-    -------
-    str
-        MIME type for the data URI.
-    """
-
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        return "image/jpeg"
-    if suffix == ".gif":
-        return "image/gif"
-    if suffix == ".svg":
-        return "image/svg+xml"
-    return "image/png"
-
-
-def _svg_image_placeholder(attrs: Mapping[str, str]) -> str:
-    """Return SVG text for an unreadable image placeholder.
-
-    Parameters
-    ----------
-    attrs:
-        Parsed attributes from the original SVG image tag.
-
-    Returns
-    -------
-    str
-        Replacement SVG text element.
-    """
-
-    x = _svg_numeric_attr(attrs, "x")
-    y = _svg_numeric_attr(attrs, "y")
-    width = _svg_numeric_attr(attrs, "width")
-    height = _svg_numeric_attr(attrs, "height")
-    text_x = x + (width / 2.0)
-    text_y = y + (height / 2.0)
-    return (
-        f'<text text-anchor="middle" x="{text_x:.2f}" y="{text_y:.2f}" '
-        'font-family="Times,serif" font-size="10.00">preview unavailable</text>'
-    )
-
-
-def _svg_numeric_attr(attrs: Mapping[str, str], name: str) -> float:
-    """Read a numeric SVG attribute, defaulting to zero.
-
-    Parameters
-    ----------
-    attrs:
-        Parsed SVG attributes.
-    name:
-        Attribute name to parse.
-
-    Returns
-    -------
-    float
-        Parsed number, or zero when absent/unparseable.
-    """
-
-    value = attrs.get(name, "0")
-    match = re.match(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)", value)
-    if match is None:
-        return 0.0
-    return float(match.group(0))
 
 
 def _format_backward_filter_caption(pass_filter: BackwardPassFilter) -> str:
@@ -371,7 +230,7 @@ def _is_hidden_buffer_update_node(
     for label in endpoint_labels:
         endpoint = entries_to_plot.get(label) or entries_by_layer_label.get(label)
         if endpoint is None and vis_mode == "unrolled":
-            endpoint = trace.layer_dict_all_keys.get(label)
+            endpoint = trace._layer_dict_all_keys.get(label)
         if endpoint is None:
             return False
         endpoints.append(endpoint)
@@ -401,9 +260,9 @@ def _entries_to_plot_for_context(
     """
 
     if vis_mode == "unrolled":
-        return dict(trace.layer_dict_main_keys)
+        return dict(trace._layer_dict_main_keys)
     if vis_mode == "rolled":
-        return dict(trace.layer_logs)
+        return dict(trace._layer_logs)
     raise ValueError("vis_mode must be either 'rolled' or 'unrolled'")
 
 
@@ -773,10 +632,15 @@ def _collapsed_container_leaf_nodes(
     show_containers: ShowContainersLiteral,
     container_max_inline: int,
     pending_nodes: list[dict[str, Any]],
+    summary_label_lines: dict[str, list[str]] | None = None,
 ) -> dict[str, str]:
-    """Return leaf-to-summary node names hidden by homogeneous collapse."""
+    """Return leaf-to-summary node names hidden by homogeneous collapse.
 
-    if show_containers not in {"collapsed", "auto", "nodes"} or vis_mode != "unrolled":
+    ``summary_label_lines``, when given, receives each summary node's label
+    lines by node name, so nodes mode can add the container role to them.
+    """
+
+    if show_containers not in {"collapsed", "nodes"} or vis_mode != "unrolled":
         return {}
     hidden: dict[str, str] = {}
     for leaves in _container_leaf_groups(entries_to_plot, vis_mode=vis_mode).values():
@@ -786,7 +650,12 @@ def _collapsed_container_leaf_nodes(
         summary_node = _collapsed_container_node_name(group_id)
         for leaf in leaves:
             hidden[_render_node_name(leaf, vis_mode)] = summary_node
-        _add_collapsed_container_node(pending_nodes, leaves, vis_mode=vis_mode)
+        _add_collapsed_container_node(
+            pending_nodes,
+            leaves,
+            vis_mode=vis_mode,
+            label_lines_sink=summary_label_lines,
+        )
     return hidden
 
 
@@ -803,8 +672,15 @@ def _container_nodes_and_overlay_edges(
     *,
     vis_call_depth: int,
     collapse_fn: CollapseFn | None,
-) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]:
+    summary_nodes: frozenset[str] = frozenset(),
+) -> tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], dict[str, str]]:
     """Return render-only container nodes and non-dataflow overlay edges.
+
+    A record that is a model input or model output is drawn as that boundary
+    container (role label and keyed source or sink edges) even when a
+    submodule also returned it, so it never gets mid-graph member-of ties.
+    A record whose every leaf is already hidden in one homogeneous-collapse
+    summary node is drawn by that summary alone: no second node, no edges.
 
     Parameters
     ----------
@@ -816,60 +692,123 @@ def _container_nodes_and_overlay_edges(
         Maximum module nesting levels to show before collapsed-module summaries.
     collapse_fn:
         Optional custom module-collapse predicate.
+    summary_nodes:
+        Names of the homogeneous-collapse summary nodes being drawn.
 
     Returns
     -------
-    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge]]
-        Node argument dictionaries and overlay edge specs. The edge specs are
-        intentionally separate from real dataflow edge queues.
+    tuple[list[ContainerOverlayNode], list[ContainerOverlayEdge], dict[str, str]]
+        Node argument dictionaries, overlay edge specs (kept separate from
+        real dataflow edge queues), and the role text of each summary node
+        that stands for a whole record.
     """
 
     nodes_by_name: dict[str, ContainerOverlayNode] = {}
     edges: list[ContainerOverlayEdge] = []
     edge_keys: set[tuple[str, str, str, str]] = set()
+    summary_roles: dict[str, str] = {}
     records = getattr(trace, "_containers", {})
     for record in records.values():
         if not isinstance(record, ContainerRecord):
             continue
+        boundary, drawn = _record_drawn_snapshots(record)
+        if not drawn:
+            continue
+        summary = _record_summary_node(trace, drawn[0], collapsed_container_nodes, summary_nodes)
+        if summary is not None:
+            summary_roles.setdefault(summary, drawn[0].role.value.replace("_", " "))
+            continue
         node_name = _container_record_node_name(record)
-        selected_snapshot: ContainerSnapshot | None = None
-        for snapshot in record.snapshots:
-            if snapshot.role not in {Role.MODEL_INPUT, Role.MODEL_OUTPUT, Role.CALL_OUTPUT}:
-                continue
-            if selected_snapshot is None:
-                selected_snapshot = snapshot
-                owner_key = _container_record_owner_key(
+        nodes_by_name.setdefault(
+            node_name,
+            ContainerOverlayNode(
+                args=_container_record_node_args(record, drawn[0], node_name),
+                owner_key=_container_record_owner_key(
                     trace,
                     record,
                     vis_call_depth=vis_call_depth,
                     collapse_fn=collapse_fn,
-                )
-                nodes_by_name.setdefault(
-                    node_name,
-                    ContainerOverlayNode(
-                        args=_container_record_node_args(record, snapshot, node_name),
-                        owner_key=owner_key,
-                    ),
-                )
-            if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}:
-                _append_boundary_container_edges(
-                    trace,
-                    snapshot,
-                    node_name,
-                    collapsed_container_nodes,
-                    edge_keys,
-                    edges,
-                )
-            elif snapshot.role == Role.CALL_OUTPUT:
-                _append_member_of_container_edges(
-                    trace,
-                    snapshot,
-                    node_name,
-                    collapsed_container_nodes,
-                    edge_keys,
-                    edges,
-                )
-    return list(nodes_by_name.values()), edges
+                ),
+            ),
+        )
+        append_edges = (
+            _append_boundary_container_edges if boundary else _append_member_of_container_edges
+        )
+        for snapshot in drawn:
+            append_edges(trace, snapshot, node_name, collapsed_container_nodes, edge_keys, edges)
+    return list(nodes_by_name.values()), edges, summary_roles
+
+
+def _record_drawn_snapshots(
+    record: ContainerRecord,
+) -> tuple[list[ContainerSnapshot], list[ContainerSnapshot]]:
+    """Return a record's boundary snapshots and the snapshots drawn for it.
+
+    Parameters
+    ----------
+    record:
+        Container registry record.
+
+    Returns
+    -------
+    tuple[list[ContainerSnapshot], list[ContainerSnapshot]]
+        The model-input and model-output snapshots, and the drawn snapshots:
+        those boundary snapshots when there are any, else the call outputs.
+    """
+
+    boundary = [
+        snapshot
+        for snapshot in record.snapshots
+        if snapshot.role in {Role.MODEL_INPUT, Role.MODEL_OUTPUT}
+    ]
+    drawn = boundary or [
+        snapshot for snapshot in record.snapshots if snapshot.role == Role.CALL_OUTPUT
+    ]
+    return boundary, drawn
+
+
+def _record_summary_node(
+    trace: "Trace",
+    snapshot: ContainerSnapshot,
+    collapsed_container_nodes: Mapping[str, str],
+    summary_nodes: frozenset[str],
+) -> str | None:
+    """Return the one collapse summary node holding every leaf of ``snapshot``, else ``None``.
+
+    Parameters
+    ----------
+    trace:
+        Trace used for resolving occurrence labels.
+    snapshot:
+        Snapshot whose leaves are checked.
+    collapsed_container_nodes:
+        Mapping from rendered leaf node names to collapsed summary node names.
+    summary_nodes:
+        Names of the homogeneous-collapse summary nodes being drawn.
+
+    Returns
+    -------
+    str | None
+        The shared summary node name, or ``None`` when any leaf is drawn on
+        its own or the leaves span several summaries.
+    """
+
+    if not summary_nodes or not snapshot.leaf_occurrences:
+        return None
+    found: set[str] = set()
+    for occurrence in snapshot.leaf_occurrences:
+        candidates = [_render_node_name_for_occurrence(trace, occurrence.producer_op_label)]
+        if snapshot.role == Role.MODEL_OUTPUT:
+            candidates.append(_render_output_node_name_for_path(trace, occurrence.path))
+        hidden_in = {
+            collapsed_container_nodes[name]
+            for name in candidates
+            if name is not None and collapsed_container_nodes.get(name) in summary_nodes
+        }
+        if len(hidden_in) != 1:
+            return None
+        found |= hidden_in
+    return next(iter(found)) if len(found) == 1 else None
 
 
 def _container_record_owner_key(
@@ -922,6 +861,37 @@ def _container_record_owner_key(
         return None
     owner = next(iter(owners))
     return cast(str, owner) if owner != -1 else None
+
+
+def _container_boundary_edge_attrs(label: str | None) -> dict[str, str]:
+    """Return Graphviz attrs for source/sink container-node edges.
+
+    Parameters
+    ----------
+    label:
+        Optional key/index label for the pulled-out field.
+
+    Returns
+    -------
+    dict[str, str]
+        Edge attributes for a boundary container overlay edge.
+    """
+
+    attrs = {
+        "color": "#777777",
+        "fontcolor": "#555555",
+        "style": "solid",
+        "arrowsize": ".6",
+        "labelfontsize": DEFAULT_TYPOGRAPHY.annotation_pt,
+        "constraint": "false",
+    }
+    if label is not None:
+        # ``xlabel``, not ``label``: these edges are constraint=false, and dot
+        # 2.43 silently drops the midpoint ``label`` of many such edges (the key
+        # vanished from the picture while the DOT still carried it). An external
+        # label is placed after layout and is always drawn (forcelabels=true).
+        attrs["xlabel"] = _html_container_edge_label(label)
+    return attrs
 
 
 def _append_boundary_container_edges(
@@ -1436,13 +1406,13 @@ def _arg_path_key(arg_path: Iterable[Any]) -> tuple[Any, ...]:
         if isinstance(component, TupleIndex):
             key.append(("tuple", component.index))
         elif isinstance(component, DictKey):
-            key.append(("dict", component.key))
+            key.append(("dict", component._key))
         elif isinstance(component, NamedField):
-            key.append(("field", component.name))
+            key.append(("field", component._name))
         elif isinstance(component, HFKey):
-            key.append(("hf", component.key))
+            key.append(("hf", component._key))
         elif isinstance(component, DataclassField):
-            key.append(("dataclass", component.name))
+            key.append(("dataclass", component._name))
         elif isinstance(component, OutputPathComponent):
             key.append((component.__class__.__name__, repr(component)))
         else:
@@ -1469,13 +1439,13 @@ def _arg_path_label_value(arg_path: Iterable[Any]) -> str:
         if isinstance(component, TupleIndex):
             values.append(component.index)
         elif isinstance(component, DictKey):
-            values.append(component.key)
+            values.append(component._key)
         elif isinstance(component, NamedField):
-            values.append(component.name)
+            values.append(component._name)
         elif isinstance(component, HFKey):
-            values.append(component.key)
+            values.append(component._key)
         elif isinstance(component, DataclassField):
-            values.append(component.name)
+            values.append(component._name)
         else:
             values.append(component)
     if len(values) == 1:
@@ -1618,7 +1588,7 @@ def _expand_edges_through_skipped(
     for child_label in parent_node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
-            child_node = trace.layer_dict_all_keys.get(child_label)
+            child_node = trace._layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         parent_label = _render_node_label(parent_node, vis_mode)
@@ -1716,7 +1686,7 @@ def _walk_skipped_successors(
     for child_label in node.children:
         child_node = visible_entries.get(child_label) or visible_entries_by_layer.get(child_label)
         if child_node is None and vis_mode == "unrolled":
-            child_node = trace.layer_dict_all_keys.get(child_label)
+            child_node = trace._layer_dict_all_keys.get(child_label)
         if child_node is None:
             continue
         walked = _walk_skipped_successors(
@@ -2052,6 +2022,7 @@ __all__ = [
     "_code_panel_composition_available",
     "_collapsed_container_leaf_nodes",
     "_collapsed_endpoint_for_emission",
+    "_container_boundary_edge_attrs",
     "_container_clusters_for_graphviz",
     "_container_leaf_groups",
     "_container_leaf_shapes_identical",
@@ -2081,20 +2052,14 @@ __all__ = [
     "_inject_sibling_rank_groups",
     "_insert_before_final_brace",
     "_insert_into_cluster",
-    "_is_non_file_svg_href",
     "_is_hidden_buffer_update_node",
     "_node_is_inside_module",
     "_owner_module_key_for_node",
     "_rank_group_lines",
     "_render_edge_occurrences",
-    "_replace_svg_attr_value",
     "_resolve_svg_image_path",
     "_sibling_chain_lca_key",
     "_simplify_boundary_labels",
     "_single_container_owner",
-    "_svg_attrs_to_dict",
-    "_svg_image_mime_type",
-    "_svg_image_placeholder",
-    "_svg_numeric_attr",
     "_walk_skipped_successors",
 ]

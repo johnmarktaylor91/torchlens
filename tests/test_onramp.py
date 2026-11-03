@@ -11,6 +11,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _utils as utils
+from torchlens._record_type import record_type
 from torchlens.experimental import attribute_walk
 
 
@@ -98,7 +99,7 @@ def _first_saved_label(model: nn.Module, x: torch.Tensor) -> str:
     log = _metadata_log(model, x)
     for label in log.layer_labels:
         if not label.startswith(("input", "output")):
-            if log.layer_num_calls.get(label, 1) > 1:
+            if log._layer_num_calls.get(label, 1) > 1:
                 return f"{label}:1"
             return label
     raise AssertionError("No internal layer found.")
@@ -219,8 +220,8 @@ def test_layer_accessor_queries_and_completion(
     log = _metadata_log(model, x)
     label = _first_saved_label(model, x)
     base_label = label.split(":", 1)[0]
-    operator = log[label].func_name or log[label].layer_type
-    assert log.layers.total() == len(log.layer_logs)
+    operator = log[label].func_name or record_type(log[label])
+    assert log.layers.total() == len(log._layer_logs)
     assert base_label in log.layers._ipython_key_completions_()
     assert base_label in dir(log.layers)
     assert isinstance(log.layers.count_by("kind"), dict)

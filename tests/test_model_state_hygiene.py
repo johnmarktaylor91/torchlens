@@ -36,6 +36,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _state
+from torchlens.errors import TraceCaptureError
 
 _X = torch.tensor([[1.0, -2.0, 0.5]])
 _FILL = 0.5
@@ -187,22 +188,19 @@ def _model_fingerprint(model: nn.Module) -> dict[str, Any]:
     }
 
 
-def _assert_fingerprints_equal(
-    before: dict[str, Any], after: dict[str, Any], *, skip: frozenset[str] = frozenset()
-) -> None:
+def _assert_fingerprints_equal(before: dict[str, Any], after: dict[str, Any]) -> None:
     """Assert two fingerprints match, naming the first differing component.
+
+    Every door, ``tl.validate`` included, seeds the global RNG streams for its own runs
+    and restores them on return, so no component is exempt.
 
     Parameters
     ----------
     before, after:
         Fingerprints from :func:`_model_fingerprint`.
-    skip:
-        Components a door documents as changed (never model state).
     """
 
     for key in before:
-        if key in skip:
-            continue
         if key == "modules":
             for name, entries in before[key].items():
                 assert after[key].get(name) == entries, (
@@ -317,12 +315,10 @@ _DOORS: dict[str, Callable[[_Model], None]] = {
     "validate": _door_validate,
 }
 
-# tl.validate documents that it seeds the global RNGs for its ground-truth and
-# replay runs and does not restore them; every other component, and every
-# component of every other door, must come back unchanged.
-_DOCUMENTED_CHANGES: dict[str, frozenset[str]] = {
-    "validate": frozenset({"torch_rng", "python_rng"}),
-}
+# Doors whose failing forward runs outside a capture: ``bind`` is a capture-free
+# executor, and ``tl.validate`` runs its uncaptured ground-truth forward first, so
+# the model's own exception propagates unwrapped there.
+_UNCAPTURED_FAILURE_DOORS: frozenset[str] = frozenset({"bind", "validate"})
 
 _FAILURES: dict[str, type[BaseException] | None] = {
     "normal": None,
@@ -341,8 +337,10 @@ _FAILURES: dict[str, type[BaseException] | None] = {
 def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> None:
     """The model state fingerprint is identical before and after every call.
 
-    A failing call must also preserve the exception type, and a deepcopy taken
-    afterwards must be independent of the original.
+    A failing call must also preserve the forward's exception type (as the
+    ``__cause__`` of the door's TraceCaptureError for an ordinary exception raised
+    during a capture, or unchanged where the forward runs outside a capture), and a
+    deepcopy taken afterwards must be independent of the original.
     """
 
     model = _fresh()
@@ -354,11 +352,16 @@ def test_entry_point_returns_the_model_unchanged(door: str, failure: str) -> Non
         if exc_type is None:
             _DOORS[door](model)
         else:
-            with pytest.raises(exc_type, match="injected model failure"):
+            # An ordinary forward exception raised during a capture escapes as
+            # TraceCaptureError chained from it; interrupts are never wrapped, and
+            # a forward run outside any capture raises the model's own exception.
+            wrapped = issubclass(exc_type, Exception) and door not in _UNCAPTURED_FAILURE_DOORS
+            expected = TraceCaptureError if wrapped else exc_type
+            with pytest.raises(expected, match="injected model failure") as excinfo:
                 _DOORS[door](model)
-    _assert_fingerprints_equal(
-        before, _model_fingerprint(model), skip=_DOCUMENTED_CHANGES.get(door, frozenset())
-    )
+            if expected is TraceCaptureError:
+                assert type(excinfo.value.__cause__) is exc_type
+    _assert_fingerprints_equal(before, _model_fingerprint(model))
 
     model.gate.exc = None
     with warnings.catch_warnings():

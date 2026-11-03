@@ -26,6 +26,7 @@ from torchlens._capture.structure_only import (
     ValueDependentBranchError,
 )
 from torchlens._utils._torch_compat import get_meta_item_guard_support
+from torchlens.errors import TraceCaptureError
 from torchlens.options import CaptureOptions
 
 STRUCTURE = CaptureOptions(structure_only=True)
@@ -185,7 +186,7 @@ def test_float_truthiness_gate_is_lifted_in_mode_only() -> None:
     assert excinfo.value.fields["consumer_kind"] == "if_test"
     # Companion: the default path still captures this model without raising.
     log = tl.trace(FloatTruthiness(), torch.randn(2, 4))
-    assert log.structure_only is False
+    assert log.options.structure_only is False
 
 
 def test_internal_frame_reads_do_not_trip_the_belt() -> None:
@@ -202,8 +203,8 @@ def test_internal_frame_reads_do_not_trip_the_belt() -> None:
             return torch.relu(self.fc(x))
 
     log = _structure_trace(Clean(), torch.randn(2, 4))
-    assert log.structure_only is True
-    assert len(log.layer_list) >= 3
+    assert log.options.structure_only is True
+    assert len(log._layer_list) >= 3
 
 
 # ---------------------------------------------------------------------------
@@ -251,13 +252,15 @@ class UserRaisesNIE(nn.Module):
 
 @pytest.mark.smoke
 def test_user_raised_notimplementederror_propagates_unchanged() -> None:
-    """C-HONESTY: user exceptions stay user exceptions — annotated (3.11+)
-    or warned (3.10), never wrapped."""
+    """C-HONESTY: the user's exception is chained unchanged under the door's
+    TraceCaptureError, never reclassified; the structure-only note rides the
+    raised error (3.11+) or a warning (3.10)."""
 
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        with pytest.raises(NotImplementedError, match="user's own refusal") as excinfo:
+        with pytest.raises(TraceCaptureError, match="user's own refusal") as excinfo:
             _structure_trace(UserRaisesNIE(), torch.randn(2))
+        assert isinstance(excinfo.value.__cause__, NotImplementedError)
     if sys.version_info >= (3, 11):
         notes = getattr(excinfo.value, "__notes__", [])
         assert any("structure-only" in note for note in notes)
@@ -294,10 +297,10 @@ def _neutralize_layer1(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _neutralize_layer2(monkeypatch: pytest.MonkeyPatch) -> None:
     from torchlens import _capture as capture_pkg  # noqa: F401
-    from torchlens._capture import trace as capture_trace_module
+    from torchlens._capture import run as capture_run_module
 
     monkeypatch.setattr(
-        capture_trace_module,
+        capture_run_module,
         "_structure_only_forward_boundary",
         lambda trace: nullcontext(),
     )
@@ -336,8 +339,9 @@ def test_both_layers_dead_returns_the_bare_torch_error(
 
     _neutralize_layer1(monkeypatch)
     _neutralize_layer2(monkeypatch)
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(TraceCaptureError) as excinfo:
         _structure_trace(MetaContextBranch(), torch.randn(2, 4))
+    assert isinstance(excinfo.value.__cause__, RuntimeError)
     assert not isinstance(excinfo.value, ValueDependentBranchError)
 
 
@@ -378,7 +382,7 @@ def test_install_census_every_surface_member_is_escalated_in_mode() -> None:
     from torchlens.backends.torch import structure_only_belt as belt
 
     class _FakeTrace:
-        structure_only = True
+        _options_structure_only = True
 
     tensor_originals = {
         name: getattr(torch.Tensor, name, None) for name in belt._TENSOR_METHOD_SURFACE

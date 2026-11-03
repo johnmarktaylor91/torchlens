@@ -25,6 +25,7 @@ from scripts.visual_language.scale_models import SCALE_FIXTURES
 from scripts.visual_language.sentinel_models import SENTINEL_FIXTURES
 from scripts.visual_language.slides import CONVENTIONS, Panel, Slide
 from torchlens import _visualization
+from torchlens._record_type import record_type
 from torchlens._visualization import lenses
 from torchlens._visualization._encoding import EncodingChannelRequest
 from torchlens.errors import InvalidArgumentError
@@ -66,7 +67,7 @@ class _Decode:
 
 
 CALLABLES: Mapping[str, Callable[[], Any]] = {
-    "@skip_reshape": lambda: lambda layer: layer.layer_type == "reshape",
+    "@skip_reshape": lambda: lambda layer: record_type(layer) == "reshape",
     "@exclude_reshapes": lambda: lenses.DisplayFilter(exclude="reshapes"),
     "@bytes_linear": lambda: EncodingChannelRequest(source="bytes", transform="linear"),
     "@bytes_rank": lambda: EncodingChannelRequest(source="bytes", transform="rank"),

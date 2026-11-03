@@ -35,6 +35,13 @@ The graph hash family answers compatibility questions about captured structure:
 Both graph hashes are deterministic within a TorchLens version for equivalent
 capture structure. They are not security hashes and are not guaranteed stable
 across intentional schema/policy changes.
+
+The content-hash family is the one home for plain digests: ``sha256_hex`` over
+bytes, ``update_hasher_from_file`` and ``sha256_file`` over a file (streamed in
+``HASH_CHUNK_BYTES`` blocks), and ``sha256_canonical_json`` over a sorted,
+compact JSON encoding of a structure. The module imports only the standard
+library, so callers on torch-free paths can still reach it once the package is
+imported.
 """
 
 import hashlib
@@ -42,7 +49,118 @@ import json
 import random
 import re
 import string
-from typing import Any
+from collections.abc import Callable
+from os import PathLike
+from typing import Any, Final, Protocol
+
+
+def _record_type(record: Any) -> Any:
+    """Return ``record.type`` for an op, else ``record.layer_type`` (``None`` when absent).
+
+    Mirrors ``torchlens._record_type.record_type`` without importing it: this module
+    stays standard-library only so it also loads standalone (module docstring).
+    """
+
+    if hasattr(record, "layer_type"):
+        return record.layer_type
+    return getattr(record, "type", None)
+
+
+HASH_CHUNK_BYTES: Final[int] = 1 << 20
+"""Read size for streamed file hashing (the digest does not depend on it)."""
+
+
+class _Hasher(Protocol):
+    """The ``hashlib`` object surface the file helpers need."""
+
+    def update(self, data: bytes, /) -> None:
+        """Feed bytes into the digest."""
+
+
+def sha256_hex(data: bytes) -> str:
+    """Return the lowercase hex SHA-256 of ``data``.
+
+    Parameters
+    ----------
+    data:
+        Bytes to hash.
+
+    Returns
+    -------
+    str
+        Lowercase hexadecimal digest.
+    """
+
+    return hashlib.sha256(data).hexdigest()
+
+
+def update_hasher_from_file(hasher: _Hasher, path: "str | PathLike[str]") -> int:
+    """Stream one file's bytes into ``hasher`` and return the byte count.
+
+    Parameters
+    ----------
+    hasher:
+        A ``hashlib`` object (any algorithm).
+    path:
+        File to read.
+
+    Returns
+    -------
+    int
+        Number of bytes read.
+    """
+
+    size = 0
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(HASH_CHUNK_BYTES), b""):
+            size += len(chunk)
+            hasher.update(chunk)
+    return size
+
+
+def sha256_file(path: "str | PathLike[str]") -> str:
+    """Return the lowercase hex SHA-256 of one file's bytes, streamed.
+
+    Parameters
+    ----------
+    path:
+        File to hash.
+
+    Returns
+    -------
+    str
+        Lowercase hexadecimal digest.
+    """
+
+    digest = hashlib.sha256()
+    update_hasher_from_file(digest, path)
+    return digest.hexdigest()
+
+
+def sha256_canonical_json(payload: Any, *, default: Callable[[Any], Any] | None = str) -> str:
+    """Return the hex SHA-256 of ``payload`` in canonical JSON.
+
+    Canonical means ``sort_keys=True``, compact ``(",", ":")`` separators and
+    UTF-8 bytes, with ``json.dumps``'s default ``ensure_ascii=True``.
+
+    Parameters
+    ----------
+    payload:
+        JSON-encodable structure.
+    default:
+        Fallback encoder for values JSON cannot encode (``str``, ``repr`` or
+        ``None`` for none at the current callers; each persisted digest keeps
+        its own choice).
+
+    Returns
+    -------
+    str
+        Lowercase hexadecimal digest.
+    """
+
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), default=default)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
 
 _BARCODE_ALPHABET = string.ascii_letters + string.digits
 
@@ -169,10 +287,10 @@ def _hashable_path_component(component: Any) -> Any:
     component_type = type(component).__name__
     if component_type == "TupleIndex" and hasattr(component, "index"):
         return {"type": type(component).__name__, "index": component.index}
-    if component_type in {"DictKey", "HFKey"} and hasattr(component, "key"):
-        return {"type": type(component).__name__, "key": repr(component.key)}
-    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "name"):
-        return {"type": type(component).__name__, "name": component.name}
+    if component_type in {"DictKey", "HFKey"} and hasattr(component, "_key"):
+        return {"type": type(component).__name__, "key": repr(component._key)}
+    if component_type in {"NamedField", "DataclassField"} and hasattr(component, "_name"):
+        return {"type": type(component).__name__, "name": component._name}
     return {"type": type(component).__name__, "value": repr(component)}
 
 
@@ -215,7 +333,7 @@ def populate_normalized_layer_addresses(trace: Any) -> None:
         Each layer's ``_address_normalized`` field is updated in place.
     """
 
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         layer._address_normalized = normalize_address_for_hash(getattr(layer, "module", None))
 
 
@@ -263,7 +381,7 @@ def compute_graph_shape_hash(
     order_by_label: dict[Any, int] = {}
     layer_by_label: dict[Any, Any] = {}
     kept_layers: list[Any] = []
-    for layer in trace.layer_list:
+    for layer in trace._layer_list:
         reference_label = (
             layer.layer_label
             if getattr(layer, "num_passes", 1) == 1
@@ -301,7 +419,7 @@ def compute_graph_shape_hash(
         records.append(
             {
                 "index": index,
-                "layer_type": getattr(layer, "layer_type", None),
+                "layer_type": _record_type(layer),
                 "func_name": str(getattr(layer, "func_name", None)),
                 "parent_indices": parent_indices,
                 "_address_normalized": hash_address,
@@ -336,7 +454,7 @@ def _replacement_layer_fold_target(
     parent's shape and dtype folds.
     """
 
-    if getattr(layer, "layer_type", None) != "interventionreplacement":
+    if _record_type(layer) != "interventionreplacement":
         return None
     parents = list(getattr(layer, "parents", ()) or ())
     if len(parents) != 1 or parents[0] not in order_by_label:

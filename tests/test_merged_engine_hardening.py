@@ -704,7 +704,7 @@ class TestHaltedMemberArtifactRoundTrip:
             # Persist a coherent HALTED attestation: the structural halted
             # marker plus the settled stamp, exactly what a halt= capture
             # leaves behind (analysis-level member saves accept halted cores).
-            log.halted = True
+            log.is_stopped = True
             log._capture_outcome = CaptureOutcome(
                 status=CaptureStatus.STOPPED, reason="synthetic halt for merge disclosure"
             )

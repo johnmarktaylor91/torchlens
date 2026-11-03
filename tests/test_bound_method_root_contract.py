@@ -63,24 +63,28 @@ def test_bound_forward_capture_matches_module_capture() -> None:
     plain = tl.trace(model, x)
     assert torch.equal(bound[bound.output_layers[0]].out, plain[plain.output_layers[0]].out)
     # Same interior ops captured (labels match one-to-one).
-    assert [op.label for op in bound.layer_list] == [op.label for op in plain.layer_list]
+    assert [op.label for op in bound._layer_list] == [op.label for op in plain._layer_list]
 
 
 def test_synthetic_root_reads_owner_identity_never_method() -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
-    assert log.model_class_name == "Sequential"
-    assert log.model_label == "Sequential"
-    assert "method" not in (log.model_class_name, log.model_label)
-    assert log.model_class_qualname == "torch.nn.modules.container.Sequential"
-    assert log.root_entry_point == ("bound_method:torch.nn.modules.container.Sequential.forward")
+    assert log.source.class_name == "Sequential"
+    assert log.model_name == "Sequential"
+    assert "method" not in (log.source.class_name, log.model_name)
+    assert log.source.class_qualname == "torch.nn.modules.container.Sequential"
+    assert log.provenance.root_entry_point == (
+        "bound_method:torch.nn.modules.container.Sequential.forward"
+    )
 
 
 def test_root_fact_stays_module_call_on_module_roots() -> None:
     model = _mlp()
     log = tl.trace(model, torch.randn(2, 4))
-    assert log.root_entry_point == ("module_call:torch.nn.modules.container.Sequential.forward")
-    for op in log.layer_list:
+    assert log.provenance.root_entry_point == (
+        "module_call:torch.nn.modules.container.Sequential.forward"
+    )
+    for op in log._layer_list:
         assert op.tl_authored_root is None
 
 
@@ -91,7 +95,7 @@ def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
         for op in log[output_label].ops:
             assert op.tl_authored_root is True
     # The marker discloses the ROOT record only, never interior ops.
-    interior = [op for op in log.layer_list if op.label.split(":")[0] not in log.output_layers]
+    interior = [op for op in log._layer_list if op.label.split(":")[0] not in log.output_layers]
     assert all(op.tl_authored_root is None for op in interior)
 
 
@@ -99,7 +103,7 @@ def test_bound_method_called_exactly_once() -> None:
     model = _ToyLM()
     log = tl.trace(model.generate, _ids())
     assert stashed(log, "generate_calls", module="owner") == 1
-    assert log.root_entry_point.endswith(".generate")
+    assert log.provenance.root_entry_point.endswith(".generate")
 
 
 def test_owner_registers_as_submodule_of_wrapper() -> None:
@@ -151,7 +155,7 @@ def test_episode_stepped_module_defaults_to_owner() -> None:
     episode = log.annotations["episode"]
     assert episode["header"]["stepped_module"] == "owner"
     assert len(episode["rows"]) == 3
-    assert log.root_entry_point.endswith("._ToyLM.generate")
+    assert log.provenance.root_entry_point.endswith("._ToyLM.generate")
 
 
 def test_episode_stepped_module_none_refuses_on_module_roots() -> None:
@@ -176,7 +180,7 @@ def test_rerun_identity_gate_refuses_bound_method_captures() -> None:
 def test_rerun_identity_gate_fail_closed_on_absent_fact() -> None:
     model = _mlp()
     log = tl.trace(model, torch.randn(2, 4))
-    log.root_entry_point = None  # simulate a legacy artifact
+    log._provenance_root_entry_point = None  # simulate a legacy artifact
     with pytest.raises(ModelMismatchError) as excinfo:
         log._validate_supplied_model_matches_capture(model)
     assert excinfo.value.fields["code"] == "root_entry_point_unavailable"
@@ -204,7 +208,7 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     target = tmp_path / "bound.tlspec"
     log.save(target)
     loaded = tl.load(target)
-    assert loaded.root_entry_point == log.root_entry_point
+    assert loaded.provenance.root_entry_point == log.provenance.root_entry_point
     out_op = loaded[loaded.output_layers[0]].ops[0]
     assert out_op.tl_authored_root is True
     with pytest.raises(ModelMismatchError) as excinfo:
@@ -217,10 +221,10 @@ def test_replay_engine_still_works_on_bound_captures() -> None:
     log = tl.trace(
         model.forward,
         torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(intervention_ready=True),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     fork = log.fork()
-    relu_label = next(op.label for op in log.layer_list if op.label.startswith("relu"))
+    relu_label = next(op.label for op in log._layer_list if op.label.startswith("relu"))
     fork.do(fork[tl.units(relu_label, [(0, 0)])], tl.zero_ablate())
     assert len(fork.intervention_audit) == 1
 
@@ -276,7 +280,7 @@ def test_return_shapes_capture_instead_of_refusing(method_name: str, expected_ou
     torch.manual_seed(0)
     model = _ShapedReturns()
     log = tl.trace(getattr(model, method_name), torch.randn(2, 4))
-    assert log.root_entry_point.endswith(f"._ShapedReturns.{method_name}")
+    assert log.provenance.root_entry_point.endswith(f"._ShapedReturns.{method_name}")
     assert len(log.output_layers) == expected_outputs
     # A None-returning root has no output op to carry the marker; the
     # Trace-level bound_method fact remains the TL-authorship disclosure.

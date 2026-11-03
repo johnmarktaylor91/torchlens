@@ -25,7 +25,7 @@ _SEEDED_RNG_NAMESPACES = frozenset({"torch", "torch.Tensor", "torch.nn.functiona
 # non-family allowlist is a FAILING test, never a silent gap.
 #
 # This block is the SINGLE definition consumed by all three recognition layers:
-# the load-side value-source classifier (``_runnable_execution.py``), the producer
+# the load-side value-source classifier (``_runnable/execution.py``), the producer
 # origin ledger (``backends/torch/completeness_witness.py``), and the pruned-orphan
 # control walk (``postprocess/graph_traversal.py``). No other call site may
 # re-derive uninitialized-memory nondeterminism from qualnames (source-scan

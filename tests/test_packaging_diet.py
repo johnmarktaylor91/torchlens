@@ -6,7 +6,6 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 import torch
@@ -58,7 +57,7 @@ def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use()
 
     log = _make_log()
 
-    assert len(log.layer_list) > 0
+    assert len(log._layer_list) > 0
     assert log.show(vis_mode="none") is None
 
 
@@ -129,12 +128,13 @@ def test_to_pandas_succeeds_when_tabular_extra_is_available() -> None:
     assert "layer_label" in frame.columns
 
 
-def test_to_pandas_missing_pandas_mentions_tabular_extra() -> None:
+def test_to_pandas_missing_pandas_mentions_tabular_extra(monkeypatch: pytest.MonkeyPatch) -> None:
     """Trace.to_pandas raises a helpful extra-install hint when pandas is missing."""
 
     log = _make_log()
 
-    with patch.dict("sys.modules", {"pandas": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "pandas", None)
         try:
             log.to_pandas()
         except ImportError as exc:
@@ -158,7 +158,7 @@ def test_repr_html_succeeds_when_notebook_extra_is_available() -> None:
     assert "NaN/Inf" in html
 
 
-def test_repr_html_without_ipython_still_renders_the_card() -> None:
+def test_repr_html_without_ipython_still_renders_the_card(monkeypatch: pytest.MonkeyPatch) -> None:
     """Card generation is stdlib-only: no IPython gate (treescope memo B1).
 
     The historical gate returned a 94-byte plain repr whenever IPython was
@@ -168,7 +168,9 @@ def test_repr_html_without_ipython_still_renders_the_card() -> None:
 
     log = _make_log()
 
-    with patch.dict("sys.modules", {"IPython": None, "IPython.display": None}):
+    with monkeypatch.context() as patched:
+        patched.setitem(sys.modules, "IPython", None)
+        patched.setitem(sys.modules, "IPython.display", None)
         html = log._repr_html_()
 
     assert "TorchLens Trace" in html
@@ -615,7 +617,12 @@ def test_newest_admitted_torch_literal_lockstep() -> None:
         *pr_jobs["smoke"]["strategy"]["matrix"]["include"],
         *nightly_jobs["smoke-matrix"]["strategy"]["matrix"]["include"],
     ]
-    matrix_versions = [str(row["torch"]).split("+", 1)[0] for row in rows]
+    # The `forward` row runs a torch above the newest admitted one on purpose
+    # (it gates the newer-torch capability flags); the tooling jobs follow the
+    # newest-admitted rows.
+    matrix_versions = [
+        str(row["torch"]).split("+", 1)[0] for row in rows if row.get("track") == "newest-admitted"
+    ]
     inline_jobs = [pr_jobs[name] for name in ("type-check", "checks", "packaging")]
     inline_jobs += [nightly_jobs[name] for name in ("dep-audit", "dep-audit-extras")]
     inline_versions = torch_re.findall("".join(str(job) for job in inline_jobs))

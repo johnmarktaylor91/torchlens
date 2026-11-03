@@ -37,6 +37,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | Module | Purpose |
 |--------|---------|
 | `request.py` | Resolved visualization requests and output targets (`ResolvedRenderRequest`, `RenderTarget`, `RenderContext`) |
+| `_trace_collapse.py` | Bodies of `Trace.module_collapse_order`, `collapse_order`, `collapse_plan` and `collapse_schedule` as `f(trace, ...)` functions, reached through `_data_classes._doors.visualization()` |
 | `_render_common.py` | Shared render types, constants, and imports for Graphviz rendering |
 | `_render_flow.py` | Focus, skip, container, and sibling setup helpers |
 | `_render_nodes.py` | Node construction and raw value helpers |
@@ -179,7 +180,7 @@ pure-Python rank layout above 20,000 cost units.
 - Buffer visibility has multiple modes; use `_normalize_buffer_visibility()`.
 - Intervention node rendering keys on the trace's `_intervention_spec`
   (`node_spec.py`) and the `vis_intervention_mode` render option
-  (`_render_dot.py`) — NOT on the deprecated `intervention_ready` name.
+  (`_render_dot.py`) — NOT on the deprecated `replayable` name.
 - Bundle diff rendering is SVG-string based; compare snapshots after visual changes.
 
 ## Tests to Run After Changes
