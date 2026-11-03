@@ -114,7 +114,7 @@ def _pre3_observed(path: Path) -> str | None:
         return None
     for marker in ("tlspec_version", "kind", "io_format_version", "n_activation_blobs"):
         if marker in manifest:
-            return f"{marker}={manifest[marker]}"
+            return f"{marker}={manifest[marker]}, format={manifest.get('format', '<missing>')!r}"
     if "format" not in manifest and any(
         marker in manifest for marker in ("torchlens_version", "tensor_entries")
     ):
