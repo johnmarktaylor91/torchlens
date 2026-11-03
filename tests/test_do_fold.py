@@ -134,8 +134,8 @@ def test_mapping_do_applies_both_edits_in_one_propagation(
     (event,) = _events(fork)[events_before:]
     assert event["status"] == "fired"
     assert event["fire_count"] == 2
-    assert list(fork["relu_1_2"].ops[0].edits or ())
-    assert list(fork["tanh_1_4"].ops[0].edits or ())
+    assert list(fork.layers["relu_1_2"].ops[0].edits or ())
+    assert list(fork.layers["tanh_1_4"].ops[0].edits or ())
     # The source trace is untouched.
     assert torch.allclose(trace["linear_3_5"].out, _hand(model, x), atol=1e-6)
 
