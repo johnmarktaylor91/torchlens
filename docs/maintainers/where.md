@@ -629,7 +629,7 @@ TorchLens quickstart: one input ladder, one provenance record, one render door. 
 | --- | --- | ---: |
 | `__init__` | TorchLens quickstart: one input ladder, one provenance record, one render door. | 73 |
 | `_gate` | The non-gold capability gate and the warn-once raw-read machinery (B10). | 160 |
-| `_grammar` | The ''input_size='' grammar and the deterministic synthesis kernel (B6). | 423 |
+| `_grammar` | The ''input_shape='' grammar and the deterministic synthesis kernel (B6). | 423 |
 | `_ladder` | The trace entry door for the declared/inferred/kwargs-only rungs ( B8). | 133 |
 | `_plan` | Input-rung law and the normalized pre-capture call description (quickstart B4). | 171 |
 | `_primitive` | The private concrete-input capture primitive (quickstart B5). | 216 |

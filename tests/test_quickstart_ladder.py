@@ -90,6 +90,9 @@ class TestGrammar:
         with pytest.raises(Exception) as excinfo:
             parse_input_size(bad, _cnn())
         assert excinfo.value.fields["code"] == "input_size_invalid"
+        # The message names the keyword users pass; input_size= was renamed.
+        assert "input_shape=" in str(excinfo.value)
+        assert "input_size=" not in str(excinfo.value)
 
     def test_bool_dimension_is_symbolic(self) -> None:
         """bool is not a size (True == 1 must not synthesize)."""
@@ -109,6 +112,7 @@ class TestGrammar:
         with pytest.raises(Exception) as excinfo:
             parse_input_size({"bogus": (1, 3)}, OneArg())
         assert excinfo.value.fields["code"] == "input_size_unknown_binding"
+        assert "input_shape= binds 'bogus'" in str(excinfo.value)
 
     def test_sequence_form_makes_positional_slots(self) -> None:
         """A sequence of shapes is multiple positional tensors."""
