@@ -125,7 +125,7 @@ torchlens/_distributed.py::_collect_module_evidence	73
 torchlens/_distributed.py::_walk_attribute_values	67
 torchlens/_ecosystem/plugins.py::activate	104
 torchlens/_ecosystem/plugins.py::activate_configured	65
-torchlens/_extraction/dtype_policy.py::cast_for_store	80
+torchlens/_extraction/dtype_policy.py::cast_for_store	64
 torchlens/_extraction/engine.py	1847
 torchlens/_extraction/engine.py::_apply_ragged_gate	65
 torchlens/_extraction/engine.py::_capture_outputs	73
