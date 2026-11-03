@@ -192,7 +192,7 @@ class PartialTrace:
             The picture whose DOT source lists the raw operations captured before the
             failure; ``str()`` of it is that source.
         """
-        from torchlens.viz._drawing import Drawing
+        from .._data_classes import _doors
 
         lines = [
             "digraph torchlens_partial {",
@@ -215,7 +215,7 @@ class PartialTrace:
                 f'  "{_dot_escape(_display_label(self.raw_layers[-1]))}" -> "__failure__";'
             )
         lines.append("}")
-        return Drawing(dot="\n".join(lines))
+        return _doors.visualization()._trace_draw.partial_drawing("\n".join(lines))
 
     def show(self, kind: Literal["graph", "repr", "html"] | None = None, **kwargs: Any) -> str:
         """Display this partial log using a small set of inspection modes.
