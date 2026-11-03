@@ -486,9 +486,10 @@ class DecodedArtifact(_RecordResolver):
     def build_records(self) -> None:
         """Run each record's state hook, leaves first, under the governed load."""
 
-        self.objects["trace"] = [state_new(record_class("trace"))]
-        if self._deferred_trace_refs:
-            self.resolve_references()
+        if not self.objects.get("trace"):
+            self.objects["trace"] = [state_new(record_class("trace"))]
+            if self._deferred_trace_refs:
+                self.resolve_references()
         with governed_artifact_load():
             for kind in LOAD_ORDER:
                 for row_number, (obj, row) in enumerate(
