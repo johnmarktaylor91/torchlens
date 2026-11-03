@@ -55,6 +55,8 @@ from .collapse_plan import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from .._data_classes.trace import Trace
     from .collapse_plan import RenderContext
     from .source_graph import SourceGraph
@@ -566,14 +568,14 @@ def _even_auto_plan(
 
 
 def _even_auto_boxes(
-    trace: Trace, signals: dict[str, Any], selected: frozenset[str]
+    trace: Trace, signals: Mapping[str, Any], selected: frozenset[str]
 ) -> frozenset[str]:
     """Box fully expanded small modules that sit beside condensed siblings.
 
     A module qualifies when it may render as a box, runs once, contains no
-    box, is inside no box, and hides no more ops than the smallest box in
-    its siblings' subtrees: left expanded it reads as stray raw ops between
-    boxes. Outermost first, so the parent the user wrote wins over its child.
+    box, is inside no box, and hides no more ops than the smallest box that
+    is a sibling or a sibling's child: left expanded it reads as stray raw
+    ops between boxes. Outermost first, so the parent the user wrote wins over its child.
     """
 
     boxes = set(selected)
@@ -599,13 +601,18 @@ def _may_box_expanded(trace: Trace, address: str, signal: Any, boxes: set[str]) 
     return not any(_within(address, box) or _within(box, address) for box in boxes)
 
 
-def _subtree_box_ops(roots: list[str], boxes: set[str], signals: dict[str, Any]) -> list[int]:
-    """Return the hidden-op counts of the boxes inside any of ``roots``."""
+def _subtree_box_ops(roots: list[str], boxes: set[str], signals: Mapping[str, Any]) -> list[int]:
+    """Return the hidden-op counts of boxes that are a root or a root's child.
+
+    Only boxes one level down count: a box nested deeper (BERT's
+    ``encoder.layer.0`` beside ``embeddings``) sits in its own cluster and
+    does not make the module beside its ancestor read as stray.
+    """
 
     return [
         signals[box].hidden_ops
         for box in boxes
-        if box in signals and any(_within(box, root) for root in roots)
+        if box in signals and any(root in (box, _parent_address(box)) for root in roots)
     ]
 
 

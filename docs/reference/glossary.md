@@ -1087,8 +1087,8 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   builtin tokens (`"time"`, `"bytes"`, `"flops"`, ... with the same meaning and units), the
   closed `"dims"` shape token (numel of the non-batch output shape), or a callable
   `node -> scalar`. Collapsed boxes and segments size from the same exact member-op sums as
-  `color_by`. Sizes are label-aware: the largest label box among encoded nodes is the
-  smallest-value size and the largest value gets 4x that area. Emitted sizes are width/height
+  `color_by`. Sizes are label-aware: the median label box among encoded nodes (or a node's
+  own label box when larger) is the smallest-value size and the largest value gets 4x that area. Emitted sizes are width/height
   MINIMUMS under `fixedsize=false`: a label can never be truncated by an encoding and fonts never
   scale. Strictly opt-in — plain `draw()` keeps
   uniform boxes. On rolled multi-pass layers size REFUSES where color degrades

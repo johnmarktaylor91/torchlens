@@ -44,11 +44,13 @@ by the numel of the non-batch output shape (the conservative area-only
 mapping). On rolled multi-pass nodes a source that cannot be certified
 single-valued refuses (`size_by_rolled_varying`).
 
-Sizes are label-aware. Once every label is resolved, the draw estimates the
-largest label box among the size-encoded nodes and scales that box by each
-node's normalized value: the smallest-value node is just large enough for
-the largest label, and the largest-value node has 4x its area. Area is
-monotone in the value, so the value (not label length) sets node size.
+Sizes are label-aware. Once every label is resolved, the draw estimates each
+label box and takes the median box among the size-encoded nodes as the base:
+the smallest-value node is the size of a typical label, and area grows
+linearly to 4x the base at the largest value. Nodes with typical labels share
+the base, so their areas compare directly. A node whose label is wider or
+taller than the median starts from its own label box instead and grows by the
+same factor, so one long argument row never inflates every node.
 Sizes are emitted as width/height MINIMUMS under `fixedsize=false`: labels
 never truncate and fonts never scale. A `node_spec_fn` that sets its own
 width/height keeps them.

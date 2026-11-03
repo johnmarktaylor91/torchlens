@@ -96,14 +96,29 @@ def _middle_blocks() -> set[str]:
 
 def test_small_expanded_modules_box_beside_condensed_siblings(mini_trace: tl.Trace) -> None:
     signals = analyze_collapse(mini_trace).signals
-    boxes = _even_auto_boxes(mini_trace, signals, frozenset(_middle_blocks()))
+    selected = frozenset(_middle_blocks() | {"stages.0"})
+    boxes = _even_auto_boxes(mini_trace, signals, selected)
     # The downsample sits beside the boxed blocks; stem and head beside the
-    # stage container holding them. All three are no larger than a block box.
-    assert {"stages.1.downsample", "stem", "head"} <= boxes
-    # A module larger than the boxes beside it stays expanded.
-    assert "stages.0" not in boxes and "stages.2" not in boxes
+    # stage container whose child stages.0 is a box; stages.2 matches stages.0.
+    assert {"stages.1.downsample", "stem", "head", "stages.2"} <= boxes
+    # A module that contains boxes stays expanded.
+    assert "stages.1" not in boxes
     # The parent the user wrote wins over its child.
     assert not any(box.startswith("stem.") for box in boxes)
+
+
+def test_boxes_nested_two_levels_down_leave_neighbours_expanded(mini_trace: tl.Trace) -> None:
+    # BERT's shape: embeddings and pooler beside encoder.layer.N stay expanded.
+    signals = analyze_collapse(mini_trace).signals
+    boxes = _even_auto_boxes(mini_trace, signals, frozenset(_middle_blocks()))
+    assert "stages.1.downsample" in boxes
+    assert "stem" not in boxes and "head" not in boxes
+
+
+def test_a_module_larger_than_the_box_beside_it_stays_expanded(mini_trace: tl.Trace) -> None:
+    signals = analyze_collapse(mini_trace).signals
+    selected = frozenset({"stages.0.downsample"})
+    assert _even_auto_boxes(mini_trace, signals, selected) == selected
 
 
 def test_nothing_boxes_without_a_condensed_sibling(mini_trace: tl.Trace) -> None:

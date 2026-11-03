@@ -13,10 +13,13 @@ legal condensation.
 
 `auto` then evens that point out, and only ever condenses further. A small module left expanded
 beside boxed siblings is boxed too, when it hides no more ops than the smallest box beside it
-(convnext's stem and stage-2 downsample), so stray raw ops do not sit between boxes. A run of
+(convnext's stem and stage-2 downsample), so stray raw ops do not sit between boxes. "Beside"
+means a sibling box or a box one level inside a sibling; a box nested deeper (BERT's
+`encoder.layer.0` next to `embeddings`) leaves its neighbours expanded. A run of
 three or more structurally identical, consecutive sibling boxes folds into one segment (convnext's
 nine stage-2 blocks become `stages.2.blocks.0-8 -- 9 blocks`). The evened plan never shows more
-nodes than the schedule point it started from; ResNet-18's auto overview is unchanged.
+nodes than the schedule point it started from; the ResNet-18, GPT-2 and BERT auto overviews are
+unchanged.
 
 ![Full ResNet-18 graph](../images/collapse/mode-none.svg)
 

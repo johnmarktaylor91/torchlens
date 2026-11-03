@@ -4,20 +4,24 @@ Graphviz treats an encoded width/height as a MINIMUM (``fixedsize=false``):
 a node is never smaller than its label. Sized from Graphviz's bare default
 box (0.75 x 0.5 in), every multi-row TorchLens label outgrows the minimum and
 the label, not the value, sets the node's size. This pass makes the value
-set the size: once every node's label is resolved, it estimates the largest
-label box among the size-encoded nodes and scales that reference by the
-node's normalized value, so the smallest-value node is exactly large enough
-for the largest label and the largest-value node has
-``SIZE_BY_MAX_AREA_MULT`` times its area. Every encoded node therefore
-outgrows its own label, area stays monotone in the value, and no label is
-clipped (the attributes remain minimums).
+set the size: once every node's label is resolved, it estimates each label
+box, takes the MEDIAN box among the size-encoded nodes as the reference, and
+scales ``max(reference, own label box)`` (per dimension) by the node's
+normalized value, so the largest-value node has ``SIZE_BY_MAX_AREA_MULT``
+times the area of its base. Nodes with typical labels share one base and are
+exactly comparable by area; a node whose label is wider or taller than the
+median starts from its own label box (never clipped) and still grows by the
+same factor. Using the median rather than the largest label keeps one long
+argument row from inflating every node in the graph.
 
 Leaf module by design: no runtime imports from the visualization package.
 """
 
 from __future__ import annotations
 
+import html
 import math
+import re
 from collections.abc import Iterable
 from dataclasses import replace
 from typing import Any
@@ -74,10 +78,29 @@ MARGIN_X_IN = 0.11 + 0.06
 MARGIN_Y_IN = 0.055 + 0.06
 
 
+_MARKUP = re.compile(r"<[^>]*>")
+
+
+def _visible_text(line: Any) -> str:
+    """Return the text Graphviz draws for one label row (tags and entities removed)."""
+
+    return html.unescape(_MARKUP.sub("", str(line)))
+
+
+def _median(values: list[float]) -> float:
+    """Return the median of a non-empty list."""
+
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+
 def estimate_label_box(lines: Iterable[Any], font_pt: float) -> tuple[float, float]:
     """Return a conservative (width, height) in inches for a node label."""
 
-    rows = [str(line) for line in lines] or [""]
+    rows = [_visible_text(line) for line in lines] or [""]
     longest = max(len(row) for row in rows)
     width_pt = longest * CHAR_WIDTH_EM * font_pt + 2 * CELL_PADDING_PT
     height_pt = len(rows) * (ROW_HEIGHT_EM * font_pt + 2 * CELL_PADDING_PT)
@@ -153,12 +176,14 @@ def layout_encoded_sizes(nodes: tuple[Any, ...], state: Any, context: Any) -> tu
             labels[target.key] = target.label_lines
     if not labels:
         return nodes
-    boxes = [estimate_label_box(lines, font_pt) for lines in labels.values()]
-    reference = (max(box[0] for box in boxes), max(box[1] for box in boxes))
-    for key in labels:
-        state.final_sizes[key] = scaled_size(
-            reference, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT
-        )
+    boxes = {key: estimate_label_box(lines, font_pt) for key, lines in labels.items()}
+    reference = (
+        _median([box[0] for box in boxes.values()]),
+        _median([box[1] for box in boxes.values()]),
+    )
+    for key, box in boxes.items():
+        base = (max(reference[0], box[0]), max(reference[1], box[1]))
+        state.final_sizes[key] = scaled_size(base, state.size_fractions[key], SIZE_BY_MAX_AREA_MULT)
     out = []
     for node in nodes:
         key = state.unit_keys.get(node.name)

@@ -199,21 +199,69 @@ def test_scaled_size_area_spans_max_mult() -> None:
     )
 
 
-def test_final_sizes_fit_labels_and_are_monotone(nested_log: tl.Trace, tmp_path: Path) -> None:
+def test_final_sizes_fit_labels_and_scale_from_a_shared_base(
+    nested_log: tl.Trace, tmp_path: Path
+) -> None:
     _draw(nested_log, tmp_path, size_by="bytes")
     state = nested_log._last_encoding_state
     finals = state.final_sizes
     assert finals and set(finals) <= set(state.size_fractions)
-    smallest = min(finals.values(), key=lambda size: size[0] * size[1])
-    # The smallest node is at least as large as an estimated two-row label box.
     floor = estimate_label_box(["x"], DEFAULT_FONT_PT)
-    assert smallest[0] >= floor[0] and smallest[1] >= floor[1]
-    order = sorted(finals, key=lambda key: state.size_fractions[key])
+    for key, size in finals.items():
+        assert size[0] >= floor[0] and size[1] >= floor[1]
+    # Area / base area is exactly 1 + f * (M - 1) for every node; nodes that share
+    # the median base are therefore ordered by value.
+    bases = {}
+    for key, size in finals.items():
+        factor = math.sqrt(1.0 + state.size_fractions[key] * (SIZE_BY_MAX_AREA_MULT - 1.0))
+        bases[key] = (round(size[0] / factor, 2), round(size[1] / factor, 2))
+    shared = max(set(bases.values()), key=list(bases.values()).count)
+    order = sorted(
+        (key for key in finals if bases[key] == shared), key=lambda key: state.size_fractions[key]
+    )
     areas = [finals[key][0] * finals[key][1] for key in order]
+    assert len(order) >= 2
     assert all(b >= a - 1e-6 for a, b in zip(areas, areas[1:], strict=False))
-    largest = max(areas)
-    assert largest / min(areas) == pytest.approx(SIZE_BY_MAX_AREA_MULT, rel=0.02) or math.isclose(
-        max(state.size_fractions.values()), min(state.size_fractions.values())
+
+
+def test_one_long_label_does_not_inflate_every_node() -> None:
+    from types import SimpleNamespace
+
+    from torchlens._visualization._encoding_size_layout import layout_encoded_sizes
+
+    short = ("op_1", "(2, 8)")
+    long_row = ("op_9", "x" * 120)
+    state = SimpleNamespace(
+        size_fractions={"a": 0.0, "b": 0.0, "c": 1.0, "d": 0.5},
+        sizes={},
+        unit_keys={},
+        final_sizes={},
+        aggregates=SimpleNamespace(
+            segments=(
+                SimpleNamespace(key="a", label_lines=short),
+                SimpleNamespace(key="b", label_lines=short),
+                SimpleNamespace(key="c", label_lines=short),
+                SimpleNamespace(key="d", label_lines=long_row),
+            )
+        ),
+    )
+    layout_encoded_sizes((), state, SimpleNamespace(font_size=None))
+    finals = state.final_sizes
+    short_box = estimate_label_box(short, DEFAULT_FONT_PT)
+    long_box = estimate_label_box(long_row, DEFAULT_FONT_PT)
+    assert finals["a"][0] == pytest.approx(short_box[0], abs=1e-3)
+    assert finals["c"][0] * finals["c"][1] == pytest.approx(
+        SIZE_BY_MAX_AREA_MULT * finals["a"][0] * finals["a"][1], rel=1e-2
+    )
+    assert finals["d"][0] >= long_box[0]
+
+
+def test_label_box_ignores_markup() -> None:
+    assert estimate_label_box(["<b>ab</b>"], DEFAULT_FONT_PT) == estimate_label_box(
+        ["ab"], DEFAULT_FONT_PT
+    )
+    assert estimate_label_box(["a&amp;b"], DEFAULT_FONT_PT) == estimate_label_box(
+        ["a&b"], DEFAULT_FONT_PT
     )
 
 

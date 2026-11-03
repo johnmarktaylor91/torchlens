@@ -482,8 +482,9 @@
   the field path), the closed `"dims"` shape token (numel of the NON-BATCH output shape; the only
   shape-valued source — callables must return scalars), or a callable. Emitted sizes are
   width/height MINIMUMS under `fixedsize=false` (labels never truncate, fonts never scale),
-  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: the largest label
-  box is the minimum-value size, area grows to `SIZE_BY_MAX_AREA_MULT` (4.0) x it); collapsed
+  label-aware (render-IR pass `_encoding_size_layout.layout_encoded_sizes`: base box =
+  per-dimension max(median label box, own label box), area grows linearly to
+  `SIZE_BY_MAX_AREA_MULT` (4.0) x the base at the top value); collapsed
   boxes and segments encode from exact member-op sums (`_encoding_aggregate`); strictly
   opt-in (plain `draw()` keeps uniform boxes). On rolled multi-pass nodes size REFUSES where
   color degrades: `size_by_rolled_varying` fires for any source that cannot be certified
