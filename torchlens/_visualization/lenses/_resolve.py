@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Any
 from ..._errors import InvalidArgumentError
 from ..._record_type import record_type
 from ...errors._base import TorchLensWarning
+from .._encoding_request import EncodingChannelRequest
 from ..theme_registry import LensPreset, get_lens, resolve_lens_request
 from ._budget import BudgetResolution, resolve_budget
 from ._families import ResolvedSource, resolve_source_family, scalar_or_none, source_coverage
@@ -510,8 +511,6 @@ def _perf_stage(
         return None, None
     source, channel_values = _resolve_perf_source(trace, lens, build.view)
     if "color_by" not in build.user_kwargs:
-        from .._encoding import EncodingChannelRequest
-
         build.effective["color_by"] = EncodingChannelRequest(
             source=source.member,
             transform="rank",

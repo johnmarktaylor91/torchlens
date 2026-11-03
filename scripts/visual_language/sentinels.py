@@ -144,7 +144,14 @@ SENTINELS: tuple[Sentinel, ...] = (
                 intervene="zero_relu",
                 kwargs={"intervention_mode": "as_node"},
             ),
-            _panel("b", "ResidualNorm", "render_surgery", call="surgery", capture=_EDIT),
+            _panel(
+                "b",
+                "ResidualNorm",
+                'draw(highlight="interventions")',
+                call="surgery",
+                capture=_EDIT,
+                kwargs={"highlight": "interventions"},
+            ),
             _panel(
                 "c", "ResidualNorm", "surgery_diff(...).draw()", call="surgery_diff", capture=_EDIT
             ),
