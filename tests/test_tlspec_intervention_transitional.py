@@ -93,7 +93,13 @@ def _remove_unified_marker(path: Path) -> None:
 def test_intervention_writer_emits_current_format(
     tmp_path: Path,
 ) -> None:
-    """The writer emits a 3.0 manifest and recipe, with no legacy payload."""
+    """The writer emits a 3.0 manifest and recipe, with no legacy payload.
+
+    Parameters
+    ----------
+    tmp_path:
+        Parent of the saved intervention artifact.
+    """
 
     path = tmp_path / "unified.tlspec"
     _interventions().save_intervention(path, level="portable")
@@ -108,7 +114,13 @@ def test_intervention_writer_emits_current_format(
 
 
 def test_new_loader_refuses_transitional_intervention_spec(tmp_path: Path) -> None:
-    """The polymorphic loader refuses the 2.x transitional layout."""
+    """The polymorphic loader refuses the 2.x transitional layout.
+
+    Parameters
+    ----------
+    tmp_path:
+        Parent of the saved intervention artifact.
+    """
 
     path = tmp_path / "transitional.tlspec"
     _interventions().save_intervention(path, level="portable")
@@ -122,7 +134,13 @@ def test_new_loader_refuses_transitional_intervention_spec(tmp_path: Path) -> No
 
 
 def test_direct_intervention_reader_refuses_transitional_kind(tmp_path: Path) -> None:
-    """The direct reader also refuses an intervention layout written by 2.x."""
+    """The direct reader also refuses an intervention layout written by 2.x.
+
+    Parameters
+    ----------
+    tmp_path:
+        Parent of the saved intervention artifact.
+    """
 
     path = tmp_path / "transitional.tlspec"
     _interventions().save_intervention(path, level="executable_with_callables")
