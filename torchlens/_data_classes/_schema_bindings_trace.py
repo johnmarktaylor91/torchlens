@@ -270,6 +270,7 @@ TRACE_BINDINGS: dict[str, StorageBinding] = {
     "track_nonfinite": StorageBinding(StorageKind.RUNTIME),
     "track_device_memory": StorageBinding(StorageKind.RUNTIME),
     "measure_host_peak_memory": StorageBinding(StorageKind.RUNTIME),
+    "_options_aten_ops": StorageBinding(StorageKind.RUNTIME),
     "_device_memory_samples": StorageBinding(StorageKind.RUNTIME),
     "grad_fn_timing_provenance": StorageBinding(StorageKind.SCALAR),
     "checkpoint_invocation_witness": StorageBinding(StorageKind.SCALAR),

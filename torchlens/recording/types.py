@@ -17,7 +17,6 @@ from .._captured_run import TraceLike
 from .._errors import CaptureNotActiveError
 from .._output_slot import read_output, returned as returned, stopped as stopped
 from . import _types_records
-from ._types_ancestry import _backfill_cooked_ancestry
 
 ActivationRecord = _types_records.ActivationRecord
 CaptureDecision = _types_records.CaptureDecision
@@ -1104,6 +1103,7 @@ class Recording(TraceLike):
             )
         from .._capture.projectors import RecordingProjector
         from .._data_classes.trace import Trace
+        from ._types_ancestry import _backfill_cooked_ancestry
         from .options import _RecordingConfig
 
         projection = RecordingProjector().project(self._captured_run_cores)
@@ -1119,16 +1119,14 @@ class Recording(TraceLike):
         trace._cooked_from = "recording"
         trace._predicate_save_options = _RecordingConfig()
         trace._replay_arg_version_data_complete = False
-        # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own
-        # `_capture_events`. Later graph traversal replaces operation events in
-        # place, so aliasing the Recording's buffer would mutate its read-only
-        # event stream. The copy shares frozen OpEvents and tensor payloads by
-        # reference (cheap; no activation cloning) while giving postprocess an
-        # independent working projection. NOTE: `output_layers`,
-        # `input_layers`, `buffer_layers`, `internal_source_ops`, the
-        # `_layer_counter` seed, and `_recover_halt_frontier()` all read from
-        # `self._capture_events` (the original, intact) below -- only the
-        # materialized `trace.capture_events` is the copy.
+        # Hand postprocess a STRUCTURAL COPY, never this frozen Recording's own `_capture_events`.
+        # Later graph traversal replaces operation events in place, so aliasing the Recording's
+        # buffer would mutate its read-only event stream. The copy shares frozen OpEvents and tensor
+        # payloads by reference (cheap; no activation cloning) while giving postprocess an
+        # independent working projection. NOTE: `output_layers`, `input_layers`, `buffer_layers`,
+        # `internal_source_ops`, the `_layer_counter` seed, and `_recover_halt_frontier()` all read
+        # from `self._capture_events` (the original, intact) below -- only the materialized
+        # `trace.capture_events` is the copy.
         events_for_replay = cast(Any, projection.capture_events)._copy_for_replay()
         # The sparse recorder never tracks ancestry at capture time; derive the
         # closures on the cook's own projection before postprocess materializes
