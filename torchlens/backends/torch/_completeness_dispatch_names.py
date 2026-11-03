@@ -377,7 +377,7 @@ def _is_buffer_state_view_dispatch(
       ``.data`` for its device and dtype before assigning storage, and the wrapper
       passes those calls through unlogged (they are constructor plumbing, not model
       dataflow). A pending slot holds no value, so the view can carry nothing that a
-      dropped op could have produced (wave-3 stress F3).
+      dropped op could have produced (wave-3 stress case 3).
 
     Parameters
     ----------

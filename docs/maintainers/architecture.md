@@ -8,8 +8,9 @@ line; this page names only what you need before editing. Testing is in
 [testing.md](testing.md), the review rules in [review_checklist.md](review_checklist.md),
 setup and gates in [CONTRIBUTING.md](https://github.com/johnmarktaylor91/torchlens/blob/main/CONTRIBUTING.md) at the repository root.
 
-Two notes on currency. A consolidation into about 12 internal packages behind an
-`import-linter` graph gate is planned, not landed; nothing below describes that target. The
+Two notes on currency. A consolidation into about 12 internal packages is planned, not
+landed; nothing below describes that target. Today's layer separations are already enforced
+by the import-linter contracts in `.importlinter` (`python scripts/checks/run_all.py`). The
 second-round moves have landed: the former fastlog package is `torchlens.recording`, and the
 capture, user_funcs, captured_run, semantic and visualization packages are private
 (`_capture/`, `_user_funcs/`, `_captured_run/`, `_semantic/`, `_visualization/`); the
