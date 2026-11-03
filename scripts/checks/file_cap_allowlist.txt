@@ -866,6 +866,7 @@ torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrappe
 torchlens/backends/torch/_completeness_storage.py::_make_storage_metadata_wrapper.wrapper	75
 torchlens/backends/torch/_completeness_storage.py::capture_scalar_escape_warning	151
 torchlens/backends/torch/_held_tensor_scan.py::iter_module_held_plain_tensors	68
+torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/_ops_activations.py::_log_output_tensor_info	317
 torchlens/backends/torch/_ops_activations.py::_metadata_shape	65
 torchlens/backends/torch/_ops_activations.py::_save_activation_fields	194
@@ -955,7 +956,6 @@ torchlens/backends/torch/identity_shims.py	993
 torchlens/backends/torch/identity_shims.py::_install_causal_bias_shim	81
 torchlens/backends/torch/identity_shims.py::_install_expanded_weights_shims	70
 torchlens/backends/torch/identity_shims.py::_install_overrides_membership_shims	70
-torchlens/backends/torch/_module_class_metadata.py::_get_class_metadata	97
 torchlens/backends/torch/model_prep.py	2304
 torchlens/backends/torch/model_prep.py::_capture_module_metadata	88
 torchlens/backends/torch/model_prep.py::_create_session_param_logs	97
