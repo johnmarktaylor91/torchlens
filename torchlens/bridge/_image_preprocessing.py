@@ -15,7 +15,7 @@ def accept_image_resolution(model: Any, resolution: Any) -> tuple[Callable[[Any]
 
     Whatever the registry resolves is applied. When NOTHING resolves the
     capture is refused ``preprocessing_unresolved``: TorchLens never applies a
-    recipe the model was not shown to use (memo D8).
+    recipe the model was not shown to use.
     """
 
     record = resolution.preprocessing

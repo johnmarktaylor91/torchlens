@@ -1754,9 +1754,12 @@ Namespace homes and exports introduced by the visuals-and-kits rename:
 - `tl.facets.FacetFunction`: Registered facet recipe metadata.
 - `tl.facets.MissingGrad`: Sentinel for a known facet gradient that is not currently saved.
 - `tl.facets.adding`: Temporarily add recipes to snapshots constructed in this context.
+- `tl.facets.child_output_spec`: Facet spec over a named child module's captured output, for custom recipes.
+- `tl.facets.config_value`: Read the first present attribute of a module or its config, for custom recipes.
 - `tl.facets.describe`: List registered facet function names and declared facets for a class name.
 - `tl.facets.enable_transformer_lens_aliases`: Enable or disable opt-in TransformerLens-style facet aliases.
 - `tl.facets.functions`: List registered recipes, optionally filtered by scope and class-name glob.
+- `tl.facets.parameter_spec`: Facet spec over a named module parameter, for custom recipes.
 - `tl.mechinterp.HeadScores`: Per-head taxonomy scores.
 - `tl.mechinterp.LogitLens`: Result of a :func:`logit_lens` sweep across transformer blocks.
 - `tl.mechinterp.LogitLensPrediction`: Streaming per-layer prediction summary (one row per projected layer).

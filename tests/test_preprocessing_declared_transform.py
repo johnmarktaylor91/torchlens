@@ -89,5 +89,4 @@ def test_unexecutable_declarations_build_no_transform() -> None:
     odd_interp = DeclaredPreprocessing(resize_size=32, interpolation="area")
     assert transform_from_declared(odd_interp) is None
     mean_only = DeclaredPreprocessing(mean=(0.5, 0.5, 0.5))
-    with pytest.raises(ValueError):
-        transform_from_declared(mean_only)
+    assert transform_from_declared(mean_only) is None

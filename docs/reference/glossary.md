@@ -3548,10 +3548,10 @@ describe each surface in depth.
 | `tl.neuro.PlanSite` | One requested site's measured plan row |
 | `tl.neuro.export_npz` | Export extracted features as npz interchange (D-21) |
 | `tl.neuro.plan_extraction` | Build a measured extraction plan from two real probe captures (D-15) |
-| `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `func`) |
-| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`) |
+| `tl.postprocessing.Detector` | Frozen metadata of one registered output detector (`name`, `priority`, `registration_order`, `func`) |
+| `tl.postprocessing.ResolvedPostprocessing` | The output-decoding provenance record a detector returns (same class as `Trace.provenance.output_postprocessor`); fields `source`, `identifier`, `verified`, `config`, `description`, `style`, `selected_output_head`, `label_source`, `label_source_version`, `confidence`, `top_n_captured`, `ambiguous`, filled by keyword (`identifier=`, `description=`, `selected_output_head=`, `label_source=`, `label_source_version=`, `top_n_captured=`) |
 | `tl.postprocessing.info` | Describe one registered output detector by name |
-| `tl.postprocessing.list` | List registered output detectors, optionally filtered by glob |
+| `tl.postprocessing.list` | List registered output detectors, optionally filtered by name glob (`name_glob=`) |
 | `tl.postprocessing.register` | Decorator registering a custom output detector (`name=`, `priority=`; lower runs first) |
 | `tl.postprocessing.snapshot` | Context manager saving and restoring the output detector registry |
 | `tl.postprocessing.unregister` | Remove a registered output detector by name |

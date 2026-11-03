@@ -508,9 +508,10 @@ def _materialize_image_paths(model: Any, x: Any) -> Any:
 
     items = x if isinstance(x, list) else [x]
     candidates = [_image_path_candidate(item) for item in items]
-    if not candidates or any(candidate is None for candidate in candidates):
+    paths = [candidate for candidate in candidates if candidate is not None]
+    if not paths or len(paths) != len(candidates):
         return x
-    missing = [candidate for candidate in candidates if not os.path.isfile(candidate)]
+    missing = [path for path in paths if not os.path.isfile(path)]
     if missing:
         if isinstance(x, str) and _has_text_tokenizer(model):
             return x
