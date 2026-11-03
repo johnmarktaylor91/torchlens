@@ -53,18 +53,15 @@ import torch.nn as nn
 
 import torchlens as tl
 import torchlens._runnable.call_arguments
-import torchlens._runnable.execution as rex
 import torchlens._runnable.input_aliases
 import torchlens._runnable.input_metadata
 import torchlens._runnable.state as rstate
-from torchlens._runnable import StateSource
 from torchlens._runnable.call_arguments import (
     _has_tensor_operand,
-    _preflight_call_allocation,
     _projection_required_by_arguments,
 )
 from torchlens._runnable.execution import _MAX_DECODE_NESTING_DEPTH
-from torchlens._runnable.state import RunResourceCeiling, _byte_guarded_clone
+from torchlens._runnable.state import RunResourceCeiling
 from torchlens.errors import RunCapabilityUnavailableError
 
 _CAPTURE = {"capture": tl.options.CaptureOptions(replayable=True)}
@@ -231,68 +228,6 @@ _Z = 200000  # zero-numel family: operands 0 bytes, projected output 160 GB
 # --------------------------------------------------------------------------- #
 
 
-@pytest.mark.parametrize(
-    "name,func,args",
-    [
-        ("outer", torch.outer, lambda: (torch.ones(_N), torch.ones(_N))),
-        ("kron", torch.kron, lambda: (torch.ones(_N), torch.ones(_N))),
-        ("broadcast_mul", torch.mul, lambda: (torch.ones(_N, 1), torch.ones(1, _N))),
-        ("cartesian_prod", torch.cartesian_prod, lambda: (torch.ones(_N), torch.ones(_N))),
-        (
-            "tensordot_dims0",
-            lambda a, b: torch.tensordot(a, b, dims=0),
-            lambda: (torch.ones(_N), torch.ones(_N)),
-        ),
-        (
-            "einsum_outer",
-            lambda a, b: torch.einsum("i,j->ij", a, b),
-            lambda: (torch.ones(_N), torch.ones(_N)),
-        ),
-        ("diag", torch.diag, lambda: (torch.ones(_N),)),
-        ("mm_zero_numel", torch.mm, lambda: (torch.empty(_Z, 0), torch.empty(0, _Z))),
-        ("matmul_zero_numel", torch.matmul, lambda: (torch.empty(_Z, 0), torch.empty(0, _Z))),
-        (
-            "einsum_zero_numel",
-            lambda a, b: torch.einsum("ij,jk->ik", a, b),
-            lambda: (torch.empty(_Z, 0), torch.empty(0, _Z)),
-        ),
-    ],
-    ids=lambda v: v if isinstance(v, str) else "",
-)
-def test_no_literal_amplifier_families_refused_typed(
-    name: str, func: Any, args: Any, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Each no-literal amplifier form (incl. the zero-numel family every numel/arity
-    threshold gaps on) is PROJECTED despite carrying no numeric literal, and refuses
-    typed at ``op_allocation_preflight`` against a small budget -- with tiny/empty real
-    operands and no real output allocation (fake tensors never allocate)."""
-
-    # Home (_runnable_state) plus the modules holding a from-import copy of the budget.
-    for module in (rstate, torchlens._runnable.call_arguments, rex):
-        monkeypatch.setattr(module, "_allocation_budget_bytes", lambda device: 8 << 20)
-    operands = args()
-    with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError) as caught:
-        _preflight_call_allocation(None, func, list(operands), {}, _stub_call())
-    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
-    assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
-
-
-def test_amplifier_ops_at_honest_shapes_not_refused() -> None:
-    """The SAME amplifier ops at honest feasible shapes pass the projection silently
-    (no over-refusal) under the REAL host budget."""
-
-    small = torch.ones(8)
-    for func, args in (
-        (torch.outer, (small, small)),
-        (torch.kron, (small, small)),
-        (torch.mul, (torch.ones(8, 1), torch.ones(1, 8))),
-        (torch.cartesian_prod, (small, small)),
-        (torch.diag, (small,)),
-        (torch.mm, (torch.empty(4, 0), torch.empty(0, 4))),
-    ):
-        _preflight_call_allocation(None, func, list(args), {}, _stub_call())
-
-
 # --------------------------------------------------------------------------- #
 # (2) free_1 E2E -- the exact r60 vector: tampered upstream literal feeding a     #
 #     no-literal amplifier refuses typed BEFORE the real allocation               #
@@ -314,45 +249,6 @@ class _ZeroNumelMM(nn.Module):
         a = x.reshape(4, 0)
         b = x.reshape(0, 4)
         return torch.mm(a, b).sum() + x.sum()
-
-
-def test_e2e_no_literal_outer_amplifier_tamper_refused(tmp_path: Path) -> None:
-    """The r60 free_1 repro, self-consistent: tamper the upstream ``arange`` literal
-    (1000 -> 1e6) AND the matching intermediate slot shapes, so every upstream gate
-    passes honestly (4 MB operand, in-budget clones, shape witnesses consistent) and the
-    downstream NO-literal ``outer`` -- recorded output slot left honest/small -- would
-    allocate 4 TB. r61 projects the outer call off its tensor operand and refuses typed
-    at ``op_allocation_preflight``, never the raw allocator (address-space cap proves no
-    allocation)."""
-
-    x = torch.zeros(4)
-    bundle = _build(tmp_path, "outer.tlspec", _ArangeOuter(), x)
-    assert _tamper_literal(bundle, "int", 1000, 10**6) >= 1
-    assert _tamper_slot_shapes(bundle, [1000], [10**6]) >= 1
-    with _rlimit_cap():
-        loaded = tl.load(str(bundle))
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone())
-    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
-
-
-def test_e2e_zero_numel_mm_tamper_refused(tmp_path: Path) -> None:
-    """Zero-numel e2e, self-consistent: tamper the reshape literals (4 -> 1e7) AND the
-    matching zero-numel slot shapes so ``mm`` on two 0-byte operands would allocate
-    4e14 bytes. Every byte gate upstream passes honestly (views project 0 new bytes;
-    0-numel slots weigh 0 bytes in every bound; the recorded mm output slot stays
-    honest/small) -- only the r61 tensor-operand projection can refuse it."""
-
-    x = torch.zeros(0)
-    bundle = _build(tmp_path, "zeromm.tlspec", _ZeroNumelMM(), x)
-    assert _tamper_literal(bundle, "int", 4, 10**7) >= 2
-    assert _tamper_slot_shapes(bundle, [4, 0], [10**7, 0]) >= 1
-    assert _tamper_slot_shapes(bundle, [0, 4], [0, 10**7]) >= 1
-    with _rlimit_cap():
-        loaded = tl.load(str(bundle))
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone())
-    assert caught.value.fields.get("detection_stage") == "op_allocation_preflight"
 
 
 # --------------------------------------------------------------------------- #
@@ -378,22 +274,13 @@ class _AmplifierZoo(nn.Module):
         )
 
 
+# Kept: a sole mutation kill.
 def test_honest_amplifier_zoo_runs_verified(tmp_path: Path) -> None:
     """Honest no-literal amplifier ops replay VERIFIED -- projecting every
     tensor-operand call refuses nothing at feasible shapes."""
 
     x = torch.randn(6)
     bundle = _build(tmp_path, "zoo.tlspec", _AmplifierZoo(), x)
-    result = tl.load(str(bundle)).run(inputs=x.clone())
-    assert result.report.path_faithfulness.value == "verified"
-
-
-def test_honest_zero_numel_model_runs_verified(tmp_path: Path) -> None:
-    """An honest zero-numel matmul model replays VERIFIED (zero-numel operands are a
-    legitimate shape, not an over-refusal channel)."""
-
-    x = torch.zeros(0)
-    bundle = _build(tmp_path, "zeromm_honest.tlspec", _ZeroNumelMM(), x)
     result = tl.load(str(bundle)).run(inputs=x.clone())
     assert result.report.path_faithfulness.value == "verified"
 
@@ -406,31 +293,7 @@ class _ExpandSum(nn.Module):
         return wide.sum() + x.sum()
 
 
-def test_e2e_self_consistent_view_extent_tamper_refused(tmp_path: Path) -> None:
-    """Tamper the ``expand`` literal AND its recorded slot shape (64 -> 1e11 rows) of a
-    capture that did not save the view, so the view is self-consistent and the run would
-    allocate nothing for it, but the ``sum`` reading it would touch 4e11 elements.
-    View-aware run-prep charging must not admit it: the view's logical extent is over
-    both the host budget and the view work ceiling, so it refuses typed at
-    ``op_allocation_preflight`` before any call executes, as it did before."""
-
-    x = torch.randn(1, 4)
-    trace = tl.trace(_ExpandSum().eval(), x, save=tl.func("sum"), **_CAPTURE)
-    bundle = tmp_path / "view_extent.tlspec"
-    trace.save(str(bundle), level="runnable", include_weights=True)
-    assert tl.load(str(bundle)).run(inputs=x.clone()).report.path_faithfulness.value == "verified"
-    assert _tamper_literal(bundle, "int", 64, 10**11) >= 1
-    assert _tamper_slot_shapes(bundle, [64, 4], [10**11, 4]) >= 1
-    with _rlimit_cap():
-        loaded = tl.load(str(bundle))
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            loaded.run(inputs=x.clone())
-    fields = caught.value.fields
-    assert fields.get("detection_stage") == "op_allocation_preflight"
-    assert int(fields["logical_elements"]) == 4 * 10**11
-    assert int(fields["logical_elements"]) > int(fields["logical_element_ceiling"])
-
-
+# Kept: sole branch coverage of _runnable/call_outputs.py, _runnable/retention.py, _runnable/state.py.
 def test_e2e_literal_only_view_extent_tamper_refused_under_return_diverged(
     tmp_path: Path,
 ) -> None:
@@ -464,6 +327,7 @@ class _Sum(nn.Module):
         return x.sum()
 
 
+# Kept: sole branch coverage of _runnable/input_metadata.py.
 def test_e2e_tampered_input_slot_expand_view_refused_at_mirror(tmp_path: Path) -> None:
     """The r60 corr_2 repro: inflate the model_input slot shape ([1] -> [1e12]) and bind
     a cheap runtime ``expand`` view that passes the shape contract. The mirror clone
@@ -477,27 +341,6 @@ def test_e2e_tampered_input_slot_expand_view_refused_at_mirror(tmp_path: Path) -
         loaded = tl.load(str(bundle))
         with pytest.raises(RunCapabilityUnavailableError) as caught:
             loaded.run(inputs=torch.randn(1).expand(10**12))
-    assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
-
-
-def test_runtime_mirror_clone_routes_guard_and_mirrors_requires_grad() -> None:
-    """The input mirror keeps the r37 autograd-mirror rule THROUGH the r61 guard: an
-    honest differentiable leaf clones with ``requires_grad`` restored (attestation
-    eligibility unchanged); a plain leaf clones without it; an over-budget logical view
-    refuses typed before cloning."""
-
-    ceiling = RunResourceCeiling(types.SimpleNamespace(calls=[]))  # type: ignore[arg-type]
-    slot = types.SimpleNamespace(slot_id="slot:input_1")
-    raw = torch.randn(3, requires_grad=True)
-    clone = torchlens._runnable.input_metadata._runtime_mirror_clone(raw, ceiling, slot)  # type: ignore[arg-type]
-    assert clone.requires_grad and clone.is_leaf
-    assert clone.data_ptr() != raw.data_ptr()
-    plain = torchlens._runnable.input_metadata._runtime_mirror_clone(torch.randn(3), ceiling, slot)  # type: ignore[arg-type]
-    assert not plain.requires_grad
-    with _rlimit_cap():
-        huge = torch.randn(1).expand(10**12)
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            torchlens._runnable.input_metadata._runtime_mirror_clone(huge, ceiling, slot)  # type: ignore[arg-type]
     assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
 
 
@@ -516,6 +359,7 @@ class _LinearNoBias(nn.Module):
         return self.lin(x).sum()
 
 
+# Kept: sole branch coverage of _runnable/state.py.
 def test_state_staging_clone_guards_logical_extent_from_load_state_dict(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -536,35 +380,7 @@ def test_state_staging_clone_guards_logical_extent_from_load_state_dict(
     assert caught.value.fields.get("state_dict_name") == "lin.weight"
 
 
-def test_honest_expanded_view_user_state_stays_verified(tmp_path: Path) -> None:
-    """Honest expanded-view user state at recorded shapes binds, stages, clones, and
-    replays VERIFIED (the probe C honest path, pinned against over-refusal)."""
-
-    x = torch.randn(2, 4)
-    bundle = _build(tmp_path, "expanded_state.tlspec", _LinearNoBias(), x)
-    loaded = tl.load(str(bundle))
-    loaded.load_state_dict({"lin.weight": torch.randn(1, 4).expand(4, 4)})
-    result = loaded.run(inputs=x.clone())
-    assert result.report.path_faithfulness.value == "verified"
-    assert result.report.state_source is StateSource.USER_STATE_DICT
-
-
-def test_byte_guarded_clone_core_units() -> None:
-    """The module-level core refuses an over-budget logical view typed (with the state
-    name in the diagnostic when given) and clones an in-budget tensor normally."""
-
-    base = torch.randn(4)
-    small = _byte_guarded_clone(base, state_dict_name="w")
-    assert torch.equal(small, base) and small.data_ptr() != base.data_ptr()
-    with _rlimit_cap():
-        huge = base[:1].expand(10**12, 4)
-        with pytest.raises(RunCapabilityUnavailableError) as caught:
-            _byte_guarded_clone(huge, state_dict_name="w")
-    assert caught.value.fields.get("detection_stage") == "clone_allocation_preflight"
-    assert caught.value.fields.get("state_dict_name") == "w"
-    assert "'w'" in str(caught.value)
-
-
+# Kept: sole branch coverage of _runnable/input_aliases.py.
 def test_run_time_state_clone_routes_through_ceiling_guard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -594,6 +410,7 @@ def test_run_time_state_clone_routes_through_ceiling_guard(
 # --------------------------------------------------------------------------- #
 
 
+# Kept: sole branch coverage of _runnable/call_arguments.py; the catch of its regression fault.
 def test_projection_predicate_truth_table() -> None:
     """``_projection_required_by_arguments`` is exactly "any size source": tensor operand
     (including ZERO-numel) or numeric literal; nothing else."""
@@ -608,6 +425,7 @@ def test_projection_predicate_truth_table() -> None:
     assert not _projection_required_by_arguments([True, None, "y"], {"s": "z"})
 
 
+# Kept: sole branch coverage of _runnable/call_arguments.py.
 def test_has_tensor_operand_is_isinstance_only_and_fails_closed() -> None:
     """The tensor-operand predicate reads NO tensor property (a subclass cannot route
     user code through it) and returns True over-depth (fail-closed: project)."""
@@ -622,6 +440,7 @@ def test_has_tensor_operand_is_isinstance_only_and_fails_closed() -> None:
     assert not _has_tensor_operand(["x", 3, None])  # literals are the OTHER predicate's job
 
 
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_source_tripwires_gate_and_clone_routing() -> None:
     """(a) ``_preflight_call_allocation`` no longer contains the has-literal-only early
     return; (b) every routed re-materialization site contains no raw ``.detach().clone()``

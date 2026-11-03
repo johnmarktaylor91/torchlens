@@ -25,7 +25,13 @@ TOOL_CLASSES = ("environment", "orientation", "rows", "payload")
 
 @dataclass(frozen=True)
 class AgentToolSpec:
-    """One registered agent tool: the single source of every served fact."""
+    """One registered agent tool: the single source of every served fact.
+
+    Examples
+    --------
+    >>> spec = tl.agent.spec_for("torchlens_schema")
+    >>> isinstance(spec, AgentToolSpec), spec.cli_verb, spec.read_only
+    (True, 'schema', True)"""
 
     name: str
     description: str
@@ -638,7 +644,13 @@ _NOT_SERVED = (
 
 
 def tool_specs() -> tuple[AgentToolSpec, ...]:
-    """Return the full tool registry (the ONE source every transport reads)."""
+    """Return the full tool registry (the ONE source every transport reads).
+
+    Examples
+    --------
+    >>> names = [spec.name for spec in tool_specs()]
+    >>> names[0], len(names) == len(tl.agent.list_tools())
+    ('torchlens_doctor', True)"""
 
     return (
         AgentToolSpec(
@@ -942,6 +954,16 @@ def spec_for(name: str) -> AgentToolSpec:
     ------
     InvalidArgumentError
         ``agent_tool_unknown`` naming the served roster.
+
+    Examples
+    --------
+    >>> spec_for("torchlens_doctor").cli_verb
+    'doctor'
+    >>> try:
+    ...     spec_for("no_such_tool")
+    ... except tl.errors.TorchLensError as err:
+    ...     print(err.fields["code"])
+    agent_tool_unknown
     """
 
     for spec in tool_specs():
@@ -975,6 +997,12 @@ def call_tool(name: str, arguments: dict[str, Any] | None = None) -> dict[str, A
         Typed refusals (Python callers branch on ``exc.fields['code']``);
         transports that need an error ENVELOPE use
         :func:`call_tool_envelope`.
+
+    Examples
+    --------
+    >>> envelope = call_tool("torchlens_schema")
+    >>> envelope["status"], "index" in envelope["data"]
+    ('ok', True)
     """
 
     spec = spec_for(name)
@@ -1014,6 +1042,12 @@ def call_tool_envelope(name: str, arguments: dict[str, Any] | None = None) -> di
     -------
     dict[str, Any]
         Result envelope, or the ``torchlens.agent.error.v1`` envelope.
+
+    Examples
+    --------
+    >>> envelope = call_tool_envelope("no_such_tool")
+    >>> envelope["status"], envelope["error"]["code"]
+    ('error', 'agent_tool_unknown')
     """
 
     try:

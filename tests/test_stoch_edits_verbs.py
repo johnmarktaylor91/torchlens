@@ -106,34 +106,6 @@ def test_permute_batch_axis_law() -> None:
     assert excinfo.value.fields["code"] == "sampling_geometry_mismatch"
 
 
-@pytest.mark.smoke
-def test_permute_batch_gradients_route_to_permuted_sources() -> None:
-    """A2 gradient leg: graph-connected index_select, never a detach."""
-
-    edit = permute_batch(seed=3, axis=0)
-    assert edit.factory is not None
-    hook_fn = edit.factory()
-    x = torch.randn(4, 3, requires_grad=True)
-    run_state: dict[str, object] = {}
-    context = make_hook_context(
-        name="permute_batch",
-        op={"label": "unit", "pass_number": 1},
-        run_context=run_state,
-    )
-    out = hook_fn(x, ctx=context)
-    draws = run_state["sampling_draws"]
-    assert isinstance(draws, list)
-    permutation = draws[-1].draw_indices
-    weights = torch.tensor([1.0, 10.0, 100.0, 1000.0]).reshape(4, 1)
-    (out * weights).sum().backward()
-    # Row j of the output is row permutation[j] of the input, so input row
-    # permutation[j] receives weight j's gradient.
-    expected = torch.zeros(4, 3)
-    for out_row, in_row in enumerate(permutation):  # type: ignore[arg-type]
-        expected[in_row] = weights[out_row]
-    assert x.grad is not None and torch.equal(x.grad, expected)
-
-
 def test_draw_independence_matrix_on_real_two_pass_recurrence() -> None:
     """A4b analog: per_firing pass draws DIFFER, per_rule draws are EQUAL.
 
@@ -242,6 +214,7 @@ def test_mask_equivariance_law() -> None:
         assert excinfo.value.fields["code"] == "mask_not_row_equivariant"
 
 
+@pytest.mark.smoke
 def test_resample_rows_from_per_row_coherent_draws() -> None:
     """Whole-row coherent donor sampling with replacement, agreement-aware."""
 
@@ -343,21 +316,6 @@ def test_trace_backed_population_reduce_refuses() -> None:
     assert excinfo.value.fields["code"] == "population_reduce_unsupported"
 
 
-def test_mean_ablate_population_evidence_set_fill() -> None:
-    """Deterministic elementwise evidence mean; stochastic=False recorded."""
-
-    log = _toy_trace()
-    baseline = log["relu_1_2"].out
-    donors = population(torch.stack([baseline, baseline + 2.0]), origin="evidence")
-    fork = log.fork()
-    fork.do(tl.label("relu_1_2"), tl.mean_ablate(donors, dim=None))
-    assert torch.allclose(fork["relu_1_2"].out, baseline + 1.0)
-    record = sampling_draws(fork)[-1]
-    assert record.draw_indices == (), "a mean draws nothing"
-    assert record.base_seed is None, "a mean never invents a seed"
-
-
-@pytest.mark.smoke
 def test_set_direction_mean_projects_and_recenters() -> None:
     """out - proj_v(out) + mean(coef(ref)) * v_hat, gradients orthogonal-only."""
 

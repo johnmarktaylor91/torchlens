@@ -73,7 +73,6 @@ def test_single_pass_buffer_write_threads_zero_ablation(buffered) -> None:
     assert torch.equal(trace[written.label].out, captured_buffer)
 
 
-@pytest.mark.smoke
 def test_single_pass_buffer_write_threads_scaled_value(buffered) -> None:
     model, x, trace = buffered
     written = _written_buffer_op(trace)

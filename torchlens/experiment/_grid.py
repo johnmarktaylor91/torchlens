@@ -71,6 +71,17 @@ class GridCell:
         ...``) or the failure text; None otherwise.
     member_name:
         The retained member's name, None when no member is held.
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> grid = tl.experiment.sweep_grid(
+    ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"}}, edit=tl.zero_ablate(),
+    ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
+    ...     model=model, inputs=x)
+    >>> cell = grid.cell(site="b")
+    >>> isinstance(cell, GridCell), cell.candidate_id, cell.coords, cell.status
+    (True, 'b', {'site': 'b'}, 'released')
     """
 
     candidate_id: str
@@ -87,6 +98,16 @@ class SweepGrid:
 
     ``values`` is plain data: no plotting helper, no threshold, no ranking
     beyond what ``effects`` already offers.
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> grid = tl.experiment.sweep_grid(
+    ...     base, axes={"site": ["conv2d_1_1", "relu_1_2"]}, edit=tl.scale(0.5),
+    ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
+    ...     model=model, inputs=x)
+    >>> isinstance(grid, SweepGrid), len(grid.cells), grid.refused
+    (True, 2, ())
     """
 
     axes: dict[str, tuple[str, ...]]
@@ -570,6 +591,17 @@ def sweep_grid(
     cell resolving to no site, or to several undeclared, is a refused cell
     (NaN) and every other cell runs; an axis-shape mistake refuses the whole
     grid before any forward. Returns a :class:`SweepGrid`.
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> metric = lambda t: float(t[t.output_layers[0]].out.sum())
+    >>> grid = tl.experiment.sweep_grid(
+    ...     base, axes={"site": {"a": "conv2d_1_1", "b": "relu_1_2"},
+    ...                 "scale": [tl.scale(0.0), tl.scale(2.0)]},
+    ...     metric=metric, retain="none", model=model, inputs=x)
+    >>> grid.values.shape, grid.axes
+    (torch.Size([2, 2]), {'site': ('a', 'b'), 'scale': ('0', '1')})
     """
 
     _validate_sweep_entry(engine=engine, metric=metric, retain=retain, model=model, x=inputs)

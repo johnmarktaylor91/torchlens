@@ -92,7 +92,7 @@ def _resolve_inferred(model: nn.Module, verb: str) -> ResolvedInputs:
 
     from ..debug._infer_input_shape import guess_input_shape
 
-    result = guess_input_shape(model, return_trace=True)
+    result = guess_input_shape(model, _return_trace=True)
     if not result.found or result.example_input is None:
         raise ShapeInferenceError(
             f"tl.{verb}(model) could not infer a runnable input: "

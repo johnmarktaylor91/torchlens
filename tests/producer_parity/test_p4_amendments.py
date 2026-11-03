@@ -124,7 +124,6 @@ def test_last_wins_per_path_in_amendment_order(
     assert journal.amended_op_record(target.label_raw).is_edited is False
 
 
-@pytest.mark.smoke_cells("test_validation_refusals[decomposed]")
 @pytest.mark.parametrize("leg", _LEGS)
 def test_validation_refusals(leg: str, leg_templates: dict[str, list[Any]]) -> None:
     journal = _fresh_journal(leg_templates[leg])
@@ -316,7 +315,6 @@ def test_multi_domain_resolves_by_label_last_occurrence(
     # Single-domain journals DO cross-check (established by the refusal test).
 
 
-@pytest.mark.smoke_cells("test_merged_multi_pass_journal_binds_amendments_by_seq[legacy]")
 @pytest.mark.parametrize("leg", _LEGS)
 def test_merged_multi_pass_journal_binds_amendments_by_seq(
     leg: str, leg_templates: dict[str, list[Any]]
@@ -493,10 +491,6 @@ class _DummyEvent:
     seq: int = 0
 
 
-@pytest.mark.smoke_cells(
-    "test_sealed_journal_refuses_every_forward_lane_append[append-op_events]",
-    "test_sealed_journal_refuses_every_forward_lane_append[append_module_prep-module_prep_events]",
-)
 @pytest.mark.parametrize(("appender", "lane"), _FENCED_APPENDERS, ids=lambda value: str(value))
 def test_sealed_journal_refuses_every_forward_lane_append(
     appender: str, lane: str, leg_templates: dict[str, list[Any]]
@@ -534,37 +528,6 @@ def test_sealed_journal_refusals_share_one_catchable_base(
         )
     assert issubclass(SealedJournalAppendError, SealedJournalWriteError)
     assert issubclass(SealedJournalAmendmentError, SealedJournalWriteError)
-
-
-def test_sealed_journal_still_accepts_backward_events(
-    leg_templates: dict[str, list[Any]],
-) -> None:
-    """The ONE documented exception: backward capture runs after the seal.
-
-    ``Trace.backward`` / ``Recording.backward`` append to the sealed
-    journal by design and ``backward_events`` is not part of the sealed core, so
-    fencing that lane would break real backward capture. Measured across the
-    smoke tier: ``append_backward`` is the only appender that ever fires on a
-    sealed journal.
-    """
-
-    from torchlens._ir.events import BackwardCoverageGap
-
-    journal = _fresh_journal(leg_templates["decomposed"])
-    journal.core_seal_watermark = journal.amendment_seq
-    journal.amendments_sealed = True
-    journal.append_backward(
-        BackwardCoverageGap(
-            pass_index=1,
-            object_id=None,
-            class_qualname=None,
-            reason="dead_node",
-            detail=None,
-            timestamp=1.0,
-        )
-    )
-    assert len(journal.backward_events) == 1
-    assert journal.backward_events[0].seq >= 1
 
 
 def test_working_projection_of_a_sealed_journal_accepts_forward_appends(

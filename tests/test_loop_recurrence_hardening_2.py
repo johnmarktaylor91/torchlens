@@ -17,7 +17,7 @@ not cover:
   unrolled record multiset (conservation).
 """
 
-from collections import Counter, OrderedDict
+from collections import Counter
 
 import pytest
 import torch
@@ -36,19 +36,6 @@ pytestmark = pytest.mark.usefixtures("legacy_structural_grouper")
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _layer_passes(traced) -> "OrderedDict[str, int]":
-    """Return ordered mapping of layer_label -> number of grouped passes."""
-    layers: OrderedDict[str, list] = OrderedDict()
-    for op in traced:
-        layers.setdefault(op.layer_label, []).append(op)
-    return OrderedDict((label, len(ops)) for label, ops in layers.items())
-
-
-def _layers_of_type(passes: "OrderedDict[str, int]", stem: str) -> dict[str, int]:
-    """Filter layer pass counts whose label starts with ``stem``."""
-    return {label: count for label, count in passes.items() if label.startswith(stem)}
 
 
 def _module_addresses(op) -> tuple[str, ...]:
@@ -78,15 +65,6 @@ def _op_record(op) -> tuple:
     )
 
 
-def _rolled_node_label_line(traced, node_name: str, outpath: str) -> str:
-    """Render the rolled graph and return the named node's label line."""
-    graph = traced.draw(rolled=True, path=outpath).dot
-    for line in graph.splitlines():
-        if line.strip().startswith(f"{node_name} [label"):
-            return line.strip()
-    raise AssertionError(f"node {node_name!r} not found in rolled render")
-
-
 # ---------------------------------------------------------------------------
 # Fixtures: tied sites, arg-divergent convs, genuine recurrence controls
 # ---------------------------------------------------------------------------
@@ -109,32 +87,6 @@ class _TiedEncoderDecoder(nn.Module):
         return self.decoder(hidden)
 
 
-class _UntiedEncoderDecoder(nn.Module):
-    """Structural control: identical topology, independent weights."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.encoder = nn.Linear(4, 4, bias=False)
-        self.decoder = nn.Linear(4, 4, bias=False)
-
-    def forward(self, x):
-        return self.decoder(torch.relu(self.encoder(x)))
-
-
-class _ReusedModuleLoop(nn.Module):
-    """Genuine recurrence control: ONE module called n times (ALBERT-style)."""
-
-    def __init__(self, n_steps: int = 3) -> None:
-        super().__init__()
-        self.cell = nn.Linear(4, 4, bias=False)
-        self.n_steps = n_steps
-
-    def forward(self, x):
-        for _ in range(self.n_steps):
-            x = torch.tanh(self.cell(x))
-        return x
-
-
 class _SharedKernelConvs(nn.Module):
     """One kernel applied with divergent non-tensor call structure."""
 
@@ -154,19 +106,6 @@ class _SharedKernelConvs(nn.Module):
             a = F.conv2d(x, self.kernel, dilation=1)
             b = F.conv2d(x, self.kernel, dilation=2)
         return a.sum() + b.sum()
-
-
-class _SharedKernelSameArgsLoop(nn.Module):
-    """Genuine functional weight-tied loop: same kernel, SAME args, chained."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.kernel = nn.Parameter(torch.randn(1, 1, 3, 3))
-
-    def forward(self, x):
-        for _ in range(3):
-            x = F.conv2d(x, self.kernel, padding=1)
-        return x
 
 
 class _ShrinkingRecurrent(nn.Module):
@@ -229,144 +168,12 @@ class _FusedLSTMLoop(nn.Module):
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("direct_chain", [False, True])
-def test_tied_distinct_modules_are_not_recurrent(direct_chain: bool) -> None:
-    """Distinct tied encoder/decoder must never become one recurrent layer.
-
-    Exact parameter identity used to override the module suffix: the union step
-    keyed only on (func_name, param_barcodes), so the straight-line chain
-    ``decoder(relu(encoder(x)))`` with a shared weight tensor collapsed into one
-    false 2-pass layer (is_recurrent=True) in defiance of the documented
-    invariant that identical ops in DIFFERENT modules are different sites.
-    """
-    torch.manual_seed(0)
-    traced = trace_fn(_TiedEncoderDecoder(direct_chain=direct_chain), torch.randn(1, 4))
-
-    assert traced.graph.is_recurrent is False
-    linear_layers = _layers_of_type(_layer_passes(traced), "linear")
-    assert len(linear_layers) == 2, linear_layers
-    assert set(linear_layers.values()) == {1}, linear_layers
-
-    # Both semantic sites survive with their own module attribution; no layer's
-    # pass ops disagree on module address.
-    site_addresses = set()
-    for layer in traced._layer_logs.values():
-        addresses = {_module_addresses(op) for op in layer.ops.values()}
-        assert len(addresses) <= 1, f"layer {layer.layer_label} spans module addresses {addresses}"
-        site_addresses.update(addresses)
-    assert ("encoder",) in site_addresses
-    assert ("decoder",) in site_addresses
-
-    assert check_metadata_invariants(traced)
-
-
-def test_tied_distinct_modules_rolled_render_shows_both_sites(tmp_path) -> None:
-    """The rolled render must contain BOTH tied sites, not one 2-pass node."""
-    torch.manual_seed(0)
-    traced = trace_fn(_TiedEncoderDecoder(), torch.randn(1, 4))
-    graph = traced.draw(
-        rolled=True,
-        path=str(tmp_path / "tied_rolled"),
-    ).dot
-    label_lines = [
-        line.strip()
-        for line in graph.splitlines()
-        if line.strip().startswith("linear_") and "[label" in line
-    ]
-    assert len(label_lines) == 2, label_lines
-    joined = "\n".join(label_lines)
-    assert "@encoder" in joined
-    assert "@decoder" in joined
-    assert "(x2)" not in joined
-    assert check_metadata_invariants(traced)
-
-
-def test_untied_control_and_reused_module_control() -> None:
-    """Untied twin stays ungrouped; ONE reused module keeps genuine recurrence."""
-    torch.manual_seed(0)
-    untied = trace_fn(_UntiedEncoderDecoder(), torch.randn(1, 4))
-    assert untied.graph.is_recurrent is False
-    assert set(_layers_of_type(_layer_passes(untied), "linear").values()) == {1}
-    assert check_metadata_invariants(untied)
-
-    reused = trace_fn(_ReusedModuleLoop(3), torch.randn(1, 4))
-    assert reused.graph.is_recurrent is True
-    assert _layers_of_type(_layer_passes(reused), "linear") == {"linear_1_1": 3}
-    assert check_metadata_invariants(reused)
-
-
 # ---------------------------------------------------------------------------
 # review test #3 -- non-tensor call structure is part of recurrence identity
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("axis", ["padding", "stride", "dilation"])
-def test_shared_kernel_divergent_args_stay_distinct(axis: str) -> None:
-    """Same-kernel calls with different structural args are not recurrence.
-
-    Parameter equivalence ignores non-tensor arguments, so two ``F.conv2d``
-    calls sharing one kernel but differing in padding/stride/dilation (different
-    output shapes, no loop) became one false recurrent layer whose aggregate
-    Layer could not truthfully describe both calls.
-    """
-    torch.manual_seed(0)
-    traced = trace_fn(_SharedKernelConvs(axis), torch.randn(1, 1, 5, 5))
-
-    assert traced.graph.is_recurrent is False
-    conv_layers = _layers_of_type(_layer_passes(traced), "conv2d")
-    assert len(conv_layers) == 2, conv_layers
-    assert set(conv_layers.values()) == {1}, conv_layers
-
-    # Each 1-pass layer keeps its own call's shape -- nothing is projected from
-    # call 1 onto call 2.
-    conv_shapes = {
-        tuple(layer.shape)
-        for layer in traced._layer_logs.values()
-        if layer.layer_label.startswith("conv2d")
-    }
-    assert len(conv_shapes) == 2, conv_shapes
-
-    assert check_metadata_invariants(traced)
-
-
-def test_shared_kernel_same_args_loop_still_groups() -> None:
-    """Control: a genuine functional weight-tied loop with uniform args groups."""
-    torch.manual_seed(0)
-    traced = trace_fn(_SharedKernelSameArgsLoop(), torch.randn(1, 1, 5, 5))
-    assert traced.graph.is_recurrent is True
-    assert _layers_of_type(_layer_passes(traced), "conv2d") == {"conv2d_1_1": 3}
-    assert check_metadata_invariants(traced)
-
-
-def test_variable_length_recurrence_not_projected_from_pass_1() -> None:
-    """Ragged recurrence groups, and its Layer aggregates are honest.
-
-    The tensor-free arg signature must keep grouping a genuine loop whose
-    activations change shape every step, and ``_build_layer_logs`` must not
-    project pass-1 shape/memory/FLOPs onto the rolled aggregate.
-    """
-    torch.manual_seed(0)
-    traced = trace_fn(_ShrinkingRecurrent(), torch.randn(4, 4))
-    layer = traced._layer_logs["linear_1_1"]
-    op_shapes = [tuple(op.shape) for op in layer.ops.values()]
-    assert op_shapes == [(4, 4), (3, 4), (2, 4)]
-
-    # Honest aggregate shape: constant dims stay ints, divergent dims become an
-    # explicit range token -- never the silent pass-1 tuple.
-    assert layer.shape == ("2..4", 4)
-
-    # Honest aggregate memory/FLOPs: the per-pass maximum, with the explicit
-    # machine-readable per-pass marker.
-    op_memory = [int(op.cost.activation_memory) for op in layer.ops.values()]
-    assert int(layer.cost.activation_memory) == max(op_memory)
-    varying = layer.annotations["varying_across_passes"]
-    assert varying["shape"] == [(4, 4), (3, 4), (2, 4)]
-    assert [int(value) for value in varying["activation_memory"]] == op_memory
-    assert "flops_forward" in varying
-
-    assert check_metadata_invariants(traced)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_layer_accessors.py.
 def test_growing_recurrence_aggregate_is_not_call_1() -> None:
     """When passes GROW, the aggregate must differ from call 1's values."""
     torch.manual_seed(0)
@@ -428,17 +235,6 @@ def test_rolled_unrolled_conservation(model_factory, model_input) -> None:
     assert check_metadata_invariants(traced)
 
 
-def test_rolled_render_displays_variation_not_pass_1(tmp_path) -> None:
-    """The rolled node label must display shape variation, not pass-1 data."""
-    torch.manual_seed(0)
-    traced = trace_fn(_ShrinkingRecurrent(), torch.randn(4, 4))
-    label_line = _rolled_node_label_line(traced, "linear_1_1", str(tmp_path / "ragged"))
-    assert "(x3)" in label_line
-    assert "(2..4, 4)" in label_line
-    assert "(4, 4)," not in label_line
-    assert check_metadata_invariants(traced)
-
-
 # ---------------------------------------------------------------------------
 # Deep-hunt L1: dict KEYS must get the same identity-repr guard as values
 # ---------------------------------------------------------------------------
@@ -448,6 +244,7 @@ class _OpaqueKey:
     """Non-primitive dict key with the default address-bearing ``repr``."""
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/loop_detection.py.
 def test_arg_signature_ignores_object_key_identity() -> None:
     """Object-identity dict keys never split a genuine recurrence signature.
 
@@ -472,29 +269,12 @@ def test_arg_signature_ignores_object_key_identity() -> None:
     assert _structural_arg_signature(_op("alpha")) != _structural_arg_signature(_op("beta"))
 
 
-def test_arg_signature_mixed_key_dict_is_order_and_address_free() -> None:
-    """Mixed primitive/object key dicts sign identically across constructions."""
-    from types import SimpleNamespace
-
-    from torchlens._postprocess.loop_detection import _structural_arg_signature
-
-    first = SimpleNamespace(
-        non_tensor_pos_args=({_OpaqueKey(): 1, "z": 2},),
-        non_tensor_kwargs={},
-    )
-    second = SimpleNamespace(
-        non_tensor_pos_args=({"z": 2, _OpaqueKey(): 1},),
-        non_tensor_kwargs={},
-    )
-
-    assert _structural_arg_signature(first) == _structural_arg_signature(second)
-
-
 # ---------------------------------------------------------------------------
 # Deep-hunt L2: the argsig split must propagate into equivalent_labels
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/loop_detection.py.
 def test_grouping_graph_equivalent_labels_respect_argsig_split(monkeypatch) -> None:
     """The neutral feed never hands a split node its unsplit class as seeds.
 

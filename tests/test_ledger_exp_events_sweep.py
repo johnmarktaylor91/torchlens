@@ -133,7 +133,6 @@ def test_sweep_default_keeps_cardinality_and_discloses() -> None:
         bundle.rank_changes()
 
 
-@pytest.mark.smoke
 def test_sweep_include_baseline_mints_pristine_first() -> None:
     torch.manual_seed(0)
     model = _Tiny()
@@ -154,6 +153,7 @@ def test_sweep_include_baseline_mints_pristine_first() -> None:
     assert operation.params["values"] == ["0.0", "1.0"]
 
 
+@pytest.mark.smoke
 def test_sweep_baseline_name_collision_refuses_typed() -> None:
     torch.manual_seed(0)
     model = _Tiny()

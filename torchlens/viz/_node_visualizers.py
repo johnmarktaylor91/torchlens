@@ -31,6 +31,13 @@ def heatmap(max_size: int = 200) -> Callable[[torch.Tensor], Image.Image | None]
     -------
     Callable[[torch.Tensor], Image.Image | None]
         Visualizer callable.
+
+    Examples
+    --------
+    >>> visualizer = tl.viz.nodes.heatmap(max_size=64)
+    >>> image = visualizer(torch.randn(3, 8, 8))
+    >>> image is not None
+    True
     """
 
     def visualizer(tensor: torch.Tensor, *, layer_label: str | None = None) -> Image.Image | None:
@@ -84,6 +91,13 @@ def channel_grid(n: int = 16, max_size: int = 300) -> Callable[[torch.Tensor], I
     -------
     Callable[[torch.Tensor], Image.Image | None]
         Visualizer callable.
+
+    Examples
+    --------
+    >>> visualizer = tl.viz.nodes.channel_grid(n=4, max_size=64)
+    >>> image = visualizer(torch.randn(1, 6, 8, 8))
+    >>> image is not None
+    True
     """
 
     if n < 1:
@@ -154,6 +168,13 @@ def histogram(
     -------
     Callable[[torch.Tensor], Image.Image | None]
         Visualizer callable.
+
+    Examples
+    --------
+    >>> visualizer = tl.viz.nodes.histogram(bins=10, width=120, height=80)
+    >>> image = visualizer(torch.randn(100))
+    >>> image.size
+    (120, 80)
     """
 
     if bins < 1:

@@ -304,7 +304,6 @@ def test_recording_to_trace_module_tree_matches_exhaustive(model_factory) -> Non
     assert _module_call_stacks(cooked) == _module_call_stacks(exhaustive)
 
 
-@pytest.mark.smoke
 def test_removed_keep_aliases_raise_type_error() -> None:
     """The removed keep_op=/keep_module= aliases fail loudly, never silently."""
 
@@ -475,6 +474,7 @@ def test_recording_to_trace_backfills_all_special_layer_lists() -> None:
     assert _buffer_read_addresses(cooked) == _buffer_read_addresses(exhaustive)
 
 
+@pytest.mark.smoke
 def test_recording_to_trace_halted_produces_valid_halted_trace() -> None:
     """A halted record().to_trace() yields a VALID halted Trace matching tl.trace().
 

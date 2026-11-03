@@ -38,8 +38,15 @@ def dry_run(
 
     Returns
     -------
-    RecordingTrace
-        Chronological event contexts and any accumulated predicate failures.
+    DryRun
+        Chronological event contexts, one capture decision per op event and any
+        accumulated predicate failures.
+
+    Examples
+    --------
+    >>> plan = tl.recording.dry_run(model, x, save=tl.func("relu"))
+    >>> type(plan).__name__, len(plan.contexts) > 0, plan.predicate_failures
+    ('DryRun', True, ())
     """
 
     inputs = _coerce_input_args(model, inputs)

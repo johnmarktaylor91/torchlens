@@ -30,6 +30,18 @@ class TargetManifestDiff:
     Site-key rows (C03, surgery Build 0b; DOCUMENTED-UNSTABLE) are the join
     identity when both sides carry keys; the label rows stay as display-only
     disclosure (labels renumber under edits, keys do not).
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     path = pathlib.Path(d) / "spec.tlspec"
+    ...     tl.io.save_intervention(edited, path, level="audit")
+    ...     compat = tl.intervention.check_spec_compat(tl.load(path), edited)
+    >>> isinstance(compat.diff, TargetManifestDiff), compat.diff.missing_labels
+    (True, [])
     """
 
     matched: list[str]
@@ -51,7 +63,20 @@ class TargetManifestDiff:
 
 @dataclass(frozen=True)
 class SpecCompat:
-    """Compatibility result for applying a saved spec to a model log."""
+    """Compatibility result for applying a saved spec to a model log.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     path = pathlib.Path(d) / "spec.tlspec"
+    ...     tl.io.save_intervention(edited, path, level="audit")
+    ...     compat = tl.intervention.check_spec_compat(tl.load(path), edited)
+    >>> compat.outcome in {"EXACT", "COMPATIBLE_WITH_CONFIRMATION"}
+    True
+    """
 
     outcome: Literal["EXACT", "COMPATIBLE_WITH_CONFIRMATION", "FAIL"]
     diff: TargetManifestDiff
@@ -272,6 +297,18 @@ def check_spec_compat(spec: InterventionSpec, trace: Any) -> SpecCompat:
     -------
     SpecCompat
         Compatibility classification and target diff.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> edited = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True),
+    ...     intervene=tl.when(tl.func("relu"), tl.zero_ablate()))
+    >>> with tempfile.TemporaryDirectory() as d:
+    ...     path = pathlib.Path(d) / "spec.tlspec"
+    ...     tl.io.save_intervention(edited, path, level="audit")
+    ...     compat = tl.intervention.check_spec_compat(tl.load(path), edited)
+    >>> compat.has_identical_target_resolution
+    True
     """
 
     graph_hash = trace._provenance_fingerprint

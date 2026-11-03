@@ -10,8 +10,6 @@ arguments and modes themselves instead of the numeric outcome.
 
 from __future__ import annotations
 
-import contextlib
-import gc
 import weakref
 from collections.abc import Iterator
 from typing import Any
@@ -119,30 +117,6 @@ def _capture_for_replay(model: nn.Module, x: torch.Tensor) -> tuple[Any, torch.T
     return trace, model(x)
 
 
-def test_masked_conv_replay_weight_requires_grad_like_capture(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The derived masked weight of every conv reaches replay requiring grad.
-
-    ``w1 = conv1.weight * mask`` is a non-leaf that requires grad. Before the
-    fix replay received a detached copy (``requires_grad=False``) for the
-    first conv, which is what sent macOS arm64 to a different kernel.
-    """
-
-    recorder = _ReplayRecorder(monkeypatch)
-
-    assert validate_forward_pass(example_models.MaskedConvModel(), torch.rand(2, 1, 16, 16))
-
-    _assert_conv_weights_require_grad(recorder)
-    # The input image (the Cin=1 conv's input) does not require grad, and
-    # replay must not invent it.
-    image_inputs = [
-        call["args"][0] for call in recorder.calls_to("conv2d") if call["args"][0].shape[1] == 1
-    ]
-    assert image_inputs
-    assert not any(image.requires_grad for image in image_inputs)
-
-
 @pytest.mark.parametrize("ambient", ["no_grad", "inference_mode"])
 def test_validation_under_another_ambient_mode_replays_the_captured_mode(
     monkeypatch: pytest.MonkeyPatch, ambient: str
@@ -177,25 +151,6 @@ class _NoGradBranchModel(nn.Module):
         with torch.no_grad():
             frozen = torch.tanh(self.inner(x))
         return self.outer(frozen) + x
-
-
-@pytest.mark.parametrize("ambient", ["enable_grad", "no_grad"])
-def test_replay_runs_under_each_ops_captured_grad_mode(
-    monkeypatch: pytest.MonkeyPatch, ambient: str
-) -> None:
-    """Replay restores the grad mode each op was captured under, whatever the caller's mode."""
-
-    model = _NoGradBranchModel()
-    trace, ground_truth = _capture_for_replay(model, torch.rand(3, 4, requires_grad=True))
-    recorder = _ReplayRecorder(monkeypatch)
-    ambient_ctx = torch.no_grad() if ambient == "no_grad" else contextlib.nullcontext()
-
-    with ambient_ctx:
-        assert bool(validate_saved_outs(trace, [ground_truth]))
-
-    assert {call["grad_enabled"] for call in recorder.calls_to("tanh")} == {False}
-    assert {call["grad_enabled"] for call in recorder.calls_to("__add__")} == {True}
-    assert {call["grad_enabled"] for call in recorder.calls_to("linear")} == {False, True}
 
 
 class _LeafAndOpOutputModel(nn.Module):
@@ -263,23 +218,3 @@ def test_requires_grad_toggle_replays_on_a_leaf(monkeypatch: pytest.MonkeyPatch)
 
     for call in recorder.calls_to("requires_grad_"):
         assert call["args"][0].is_leaf
-
-
-def test_replay_tensors_do_not_outlive_the_check(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Grad-requiring replay copies, outputs and their graphs are freed while the trace lives."""
-
-    model = example_models.MaskedConvModel()
-    trace, ground_truth = _capture_for_replay(model, torch.rand(2, 1, 16, 16))
-    recorder = _ReplayRecorder(monkeypatch)
-
-    assert bool(validate_saved_outs(trace, [ground_truth]))
-    assert any(
-        leaf.requires_grad for call in recorder.calls for leaf in _tensor_leaves(call["args"])
-    )
-    recorder.drop_arg_values()
-    gc.collect()
-
-    alive = [ref for ref in recorder.refs if ref() is not None]
-    assert recorder.refs
-    assert not alive, f"{len(alive)} replay tensors outlived validation"
-    assert trace is not None

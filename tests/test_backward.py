@@ -177,7 +177,7 @@ def _saved_relu(trace: tl.Trace) -> torch.Tensor:
 def test_detached_saved_activation_backward_names_backward_ready_remedy() -> None:
     """A TorchLens-detached retained activation gives targeted backward guidance.
 
-    The trace opts into detaching (U27.1: a default trace keeps selector saves
+    The trace opts into detaching (a default trace keeps selector saves
     graph-connected; ``tl.record`` and ``tl.extract`` detach by default).
     """
 
@@ -200,7 +200,7 @@ def test_detached_saved_activation_backward_names_backward_ready_remedy() -> Non
 
 
 def test_default_trace_selector_save_keeps_the_graph_for_backward() -> None:
-    """A default-trace selector save keeps the graph, so backward reaches the input (U27.1)."""
+    """A default-trace selector save keeps the graph, so backward reaches the input."""
 
     model = _TinyBackwardModel()
     x = torch.randn(2, 3, requires_grad=True)
@@ -428,7 +428,9 @@ def test_backward_events_share_one_monotonic_seq_domain() -> None:
 
 def _invariant_check(trace: tl.Trace) -> None:
     """Run the backward event-flow invariant directly."""
-    from torchlens.validation._invariants_backward_flow import _check_backward_event_flow_invariants
+    from torchlens.validation._invariants_backward_flow import (
+        _check_backward_event_flow_invariants,
+    )
 
     _check_backward_event_flow_invariants(trace, "backward_graph_invariants")
 
@@ -1932,7 +1934,9 @@ def test_journal_seq_invariant_fires_on_planted_mutations() -> None:
     """The journal-wide seq invariant is independently armed per failure mode."""
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
     from torchlens.validation._invariants import MetadataInvariantError
-    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation._invariants_backward_domain import (
+        _check_journal_seq_invariants,
+    )
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -2006,8 +2010,13 @@ def test_journal_seq_invariant_fires_on_event_deletion() -> None:
     """
 
     from torchlens.backends.torch.backward import _ensure_backward_event_stream
-    from torchlens.validation._invariants import MetadataInvariantError, check_metadata_invariants
-    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation._invariants import (
+        MetadataInvariantError,
+        check_metadata_invariants,
+    )
+    from torchlens.validation._invariants_backward_domain import (
+        _check_journal_seq_invariants,
+    )
 
     _model, _x, trace = _logged_model()
     trace.backward(_output_loss(trace))
@@ -2059,7 +2068,9 @@ def test_amendment_lane_deletion_is_visible_to_the_journal_invariant() -> None:
 
     from torchlens._ir.capture_events import CaptureEvents
     from torchlens.validation._invariants import MetadataInvariantError
-    from torchlens.validation._invariants_backward_domain import _check_journal_seq_invariants
+    from torchlens.validation._invariants_backward_domain import (
+        _check_journal_seq_invariants,
+    )
 
     _model, _x, trace = _logged_model()
     stream = trace._capture_events
@@ -2338,7 +2349,7 @@ def test_refresh_projection_with_inplace_op_keeps_one_grad_owner_per_label() -> 
         capture=CaptureOptions(save_grads="all", seed=0),
         save="all",
     )
-    trace.save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
+    trace._save_new_outs(model, torch.randn(2, 3, requires_grad=True), seed=1)
     trace.backward(trace[trace.output_layers[0]].out.sum())
 
     pass_index = len(trace.autograd.backward_passes)

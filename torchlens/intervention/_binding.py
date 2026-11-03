@@ -46,7 +46,7 @@ from .._selection.module_alias_guard import (
 from .._utils._record_group_table import record_member
 from ._audit import EXECUTION_EFFECTS, build_fire_record, rules_payload
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
-from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
+from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
 from ._helper_fingerprint import helper_versions
 from ._model_door import resolve_model_operand
 from ._spec import Recipe
@@ -103,6 +103,14 @@ class BindReport:
     ``trace=None`` -- spec and model stamps, resolved static targets, per-rule
     fire counts, zero-fire rules, errors, and the cleanup verdict. No per-op
     claims are made: nothing was captured.
+
+    Examples
+    --------
+    >>> bound = tl.when(tl.func("relu"), tl.zero_ablate()).bind(model)
+    >>> _ = bound(x)
+    >>> report = bound.last_report
+    >>> isinstance(report, BindReport), report.status, report.num_fires
+    (True, 'fired', 1)
     """
 
     schema: str = "bind_report_v1"
@@ -900,7 +908,7 @@ def _make_boundary_hook(
         if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
-        for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
+        for out, container_path in _bound_leaves(output, _iter_loggable_live_outputs(output, True)):
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",
@@ -1210,6 +1218,14 @@ class BoundModel:
     serialization. A bound executor reads the helper's tensor at each call;
     in-place changes apply to the next call (``.last_report`` records each
     helper tensor's version counter).
+
+    Examples
+    --------
+    >>> spec = tl.when(tl.func("relu"), tl.zero_ablate())
+    >>> bound = spec.bind(model)
+    >>> out = bound(x)
+    >>> isinstance(bound, BoundModel), bound.recipe == spec, tuple(out.shape)
+    (True, True, (1, 2, 8, 8))
     """
 
     def __init__(self, spec: Recipe, model: Any, *, on_zero_fire: str) -> None:

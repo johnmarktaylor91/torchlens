@@ -40,7 +40,18 @@ ContainerRootKind = Literal["call", "final_output", "path"]
 
 @dataclass(frozen=True)
 class Container:
-    """Computed view over a captured Python output container."""
+    """Computed view over a captured Python output container.
+
+    Examples
+    --------
+    >>> class Pair(nn.Module):
+    ...     def forward(self, a):
+    ...         return a.relu(), a.sigmoid()
+    >>> opts = tl.options.CaptureOptions(capture_container_structure=True)
+    >>> trace = tl.trace(Pair(), x, capture=opts)
+    >>> container = trace.ops[trace.output_layers[0]].container
+    >>> type(container).__name__, len(container)
+    ('Container', 2)"""
 
     spec: ContainerSpec | None
     leaves: tuple[Op, ...]

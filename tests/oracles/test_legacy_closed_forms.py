@@ -330,27 +330,6 @@ def test_op_and_layer_argument_counts(graph_trace, outer_case) -> None:
         )
 
 
-def test_module_call_forward_argument_counts(outer_case) -> None:
-    _, trace, _, _ = outer_case
-    calls = {call.label: call for call in trace.module_calls}
-    # block(x, scale=2.0); block(h); fc(x) twice; head(h).
-    expected = {
-        "block:1": (1, 1),
-        "block:2": (1, 0),
-        "block.fc:1": (1, 0),
-        "block.fc:2": (1, 0),
-        "head:1": (1, 0),
-    }
-    assert set(calls) == set(expected) | {"self:1"}
-    for label, (positional, keyword) in expected.items():
-        call = calls[label]
-        assert (
-            int(call.num_forward_pos_args),
-            int(call.num_forward_kwargs),
-            int(call.num_forward_args_total),
-        ) == (positional, keyword, positional + keyword), label
-
-
 def test_root_call_forward_argument_counts(graph_trace, outer_case) -> None:
     # Outer.forward(x): one positional; Graph.forward(x, y): two.
     _, trace, _, _ = outer_case

@@ -45,6 +45,14 @@ def list_tools() -> list[dict[str, Any]]:
         One declaration per tool: name, description, input/output schema,
         annotations, CLI verb, and default limits -- the field-parity gate
         compares real served output against these rows.
+
+    Examples
+    --------
+    >>> tools = list_tools()
+    >>> "torchlens_doctor" in [tool["name"] for tool in tools]
+    True
+    >>> tools[0]["annotations"]["readOnlyHint"]
+    True
     """
 
     return [

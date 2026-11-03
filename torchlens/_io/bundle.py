@@ -532,7 +532,7 @@ def save(
                     "Runnable save refuses a HALTED capture: the recorded graph "
                     "is an honest prefix of the forward, not the complete taken "
                     "path the sparse runnable contract requires. Re-capture "
-                    "without halt= to produce a runnable artifact.",
+                    "without stop_after= to produce a runnable artifact.",
                     code=RunnableErrorCode.HALTED_CAPTURE_NOT_RUNNABLE.value,
                 ) from outcome_exc
             raise
@@ -1351,18 +1351,6 @@ def load(
     ArtifactError
         If the bundle is invalid, corrupt, or incompatible with this runtime.
 
-    Examples
-    --------
-    >>> import torchlens as tl
-    >>> trace = tl.load("demo_trace.tlspec", lazy=True)
-    >>> trace.payload_load_status
-    'loaded_lazy'
-    >>> layer = trace["linear_1_1"]
-    >>> layer.out.shape  # saved rows materialize sha-verified, never None
-    torch.Size([2, 3])
-    >>> spec = tl.load("demo_intervention.tlspec")
-    >>> bundle = tl.load("demo_bundle.tlspec")
-
     Warnings
     --------
     Portable bundles contain a pickle file, but the default load path decodes
@@ -1373,6 +1361,18 @@ def load(
     trust model, not ordinary arbitrary-code execution: opting into trusted
     custom-callable execution imports and runs module top-level code, so only
     grant it to artifacts whose provenance you trust.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "demo.tlspec"
+    ...     trace.save(path)
+    ...     loaded = tl.load(path)
+    ...     same = loaded.layer_labels == trace.layer_labels
+    >>> same
+    True
     """
 
     # Load boundary: force every memoized class-owned static lookup to re-validate
@@ -2580,13 +2580,15 @@ def cleanup_tmp(path: str | Path, *, force: bool = False) -> list[Path]:
 
     Examples
     --------
-    >>> from pathlib import Path
-    >>> import torchlens as tl
-    >>> partial = Path("demo_bundle.tmp.partial")
-    >>> partial.mkdir(exist_ok=True)
-    >>> (partial / "PARTIAL").write_text("", encoding="ascii")
-    >>> tl.cleanup_tmp("demo_bundle")
-    [PosixPath('demo_bundle.tmp.partial')]
+    >>> import pathlib, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     target = pathlib.Path(tmp) / "demo.tlspec"
+    ...     partial = pathlib.Path(tmp) / "demo.tlspec.tmp.partial"
+    ...     partial.mkdir()
+    ...     _ = (partial / "PARTIAL").write_text("", encoding="ascii")
+    ...     removed = [p.name for p in tl.io.cleanup_tmp(target)]
+    >>> removed
+    ['demo.tlspec.tmp.partial']
     """
 
     bundle_path = Path(path)

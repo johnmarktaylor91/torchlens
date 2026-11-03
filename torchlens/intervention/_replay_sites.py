@@ -69,8 +69,8 @@ def _no_func_message(site: Op, *, loaded: bool) -> str:
     return (
         f"{site.layer_label!r} has no func for replay: this trace was loaded from a saved "
         "file, and a save keeps no capture-time callables or argument templates, so edits "
-        "cannot be replayed on it. Edit a trace captured in this process with "
-        "CaptureOptions(replayable=True), or rerun the model with the edit staged: "
+        "cannot be replayed on it. Edit a trace captured in this process "
+        "(tl.trace(model, inputs)), or rerun the model with the edit staged: "
         "trace.run(model, inputs)"
     )
 
@@ -87,13 +87,21 @@ def _unmet_log_precondition(log: Trace) -> str | None:
     -------
     str | None
         The refusal message for the first unmet precondition (a completed
-        capture, then ``replayable=True`` metadata), or None.
+        capture, then per-op argument templates), or None.
     """
 
     if not getattr(log, "_tracing_finished", False):
         return "replay requires a completed Trace"
-    if not getattr(log, "is_replayable", False):
-        return "replay requires replayable=True capture metadata"
+    if not (
+        getattr(log, "is_replayable", False)
+        or getattr(getattr(log, "options", None), "save_arg_templates", False)
+    ):
+        return (
+            "replay requires per-op argument templates, and this trace has none (a "
+            "tl.record recording keeps none; every tl.trace capture records them); "
+            "capture with tl.trace(model, inputs), or rerun the model with the edit staged: "
+            "trace.do(site, edit, model=model, inputs=inputs)"
+        )
     return None
 
 

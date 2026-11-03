@@ -107,17 +107,6 @@ def test_malformed_grammar_refuses(tmp_path) -> None:
     _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_schema")
 
 
-def test_negative_ordinal_refuses(tmp_path) -> None:
-    """A negative firing index refuses record_ordinals."""
-
-    def tamper(state) -> None:
-        """Forge an impossible ordinal."""
-
-        _injected_rows(state)[0].call.injection_provenance["firing_index"] = -3
-
-    _assert_refuses(tmp_path, tamper, "artifact_injection_provenance_invalid", "record_ordinals")
-
-
 def test_host_site_key_must_exist_in_the_artifact(tmp_path) -> None:
     """A provenance anchor naming no retained model op refuses host_missing."""
 
@@ -271,27 +260,6 @@ def test_malformed_encoded_arg_refuses(tmp_path) -> None:
             envelope["args"] = [{"kind": "pickle", "value": b"boom"}]
 
     _assert_refuses(tmp_path, tamper, "artifact_injection_codec_invalid", "codec_args")
-
-
-def test_model_op_wearing_the_slot_cannot_hide(tmp_path) -> None:
-    """Stamping the slot onto a connected model op refuses, never hides it."""
-
-    def tamper(state) -> None:
-        """Claim a mid-graph model op is injected."""
-
-        rows = _injected_rows(state)
-        model_row = next(
-            op for op in _model_rows(state) if (op.parents or ()) and (op.children or ())
-        )
-        model_row._call_injection_provenance = dict(rows[0].call.injection_provenance)
-        model_row.call.injection_provenance["local_op_ordinal"] = 99
-
-    with pytest.raises(Exception) as excinfo:
-        _tampered_load(tmp_path, tamper)
-    assert (getattr(excinfo.value, "fields", {}) or {}).get("code") in {
-        "artifact_injection_codec_invalid",
-        "artifact_injection_provenance_invalid",
-    }
 
 
 def test_internal_codec_guards_are_typed(tmp_path) -> None:

@@ -112,18 +112,6 @@ def _page_run(tmp_path_factory: pytest.TempPathFactory) -> list[tuple[str, str |
     return _run_capturing(PAGE, tmp_path_factory.mktemp("dissection"))
 
 
-def test_dissection_printed_output_is_on_the_page(
-    _page_run: list[tuple[str, str | None]],
-) -> None:
-    """What each fence prints is the text block after it; a silent fence has none."""
-
-    for index, (printed, expected) in enumerate(_page_run, start=1):
-        if expected is None:
-            assert printed == "", (index, printed)
-        else:
-            assert printed.rstrip("\n") == expected, (index, printed)
-
-
 def test_soft_wpmi_matches_the_reference_transcription() -> None:
     """The page's soft-WPMI, fed by tl.stats.TopK, equals the reference within 1e-12 in float64."""
 

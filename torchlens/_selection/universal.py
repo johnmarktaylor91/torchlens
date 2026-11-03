@@ -1,7 +1,7 @@
 """The universal selector ``tl.all_sites()``, the named form of ``tl.label_matches(".*")``.
 
-Split out of ``selectors`` (which sits at its file cap) when walk ruling late.9
-(31 Oct 2026) added the name; nothing in ``selectors`` depends on it.
+Split out of ``selectors`` (which sits at its file cap) when the public name was
+added; nothing in ``selectors`` depends on it.
 """
 
 from __future__ import annotations
@@ -52,6 +52,14 @@ def all_sites() -> _AllSitesSelector:
     -------
     _AllSitesSelector
         Immutable selector.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> len(trace[tl.all_sites()]) == len(trace[tl.label_matches(".*")])
+    True
+    >>> trace[tl.all_sites() - tl.func("relu")].labels
+    ('input_1:1', 'conv2d_1_1:1', 'conv2d_2_3:1', 'output_1:1')
     """
 
     return _AllSitesSelector()

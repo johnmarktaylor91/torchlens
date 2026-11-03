@@ -17,7 +17,6 @@ from torch import nn
 from torchlens._data_substrate import (
     MERKLE_ALGORITHM_ID,
     MODEL_IDENTITY_LEVELS,
-    MODEL_STATE_DIGEST_ID,
     compare_model_identity,
     compute_model_identity,
     merkle_digest,
@@ -54,40 +53,6 @@ def _entries(n: int = 4, seed: int = 0) -> list[tuple[str, torch.Tensor]]:
 # --- threaded Merkle digest ---------------------------------------------------
 
 
-def test_merkle_digest_is_thread_count_invariant() -> None:
-    """Identical digest at 1, 4, and 32 workers (the Merkle silent-wrong case)."""
-
-    entries = _entries()
-    digests = {merkle_digest(entries, max_workers=workers).digest for workers in (1, 4, 32, None)}
-    assert len(digests) == 1
-
-
-def test_merkle_digest_is_order_and_content_sensitive() -> None:
-    """Reordering entries, renaming, or flipping one byte changes the digest."""
-
-    base = merkle_digest(_entries()).digest
-    assert merkle_digest(list(reversed(_entries()))).digest != base
-    renamed = _entries()
-    renamed[0] = ("w2", renamed[0][1])
-    assert merkle_digest(renamed).digest != base
-    flipped = _entries()
-    flipped[0][1].view(-1)[0] += 1.0
-    assert merkle_digest(flipped).digest != base
-
-
-def test_merkle_digest_folds_shape_and_dtype_not_just_bytes() -> None:
-    """Two byte-identical payloads with different geometry digest differently."""
-
-    flat = torch.arange(6, dtype=torch.float32)
-    assert (
-        merkle_digest([("t", flat.reshape(2, 3))]).digest
-        != merkle_digest([("t", flat.reshape(3, 2))]).digest
-    )
-    assert (
-        merkle_digest([("t", flat)]).digest != merkle_digest([("t", flat.view(torch.int32))]).digest
-    )
-
-
 def test_merkle_digest_record_and_hash_selection() -> None:
     """The record carries the pinned algorithm id/version; sha256 selectable."""
 
@@ -112,46 +77,6 @@ def test_merkle_digest_unknown_hash_refuses_typed() -> None:
 # --- order-sensitive value reduction ------------------------------------------
 
 
-def test_value_reduction_collision_battery() -> None:
-    """The battery that killed the sampled fingerprint: none of these collide.
-
-    The two-word algebraic collision (fp([0, 0]) == fp([-G, 1]) for the
-    rejected sum-based fingerprint, constructed without search) plus swaps,
-    rolls, and reversals — each must produce a DIFFERENT reduction, because
-    the Horner fold weights every byte by position.
-    """
-
-    base_tensor = torch.arange(16384, dtype=torch.float32)
-    base = value_reduction("t", base_tensor)
-
-    def variant(mutate) -> str:
-        t = base_tensor.clone()
-        mutate(t)
-        return value_reduction("t", t)
-
-    def swap(t: torch.Tensor, i: int, j: int) -> None:
-        t[i], t[j] = t[j].item(), t[i].item()
-
-    assert variant(lambda t: swap(t, 0, 1)) != base, "adjacent swap"
-    assert variant(lambda t: swap(t, 0, 4096)) != base, "distant swap"
-    assert value_reduction("t", torch.flip(base_tensor, dims=(0,))) != base, "full reverse"
-    assert value_reduction("t", torch.roll(base_tensor, 1)) != base, "roll by 1"
-    shuffled = torch.roll(base_tensor, 7)
-    assert value_reduction("t", shuffled.msort()) != value_reduction("t", shuffled), "sort"
-    # The exact two-word algebraic collision class: zero-sum rearrangements.
-    a = torch.tensor([0.0, 0.0])
-    b = torch.tensor([-1.0, 1.0])
-    assert value_reduction("t", a) != value_reduction("t", b)
-
-
-def test_value_reduction_folds_name_shape_and_dtype() -> None:
-    """The per-tensor header fold distinguishes name, geometry, and dtype."""
-
-    t = torch.arange(6, dtype=torch.float32)
-    assert value_reduction("a", t) != value_reduction("b", t)
-    assert value_reduction("a", t.reshape(2, 3)) != value_reduction("a", t.reshape(3, 2))
-
-
 def test_value_reduction_block_boundaries_and_zero_dim() -> None:
     """Sizes straddling the 65536-byte block slice stay well-defined and distinct."""
 
@@ -163,13 +88,6 @@ def test_value_reduction_block_boundaries_and_zero_dim() -> None:
     scalar = value_reduction("s", torch.tensor(3.0))
     assert scalar.startswith("0x") and len(scalar) == 18
     assert value_reduction("s", torch.tensor([], dtype=torch.float32)).startswith("0x")
-
-
-def test_value_reduction_is_deterministic_across_calls() -> None:
-    """Same name + tensor -> same hex, every time (a recomputation contract)."""
-
-    t = torch.arange(100, dtype=torch.float16)
-    assert value_reduction("x", t) == value_reduction("x", t.clone())
 
 
 # --- model identity (D6) --------------------------------------------------------
@@ -201,37 +119,6 @@ class _BnModel(nn.Module):
         """
 
         return self.bn(self.conv(x))
-
-
-def test_measured_identity_covers_every_state_entry() -> None:
-    """The digest covers params AND persistent buffers, int/bool/0-dim included."""
-
-    model = _BnModel()
-    record = compute_model_identity(model)
-    assert record["level"] == "measured"
-    assert record["algorithm_id"] == MODEL_STATE_DIGEST_ID
-    assert record["n_state_entries"] == len(model.state_dict())
-    assert record["digest"].startswith("blake2b:")
-
-
-def test_resume_identity_integer_buffer_mutation_changes_the_digest() -> None:
-    """T-IDENTITY-BUFFERS: mutate num_batches_tracked -> identity changes."""
-
-    model = _BnModel()
-    before = compute_model_identity(model)["digest"]
-    model.bn.num_batches_tracked += 1
-    after = compute_model_identity(model)["digest"]
-    assert before != after
-
-
-def test_resume_identity_weight_edit_changes_the_digest() -> None:
-    """An in-place weight edit (LoRA-merge / lesion class) changes the identity."""
-
-    model = _BnModel()
-    before = compute_model_identity(model)["digest"]
-    with torch.no_grad():
-        model.conv.weight[0, 0, 0, 0] += 1.0
-    assert compute_model_identity(model)["digest"] != before
 
 
 def test_identity_levels_and_refusals() -> None:

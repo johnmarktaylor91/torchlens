@@ -23,7 +23,18 @@ _COMMON_BUFFER_SUFFIXES = (".running_mean", ".running_var", ".num_batches_tracke
 
 
 class AmbiguousLabelError(KeyError):
-    """Raised when ``Bundle.at`` finds a label in multiple accessors."""
+    """Raised when ``Bundle.at`` finds a label in multiple accessors.
+
+    Examples
+    --------
+    >>> issubclass(AmbiguousLabelError, KeyError)
+    True
+    >>> try:
+    ...     raise AmbiguousLabelError("relu_1 names an op and a layer")
+    ... except KeyError as error:
+    ...     print(type(error).__name__)
+    AmbiguousLabelError
+    """
 
 
 # Defined here so this leaf never imports the package at call time (layering:

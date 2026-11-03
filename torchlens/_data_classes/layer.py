@@ -55,7 +55,10 @@ from .._ir.refs import DtypeRef
 from .._quantities import Bytes, Macs
 from .._selection.selection import _SelectionOperand
 from .._trace_core.op_store import DetachedOpStore
-from .._trace_core.relation_views import LAYER_FROZENSET_VIEW_FIELDS, LAYER_TUPLE_VIEW_FIELDS
+from .._trace_core.relation_views import (
+    LAYER_FROZENSET_VIEW_FIELDS,
+    LAYER_TUPLE_VIEW_FIELDS,
+)
 from .._utils._record_group_table import (
     LAYER_MOVED_MEMBERS,
     LAYER_STORAGE_ATTRS,
@@ -100,7 +103,10 @@ from ._record_groups_source import LayerSource
 from ._repr import format_config_items, format_shape_list
 from ._state_adapter import state_items
 from ._value_repr import layer_card, layer_repr_line
-from .field_policy import build_record_field_policy_table, portable_state_spec_from_policy
+from .field_policy import (
+    build_record_field_policy_table,
+    portable_state_spec_from_policy,
+)
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -316,6 +322,14 @@ class Layer(_SelectionOperand):
     For single-pass layers, per-pass fields are accessible directly via
     ``__getattr__`` delegation (e.g. ``layer_log.out`` transparently
     reads from ``ops[0].out``).
+
+    Examples
+    --------
+    >>> layer = tl.trace(model, x).layers["relu_1_2"]
+    >>> type(layer).__name__, layer.func_name
+    ('Layer', 'relu')
+    >>> tuple(layer.out.shape)
+    (1, 4, 8, 8)
     """
 
     if TYPE_CHECKING:
@@ -1493,44 +1507,6 @@ class Layer(_SelectionOperand):
             model=model,
             inputs=inputs,
             intervention=intervention,
-        )
-
-    def attach_hooks(
-        self,
-        hook: Any = None,
-        *extra_hooks: Any,
-        strict: bool = False,
-        prepend: bool = False,
-        confirm_mutation: bool = False,
-    ) -> Any:
-        """Attach sticky hooks to this layer through the owning Trace.
-
-        Parameters
-        ----------
-        hook:
-            Hook or helper to attach to this layer.
-        *extra_hooks:
-            Additional hooks to compose on this layer in left-to-right order.
-        strict:
-            Whether site resolution should reject non-portable selectors.
-        prepend:
-            Whether new sticky hooks should run before existing sticky hooks.
-        confirm_mutation:
-            Suppress root mutation warnings when intentionally mutating.
-
-        Returns
-        -------
-        Any
-            Trace or scoped removable hook handle, matching ``Trace.attach_hooks``.
-        """
-
-        return self._source_trace_or_error().attach_hooks(
-            self._intervention_site(),
-            hook,
-            *extra_hooks,
-            strict=strict,
-            prepend=prepend,
-            confirm_mutation=confirm_mutation,
         )
 
     def to_pandas(self) -> "pd.DataFrame":

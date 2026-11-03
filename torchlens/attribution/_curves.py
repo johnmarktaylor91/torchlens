@@ -194,6 +194,20 @@ class CurveStep:
     score
         Target score after the step: one value per example for an integer
         target, one value for a callable target.
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> curve = tl.attribution.deletion_curve(
+    ...     model, x, target=0, attribution=attr, num_steps=4
+    ... )
+    >>> step = curve.steps[-1]
+    >>> type(step).__name__
+    'CurveStep'
+    >>> step.index
+    4
+    >>> step.num_features
+    64
     """
 
     index: int
@@ -271,6 +285,21 @@ class PerturbationCurve:
         Method-specific extras: per-example areas (``area_per_example``) and
         AOPC values (``aopc_per_example``), the feature count (``n_features``)
         and the attribution method name (``attribution_method``).
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> curve = tl.attribution.deletion_curve(
+    ...     model, x, target=0, attribution=attr, num_steps=4
+    ... )
+    >>> type(curve).__name__
+    'PerturbationCurve'
+    >>> curve.kind
+    'deletion'
+    >>> tuple(curve.fractions.shape)
+    (5,)
+    >>> len(curve.steps)
+    5
     """
 
     kind: str
@@ -615,6 +644,17 @@ def deletion_curve(  # noqa: PLR0913 - public door: keyword-only evaluation sett
     AttributionError
         On a misaligned attribution, an invalid setting, or a ``SiteTarget``
         (curves score the model output).
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> curve = tl.attribution.deletion_curve(
+    ...     model, x, target=0, attribution=attr, num_steps=4
+    ... )
+    >>> curve.kind
+    'deletion'
+    >>> len(curve.steps)
+    5
     """
 
     return _curve(
@@ -655,6 +695,17 @@ def insertion_curve(  # noqa: PLR0913 - mirrors deletion_curve one-to-one
     -------
     CurveResult
         Fractions, scores, area, AOPC and the recorded steps.
+
+    Examples
+    --------
+    >>> attr = tl.attribution.saliency(model, x, target=0)
+    >>> curve = tl.attribution.insertion_curve(
+    ...     model, x, target=0, attribution=attr, num_steps=4
+    ... )
+    >>> curve.kind
+    'insertion'
+    >>> len(curve.steps)
+    5
     """
 
     return _curve(

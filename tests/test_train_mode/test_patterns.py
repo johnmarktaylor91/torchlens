@@ -146,7 +146,7 @@ def test_aux_loss_replay(two_layer_mlp: TwoLayerMlp) -> None:
     """Pattern A: replay capture supports an auxiliary loss on an intermediate out."""
 
     trace = tl.trace(two_layer_mlp, torch.randn(3, 4), capture=tl.options.CaptureOptions(seed=0))
-    trace.save_new_outs(
+    trace._save_new_outs(
         two_layer_mlp,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -207,7 +207,7 @@ def test_probe_frozen_backbone_replay(tiny_resnet_with_probe: TinyResnetWithProb
         torch.randn(3, 4),
         capture=tl.options.CaptureOptions(seed=0),
     )
-    trace.save_new_outs(
+    trace._save_new_outs(
         tiny_resnet_with_probe,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -390,7 +390,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
         capture=tl.options.CaptureOptions(backward_ready=True, seed=0),
     )
 
-    trace.save_new_outs(
+    trace._save_new_outs(
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=None,
@@ -403,6 +403,7 @@ def test_save_new_outs_train_mode_inherits() -> None:
     trace.cleanup()
 
 
+@pytest.mark.smoke
 def test_save_new_outs_train_mode_overrides() -> None:
     """Explicit save_new_outs backward_ready overrides detach flags temporarily."""
 
@@ -414,7 +415,7 @@ def test_save_new_outs_train_mode_overrides() -> None:
     )
     original_layer_flags = [layer._detach_saved_activations for layer in trace]
 
-    trace.save_new_outs(
+    trace._save_new_outs(
         model,
         torch.randn(3, 4, requires_grad=True),
         backward_ready=True,
@@ -452,7 +453,7 @@ def test_fastlog_train_mode_explicit_default_op_false() -> None:
     recording = tl.record(
         SharedFrozenModule(),
         torch.randn(3, 4, requires_grad=True),
-        default_op=False,
+        recording=tl.options.RecordingOptions(default_op=False),
         capture=tl.options.CaptureOptions(backward_ready=True),
     )
 
@@ -466,11 +467,12 @@ def test_fastlog_train_mode_default_op_true_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            default_op=True,
+            recording=tl.options.RecordingOptions(default_op=True),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
 
+@pytest.mark.smoke
 def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
     """CaptureSpec save_grad=False contradicts backward_ready keep-grad sugar."""
 
@@ -478,7 +480,9 @@ def test_fastlog_train_mode_explicit_capspec_keepgrad_false_errors() -> None:
         tl.record(
             SharedFrozenModule(),
             torch.randn(3, 4, requires_grad=True),
-            default_op=tl.recording.CaptureSpec(save_grad=False),
+            recording=tl.options.RecordingOptions(
+                default_op=tl.recording.CaptureSpec(save_grad=False)
+            ),
             capture=tl.options.CaptureOptions(backward_ready=True),
         )
 
@@ -503,7 +507,7 @@ def test_save_new_outs_train_mode_restored_on_graph_mismatch() -> None:
     model.forward = types.MethodType(divergent_forward, model)
 
     try:
-        trace.save_new_outs(
+        trace._save_new_outs(
             model,
             torch.ones(2, 4, requires_grad=True),
             backward_ready=True,

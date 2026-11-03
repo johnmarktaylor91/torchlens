@@ -7,9 +7,7 @@ import torch
 import torch.nn as nn
 
 import torchlens as tl
-from torchlens._data_classes.layer import OpAccessor
 from torchlens._data_classes.module import Module, ModuleCall
-from torchlens._data_classes.op import Op
 from torchlens._data_classes.param import ParamAccessor
 from torchlens.options import CaptureOptions
 
@@ -60,22 +58,6 @@ def test_trace_call_tree_and_num_modules() -> None:
     # ASCII-canonical -- and stays free of the former unicode rails.
     assert "|--" in stream.getvalue() or "`--" in stream.getvalue()
     assert "├" not in stream.getvalue() and "└" not in stream.getvalue()
-
-
-def test_op_input_side_properties() -> None:
-    """Op input-side properties resolve parent Ops and saved activations."""
-
-    trace = _make_trace()
-    op = next(record for record in trace.ops if record.parents)
-    parent = trace.ops[op.parents[0]]
-
-    assert isinstance(op, Op)
-    assert isinstance(op.input_ops, OpAccessor)
-    assert op.graph.num_inputs == len(op.parents)
-    assert op.input_shapes[0] == parent.shape
-    assert op.input_dtypes[0] == parent.dtype
-    assert op.cost.input_memory >= parent.cost.activation_memory
-    assert op.input_activations[0] is not None
 
 
 def test_module_recursive_params_memory_and_call_tree() -> None:

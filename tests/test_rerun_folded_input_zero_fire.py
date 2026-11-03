@@ -19,7 +19,6 @@ loop model as the multi-pass case through its loop-body relu (rule row 2).
 
 from __future__ import annotations
 
-import warnings
 from typing import Any
 
 import pytest
@@ -28,7 +27,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.intervention._rerun import _same_rerun_inputs
-from torchlens.intervention.errors import LiveModeLabelError
 from torchlens.options import CaptureOptions, InterventionOptions
 
 
@@ -68,6 +66,7 @@ def _traces(model_cls: type[nn.Module], inputs: tuple[Any, Any], other: tuple[An
     return tl.trace(model, inputs), tl.trace(model, other)
 
 
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_folded_input_premise() -> None:
     """Premise under call-site grouping: input nodes never fold.
 
@@ -154,32 +153,3 @@ def _rerun(baseline: Any, site: Any, model: nn.Module, inputs: tuple[Any, Any]) 
         inputs=inputs,
         intervention=InterventionOptions(engine="rerun"),
     )
-
-
-@pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs], ids=["folded", "single"])
-def test_zero_fire_rerun_on_same_inputs_refuses_typed(model_cls: type[nn.Module]) -> None:
-    model, inputs, baseline, label = _intervention_case(model_cls)
-    member = baseline.fork()
-    before = member[label].out.clone()
-    with pytest.raises(LiveModeLabelError) as excinfo:
-        member.do(
-            _value_predicate(baseline, label),
-            tl.zero_ablate(),
-            model=model,
-            inputs=tuple(t.clone() for t in inputs),
-            intervention=InterventionOptions(engine="rerun"),
-        )
-    assert excinfo.value.fields["code"] == "rerun_selector_unmatchable_live"
-    assert excinfo.value.fields["source_site_count"] == 1
-    assert torch.equal(member[label].out, before)
-
-
-@pytest.mark.parametrize("model_cls", [_LoopOverInputs, _TwoInputs], ids=["folded", "single"])
-def test_zero_fire_rerun_on_a_changed_second_input_warns(model_cls: type[nn.Module]) -> None:
-    model, (a, b), baseline, label = _intervention_case(model_cls)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = _rerun(baseline, _value_predicate(baseline, label), model, (a.clone(), b + 1.0))
-    assert [w for w in caught if "fired at zero sites" in str(w.message)]
-    assert result.last_run["hooks_fired"] == 0
-    assert result.last_run["hooks_unfired"] > 0

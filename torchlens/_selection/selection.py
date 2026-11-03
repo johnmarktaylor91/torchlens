@@ -104,6 +104,13 @@ class Site:
     the L1 structural site key when present (bridging relation; ``None``
     otherwise). ``mask`` returns a FRESH dense bool materialization on every
     access — mutating the returned tensor cannot alter the selection.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> site = trace[tl.units("relu_1_2", [(0, 0, 1, 1)])][0]
+    >>> site.key, site.shape, site.num_selected
+    (('relu_1_2', 1), (1, 4, 8, 8), 1)
     """
 
     kind: str
@@ -215,6 +222,15 @@ class Selection:
     level of the two-level denotation. ``.empty`` and ``__bool__`` report the
     ELEMENT level only; read the family via iteration / ``len()``.
     Session-time only; never persisted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.func("conv2d")]
+    >>> isinstance(selection, tl.Selection)
+    True
+    >>> selection.labels, selection.kind, selection.is_empty
+    (('conv2d_1_1:1', 'conv2d_2_3:1'), 'ACT', False)
     """
 
     __slots__ = ("_digest", "_entries", "_kind", "_selector", "_trace")
@@ -584,6 +600,15 @@ class Selector:
     (``selection_bool_ambiguous``) because ``a and b`` on a lazily-composable
     AST silently discards the left operand. Resolve first; the
     ``Selection`` is truthy on "has any selected element".
+
+    Examples
+    --------
+    >>> query = tl.units("relu_1_2", [(0, 0, 1, 1)]) | tl.units("relu_1_2", [(0, 1, 2, 2)])
+    >>> isinstance(query, tl.Selector), query.kind
+    (True, 'ACT')
+    >>> trace = tl.trace(model, x)
+    >>> trace[query][0].num_selected
+    2
     """
 
     __slots__ = ("_kind", "_node", "_signal")
@@ -1396,6 +1421,13 @@ def units(
     indices:
         Either a bool mask over the site's output index space, or an iterable
         of integer coordinate tuples (ints accepted for 1-d sites).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.units("relu_1_2", [(0, 0, 1, 1), (0, 1, 2, 2)])]
+    >>> selection.labels, selection[0].num_selected
+    (('relu_1_2:1',), 2)
     """
 
     if not isinstance(site, str) or not site:
@@ -1424,6 +1456,13 @@ def param(name: str, mask: torch.Tensor | None = None) -> Selector:
     ``mask=None`` selects the whole parameter. Fenced from
     ``module.parameters()``: this addresses the TRACE's recorded parameter
     geometry by name/address.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> selection = trace[tl.param("0.weight")]
+    >>> selection.kind, selection[0].num_selected
+    ('PARAM', 108)
     """
 
     if not isinstance(name, str) or not name:
@@ -1448,6 +1487,14 @@ def random_like(
     kind; ``|result| == |like|`` sampled without replacement. A population
     smaller than ``|like|`` (including an empty complement) refuses typed
     (``selection_unresolvable``, ``reason="population_too_small"``).
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> probe = tl.units("relu_1_2", [(0, 0, 0, 0), (0, 1, 1, 1)])
+    >>> control = tl.random_like(like=probe, within=tl.func("conv2d"), seed=0)
+    >>> sum(site.num_selected for site in trace[control])
+    2
     """
 
     if not isinstance(seed, int) or isinstance(seed, bool) or seed < 0:

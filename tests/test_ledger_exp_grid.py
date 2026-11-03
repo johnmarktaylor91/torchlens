@@ -89,7 +89,6 @@ def _code(excinfo: pytest.ExceptionInfo[BundleExperimentError]) -> str:
 # ---- shape, equality with the flat sweep, connectedness ----------------------
 
 
-@pytest.mark.smoke
 def test_grid_shape_axes_cells_follow_the_declared_axes() -> None:
     model, x, baseline = _tiny()
     grid = _grid(
@@ -149,7 +148,6 @@ def test_changing_an_edit_axis_value_changes_only_that_cell() -> None:
 # ---- holes and refusals --------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_unresolved_cell_is_refused_and_the_rest_run() -> None:
     model, x, baseline = _tiny()
     calls = {"n": 0}
@@ -202,12 +200,11 @@ def test_edit_axis_and_edit_keyword_are_exclusive_and_one_is_required() -> None:
     assert _code(excinfo) == "grid_site_axis_missing"
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of experiment/_grid.py.
 @pytest.mark.parametrize(
     "axes",
     [
         {},
-        {"site": []},
-        {"site": {"a,b": "relu_1_2"}},
         {"site": {"baseline": "relu_1_2"}},
         {"site": {"a": "relu_1_2", "a2": "relu_1_2"}, "": [tl.scale(0.5)]},
         {"site": "relu_1_2"},
@@ -350,6 +347,7 @@ def test_duplicate_identity_includes_the_edit() -> None:
     assert replicated.cell(site="a", pos="t0").value == replicated.cell(site="a", pos="again").value
 
 
+@pytest.mark.smoke
 def test_position_preflight_against_recorded_shapes() -> None:
     model, x, baseline = _tiny((2, 4, 3))
     calls = {"n": 0}
@@ -456,6 +454,7 @@ def test_axes_are_recorded_in_the_operation_params() -> None:
     assert grid.history_id == sweeps[0].operation_id
 
 
+@pytest.mark.smoke
 def test_grid_round_trips_through_save_and_load(tmp_path: Path) -> None:
     model, x, baseline = _tiny()
     grid = _grid(baseline, model, x, axes={"site": _SITES, "scale": [tl.scale(0.0), tl.scale(0.5)]})

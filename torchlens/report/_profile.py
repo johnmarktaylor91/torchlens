@@ -93,6 +93,15 @@ class ProfileReport:
     -----
     Operation wall-times are collected while TorchLens instrumentation is
     active. Use them to identify relative hotspots, not as clean benchmarks.
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), level="module")
+    >>> report.level
+    'module'
+    >>> "flops" in report.to_pandas().columns
+    True
     """
 
     frame: pd.DataFrame
@@ -119,7 +128,9 @@ class ProfileReport:
     # one row per op. DOCUMENTED-UNSTABLE spelling.
     group_by: str | None = None
 
-    def to_pandas(self, *, include_totals: bool = False, evidence: bool = False) -> pd.DataFrame:
+    def to_pandas(
+        self, *, include_totals: bool = False, include_evidence: bool = False
+    ) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
 
         The stamped capture-honesty facts and the column-additivity map
@@ -133,7 +144,7 @@ class ProfileReport:
             additive families carry the whole-capture partition totals --
             the sort/top_k view above it never changes these denominators
             (D6).
-        evidence:
+        include_evidence:
             Interleave per-cell evidence columns (``<column>_evidence``)
             into the frame (costreport D9's inline form). The labels are
             the same :meth:`honesty` projection; the ``TOTAL`` row carries
@@ -144,9 +155,8 @@ class ProfileReport:
         pandas.DataFrame
             Resource profile rows.
         """
-
         frame = self.frame.copy()
-        if evidence:
+        if include_evidence:
             honesty_frame = self._honesty_table()
             for column in ("time", "flops", "activation_memory", "param_count"):
                 frame.insert(
@@ -174,7 +184,6 @@ class ProfileReport:
 
     def _totals_row(self) -> dict[str, Any]:
         """The explicit totals row (sumfam item 12): partition denominators."""
-
         row: dict[str, Any] = dict.fromkeys(self.frame.columns)
         row["name"] = "TOTAL"
         row["kind"] = "total"
@@ -908,6 +917,15 @@ def profile(  # noqa: PLR0913 -- the ruled view kwargs (level, sort_by, ascendin
     ``flops`` (inclusive subtree, NON-additive there) and ``flops_self``
     (exclusive, additive, sums to the partition total) -- with roles and
     column additivity stamped on every export (D5).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> report = tl.report.profile(tl.trace(model, x), sort_by="flops", k=2)
+    >>> report.level
+    'op'
+    >>> "name" in report.to_pandas().columns
+    True
     """
 
     _validate_profile_args(level, sort_by, k, group_by)

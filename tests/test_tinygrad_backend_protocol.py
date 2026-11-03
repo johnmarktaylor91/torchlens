@@ -23,7 +23,7 @@ from torchlens.validation._status import ValidationStatus
 tinygrad = pytest.importorskip("tinygrad")
 Tensor = pytest.importorskip("tinygrad").Tensor
 
-pytestmark = pytest.mark.backend_tinygrad
+pytestmark = [pytest.mark.backend_tinygrad, pytest.mark.rare]
 
 
 def _block(x: Any) -> Any:
@@ -79,7 +79,7 @@ def test_protocol_validate_names_op_and_reason_on_tamper() -> None:
     assert status.state == "failed"
     assert len(status.decisions) == 1
     decision = status.decisions[0]
-    assert decision["label"] == op._label_raw
+    assert decision["op_label"] == op._label_raw
     assert decision["reason"] in VALIDATION_REASONS
     assert op._label_raw in status.message
     # the public boolean contract of the spec entry is unchanged
@@ -97,7 +97,7 @@ def test_protocol_validate_names_dropped_payload() -> None:
 
     assert status.state == "failed"
     assert status.decisions[0]["reason"] == "parent_payload_missing"
-    assert status.decisions[0]["label"] == op._label_raw
+    assert status.decisions[0]["op_label"] == op._label_raw
 
 
 def test_replay_verdict_decisions_and_message() -> None:
@@ -110,8 +110,8 @@ def test_replay_verdict_decisions_and_message() -> None:
     failed = ReplayVerdict.fail("add_1", "replay_mismatch", "differs", 1)
     (decision,) = failed.decisions()
     assert decision == {
-        "label": "add_1",
-        "verdict": "failed",
+        "op_label": "add_1",
+        "decision": "failed",
         "reason": "replay_mismatch",
         "detail": "differs",
     }

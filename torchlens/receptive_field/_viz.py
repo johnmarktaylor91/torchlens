@@ -10,6 +10,7 @@ from PIL import Image, ImageDraw
 
 from .._utils._record_group_table import record_member
 from .._vocab.node_spec import NodeSpec, NodeSpecFn
+from ..errors import InvalidArgumentError
 from ..viz import _node_plots as node_plots
 from ._errors import (
     AmbiguousInputError,
@@ -192,6 +193,13 @@ def node_spec(
     ------
     AmbiguousInputError
         If more than one model input reaches ``op`` and ``input`` is omitted.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> style = node_spec(trace["conv2d_2_3"])
+    >>> callable(style)
+    True
     """
 
     _ = overlay, grad, box_color, alpha, cmap
@@ -262,7 +270,8 @@ def _view_box(
             return cast(ReceptiveFieldBox, view.at(coordinates, input_op=selected))
         if direction is ReceptiveFieldDirection.PROJECTIVE:
             return cast(
-                ReceptiveFieldBox, view.at(coordinates, direction=direction, target=selected)
+                ReceptiveFieldBox,
+                view.at(coordinates, direction=direction, target=selected),
             )
         return cast(ReceptiveFieldBox, view.at(coordinates, direction=direction, input_op=selected))
     except TypeError as exc:
@@ -413,7 +422,12 @@ def _gradient_image(
 
 
 def _draw_box(
-    image: Image.Image, box: ReceptiveFieldBox, axes: tuple[int, ...], *, dashed: bool, color: str
+    image: Image.Image,
+    box: ReceptiveFieldBox,
+    axes: tuple[int, ...],
+    *,
+    dashed: bool,
+    color: str,
 ) -> None:
     """Draw a status-styled RF region scaled from tensor extents to image pixels."""
 
@@ -537,7 +551,12 @@ def _rendered_labels(layer: Any) -> frozenset[str]:
 
     values = set(getattr(layer, "op_labels", ()))
     for name in ("label", "layer_label", "_layer_label_raw"):
-        value = getattr(layer, name, None)
+        try:
+            value = getattr(layer, name, None)
+        except InvalidArgumentError:
+            # A multi-pass Layer refuses its single-pass fields; its ops are
+            # already represented through ``op_labels``.
+            continue
         if isinstance(value, str):
             values.add(value)
     return frozenset(values)

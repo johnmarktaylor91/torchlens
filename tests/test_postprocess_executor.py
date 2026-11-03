@@ -294,7 +294,6 @@ class _DictOutputModel(nn.Module):
         return {"a": x.relu(), "b": x.sigmoid()}
 
 
-@pytest.mark.smoke
 def test_adopt_containers_step_adopts_records_before_the_registry_clears() -> None:
     """The adopt_containers_and_drop_workspaces step's one NON-redundant effect: adopt container records onto the trace.
 
@@ -323,7 +322,6 @@ def test_adopt_containers_step_adopts_records_before_the_registry_clears() -> No
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_evict_streamed_outs_step_and_gate_evict_from_memory(tmp_path: Path) -> None:
     """evict_streamed_outs (and its gate) must drop in-memory ``out`` once streamed.
 

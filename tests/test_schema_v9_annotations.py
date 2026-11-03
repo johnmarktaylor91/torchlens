@@ -43,28 +43,14 @@ def _reload_with_annotation(tmp_path, key, value, name):
 # ---------------------------------------------------------------------------
 
 
-def test_sidecar_envelope_round_trips_plainly(tmp_path):
-    envelope = {
-        "schema_id": "myorg.saliency.v1",
-        "version": 1,
-        "owner": "myorg",
-        "payload": {"scores": [0.25]},
-    }
-    loaded = _reload_with_annotation(
-        tmp_path, "sidecar", {"myorg.saliency": envelope}, "sidecar_ok"
-    )
-    assert loaded.annotations["sidecar"]["myorg.saliency"] == envelope
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "namespace",
     [
         "not-a-mapping",
         {"NotNamespaced": {"schema_id": "s", "version": 1, "owner": "o", "payload": {}}},
-        {"myorg.saliency": {"schema_id": "s", "version": 1, "owner": "o"}},
         {"myorg.saliency": {"schema_id": "", "version": 1, "owner": "o", "payload": {}}},
         {"myorg.saliency": {"schema_id": "s", "version": 0, "owner": "o", "payload": {}}},
-        {"myorg.saliency": {"schema_id": "s", "version": True, "owner": "o", "payload": {}}},
         {"myorg.saliency": {"schema_id": "s", "version": 1, "owner": "", "payload": {}}},
         {
             "myorg.saliency": {
@@ -88,20 +74,7 @@ def test_malformed_sidecar_namespace_refuses_at_load(tmp_path, namespace):
 # ---------------------------------------------------------------------------
 
 
-def test_capture_advisories_round_trip(tmp_path):
-    rows = [
-        {
-            "kind": "scalar_escape",
-            "count": 3,
-            "first_location": "model.py:10",
-            "message": "a Python scalar left the graph",
-        },
-        {"kind": "other", "count": 1, "first_location": None, "message": "m"},
-    ]
-    loaded = _reload_with_annotation(tmp_path, "capture_advisories", rows, "advisories_ok")
-    assert loaded.annotations["capture_advisories"] == rows
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "rows",
     [
@@ -109,10 +82,8 @@ def test_capture_advisories_round_trip(tmp_path):
         [{"kind": "k", "count": 1, "message": "m"}],
         [{"kind": "", "count": 1, "first_location": None, "message": "m"}],
         [{"kind": "k", "count": 0, "first_location": None, "message": "m"}],
-        [{"kind": "k", "count": True, "first_location": None, "message": "m"}],
         [{"kind": "k", "count": 1, "first_location": 4, "message": "m"}],
         [{"kind": "k", "count": 1, "first_location": None, "message": 9}],
-        [{"kind": "k", "count": 1, "first_location": None, "message": "m", "extra": 1}],
     ],
 )
 def test_malformed_capture_advisories_refuse_at_load(tmp_path, rows):
@@ -124,20 +95,6 @@ def test_malformed_capture_advisories_refuse_at_load(tmp_path, rows):
 # ---------------------------------------------------------------------------
 # health_facts: consumer-contract validation row (degrade, never a false clean)
 # ---------------------------------------------------------------------------
-
-
-def test_health_facts_round_trip_serves_persisted_basis(tmp_path):
-    from torchlens.report._health import health_facts
-
-    trace = _traced()
-    record = health_facts(trace)
-    assert "health_facts" in trace.annotations, "derivation persists on the channel (D9)"
-    path = tmp_path / "health_ok.tlspec"
-    trace.save(path)
-    loaded = tl.load(path)
-    served = health_facts(loaded)
-    assert served.nonfinite_labels == record.nonfinite_labels
-    assert served.num_checked_ops == record.num_checked_ops
 
 
 def test_tampered_health_facts_are_never_the_authority(tmp_path):

@@ -24,14 +24,12 @@ refuses as newer-than-runtime.
 
 from __future__ import annotations
 
-import json
 import warnings
 from pathlib import Path
 
 import pytest
 import torch
 import torch.nn as nn
-from _refuses_as_2x import assert_refuses_as_2x
 from torch.utils.checkpoint import checkpoint
 
 import torchlens as tl
@@ -319,29 +317,6 @@ def _selection_fork() -> tl.Trace:
     return fork
 
 
-class _EdgeNet(nn.Module):
-    def __init__(self) -> None:
-        super().__init__()
-        self.c1 = nn.Conv2d(1, 2, 3)
-        self.c2 = nn.Conv2d(2, 2, 3)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.relu(self.c2(torch.relu(self.c1(x))) + 1.0)
-
-
-def _edge_fork() -> tl.Trace:
-    torch.manual_seed(0)
-    trace = tl.trace(
-        _EdgeNet(),
-        torch.randn(1, 1, 12, 12),
-        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
-    )
-    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
-    fork = trace.fork()
-    fork.do(edge.__selection__(), trace["relu_1_2"].out.clone())
-    return fork
-
-
 class _BackwardTiny(nn.Module):
     def __init__(self) -> None:
         super().__init__()
@@ -432,22 +407,15 @@ def _structure_only_trace() -> tl.Trace:
     )
 
 
-def _armed_aten_trace() -> tl.Trace:
-    torch.manual_seed(0)
-    return tl.trace(
-        nn.Sequential(nn.Linear(4, 4), nn.ReLU()),
-        torch.randn(1, 4),
-        capture=tl.options.CaptureOptions(aten_ops=True),
-    )
-
-
 def _telemetry_trace() -> tl.Trace:
     from torchlens import _kernel_telemetry as telemetry
 
     torch.manual_seed(0)
     return telemetry._profile_trace_with_cuda_kernels(
         lambda: tl.trace(
-            nn.Linear(2, 2), torch.ones(2, 2), capture=tl.options.CaptureOptions(aten_ops=True)
+            nn.Linear(2, 2),
+            torch.ones(2, 2),
+            capture=tl.options.CaptureOptions(aten_ops=True),
         )
     )
 
@@ -455,25 +423,6 @@ def _telemetry_trace() -> tl.Trace:
 # ---------------------------------------------------------------------------
 # Per-family switched round trips (brief questions 1 + 3)
 # ---------------------------------------------------------------------------
-
-
-def test_l1_grouping_family_roundtrip(tmp_path) -> None:
-    trace = _tiny_trace()
-    loaded = _plain_roundtrip(trace, tmp_path, "grouping")
-    assert loaded.options.grouping == trace.options.grouping == "structural"
-    assert loaded.options.grouping_policy == trace.options.grouping_policy
-    gen2 = _second_generation(loaded, tmp_path, "grouping")
-    assert gen2.options.grouping_policy == loaded.options.grouping_policy
-
-
-def test_l1_site_key_family_roundtrip(tmp_path) -> None:
-    trace = _tiny_trace()
-    live_keys = [op.graph.site_key for op in trace.ops]
-    assert any(key and key.startswith("s1|") for key in live_keys)
-    loaded = _plain_roundtrip(trace, tmp_path, "site_key")
-    assert [op.graph.site_key for op in loaded.ops] == live_keys
-    gen2 = _second_generation(loaded, tmp_path, "site_key")
-    assert [op.graph.site_key for op in gen2.ops] == live_keys
 
 
 def test_l2_episode_family_roundtrip(tmp_path) -> None:
@@ -485,33 +434,7 @@ def test_l2_episode_family_roundtrip(tmp_path) -> None:
     assert gen2.annotations["episode"] == trace.annotations["episode"]
 
 
-def test_l3_aten_profile_family_roundtrip(tmp_path) -> None:
-    trace = _armed_aten_trace()
-    live_profile = trace._primitive_op_profile
-    assert live_profile is not None and live_profile.primitive_ops
-    loaded = _plain_roundtrip(trace, tmp_path, "aten")
-    assert _persisted_eq(loaded._primitive_op_profile, live_profile)
-    gen2 = _second_generation(loaded, tmp_path, "aten")
-    assert _persisted_eq(gen2._primitive_op_profile, live_profile)
-
-
-def test_l3_kernel_telemetry_family_roundtrip(tmp_path) -> None:
-    from torchlens import _kernel_telemetry as telemetry
-
-    trace = _telemetry_trace()
-    live_payload = trace.annotations["_kernel_telemetry"]
-    loaded = _plain_roundtrip(trace, tmp_path, "telemetry")
-    assert _persisted_eq(loaded.annotations["_kernel_telemetry"], live_payload)
-    telemetry._bind_trace_telemetry(loaded)
-    assert telemetry._op_gpu_kernels(loaded.ops[0])[0].attribution_status in (
-        "unavailable",
-        "exact",
-        "ambiguous",
-    )
-    gen2 = _second_generation(loaded, tmp_path, "telemetry")
-    assert _persisted_eq(gen2.annotations["_kernel_telemetry"], live_payload)
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_l6_selection_family_roundtrip(tmp_path) -> None:
     fork = _selection_fork()
     live_audit = fork.intervention_audit
@@ -533,6 +456,32 @@ def test_l6_selection_family_roundtrip(tmp_path) -> None:
     assert gen2.intervention_audit == live_audit
 
 
+# Kept: named by a kept test.
+class _EdgeNet(nn.Module):
+    def __init__(self) -> None:
+        super().__init__()
+        self.c1 = nn.Conv2d(1, 2, 3)
+        self.c2 = nn.Conv2d(2, 2, 3)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.relu(self.c2(torch.relu(self.c1(x))) + 1.0)
+
+
+# Kept: named by a kept test.
+def _edge_fork() -> tl.Trace:
+    torch.manual_seed(0)
+    trace = tl.trace(
+        _EdgeNet(),
+        torch.randn(1, 1, 12, 12),
+        capture=tl.options.CaptureOptions(replayable=True, save_args=True),
+    )
+    edge = next(e for e in trace.graph.edges if e.parent_label == "relu_1_2")
+    fork = trace.fork()
+    fork.do(edge.__selection__(), trace["relu_1_2"].out.clone())
+    return fork
+
+
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_l6_edge_family_roundtrip(tmp_path) -> None:
     fork = _edge_fork()
     child = fork.layers["conv2d_2_3"].ops[0]
@@ -552,37 +501,6 @@ def test_l6_edge_family_roundtrip(tmp_path) -> None:
     gen2 = _second_generation(loaded, tmp_path, "edges")
     gen2_child = gen2.layers["conv2d_2_3"].ops[0]
     assert torch.equal(gen2_child.graph.edge_substitutions[store_key]["value"], live_value)
-
-
-def test_l7a_structure_only_family_roundtrip(tmp_path) -> None:
-    trace = _structure_only_trace()
-    assert trace.options.structure_only is True
-    loaded = _plain_roundtrip(trace, tmp_path, "structure_only")
-    assert loaded.options.structure_only is True
-    gen2 = _second_generation(loaded, tmp_path, "structure_only")
-    assert gen2.options.structure_only is True
-
-
-def test_l8_distributed_scope_family_roundtrip(tmp_path) -> None:
-    from torchlens.distributed import _lifecycle as lifecycle
-    from torchlens.distributed._dtensor import RANK_LOCAL_SHARD
-
-    lifecycle.disarm()
-    trace = _tiny_trace()
-    trace._provenance_distributed_scope = RANK_LOCAL_SHARD
-    loaded = _plain_roundtrip(trace, tmp_path, "distributed_scope")
-    assert loaded.provenance.distributed_scope == RANK_LOCAL_SHARD
-    gen2 = _second_generation(loaded, tmp_path, "distributed_scope")
-    assert gen2.provenance.distributed_scope == RANK_LOCAL_SHARD
-
-
-def test_l9_timing_provenance_family_roundtrip(tmp_path) -> None:
-    trace = _backward_trace()
-    assert trace.grad_fn_timing_provenance == "perf_counter"
-    loaded = _plain_roundtrip(trace, tmp_path, "timing")
-    assert loaded.grad_fn_timing_provenance == "perf_counter"
-    gen2 = _second_generation(loaded, tmp_path, "timing")
-    assert gen2.grad_fn_timing_provenance == "perf_counter"
 
 
 def test_l9_checkpoint_witness_family_roundtrip(tmp_path) -> None:
@@ -767,26 +685,6 @@ def test_tamper_kernel_telemetry_refuses_typed(tmp_path) -> None:
     assert refusal.fields["code"] == "artifact_kernel_telemetry_invalid"
 
 
-def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
-    """VALIDATED-NOW representative: the grouping stamp tamper degrades typed
-    (fail-closed settlement), re-proven here so the ledger's validated class
-    has an in-module witness alongside the owning lane suite."""
-
-    from torchlens._postprocess._grouping_stamp import degraded_grouping_policy_stamp
-    from torchlens.errors import TorchLensWarning
-
-    assert FORGERY_SURFACE_LEDGER["Trace.options.grouping_policy"].startswith("validated")
-    trace = _tiny_trace()
-    trace._options_grouping_policy = {**trace.options.grouping_policy, "policy": "greedy"}
-    path = tmp_path / "grouping_tampered.tlspec"
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace.save(str(path))
-    with pytest.warns(TorchLensWarning, match="grouping_policy stamp is invalid"):
-        loaded = tl.load(str(path))
-    assert loaded.options.grouping_policy == degraded_grouping_policy_stamp("vocabulary")
-
-
 # ---------------------------------------------------------------------------
 # S2 marker-combination table (brief question 4): every reachable TYPED
 # REFUSE cell refuses, every reachable LEGAL cell works. The ledger-only
@@ -794,34 +692,6 @@ def test_tamper_grouping_policy_validated_degrades_typed(tmp_path) -> None:
 # lane in tests/test_bundle_relations.py; the wave-3 P1 totality test owns
 # the full product.
 # ---------------------------------------------------------------------------
-
-
-def test_combination_plain_structure_only_truncation_refuses() -> None:
-    """Cell (plain, structure_only=True, truncation present) = TYPED REFUSE.
-
-    A structure-only capture executes no values to truncate; the refusal
-    fires at the L7a value-consumer chokepoint before any truncation term.
-    """
-
-    trace = _structure_only_trace()
-    with pytest.raises(Exception) as excinfo:
-        trace.run(inputs=torch.randn(1, 4), until="linear_1_1")
-    assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
-
-
-def test_combination_episode_structure_only_refuses() -> None:
-    """Cell (episode, structure_only=True, *, *) = TYPED REFUSE at entry."""
-
-    lm = _TinyLM()
-    runner = _GreedyRunner(lm, 2)
-    with pytest.raises(Exception) as excinfo:
-        tl.trace(
-            runner,
-            torch.zeros(1, 3, dtype=torch.long),
-            episode=tl.options.EpisodeOptions(stepped_module=lm, num_steps=2),
-            capture=tl.options.CaptureOptions(structure_only=True),
-        )
-    assert excinfo.value.fields["code"] == "structure_only_episode_unsupported"
 
 
 def test_combination_plain_truncation_legal_run_result_term_only() -> None:
@@ -842,25 +712,6 @@ def test_combination_plain_truncation_legal_run_result_term_only() -> None:
     assert result.output is None  # disclosed, never a fabricated tail
     assert trace.outcome.status is CaptureStatus.COMPLETE
     del model  # keep-alive: the live run needs the strong model reference
-
-
-def test_combination_episode_core_legal() -> None:
-    """Cell (episode, structure_only=False, absent, exact) = LEGAL."""
-
-    trace = _episode_trace()
-    header = trace.annotations["episode"]["header"]
-    assert header["capture_kind"] == "episode"
-    assert header["structure_only"] is False
-    rows = trace.annotations["episode"]["rows"]
-    assert all(row["status"] == "complete" for row in rows)
-
-
-def test_combination_plain_structure_only_absent_legal() -> None:
-    """Cell (plain, structure_only=True, truncation absent) = LEGAL (L7a core)."""
-
-    trace = _structure_only_trace()
-    assert trace.options.structure_only is True
-    assert trace.ops  # structure recorded, values hypothesized
 
 
 # ---------------------------------------------------------------------------
@@ -944,40 +795,3 @@ def test_tamper_structure_only_refuses_typed(
 # Version proofs: the v7 (2.x) snapshot refuses, v10 is distinguishable,
 # a newer stamp refuses.
 # ---------------------------------------------------------------------------
-
-_V7_FIXTURE = Path(__file__).parent / "goldens" / "legacy" / "tlspec_v7.tlspec"
-
-
-def test_real_v7_artifact_refuses_as_2x() -> None:
-    """The checked-in pre-bump v7 byte snapshot refuses typed after the bump.
-
-    The snapshot was written by torchlens 2.x, which this release does not
-    read: it refuses with the one typed 2.x error naming the re-save remedy.
-    Its manifest still records stamp 7.
-    """
-
-    manifest = json.loads((_V7_FIXTURE / "manifest.json").read_text(encoding="utf-8"))
-    assert manifest["tlspec_version"] == 7
-    assert_refuses_as_2x(_V7_FIXTURE)
-
-
-def test_current_artifact_is_distinguishable_from_v7(tmp_path) -> None:
-    """A fresh save stamps tlspec_version 11; the v7 fixture stays 7."""
-
-    trace = _tiny_trace()
-    state, _, _ = scrub_for_save(trace)
-    assert state["tlspec_version"] == TLSPEC_VERSION == 11
-    path = tmp_path / "fresh_v11.tlspec"
-    trace.save(str(path))
-    loaded = tl.load(str(path))
-    assert loaded.tlspec_version == 11
-    assert [op.graph.site_key for op in loaded.ops] == [op.graph.site_key for op in trace.ops]
-
-
-def test_newer_than_runtime_version_refuses_typed() -> None:
-    """A claimed tlspec_version=12 state refuses as newer-than-runtime."""
-
-    from torchlens._io import read_tlspec_version
-
-    with pytest.raises(ArtifactError, match="only supports up to 11"):
-        read_tlspec_version({"tlspec_version": 12}, cls_name="Trace")

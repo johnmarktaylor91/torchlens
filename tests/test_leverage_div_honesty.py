@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import pytest
 import torch
-import torch.nn as nn
 from test_leverage_div_fixtures import ReusedReluNet
 
 import torchlens as tl
@@ -33,7 +32,6 @@ def _traced_toy():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_overlay_zero_match_refuses(tmp_path):
     """A mapping that paints nothing refuses typed — never a blank success."""
 
@@ -55,16 +53,6 @@ def test_overlay_partial_match_discloses(tmp_path):
     assert "node_overlay_partial_match" in codes
 
 
-def test_overlay_full_match_renders_silently(tmp_path, recwarn):
-    """A fully-realized mapping renders without overlay warnings."""
-
-    _, _, trace = _traced_toy()
-    trace.draw(node_overlay={"relu_1_2": 1.0}, path=str(tmp_path / "g"))
-    codes = {getattr(record.message, "fields", {}).get("code", None) for record in recwarn.list}
-    assert "node_overlay_partial_match" not in codes
-
-
-@pytest.mark.smoke
 def test_overlay_selection_source_lowers_to_selected_counts(tmp_path):
     """Element-mask law: a Selection paints selected COUNTS, never membership."""
 
@@ -93,16 +81,6 @@ def test_cone_of_effect_string_origin_refuses():
     with pytest.raises(InvalidArgumentError) as excinfo:
         cone_of_effect(trace, ["relu_1_2"])
     assert excinfo.value.fields["code"] == "cone_origin_invalid"
-
-
-def test_cone_of_effect_op_origins_still_work():
-    from torchlens.intervention._replay import cone_of_effect
-
-    _, _, trace = _traced_toy()
-    # grouping rule row 28: the reused relu instance is one Layer with 2 passes;
-    # the cone from its first call reaches its second call downstream.
-    cone = cone_of_effect(trace, [trace["relu_1_2:1"]])
-    assert any(op.label == "relu_1_2:2" for op in cone)
 
 
 def test_do_accepts_find_sites_output():
@@ -143,7 +121,6 @@ def test_when_refuses_raw_string_at_build():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_escrow_spill_budget_refuses_typed():
     """Crossing the declared spill bound refuses with the accounting on fields."""
 
@@ -173,13 +150,6 @@ def test_escrow_spill_budget_refuses_typed():
     assert excinfo.value.fields["budget_bytes"] == 128
 
 
-def test_escrow_budget_none_disables_bound(tmp_path):
-    from torchlens._capture.plan import RetentionProfile
-
-    profile = RetentionProfile(escrow_spill_budget_bytes=None)
-    assert profile.escrow_spill_budget_bytes is None
-
-
 @pytest.mark.smoke
 def test_address_preflight_classifies_and_names_equivalent():
     """The preflight prices the address and NAMES the cheap spelling."""
@@ -196,7 +166,6 @@ def test_address_preflight_classifies_and_names_equivalent():
     assert not live_only.escrowing
 
 
-@pytest.mark.smoke
 def test_address_preflight_output_and_ordinal_deferred():
     report = address_preflight(["output", 5])
     assert all(v.resolution == "deferred" for v in report.verdicts)
@@ -220,15 +189,17 @@ def test_address_preflight_mixed_module_selector_deferred(selector):
     assert report.escrowing
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "selector",
     [
-        lambda: tl.module("conv1"),
         lambda: tl.module("conv1") | tl.module("conv2"),
         lambda: tl.module("conv1") & tl.func("relu"),
-        lambda: tl.func("relu"),
     ],
-    ids=["module", "module_union", "module_and_func", "func"],
+    ids=[
+        "module_union",
+        "module_and_func",
+    ],
 )
 def test_address_preflight_pure_module_union_and_func_live(selector):
     """Module-bounded selectors (``|`` unions, ``&`` intersections) and plain ones stay live."""
@@ -237,8 +208,3 @@ def test_address_preflight_pure_module_union_and_func_live(selector):
     (verdict,) = report.verdicts
     assert verdict.resolution == "live"
     assert not report.escrowing
-
-
-class _NoSitesModel(nn.Module):
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x * 2.0

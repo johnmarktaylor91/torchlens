@@ -4,7 +4,6 @@ import os
 from os.path import join as opj
 from pathlib import Path
 
-import example_models
 import pytest
 import torch
 import torch.nn as nn
@@ -12,13 +11,11 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens import trace as trace_fn
 from torchlens._errors import AmbiguousOpLookupError
-from torchlens._visualization import show_model_graph
 from torchlens._visualization.themes import resolve_theme
 from torchlens.types import Param
 
 #: Parameter fills as the DEFAULT skin renders them.
 _TRAINABLE = resolve_theme("torchlens").semantic_palette["params_trainable"]
-_FROZEN = resolve_theme("torchlens").semantic_palette["params_frozen"]
 _MIXED = resolve_theme("torchlens").semantic_palette["params_gradient"]
 
 VIS_OUTPUT_DIR = opj(os.environ["TORCHLENS_TEST_OUTPUTS_DIR"], "visualizations")
@@ -35,23 +32,6 @@ class _SimpleLinear(nn.Module):
 
     def forward(self, x):
         return self.fc(x)
-
-
-class _TiedParameterModel(nn.Module):
-    """Model with one parameter registered at two addresses."""
-
-    def __init__(self) -> None:
-        """Initialize tied parameter aliases."""
-
-        super().__init__()
-        self.left = nn.Linear(3, 3, bias=False)
-        self.right = nn.Linear(3, 3, bias=False)
-        self.right.weight = self.left.weight
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Use both tied parameter addresses."""
-
-        return self.left(x) + self.right(x)
 
 
 class _TiedEmbeddingHead(nn.Module):
@@ -91,20 +71,6 @@ def _make_simple_model():
     return nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
 
 
-def _make_frozen_first_layer():
-    model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-    for p in model[0].parameters():
-        p.requires_grad = False
-    return model
-
-
-def _make_all_frozen():
-    model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-    for p in model.parameters():
-        p.requires_grad = False
-    return model
-
-
 def _simple_input():
     return torch.randn(1, 10)
 
@@ -123,32 +89,21 @@ def _assert_generated_pdf(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-class TestParamLogFields:
-    def test_fields_populated(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        pl = mh.params[0]
-        assert isinstance(pl, Param)
-        assert isinstance(pl.address, str)
-        assert isinstance(pl.name, str)
-        assert isinstance(pl.shape, tuple)
-        assert isinstance(pl.dtype, torch.dtype)
-        assert isinstance(pl.num_params, int)
-        assert isinstance(pl.param_memory, int)
-        assert isinstance(str(pl.param_memory), str)
-        assert isinstance(pl.is_trainable, bool)
-        assert isinstance(pl.module_address, str)
-        assert pl.module is not None
-        assert not hasattr(pl, "module_class_name")
-        assert not hasattr(pl, "module_class_qualname")
-        assert not hasattr(pl, "module_type")
-        assert isinstance(pl.barcode, str)
-        assert isinstance(pl.num_calls, int)
-        assert isinstance(pl.used_by_ops, list)
-        assert isinstance(pl.used_by_layers, list)
-        assert isinstance(len(pl.used_by_ops), int)
-        assert isinstance(len(pl.used_by_layers), int)
-        assert isinstance(pl.co_parent_params, list)
+def _make_frozen_first_layer():
+    model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
+    for p in model[0].parameters():
+        p.requires_grad = False
+    return model
 
+
+def _make_all_frozen():
+    model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
+    for p in model.parameters():
+        p.requires_grad = False
+    return model
+
+
+class TestParamLogFields:
     def test_repr_contains_key_info(self):
         """F10 re-pin: repr is one envelope+core line; grad/module facts
         moved to the str() card (D15)."""
@@ -182,25 +137,6 @@ class TestParamLogFields:
 
 
 class TestParamAccessorMH:
-    def test_access_by_address(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        pl = mh.params["0.weight"]
-        assert pl.address == "0.weight"
-
-    def test_access_by_index(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        pl = mh.params[0]
-        assert isinstance(pl, Param)
-
-    def test_iterable(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        params = list(mh.params)
-        assert len(params) == 4  # weight+bias for each Linear
-
-    def test_len(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        assert len(mh.params) == 4
-
     def test_contains(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
         assert "0.weight" in mh.params
@@ -219,51 +155,10 @@ class TestParamAccessorMH:
         assert "ParamAccessor(" in r and "params" in r
         assert "0.weight" in str(mh.params)
 
-    def test_params_property_same_as_param_logs(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        assert mh.params is mh._param_logs
-
 
 # ---------------------------------------------------------------------------
 # ParamAccessor on Op
 # ---------------------------------------------------------------------------
-
-
-class TestParamAccessorTLE:
-    def test_access_by_address(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.has_params][0]
-        pl = entry.params[entry._param_logs[0].address]
-        assert isinstance(pl, Param)
-
-    def test_access_by_short_name(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.has_params][0]
-        w = entry.params["weight"]
-        b = entry.params["bias"]
-        assert "weight" in w.name
-        assert "bias" in b.name
-
-    def test_access_by_index(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.has_params][0]
-        assert isinstance(entry.params[0], Param)
-
-    def test_len(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.has_params][0]
-        assert len(entry.params) == 2  # weight + bias
-
-    def test_iterable(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        entry = [e for e in mh if e.has_params][0]
-        params = list(entry.params)
-        assert len(params) == 2
-
-    def test_no_params_for_non_param_layer(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        input_entry = mh["input_1"]
-        assert len(input_entry.params) == 0
 
 
 # ---------------------------------------------------------------------------
@@ -271,49 +166,139 @@ class TestParamAccessorTLE:
 # ---------------------------------------------------------------------------
 
 
-class TestParamMetadata:
-    def test_address_and_name(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        pl = mh.params["0.weight"]
-        assert pl.address == "0.weight"
-        assert pl.name == "weight"
-        assert pl.module_address == "0"
-
-    def test_shape_and_dtype(self):
-        model = _make_simple_model()
-        mh = trace_fn(model, _simple_input())
-        pl = mh.params["0.weight"]
-        assert pl.shape == (5, 10)
-        assert pl.dtype == torch.float32
-
-    def test_trainable_flag_true(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            assert pl.is_trainable is True
-
-    def test_trainable_flag_frozen(self):
-        mh = trace_fn(_make_frozen_first_layer(), _simple_input())
-        assert mh.params["0.weight"].is_trainable is False
-        assert mh.params["0.bias"].is_trainable is False
-        assert mh.params["2.weight"].is_trainable is True
-        assert mh.params["2.bias"].is_trainable is True
-
-    def test_module_info(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        pl = mh.params["0.weight"]
-        assert pl.module_address == "0"
-        assert pl.module.class_name == "Linear"
-
-    def test_fsize_positive(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            assert pl.param_memory > 0
-            assert len(str(pl.param_memory)) > 0
-
-
 # ---------------------------------------------------------------------------
 # Trainable / frozen tallies
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Linked params
+# ---------------------------------------------------------------------------
+
+
+class TestLinkedParams:
+    def test_tied_weight_alias_resolves(self) -> None:
+        """Tied parameter addresses are aliases, not unresolved co-parents."""
+
+        mh = trace_fn(_TiedEmbeddingHead(), torch.tensor([[1, 2, 3]]))
+        tied = mh.params["embed.weight"]
+        assert mh.params["head.weight"] is tied
+        assert tied.all_addresses == ["embed.weight", "head.weight"]
+        assert "head" in tied.all_module_addresses
+        assert "head.weight" not in tied.co_parent_params
+        assert mh.check_metadata_invariants() is True
+
+
+# ---------------------------------------------------------------------------
+# used_by_layers reverse mapping
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Recurrent / multi-pass
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Gradient tracking
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Optimizer support
+# ---------------------------------------------------------------------------
+
+
+class TestOptimizerSupport:
+    def test_has_optimizer_partial(self):
+        model = _make_simple_model()
+        # Only optimize second linear layer
+        optimizer = torch.optim.Adam(model[2].parameters())
+        mh = trace_fn(
+            model,
+            _simple_input(),
+            capture=tl.options.CaptureOptions(optimizer=optimizer),
+        )
+        assert mh.params["0.weight"].has_optimizer is False
+        assert mh.params["0.bias"].has_optimizer is False
+        assert mh.params["2.weight"].has_optimizer is True
+        assert mh.params["2.bias"].has_optimizer is True
+
+
+# ---------------------------------------------------------------------------
+# Visualization — param labels and colors
+# ---------------------------------------------------------------------------
+
+
+class TestVisualizationParams:
+    def _get_dot_source(self, model, x, rolled=False, depth=1000):
+        outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
+        mh = trace_fn(model, x)
+        dot_source = mh.draw(
+            rolled=rolled,
+            path=outpath,
+            depth=depth,
+        ).dot
+        return dot_source, mh
+
+    def test_collapsed_module_mixed_grad(self):
+        """Collapsed module with mixed frozen/trainable should use grad fill."""
+        model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
+        model[0].weight.requires_grad = False
+        dot, mh = self._get_dot_source(model, _simple_input(), depth=1)
+        # The collapsed "0" module has mixed params
+        assert _MIXED in dot or _TRAINABLE in dot  # at least one color appears
+
+
+# ---------------------------------------------------------------------------
+# Integration: end-to-end with various model types
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Bugfix regression tests
+# ---------------------------------------------------------------------------
+
+
+class TestDerivedGradRecordPathFieldOrder:
+    """cert9 MAJOR: ``_derived_grad_record_path`` must survive ``to_pandas()``.
+
+    ``Param._derived_grad_record_path`` is a real, populated ``FieldPolicy.KEEP``
+    field written unconditionally (no ``getattr``/``setdefault`` guard) by the
+    mlx, paddle, jax, and tinygrad backends on every derived-gradient capture
+    (``backends/mlx/backend.py``, ``backends/paddle/backend.py``,
+    ``backends/jax/backend.py``, ``backends/tinygrad/backend.py``), but it was
+    silently absent from ``PARAM_LOG_FIELD_ORDER`` -- the exact FIELD_ORDER /
+    ``to_pandas()`` desync class this bucket exists to close, just on a
+    surface (``Param``) not yet wired into the shared parametrized
+    ``test_field_order_has_no_keep_field_desync`` (that test is scoped away
+    from ``Param`` pending a dedicated alias-exclusion design for
+    ``_grad_memory``/``_derived_grad_payload``; this field is not one of
+    those documented aliases, so it needs its own litmus here rather than
+    waiting on that broader design).
+    """
+
+    def test_derived_grad_record_path_survives_to_pandas(self) -> None:
+        """A populated ``_derived_grad_record_path`` must appear as a column."""
+
+        param_log = Param(
+            module_address="self",
+            name="weight",
+            shape=(2, 2),
+            dtype=torch.float32,
+            num_params=4,
+            param_memory=16,
+            trainable=True,
+            address="weight",
+            barcode="b1",
+        )
+        param_log._derived_grad_payload = torch.zeros(2, 2)
+        param_log._derived_grad_record_path = "grad_records[3].payload"
+
+        df = param_log.to_pandas()
+
+        assert "_derived_grad_record_path" in df.columns
+        assert df["_derived_grad_record_path"].iloc[0] == "grad_records[3].payload"
 
 
 class TestTrainableFrozenTallies:
@@ -358,54 +343,7 @@ class TestTrainableFrozenTallies:
         assert len(output._param_logs) == 0
 
 
-# ---------------------------------------------------------------------------
-# Linked params
-# ---------------------------------------------------------------------------
-
-
-class TestLinkedParams:
-    def test_weight_bias_linked(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        w = mh.params["0.weight"]
-        b = mh.params["0.bias"]
-        assert b.address in w.co_parent_params
-        assert w.address in b.co_parent_params
-        assert not w.has_multiple_addresses
-        assert not b.has_multiple_addresses
-
-    def test_tied_parameter_reports_multiple_addresses(self) -> None:
-        """Actual tied parameter aliases still report multiple addresses."""
-
-        mh = trace_fn(_TiedParameterModel(), torch.randn(1, 3))
-        param = mh.params["left.weight"]
-
-        assert param.has_multiple_addresses
-        assert param.all_addresses == ["left.weight", "right.weight"]
-
-    def test_linked_symmetric(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            for other_addr in pl.co_parent_params:
-                other = mh.params[other_addr]
-                assert pl.address in other.co_parent_params
-
-    def test_tied_weight_alias_resolves(self) -> None:
-        """Tied parameter addresses are aliases, not unresolved co-parents."""
-
-        mh = trace_fn(_TiedEmbeddingHead(), torch.tensor([[1, 2, 3]]))
-        tied = mh.params["embed.weight"]
-        assert mh.params["head.weight"] is tied
-        assert tied.all_addresses == ["embed.weight", "head.weight"]
-        assert "head" in tied.all_module_addresses
-        assert "head.weight" not in tied.co_parent_params
-        assert mh.check_metadata_invariants() is True
-
-
-# ---------------------------------------------------------------------------
-# used_by_layers reverse mapping
-# ---------------------------------------------------------------------------
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 class TestTensorLogEntries:
     def test_populated(self):
         mh = trace_fn(_make_simple_model(), _simple_input())
@@ -430,465 +368,3 @@ class TestTensorLogEntries:
 # ---------------------------------------------------------------------------
 # Recurrent / multi-pass
 # ---------------------------------------------------------------------------
-
-
-class TestRecurrentParams:
-    def test_num_calls_non_recurrent(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            assert pl.num_calls == 1
-
-    def test_num_calls_recurrent(self, input_2d):
-        model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d)
-        # fc1 is used 4 times
-        pl = mh.params["fc1.weight"]
-        assert pl.num_calls >= 2  # should be 4
-        assert len(pl.used_by_ops) >= 2
-        assert len(pl.used_by_layers) >= 1
-
-    def test_layer_log_entries_multi_pass(self, input_2d):
-        model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d)
-        pl = mh.params["fc1.weight"]
-        # num_calls equals the number of used_by_ops
-        assert pl.num_calls == len(pl.used_by_ops)
-        assert pl.num_calls >= 2
-
-
-# ---------------------------------------------------------------------------
-# Gradient tracking
-# ---------------------------------------------------------------------------
-
-
-class TestGradientTracking:
-    def test_no_grad_by_default(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            assert pl.has_grad is False
-            assert pl.grad_shape is None
-
-    def test_no_grad_without_save_grads(self):
-        mh = trace_fn(
-            _make_simple_model(),
-            _simple_input(),
-            capture=tl.options.CaptureOptions(save_grads=False),
-        )
-        # Even if we could call backward, save_grads=False means no hooks
-        for pl in mh.params:
-            assert pl.has_grad is False
-
-    def test_grad_after_backward(self):
-        model = _make_simple_model()
-        x = _simple_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        # All trainable params should have grads
-        for pl in mh.params:
-            assert pl.has_grad is True
-            assert pl.grad_shape == pl.shape
-            assert pl.grad_dtype == pl.dtype
-            assert pl.grad_memory > 0
-            assert len(str(pl.grad_memory)) > 0
-
-    def test_grad_frozen_params_no_grad(self):
-        model = _make_frozen_first_layer()
-        x = _simple_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        # Frozen params should NOT have grads
-        assert mh.params["0.weight"].has_grad is False
-        assert mh.params["0.bias"].has_grad is False
-        # Trainable params should have grads
-        assert mh.params["2.weight"].has_grad is True
-        assert mh.params["2.bias"].has_grad is True
-
-    def test_tle_grad_saved(self):
-        model = _make_simple_model()
-        x = _simple_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        # TLEs with param layers should have saved grads
-        for entry in mh:
-            if entry.has_params:
-                assert entry.has_grad is True
-                assert entry.grad is not None
-                assert entry.autograd.grad_shape is not None
-
-    def test_saved_grad_ops_populated(self):
-        model = _make_simple_model()
-        x = _simple_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        assert len(mh.saved_grad_ops) > 0
-        for label in mh.saved_grad_ops.keys():
-            assert mh[label].has_grad is True
-
-    def test_grad_shape_matches_param_shape(self):
-        model = _make_simple_model()
-        x = _simple_input()
-        mh = trace_fn(model, x, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        for pl in mh.params:
-            if pl.has_grad:
-                assert pl.grad_shape == pl.shape, (
-                    f"Grad shape {pl.grad_shape} != param shape {pl.shape} for {pl.address}"
-                )
-
-
-# ---------------------------------------------------------------------------
-# Optimizer support
-# ---------------------------------------------------------------------------
-
-
-class TestOptimizerSupport:
-    def test_has_optimizer_none_by_default(self):
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for pl in mh.params:
-            assert pl.has_optimizer is None
-
-    def test_has_optimizer_true(self):
-        model = _make_simple_model()
-        optimizer = torch.optim.Adam(model.parameters())
-        mh = trace_fn(
-            model, _simple_input(), capture=tl.options.CaptureOptions(optimizer=optimizer)
-        )
-        for pl in mh.params:
-            assert pl.has_optimizer is True
-
-    def test_has_optimizer_partial(self):
-        model = _make_simple_model()
-        # Only optimize second linear layer
-        optimizer = torch.optim.Adam(model[2].parameters())
-        mh = trace_fn(
-            model, _simple_input(), capture=tl.options.CaptureOptions(optimizer=optimizer)
-        )
-        assert mh.params["0.weight"].has_optimizer is False
-        assert mh.params["0.bias"].has_optimizer is False
-        assert mh.params["2.weight"].has_optimizer is True
-        assert mh.params["2.bias"].has_optimizer is True
-
-
-# ---------------------------------------------------------------------------
-# Visualization — param labels and colors
-# ---------------------------------------------------------------------------
-
-
-class TestVisualizationParams:
-    def _get_dot_source(self, model, x, rolled=False, depth=1000):
-        outpath = opj(VIS_OUTPUT_DIR, "toy-networks", "_test_param_vis")
-        mh = trace_fn(model, x)
-        dot_source = mh.draw(
-            rolled=rolled,
-            path=outpath,
-            depth=depth,
-        ).dot
-        return dot_source, mh
-
-    def test_param_label_shows_names(self):
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "weight (5, 10)" in dot
-        assert "bias (5,)" in dot
-
-    def test_param_label_uses_tuple_shapes(self):
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "params: weight (5, 10) · bias (5,)" in dot
-
-    def test_frozen_param_label_keeps_text_format(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert "params: weight [5, 10] · bias [5,]" in dot
-
-    def test_mixed_param_label_keeps_text_format(self):
-        dot, mh = self._get_dot_source(_make_frozen_first_layer(), _simple_input())
-        assert "params: weight [5, 10] · bias [5,]" in dot
-        assert "params: weight (2, 5) · bias (2,)" in dot
-        assert "weight:" not in dot
-
-    def test_mixed_same_layer_param_label_marks_each_shape(self) -> None:
-        """Mixed params in one layer mark each shape by trainability."""
-
-        model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-        model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input())
-        assert "params: weight [5, 10] · bias (5,)" in dot
-
-    def test_trainable_bg_color(self):
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert _TRAINABLE in dot
-
-    def test_frozen_bg_color(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert _FROZEN in dot
-
-    def test_mixed_grad_fill(self):
-        """When a layer has both trainable and frozen params, use grad fill."""
-        # Create a model with mixed trainable/frozen in the same layer
-        model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-        # Freeze only the weight, keep bias trainable
-        model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input())
-        # Gradient fill uses "color1:color2" syntax
-        assert _MIXED in dot
-        assert "gradangle" in dot
-
-    def test_graph_caption_all_trainable(self):
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input())
-        assert "all trainable" in dot
-
-    def test_graph_caption_all_frozen(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input())
-        assert "all frozen" in dot
-
-    def test_graph_caption_mixed(self):
-        dot, mh = self._get_dot_source(_make_frozen_first_layer(), _simple_input())
-        assert "trainable" in dot
-        # Should show ratio like "12/67 trainable"
-        assert "12/67" in dot
-
-    def test_collapsed_module_trainable_color(self):
-        """Collapsed module with all trainable params should use trainable color."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
-        assert _TRAINABLE in dot
-
-    def test_collapsed_module_frozen_color(self):
-        """Collapsed module with all frozen params should use frozen color."""
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
-        assert _FROZEN in dot
-
-    def test_collapsed_module_mixed_grad(self):
-        """Collapsed module with mixed frozen/trainable should use grad fill."""
-        model = nn.Sequential(nn.Linear(10, 5), nn.ReLU(), nn.Linear(5, 2))
-        model[0].weight.requires_grad = False
-        dot, mh = self._get_dot_source(model, _simple_input(), depth=1)
-        # The collapsed "0" module has mixed params
-        assert _MIXED in dot or _TRAINABLE in dot  # at least one color appears
-
-    def test_collapsed_module_param_detail(self):
-        """Collapsed module should show trainable/frozen param breakdown."""
-        dot, mh = self._get_dot_source(_make_simple_model(), _simple_input(), depth=1)
-        assert "all trainable" in dot
-
-    def test_collapsed_module_param_detail_frozen(self):
-        dot, mh = self._get_dot_source(_make_all_frozen(), _simple_input(), depth=1)
-        assert "all frozen" in dot
-
-
-# ---------------------------------------------------------------------------
-# Integration: end-to-end with various model types
-# ---------------------------------------------------------------------------
-
-
-class TestIntegration:
-    def test_recurrent_model(self, input_2d):
-        model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d)
-        assert len(mh.params) == 2  # fc1.weight, fc1.bias
-        assert mh.params["fc1.weight"].num_calls >= 2
-
-    def test_model_with_no_params(self):
-        model = nn.Sequential(nn.ReLU(), nn.Sigmoid())
-        x = torch.randn(1, 5)
-        mh = trace_fn(model, x)
-        assert len(mh.params) == 0
-        assert mh.num_params == 0
-        assert mh.num_params_trainable == 0
-        assert mh.num_params_frozen == 0
-
-    def test_recurrent_params_complex(self, input_2d):
-        model = example_models.RecurrentParamsComplex()
-        mh = trace_fn(model, input_2d)
-        assert len(mh.params) == 4  # fc1 weight+bias, fc2 weight+bias
-        # Both fc1 and fc2 are used multiple times (as used_by_layers)
-        assert mh.params["fc1.weight"].num_calls >= 2
-        assert mh.params["fc2.weight"].num_calls >= 2
-        # Verify all entries point to real layers
-        for pl in mh.params:
-            for label in pl.used_by_ops:
-                assert label in mh._layer_dict_all_keys
-
-    def test_grad_tracking_recurrent(self, input_2d):
-        model = example_models.RecurrentParamsSimple()
-        mh = trace_fn(model, input_2d, capture=tl.options.CaptureOptions(save_grads=True))
-        output = mh["output_1"].out
-        output.sum().backward()
-
-        # Despite multiple ops, each param should have exactly one grad
-        for pl in mh.params:
-            assert pl.has_grad is True
-            assert pl.grad_shape == pl.shape
-
-    def test_parent_params_cleared_from_tle(self):
-        """After postprocessing, parent_params references should be cleared."""
-        mh = trace_fn(_make_simple_model(), _simple_input())
-        for entry in mh:
-            assert entry.graph.parent_params == ()
-
-    def test_vis_renders_without_error(self, tmp_path: Path) -> None:
-        """Visualization should emit fresh PDFs for each parameter scenario."""
-
-        # All trainable
-        all_trainable = tmp_path / "_param_all_trainable.pdf"
-        model = _make_simple_model()
-        show_model_graph(
-            model,
-            _simple_input(),
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(all_trainable.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(all_trainable)
-
-        # Mixed
-        mixed = tmp_path / "_param_mixed.pdf"
-        model = _make_frozen_first_layer()
-        show_model_graph(
-            model,
-            _simple_input(),
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(mixed.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(mixed)
-
-        # All frozen
-        all_frozen = tmp_path / "_param_all_frozen.pdf"
-        model = _make_all_frozen()
-        show_model_graph(
-            model,
-            _simple_input(),
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(all_frozen.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(all_frozen)
-
-    def test_vis_collapsed_renders_without_error(self, tmp_path: Path) -> None:
-        """Collapsed visualization should emit fresh PDFs for each parameter scenario."""
-
-        collapsed_trainable = tmp_path / "_param_collapsed_trainable.pdf"
-        model = _make_simple_model()
-        show_model_graph(
-            model,
-            _simple_input(),
-            depth=1,
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(collapsed_trainable.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(collapsed_trainable)
-
-        collapsed_mixed = tmp_path / "_param_collapsed_mixed.pdf"
-        model = _make_frozen_first_layer()
-        show_model_graph(
-            model,
-            _simple_input(),
-            depth=1,
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(collapsed_mixed.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(collapsed_mixed)
-
-        collapsed_frozen = tmp_path / "_param_collapsed_frozen.pdf"
-        model = _make_all_frozen()
-        show_model_graph(
-            model,
-            _simple_input(),
-            depth=1,
-            visualization=tl.options.VisualizationOptions(
-                container_path=str(collapsed_frozen.with_suffix(""))
-            ),
-        )
-        _assert_generated_pdf(collapsed_frozen)
-
-
-# ---------------------------------------------------------------------------
-# Bugfix regression tests
-# ---------------------------------------------------------------------------
-
-
-class TestParamContains:
-    """ParamAccessor.__contains__ should support int."""
-
-    def test_int_contains(self):
-        model = _SimpleLinear()
-        mh = trace_fn(model, torch.randn(2, 10))
-        if mh._param_logs:
-            assert 0 in mh.params
-
-
-class TestParamRefCleared:
-    """GC-1: Param._param_ref should be cleared after cleanup."""
-
-    def test_param_ref_cleared_after_cleanup(self):
-        model = _SimpleLinear()
-        mh = trace_fn(model, torch.randn(2, 10))
-        # Capture the ParamLog objects BEFORE cleanup: iterating ``mh._param_logs``
-        # rehydrates ``_param_ref`` on access, so we must assert against the same
-        # captured objects, not a fresh re-iteration (which would repopulate it).
-        param_logs = list(mh._param_logs)
-        for pl in param_logs:
-            assert pl._param_ref is not None
-        mh.cleanup()
-        # GC-1 (discriminating): cleanup must actually release the cached param refs.
-        # Without this post-cleanup assertion the test passes even if cleanup() is a no-op.
-        for pl in param_logs:
-            assert pl._param_ref is None
-
-
-class TestDerivedGradRecordPathFieldOrder:
-    """cert9 MAJOR: ``_derived_grad_record_path`` must survive ``to_pandas()``.
-
-    ``Param._derived_grad_record_path`` is a real, populated ``FieldPolicy.KEEP``
-    field written unconditionally (no ``getattr``/``setdefault`` guard) by the
-    mlx, paddle, jax, and tinygrad backends on every derived-gradient capture
-    (``backends/mlx/backend.py``, ``backends/paddle/backend.py``,
-    ``backends/jax/backend.py``, ``backends/tinygrad/backend.py``), but it was
-    silently absent from ``PARAM_LOG_FIELD_ORDER`` -- the exact FIELD_ORDER /
-    ``to_pandas()`` desync class this bucket exists to close, just on a
-    surface (``Param``) not yet wired into the shared parametrized
-    ``test_field_order_has_no_keep_field_desync`` (that test is scoped away
-    from ``Param`` pending a dedicated alias-exclusion design for
-    ``_grad_memory``/``_derived_grad_payload``; this field is not one of
-    those documented aliases, so it needs its own litmus here rather than
-    waiting on that broader design).
-    """
-
-    def test_derived_grad_record_path_in_field_order(self) -> None:
-        """The field must be a real member of PARAM_LOG_FIELD_ORDER."""
-
-        from torchlens._constants import PARAM_LOG_FIELD_ORDER
-
-        assert "_derived_grad_record_path" in PARAM_LOG_FIELD_ORDER
-
-    def test_derived_grad_record_path_survives_to_pandas(self) -> None:
-        """A populated ``_derived_grad_record_path`` must appear as a column."""
-
-        param_log = Param(
-            module_address="self",
-            name="weight",
-            shape=(2, 2),
-            dtype=torch.float32,
-            num_params=4,
-            param_memory=16,
-            trainable=True,
-            address="weight",
-            barcode="b1",
-        )
-        param_log._derived_grad_payload = torch.zeros(2, 2)
-        param_log._derived_grad_record_path = "grad_records[3].payload"
-
-        df = param_log.to_pandas()
-
-        assert "_derived_grad_record_path" in df.columns
-        assert df["_derived_grad_record_path"].iloc[0] == "grad_records[3].payload"

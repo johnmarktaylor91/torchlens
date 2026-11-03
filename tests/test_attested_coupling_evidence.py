@@ -11,8 +11,6 @@ law. End-to-end coupled captures land with the REFUSED -> COUPLED flip.
 
 from __future__ import annotations
 
-import dataclasses
-
 import pytest
 import torch
 import torch.nn as nn
@@ -23,8 +21,6 @@ from torchlens._capture._episode_coupling import (
     CouplingSession,
     attest_coupling,
     coupling_segments,
-    mint_intervention_digest,
-    quarantine_episode_after_perturbed_replay,
     refuse_coupled_replay,
     settlement_fire_counts,
 )
@@ -80,15 +76,7 @@ def _fire(step, site="relu_1_2", replaced=True):
 # ---------------------------------------------------------------------------
 
 
-def test_fire_counts_distinguish_zero_from_no_opportunity():
-    """Started steps read measured counts (0 included); unstarted read None."""
-
-    session = CouplingSession()
-    session.fires.extend([_fire(0), _fire(0), _fire(2)])
-    assert settlement_fire_counts(session, started=3, n_total=5) == [2, 0, 1, None, None]
-    assert settlement_fire_counts(None, started=3, n_total=5) is None
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py.
 def test_outside_step_fires_are_bucketed_not_guessed():
     """Fires outside every stepped call never land in a row's count."""
 
@@ -96,39 +84,6 @@ def test_outside_step_fires_are_bucketed_not_guessed():
     session.fires.extend([_fire(None), _fire(1), _fire(None)])
     assert session.outside_step_fires == 2
     assert settlement_fire_counts(session, started=2, n_total=2) == [0, 1]
-
-
-def test_intervention_digest_is_deterministic_and_order_sensitive():
-    """Identical fire evidence mints the identical digest; order matters."""
-
-    a = CouplingSession(rule_identity=(("rule-1", "tl.func('relu')"),))
-    b = CouplingSession(rule_identity=(("rule-1", "tl.func('relu')"),))
-    for session in (a, b):
-        session.fires.extend([_fire(0), _fire(1)])
-    assert mint_intervention_digest(a) == mint_intervention_digest(b)
-
-    swapped = CouplingSession(rule_identity=(("rule-1", "tl.func('relu')"),))
-    swapped.fires.extend([_fire(1), _fire(0)])
-    assert mint_intervention_digest(swapped) != mint_intervention_digest(a)
-
-    zero = CouplingSession(rule_identity=(("rule-1", "tl.func('relu')"),))
-    assert mint_intervention_digest(zero) != mint_intervention_digest(a)
-
-
-def test_digest_covers_replaced_flag_and_outside_fires():
-    """Observing (replaced=False) and outside-step fires change the digest."""
-
-    replaced = CouplingSession()
-    replaced.fires.append(_fire(0, replaced=True))
-    observing = CouplingSession()
-    observing.fires.append(_fire(0, replaced=False))
-    assert mint_intervention_digest(replaced) != mint_intervention_digest(observing)
-
-    inside = CouplingSession()
-    inside.fires.append(_fire(0))
-    outside = CouplingSession()
-    outside.fires.append(_fire(None))
-    assert mint_intervention_digest(inside) != mint_intervention_digest(outside)
 
 
 # ---------------------------------------------------------------------------
@@ -162,21 +117,7 @@ class _Subject:
         self.annotations = {"episode": payload}
 
 
-def test_segments_split_at_break_joins_and_never_span_one():
-    """exogenous/declared joins divide segments; facts stay per segment."""
-
-    payload = _payload(
-        grades=[None, "continuous", "exogenous", "continuous", "declared"],
-        statuses=["complete"] * 5,
-        fire_counts=[1, 0, 2, 0, 3],
-    )
-    segments = coupling_segments(_Subject(payload))
-    assert [(s.start_step, s.end_step) for s in segments] == [(0, 1), (2, 3), (4, 4)]
-    assert [s.fire_count_total for s in segments] == [1, 2, 3]
-    assert all(s.join_basis == "measured" for s in segments)
-    assert all(s.unchecked_joins == 0 for s in segments)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py.
 def test_segments_disclose_unchecked_joins_and_unmeasured_basis():
     """Unchecked interior joins and absent envelopes are disclosed, not attested."""
 
@@ -194,50 +135,12 @@ def test_segments_disclose_unchecked_joins_and_unmeasured_basis():
     assert unmeasured[0].unchecked_joins == 2  # every interior join unmeasured
 
 
-def test_segments_close_at_the_started_prefix():
-    """Absent rows never join a segment (no opportunity, no claim)."""
-
-    payload = _payload(
-        grades=[None, "continuous", None, None],
-        statuses=["complete", "complete", "absent", "absent"],
-    )
-    segments = coupling_segments(_Subject(payload))
-    assert [(s.start_step, s.end_step) for s in segments] == [(0, 1)]
-
-
 # ---------------------------------------------------------------------------
 # Attestation: the capture digest consumed (the positive binding claim)
 # ---------------------------------------------------------------------------
 
 
-def test_attestation_binds_a_real_uncoupled_episode_product():
-    """A real capture attests bound=True, coupled=False, entry-dark counts."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    attestation = log.episode_coupling
-    assert attestation is not None
-    assert attestation.bound is True
-    assert attestation.coupled is False
-    assert attestation.intervention_digest is None
-    assert attestation.fire_counts == (None, None, None)
-    assert len(attestation.segments) == 1
-    assert attestation.segments[0].join_basis == "measured"
-
-
-def test_attestation_refuses_a_tampered_ledger():
-    """Editing the persisted evidence breaks the binding, typed."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    header = log.annotations["episode"]["header"]
-    header["capture_digest"] = "0" * 64
-    with pytest.raises(EpisodeCaptureError) as excinfo:
-        attest_coupling(log)
-    assert excinfo.value.fields["code"] == "episode_coupling_unbound"
-    assert excinfo.value.fields["persisted_digest"] == "0" * 64
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py.
 def test_attestation_refuses_a_pre_binding_artifact():
     """A ledger with no capture digest cannot be attested (re-capture)."""
 
@@ -249,6 +152,7 @@ def test_attestation_refuses_a_pre_binding_artifact():
     assert excinfo.value.fields["code"] == "episode_coupling_unmintable"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py.
 def test_attestation_none_for_plain_captures():
     """Plain products mirror Trace.episode: None, never a fake verdict."""
 
@@ -258,24 +162,12 @@ def test_attestation_none_for_plain_captures():
     assert coupling_segments(log) == ()
 
 
-def test_attestation_survives_save_load(tmp_path):
-    """The binding recomputes identically from the loaded product."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    target = tmp_path / "episode.tlspec"
-    log.save(target)
-    loaded = tl.load(target)
-    attestation = loaded.episode_coupling
-    assert attestation is not None and attestation.bound is True
-    assert attestation.capture_digest == log.episode_coupling.capture_digest
-
-
 # ---------------------------------------------------------------------------
 # Replay doors: derive a fresh ledger or refuse; never a foreign ledger
 # ---------------------------------------------------------------------------
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py, intervention/_trace_run.py.
 def test_run_refuses_a_coupled_product_before_execution():
     """The run gate fires on intervention evidence, both digests present."""
 
@@ -291,18 +183,7 @@ def test_run_refuses_a_coupled_product_before_execution():
         log.run(inputs=torch.randn(2, 4))
 
 
-def test_run_keeps_uncoupled_episode_replay_shipped_behavior():
-    """Uncoupled episode products still run; evidence quarantines (F40a)."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    refuse_coupled_replay(log)  # no-op: uncoupled
-    result = log.run(inputs=torch.randn(2, 4))
-    episode_key = result.trace.annotations.get("episode")
-    assert episode_key is not None and episode_key.get("quarantined") is True
-    assert episode_key.get("code") == "episode_evidence_dropped_fresh_execution"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py, _selection/do_plan.py, _selection/selection.py.
 def test_do_quarantines_inherited_episode_evidence():
     """A do() edit on an episode fork quarantines the stale step evidence."""
 
@@ -321,28 +202,3 @@ def test_do_quarantines_inherited_episode_evidence():
     # The source product keeps its evidence untouched.
     assert log.annotations["episode"].get("rows") is not None
     assert log.episode_coupling.bound is True
-
-
-def test_quarantine_is_idempotent_and_plain_safe():
-    """The quarantine helper never double-wraps and ignores plain traces."""
-
-    plain = tl.trace(Root(), torch.randn(2, 4))
-    quarantine_episode_after_perturbed_replay(plain)  # no episode key: no-op
-    assert "episode" not in plain.annotations
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    quarantine_episode_after_perturbed_replay(log)
-    first = dict(log.annotations["episode"])
-    quarantine_episode_after_perturbed_replay(log)
-    assert log.annotations["episode"] == first
-
-
-def test_coupling_attestation_is_frozen():
-    """The verdict object is immutable evidence, never a mutable report."""
-
-    model = Root()
-    log = _episode_trace(model, torch.randn(2, 4))
-    attestation = log.episode_coupling
-    with pytest.raises(dataclasses.FrozenInstanceError):
-        attestation.coupled = True

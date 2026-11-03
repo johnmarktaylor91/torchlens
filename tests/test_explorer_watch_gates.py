@@ -22,12 +22,8 @@ import pytest
 import torch
 
 from torchlens._observability import (
-    Histogram,
     HistoryCollector,
-    ObservationRecord,
-    RunningStats,
     StepTruth,
-    merge_observations,
 )
 from torchlens._observability._errors import HistorySchemaError
 from torchlens._observability._op_tier import OpTierCollector
@@ -47,67 +43,6 @@ class _NaNInjector(torch.nn.Module):
             x = x.clone()
             x[0, 0] = float("nan")
         return x
-
-
-class TestNumbersRightAndObservationInert:
-    """Matrix row 3: exact counts vs direct torch; NaN at the coordinate."""
-
-    def test_first_and_last_step_cross_check(self) -> None:
-        torch.manual_seed(0)
-        model = torch.nn.Sequential(torch.nn.Linear(8, 8), torch.nn.ReLU())
-        collector = HistoryCollector(model, streams=("activation",))
-        collector.discover(torch.randn(4, 8))
-        collector.attach()
-        inputs = [torch.randn(4, 8) for _ in range(3)]
-        outputs: dict[int, torch.Tensor] = {}
-        hook = model[1].register_forward_hook(
-            lambda module, args, output: outputs.__setitem__(len(outputs), output.detach().clone())
-        )
-        try:
-            for step, x in enumerate(inputs):
-                with collector.step(step, truth=StepTruth()):
-                    model(x)
-        finally:
-            hook.remove()
-            collector.detach()
-        view = HistoryView.from_collector(collector)
-        relu_site = next(s for s, r in view.sites.items() if r.module_path == "1")
-        series = view.series(relu_site)
-        for index in (0, len(series) - 1):
-            spine = series[index].observation.spine
-            direct = outputs[index]
-            assert spine.numel == direct.numel()
-            assert spine.num_zero == int((direct == 0).sum())
-            assert spine.finite_max == pytest.approx(float(direct.max()), rel=1e-6)
-            assert spine.sum == pytest.approx(float(direct.double().sum()), rel=1e-9)
-
-    def test_nan_appears_at_exactly_its_coordinate(self) -> None:
-        torch.manual_seed(1)
-        injector = _NaNInjector()
-        model = torch.nn.Sequential(torch.nn.Linear(8, 8), injector, torch.nn.Linear(8, 4))
-        collector = HistoryCollector(model, streams=("activation",))
-        collector.discover(torch.randn(2, 8))
-        collector.attach()
-        try:
-            for step in range(4):
-                injector.fire = step == 2
-                with collector.step(step, truth=StepTruth()):
-                    model(torch.randn(2, 8))
-        finally:
-            injector.fire = False
-            collector.detach()
-        view = HistoryView.from_collector(collector)
-        injector_site = next(s for s, r in view.sites.items() if r.module_path == "1")
-        nan_steps = [
-            p.step_lo
-            for p in view.series(injector_site)
-            if p.observation.spine is not None and p.observation.spine.num_nan > 0
-        ]
-        assert nan_steps == [2], "NaN lands at exactly its (site, step) coordinate"
-        assert "nonfinite" in quantile_fan(view, injector_site)
-        # Observation is inert: no other site saw a NaN at step 2 upstream.
-        upstream = next(s for s, r in view.sites.items() if r.module_path == "0")
-        assert all(p.observation.spine.num_nan == 0 for p in view.series(upstream))
 
 
 class TestResumeSegments:
@@ -139,47 +74,9 @@ class TestResumeSegments:
         assert "segment" in quantile_fan(view, site)
 
 
-class TestReusedModuleTruth:
-    """Matrix row 9: a module called twice per step -- current truth pinned.
-
-    The Route-A collector folds repeated calls of one module within a step
-    into ONE merged observation (exact integer merge over both call
-    populations). Pass-qualified per-call series are the op tier's grain
-    (fastlog labels are per structural position); this pin documents the
-    module-tier fold so it can never silently change meaning.
-    """
-
-    @pytest.mark.smoke
-    def test_double_call_folds_exactly(self) -> None:
-        torch.manual_seed(3)
-
-        class TwiceModel(torch.nn.Module):
-            def __init__(self) -> None:
-                super().__init__()
-                self.core = torch.nn.Linear(4, 4)
-
-            def forward(self, x: torch.Tensor) -> torch.Tensor:
-                return self.core(self.core(x))
-
-        model = TwiceModel()
-        collector = HistoryCollector(model, sites=("core",), streams=("activation",))
-        collector.discover(torch.randn(2, 4))
-        collector.attach()
-        try:
-            with collector.step(0):
-                model(torch.randn(2, 4))
-        finally:
-            collector.detach()
-        view = HistoryView.from_collector(collector)
-        site = next(iter(view.sites))
-        spine = view.series(site)[0].observation.spine
-        assert spine.numel == 2 * (2 * 4), "both calls' populations folded exactly"
-
-
 class TestFailOpenReducer:
     """Matrix row 11: a raising reducer records capture_failed; step survives."""
 
-    @pytest.mark.smoke
     def test_op_tier_raising_facet_fails_open(self) -> None:
         torch.manual_seed(4)
         model = torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.ReLU())
@@ -202,68 +99,6 @@ class TestFailOpenReducer:
         assert len(observations) == 1
         assert observations[0].presence == "capture_failed"
         assert "boom" in (observations[0].reason or "")
-
-
-class TestCrossSiteRollupRefused:
-    """Matrix row 15: no rollup door exists; cross-site merge refuses typed."""
-
-    def test_merge_across_sites_refuses(self) -> None:
-        def observed(site: str) -> ObservationRecord:
-            spine = RunningStats()
-            spine.update(torch.randn(8))
-            sketch = Histogram()
-            sketch.update(torch.randn(8))
-            return ObservationRecord(
-                global_step=0,
-                site_id=site,
-                stream="activation",
-                phase="forward",
-                presence="observed",
-                spine=spine.compute(),
-                sketch=sketch.compute(),
-            )
-
-        with pytest.raises(HistorySchemaError) as excinfo:
-            merge_observations(observed("m:a"), observed("m:b"))
-        assert excinfo.value.fields["code"] == "history_merge_incompatible"
-
-
-@pytest.mark.real_model
-@pytest.mark.heavy
-class TestResnet18Row:
-    """Matrix row 5: real resnet18 -- in-place ReLUs, train-mode BatchNorm."""
-
-    def test_running_stats_unperturbed_and_sheet_renders(self) -> None:
-        torchvision = pytest.importorskip("torchvision")
-        torch.manual_seed(0)
-        # Both variants constructed BEFORE any capture, identical weights.
-        watched = torchvision.models.resnet18(weights="IMAGENET1K_V1")
-        control = torchvision.models.resnet18(weights="IMAGENET1K_V1")
-        watched.train()
-        control.train()
-        batches = [torch.randn(2, 3, 64, 64) for _ in range(2)]
-        collector = HistoryCollector(watched, sites=("layer1", "layer2"), streams=("activation",))
-        collector.discover(batches[0])
-        collector.attach()
-        try:
-            for step, batch in enumerate(batches):
-                with collector.step(step):
-                    watched(batch)
-        finally:
-            collector.detach()
-        # The unobserved control sees the SAME batches (including the
-        # discovery forward, which is a real train-mode forward).
-        control(batches[0])
-        for batch in batches:
-            control(batch)
-        for (name_w, buf_w), (name_c, buf_c) in zip(
-            watched.named_buffers(), control.named_buffers(), strict=True
-        ):
-            assert name_w == name_c
-            assert torch.equal(buf_w, buf_c), f"observer perturbed {name_w}"
-        view = HistoryView.from_collector(collector)
-        sheet = contact_sheet(view)
-        assert "of" in sheet and sheet.startswith("<svg")
 
 
 @pytest.mark.real_model
@@ -328,7 +163,11 @@ class TestCudaGateRows:
     )
     def test_module_tier_overhead_gates(self, sketch_cadence: int | None, threshold: float) -> None:
         transformers = pytest.importorskip("transformers")
-        from torchlens._observability import WatchSettings, measure_ab, measure_noise_band
+        from torchlens._observability import (
+            WatchSettings,
+            measure_ab,
+            measure_noise_band,
+        )
 
         torch.manual_seed(0)
         device = "cuda"

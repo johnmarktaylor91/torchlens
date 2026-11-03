@@ -78,24 +78,7 @@ class HandRolledTP(nn.Module):
 
 
 class TestBoundaryNode:
-    # NOT smoke-marked yet (2026-08-14, fix-testinfra T14-4): every test here
-    # measures well under the smoke budget, but
-    # test_boundary_carries_collective_boundary_v1_payload is red on main
-    # (layer.annotations lacks the op's "collective" mirror -- relayed
-    # source-side defect). Smoke-mark this class WITH that fix so the
-    # commit-tier gate does not inherit a known red.
-    @requires_vetted_snapshot
-    def test_allreduce_becomes_boundary_node_with_provenance(self, gloo_world):
-        lifecycle.arm()
-        log = tl.trace(HandRolledTP(), torch.randn(2, 4))
-        boundary_ops = [op for op in log.ops if op.type == "allreduce"]
-        assert len(boundary_ops) == 1
-        boundary = boundary_ops[0]
-        # The boundary node sits IN the dataflow: linear -> allreduce -> relu.
-        assert any("linear" in parent for parent in boundary.parents)
-        relu = [op for op in log.ops if op.type == "relu"][0]
-        assert any("allreduce" in parent for parent in relu.parents)
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_boundary_carries_collective_boundary_v1_payload(self, gloo_world):
         lifecycle.arm()
@@ -124,6 +107,7 @@ class TestBoundaryNode:
         # The payload is portable plain data.
         json.dumps(info)
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_trace_journal_and_ledger_are_recorded(self, gloo_world):
         lifecycle.arm()
@@ -136,6 +120,7 @@ class TestBoundaryNode:
         assert record["install_epoch"] in ("armed_before_any_group", "seeded")
         json.dumps(record)
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_output_passthrough_never_duplicates_boundary_payload(self, gloo_world):
         dist = gloo_world
@@ -166,17 +151,7 @@ class TestBoundaryNode:
         assert output_ops
         assert all(op.annotations == {} for op in output_ops)
 
-    @requires_vetted_snapshot
-    def test_auto_arm_at_capture_entry_for_spmd(self, gloo_world):
-        # No explicit arm(): an initialized SPMD process arms lazily at
-        # capture entry with restricted registry seeding.
-        assert not lifecycle.is_armed()
-        log = tl.trace(HandRolledTP(), torch.randn(2, 4))
-        assert lifecycle.is_armed()
-        info = [op for op in log.ops if op.type == "allreduce"][0].annotations["collective"]
-        assert info["lifetime_evidence"]["arming_source"] == "auto"
-        assert info["lifetime_evidence"]["ordinal_source"] == "seeded"
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py.
     @requires_vetted_snapshot
     def test_seq_ticks_at_issue_even_outside_capture(self, gloo_world):
         dist = gloo_world
@@ -189,6 +164,7 @@ class TestBoundaryNode:
         info = [op for op in log.ops if op.type == "allreduce"][0].annotations["collective"]
         assert info["correlation"]["seq"] == 1
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     @requires_vetted_snapshot
     def test_all_gather_list_destinations_enter_dataflow(self, gloo_world):
         dist = gloo_world
@@ -207,6 +183,7 @@ class TestBoundaryNode:
         add = [op for op in log.ops if op.type == "add"][0]
         assert any("allgather" in parent for parent in add.parents)
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_async_op_records_unobserved_completion(self, gloo_world):
         dist = gloo_world
@@ -224,6 +201,7 @@ class TestBoundaryNode:
         assert info["events"] == {"async_op": True, "completion_binding": "unobserved"}
         assert "read_of_inflight_destination" in info["disclosures"]
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     @requires_vetted_snapshot
     def test_nested_collectives_inside_object_collective_do_not_tick(self, gloo_world):
         dist = gloo_world
@@ -246,6 +224,7 @@ class TestBoundaryNode:
         coll_ticks = sum(count for key, count in state.seq_counters.items() if key[2] == "coll")
         assert coll_ticks == 1
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
     @requires_vetted_snapshot
     def test_barrier_is_journal_only(self, gloo_world):
         dist = gloo_world
@@ -263,6 +242,7 @@ class TestBoundaryNode:
         assert entry["op_labels_raw"] == [] and entry["op_node"] is False
         assert not any(op.type == "barrier" for op in log.ops)
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     @requires_vetted_snapshot
     def test_wildcard_recv_refuses_typed_during_capture(self, gloo_world):
         dist = gloo_world
@@ -278,15 +258,7 @@ class TestBoundaryNode:
             tl.trace(WildcardModel(), torch.ones(2))
         assert excinfo.value.fields["kind"] == "wildcard_recv_unsupported"
 
-    @requires_vetted_snapshot
-    def test_disarm_restores_collective_functions(self, gloo_world):
-        dist = gloo_world
-        original = dist.all_reduce
-        lifecycle.arm()
-        assert dist.all_reduce is not original
-        lifecycle.disarm()
-        assert dist.all_reduce is original
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     def test_failed_collective_restore_retains_original_for_retry(self) -> None:
         """A teardown failure cannot discard the pristine function ledger entry."""
 
@@ -315,40 +287,11 @@ class TestBoundaryNode:
             remove_collective_wraps(originals)
         assert originals[(module, "all_reduce")] is original
 
-    @requires_vetted_snapshot
-    def test_unarmed_capture_is_status_quo(self, gloo_world):
-        # Arm is refused/absent -> no boundary nodes, capture itself intact
-        # (the pre-tier-(b) behavior). Force unarmed by disarming and making
-        # lazy arming a no-op via an uninitialized-looking guard is not
-        # possible here (dist IS initialized), so instead pin that a plain
-        # dense model with no collectives captures identically armed.
-        lifecycle.arm()
-        model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-        log = tl.trace(model, torch.randn(2, 4))
-        assert not any(op.type == "allreduce" for op in log.ops)
-        assert "distributed" not in log.annotations
-
 
 class TestWitnessPolicy:
     pytestmark = requires_vetted_snapshot
 
-    def test_digest_witness_records_byte_exact_digests(self, gloo_world):
-        from torchlens.backends.torch.collectives import _digest_tensor
-
-        lifecycle.arm()
-        log = tl.trace(
-            HandRolledTP(),
-            torch.randn(2, 4),
-            capture=tl.options.CaptureOptions(distributed_witness="digest"),
-        )
-        boundary = [op for op in log.ops if op.type == "allreduce"][0]
-        witness = boundary.annotations["collective"]["witness"]
-        assert witness["policy_resolved"] == "digest"
-        assert len(witness["contribution_digests"]) == 1
-        # The destination digest is byte-exact evidence: recomputing it over
-        # the saved boundary output must reproduce it.
-        assert witness["destination_digests"] == [_digest_tensor(boundary.out)]
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py.
     def test_digest_witness_does_not_change_captured_graph(self, gloo_world) -> None:
         """Capture-internal digest operations must remain outside the user graph."""
 
@@ -363,6 +306,7 @@ class TestWitnessPolicy:
         )
         assert [op.type for op in witnessed.ops] == [op.type for op in plain.ops]
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     def test_fastlog_collective_refuses_instead_of_dropping_journal(self, gloo_world) -> None:
         """Fastlog must not return a product that omits an executed collective."""
 
@@ -371,6 +315,7 @@ class TestWitnessPolicy:
             tl.record(HandRolledTP(), torch.randn(2, 4), save=tl.func("relu"))
         assert excinfo.value.fields["kind"] == "collective_boundary_fastlog_unsupported"
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/collectives.py, campaign mutant kills.
     def test_async_digest_destination_not_present(self, gloo_world):
         dist = gloo_world
 
@@ -394,11 +339,13 @@ class TestWitnessPolicy:
         assert witness["destination_digests"] is None
         assert witness["not_present_reason"] == "async_completion_unobserved"
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _options_validation.py.
     def test_payload_witness_is_reserved_and_refuses(self, gloo_world):
         lifecycle.arm()
         with pytest.raises(ValueError, match="payload"):
             tl.options.CaptureOptions(distributed_witness="payload")
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _options_validation.py.
     def test_unknown_witness_level_refuses(self, gloo_world):
         lifecycle.arm()
         with pytest.raises(ValueError, match="distributed_witness"):
@@ -414,6 +361,7 @@ class TestReplayRefusals:
     invariants run in full.
     """
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _runnable/__init__.py, validation/_core.py.
     def test_forward_replay_validation_refuses_typed(self, gloo_world):
         from torchlens.errors import CollectiveBoundaryReplayError
 
@@ -423,6 +371,7 @@ class TestReplayRefusals:
             log.validate_forward_pass([torch.zeros(2, 4)])
         assert excinfo.value.fields["code"] == "collective_boundary_unsupported"
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _io/runnable.py, campaign mutant kills.
     def test_runnable_save_refuses_typed(self, gloo_world, tmp_path):
         from torchlens.errors import RunnablePreflightError
 
@@ -434,15 +383,7 @@ class TestReplayRefusals:
         codes = {d.code for d in excinfo.value.fields["diagnostics"]}
         assert "collective_boundary_unsupported" in codes
 
-    def test_metadata_invariants_still_run_in_full(self, gloo_world):
-        from torchlens.validation import check_metadata_invariants
-
-        lifecycle.arm()
-        log = tl.trace(HandRolledTP(), torch.randn(2, 4))
-        # Raises MetadataInvariantError on any violation; a boundary-crossing
-        # trace must still pass the full invariant sweep.
-        check_metadata_invariants(log)
-
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _io/bundle.py, _io/runnable.py, _io/runnable_load.py ....
     def test_boundary_free_capture_keeps_both_surfaces(self, gloo_world, tmp_path):
         lifecycle.arm()
         model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())

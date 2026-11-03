@@ -64,7 +64,15 @@ RESERVED_SIDECAR_FAMILY_IDS = frozenset(
 
 
 class SidecarError(ConfigurationError):
-    """Raised for sidecar-family registration and payload refusals."""
+    """Raised for sidecar-family registration and payload refusals.
+
+    Examples
+    --------
+    >>> issubclass(SidecarError, tl.errors.ConfigurationError)
+    True
+    >>> issubclass(SidecarError, tl.errors.TorchLensError)
+    True
+    """
 
 
 @dataclass(frozen=True)
@@ -84,6 +92,12 @@ class SidecarFamily:
         Human-readable owning party (package or team).
     size_budget_bytes:
         Maximum canonical-JSON payload size accepted at attach time.
+
+    Examples
+    --------
+    >>> family = tl.io.SidecarFamily("docsdemo.saliency", "docsdemo_saliency_v1", 1, "docsdemo")
+    >>> (family.family_id, family.version, family.size_budget_bytes)
+    ('docsdemo.saliency', 1, 1048576)
     """
 
     family_id: str
@@ -108,6 +122,15 @@ class AnalysisOnlySidecar:
     The declared missing-provider behavior of the sidecar domain: the raw
     envelope stays inspectable (analysis-only), no validation is claimed,
     and no provider code is imported.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.io.register_sidecar_family(tl.io.SidecarFamily("docsdemo.ao", "docsdemo_ao_v1", 1, "docsdemo")); tl.io.attach_sidecar(trace, "docsdemo.ao", {"k": 1})
+    >>> tl.io.unregister_sidecar_family("docsdemo.ao")
+    >>> view = tl.io.read_sidecar(trace, "docsdemo.ao")
+    >>> (view.family_id, view.payload, view.analysis_only)
+    ('docsdemo.ao', {'k': 1}, True)
     """
 
     family_id: str
@@ -171,6 +194,16 @@ def register_sidecar_family(
         encoding and budget.
     replace:
         Explicit replacement opt-in (kernel collision refusal otherwise).
+
+    Examples
+    --------
+    >>> family = tl.io.SidecarFamily("docsdemo.notes", "docsdemo_notes_v1", 1, "docsdemo")
+    >>> tl.io.register_sidecar_family(family)
+    >>> "docsdemo.notes" in tl.io.list_sidecar_families()
+    True
+    >>> tl.io.unregister_sidecar_family("docsdemo.notes")
+    >>> "docsdemo.notes" in tl.io.list_sidecar_families()
+    False
     """
 
     if not isinstance(family, SidecarFamily):
@@ -248,14 +281,31 @@ def register_sidecar_family(
 
 
 def unregister_sidecar_family(family_id: str) -> None:
-    """Remove one sidecar family registration (tests and provider teardown)."""
+    """Remove one sidecar family registration (tests and provider teardown).
+
+    Examples
+    --------
+    >>> tl.io.register_sidecar_family(tl.io.SidecarFamily("docsdemo.tmp", "docsdemo_tmp_v1", 1, "docsdemo"))
+    >>> tl.io.unregister_sidecar_family("docsdemo.tmp")
+    >>> "docsdemo.tmp" in tl.io.list_sidecar_families()
+    False
+    """
 
     _ensure_builtin_families()
     _SIDECAR_REGISTRY.unregister(family_id)
 
 
 def list_sidecar_families() -> tuple[str, ...]:
-    """Return the registered sidecar family ids (the builtin families included)."""
+    """Return the registered sidecar family ids (the builtin families included).
+
+    Examples
+    --------
+    >>> families = tl.io.list_sidecar_families()
+    >>> isinstance(families, tuple)
+    True
+    >>> "torchlens.boundary_facts" in families
+    True
+    """
 
     _ensure_builtin_families()
     return _SIDECAR_REGISTRY.list_ids()
@@ -301,6 +351,15 @@ def attach_sidecar(trace: Any, family_id: str, payload: Any) -> None:
     (JSON portability, size budget, then the family's own validator) and
     stored as a self-describing envelope under
     ``trace.annotations["sidecar"][family_id]``.
+
+    Examples
+    --------
+    >>> tl.io.register_sidecar_family(tl.io.SidecarFamily("docsdemo.scores", "docsdemo_scores_v1", 1, "docsdemo"))
+    >>> trace = tl.trace(model, x)
+    >>> tl.io.attach_sidecar(trace, "docsdemo.scores", {"scores": [0.5, 0.25]})
+    >>> tl.io.read_sidecar(trace, "docsdemo.scores")
+    {'scores': [0.5, 0.25]}
+    >>> tl.io.unregister_sidecar_family("docsdemo.scores")
     """
 
     _ensure_builtin_families()
@@ -340,6 +399,16 @@ def read_sidecar(trace: Any, family_id: str) -> Any | AnalysisOnlySidecar:
         :class:`AnalysisOnlySidecar` (raw envelope, no validation claim) when
         it is not. Never imports out-of-tree provider code; the builtin
         TorchLens families are always registered.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> tl.io.register_sidecar_family(tl.io.SidecarFamily("docsdemo.rs", "docsdemo_rs_v1", 1, "docsdemo")); tl.io.attach_sidecar(trace, "docsdemo.rs", {"k": 1})
+    >>> tl.io.read_sidecar(trace, "docsdemo.rs")
+    {'k': 1}
+    >>> tl.io.unregister_sidecar_family("docsdemo.rs")
+    >>> tl.io.read_sidecar(trace, "docsdemo.rs").analysis_only
+    True
     """
 
     annotations = _annotations_mapping(trace, family_id)

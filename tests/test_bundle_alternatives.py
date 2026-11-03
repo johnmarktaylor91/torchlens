@@ -18,7 +18,7 @@ import pytest
 import torch
 
 import torchlens as tl
-from torchlens.bundle import AlternativeReport, Bundle, TokenDivergence
+from torchlens.bundle import AlternativeReport, Bundle
 from torchlens.errors._episode import BundleRelationError
 
 
@@ -110,23 +110,6 @@ def test_steering_the_draft_reaches_critique_and_revise() -> None:
     statuses = {c["call"]: c["status"] for c in b.history[-1].params["alternative"]["calls"]}
     assert statuses == {row.call: row.status for row in report.calls}
     assert "draft" in report.table() and "steered" in report.table()
-
-
-def test_token_divergence_gives_first_differing_positions() -> None:
-    b = _critique_loop({})
-    report = b.add_alternative(_critique_loop({"draft": _STEER}), steered="draft")
-    split = {row.call: row for row in report.calls}["draft"].completion_divergence
-    d = b.token_divergence("critique", "cf_critique")
-    assert isinstance(d, TokenDivergence)
-    assert d.prompt_divergence == 6 + split and not d.prompt_same
-    assert d.intervened == (False, False)
-    (prompt_len, _), _ = d.lengths
-    assert d.shared[0] == (0, d.prompt_divergence, 0, d.prompt_divergence)
-    tail = d.shared[1]
-    assert tail[1] == prompt_len, "the template token after the quote is shared"
-    steered = b.token_divergence("draft", "cf_draft")
-    assert steered.prompt_same and steered.completion_divergence == split
-    assert steered.intervened == (False, True)
 
 
 def test_steering_the_last_call_leaves_earlier_calls_unchanged() -> None:

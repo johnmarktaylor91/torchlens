@@ -627,7 +627,7 @@ def _run_capture(
             model,
             input_tensor,
             save=_save_all_ops,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
@@ -679,7 +679,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             intervene=tl.when(tl.func("relu"), tl.add(0.0)),
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
@@ -698,7 +698,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             stop_after=_halt_on_relu,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
@@ -719,7 +719,7 @@ def _run_capture(
             model,
             input_tensor.requires_grad_(True),
             save=_save_all_ops,
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
             capture=tl.options.CaptureOptions(save_grads=True, backward_ready=True, seed=_SEED),
         )
         output = cast(torch.Tensor, recording.output)
@@ -749,7 +749,7 @@ def _run_capture(
             input_tensor,
             save=_save_all_ops,
             storage=tl.to_disk(disk_path, retain_in_memory=True),
-            include_source_events=True,
+            recording=tl.options.RecordingOptions(include_source_events=True),
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, None, None
@@ -758,8 +758,9 @@ def _run_capture(
             model,
             input_tensor,
             save=_save_all_ops,
-            include_source_events=True,
-            on_forward_error="return_partial",
+            recording=tl.options.RecordingOptions(
+                include_source_events=True, on_forward_error="return_partial"
+            ),
             capture=tl.options.CaptureOptions(seed=_SEED),
         )
         return recording, RuntimeError("capture-oracle intentional forward failure"), None

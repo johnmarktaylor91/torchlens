@@ -236,6 +236,13 @@ def site_stats(trace: Any) -> dict[str, RunningStats]:
         layers). Each keeps folding with ``update``/``merge`` and saves with
         ``tl.stats.save_fitted``. Sites whose out the kernel refused (complex
         dtypes) are absent.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, save="stats")
+    >>> stats = tl.stats.site_stats(trace)
+    >>> "relu_1_2:1" in stats
+    True
     """
 
     if not is_stats_capture(trace):

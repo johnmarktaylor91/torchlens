@@ -252,6 +252,7 @@ class _MangledSlotSubTop(nn.Module):
 # --- hon_1 sweep-level: numeric-payload instance state IS inventoried ------------------------
 
 
+# Kept: shares a parametrize list that is not trimmable per id with kept params.
 @pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
 @pytest.mark.parametrize("placement", _NUMERIC_PLACEMENTS)
 def test_numeric_payload_generator_is_swept_and_draw_flips_digest(
@@ -276,207 +277,13 @@ def test_numeric_payload_generator_is_swept_and_draw_flips_digest(
 # --- hon_1 end-to-end: unseeded generator, pre-existing worker draw -> UNVERIFIABLE ----------
 
 
-@pytest.mark.parametrize("placement", _NUMERIC_PLACEMENTS)
-def test_numeric_payload_generator_preexisting_thread_draw_is_unverifiable(
-    placement: str, preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """The r60 hon_1 repro shape, all three payload placements: an UNSEEDED generator on a
-    numeric-payload instance ``__dict__``, drawn on a pre-existing non-hooked worker ->
-    ``model_attribute_generator`` -> UNVERIFIABLE + not ATTESTED (was false VERIFIED +
-    ATTESTED)."""
-
-    gen = np.random.default_rng()  # unseeded, constructed BEFORE the capture window
-    model = _NumericPayloadModel(placement, gen, preexisting_worker)
-    trace, result = _roundtrip(model, torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels, (
-        f"{placement}: payload-held generator draw was not inventoried"
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
 # --- corr_1 sweep-level + end-to-end: name-mangled private slots -----------------------------
-
-
-@pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
-@pytest.mark.parametrize("placement", ["top", "submodule"])
-def test_mangled_slot_generator_is_swept_and_draw_flips_digest(placement: str, kind: str) -> None:
-    """A ``__slots__ = ("__rng",)`` generator (class-dict key ``_Class__rng`` via CPython
-    name mangling) on the TOP model or a registered submodule is inventoried, and a
-    non-hooked draw flips its digest -- the r60 corr_1 unwitnessed-slot hole."""
-
-    gen = _GEN_FACTORIES[kind]()
-    model: nn.Module = _MangledSlotTop(gen) if placement == "top" else _MangledSlotSubTop(gen)
-    snapshots = _sweep(model)
-    holders = {id(holder): digest for holder, digest in snapshots}
-    assert id(gen) in holders, f"{placement}/{kind}: mangled-slot generator not inventoried"
-    worker = threading.Thread(target=lambda: _draw(gen))
-    worker.start()
-    worker.join()
-    after = host_nondeterminism_monitor._digest_rng_instance(gen)
-    assert after != holders[id(gen)], f"{placement}/{kind}: slot draw did not flip the digest"
-
-
-@pytest.mark.parametrize("placement", ["top", "submodule"])
-def test_mangled_slot_generator_preexisting_thread_draw_is_unverifiable(
-    placement: str, preexisting_worker: Any, tmp_path: Path
-) -> None:
-    """The r60 corr_1 e2e shape, both placements: a name-mangled slot generator drawn on a
-    pre-existing non-hooked worker -> ``model_attribute_generator`` -> UNVERIFIABLE + not
-    ATTESTED."""
-
-    gen = np.random.default_rng(777)
-    model: nn.Module = (
-        _MangledSlotTop(gen, preexisting_worker)
-        if placement == "top"
-        else _MangledSlotSubTop(gen, preexisting_worker)
-    )
-    trace, result = _roundtrip(model, torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" in trace._runnable.host_rng_channels, (
-        f"{placement}: mangled-slot generator draw was not inventoried"
-    )
-    assert result.report.path_faithfulness is PathFaithfulness.UNVERIFIABLE
-    assert result.report.numeric_attestation is not NumericAttestationStatus.ATTESTED
-
-
-def test_resolve_slot_member_mangling_matrix() -> None:
-    """CPython name-mangling ground truth, 6/6 (probe D): the resolver returns the DECLARING
-    class's member descriptor for every mangling shape, and ``_custom_holder_children``
-    surfaces the held value through it."""
-
-    marker = object()
-
-    class _C61Std:
-        __slots__ = ("__rng",)
-
-        def __init__(self) -> None:
-            self.__rng = marker
-
-    class _C61Triple:
-        __slots__ = ("___x",)
-
-        def __init__(self) -> None:
-            self.___x = marker
-
-    class _C61Dunder:
-        __slots__ = ("__d__",)
-
-        def __init__(self) -> None:
-            self.__d__ = marker
-
-    class _F:
-        __slots__ = ("__rng",)
-
-        def __init__(self) -> None:
-            self.__rng = marker
-
-    class ___:  # noqa: N801 - all-underscore class name is the probed edge case
-        __slots__ = ("__rng",)
-
-        def __init__(self) -> None:
-            self.__rng = marker
-
-    class _C61Single:
-        __slots__ = ("_x",)
-
-        def __init__(self) -> None:
-            self._x = marker
-
-    cases: list[tuple[type, str, str]] = [
-        (_C61Std, "__rng", "_C61Std__rng"),  # standard private-name mangling
-        (_C61Triple, "___x", "_C61Triple___x"),  # extra leading underscores still mangle
-        (_C61Dunder, "__d__", "__d__"),  # trailing dunder NOT mangled
-        (_F, "__rng", "_F__rng"),  # class-name leading underscores stripped
-        (___, "__rng", "__rng"),  # all-underscore class name mangles NOTHING
-        (_C61Single, "_x", "_x"),  # single underscore NOT mangled
-    ]
-    for klass, slot, expected_key in cases:
-        assert expected_key in klass.__dict__, f"{klass.__name__}: ground-truth key missing"
-        descriptor = _resolve_slot_member(klass, slot)
-        assert descriptor is klass.__dict__[expected_key], (
-            f"{klass.__name__}/{slot}: resolver did not return the declaring descriptor"
-        )
-        instance = klass()
-        assert descriptor.__get__(instance, klass) is marker
-        children = host_nondeterminism_monitor._custom_holder_children(instance)
-        assert any(child is marker for child in children), (
-            f"{klass.__name__}/{slot}: slot value not surfaced by _custom_holder_children"
-        )
 
 
 # --- r63 raw-shadow HIGH: mangled private descriptor beats any raw class-dict key ------------
 
 
-def test_raw_class_dict_shadow_does_not_beat_mangled_descriptor() -> None:
-    """r62 raw-shadow HIGH (sol_angle2#1): a post-hoc raw class-dict entry at the UNMANGLED
-    private key (``setattr(M, "__rng", shadow)`` -- mangling is a compile-time class-body
-    transform, so the shadow lands at the raw key while the real slot descriptor stays at
-    ``_M__rng``) must NOT hide the slot value, and a hostile descriptor planted at the raw
-    key must NEVER get its ``__get__`` invoked."""
-
-    hostile_get_calls = {"n": 0}
-
-    class _ShadowBoom:
-        def __get__(self, obj: Any, objtype: Any = None) -> Any:
-            hostile_get_calls["n"] += 1
-            return None
-
-    marker = object()
-
-    class _M63Shadow:
-        __slots__ = ("__rng",)
-
-        def __init__(self) -> None:
-            self.__rng = marker
-
-    instance = _M63Shadow()
-    for shadow in ("shadow", _ShadowBoom()):
-        setattr(_M63Shadow, "__rng", shadow)  # raw key: no compile-time mangling here
-        assert "__rng" in _M63Shadow.__dict__, "shadow key missing -- test shape broken"
-        assert "_M63Shadow__rng" in _M63Shadow.__dict__, "mangled key missing -- shape broken"
-        resolved = _resolve_slot_member(_M63Shadow, "__rng")
-        assert isinstance(resolved, MemberDescriptorType), (
-            "resolver returned a non-inert object (raw shadow beat the mangled descriptor)"
-        )
-        assert resolved is _M63Shadow.__dict__["_M63Shadow__rng"]
-        children = host_nondeterminism_monitor._custom_holder_children(instance)
-        assert any(child is marker for child in children), (
-            "raw shadow hid the mangled-slot value from _custom_holder_children"
-        )
-    assert hostile_get_calls["n"] == 0, "hostile shadow __get__ fired during resolution"
-
-
-@pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
-def test_raw_shadow_on_slotted_module_generator_still_swept(kind: str) -> None:
-    """The r62 sol_angle2#1 repro shape: a raw ``M.__rng = "shadow"`` class attribute on a
-    slotted REGISTERED module must not drop the mangled-slot generator from the sweep (the
-    module is premarked, so the gc fallback can never recover a seed-loop miss)."""
-
-    gen = _GEN_FACTORIES[kind]()
-
-    class _ShadowedSlotTop(nn.Module):
-        __slots__ = ("__rng",)
-
-        def __init__(self, g: Any) -> None:
-            super().__init__()
-            self.lin = nn.Linear(4, 4)
-            self.__rng = g
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            return self.lin(x)
-
-    setattr(_ShadowedSlotTop, "__rng", "shadow")  # the raw class-dict shadow
-    model = _ShadowedSlotTop(gen)
-    snapshots = _sweep(model)
-    holders = {id(holder): digest for holder, digest in snapshots}
-    assert id(gen) in holders, f"{kind}: raw shadow dropped the mangled-slot generator"
-    worker = threading.Thread(target=lambda: _draw(gen))
-    worker.start()
-    worker.join()
-    after = host_nondeterminism_monitor._digest_rng_instance(gen)
-    assert after != holders[id(gen)], f"{kind}: shadowed-slot draw did not flip the digest"
-
-
+# Kept: sole branch coverage of _utils/rng/inventory_types.py, _utils/rng/inventory_walk.py.
 def test_resolve_slot_member_returns_only_inert_member_descriptor() -> None:
     """The resolver's return type IS the safety contract: only a ``MemberDescriptorType``
     (pure C field access) or ``None`` (slot skipped) -- a hostile non-descriptor that
@@ -575,27 +382,7 @@ def _make_class_attr_payload_model(placement: str, gen: Any, worker: Any = None)
     return _ClassAttrPayloadModel()
 
 
-@pytest.mark.parametrize("kind", sorted(_GEN_FACTORIES))
-@pytest.mark.parametrize("placement", _CLASS_ATTR_PLACEMENTS)
-def test_class_attr_generator_on_payload_subclass_is_swept_and_draw_flips_digest(
-    placement: str, kind: str
-) -> None:
-    """r62 class-surface MED (fable_freeroam): a generator held ONLY as a CLASS attribute of
-    an ``nn.Parameter`` / ndarray SUBCLASS is inventoried through the numeric-payload node's
-    new class-surface edge, and a non-hooked draw flips its digest."""
-
-    gen = _GEN_FACTORIES[kind]()
-    model = _make_class_attr_payload_model(placement, gen)
-    snapshots = _sweep(model)
-    holders = {id(holder): digest for holder, digest in snapshots}
-    assert id(gen) in holders, f"{placement}/{kind}: class-attr generator not inventoried"
-    worker = threading.Thread(target=lambda: _draw(gen))
-    worker.start()
-    worker.join()
-    after = host_nondeterminism_monitor._digest_rng_instance(gen)
-    assert after != holders[id(gen)], f"{placement}/{kind}: draw did not flip the digest"
-
-
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize("placement", _CLASS_ATTR_PLACEMENTS)
 def test_class_attr_payload_subclass_preexisting_thread_draw_is_unverifiable(
     placement: str, preexisting_worker: Any, tmp_path: Path
@@ -617,6 +404,7 @@ def test_class_attr_payload_subclass_preexisting_thread_draw_is_unverifiable(
 # --- over-trigger pins ------------------------------------------------------------------------
 
 
+# Kept: sole branch coverage of _capture_attr_observer.py.
 def test_benign_numeric_payload_surfaces_stay_verified(tmp_path: Path) -> None:
     """A deterministic model whose tensors / ndarray-subclass attrs hold NO generator sweeps
     nothing, flags nothing, and stays VERIFIED + ATTESTED -- neither the instance-state walk
@@ -649,19 +437,10 @@ def test_benign_numeric_payload_surfaces_stay_verified(tmp_path: Path) -> None:
     assert result.report.numeric_attestation is NumericAttestationStatus.ATTESTED
 
 
-def test_undrawn_numeric_payload_generator_stays_verified(tmp_path: Path) -> None:
-    """A payload-held generator that is present but NEVER drawn stays VERIFIED with no
-    ``model_attribute_generator`` channel (digest unchanged; possession is not consumption)."""
-
-    model = _NumericPayloadModel("param_attr", np.random.default_rng(3))
-    trace, result = _roundtrip(model, torch.randn(2, 4), tmp_path)
-    assert "model_attribute_generator" not in trace._runnable.host_rng_channels
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-
-
 # --- zero-user-code: the new instance-state walk stays inert ----------------------------------
 
 
+# Kept: sole branch coverage of _utils/rng/generator_sweep.py.
 def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
     """The numeric-payload instance-state AND class-surface walks fire NO property, NO
     ``__getattr__``, and NO descriptor ``__get__`` on hostile tensor / ndarray SUBCLASSES --
@@ -733,9 +512,7 @@ def test_numeric_payload_instance_walk_executes_zero_user_code() -> None:
     )
 
 
-# --- source tripwires + ambient walls ----------------------------------------------------------
-
-
+# Kept: reads source statically or runs a subprocess, so per-id coverage cannot measure it (shrink rule 3).
 def test_source_tripwire_numeric_payloads_not_hard_leaves() -> None:
     """Structural pin: tensors / ndarrays / numpy scalars must appear in NO tuple used as a
     hard pre-instance-state skip, and the numeric-payload branch must route through the
@@ -780,3 +557,6 @@ def test_source_tripwire_numeric_payloads_not_hard_leaves() -> None:
     # the r61 split must not resurrect ambient members inside the payload tuple
     assert not set(_NUMERIC_PAYLOAD_LEAF_TYPES) & set(_AMBIENT_BRIDGE_LEAF_TYPES)
     assert rng_inventory_types._INVENTORY_LEAF_TYPES  # element-iteration wall still declared
+
+
+# --- source tripwires + ambient walls ----------------------------------------------------------

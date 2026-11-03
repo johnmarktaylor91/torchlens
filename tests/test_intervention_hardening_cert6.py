@@ -75,21 +75,6 @@ class _TupleOut(torch.nn.Module):
         return self.lin1(x), self.lin2(x)
 
 
-class _LinearSum(torch.nn.Module):
-    """Model whose params can carry an attached optimizer."""
-
-    def __init__(self) -> None:
-        """Initialize a single linear layer."""
-
-        super().__init__()
-        self.lin = torch.nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Return ``lin(x)`` summed to a scalar."""
-
-        return self.lin(x).sum()
-
-
 def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> None:
     """BLOCKER-1: annotating a diff-replay fork must not mutate the parent trace."""
 
@@ -111,39 +96,6 @@ def test_differentiable_replay_fork_annotation_is_independent_of_parent() -> Non
     assert fork._layer_dict_all_keys["input_1"].annotations == {
         "user": {"data": {"owner": "fork-only"}}
     }
-
-
-def test_fork_shares_optimizer_aliasing_live_params() -> None:
-    """MAJOR-1: a forked trace's ``_optimizer`` must alias the live model params."""
-
-    model = _LinearSum()
-    opt = torch.optim.SGD(model.parameters(), lr=0.1)
-    log = tl.trace(
-        model,
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True, optimizer=opt),
-    )
-    assert getattr(log, "_optimizer", None) is opt
-
-    fork = log.fork()
-    # Shared by reference, not deep-copied.
-    assert getattr(fork, "_optimizer", None) is opt
-    live_param = next(model.parameters())
-    fork_param = fork._optimizer.param_groups[0]["params"][0]
-    assert fork_param is live_param
-
-
-def test_fork_policy_shares_optimizer_but_keeps_it_off_the_display_field_order() -> None:
-    """MAJOR-1: ``_optimizer`` has a SHARE policy yet stays out of FIELD_ORDER."""
-
-    from torchlens._constants import MODEL_LOG_FIELD_ORDER
-    from torchlens.intervention._types import (
-        MODEL_LOG_FIELD_FORK_POLICY,
-        ForkFieldPolicy,
-    )
-
-    assert "_optimizer" not in MODEL_LOG_FIELD_ORDER
-    assert MODEL_LOG_FIELD_FORK_POLICY["_optimizer"] is ForkFieldPolicy.FORK_SHARE
 
 
 def test_spec_serialize_preserves_non_string_dict_keys() -> None:

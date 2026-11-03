@@ -336,6 +336,12 @@ class JaxPayloadLoadHint:
         example ``"cpu"``.
     devices:
         Optional explicit local devices to use for metadata reconstruction.
+
+    Examples
+    --------
+    >>> hint = tl.io.JaxPayloadLoadHint(reconstruct_sharding=True, platform="cpu")
+    >>> (hint.reconstruct_sharding, hint.platform, hint.sharding)
+    (True, 'cpu', None)
     """
 
     sharding: Any | None = None
@@ -353,6 +359,14 @@ class PayloadLoadHints:
     ----------
     jax:
         Optional JAX payload hint.
+
+    Examples
+    --------
+    >>> hints = tl.io.PayloadLoadHints(jax=tl.io.JaxPayloadLoadHint(platform="cpu"))
+    >>> hints.jax.platform
+    'cpu'
+    >>> tl.io.PayloadLoadHints().jax is None
+    True
     """
 
     jax: JaxPayloadLoadHint | None = None

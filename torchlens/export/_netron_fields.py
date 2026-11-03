@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from .._data_classes.func_call_location import display_frame
 from .._utils._record_group_table import record_member
 
 if TYPE_CHECKING:
@@ -192,18 +193,18 @@ def node_doc(entry: Any) -> str:
     """Build the one-line, privacy-normalized docString (memo D-18).
 
     Source locations emit basename+line only, never absolute home or temp
-    paths; the innermost recorded frame is the op's own call site.
+    paths. The location is the frame a display names as the line that ran
+    the op (``display_frame``): the innermost frame outside torch's own
+    code, the same frame ``print(op)`` and the trace summary name.
     """
 
-    contexts = record_member(entry, "code_context", None) or []
+    frame = display_frame(record_member(entry, "code_context", None))
     location = ""
-    for frame in reversed(list(contexts)):
-        file_name = str(getattr(frame, "file", "") or "")
+    file_name = str(getattr(frame, "file", "") or "")
+    if file_name:
         line = getattr(frame, "line", None)
-        if file_name:
-            base = file_name.replace("\\", "/").rsplit("/", 1)[-1]
-            location = f"{base}:{line}" if line else base
-            break
+        base = file_name.replace("\\", "/").rsplit("/", 1)[-1]
+        location = f"{base}:{line}" if line else base
     func = str(record_member(entry, "func_qualname", "") or getattr(entry, "func_name", ""))
     # torch's free functions carry an internal holder-class qualname that
     # reads as noise in the sidebar; the bare function name is the fact.

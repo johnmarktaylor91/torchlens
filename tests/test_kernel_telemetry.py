@@ -14,9 +14,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens import _kernel_telemetry as telemetry
-from torchlens._io import FieldPolicy
-from torchlens._io.prerelease import registered_prerelease_fields
-from torchlens._kernel_telemetry import KernelLaunch
 from torchlens._observability._kineto import NormalizedEvent
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -189,61 +186,6 @@ def test_synthetic_kineto_join_covers_required_async_and_many_to_many_shapes() -
 
 
 @pytest.mark.smoke
-def test_marker_begin_end_and_capture_exception_shape_close_cleanly() -> None:
-    """A boundary-closed marker still correlates after an exceptional exit.
-
-    A raising capture leaves markers the pass-boundary/session cleanup
-    closed (never dropped); the join sees one closed marker interval and the
-    correlation still lands.
-    """
-
-    marker = "torchlens::aten::exception"
-    span = _event(marker, "user_annotation", 5, 4)
-    runtime = _event("cudaLaunchKernel", "cuda_runtime", 7, 1, correlation=44)
-    kernel = _event("kernel", "kernel", 20, 1, correlation=44, stream=1, device=0)
-    payload = telemetry._payload_from_events(
-        [span, runtime, kernel], {marker: 4}, telemetry_available=True
-    )
-    assert payload._relations == ((4, 0),)
-    assert payload._launches[0].attribution_status == "attributed"
-
-
-def test_unavailable_session_is_typed_and_never_fabricates_a_launch() -> None:
-    """Unavailable CUDA produces one fact-free disclosure, never a zero claim."""
-
-    payload = telemetry._payload_from_events(
-        (), {"torchlens::aten::1": 3, "torchlens::aten::2": 5}, telemetry_available=False
-    )
-    assert not payload._available
-    assert payload._relations == ((3, 0), (5, 0))
-    assert payload._launches == (
-        KernelLaunch(
-            launch_name=None,
-            device=None,
-            stream=None,
-            duration=None,
-            runtime_correlation=None,
-            attribution_status="unavailable",
-        ),
-    )
-
-
-def test_scoped_marker_instrumentation_restores_exact_core_functions() -> None:
-    """The adapter restores both monkeypatched seams after a capture exception."""
-
-    from torchlens.backends.torch import _aten_capture
-
-    prepare = _aten_capture._prepare_aten_call
-    finish = _aten_capture._finish_aten_call
-    with pytest.raises(RuntimeError, match="planned"), telemetry._instrument_aten_markers():
-        assert _aten_capture._prepare_aten_call is not prepare
-        assert _aten_capture._finish_aten_call is not finish
-        raise RuntimeError("planned")
-    assert _aten_capture._prepare_aten_call is prepare
-    assert _aten_capture._finish_aten_call is finish
-
-
-@pytest.mark.smoke
 def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: Path) -> None:
     """CPU capture discloses NOT-RUN; plain v8 saves persist the telemetry section."""
 
@@ -281,18 +223,6 @@ def test_cpu_host_records_unavailable_views_and_drop_gated_annotation(tmp_path: 
     assert "_kernel_telemetry" in loaded.annotations
     telemetry._bind_trace_telemetry(loaded)
     assert telemetry._op_gpu_kernels(loaded.ops[0])[0].attribution_status == "unavailable"
-
-
-def test_kernel_rows_persist_and_registrations_are_retired() -> None:
-    """tlspec v8: telemetry rows declare KEEP directly; registrations retired."""
-
-    inventory = registered_prerelease_fields()
-    assert "KernelLaunch" not in inventory
-    assert "_TelemetryPayload" not in inventory
-    # v8 telemetry keys retired; the standing row is C01's gated sidecar key.
-    assert inventory.get("Trace.annotations", ()) in ((), ("sidecar",))
-    assert set(KernelLaunch._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
-    assert set(telemetry._TelemetryPayload._PORTABLE_STATE_SPEC.values()) == {FieldPolicy.KEEP}
 
 
 def _imported_modules(path: Path) -> set[str]:

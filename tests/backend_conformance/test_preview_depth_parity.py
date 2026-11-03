@@ -21,13 +21,16 @@ import pytest
 
 from torchlens._utils._record_group_table import record_member
 
-pytestmark = pytest.mark.backend_parity
+pytestmark = [pytest.mark.backend_parity, pytest.mark.rare]
 
 
 def _assert_depths(trace, expect_recurrence: bool, expected_max_depth: int) -> None:
     ops = list(trace._layer_list)
     depths = {
-        op._label_raw: (op.graph.min_distance_from_input, op.graph.max_distance_from_input)
+        op._label_raw: (
+            op.graph.min_distance_from_input,
+            op.graph.max_distance_from_input,
+        )
         for op in ops
         if record_member(op, "min_distance_from_input", None) is not None
     }

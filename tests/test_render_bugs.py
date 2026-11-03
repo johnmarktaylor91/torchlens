@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import dataclasses
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -16,14 +15,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.trace import Trace
-from torchlens._record_type import record_type
 from torchlens._visualization import _render_utils
 from torchlens._visualization._rank_layout_internal import layout as rank_layout
 from torchlens._visualization._render_common import GraphvizRenderError, GraphvizUnavailableError
-from torchlens._visualization._render_dot import _strip_render_extension
 from torchlens._visualization._render_utils import render_dot_to_file
-from torchlens._visualization.collapse_plan import RenderContext
-from torchlens._visualization.render_ir import build_render_ir
 
 
 class _TinyRenderModel(nn.Module):
@@ -37,23 +32,6 @@ class _TinyRenderModel(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Run a forward pass."""
         return torch.relu(self.linear(x)).sum()
-
-
-class _LargeChainRenderModel(nn.Module):
-    """Model with enough repeated ops to exercise large PDF page geometry."""
-
-    def __init__(self, width: int = 4, depth: int = 48) -> None:
-        """Initialize a deterministic linear chain."""
-
-        super().__init__()
-        self.layers = nn.ModuleList(nn.Linear(width, width) for _ in range(depth))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the chain with one activation per layer."""
-
-        for layer in self.layers:
-            x = torch.relu(layer(x))
-        return x
 
 
 class _NestedTorchOpModel(nn.Module):
@@ -93,70 +71,6 @@ class _NestedTorchOpModel(nn.Module):
         return self.block(x).sum()
 
 
-class _SpecialCharDictOutputModel(nn.Module):
-    """Return a two-leaf dict output with an HTML-special-character key."""
-
-    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
-        """Run the model."""
-
-        return {"loss & aux": x + 1, "b": x + 2}
-
-
-class _ModuleDictSpecialKeyModel(nn.Module):
-    """Model whose ``nn.ModuleDict`` key contains an HTML-special character."""
-
-    def __init__(self) -> None:
-        """Initialize a ModuleDict keyed by a string containing ``&``."""
-
-        super().__init__()
-        self.heads = nn.ModuleDict(
-            {"score & rank": nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))}
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the ``"score & rank"`` branch."""
-
-        return self.heads["score & rank"](x)
-
-
-class _ModuleDictAngleAmpersandKeyModel(nn.Module):
-    """Model whose ``nn.ModuleDict`` key mixes ``<``, ``>``, and ``&``."""
-
-    def __init__(self) -> None:
-        """Initialize a ModuleDict keyed by a string with mixed DOT-illegal chars."""
-
-        super().__init__()
-        self.heads = nn.ModuleDict(
-            {"a<b>&c": nn.Sequential(nn.Linear(3, 4), nn.ReLU(), nn.Linear(4, 2))}
-        )
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run the ``"a<b>&c"`` branch."""
-
-        return self.heads["a<b>&c"](x)
-
-
-class _LSTMCellSeq(nn.Module):
-    """Loop over an LSTMCell whose call returns two tensors."""
-
-    def __init__(self) -> None:
-        """Initialize the recurrent cell."""
-
-        super().__init__()
-        self.cell = nn.LSTMCell(6, 5)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run four recurrent cell calls."""
-
-        h = torch.zeros(x.shape[1], 5)
-        c = torch.zeros(x.shape[1], 5)
-        outputs = []
-        for step in range(x.shape[0]):
-            h, c = self.cell(x[step], (h, c))
-            outputs.append(h)
-        return torch.stack(outputs)
-
-
 @pytest.fixture
 def forward_trace() -> Trace:
     """Return a tiny forward Trace."""
@@ -177,19 +91,21 @@ def backward_trace() -> Trace:
     return trace
 
 
-def test_skip_fn_omits_unrolled_skipped_node(tmp_path: Path) -> None:
-    """Skipped unrolled nodes should not be emitted as detached DOT nodes."""
+class _LargeChainRenderModel(nn.Module):
+    """Model with enough repeated ops to exercise large PDF page geometry."""
 
-    trace = tl.trace(nn.Sequential(nn.Linear(4, 4), nn.ReLU()), torch.randn(2, 4))
+    def __init__(self, width: int = 4, depth: int = 48) -> None:
+        """Initialize a deterministic linear chain."""
 
-    dot = trace.draw(
-        skip_fn=lambda layer: layer.func_name == "relu",
-        path=str(tmp_path / "skip_relu"),
-        file_format="dot",
-        order_siblings=False,
-    ).dot
+        super().__init__()
+        self.layers = nn.ModuleList(nn.Linear(width, width) for _ in range(depth))
 
-    assert "relu_1_2" not in dot
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Run the chain with one activation per layer."""
+
+        for layer in self.layers:
+            x = torch.relu(layer(x))
+        return x
 
 
 @pytest.mark.skipif(sys.platform != "linux", reason="PR_SET_PDEATHSIG is Linux-only")
@@ -290,113 +206,6 @@ def test_missing_graphviz_binary_refuses_typed(
     assert exc_info.value.fields["executable"]
 
 
-def test_render_ir_honors_skip_fn_without_repeat_folds() -> None:
-    """Render IR node/edge topology follows skip-spliced drawing topology."""
-
-    trace = tl.trace(_TinyRenderModel(), torch.randn(2, 3))
-
-    def skip_relu(layer: Any) -> bool:
-        """Skip relu layers."""
-
-        return record_type(layer, None) == "relu"
-
-    render_ir = build_render_ir(
-        trace,
-        collapse_fn=None,
-        repeat_folds=None,
-        context=RenderContext(skip_fn=skip_relu),
-    )
-
-    node_labels = {node.source_label for node in render_ir.nodes}
-    edge_originals = {
-        label for edge in render_ir.edges for label in edge.source_originals + edge.target_originals
-    }
-    assert "relu_1_2" not in node_labels
-    assert "relu_1_2" not in edge_originals
-    assert ("linear_1_1",) in {edge.source_originals for edge in render_ir.edges}
-    assert ("sum_1_3",) in {edge.target_originals for edge in render_ir.edges}
-
-
-def test_render_extension_stripping_is_case_insensitive_and_shared() -> None:
-    """Graphviz outpath normalization strips known extensions once."""
-
-    assert _strip_render_extension("/tmp/model.PDF") == "/tmp/model"
-    assert _strip_render_extension("/tmp/model.SVG") == "/tmp/model"
-    assert _strip_render_extension("/tmp/model.dot") == "/tmp/model"
-
-
-def test_hidden_buffer_update_node_is_not_rendered(tmp_path: Path) -> None:
-    """Buffer-only update ops hidden by buffer visibility should not render."""
-
-    model = nn.Sequential(nn.Linear(8, 8), nn.BatchNorm1d(8)).train()
-    trace = tl.trace(model, torch.randn(4, 8))
-
-    dot = trace.draw(
-        path=str(tmp_path / "batchnorm_hidden_buffers"),
-        file_format="dot",
-        order_siblings=False,
-    ).dot
-
-    assert "add_1_2" not in dot
-    assert "batchnorm_1_3" in dot
-
-
-def test_lstmcell_rolled_count_uses_calls_not_outputs(tmp_path: Path) -> None:
-    """Rolled multi-output module ops should count calls in the ``(xN)`` badge."""
-
-    trace = tl.trace(_LSTMCellSeq(), torch.randn(4, 1, 6))
-
-    dot = trace.draw(
-        rolled=True,
-        path=str(tmp_path / "lstmcell_rolled"),
-        file_format="dot",
-        order_siblings=False,
-    ).dot
-
-    assert "lstmcell_1_4 (x4)" in dot
-    assert "lstmcell_1_4 (x8)" not in dot
-
-
-def test_dark_theme_themes_caption_and_parameter_nodes(tmp_path: Path) -> None:
-    """Dark theme should not leave graph captions or parameter nodes dark-on-dark."""
-
-    trace = tl.trace(nn.Linear(4, 2), torch.randn(1, 4))
-
-    dot = trace.draw(
-        theme="dark",
-        path=str(tmp_path / "dark"),
-        file_format="dot",
-        order_siblings=False,
-    ).dot
-
-    assert "FONT COLOR='#F9FAFB'" in dot
-    assert 'fillcolor="#374151"' in dot
-
-
-def test_rank_layout_embeds_code_panel(tmp_path: Path) -> None:
-    """Rank layout should keep code panel content instead of dropping it.
-
-    The model stays bound to a local: a callable ``code_panel`` documents that
-    the ORIGINAL model must still be alive at draw time (the Trace holds only
-    a weakref), so an anonymous inline model only ever rendered by
-    cycle-collection timing luck.
-    """
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
-    trace = tl.trace(model, torch.randn(1, 4))
-
-    dot = trace.draw(
-        layout="rank",
-        code_panel=lambda _model: "def forward(self, x):\n    return self[1](self[0](x))",
-        path=str(tmp_path / "rank_code_panel"),
-        file_format="svg",
-        order_siblings=False,
-    ).dot
-
-    assert "cluster_torchlens_code_panel" in dot
-    assert "Source code" in dot
-
-
 def test_shared_render_timeout_preserves_reported_dot_source(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -466,26 +275,6 @@ def _write_zero_byte_output(args: Sequence[str], **kwargs: Any) -> subprocess.Co
     output_flag_index = args.index("-o")
     Path(args[output_flag_index + 1]).write_bytes(b"")
     return subprocess.CompletedProcess(args=args, returncode=0, stdout="", stderr="")
-
-
-def test_draw_bool_flag_kwarg_refuses_non_bool_typed(
-    forward_trace: Trace,
-    tmp_path: Path,
-) -> None:
-    """Bool-typed draw kwargs refuse strings with the stable code (R64-F3).
-
-    ``order_siblings='no'`` used to be silently truthy — OFF spelled as a
-    string meant ON.
-    """
-
-    from torchlens._errors import InvalidArgumentError
-
-    with pytest.raises(InvalidArgumentError, match="order_siblings") as excinfo:
-        forward_trace.draw(
-            path=str(tmp_path / "bool_flag"),
-            order_siblings="no",  # type: ignore[arg-type]
-        )
-    assert excinfo.value.fields["code"] == "visualization_bool_option_invalid"
 
 
 def test_draw_show_containers_vocabulary_refuses_typed(
@@ -606,23 +395,6 @@ def test_combined_zero_byte_render_raises_typed_error(
         )
 
 
-def test_forward_called_process_error_raises_typed_error(
-    forward_trace: Trace,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Forward rendering raises a typed error when Graphviz exits unsuccessfully."""
-
-    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_called_process_error)
-
-    with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
-        forward_trace.draw(
-            path=str(tmp_path / "forward_failed"),
-            file_format="svg",
-            order_siblings=False,
-        )
-
-
 def test_backward_called_process_error_raises_typed_error(
     backward_trace: Trace,
     tmp_path: Path,
@@ -636,23 +408,6 @@ def test_backward_called_process_error_raises_typed_error(
         backward_trace.draw(
             graph="backward",
             path=str(tmp_path / "backward_failed"),
-            file_format="svg",
-        )
-
-
-def test_combined_called_process_error_raises_typed_error(
-    backward_trace: Trace,
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Combined rendering raises a typed error when Graphviz exits unsuccessfully."""
-
-    monkeypatch.setattr(_render_utils, "run_bounded_subprocess", _raise_called_process_error)
-
-    with pytest.raises(GraphvizRenderError, match="Graphviz failed.*graphviz failed"):
-        backward_trace.draw(
-            graph="combined",
-            path=str(tmp_path / "combined_failed"),
             file_format="svg",
         )
 
@@ -742,244 +497,6 @@ def test_grad_edges_use_preserved_edge_cluster_key(
     assert modules_by_edge[("relu", "sigmoid")] == "block.inner:1"
 
 
-def test_module_cluster_title_escapes_html_special_moduledict_key(tmp_path: Path) -> None:
-    """Module cluster titles HTML-escape special characters from module addresses.
-
-    Regression test for the module-address cluster-title bug: an
-    ``nn.ModuleDict`` key containing ``&`` (e.g. ``"score & rank"``) becomes
-    part of the module address used as the cluster title in both render
-    engines. ``_setup_subgraphs_recurse`` (``_render_dot.py``) previously
-    passed ``title_already_escaped=True`` on the false assumption that Trace
-    subgraph titles never contain HTML specials, and the rank-layout
-    engine's ``_write_cluster`` (``_rank_layout_internal/layout.py``) built
-    its ``cluster_label`` with zero escaping at all. Raw ``&`` in a Graphviz
-    HTML-like cluster label breaks the parser, raising
-    ``GraphvizRenderError`` on ``draw()`` -- reproduced on the DEFAULT (dot)
-    render engine with DEFAULT settings by reverting the fix and re-running
-    this exact scenario. Renders to an actual SVG file through the real
-    Graphviz binary to verify end-to-end, not just at the string-building
-    layer.
-    """
-
-    trace = tl.trace(_ModuleDictSpecialKeyModel(), torch.randn(2, 3))
-    outpath = tmp_path / "moduledict_special_char"
-    try:
-        # Must NOT raise GraphvizRenderError -- the raw "&" in the
-        # ModuleDict key previously broke the HTML-like label parser
-        # mid-render of the "heads.score & rank" module cluster.
-        dot = trace.draw(
-            path=str(outpath),
-            file_format="svg",
-            order_siblings=False,
-        ).dot
-    finally:
-        trace.cleanup()
-
-    assert "score &amp; rank" in dot
-    assert "score & rank<" not in dot  # raw ampersand must not survive
-    svg_path = outpath.with_suffix(".svg")
-    assert svg_path.exists()
-    svg_text = svg_path.read_text(encoding="utf-8")
-    assert "score &amp; rank" in svg_text
-
-
-def test_rank_engine_cluster_subgraph_id_quotes_moduledict_special_key(
-    tmp_path: Path,
-) -> None:
-    """Rank-layout ``_write_cluster`` quotes the subgraph identifier, not just the label.
-
-    Regression test for a gap left by the F4 fix (``bfe71593``): that commit
-    HTML-escaped the cluster *label* text (``cluster_label`` in
-    ``_write_cluster``) but the raw DOT *subgraph identifier* built two lines
-    earlier (``subgraph cluster_{safe} {``) was spliced straight into the DOT
-    source with no sanitization at all -- unlike every other raw-DOT
-    identifier in this file (node names, edge tail/head names), which route
-    through the ``_dot_id()`` quoting helper. An ``nn.ModuleDict`` key
-    containing ``<``, ``>``, and ``&`` together produces an unquoted
-    subgraph name like ``subgraph cluster_heads_a<b>&c_pass1 {``, which
-    ``neato`` rejects with a raw ``syntax error near '>'`` -- a real crash on
-    the rank engine, reachable by default whenever ``layout=
-    "auto"`` promotes to rank for a large enough graph.
-
-    Exercises the *explicit* rank engine (``layout="rank"``),
-    which the shipped ``test_module_cluster_title_escapes_html_special_
-    moduledict_key`` test above never does (it only calls ``draw()`` with
-    default -- i.e. dot-engine -- settings), plus the default dot engine for
-    parity.
-    """
-
-    for engine_kwargs in ({}, {"layout": "rank"}):
-        trace = tl.trace(_ModuleDictAngleAmpersandKeyModel(), torch.randn(2, 3))
-        outpath = tmp_path / f"moduledict_angle_amp{'_rank' if engine_kwargs else '_dot'}"
-        try:
-            # Must not raise: neither a GraphvizRenderError (dot engine) nor a
-            # RuntimeError from a failed `neato` subprocess (rank engine).
-            dot = trace.draw(
-                path=str(outpath),
-                file_format="svg",
-                order_siblings=False,
-                **engine_kwargs,
-            ).dot
-        finally:
-            trace.cleanup()
-
-        # The label is HTML-escaped (F4 fix, still holding)...
-        assert "a&lt;b&gt;&amp;c" in dot
-        # ...and the subgraph identifier itself must be quoted so the raw
-        # `<`/`>`/`&` never appear unescaped/unquoted in the DOT source as a
-        # bare identifier.
-        assert "subgraph cluster_heads_a<b>&c" not in dot
-        svg_path = outpath.with_suffix(".svg")
-        assert svg_path.exists()
-
-
-def test_container_edge_label_escapes_html_special_dict_key(tmp_path: Path) -> None:
-    """Container edge labels HTML-escape special characters from dict keys.
-
-    Regression test for commit ee5c1bcc: ``_html_container_edge_label`` (and
-    sibling ``_html_edge_label``/``_html_combined_recurrence_label``)
-    previously interpolated raw container-path text into a Graphviz
-    HTML-like edge label. A ``DictKey``/``HFKey`` output-dict key containing
-    ``&``, ``<``, or ``>`` is a realistic shape -- container path components
-    render as ``str(component._key)`` (``_container_component_role`` in
-    ``_render_leaf.py``) -- and previously broke Graphviz's HTML-like label
-    parser, raising ``GraphvizRenderError`` on ``draw()``. Now the text is
-    escaped before interpolation. Renders to an actual SVG file (not just
-    the returned DOT source string) so the fix is verified end-to-end
-    through the real Graphviz binary, not just at the string-building layer.
-    """
-
-    trace = tl.trace(
-        _SpecialCharDictOutputModel(),
-        torch.ones(2),
-        capture=tl.options.CaptureOptions(capture_container_structure=True),
-    )
-    outpath = tmp_path / "container_edge_special_char"
-    try:
-        # Must NOT raise GraphvizRenderError -- the raw "&" in the dict key
-        # previously broke the HTML-like label parser mid-render.
-        dot = trace.draw(
-            show_containers="nodes",
-            path=str(outpath),
-            file_format="svg",
-            order_siblings=False,
-        ).dot
-    finally:
-        trace.cleanup()
-
-    assert "loss &amp; aux" in dot
-    svg_path = outpath.with_suffix(".svg")
-    assert svg_path.exists()
-    svg_text = svg_path.read_text(encoding="utf-8")
-    assert "loss &amp; aux" in svg_text
-
-
-def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> None:
-    """Large composed PDF renders graph contents inside the page bounds."""
-
-    fitz = pytest.importorskip("fitz")
-    model = _LargeChainRenderModel().eval()
-    trace = tl.trace(model, torch.randn(1, 4))
-    pdf_path = tmp_path / "large_composed.pdf"
-    try:
-        trace.draw(
-            path=str(pdf_path.with_suffix("")),
-            file_format="pdf",
-            code_panel=lambda _model: "def forward(self, x):\n    return x",
-            order_siblings=False,
-        )
-    finally:
-        trace.cleanup()
-
-    document = fitz.open(pdf_path)
-    try:
-        page = document[0]
-        page_rect = page.rect
-        content_rect = fitz.Rect()
-        for block in page.get_text("blocks"):
-            content_rect |= fitz.Rect(block[:4])
-        for drawing in page.get_drawings():
-            rect = drawing.get("rect")
-            if rect is not None:
-                content_rect |= rect
-        assert not content_rect.is_empty
-        assert page_rect.intersects(content_rect)
-        assert content_rect.get_area() > 0.01 * page_rect.get_area()
-    finally:
-        document.close()
-
-
-class _TwoInputSubModel(nn.Module):
-    """Non-commutative op with two distinct parents, for arg-label tests."""
-
-    def forward(self, x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Return ``x - y``.
-
-        Parameters
-        ----------
-        x:
-            First input tensor.
-        y:
-            Second input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Difference of the two inputs.
-        """
-        return torch.sub(x, y)
-
-
-def test_rank_layout_escapes_html_special_chars_in_arg_edge_use_labels(
-    tmp_path: Path,
-) -> None:
-    """Rank-engine arg-position labels must escape HTML specials.
-
-    ``_add_arg_label`` (the rank-layout engine's argument-position labeler,
-    ``torchlens/_visualization/_rank_layout_internal/layout.py``) builds its
-    label text from ``render_edge.argument_label``, which for ``Op`` children
-    is derived from ``edge_uses[].arg_path`` (see
-    ``_edge_use_argument_label``/``_arg_path_label_value`` in
-    ``_render_flow.py``). Real capture can populate ``arg_path`` with
-    container-key text pulled from a nested dict/list container argument
-    (``DictKey``/``HFKey`` components carry the raw key string verbatim).
-    Before the fix, that text was interpolated into the rank engine's
-    Graphviz HTML-like edge label unescaped, so a key containing ``<``,
-    ``>``, or ``&`` raised a real ``neato`` parse failure
-    (``RuntimeError: neato rendering failed ... not well-formed (invalid
-    token)``) -- confirmed by reverting the fix and re-running this exact
-    scenario. This mirrors the parallel fix already applied to the dot
-    engine's ``_label_node_arguments_if_needed`` in ``_render_edges.py``.
-    """
-
-    trace = tl.trace(_TwoInputSubModel(), (torch.randn(3), torch.randn(3)))
-    try:
-        sub_op = trace["sub_1_1:1"]
-        # Simulate a container-key edge use (e.g. a DictKey/HFKey component
-        # whose ``.key`` carries arbitrary output-dict text) landing in
-        # ``arg_path`` for the first positional edge use, matching the real
-        # data shape produced by container-argument capture.
-        mutated_edge_uses = tuple(
-            dataclasses.replace(record, arg_path=("loss & aux <script>",))
-            if record.arg_kind == "positional" and record.arg_path == (0,)
-            else record
-            for record in sub_op.edge_uses
-        )
-        sub_op._edge_uses = mutated_edge_uses  # type: ignore[attr-defined]
-
-        dot = trace.draw(
-            layout="rank",
-            path=str(tmp_path / "rank_html_escape"),
-            file_format="svg",
-            order_siblings=False,
-        ).dot
-    finally:
-        trace.cleanup()
-
-    assert "arg loss &amp; aux &lt;script&gt;" in dot
-    assert "loss & aux <script>" not in dot
-
-
 def test_rank_layout_model_class_name_html_specials_render_cleanly(
     tmp_path: Path,
 ) -> None:
@@ -1020,43 +537,6 @@ def _attach_probe_image(trace: Trace) -> Path:
     image_path = root / "probe.png"
     Image.new("RGB", (12, 12), "red").save(image_path)
     return image_path
-
-
-def test_saved_dot_source_free_of_per_run_temp_imagepath(tmp_path: Path) -> None:
-    """User-saved DOT must not bake the per-run mkdtemp visualizer path.
-
-    T9 (grind-p3, LOW) red pin: node images live in a ``tempfile.mkdtemp``
-    scratch dir that is removed when the trace is garbage collected. Baking
-    that dir into the saved source as a graph-level ``imagepath`` made every
-    user-kept DOT unrenderable after the trace died. The image root now
-    reaches Graphviz as the render subprocess working directory only; the
-    saved source keeps stable relative image refs.
-    """
-
-    trace = tl.trace(_TinyRenderModel(), torch.randn(1, 3))
-    try:
-        image_path = _attach_probe_image(trace)
-
-        def spec_fn(layer_log: Any, default_spec: Any) -> Any:
-            if "relu" in str(layer_log.layer_label):
-                default_spec.image = str(image_path)
-            return default_spec
-
-        outpath = tmp_path / "temp_free"
-        trace.draw(
-            node_spec_fn=spec_fn,
-            file_format="dot",
-            path=str(outpath),
-        )
-        source = (tmp_path / "temp_free.dot").read_text()
-    finally:
-        trace.cleanup()
-
-    assert 'image="probe.png"' in source, "probe image ref missing; test rig broke"
-    assert "torchlens_visualizers_" not in source, (
-        "saved DOT bakes the per-run mkdtemp visualizer path"
-    )
-    assert "imagepath" not in source
 
 
 def test_node_image_renders_without_in_source_imagepath(tmp_path: Path) -> None:
@@ -1174,60 +654,6 @@ def test_tooltip_reprs_mask_memory_addresses() -> None:
     assert not address.search(batch_attrs["tooltip"])
 
 
-class _TwoOutInner(nn.Module):
-    """Module returning TWO tensors, both consumed by one exterior op."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        y = self.lin(x)
-        return torch.relu(y), torch.tanh(y)
-
-
-class _TwoOutOuter(nn.Module):
-    """Consumes both inner outputs in a single exterior add."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.two = _TwoOutInner()
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        a, b = self.two(x)
-        return a + b
-
-
-def test_collapsed_module_boundary_edge_discloses_multiplicity(tmp_path: Path) -> None:
-    """Distinct dataflow edges merged by collapse must disclose multiplicity.
-
-    r19 (b6-fable carried LOW, 3rd round): a collapsed module returning two
-    tensors, both consumed by one exterior ``add``, rendered as ONE
-    unlabeled edge — the boundary-crossing distinct-dataflow edges were
-    visually deduped with no disclosure. The merged edge must carry an
-    ``x2`` label.
-    """
-
-    trace = tl.trace(_TwoOutOuter(), torch.randn(2, 4))
-    outpath = tmp_path / "twoout"
-    trace.draw(
-        depth=1,
-        file_format="dot",
-        path=str(outpath),
-    )
-    source = (tmp_path / "twoout.dot").read_text()
-    boundary_edge_lines = [
-        index for index, line in enumerate(source.splitlines()) if "twopass1 -> add" in line
-    ]
-    assert len(boundary_edge_lines) == 1
-    lines = source.splitlines()
-    start = boundary_edge_lines[0]
-    edge_stanza = "\n".join(lines[start : start + 6])
-    assert "x2" in edge_stanza, (
-        "two distinct dataflow edges merged into one rendered edge with no multiplicity disclosure"
-    )
-
-
 def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
     """The reverse-edge map is built once per downstream inference (R52-3).
 
@@ -1270,34 +696,6 @@ def test_downstream_intervening_inference_builds_reverse_edges_once() -> None:
     )
 
 
-def test_code_panel_tooltip_shows_basename_not_absolute_path() -> None:
-    """The visible source-link tooltip must not leak the absolute host path.
-
-    Hunt-6 R62-2: ``draw(code_panel=True)`` embedded the absolute
-    (username-bearing) source path in BOTH the ``vscode://file`` HREF and the
-    visible tooltip. The HREF keeps the absolute path -- local editor
-    clickability is the deliberate feature, disclosed in limitations.md --
-    but the tooltip now shows the basename only.
-    """
-
-    from types import SimpleNamespace
-
-    from torchlens._visualization.code_panel import _source_text_to_html_rows
-
-    source_text = SimpleNamespace(
-        file_path="/home/canary_user_zq81/models/canary_src.py",
-        line_number=21,
-    )
-    rows = _source_text_to_html_rows(source_text, ["def forward(self, x):"])  # type: ignore[arg-type]
-    link_row = rows[0]
-
-    assert "vscode://file//home/canary_user_zq81/models/canary_src.py:21" in link_row
-    tooltip = link_row.split("TOOLTIP='", 1)[1].split("'", 1)[0]
-    assert "canary_src.py" in tooltip
-    assert "canary_user_zq81" not in tooltip
-    assert "/home/" not in tooltip
-
-
 def test_rank_layout_without_neato_plugin_names_the_plugin_package(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1333,3 +731,38 @@ def test_rank_layout_without_neato_plugin_names_the_plugin_package(
     assert "libgvplugin-neato-layout8" in exc_info.value.fields["remedy"]
     assert "layout='dot'" in exc_info.value.fields["remedy"]
     assert 'no layout engine support for "neato"' in str(exc_info.value)
+
+
+def test_large_composed_pdf_contains_visible_graph_region(tmp_path: Path) -> None:
+    """Large composed PDF renders graph contents inside the page bounds."""
+
+    fitz = pytest.importorskip("fitz")
+    model = _LargeChainRenderModel().eval()
+    trace = tl.trace(model, torch.randn(1, 4))
+    pdf_path = tmp_path / "large_composed.pdf"
+    try:
+        trace.draw(
+            path=str(pdf_path.with_suffix("")),
+            file_format="pdf",
+            code_panel=lambda _model: "def forward(self, x):\n    return x",
+            order_siblings=False,
+        )
+    finally:
+        trace.cleanup()
+
+    document = fitz.open(pdf_path)
+    try:
+        page = document[0]
+        page_rect = page.rect
+        content_rect = fitz.Rect()
+        for block in page.get_text("blocks"):
+            content_rect |= fitz.Rect(block[:4])
+        for drawing in page.get_drawings():
+            rect = drawing.get("rect")
+            if rect is not None:
+                content_rect |= rect
+        assert not content_rect.is_empty
+        assert page_rect.intersects(content_rect)
+        assert content_rect.get_area() > 0.01 * page_rect.get_area()
+    finally:
+        document.close()

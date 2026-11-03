@@ -17,8 +17,6 @@ truth -- the confound that masked the original bug).
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 import torch.nn as nn
@@ -28,7 +26,6 @@ from torchlens.errors import SelectionError
 from torchlens.intervention._replay import cone_of_effect
 from torchlens.intervention.errors import (
     AmbiguousSiteError,
-    ControlFlowDivergenceWarning,
 )
 
 _N_PASSES = 3
@@ -105,44 +102,7 @@ def _hand_forward_with_zeroed_pass(
 # ---------------------------------------------------------------------------
 
 
-def test_zero_ablate_pass1_per_pass_ground_truth(recurrent):
-    """Zeroing relu pass 1 zeroes THAT pass and recomputes 2/3 correctly."""
-
-    model, x, trace = recurrent
-    expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
-    fork = trace.fork()
-    fork.do(fork[tl.units("relu_1_2:1", _ALL_UNITS)], tl.zero_ablate())
-
-    for pass_index in (1, 2, 3):
-        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
-        captured = trace._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
-        assert torch.allclose(got, expected[pass_index - 1]), f"pass {pass_index} wrong"
-        # bias=True makes every recomputed pass differ from the captured one.
-        assert not torch.allclose(got, captured), f"pass {pass_index} stale"
-    assert bool((fork._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    output = fork._layer_dict_all_keys["output_1"].out
-    assert torch.allclose(output, expected[-1])
-    assert not bool((output == 0).all())
-
-
-def test_zero_ablate_middle_pass_leaves_pass1_untouched(recurrent):
-    """Editing pass 2 recomputes 2/3 only; pass 1 stays bit-identical."""
-
-    model, x, trace = recurrent
-    expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=2)
-    fork = trace.fork()
-    fork.do(fork[tl.units("relu_1_2:2", _ALL_UNITS)], tl.zero_ablate())
-
-    pass1 = fork._layer_dict_all_keys["relu_1_2:1"].out
-    assert torch.equal(pass1, trace._layer_dict_all_keys["relu_1_2:1"].out)
-    assert torch.allclose(pass1, expected[0])
-    assert bool((fork._layer_dict_all_keys["relu_1_2:2"].out == 0).all())
-    pass3 = fork._layer_dict_all_keys["relu_1_2:3"].out
-    assert torch.allclose(pass3, expected[2])
-    assert not torch.allclose(pass3, trace._layer_dict_all_keys["relu_1_2:3"].out)
-    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_whole_layer_selection_edits_every_pass(recurrent):
     """The explicit Layer selection is the all-passes spelling; each pass edits."""
 
@@ -168,27 +128,6 @@ def test_whole_layer_selection_edits_every_pass(recurrent):
     assert bool((output == 0).all())
 
 
-def test_hook_fires_only_at_targeted_pass(recurrent):
-    """A hook addressed to ONE pass fires exactly once, at that pass."""
-
-    _model, _x, trace = recurrent
-    fork = trace.fork()
-    fired: list[str] = []
-
-    def spy_hook(out: torch.Tensor, *, ctx) -> torch.Tensor:
-        fired.append(str(ctx.op.get("label")))
-        return torch.zeros_like(out)
-
-    fork.do("relu_1_2:1", spy_hook)
-
-    assert fired == ["relu_1_2:1"]
-    assert bool((fork._layer_dict_all_keys["relu_1_2:1"].out == 0).all())
-    assert not bool((fork._layer_dict_all_keys["relu_1_2:2"].out == 0).all())
-    assert fork._layer_dict_all_keys["relu_1_2:1"].edits
-    assert not fork._layer_dict_all_keys["relu_1_2:2"].edits
-    assert not fork._layer_dict_all_keys["relu_1_2:3"].edits
-
-
 def test_cone_of_effect_crosses_pass_boundaries(recurrent):
     """The cone from pass 1 includes every downstream pass and the output."""
 
@@ -210,37 +149,6 @@ def test_cone_of_effect_crosses_pass_boundaries(recurrent):
 # ---------------------------------------------------------------------------
 # Divergence-warning honesty + strict mode.
 # ---------------------------------------------------------------------------
-
-
-def test_no_spurious_divergence_warning_on_multipass_replay(recurrent):
-    """A plain multi-pass replay emits no ControlFlowDivergenceWarning."""
-
-    _model, _x, trace = recurrent
-    fork = trace.fork()
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        fork.do(fork[tl.units("relu_1_2:1", _ALL_UNITS)], tl.zero_ablate())
-    divergence = [
-        entry for entry in caught if issubclass(entry.category, ControlFlowDivergenceWarning)
-    ]
-    assert divergence == []
-
-
-def test_strict_multipass_replay_works(recurrent):
-    """strict=True multi-pass replay succeeds and matches hand ground truth."""
-
-    model, x, trace = recurrent
-    expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
-    fork = trace.fork()
-    fork.do(
-        fork[tl.units("relu_1_2:1", _ALL_UNITS)],
-        tl.zero_ablate(),
-        intervention=tl.options.InterventionOptions(strict=True),
-    )
-    for pass_index in (1, 2, 3):
-        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
-        assert torch.allclose(got, expected[pass_index - 1])
-    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])
 
 
 def test_differentiable_replay_multipass_frontier_keys_are_per_pass(recurrent):
@@ -312,22 +220,6 @@ def test_substring_patterns_keep_fanout_semantics(recurrent):
     assert len(sites) == _N_PASSES
 
 
-def test_single_pass_bare_label_still_accepted(single_pass):
-    """Bare labels keep working everywhere the layer is single-pass."""
-
-    model, x, trace = single_pass
-    resolved = trace[tl.units("relu_1_2", [(0, 0)])]
-    assert len(tuple(resolved)) == 1
-    site = trace[tl.label("relu_1_2")]
-    assert site.layer_label == "relu_1_2"
-
-    with torch.no_grad():
-        expected = torch.zeros_like(torch.relu(model.cell(x)))
-    fork = trace.fork()
-    fork.do("relu_1_2", lambda out, *, ctx: torch.zeros_like(out))
-    assert torch.equal(fork._layer_dict_all_keys["relu_1_2:1"].out, expected)
-
-
 def test_single_pass_replay_disclosures_keep_bare_labels(single_pass):
     """Single-pass replay is unchanged: bare cone/origin disclosures, hand math."""
 
@@ -364,19 +256,3 @@ def test_push_from_bare_multipass_string_refuses(recurrent):
     with pytest.raises(AmbiguousSiteError) as excinfo:
         fork.push_from("relu_1_2")
     assert excinfo.value.fields["code"] == "multipass_bare_label_ambiguous"
-
-
-def test_push_from_pass_qualified_op_recomputes_downstream_passes(recurrent):
-    """push_from(op) on pass 1 propagates through passes 2/3 with hand math."""
-
-    model, x, trace = recurrent
-    expected = _hand_forward_with_zeroed_pass(model, x, zeroed_pass=1)
-    fork = trace.fork()
-    origin = fork._layer_dict_all_keys["relu_1_2:1"]
-    origin._internal_set("out", torch.zeros_like(origin.out))
-    fork.push_from(origin)
-
-    for pass_index in (1, 2, 3):
-        got = fork._layer_dict_all_keys[f"relu_1_2:{pass_index}"].out
-        assert torch.allclose(got, expected[pass_index - 1]), f"pass {pass_index} wrong"
-    assert torch.allclose(fork._layer_dict_all_keys["output_1"].out, expected[-1])

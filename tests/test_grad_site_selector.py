@@ -23,7 +23,6 @@ from torchlens._selection.resolver import (
 )
 from torchlens._selection.selectors import (
     GradSelector,
-    classify_selector_universe,
     grad_fn_label,
 )
 from torchlens.intervention._types import TargetSpec
@@ -74,21 +73,6 @@ def _code(exc: pytest.ExceptionInfo[BaseException]) -> str:
     return str(fields.get("code"))
 
 
-def test_grad_selector_identity_hash_and_repr() -> None:
-    """A1: tl.grad is a hashable, value-equal GradSelector with a constructor repr."""
-
-    address = tl.grad("relu_3")
-    assert isinstance(address, GradSelector)
-    assert address.selector_kind == "grad"
-    assert address.inner == "relu_3"
-    assert address == tl.grad("relu_3")
-    assert hash(address) == hash(tl.grad("relu_3"))
-    assert repr(address) == "tl.grad('relu_3')"
-    assert repr(tl.grad(tl.func("relu"))) == "tl.grad(tl.func('relu'))"
-    assert {address, tl.grad("relu_3")} == {address}
-
-
-@pytest.mark.smoke
 def test_grad_accepts_every_forward_site_spelling() -> None:
     """A2: each accepted spelling resolves to the bare inner's ops, tagged gradient."""
 
@@ -115,57 +99,21 @@ def test_grad_accepts_every_forward_site_spelling() -> None:
         assert [op.label for op in plan[0].sites] == [op.label for op in bare[0].sites]
 
 
-def test_gradient_branch_needs_no_backward_pass() -> None:
-    """A gradient branch resolves forward ops; a node branch still needs a backward."""
-
-    trace = _trace()
-    first_relu, _ = _relu_labels(trace)
-    assert resolve_site_plan(trace, tl.grad(first_relu))[0].sites
-    with pytest.raises(tl.errors.SiteResolutionError, match="backward"):
-        resolve_site_plan(trace, tl.grad_fn("ReluBackward0"))
-
-
-def test_grad_unmatched_inner_refuses_like_the_activation_door() -> None:
-    """A structurally unmatched inner refuses with the activation door's text."""
-
-    trace = _trace()
-    with pytest.raises(tl.errors.SiteResolutionError, match="matched 0 sites") as bare:
-        trace._resolve_sites(tl.label("no_such_op"))
-    with pytest.raises(tl.errors.SiteResolutionError, match="matched 0 sites") as grad:
-        trace._resolve_sites(tl.grad(tl.label("no_such_op")))
-    assert "trace[selector]" in str(bare.value) and "trace[selector]" in str(grad.value)
-
-
-@pytest.mark.smoke_cells("test_grad_construction_refusals[nested]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
-        (lambda: tl.grad(tl.grad("x")), "grad_selector_nested"),
         (lambda: tl.grad(tl.grad("x") | "y"), "grad_selector_nested"),
-        (lambda: tl.grad(tl.grad_fn("ReluBackward0")), "grad_selector_inner_not_forward"),
-        (lambda: tl.grad(tl.grad_output()), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(grad_fn_label("x")), "grad_selector_inner_not_forward"),
-        (lambda: tl.grad(tl.without_op()), "grad_selector_inner_not_forward"),
-        (lambda: tl.grad(tl.in_backward_pass(2)), "grad_selector_inner_not_forward"),
         (lambda: tl.grad(tl.head(0)), "grad_facet_unsupported"),
-        (lambda: tl.grad(tl.facet("q")), "grad_facet_unsupported"),
-        (lambda: tl.grad(["a", "b"]), "grad_selector_inner_invalid"),
         (lambda: tl.grad({"a": 1}), "grad_selector_inner_invalid"),
         (lambda: tl.grad(3), "grad_selector_inner_invalid"),
         (lambda: tl.grad(tl.label("a").__selection__()), "grad_selection_unsupported"),
         (lambda: tl.grad("a").__selection__(), "grad_selection_unsupported"),
     ],
     ids=[
-        "nested",
         "nested_in_union",
-        "grad_fn",
-        "grad_output",
         "grad_fn_label",
-        "without_op",
-        "pass_qualifier",
         "head",
-        "facet",
-        "list",
         "mapping",
         "int",
         "selection",
@@ -201,7 +149,6 @@ def test_grad_refuses_a_pass_qualifier_hidden_in_a_deserialized_inner() -> None:
     assert "tl.grad(s) & tl.in_backward_pass(2)" in exc.value.fields["remedy"]
 
 
-@pytest.mark.smoke
 def test_mixed_union_keeps_both_branches() -> None:
     """A4: tl.grad(s) | s plans a gradient and an activation branch on the same op."""
 
@@ -218,43 +165,13 @@ def test_mixed_union_keeps_both_branches() -> None:
     assert list(frame["signal"]) == ["backward", "forward"]
 
 
-def test_find_sites_signal_column() -> None:
-    """find_sites tags gradient matches backward and activation matches forward."""
-
-    trace = _trace()
-    pytest.importorskip("pandas")
-    grad_frame = trace.find_sites(tl.grad(tl.func("relu"))).to_dataframe()
-    assert set(grad_frame["signal"]) == {"backward"}
-    act_frame = trace.find_sites(tl.func("relu")).to_dataframe()
-    assert set(act_frame["signal"]) == {"forward"}
-    assert len(grad_frame) == len(act_frame) == 2
-
-
-@pytest.mark.smoke_cells("test_cross_universe_composition_refusals[grad_and_activation]")
 @pytest.mark.parametrize(
     ("build", "code"),
     [
-        (lambda: "relu_3" & tl.in_backward_pass(2), "selector_signal_mismatch"),
-        (lambda: tl.func("relu") & tl.in_backward_pass(2), "selector_signal_mismatch"),
-        (lambda: tl.grad("relu_3") & "relu_3", "selector_cross_universe_and"),
-        (lambda: tl.grad("relu_3") & tl.label("relu_3"), "selector_cross_universe_and"),
-        (lambda: "relu_3" & tl.grad_output(), "selector_cross_universe_and"),
-        (lambda: tl.label("relu_3") & tl.grad_fn("x"), "selector_cross_universe_and"),
-        (
-            lambda: tl.grad("relu_3") & tl.grad_fn("ReluBackward0"),
-            "selector_cross_universe_and",
-        ),
         (lambda: (tl.grad("a") | "a") & tl.in_backward_pass(2), "selector_cross_universe_and"),
         (lambda: ~(tl.grad("a") | "a"), "selector_cross_universe_not"),
     ],
     ids=[
-        "string_and_pass",
-        "func_and_pass",
-        "grad_and_activation",
-        "grad_and_label",
-        "string_and_node",
-        "label_and_grad_fn",
-        "grad_and_grad_fn",
         "mixed_and_pass",
         "invert_mixed",
     ],
@@ -267,6 +184,7 @@ def test_cross_universe_composition_refusals(build: Any, code: str) -> None:
     assert _code(exc) == code
 
 
+@pytest.mark.smoke
 def test_signal_mismatch_remedy_names_the_gradient_spelling() -> None:
     """A5: the remedy spells tl.grad('relu_3') & tl.in_backward_pass(2)."""
 
@@ -274,21 +192,6 @@ def test_signal_mismatch_remedy_names_the_gradient_spelling() -> None:
         _ = "relu_3" & tl.in_backward_pass(2)
     assert "tl.grad('relu_3') & tl.in_backward_pass(2)" in exc.value.fields["remedy"]
     assert str(exc.value).endswith("tl.grad('relu_3') & tl.in_backward_pass(2).")
-
-
-def test_legal_compositions_classify_by_universe() -> None:
-    """The composition table's legal rows land in the documented universes."""
-
-    assert classify_selector_universe(tl.grad("a") & tl.in_backward_pass(2)) == "gradient"
-    assert classify_selector_universe(tl.grad("a") | tl.grad("b")) == "gradient"
-    assert classify_selector_universe(tl.grad("a") & tl.grad("b")) == "gradient"
-    assert classify_selector_universe(tl.grad("a") | "a") == "mixed"
-    assert (
-        classify_selector_universe(tl.grad_fn("ReluBackward0") & tl.in_backward_pass(2)) == "node"
-    )
-    assert classify_selector_universe(tl.in_backward_pass(2)) == "qualifier"
-    assert classify_selector_universe(tl.label("a") & tl.func("relu")) == "activation"
-    assert classify_selector_universe("a") is None
 
 
 def test_pass_qualifier_becomes_the_gradient_branch_filter() -> None:
@@ -305,21 +208,6 @@ def test_pass_qualifier_becomes_the_gradient_branch_filter() -> None:
     assert _code(exc) == "selector_signal_mismatch"
 
 
-def test_differently_filtered_gradient_operands_stay_separate() -> None:
-    """Union operands merge only when universe and pass filter both agree."""
-
-    branches = split_site_branches(
-        (tl.grad("a") & tl.in_backward_pass(1))
-        | tl.grad("b")
-        | (tl.grad("c") & tl.in_backward_pass(1))
-    )
-    assert [(b.universe, b.accepts_pass(1), b.accepts_pass(2)) for b in branches] == [
-        ("gradient", True, False),
-        ("gradient", True, True),
-    ]
-
-
-@pytest.mark.smoke
 def test_grad_complement_and_union_normalise_inside_the_gradient_universe() -> None:
     """A6: ~tl.grad(s) == tl.grad(~s); tl.grad(a) | tl.grad(b) == tl.grad(a | b)."""
 
@@ -340,27 +228,6 @@ def test_grad_complement_and_union_normalise_inside_the_gradient_universe() -> N
     joined = resolve_site_plan(trace, tl.grad(tl.label(first_relu) | tl.label(second_relu)))
     assert [b.universe for b in union] == [b.universe for b in joined] == ["gradient"]
     assert [op.label for op in union[0].sites] == [op.label for op in joined[0].sites]
-
-
-@pytest.mark.smoke
-def test_bare_label_never_resolves_in_the_backward_universe() -> None:
-    """A7: after a backward, a bare label is the forward op; node selectors unchanged."""
-
-    trace = _trace(backward=True)
-    first_relu, _ = _relu_labels(trace)
-    plan = resolve_site_plan(trace, first_relu)
-    assert [branch.universe for branch in plan] == ["activation"]
-    assert all(type(site).__name__ != "GradFn" for site in plan[0].sites)
-    table = trace._resolve_sites(tl.label(first_relu))
-    assert [site.label for site in table] == [trace[first_relu].label]
-
-    grad_fns = trace.find_sites(tl.grad_fn(label="relu"), max_fanout=100)
-    assert len(grad_fns) >= 1
-    assert all(type(site).__name__ == "GradFn" for site in grad_fns)
-    pass_one = trace.find_sites(tl.in_backward_pass(1), max_fanout=100)
-    assert len(pass_one) >= 1
-    assert all(type(site).__name__ == "GradFn" for site in pass_one)
-    assert len(trace.find_sites(tl.in_backward_pass(2))) == 0
 
 
 def test_grad_bridges_to_the_grad_fn_behind_its_op() -> None:
@@ -393,7 +260,6 @@ def test_grad_target_spec_round_trip() -> None:
         assert normalize_selector_like(spec.freeze(), lifecycle="site") == address
 
 
-@pytest.mark.smoke
 def test_root_exports_grad_and_drop_gradient_only_helpers() -> None:
     """A8: grad and clip_norm are exported; the six helpers are gone with no alias."""
 

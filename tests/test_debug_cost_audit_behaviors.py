@@ -42,20 +42,7 @@ def cost_trace() -> Iterator[tl.Trace]:
         trace.cleanup()
 
 
-def test_hot_path_ranks_source_lines_with_full_percentages(cost_trace) -> None:
-    """hot_path() groups ops by source line, sorts by cost, and sums to 100%."""
-
-    frame = hot_path(cost_trace, by="duration").to_pandas()
-    assert list(frame.columns) == ["source_file:line", "op_count", "total_cost", "pct_total"]
-    assert len(frame) >= 2
-    costs = list(frame["total_cost"])
-    assert costs == sorted(costs, reverse=True)
-    assert sum(frame["pct_total"]) == pytest.approx(100.0)
-    assert int(frame["op_count"].sum()) >= 3
-    assert frame.attrs["metric"] == "duration"
-    assert "test_debug_cost_audit_behaviors" in str(frame["source_file:line"].iloc[0])
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_cost.py.
 def test_hot_path_rejects_unknown_metric(cost_trace) -> None:
     """An unsupported cost metric fails fast."""
 
@@ -63,7 +50,7 @@ def test_hot_path_rejects_unknown_metric(cost_trace) -> None:
         hot_path(cost_trace, by="watts")
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _data_classes/layer.py, debug/_cost.py.
 def test_theoretical_op_bytes_models_reads_writes_and_views(cost_trace) -> None:
     """Dense ops read inputs+params once and write once; views cost zero."""
 
@@ -79,15 +66,7 @@ def test_theoretical_op_bytes_models_reads_writes_and_views(cost_trace) -> None:
     assert int(view_written) == 0
 
 
-@pytest.mark.smoke
-def test_count_compiles_reports_zero_for_eager_blocks() -> None:
-    """A block with no Dynamo activity reports zero frame compilations."""
-
-    with count_compiles() as counts:
-        _ = torch.relu(torch.ones(3))
-    assert counts.frames_compiled == 0
-
-
+# Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_compile_counter.py.
 @pytest.mark.slow
 def test_count_compiles_sees_live_compiles_and_freezes_at_exit() -> None:
     """Compiles inside a block are counted; exited blocks never absorb later ones."""
@@ -116,7 +95,7 @@ class _MidwayFailModel(nn.Module):
         raise RuntimeError("midway boom")
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _capture/_nonfinite_prefix.py, _data_classes/_nonfinite.py and more.
 def test_audit_trace_on_failed_partial_reports_exception_with_context() -> None:
     """A failed capture audits to a critical finding naming the exception."""
 

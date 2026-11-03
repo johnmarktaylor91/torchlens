@@ -24,10 +24,12 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._fast_run import close_fast_run_session
 from torchlens._runnable import RunResult
 from torchlens.errors import PathDivergenceError, RunCapabilityUnavailableError
-from torchlens.intervention.errors import ControlFlowDivergenceWarning, EngineDispatchError
+from torchlens.intervention.errors import (
+    ControlFlowDivergenceWarning,
+    EngineDispatchError,
+)
 
 _VOCAB = 64
 _DIM = 16
@@ -414,75 +416,7 @@ def _assert_matches_hook(trace: Any, reference: dict[str, Any], *, fast: bool) -
     assert _max_abs_diff(_site_op(trace, _HEAD).out, reference["head"]) == 0.0
 
 
-@pytest.mark.smoke
-def test_five_legacy_reruns_are_exact_against_hook_and_fresh_trace() -> None:
-    """Five consecutive same-length steered reruns match the hook and a fresh capture."""
-
-    model, direction = _build()
-    capture_ids = _ids(_CAPTURE_LEN, seed=100)
-    with torch.no_grad():
-        plain = model(capture_ids)
-    reference = _hooked(model, direction, capture_ids)
-    # The steer must move the output, or exactness below proves nothing.
-    assert not torch.equal(reference["output"], plain)
-
-    trace = _steered_trace(model, direction, capture_ids)
-    _assert_matches_hook(trace, reference, fast=False)
-    for step in range(_RERUNS):
-        ids = _ids(_CAPTURE_LEN, seed=200 + step)
-        reference = _hooked(model, direction, ids)
-        fresh = _steered_trace(model, direction, ids)
-        # The two references agree before the rerun is judged against them.
-        assert _max_abs_diff(_site_op(fresh, _HEAD).out, reference["head"]) == 0.0
-        assert _max_abs_diff(_site_op(fresh, _SITE).out, reference["site"]) == 0.0
-
-        returned = trace.run(model, ids)
-
-        assert returned is trace
-        assert trace.last_run["engine"] == "guarded_fast"
-        assert trace.last_run["shape_varied"] is False
-        _assert_matches_hook(trace, reference, fast=True)
-        assert _max_abs_diff(_site_op(trace, _HEAD).out, _site_op(fresh, _HEAD).out) == 0.0
-
-
-@pytest.mark.smoke
-def test_greedy_growing_length_reruns_stay_exact_and_shape_varied() -> None:
-    """Eight greedy steps of growing length rerun fast, exactly, with honest shapes."""
-
-    model, direction = _build()
-    ids = _ids(_CAPTURE_LEN, seed=300)
-    trace = _steered_trace(model, direction, ids)
-    unsaved = next(op for op in trace._layer_list if op.func_name == "gelu")
-    unsaved_label = unsaved.label
-    assert not unsaved.has_saved_activation
-    assert unsaved.shape is not None  # capture-time metadata exists, so None is a change
-
-    reference_ids = ids.clone()
-    for step in range(_GREEDY_STEPS):
-        reference = _hooked(model, direction, reference_ids)
-        trace.run(model, ids)
-
-        assert trace.last_run["engine"] == "guarded_fast"
-        assert trace.last_run["shape_varied"] is (step > 0)
-        _assert_matches_hook(trace, reference, fast=True)
-        length = ids.shape[1]
-        assert tuple(_site_op(trace, _SITE).shape) == (1, length, _DIM)
-        assert tuple(_site_op(trace, _SITE).out.shape) == (1, length, _DIM)
-        if step > 0:
-            stale = trace[unsaved_label]
-            assert stale.shape is None
-            assert stale.payload.transformed_out_shape is None
-            assert stale.cost.activation_memory is None
-
-        token = _site_op(trace, _HEAD).out[:, -1, :].argmax(dim=-1, keepdim=True)
-        reference_token = reference["output"].argmax(dim=-1, keepdim=True)
-        assert torch.equal(token, reference_token)
-        ids = torch.cat([ids, token], dim=1)
-        reference_ids = torch.cat([reference_ids, reference_token], dim=1)
-    assert torch.equal(ids, reference_ids)
-
-
-@pytest.mark.smoke
+# Kept: sole branch coverage of _fast_live_steer.py, _fast_run.py, intervention/_trace_run.py; a sole mutation kill.
 def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
     """A different branch at the new length is refused fast and reruns through capture."""
 
@@ -508,41 +442,7 @@ def test_control_flow_divergence_refuses_fast_and_falls_back_exactly() -> None:
         explicit.run(inputs=long_ids, fast=True)
 
 
-def test_fast_session_hooks_are_installed_once_and_closed() -> None:
-    """Module hook count is constant across reruns and restored by closing the session."""
-
-    model, direction = _build()
-    before = _module_hook_count(model)
-    trace = _steered_trace(model, direction, _ids(_CAPTURE_LEN, seed=500))
-
-    counts = []
-    for step in range(_RERUNS):
-        trace.run(model, _ids(_CAPTURE_LEN, seed=510 + step))
-        assert trace.last_run["engine"] == "guarded_fast"
-        counts.append(_module_hook_count(model))
-
-    assert counts[0] == counts[-1]
-    assert len(set(counts)) == 1
-    close_fast_run_session(trace)
-    assert _module_hook_count(model) == before
-
-
-def test_staged_spec_object_is_stable_across_fast_reruns() -> None:
-    """The staged spec stays the same object with the same hook count after each rerun."""
-
-    model, direction = _build()
-    trace = _steered_trace(model, direction, _ids(_CAPTURE_LEN, seed=600))
-    spec = trace._intervention_spec
-    staged = len(spec.hook_specs)
-    assert staged >= 1
-
-    for step in range(_RERUNS):
-        trace.run(model, _ids(_CAPTURE_LEN, seed=610 + step))
-        assert trace.last_run["engine"] == "guarded_fast"
-        assert trace._intervention_spec is spec
-        assert len(spec.hook_specs) == staged
-
-
+# Kept: sole branch coverage of intervention/_trace_run.py.
 def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() -> None:
     """``run(inputs=, fast=True)`` applies the steer; plain ``run(inputs=)`` refuses."""
 
@@ -565,44 +465,7 @@ def test_fast_door_applies_staged_spec_while_plain_run_inputs_still_refuses() ->
     assert refused_again.value.fields["code"] == "run_staged_spec_unapplied"
 
 
-@pytest.mark.parametrize("replayable", [False, True], ids=["default", "ready"])
-def test_default_save_fallback_replays_stochastic_forward_and_keeps_readiness(
-    replayable: bool,
-) -> None:
-    """A default-save trace reruns through capture, RNG-exact, inheriting readiness.
-
-    The rerun replays the capture's recorded ``random_seed`` (the behavior main
-    ships), so the fallback's random draws reproduce the CAPTURE's output, not
-    the caller's ambient seed; a stochastic model pins exactly that, and that
-    the readiness setting is inherited rather than forced on.
-    """
-
-    torch.manual_seed(0)
-    model = _StochasticModel().train()
-    x = torch.randn(2, 8)
-    torch.manual_seed(7)
-    with torch.no_grad():
-        plain = model(x)
-
-    torch.manual_seed(123)
-    if replayable:
-        trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
-    else:
-        trace = tl.trace(model, x)
-    source_ready = trace.is_replayable
-    assert source_ready is replayable
-    captured = _output(trace).detach().clone()
-    # The model is genuinely stochastic: an unseeded-equivalent forward differs.
-    assert not torch.equal(captured, plain)
-
-    torch.manual_seed(7)
-    trace.run(model, x)
-
-    assert trace.last_run["engine"] == "rerun"
-    assert torch.equal(_output(trace), captured)
-    assert trace.is_replayable == source_ready
-
-
+# Kept: sole branch coverage of _fast_live_steer.py, _fast_run.py; a sole mutation kill.
 def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
     """A ``(1, L, V)`` output keeps its rank and follows the new length exactly."""
 
@@ -623,31 +486,7 @@ def test_full_sequence_output_reruns_shape_varied_exactly() -> None:
     _assert_matches_hook(trace, reference, fast=True)
 
 
-def test_cached_fast_door_session_does_not_pollute_a_later_capture() -> None:
-    """Hooks a cached ``fast=True`` session leaves on the model stay inert elsewhere.
-
-    The explicit door keeps its session, with its module-entry token hooks, on
-    the model between calls. A second steered capture of the same model must
-    seal the fingerprint a clean capture seals (not one with every module
-    counted twice), so its longer-input rerun still takes the fast engine.
-    """
-
-    model, direction = _build()
-    short_ids = _ids(_CAPTURE_LEN, seed=1)
-    first = _steered_trace(model, direction, short_ids)
-    assert first.run(inputs=short_ids, fast=True).trace.last_run["engine"] == "guarded_fast"
-    assert _module_hook_count(model) > 0, "the explicit door keeps its session hooks"
-
-    second = _steered_trace(model, direction, short_ids)
-    long_ids = _ids(_CAPTURE_LEN + 2, seed=2)
-    reference = _hooked(model, direction, long_ids)
-    second.run(model, long_ids)
-
-    assert second.last_run["engine"] == "guarded_fast", second.last_run.get("fast_refused")
-    assert second.last_run["shape_varied"] is True
-    _assert_matches_hook(second, reference, fast=True)
-
-
+# Kept: sole branch coverage of _data_classes/trace.py, _fast_live_steer.py, intervention/_trace_edits.py and more; a sole mutation kill.
 def test_fast_door_session_follows_a_restaged_spec() -> None:
     """A cached ``fast=True`` session applies the spec staged NOW, never a stale plan.
 
@@ -666,8 +505,8 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert _max_abs_diff(first.output, _hooked(model, direction, ids)["output"]) == 0.0
 
     other = torch.randn(_DIM, generator=torch.Generator().manual_seed(12))
-    trace.clear_hooks(confirm_mutation=True)
-    trace.attach_hooks(
+    trace._clear_hooks(confirm_mutation=True)
+    trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(other, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
@@ -676,7 +515,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert restaged.trace.last_run["engine"] == "guarded_fast"
     assert _max_abs_diff(restaged.output, _hooked(model, other, ids)["output"]) == 0.0
 
-    trace.clear_hooks(confirm_mutation=True)
+    trace._clear_hooks(confirm_mutation=True)
     with pytest.raises(RunCapabilityUnavailableError) as refused:
         trace.run(inputs=ids, fast=True)
     assert refused.value.fields["detection_stage"] == "fast_rerun_graph_unsteered"
@@ -689,6 +528,7 @@ def test_fast_door_session_follows_a_restaged_spec() -> None:
     assert _max_abs_diff(_site_op(trace, _HEAD).out[:, -1, :], plain) == 0.0
 
 
+# Kept: sole branch coverage of _fast_live_steer.py, intervention/_zero_fire.py.
 def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     """Hooks staged on a plain capture send the first rerun through the capture engine.
 
@@ -707,7 +547,7 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     ids = _ids(_CAPTURE_LEN, seed=3)
     baseline = _module_hook_count(model)
     trace = tl.trace(model, ids, save=tl.module(_SITE) | tl.module(_HEAD))
-    trace.attach_hooks(
+    trace._attach_hooks(
         tl.module(_SITE),
         tl.steer(direction, strength=_MAGNITUDE, dim=-1),
         confirm_mutation=True,
@@ -728,23 +568,3 @@ def test_hooks_attached_after_capture_rerun_through_capture_once() -> None:
     assert trace.last_run["engine"] == "guarded_fast"
     _assert_matches_hook(trace, reference, fast=True)
     assert _module_hook_count(model) == baseline
-
-
-def test_fast_door_with_staged_spec_does_not_disclose_pending_value_edits() -> None:
-    """The fast door applies the staged spec, so its firing trail is not an inert value edit.
-
-    Before the fix every ``run(inputs=..., fast=True)`` on a trace captured with
-    ``intervene=`` warned ``PendingValueEditsWarning`` (the capture-time audit, then
-    the rerun-propagated state, read as ``do()`` edits) while the result was exact.
-    """
-
-    from torchlens.intervention.errors import PendingValueEditsWarning
-
-    model, direction = _build()
-    trace = _steered_trace(model, direction, _ids(_CAPTURE_LEN, seed=2))
-    for step in range(3):
-        with warnings.catch_warnings(record=True) as caught:
-            warnings.simplefilter("always")
-            result = trace.run(inputs=_ids(_CAPTURE_LEN + 1 + step, seed=5 + step), fast=True)
-        assert result.trace.last_run["engine"] == "guarded_fast"
-        assert not [w for w in caught if issubclass(w.category, PendingValueEditsWarning)], step

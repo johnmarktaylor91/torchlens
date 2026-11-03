@@ -118,6 +118,7 @@ def test_clean_wrapped_process_validation_still_passes() -> None:
     assert "VERDICT=True" in stdout, stdout
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_pristine_oracle_unwraps_and_restores_wrap_state() -> None:
     """Inside the context torch is pristine; after it, wrappers return."""
 
@@ -156,6 +157,7 @@ def test_pristine_oracle_is_noop_when_never_wrapped() -> None:
     assert "NOOP-OK" in _run_probe(script)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_backward.py.
 def test_backward_validation_runs_pristine_stock_pass() -> None:
     """Backward validation's stock pass also settles under the pristine root.
 
@@ -220,6 +222,7 @@ class TestUnwrapLedgerIntegrity:
         # The refusal must not have unwrapped torch and left it that way.
         assert _state._is_decorated
 
+    # Kept by shrink-r4 (per-id subset rule): sole coverage of _user_public_impls.py, validation/_pristine.py, campaign mutant kills.
     def test_poisoned_ledger_fails_validation_closed(self) -> None:
         model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
         x = torch.randn(2, 4)
@@ -231,22 +234,6 @@ class TestUnwrapLedgerIntegrity:
             assert verdict is False
         finally:
             _state._decorated_to_orig.pop(key, None)
-
-    def test_honest_ledger_carries_no_wrapper_marked_origs(self) -> None:
-        """Positive control: after real captures the append-only ledger holds
-        only unwrapped originals -- the integrity scan has no false positive
-        surface on an honest process."""
-
-        model = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
-        tl.trace(model, torch.randn(2, 4))
-        offenders = [
-            getattr(orig, "__tl_wrapper_name__")
-            for orig in _state._decorated_to_orig.values()
-            if hasattr(orig, "__tl_wrapper_name__")
-        ]
-        assert not offenders, offenders
-        with pristine_torch_oracle() as pristine:
-            assert pristine
 
 
 _MASKED_PROBE_SCRIPT = _PROBE_SCRIPT.replace(

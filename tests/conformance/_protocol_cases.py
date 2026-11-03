@@ -573,11 +573,14 @@ def _rng_once_body(adapter: Any, model: RosterModel) -> tuple[str, ...]:
         trace = adapter.trace(net, example)
     after_capture = rng_state()
     eager_net, eager_example = model.builder()
-    eager = adapter.reference_output(eager_net, eager_example)
+    # The eager forward completes (its output is read to the host) before the
+    # RNG state is read: on a lazy backend reading the state first realizes the
+    # RNG counter on its own, which changes the values lazy random weights take.
+    eager = convert(adapter.reference_output(eager_net, eager_example))
     after_eager = rng_state()
     problems: list[str] = []
     captured = trace.output_ops[0].out if trace.output_ops else None
-    if captured is None or not np.array_equal(convert(captured), convert(eager)):
+    if captured is None or not np.array_equal(convert(captured), eager):
         problems.append("captured output differs from the eager forward of the same seed")
     if not np.array_equal(np.asarray(after_capture), np.asarray(after_eager)):
         problems.append("RNG state after capture differs from the state after one eager forward")

@@ -148,7 +148,7 @@ class TestCloneSkipFastlog:
             rec = tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True),
+                recording=tl.options.RecordingOptions(default_op=CaptureSpec(save_out=True)),
                 capture=tl.options.CaptureOptions(
                     activation_transform=probe, save_raw_activations=False
                 ),
@@ -181,7 +181,9 @@ class TestCloneSkipFastlog:
             tl.record(
                 model,
                 x,
-                default_op=CaptureSpec(save_out=True, dtype=torch.float64),
+                recording=tl.options.RecordingOptions(
+                    default_op=CaptureSpec(save_out=True, dtype=torch.float64)
+                ),
                 capture=tl.options.CaptureOptions(
                     activation_transform=probe, save_raw_activations=False
                 ),
@@ -210,7 +212,6 @@ class TestReduceOnlyBudget:
         )
         assert log["linear_1_1"].payload.transformed_out is not None
 
-    @pytest.mark.smoke
     def test_budget_below_summary_refuses(self) -> None:
         from torchlens.errors import SaveBudgetExceededError
 

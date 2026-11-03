@@ -31,6 +31,17 @@ class EffectsView:
     its SITE axis. ``selection()`` is the EXPLICIT tier-c conversion: the
     union of the top candidates' WHERE regions, session-only (a loaded
     artifact carries no Selection objects and refuses typed).
+
+    Examples
+    --------
+    >>> base = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> bundle = tl.experiment.sweep_sites(
+    ...     base, candidates={"conv": "conv2d_1_1", "relu": "relu_1_2"}, edit=tl.zero_ablate(),
+    ...     metric=lambda t: float(t[t.output_layers[0]].out.sum()), retain="none",
+    ...     model=model, inputs=x)
+    >>> view = bundle.effects()
+    >>> isinstance(view, EffectsView), len(view.rank_changes())
+    (True, 2)
     """
 
     table: MemberEffectTable

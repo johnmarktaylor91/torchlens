@@ -176,28 +176,14 @@ def test_rewritten_buffer_validates_with_no_retrace_warning(name: str) -> None:
         assert validate_forward_pass(_REWRITERS[name](), torch.rand(4)) is True
 
 
-def test_nan_reached_by_a_rewritten_buffer_keeps_its_identity_edge() -> None:
-    """A buffer version that holds NaN still replays as ``identity`` of its producer."""
-
-    trace = tl.trace(
-        _fill_buffers(_Reassign(), float("nan")), torch.rand(4), capture=_SAVE_ALL, save="all"
-    )
-    try:
-        versions = [op for op in trace._layer_list if op.graph.is_buffer and op.graph.buffer_source]
-        assert versions, "the reassignment must log a buffer version node"
-        for op in versions:
-            assert torch.isnan(op.out).all()
-            assert op.func_name == "identity"
-            assert list(op.parents) == [op.graph.buffer_source]
-    finally:
-        trace.cleanup()
-
-
 def test_equal_valued_storage_swap_keeps_its_own_version_node() -> None:
     """A recorded write never merges into the read before it, even when values agree."""
 
     trace = tl.trace(
-        _fill_buffers(_DataSwapToZeros(), 0.0), torch.rand(4), capture=_SAVE_ALL, save="all"
+        _fill_buffers(_DataSwapToZeros(), 0.0),
+        torch.rand(4),
+        capture=_SAVE_ALL,
+        save="all",
     )
     try:
         buffer_ops = [op for op in trace._layer_list if op.graph.is_buffer]

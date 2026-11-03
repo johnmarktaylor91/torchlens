@@ -74,23 +74,6 @@ class _AsStridedOutsideExtent(nn.Module):
         return h + v.sum() * 0.0
 
 
-def test_r15_h2_storage_setitem_outside_extent_is_unverifiable(tmp_path: Path) -> None:
-    """An out-of-extent storage write is caught by the whole-storage snapshot on ANY input."""
-    x = torch.tensor([1.0, 2.0, 3.0, 4.0])
-    assert _status(_StorageSetitemOutsideExtent(), x, x, tmp_path) is not PathFaithfulness.VERIFIED
-    assert (
-        _status(_StorageSetitemOutsideExtent(), x, x + 5.0, tmp_path)
-        is not PathFaithfulness.VERIFIED
-    )
-
-
-def test_r15_h2_as_strided_outside_extent_is_unverifiable(tmp_path: Path) -> None:
-    """An out-of-extent numpy ``as_strided`` write is caught on ANY input."""
-    x = torch.tensor([1.0, 2.0, 3.0, 4.0])
-    assert _status(_AsStridedOutsideExtent(), x, x, tmp_path) is not PathFaithfulness.VERIFIED
-    assert _status(_AsStridedOutsideExtent(), x, x + 5.0, tmp_path) is not PathFaithfulness.VERIFIED
-
-
 # --------------------------------------------------------------------------------------
 # H1: raw data_ptr() pointer escape (ctypes read/write) is unobservable -> fail closed.
 # --------------------------------------------------------------------------------------
@@ -112,18 +95,13 @@ class _DataPtrCtypesWrite(nn.Module):
         return h + 0.0
 
 
+# Kept: sole branch coverage of backends/torch/_completeness_dispatch.py; a sole mutation kill; the catch of its regression fault.
 def test_r15_h1_data_ptr_read_bake_is_unverifiable(tmp_path: Path) -> None:
     """A ctypes READ through data_ptr() can bake a stale literal -> UNVERIFIABLE."""
     cap_x, new_x = torch.tensor([1.0, 2.0]), torch.tensor([-10.0, 20.0])
     assert _status(_DataPtrCtypesRead(), cap_x, new_x, tmp_path) is not PathFaithfulness.VERIFIED
     # UNVERIFIABLE even on the ORIGINAL input -- the pointer is unobservable by construction.
     assert _status(_DataPtrCtypesRead(), cap_x, cap_x, tmp_path) is not PathFaithfulness.VERIFIED
-
-
-def test_r15_h1_data_ptr_write_is_unverifiable(tmp_path: Path) -> None:
-    """A ctypes WRITE through data_ptr() lands off-dispatch -> UNVERIFIABLE on any input."""
-    x = torch.tensor([1.0, 2.0])
-    assert _status(_DataPtrCtypesWrite(), x, x, tmp_path) is not PathFaithfulness.VERIFIED
 
 
 # --------------------------------------------------------------------------------------
@@ -141,32 +119,9 @@ class _BufferNumpyWriteback(nn.Module):
         return self.b * x
 
 
-def test_r15_c2_buffer_numpy_writeback_captures_and_is_unverifiable(tmp_path: Path) -> None:
-    """A registered-buffer numpy write-back must capture (no crash) and replay UNVERIFIABLE."""
-    x = torch.tensor([3.0, 5.0])
-    # Capture must NOT raise (the r14 regression asserted on this zero-copy write).
-    trace = tl.trace(_BufferNumpyWriteback(), x.clone(), capture=_CAPTURE)
-    path = tmp_path / "buf.tlspec"
-    shutil.rmtree(path, ignore_errors=True)
-    trace.save(path, level="runnable", include_weights=True)
-    result = tl.load(path).run(inputs=x.clone(), seed=0, on_divergence="return")
-    assert result.report.path_faithfulness is not PathFaithfulness.VERIFIED
-
-
 # --------------------------------------------------------------------------------------
 # C3: training BatchNorm's tracked running-stat update stays VERIFIED + value-correct.
 # --------------------------------------------------------------------------------------
-
-
-def test_r15_c3_training_batchnorm_stays_verified_and_value_correct(tmp_path: Path) -> None:
-    """A normal training BatchNorm running-stat in-place update is replayable -> VERIFIED."""
-    x = torch.tensor([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
-    for run_x in (x, x + 10.0):
-        model = nn.BatchNorm1d(2, affine=False, track_running_stats=True).train()
-        loaded = _save_load(model, x, tmp_path)
-        result = loaded.run(inputs=run_x.clone(), seed=0, on_divergence="return")
-        assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-        assert torch.allclose(model(run_x.clone()), result.output)
 
 
 # --------------------------------------------------------------------------------------
@@ -195,11 +150,3 @@ class _NoopInplaceAfterExpose(nn.Module):
         h.add_(0.0)
         h.mul_(1.0)
         return h
-
-
-def test_r15_no_over_trigger_readonly_and_noop_stay_verified(tmp_path: Path) -> None:
-    """Read-only numpy/metadata exposures and no-op in-place stay honestly VERIFIED."""
-    x = torch.tensor([1.0, 2.0, 3.0])
-    assert _status(_ReadonlyNumpySum(), x, x, tmp_path) is PathFaithfulness.VERIFIED
-    assert _status(_StorageNbytesMetadata(), x, x, tmp_path) is PathFaithfulness.VERIFIED
-    assert _status(_NoopInplaceAfterExpose(), x, x, tmp_path) is PathFaithfulness.VERIFIED

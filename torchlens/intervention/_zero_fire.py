@@ -19,11 +19,11 @@ from __future__ import annotations
 
 import sys
 import warnings
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Collection, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Any, Final, Literal, NoReturn
+from typing import TYPE_CHECKING, Any, Final, Literal, NoReturn
 
 from .._errors import InvalidArgumentError, TorchLensWarning
 from .._ir.container import NamedField
@@ -34,11 +34,17 @@ from .._ir.distribution_container import (
 )
 from .._selection.errors import SiteResolutionError
 
+if TYPE_CHECKING:
+    from ._spec import Recipe, Rule
+
 __all__ = (
     "DEFAULT_ZERO_FIRE_POLICY",
     "NON_TENSOR_MODULE_OUTPUT_REASON",
     "ZERO_FIRE_POLICIES",
     "ZeroFirePolicy",
+    "capture_rule_fire_ledger",
+    "note_capture_fire",
+    "note_capture_rule_fired",
     "zero_fire_policy_scope",
     "check_zero_fire_policy",
     "current_zero_fire_policy",
@@ -50,6 +56,7 @@ __all__ = (
     "recorded_non_tensor_details",
     "settle_capture_zero_fire",
     "settle_zero_fire",
+    "warn_multiclause_unfired",
 )
 
 ZeroFirePolicy = Literal["warn", "error", "disclose"]
@@ -298,6 +305,76 @@ def zero_fire_policy_scope(value: object | None) -> Iterator[None]:
         _CAPTURE_POLICY.reset(token)
 
 
+#: Rule ids of the public-spec ``intervene=`` rules that fired during the capture
+#: in progress (``None`` outside a capture). Zero-fire settlement reads it per rule
+#: IDENTITY: action reprs collide for same-named closures and never match a fire
+#: record's rendering of a callable, so a repr comparison both hid a real zero and
+#: reported a fired rule as unfired.
+_CAPTURE_FIRED_RULES: ContextVar[set[str] | None] = ContextVar(
+    "torchlens_capture_fired_rules", default=None
+)
+
+
+@contextmanager
+def capture_rule_fire_ledger() -> Iterator[set[str]]:
+    """Open the per-capture ledger of fired ``intervene=`` rule ids.
+
+    Yields
+    ------
+    set[str]
+        The live set the capture's intervention doors add rule ids to; read it
+        after the forward to settle zero-fire per rule.
+    """
+
+    fired: set[str] = set()
+    token = _CAPTURE_FIRED_RULES.set(fired)
+    try:
+        yield fired
+    finally:
+        _CAPTURE_FIRED_RULES.reset(token)
+
+
+def note_capture_rule_fired(rule_id: object) -> None:
+    """Record that the capture-time ``intervene=`` rule ``rule_id`` fired at a site.
+
+    Parameters
+    ----------
+    rule_id:
+        The fired rule's id (``decision.rule_id`` or a lowered entry's
+        ``rule_id``); ``None`` (a non-spec request) and calls outside a capture
+        ledger record nothing.
+    """
+
+    fired = _CAPTURE_FIRED_RULES.get()
+    if fired is not None and isinstance(rule_id, str):
+        fired.add(rule_id)
+
+
+def note_capture_fire(trace: Any, fire_count: int, rule_id: object) -> None:
+    """Count ``fire_count`` intervene fires on ``trace`` and note the fired rule.
+
+    The capture doors' one bookkeeping step after an ``intervene=`` decision
+    fires: the trace's zero-match fire count grows (read by the zero-match
+    selector disclosure) and the rule id enters the per-capture fire ledger
+    (read by per-rule zero-fire settlement).
+
+    Parameters
+    ----------
+    trace:
+        The active trace, or ``None`` outside a capture (count skipped).
+    fire_count:
+        How many fires to add.
+    rule_id:
+        The fired rule's id; see :func:`note_capture_rule_fired`.
+    """
+
+    if trace is not None:
+        trace._tl_intervene_selector_fire_count = (
+            int(getattr(trace, "_tl_intervene_selector_fire_count", 0)) + fire_count
+        )
+    note_capture_rule_fired(rule_id)
+
+
 def current_zero_fire_policy() -> ZeroFirePolicy:
     """Return the ``on_zero_fire`` policy of the capture or run in progress (default ``"warn"``)."""
 
@@ -372,4 +449,67 @@ def raise_rerun_zero_fire(message: str, unfired_plan_ids: list[str]) -> NoReturn
         remedy="resolve the target sites against the rerun trace (trace[selector]) "
         "before re-applying, or run with the default on_zero_fire='warn' or 'disclose'",
         unfired_plan_ids=list(unfired_plan_ids),
+    )
+
+
+def warn_multiclause_unfired(intervene: object, fire_count: int) -> None:
+    """Warn (code ``trace_zero_fire``) when a multi-clause ``intervene=`` fired nowhere.
+
+    A multi-clause ``Recipe`` has no single ``.selector``, so the recorder's
+    selector check never sees it; without this, a spec whose every forward rule
+    missed recorded silently. The spec is read by its ``rules`` tuple so this
+    module imports nothing from ``spec``.
+
+    Parameters
+    ----------
+    intervene:
+        The recording's ``intervene=`` option.
+    fire_count:
+        How many times the recording's intervene predicate fired.
+    """
+
+    rules = getattr(intervene, "rules", None)
+    if fire_count != 0 or not isinstance(rules, tuple) or len(rules) < 2:
+        return
+    forward_rules = [rule for rule in rules if rule.signal != "backward"]
+    if not forward_rules:
+        return
+    names = ", ".join(rule.rule_id for rule in forward_rules)
+    warnings.warn(
+        TorchLensWarning(
+            f"Capture-time intervention rules [{names}] fired at zero sites; the recording "
+            "completed with them unapplied. Remedy: fix the intervene= selector so it "
+            "matches a site",
+            code="trace_zero_fire",
+        ),
+        stacklevel=5,
+    )
+
+
+def _unfired_forward_rules(spec: Recipe, fired_rule_ids: Collection[str]) -> tuple[Rule, ...]:
+    """Return the spec's rules that address the forward pass and fired nowhere.
+
+    Settlement is per rule IDENTITY (the rule ids the capture doors noted as
+    they fired), never per action repr: same-named closures render alike, and
+    a callable never renders like its fire record. A backward-only rule
+    (``tl.grad(...)`` or a node site) fires after the capture returns, so the
+    capture-time settlement never judges it.
+
+    Parameters
+    ----------
+    spec:
+        The capture's public ``intervene=`` spec.
+    fired_rule_ids:
+        Rule ids noted as fired during the capture.
+
+    Returns
+    -------
+    tuple[Rule, ...]
+        Unfired forward rules, in spec order.
+    """
+
+    return tuple(
+        rule
+        for rule in spec.rules
+        if rule.signal != "backward" and rule.rule_id not in fired_rule_ids
     )

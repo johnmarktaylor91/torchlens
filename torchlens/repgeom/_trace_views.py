@@ -97,6 +97,15 @@ def mds_evolution(
     ValueError
         If a selected site has no saved activation, is recurrent without a
         pass-qualified selection, or fails MDS preconditions.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, torch.randn(8, 3, 8, 8))
+    >>> coords = tl.repgeom.mds_evolution(trace, min_stimuli=8)
+    >>> len(coords) > 0
+    True
+    >>> next(iter(coords.values())).shape
+    (8, 2)
     """
 
     selected = _selected_mds_sites(trace, save, verb="mds_evolution")
@@ -163,6 +172,15 @@ def rdm_evolution(
         If a selected site has no saved activation, has too few stimuli, is
         a bare recurrent layer aggregate (select its passes instead), or
         fails metric preconditions.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, torch.randn(8, 3, 8, 8))
+    >>> rdms = tl.repgeom.rdm_evolution(trace)
+    >>> len(rdms) > 0
+    True
+    >>> next(iter(rdms.values())).shape
+    (8, 8)
     """
 
     if min_stimuli < 2:
@@ -228,6 +246,15 @@ def scree_evolution(
         If a selected site has no saved activation, has too few stimuli, is
         recurrent without a pass-qualified selection, or fails metric
         preconditions.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, torch.randn(8, 3, 8, 8))
+    >>> spectra = tl.repgeom.scree_evolution(trace)
+    >>> len(spectra) > 0
+    True
+    >>> next(iter(spectra.values())).shape
+    (8,)
     """
 
     _validate_variance_threshold(variance_threshold)

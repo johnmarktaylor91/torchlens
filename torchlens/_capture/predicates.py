@@ -398,8 +398,9 @@ def validate_followed_by_capability(
     if not supports_retroactive:
         raise PredicateError(
             f"{api_name} does not support tl.followed_by(...) retroactive capture; "
-            "use trace(save=...) with lookback and lookback_payload_policy instead. "
-            "Remedy: use trace(save=...) with lookback= and lookback_payload_policy=.",
+            "only tl.trace(save=...) can keep an earlier candidate once its successor runs. "
+            "Remedy: use tl.trace(save=..., capture=tl.options.CaptureOptions(lookback=N, "
+            'lookback_payload_policy="detached_raw")).',
             code="followed_by_unsupported",
         )
 

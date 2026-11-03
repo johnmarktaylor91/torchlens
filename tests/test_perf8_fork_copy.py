@@ -15,6 +15,7 @@ capture is pinned.
 from __future__ import annotations
 
 import functools
+import gc
 import math
 import sys
 from collections import OrderedDict, defaultdict
@@ -685,6 +686,15 @@ def test_a_fork_equals_one_built_by_the_former_copy_path(
 
 
 def _fork_events(trace: Any) -> int:
+    """Count the fork's own calls, never the finalizers of garbage it happens to collect.
+
+    Earlier tests in the same process leave dead captures in reference cycles. If an
+    automatic collection fires inside the profiled fork, their op-store finalizers run
+    there and are counted as the fork's calls (one such collection read about four
+    times the fork's own count). So collect first and keep automatic collection off
+    for the profiled call.
+    """
+
     trace.fork()  # warm-up, as the benchmark counter does
     calls = 0
 
@@ -693,11 +703,16 @@ def _fork_events(trace: Any) -> int:
         if event in ("call", "c_call"):
             calls += 1
 
+    gc.collect()
+    was_enabled = gc.isenabled()
+    gc.disable()
     sys.setprofile(count)
     try:
         member = trace.fork()
     finally:
         sys.setprofile(None)
+        if was_enabled:
+            gc.enable()
     del member
     return calls
 

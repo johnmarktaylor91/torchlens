@@ -19,7 +19,9 @@ def _mlp() -> nn.Module:
 def test_enrich_module_path_strings_populates_metadata() -> None:
     """Module path enrichment adds expected metadata fields."""
 
-    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(
+        _mlp(), torch.randn(1, 4), recording=tl.options.RecordingOptions(default_op=True)
+    )
     enriched = recording.enrich(["module_path_strings"])
     assert enriched is not recording
     assert enriched.records
@@ -30,7 +32,9 @@ def test_enrich_module_path_strings_populates_metadata() -> None:
 def test_enrich_all_feasible_matches_available_enrichments() -> None:
     """All-feasible applies all enrichments currently computable."""
 
-    recording = tl.record(_mlp(), torch.randn(1, 4), default_op=True)
+    recording = tl.record(
+        _mlp(), torch.randn(1, 4), recording=tl.options.RecordingOptions(default_op=True)
+    )
     by_name = recording.enrich(["module_path_strings"])
     by_preset = recording.enrich("all-feasible")
     assert [record.metadata for record in by_preset.records] == [
@@ -44,15 +48,13 @@ def test_record_postprocess_accepts_only_the_live_enrich_steps() -> None:
     live = tl.record(
         _mlp(),
         torch.randn(1, 4),
-        default_op=True,
-        postprocess="module_path_strings",
+        recording=tl.options.RecordingOptions(default_op=True, postprocess="module_path_strings"),
     )
     assert "module_path" in live.records[0].metadata
     with pytest.raises(RecordingConfigError, match="module_path_strings") as info:
         tl.record(
             _mlp(),
             torch.randn(1, 4),
-            default_op=True,
-            postprocess="param_addresses",
+            recording=tl.options.RecordingOptions(default_op=True, postprocess="param_addresses"),
         )
     assert "param_addresses" not in str(info.value).split("must be")[1]

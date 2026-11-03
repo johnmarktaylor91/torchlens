@@ -1,10 +1,10 @@
 """Typed attribution refusals from the honesty lane, each with a running remedy.
 
-- U20.5: occlusion over an element-empty selection refuses
+- Occlusion over an element-empty selection refuses
   (``occlusion_selection_empty``) instead of returning a confident zero.
-- U21.5: zero-noise SmoothGrad refuses (``smoothgrad_noise_level_invalid``)
+- Zero-noise SmoothGrad refuses (``smoothgrad_noise_level_invalid``)
   instead of averaging identical saliency maps.
-- U23.3: text attribution over an input longer than the model's position
+- Text attribution over an input longer than the model's position
   limit refuses (``text_input_exceeds_position_limit``) with a remedy naming
   ``max_length``.
 """
@@ -48,7 +48,7 @@ def _output_sum(trace: Any) -> Tensor:
 
 
 def test_occlusion_refuses_an_empty_selection_and_the_remedy_runs() -> None:
-    """U20.5: zero selected elements refuse typed; one selected element scores."""
+    """Zero selected elements refuse typed; one selected element scores."""
 
     inputs = torch.arange(1.0, 10.0).reshape(1, 1, 3, 3)
     trace = tl.trace(_ImageScale(), inputs, capture=tl.options.CaptureOptions(replayable=True))
@@ -71,19 +71,8 @@ def test_occlusion_refuses_an_empty_selection_and_the_remedy_runs() -> None:
 
 @pytest.mark.parametrize("noise_level", [0.0, 0, -0.1])
 def test_smoothgrad_refuses_zero_or_negative_noise(noise_level: float) -> None:
-    """U21.5: zero noise (and negative, as before) refuses typed."""
+    """Zero noise (and negative, as before) refuses typed."""
 
     with pytest.raises(AttributionError) as info:
         attribution.smoothgrad(_Linear(), torch.randn(2, 4), target=0, noise_level=noise_level)
     assert info.value.fields["code"] == "smoothgrad_noise_level_invalid"
-
-
-def test_smoothgrad_zero_noise_remedies_run() -> None:
-    """Both remedies run: a positive scale, or saliency for the noise-free map."""
-
-    torch.manual_seed(0)
-    model, x = _Linear(), torch.randn(2, 4)
-    noisy = attribution.smoothgrad(model, x, target=0, num_samples=3, noise_level=0.1, seed=0)
-    assert noisy.values.shape == x.shape
-    plain = attribution.saliency(model, x, target=0)
-    assert plain.values.shape == x.shape

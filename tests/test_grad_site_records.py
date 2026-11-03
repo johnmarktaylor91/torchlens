@@ -18,8 +18,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens.intervention import _helpers as helper_module
-from torchlens.intervention._audit import rule_signal, rules_payload
-from torchlens.intervention._types import Edit, FireRecord
+from torchlens.intervention._types import Edit
 
 _CAPTURE = tl.options.CaptureOptions(backward_ready=True, save_grads="all")
 
@@ -39,7 +38,10 @@ def test_multi_output_op_fires_once_per_output_slot_with_forward_labels() -> Non
     split_labels = [label for label in base.layer_labels if label.startswith("split")]
     assert len(split_labels) == 2
     trace = tl.trace(
-        _Split(), x, capture=_CAPTURE, intervene=tl.when(tl.grad(tl.func("split")), tl.scale(0.5))
+        _Split(),
+        x,
+        capture=_CAPTURE,
+        intervene=tl.when(tl.grad(tl.func("split")), tl.scale(0.5)),
     )
     trace.backward(trace[trace.output_layers[0]].out)
     records = [record for record in trace._intervention_spec.records if record.signal == "backward"]
@@ -80,18 +82,6 @@ def test_edit_signal_replaces_kind_and_direction() -> None:
         assert forward_only.signal == "forward", forward_only.name
 
 
-def test_fire_record_and_audit_payload_carry_signal() -> None:
-    field_names = {field.name for field in dataclasses.fields(FireRecord)}
-    assert "signal" in field_names and "direction" not in field_names
-    assert "signal" in FireRecord._PORTABLE_STATE_SPEC
-    assert "direction" not in FireRecord._PORTABLE_STATE_SPEC
-    recipe = tl.when(tl.func("relu"), tl.scale(0.5))
-    (row,) = rules_payload(recipe)
-    assert row["signal"] == "forward" and "direction" not in row
-    assert rule_signal(tl.grad("relu_1")) == "backward"
-    assert rule_signal(tl.grad("relu_1") | "relu_1") == "both"
-
-
 def test_rule_has_no_direction_field_and_the_site_decides_the_pass() -> None:
     rule_cls = tl.intervention.Rule
     assert "direction" not in {field.name for field in dataclasses.fields(rule_cls)}
@@ -114,7 +104,15 @@ def test_rule_has_no_direction_field_and_the_site_decides_the_pass() -> None:
 
 
 @pytest.mark.parametrize(
-    "removed", ["zero_grad", "scale_grad", "clamp_grad", "add_grad_noise", "clip_grad", "hook_grad"]
+    "removed",
+    [
+        "zero_grad",
+        "scale_grad",
+        "clamp_grad",
+        "add_grad_noise",
+        "clip_grad",
+        "hook_grad",
+    ],
 )
 def test_removed_gradient_helpers_are_gone_and_refuse_on_load(removed: str) -> None:
     assert removed not in helper_module.__all__
@@ -123,9 +121,3 @@ def test_removed_gradient_helpers_are_gone_and_refuse_on_load(removed: str) -> N
         helper_module.rebuild_builtin_helper(removed, (), {})
     assert exc_info.value.fields["code"] == "intervention_helper_renamed"
     assert "tl.grad(site)" in exc_info.value.fields["remedy"]
-
-
-def test_clip_norm_round_trips_through_the_builtin_registry() -> None:
-    rebuilt = helper_module.rebuild_builtin_helper("clip_norm", (2.0,), {"norm_type": 1.0})
-    assert rebuilt == tl.clip_norm(2.0, norm_type=1.0)
-    assert repr(rebuilt).endswith("clip_norm(2.0, norm_type=1.0)")

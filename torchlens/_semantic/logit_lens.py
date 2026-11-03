@@ -80,6 +80,13 @@ class LogitLensError(TorchLensError, RuntimeError):
 
     Contracted refusals carry a stable ``fields["code"]``; the historical
     ``RuntimeError`` lineage is preserved for existing catch sites.
+
+    Examples
+    --------
+    >>> issubclass(LogitLensError, tl.errors.TorchLensError)
+    True
+    >>> issubclass(LogitLensError, RuntimeError)
+    True
     """
 
 
@@ -150,6 +157,15 @@ class LogitLens:
         check under ``logit_lens(verify=...)``).
     final_logits:
         The model's captured real output logits when readable, else ``None``.
+
+    Examples
+    --------
+    >>> lens = LogitLens(entries=(), facet="resid_post", lens_source="user",
+    ...                  is_validated=False, final_logits=None)
+    >>> lens.lens_source
+    'user'
+    >>> print(lens.summary())
+    logit lens (resid_post, lens=user)
     """
 
     entries: tuple[LogitLensEntry, ...]
@@ -279,6 +295,17 @@ class LogitLensPrediction:
         Requested-token values: ids as given, logits/probabilities shaped
         ``[batch, n_positions, n_tokens]``, and ONE-BASED ranks (int64, tie
         convention recorded on the parent result).
+
+    Examples
+    --------
+    >>> z = torch.zeros(1, 1, 2)
+    >>> row = LogitLensPrediction("blocks.0", 0, "resid_post", "projected through final norm/head",
+    ...                           (5,), z.long(), z, z, torch.zeros(1, 1), (), z[..., :0],
+    ...                           z[..., :0], z[..., :0].long())
+    >>> row.positions
+    (5,)
+    >>> tuple(row.top_ids.shape)
+    (1, 1, 2)
     """
 
     address: str
@@ -316,6 +343,15 @@ class LogitLensPredictions:
         Whether the reconstructed lens passed numeric validation.
     tie_convention:
         Recorded rank tie convention for ``token_ranks``.
+
+    Examples
+    --------
+    >>> preds = LogitLensPredictions(rows=(), k=5, facet="resid_post", lens_source="user",
+    ...                              is_validated=False)
+    >>> preds.k
+    5
+    >>> len(preds.rows)
+    0
     """
 
     rows: tuple[LogitLensPrediction, ...]
@@ -330,7 +366,7 @@ def logit_lens(
     trace: Any,
     *,
     facet: str = "resid_post",
-    layers: Sequence[str] | None = None,
+    modules: Sequence[str] | None = None,
     lens: LensFunc | Mapping[str, LensFunc] | None = None,
     verify: bool = True,
     rtol: float = 1e-4,
@@ -348,7 +384,7 @@ def logit_lens(
     facet:
         Hidden-state facet to project (``"resid_post"``, ``"resid_pre"``, or
         ``"resid_mid"``).
-    layers:
+    modules:
         Explicit module addresses to project; defaults to every module
         exposing ``facet``, in trace order. A vision head lens projects only
         the blocks of the tower that feeds its head (CLIP's vision tower,
@@ -385,7 +421,7 @@ def logit_lens(
 
     setup = _prepare_lens(
         trace,
-        _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify, rtol=rtol, atol=atol),
+        _LensRequest(facet=facet, layers=modules, lens=lens, validate=verify, rtol=rtol, atol=atol),
     )
     entries = [
         LogitLensEntry(address=address, layer_index=layer_index, facet=facet, logits=logits)
@@ -407,7 +443,7 @@ def logit_lens_predictions(
     positions: Sequence[int] | None = None,
     tokens: Sequence[int] | None = None,
     facet: str = "resid_post",
-    layers: Sequence[str] | None = None,
+    modules: Sequence[str] | None = None,
     lens: LensFunc | Mapping[str, LensFunc] | None = None,
     verify: bool = True,
     rtol: float = 1e-4,
@@ -438,7 +474,7 @@ def logit_lens_predictions(
         ``logits_to_keep``-sliced capture covers only the last positions).
     tokens:
         Token ids whose logit/probability/rank are retained per position.
-    facet / layers / lens / validate / rtol / atol:
+    facet / modules / lens / validate / rtol / atol:
         As in :func:`logit_lens`.
     include_native:
         Whether to append the native-output row when captured logits are
@@ -466,7 +502,7 @@ def logit_lens_predictions(
         )
     setup = _prepare_lens(
         trace,
-        _LensRequest(facet=facet, layers=layers, lens=lens, validate=verify, rtol=rtol, atol=atol),
+        _LensRequest(facet=facet, layers=modules, lens=lens, validate=verify, rtol=rtol, atol=atol),
     )
     head, final_logits = setup.head, setup.final_logits
     token_ids = tuple(int(token) for token in tokens) if tokens is not None else ()
@@ -560,7 +596,7 @@ class _LensRequest:
 
     Attributes
     ----------
-    facet / layers / lens / validate / rtol / atol:
+    facet / modules / lens / validate / rtol / atol:
         As in :func:`logit_lens`.
     """
 
@@ -868,7 +904,7 @@ def _resolve_layer_addresses(
         raise LogitLensError(
             f"Modules {tuple(outside)!r} lie outside {tower!r}, the tower whose blocks "
             "feed this trace's vision head, so the head's lens cannot decode them. "
-            f"Remedy: pass layers inside {tower!r}, or pass lens= for those layers.",
+            f"Remedy: pass modules inside {tower!r}, or pass lens= for those modules.",
             code="logit_lens_layer_outside_head",
         )
     return [str(address) for address in layers]

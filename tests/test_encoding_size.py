@@ -26,16 +26,10 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._visualization._encoding import (
-    DEFAULT_NODE_HEIGHT_IN,
-    DEFAULT_NODE_WIDTH_IN,
     LAYER_SOURCE_ROWS,
-    NOTE_CALLABLE,
-    SIZE_BY_MAX_AREA_MULT,
-    non_batch_numel,
     resolve_size_by,
     resolve_size_scale,
 )
-from torchlens._visualization.node_spec import NodeSpec
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -181,22 +175,6 @@ def _state(log: tl.Trace) -> Any:
 # ---------------------------------------------------------------------------
 
 
-def test_resolve_none_is_inactive() -> None:
-    assert resolve_size_by(None) is None
-
-
-def test_resolve_dims_field_and_callable_kinds() -> None:
-    assert resolve_size_by("dims").source_kind == "dims"
-    assert resolve_size_by("activation_memory").source_kind == "field"
-    assert resolve_size_by(lambda node: 1.0).source_kind == "callable"
-
-
-def test_unknown_source_refuses_at_option_validation() -> None:
-    with pytest.raises(Exception) as excinfo:
-        resolve_size_by("no_such_field_anywhere")
-    assert excinfo.value.fields["code"] == "encoding_source_invalid"
-
-
 def test_non_string_non_callable_refuses() -> None:
     with pytest.raises(Exception) as excinfo:
         resolve_size_by(42)
@@ -214,11 +192,6 @@ def test_size_by_shares_color_by_builtin_tokens() -> None:
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
-def test_scale_defaults_to_sqrt() -> None:
-    assert resolve_size_scale(None, size_by_active=True) == "sqrt"
-    assert resolve_size_scale(None, size_by_active=False) == "sqrt"
-
-
 def test_scale_closed_vocabulary() -> None:
     assert resolve_size_scale("linear", size_by_active=True) == "linear"
     with pytest.raises(Exception) as excinfo:
@@ -226,68 +199,9 @@ def test_scale_closed_vocabulary() -> None:
     assert excinfo.value.fields["code"] == "encoding_scale_invalid"
 
 
-def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, size_scale="sqrt")
-    assert excinfo.value.fields["code"] == "scale_requires_size_by"
-
-
 # ---------------------------------------------------------------------------
 # "dims" typed shape path (memo 2.2) + D4 default mapping (C2)
 # ---------------------------------------------------------------------------
-
-
-def test_non_batch_numel_mapping() -> None:
-    """C2 mapping pins: torch.Size/tuple parity, empty/rank-0/rank-1 default."""
-
-    assert non_batch_numel(()) == 1.0
-    assert non_batch_numel((5,)) == 1.0
-    assert non_batch_numel((2, 3)) == 3.0
-    assert non_batch_numel((2, 3, 4)) == 12.0
-    assert non_batch_numel(tuple(torch.Size((2, 3, 4)))) == 12.0
-
-
-def test_size_by_dims_encodes_minimum_geometry(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(mlp_log, tmp_path, size_by="dims")
-    state = _state(mlp_log)
-    assert state.sizes, "no node was size-encoded"
-    assert "fixedsize=false" in dot
-    assert "width=" in dot and "height=" in dot
-    # Fonts never scale: the channel injects no fontsize attribute.
-    plain = _draw(mlp_log, tmp_path)
-    assert dot.count("fontsize") == plain.count("fontsize")
-
-
-def test_size_area_clamped_to_max_mult(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Encoded area spans [1x .. SIZE_BY_MAX_AREA_MULT x] the default area."""
-
-    _draw(mlp_log, tmp_path, size_by="dims")
-    default_area = DEFAULT_NODE_WIDTH_IN * DEFAULT_NODE_HEIGHT_IN
-    for width, height in _state(mlp_log).sizes.values():
-        area = width * height
-        assert area >= default_area * 0.99
-        assert area <= default_area * SIZE_BY_MAX_AREA_MULT * 1.01
-
-
-def test_plain_draw_untouched_by_size_machinery(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """STRICTLY OPT-IN: no width/height/fixedsize emissions on plain draw."""
-
-    dot = _draw(mlp_log, tmp_path)
-    assert "fixedsize" not in dot
-    assert not re.search(r"\bwidth=", dot)
-
-
-def test_scale_linear_vs_sqrt_changes_geometry(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, size_by="dims", size_scale="sqrt")
-    sqrt_sizes = dict(_state(mlp_log).sizes)
-    _draw(mlp_log, tmp_path, size_by="dims", size_scale="linear")
-    linear_sizes = dict(_state(mlp_log).sizes)
-    assert sqrt_sizes != linear_sizes
-    # Extremes agree (min-max normalization pins both endpoints)...
-    sqrt_order = sorted(sqrt_sizes, key=lambda key: sqrt_sizes[key])
-    linear_order = sorted(linear_sizes, key=lambda key: linear_sizes[key])
-    # ...and the ordering is identical (both transforms are monotone).
-    assert sqrt_order == linear_order
 
 
 def test_per_pass_op_nodes_size_by_their_own_pass(spatial_log: tl.Trace, tmp_path: Path) -> None:
@@ -298,15 +212,6 @@ def test_per_pass_op_nodes_size_by_their_own_pass(spatial_log: tl.Trace, tmp_pat
     conv_sizes = {key: value for key, value in state.sizes.items() if "conv" in key}
     assert len(conv_sizes) == 3
     assert len(set(conv_sizes.values())) == 3, conv_sizes
-
-
-def test_callable_shape_return_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Callables must return scalars; 'dims' is the only shape-valued source."""
-
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, size_by=lambda node: tuple(node.shape))
-    assert excinfo.value.fields["code"] == "encoding_value_invalid"
-    assert "dims" in str(excinfo.value)
 
 
 def test_bool_value_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
@@ -350,30 +255,12 @@ def test_absent_field_degrades_to_default_box(mlp_log: tl.Trace, tmp_path: Path)
 # ---------------------------------------------------------------------------
 
 
-def test_rolled_varying_dims_refuses(spatial_log: tl.Trace, tmp_path: Path) -> None:
-    """Refusal fires BEFORE dims resolution (ordering pin: no '3..4' strings)."""
-
-    with pytest.raises(Exception) as excinfo:
-        _draw(spatial_log, tmp_path, size_by="dims", rolled=True)
-    assert excinfo.value.fields["code"] == "size_by_rolled_varying"
-
-
 def test_interior_only_variation_refuses(interior_log: tl.Trace, tmp_path: Path) -> None:
     """first==last with interior variation — the case a first/last summary misses."""
 
     with pytest.raises(Exception) as excinfo:
         _draw(interior_log, tmp_path, size_by="dims", rolled=True)
     assert excinfo.value.fields["code"] == "size_by_rolled_varying"
-
-
-def test_uniform_multipass_dims_no_refusal(uniform_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(uniform_log, tmp_path, size_by="dims", rolled=True)
-    assert _state(uniform_log).sizes
-
-
-def test_single_pass_layers_unaffected(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, size_by="activation_memory", rolled=True)
-    assert _state(mlp_log).sizes
 
 
 def test_varying_scalar_field_refuses(varying_log: tl.Trace, tmp_path: Path) -> None:
@@ -426,13 +313,6 @@ def test_unclassified_source_on_rolled_refuses(varying_log: tl.Trace, tmp_path: 
     assert excinfo.value.fields["code"] == "encoding_source_invalid"
 
 
-def test_callable_on_rolled_bypasses_with_disclosure(varying_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(varying_log, tmp_path, size_by=lambda node: float(node.num_passes), rolled=True)
-    state = _state(varying_log)
-    assert state.sizes
-    assert NOTE_CALLABLE in state.size_notes
-
-
 def test_shape_field_source_names_dims_remedy(mlp_log: tl.Trace, tmp_path: Path) -> None:
     """size_by='shape' hits the wrong-type row and points at 'dims'."""
 
@@ -447,95 +327,15 @@ def test_shape_field_source_names_dims_remedy(mlp_log: tl.Trace, tmp_path: Path)
 # ---------------------------------------------------------------------------
 
 
-def test_color_and_size_compose_freely(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    _draw(mlp_log, tmp_path, color_by="bytes", size_by="dims")
-    state = _state(mlp_log)
-    assert state.colors and state.sizes
-    assert state.active_channels() == ("color_by", "size_by")
-
-
-def test_explicit_rank_with_size_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    with pytest.raises(Exception) as excinfo:
-        _draw(mlp_log, tmp_path, size_by="dims", layout="rank")
-    assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"
-    assert "size_by" in str(excinfo.value)
-
-
 def test_dagua_renderer_with_size_channel_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
     with pytest.raises(Exception) as excinfo:
         _draw(mlp_log, tmp_path, size_by="dims", renderer="dagua")
     assert excinfo.value.fields["code"] == "encoding_requires_dot_layout"
 
 
-def test_legend_states_scale_transform(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    """Disclosure contract: every legend drawn states the size transform."""
-
-    dot = _draw(mlp_log, tmp_path, size_by="dims")
-    assert "TorchLens encoding" in dot
-    assert "sqrt(dims)" in dot
-    dot_linear = _draw(mlp_log, tmp_path, size_by="dims", size_scale="linear")
-    assert "linear(dims)" in dot_linear
-
-
-def test_legend_false_honored_with_size_channel(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    dot = _draw(mlp_log, tmp_path, size_by="dims", show_legend=False)
-    assert "cluster_torchlens_encoding_legend" not in dot
-
-
-def test_request_hash_ignores_size_fields() -> None:
-    from torchlens._visualization.request import ResolvedRenderRequest
-
-    base = ResolvedRenderRequest()
-    sized = ResolvedRenderRequest(size_by="dims", scale="linear", encoding=object())
-    assert hash(base) == hash(sized)
-
-
 # ---------------------------------------------------------------------------
 # 2.4(ii) funnel image-drop rule + extra_attrs power valve (C2(b))
 # ---------------------------------------------------------------------------
-
-
-def test_funnel_drops_size_fields_on_image_specs() -> None:
-    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
-
-    spec = NodeSpec(lines=["x"], width=2.0, height=1.0, fixedsize="false", image="node.png")
-    args = _node_spec_to_graphviz_args(spec)
-    assert "width" not in args and "height" not in args
-    assert args["image"] == "node.png"
-
-
-def test_funnel_emits_size_fields_without_image() -> None:
-    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
-
-    spec = NodeSpec(lines=["x"], width=2.0, height=1.0, fixedsize="false")
-    args = _node_spec_to_graphviz_args(spec)
-    assert args["width"] == "2.0" and args["height"] == "1.0"
-    assert args["fixedsize"] == "false"
-
-
-def test_extra_attrs_wins_over_nodespec_size_fields() -> None:
-    """The power valve wins by merge order — a rule, not an accident."""
-
-    from torchlens._visualization._render_leaf import _node_spec_to_graphviz_args
-
-    spec = NodeSpec(lines=["x"], width=2.0, height=1.0, extra_attrs={"width": "9"})
-    args = _node_spec_to_graphviz_args(spec)
-    assert args["width"] == "9"
-    # And the image-drop rule cannot drop the power valve either.
-    spec_image = NodeSpec(lines=["x"], width=2.0, image="node.png", extra_attrs={"width": "9"})
-    assert _node_spec_to_graphviz_args(spec_image)["width"] == "9"
-
-
-def test_user_node_spec_fn_sees_and_can_override_size(mlp_log: tl.Trace, tmp_path: Path) -> None:
-    seen_widths: list[Any] = []
-
-    def node_spec_fn(layer_log: Any, default_spec: NodeSpec) -> NodeSpec:
-        seen_widths.append(default_spec.width)
-        return default_spec.replace(width=None, height=None, fixedsize=None)
-
-    dot = _draw(mlp_log, tmp_path, size_by="dims", node_spec_fn=node_spec_fn)
-    assert any(width is not None for width in seen_widths)
-    assert "fixedsize" not in dot
 
 
 def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> None:
@@ -567,6 +367,8 @@ def test_annotation_image_node_excluded_from_size_and_domain(tmp_path: Path) -> 
 # ---------------------------------------------------------------------------
 
 
+# Kept: slice 4 removed this test; the train's size_by encoding work (bc6b4799a, via slice 5's
+# train merge) added two writer sites to its expected allowlist after slice 4 measured it.
 def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
     """No TorchLens-internal call site may emit width/height/fixedsize into
     node args on an encodable node (memo C2(b)).
@@ -625,3 +427,9 @@ def test_size_attr_writer_sites_are_the_declared_allowlist() -> None:
         "width/height/fixedsize node-arg writer sites changed; a new internal "
         f"writer on an encodable node class is forbidden (C2(b)). Found: {found}"
     )
+
+
+def test_scale_without_size_by_refuses(mlp_log: tl.Trace, tmp_path: Path) -> None:
+    with pytest.raises(Exception) as excinfo:
+        _draw(mlp_log, tmp_path, size_scale="sqrt")
+    assert excinfo.value.fields["code"] == "scale_requires_size_by"

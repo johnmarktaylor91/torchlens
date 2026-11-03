@@ -63,6 +63,14 @@ class BatchEnvelope:
         JSON-portable collate disclosure recorded in the manifest and the
         resume signature (collate kind, tokenizer identity, pad-token
         source, ...).
+
+    Examples
+    --------
+    >>> envelope = BatchEnvelope(args=(x,), kwargs={}, num_rows=1, mask=None, disclosure={})
+    >>> envelope.num_rows
+    1
+    >>> envelope.first_input() is x
+    True
     """
 
     args: tuple[Any, ...]
@@ -534,6 +542,12 @@ def hf_collate(
     Callable
         An engine collate callable: ``(items, model, run_state) ->
         BatchEnvelope``.
+
+    Examples
+    --------
+    >>> collate = hf_collate(pad_token="eos", truncation=True, max_length=16)
+    >>> callable(collate)
+    True
     """
 
     def _collate(items: list[Any], model: nn.Module, run_state: dict[str, Any]) -> BatchEnvelope:

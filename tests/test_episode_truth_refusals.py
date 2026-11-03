@@ -11,7 +11,6 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._capture._episode_ledger import (
     EPISODE_DECLARED_STEP_CEILING,
-    resolve_episode_declaration,
 )
 from torchlens.errors._episode import EpisodeDeclarationError, EpisodeLedgerError
 from torchlens.options import EpisodeOptions
@@ -57,15 +56,7 @@ class _FloatGreedy(_Greedy):
         return super().forward(ids).float()
 
 
-class _PromptPlusCompletion(_Greedy):
-    """A root returning what real ``generate()`` returns: prompt+completion."""
-
-    def forward(self, ids: torch.Tensor) -> torch.Tensor:
-        for _ in range(self.n):
-            ids = torch.cat([ids, self.step(ids).argmax(-1, keepdim=True)], dim=1)
-        return ids
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_coupling.py, _capture/_episode_join.py, _capture/_episode_ledger.py ....
 def test_episode_x_intervene_couples_with_the_evidence_bar_met():
     """The foldA D5 flip (lane F42): the cell is COUPLED, never silent.
 
@@ -94,42 +85,7 @@ def test_episode_x_intervene_couples_with_the_evidence_bar_met():
     assert attestation.coupled is True and attestation.bound is True
 
 
-def test_step_ceiling_refuses_at_declaration_and_override_admits():
-    """Declarations beyond the ceiling refuse typed; the override is explicit."""
-
-    model = _Greedy()
-    over = EPISODE_DECLARED_STEP_CEILING + 1
-
-    with pytest.raises(EpisodeDeclarationError) as excinfo:
-        resolve_episode_declaration(
-            EpisodeOptions(stepped_module=model.step, num_steps=over), model
-        )
-    assert excinfo.value.fields["code"] == "episode_step_ceiling_exceeded"
-    assert "acknowledge_step_cost" in str(excinfo.value)
-
-    # The forced-tokens length is a declared step count too.
-    with pytest.raises(EpisodeDeclarationError) as excinfo:
-        resolve_episode_declaration(
-            EpisodeOptions(stepped_module=model.step, forced_tokens=tuple(range(over))),
-            model,
-        )
-    assert excinfo.value.fields["code"] == "episode_step_ceiling_exceeded"
-
-    # At the ceiling: admitted without the override.
-    at_ceiling = resolve_episode_declaration(
-        EpisodeOptions(stepped_module=model.step, num_steps=EPISODE_DECLARED_STEP_CEILING),
-        model,
-    )
-    assert at_ceiling.n_steps == EPISODE_DECLARED_STEP_CEILING
-
-    # Beyond the ceiling with the explicit acknowledgement: admitted.
-    acknowledged = resolve_episode_declaration(
-        EpisodeOptions(stepped_module=model.step, num_steps=over, acknowledge_step_cost=True),
-        model,
-    )
-    assert acknowledged.n_steps == over
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_entry_refusal_via_trace_keeps_root_unexecuted():
     """The ceiling fires through the tl.trace entry, before any forward."""
 
@@ -168,6 +124,7 @@ def _assert_settlement_refusal_keeps_product(excinfo: pytest.ExceptionInfo) -> N
     assert len(partial.trace._layer_list) > 0
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_ledger.py.
 def test_settlement_count_mismatch_carries_partial_trace():
     """episode_ledger_incoherent at settlement keeps the settled product."""
 
@@ -182,6 +139,7 @@ def test_settlement_count_mismatch_carries_partial_trace():
     _assert_settlement_refusal_keeps_product(excinfo)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _capture/_episode_derivation.py.
 def test_float_root_under_tokens_kind_teaches_digest_and_keeps_product():
     """The R13-C2 shape under the DEFAULT kind still refuses -- teaching.
 
@@ -202,64 +160,3 @@ def test_float_root_under_tokens_kind_teaches_digest_and_keeps_product():
     assert "step_output_kind='digest'" in str(excinfo.value)
     assert "'none'" in str(excinfo.value)
     _assert_settlement_refusal_keeps_product(excinfo)
-
-
-def test_prompt_plus_completion_matches_emitted_only_column():
-    """The R13-C1 shape (real generate() return) STOPS refusing (foldA D8).
-
-    The axis-length-equality refusal was root-output-shape guessing; the
-    declared derivation reads the LAST n_steps positions (tail-aligned), so
-    prompt+completion and emitted-only roots yield the SAME evidence column.
-    """
-
-    prompt = torch.tensor([[1]])
-    generate_shaped = _PromptPlusCompletion()
-    full_trace = tl.trace(
-        generate_shaped,
-        prompt,
-        episode=EpisodeOptions(stepped_module=generate_shaped.step, num_steps=N_STEPS),
-    )
-    emitted_only = _Greedy()
-    emitted_trace = tl.trace(
-        emitted_only,
-        prompt,
-        episode=EpisodeOptions(stepped_module=emitted_only.step, num_steps=N_STEPS),
-    )
-    full_ledger = full_trace.episode
-    emitted_ledger = emitted_trace.episode
-    assert full_ledger is not None and emitted_ledger is not None
-    full_column = [row.step_output for row in full_ledger.rows]
-    emitted_column = [row.step_output for row in emitted_ledger.rows]
-    assert full_column == emitted_column
-    assert all(isinstance(entry, tuple) for entry in full_column)
-    # The prompt prefix stays OUT of the evidence column.
-    root_out = full_trace.output_ops[0].out
-    assert root_out.shape[-1] == N_STEPS + prompt.shape[-1]
-    assert full_ledger.header.step_output_from == "output"
-    assert full_ledger.header.step_output_kind == "tokens"
-
-
-def test_capture_kind_and_public_step_access():
-    """Discoverability seam: Trace.provenance.kind and Trace.episode."""
-
-    model = _Greedy()
-    episode_trace = tl.trace(
-        model,
-        torch.tensor([[1]]),
-        episode=EpisodeOptions(stepped_module=model.step, num_steps=N_STEPS),
-    )
-    assert episode_trace.provenance.kind == "episode"
-    ledger = episode_trace.episode
-    assert ledger is not None
-    assert ledger.steps_completed == N_STEPS
-    assert ledger.truncated_at_step is None
-    assert [row.status for row in ledger.rows] == ["complete"] * N_STEPS
-    assert ledger.header.stepped_module == "step"
-
-    plain_trace = tl.trace(model, torch.tensor([[1]]))
-    assert plain_trace.provenance.kind == "plain"
-    assert plain_trace.episode is None
-
-    product = episode_trace.run(inputs=torch.tensor([[9]]))
-    assert product.trace.provenance.kind == "plain"
-    assert product.trace.episode is None

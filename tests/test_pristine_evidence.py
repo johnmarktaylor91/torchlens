@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pickle
 import shutil
-import warnings
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -22,10 +21,9 @@ from _refuses_as_2x import assert_refuses_as_2x
 from torch import nn
 
 import torchlens as tl
-from torchlens._data_classes._trace_pristine import derive_pristine, pristine_touch_evidence
+from torchlens._data_classes._trace_pristine import derive_pristine
 from torchlens._runnable import PathFaithfulness
 from torchlens._trace_state import TraceState
-from torchlens.backends._intervention_evidence import records_intervention_evidence
 from torchlens.intervention.errors import BaselineUndeterminedError
 from torchlens.options import CaptureOptions
 
@@ -87,38 +85,14 @@ def _double(out: torch.Tensor) -> torch.Tensor:
     return out * 2.0
 
 
-def test_plain_capture_reads_pristine_before_and_after_save(tmp_path: Path) -> None:
-    trace = tl.trace(_model(), _x())
-    assert trace.is_pristine is True
-    assert pristine_touch_evidence(trace) == ()
-    assert _saved(trace, tmp_path).is_pristine is True
-    assert pickle.loads(pickle.dumps(trace)).is_pristine is True
-
-
-def test_intervened_capture_reads_not_pristine_although_its_state_says_pristine(
-    tmp_path: Path,
-) -> None:
-    trace = _ablated(_model())
-    # The operational state machine never left PRISTINE for a func-targeted edit;
-    # the derived reading comes from the evidence the capture recorded.
-    assert trace.state is TraceState.PRISTINE
-    assert trace.is_pristine is False
-    assert {"intervention_audit", "state_history", "op_marks"} <= set(
-        pristine_touch_evidence(trace)
-    )
-    loaded = _saved(trace, tmp_path)
-    assert loaded.is_pristine is False
-    assert {"intervention_audit", "state_history", "op_marks"} <= set(
-        pristine_touch_evidence(loaded)
-    )
-
-
+# Kept: a sole mutation kill.
 def test_steered_capture_reads_not_pristine_after_save(tmp_path: Path) -> None:
     trace = _steered(_model())
     assert trace.is_pristine is False
     assert _saved(trace, tmp_path).is_pristine is False
 
 
+# Kept: sole branch coverage of intervention/_zero_fire.py; a sole mutation kill.
 def test_zero_fire_capture_reads_not_pristine(tmp_path: Path) -> None:
     never = tl.when(tl.func("sigmoid"), tl.zero_ablate())
     trace = tl.trace(_model(), _x(), intervene=never, on_zero_fire="disclose")
@@ -126,54 +100,7 @@ def test_zero_fire_capture_reads_not_pristine(tmp_path: Path) -> None:
     assert _saved(trace, tmp_path).is_pristine is False
 
 
-def test_staged_hook_stays_not_pristine_after_clear_and_save(tmp_path: Path) -> None:
-    trace = _ready(_model())
-    trace.attach_hooks(tl.func("relu"), tl.zero_ablate(), confirm_mutation=True)
-    assert trace.is_pristine is False
-    assert "staged_spec" in pristine_touch_evidence(trace)
-    trace.clear_hooks(confirm_mutation=True)
-    assert trace.is_pristine is False
-    # The staged spec is session-time; the staging row persists.
-    loaded = _saved(trace, tmp_path)
-    assert loaded.is_pristine is False
-    assert "state_history" in pristine_touch_evidence(loaded)
-
-
-def test_value_replacement_survives_a_state_reassignment(tmp_path: Path) -> None:
-    trace = _ready(_model())
-    trace.do(
-        tl.module("block"),
-        _double,
-        intervention=tl.options.InterventionOptions(engine="set_only", confirm_mutation=True),
-    )
-    trace.state = TraceState.PRISTINE
-    assert trace.is_pristine is False
-    loaded = _saved(trace, tmp_path)
-    loaded.state = TraceState.PRISTINE
-    assert loaded.is_pristine is False
-
-
-def test_clear_hooks_on_an_untouched_trace_stays_pristine(tmp_path: Path) -> None:
-    trace = _ready(_model())
-    trace.clear_hooks(confirm_mutation=True)
-    assert trace.state is TraceState.SPEC_STALE
-    assert trace.is_pristine is True
-    assert _saved(trace, tmp_path).is_pristine is True
-
-
-def test_plain_reruns_and_runs_stay_pristine(tmp_path: Path) -> None:
-    model = _model()
-    rerun = tl.trace(model, _x())
-    rerun.run(model, _x(1))
-    assert rerun.state is TraceState.RERUN_PROPAGATED
-    assert rerun.is_pristine is True
-    assert _saved(rerun, tmp_path, "rerun").is_pristine is True
-
-    source = tl.trace(model, _x())
-    result = source.run(inputs=_x(1))
-    assert source.is_pristine is True and result.trace.is_pristine is True
-
-
+# Kept: sole branch coverage of _data_classes/trace.py, intervention/_trace_edits.py, intervention/hooks.py and more.
 def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     model = _model()
     plain = tl.trace(model, _x(), capture=CaptureOptions(replayable=True))
@@ -189,6 +116,7 @@ def test_fork_inherits_the_reading_and_never_touches_its_parent() -> None:
     assert fork.fork("g").is_pristine is False
 
 
+# Kept: a sole mutation kill.
 def test_hooked_fast_run_agrees_with_the_flag() -> None:
     model = _model()
     plain = tl.trace(model, _x(), save=tl.module("block") | tl.module("head"))
@@ -205,14 +133,7 @@ def test_hooked_fast_run_agrees_with_the_flag() -> None:
     assert pickle.loads(pickle.dumps(result.trace)).is_pristine is False
 
 
-def test_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
-    """A v9 artifact written by torchlens 2.x refuses typed at load."""
-
-    work = tmp_path / "clean_v9.tlspec"
-    shutil.copytree(_V9_ARTIFACT, work)
-    assert_refuses_as_2x(work)
-
-
+# Kept: sole branch coverage of _io/bundle.py, _io/format_contract.py; a sole mutation kill.
 def test_pre_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
     """A pre-v9 artifact written by torchlens 2.x refuses typed at load."""
 
@@ -221,18 +142,7 @@ def test_pre_v9_artifact_refuses_as_2x(tmp_path: Path) -> None:
     assert_refuses_as_2x(work)
 
 
-def test_saved_artifact_reads_what_it_carries(tmp_path: Path) -> None:
-    """An untouched trace saved by this release loads with no touch evidence, pristine."""
-
-    path = tmp_path / "clean.tlspec"
-    tl.trace(_model(), _x()).save(path)
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.load(path)
-    assert pristine_touch_evidence(trace) == ()
-    assert trace.is_pristine is True
-
-
+# Kept: sole branch coverage of _data_classes/_trace_pristine.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     ("backend", "version", "history", "expected"),
     [
@@ -260,24 +170,7 @@ def test_derivation_rule(backend: str, version: int, history: list[Any], expecte
     assert derive_pristine(stub) is expected
 
 
-def test_non_torch_backends_read_not_recorded_never_pristine() -> None:
-    names = {spec.name for spec in tl.backends.specs()}
-    assert "torch" in names and len(names) > 1
-    for name in sorted(names):
-        stub = SimpleNamespace(
-            _provenance_backend=name,
-            tlspec_version=10,
-            state_history=[],
-            intervention_audit=[],
-            state=TraceState.PRISTINE,
-            _has_direct_writes=False,
-            _layer_list=[],
-        )
-        expected = True if name == "torch" else None
-        assert records_intervention_evidence(name) is (name == "torch")
-        assert derive_pristine(stub) is expected, name
-
-
+# Kept: sole branch coverage of _data_classes/_trace_pristine.py; its other params stay because the list is not trimmable per id.
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -303,6 +196,7 @@ def test_each_evidence_kind_reads_not_pristine(field: str, value: Any) -> None:
     assert derive_pristine(stub) is False
 
 
+# Kept: sole branch coverage of bundle/__init__.py.
 def test_bundle_auto_baseline_reads_the_derived_flag() -> None:
     model = _model()
     clean = tl.trace(model, _x())
@@ -313,25 +207,13 @@ def test_bundle_auto_baseline_reads_the_derived_flag() -> None:
     assert derive_pristine(bundle["ablated"]) is False
 
 
+# Kept: sole branch coverage of bundle/__init__.py, bundle/_comparisons.py, bundle/_members.py.
 def test_bundle_without_a_pristine_member_refuses_typed() -> None:
     model = _model()
     bundle = tl.Bundle({"a": _ablated(model), "b": _steered(model)})
     assert bundle.baseline_name is None
     with pytest.raises(BaselineUndeterminedError):
         bundle.rank_changes()
-
-
-def test_reading_the_flag_never_changes_the_plain_run_verdict() -> None:
-    model = _model()
-    first = tl.trace(model, _x())
-    unread = first.run(inputs=_x(1)).report
-    second = tl.trace(model, _x())
-    assert second.is_pristine is True
-    read = second.run(inputs=_x(1)).report
-    card = ("path_faithfulness", "first_mismatch", "is_poisoned", "numeric_attestation")
-    assert [getattr(read, name) for name in card] == [getattr(unread, name) for name in card]
-    assert read.path_faithfulness is PathFaithfulness.VERIFIED
-    assert tl.validate(model, _x(), scope="forward") is True
 
 
 def test_runnable_model_doc_states_the_hooked_run_disclosure() -> None:

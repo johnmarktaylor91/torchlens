@@ -19,6 +19,30 @@ encoder. The loop runs the model through a capture-free binding,
 `tl.when(site, action).bind(model)`, whose action keeps the site's output with
 its gradient, so a step costs about a plain forward instead of a full trace.
 
+## Minimal example on the running model
+
+This page uses [ResNet-18 on one
+image](running_examples.md#resnet-18-on-one-image). Feature visualisation
+optimises the input for one site's response; this reads that response for one channel of
+`layer3`. The recipe below builds its own model for the method.
+
+```python
+# recipe-test: tool=torchlens expected=True
+import torch
+import torchvision
+
+import torchlens as tl
+
+torch.manual_seed(0)
+model = torchvision.models.resnet18(weights=None).eval()
+x = torch.rand(1, 3, 224, 224)
+
+trace = tl.trace(model, x)
+
+response = trace["layer3"].out[0, 0].mean()
+RESULT = response.ndim == 0
+```
+
 ## A model with a planted detector
 
 The first convolution's channel 0 is set to a known pattern: diagonal stripes

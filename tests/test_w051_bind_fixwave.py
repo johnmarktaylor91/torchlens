@@ -21,6 +21,7 @@ from torch import nn
 
 import torchlens as tl
 import torchlens._capture._run_setup as capture_run_setup
+from torchlens._io._canonical_pickle import dump_canonical_metadata
 from torchlens._utils._record_group_table import record_member
 from torchlens.intervention._injection import attest_injected_ops, injected_ops
 from torchlens.intervention.errors import BindingPreflightError
@@ -141,7 +142,7 @@ def _save_tamper_load(tmp_path, trace, tamper):
         state = pickle.load(handle)
     tamper(state)
     with metadata_path.open("wb") as handle:
-        pickle.dump(state, handle)
+        dump_canonical_metadata(state, handle)
     return tl.load(str(path))
 
 
@@ -193,7 +194,6 @@ def test_inplace_injected_ops_attest_on_honest_capture() -> None:
     assert {row.status for row in report.rows} == {"attested"}
 
 
-@pytest.mark.smoke
 def test_functional_inplace_kwarg_injected_op_attests() -> None:
     """F.relu(inplace=True) inside a hook attests too (kwarg-spelled in-place)."""
 
@@ -213,7 +213,6 @@ def test_functional_inplace_kwarg_injected_op_attests() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_nan_output_injected_op_attests_and_value_mismatch_still_diverges() -> None:
     """NaN == NaN positionally is honest evidence; any finite mismatch is not."""
 
@@ -368,7 +367,6 @@ def test_bind_site_keys_match_capture_for_submodule_ops() -> None:
         assert not any("|/" in key for key in bind_keys)
 
 
-@pytest.mark.smoke
 def test_bind_in_module_pass_qualifier_still_resolves_after_root_skip() -> None:
     """Root pass counting survives the root frame leaving the module stack."""
 
@@ -466,7 +464,6 @@ def test_region_edit_dtype_change_refuses_typed(chain_fork) -> None:
     assert excinfo.value.fields["code"] == "intervention_replacement_invalid"
 
 
-@pytest.mark.smoke
 def test_region_edit_same_shape_still_lowers(chain_fork) -> None:
     """The gate admits a well-formed replacement (no false refusal)."""
 
@@ -483,7 +480,6 @@ def test_region_edit_same_shape_still_lowers(chain_fork) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_bind_alias_address_refuses_teaching_canonical_name() -> None:
     """tl.module('dec') on self.dec = self.enc names the alias and its canonical name."""
 
@@ -577,7 +573,8 @@ def test_module_boundary_rule_id_from_stamped_plan_entry(monkeypatch) -> None:
         entries = real(*args, **kwargs)
         return [
             dataclasses.replace(
-                entry, metadata={**dict(entry.metadata), "rule_id": spec.rules[0].rule_id}
+                entry,
+                metadata={**dict(entry.metadata), "rule_id": spec.rules[0].rule_id},
             )
             for entry in entries
         ]

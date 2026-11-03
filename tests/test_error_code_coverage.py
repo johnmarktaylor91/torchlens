@@ -132,7 +132,8 @@ UNPROVOKED_BASELINE: frozenset[str] = frozenset(
         "module_call_ambiguous",
         "module_focus_empty",
         "op_lookup_pass_required",
-        "option_group_type_invalid",
+        # option_group_type_invalid: row DELETED (shrink-only lock-in) -- the
+        # record-options lane's test_record_recording_options.py now provokes it.
         "output_device_invalid",
         # output_sink_conflict: row DELETED (shrink-only lock-in) -- the REM1
         # test_io_streaming migration to the typed ArgumentConflictError now

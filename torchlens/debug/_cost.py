@@ -91,6 +91,14 @@ def hot_path_rows(
     tuple[list[dict[str, Any]], dict[str, Any]]
         Cost-ranked row dicts and the attrs mapping (excluded count, metric,
         capture-honesty facts).
+
+    Examples
+    --------
+    >>> rows, attrs = hot_path_rows(tl.trace(model, x), by="flops")
+    >>> len(rows) > 0, attrs["metric"]
+    (True, 'flops')
+    >>> sorted(rows[0])
+    ['op_count', 'pct_total', 'source_file:line', 'total_cost']
     """
 
     field_name = _metric_field(by)
@@ -150,6 +158,13 @@ def hot_path(trace: Trace, by: CostMetric = "flops") -> Report:
         ``pct_total``. The number of ops excluded for missing metrics is stored
         in ``df.attrs["excluded_missing_metric_count"]``. The optional view
         over :func:`hot_path_rows` (the pandas-free core).
+
+    Examples
+    --------
+    >>> # requires: pandas
+    >>> frame = hot_path(tl.trace(model, x)).to_pandas()
+    >>> len(frame) > 0, frame.attrs["metric"]
+    (True, 'flops')
     """
 
     rows, attrs = hot_path_rows(trace, by)

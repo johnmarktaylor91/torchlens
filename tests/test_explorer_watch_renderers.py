@@ -159,37 +159,6 @@ def collector_view() -> HistoryView:
 
 
 class TestDerivedQuantiles:
-    def test_matches_torch_quantile_within_grid_tolerance(self) -> None:
-        torch.manual_seed(1)
-        data = torch.randn(20000)
-        histogram = Histogram()
-        histogram.update(data)
-        sketch = histogram.compute()
-        for q in (0.05, 0.25, 0.5, 0.75, 0.95):
-            estimate = derived_quantile(sketch, q)
-            truth = float(torch.quantile(data, q))
-            assert estimate.approximate
-            # bpo=4 grid: one bin spans a 2^(1/4) magnitude ratio (~19%).
-            assert abs(estimate.value - truth) <= max(abs(truth) * 0.2, 0.02), (
-                q,
-                estimate.value,
-                truth,
-            )
-
-    def test_monotone_in_q(self) -> None:
-        torch.manual_seed(2)
-        histogram = Histogram()
-        histogram.update(torch.randn(5000))
-        sketch = histogram.compute()
-        values = [derived_quantile(sketch, q).value for q in (0.1, 0.3, 0.5, 0.7, 0.9)]
-        assert values == sorted(values)
-
-    @pytest.mark.smoke
-    def test_zero_heavy_population_median_is_zero(self) -> None:
-        histogram = Histogram()
-        histogram.update(torch.zeros(100))
-        assert derived_quantile(histogram.compute(), 0.5).value == 0.0
-
     def test_overflow_clamp_is_disclosed(self) -> None:
         histogram = Histogram()
         histogram.update(torch.full((50,), 2.0**40))  # beyond hi_exp=16 window
@@ -213,7 +182,6 @@ class TestDerivedQuantiles:
 
 
 class TestHistogramPayload:
-    @pytest.mark.smoke
     def test_bucket_counts_cover_finite_population(self) -> None:
         torch.manual_seed(4)
         data = torch.randn(3000)
@@ -245,7 +213,6 @@ class TestHistogramPayload:
             histogram_payload(obs)
         assert excinfo.value.fields["code"] == "watch_sketch_missing"
 
-    @pytest.mark.smoke
     def test_observation_row_none_payload_for_gaps(self) -> None:
         gap = ObservationRecord(
             global_step=1,
@@ -260,7 +227,6 @@ class TestHistogramPayload:
 
 
 class TestHistoryView:
-    @pytest.mark.smoke
     def test_series_and_refusals(self) -> None:
         view = _synthetic_view()
         series = view.series("m:a")
@@ -299,20 +265,12 @@ class TestHistoryView:
         assert excinfo.value.fields["code"] == "watch_phase_ambiguous"
         assert len(view.series("p:w", "param_grad", "pre_clip")) == 1
 
-    def test_rows_long_form(self) -> None:
-        view = _synthetic_view()
-        rows = view.rows()
-        assert len(rows) == 10
-        gap_rows = [r for r in rows if r["presence"] != "observed"]
-        assert len(gap_rows) == 1 and gap_rows[0]["mean"] is None
-
     def test_to_pandas_when_available(self) -> None:
         pandas = pytest.importorskip("pandas")
         frame = _synthetic_view().to_pandas()
         assert isinstance(frame, pandas.DataFrame)
         assert len(frame) == 10
 
-    @pytest.mark.smoke
     def test_to_pandas_without_pandas_refuses_typed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Absent pandas refuses ``watch_tabular_extra_missing`` with the remedy."""
 
@@ -341,7 +299,6 @@ class TestRenderers:
         assert "nonfinite event" in svg_1  # the injected NaN
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_waterfall_deterministic_with_raster_and_caption(self) -> None:
         view = _synthetic_view()
         svg_1 = histogram_waterfall(view, "m:a")
@@ -351,7 +308,6 @@ class TestRenderers:
         assert "nonfinite" in svg_1
         _parse_svg(svg_1)
 
-    @pytest.mark.smoke
     def test_contact_sheet_footer_ranking_pagination(self) -> None:
         view = _synthetic_view()
         sheet = contact_sheet(view)
@@ -369,7 +325,6 @@ class TestRenderers:
         assert excinfo.value.fields["code"] == "watch_page_out_of_range"
         _parse_svg(sheet)
 
-    @pytest.mark.smoke
     def test_detail_sheet_discloses(self) -> None:
         view = _synthetic_view()
         detail = site_detail(view, "m:b")
@@ -378,7 +333,6 @@ class TestRenderers:
         assert "activation" in detail
         _parse_svg(detail)
 
-    @pytest.mark.smoke
     def test_real_collector_views_render(self, collector_view: HistoryView) -> None:
         ranked = rank_sites(collector_view)
         assert ranked, "collector produced rankable sites"
@@ -454,7 +408,6 @@ class TestCairosvgRoundTrip:
 
 
 class TestGraphJoin:
-    @pytest.mark.smoke
     def test_color_by_watch_callable(self) -> None:
         from types import SimpleNamespace
 

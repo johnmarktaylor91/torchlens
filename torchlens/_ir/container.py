@@ -123,7 +123,13 @@ OutputPathComponent: TypeAlias = (
 
 @dataclass(frozen=True)
 class ContainerSpec:
-    """Portable description of an output container seen during capture."""
+    """Portable description of an output container seen during capture.
+
+    Examples
+    --------
+    >>> spec = tl.types.ContainerSpec(kind="tuple", length=2)
+    >>> spec.kind, spec.length, spec.lossy_reconstruction
+    ('tuple', 2, False)"""
 
     _PORTABLE_STATE_SPEC: ClassVar[dict[str, FieldPolicy]] = {
         "kind": FieldPolicy.KEEP,
@@ -1147,6 +1153,21 @@ def register_container(
         Trusted declaration that the hook pair round-trips ALL per-instance
         state (r37 R11); without it, runnable saves refuse instances carrying
         extra ``__dict__`` state instead of dropping it silently on replay.
+
+    Examples
+    --------
+    >>> class Pair:
+    ...     def __init__(self, left, right):
+    ...         self.left, self.right = left, right
+    >>> tl.types.register_container(
+    ...     Pair, lambda p: ([p.left, p.right], None), lambda aux, kids: Pair(*kids)
+    ... )
+    >>> class PairNet(nn.Module):
+    ...     def forward(self, v):
+    ...         return Pair(v + 1, v * 2)
+    >>> trace = tl.trace(PairNet(), torch.zeros(1, 2))
+    >>> len(trace.output_layers)
+    2
     """
 
     with _CONTAINER_REGISTRY_LOCK:

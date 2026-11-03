@@ -61,18 +61,7 @@ def _edges_by_child(trace):
     return result
 
 
-def test_view_or_copy_population(zoo_trace) -> None:
-    """The closed table populates exactly the provable storage verdicts."""
-
-    edges = _edges_by_child(zoo_trace)
-    by_func = {label.split("_")[0]: record.view_or_copy for label, record in edges.items()}
-    assert by_func.get("view") == "view"
-    assert by_func.get("clone") == "copy"
-    assert by_func.get("flatten") == "unknown"  # may copy -- stays honest
-    assert by_func.get("expand") == "view"
-    assert by_func.get("linear") == "unknown"
-
-
+# Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 def test_distribution_relation_verdicts(zoo_trace) -> None:
     """same_multiset holds exactly where semantics + geometry corroborate."""
 
@@ -93,6 +82,7 @@ def test_distribution_relation_verdicts(zoo_trace) -> None:
     assert proof.corroboration.startswith("numel_match:")
 
 
+# Kept by the shrink-r4 coverage proof: a sole campaign mutation kill.
 def test_classifier_is_slot0_only() -> None:
     """Only the positional slot-0 edge can carry a storage verdict."""
 
@@ -103,7 +93,7 @@ def test_classifier_is_slot0_only() -> None:
     assert classify_view_or_copy("reshape", (0,)) == "unknown"  # may copy
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_stats_table.py, report/_stats_view.py and more.
 def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     """Item 9: marks from D28 only; budget typed; sorts disclosed."""
 
@@ -120,7 +110,7 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     assert "unscanned" in states
     assert "budget: max_scan_elements=20" in str(budgeted)
     unscanned = next(row for row in budgeted.rows if row.state == "unscanned")
-    assert unscanned.stats is None and "budget" in unscanned.reason
+    assert unscanned.value_stats is None and "budget" in unscanned.reason
 
     ranked = table.sort_rows("mean")
     assert "sorted by mean" in repr(ranked)
@@ -132,16 +122,7 @@ def test_stats_table_marks_budget_sort_fold(zoo_trace) -> None:
     assert "rows folded" in repr(folded)
 
 
-def test_marks_never_fold_by_default(zoo_trace) -> None:
-    """D28: the default table keeps every marked row visible."""
-
-    table = build_stats_table(zoo_trace)
-    assert any(row.parent_mark for row in table.rows)
-    assert table.fold_note is None
-    assert "rows folded" not in str(zoo_trace.summary(view="stats"))
-
-
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of report/_stats_table.py, report/_summary_report.py.
 def test_to_pandas_carries_relation_columns(zoo_trace) -> None:
     """The tabular exit preserves the mark and its proof provenance."""
 

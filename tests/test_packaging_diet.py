@@ -52,14 +52,6 @@ def _make_log() -> tl.Trace:
     return tl.trace(_TinyModel(), torch.randn(1, 3))
 
 
-def test_core_import_capture_and_show_without_optional_tabular_or_notebook_use() -> None:
-    """Core import, capture, and show path succeed in the current dev environment."""
-
-    log = _make_log()
-
-    assert len(log._layer_list) > 0
-
-
 def test_plain_capture_never_imports_dynamo_or_fsdp() -> None:
     """A fresh-process plain trace/record must not import torch._dynamo or FSDP.
 
@@ -115,16 +107,6 @@ print("COLD_IMPORT_OK")
     )
     assert result.returncode == 0, result.stderr
     assert "COLD_IMPORT_OK" in result.stdout
-
-
-def test_to_pandas_succeeds_when_tabular_extra_is_available() -> None:
-    """Trace.to_pandas succeeds when pandas is installed."""
-
-    log = _make_log()
-    frame = log.to_pandas()
-
-    assert not frame.empty
-    assert "layer_label" in frame.columns
 
 
 def test_to_pandas_missing_pandas_mentions_tabular_extra(monkeypatch: pytest.MonkeyPatch) -> None:

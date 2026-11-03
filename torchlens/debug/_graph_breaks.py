@@ -30,6 +30,14 @@ class GraphBreaksUnavailableError(_ActionableErrorMixin, CompatibilityError, Run
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     and existing ``except RuntimeError`` callers stay valid (R64).
+
+    Examples
+    --------
+    >>> err = GraphBreaksUnavailableError("no explain")
+    >>> err.fields["code"]
+    'graph_breaks_unavailable'
+    >>> isinstance(err, RuntimeError), isinstance(err, tl.errors.CompatibilityError)
+    (True, True)
     """
 
     code: str = "graph_breaks_unavailable"
@@ -72,6 +80,14 @@ class GraphBreaksNormalizationError(_ActionableErrorMixin, CompatibilityError, R
     Keeps its historical ``RuntimeError`` base while joining the taxonomy
     with a stable code and a default remedy, so single-message raise sites
     and existing ``except RuntimeError`` callers stay valid (R64).
+
+    Examples
+    --------
+    >>> err = GraphBreaksNormalizationError("odd shape")
+    >>> err.fields["code"]
+    'graph_breaks_normalization_failed'
+    >>> isinstance(err, RuntimeError), isinstance(err, tl.errors.CompatibilityError)
+    (True, True)
     """
 
     code: str = "graph_breaks_normalization_failed"
@@ -399,6 +415,15 @@ def graph_breaks(model: nn.Module, inputs: Any, **trace_kwargs: Any) -> GraphBre
         If this torch runtime lacks ``torch._dynamo.explain``.
     GraphBreaksNormalizationError
         If the runtime returns an unrecognized explain-result shape.
+
+    Examples
+    --------
+    >>> try:
+    ...     report = graph_breaks(model, x)
+    ... except tl.errors.GraphBreaksUnavailableError:
+    ...     report = None
+    >>> report is None or len(report) == 0
+    True
     """
 
     if not _torch_compat.HAS_DYNAMO_EXPLAIN:

@@ -74,6 +74,15 @@ class Direction:
         ``config.model_type`` of the traced model, or ``None`` when it has none.
     provenance:
         Origin, method, geometry and content digest of the vector.
+
+    Examples
+    --------
+    >>> lm = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
+    >>> pos = tl.trace(lm, torch.randn(6, 4))
+    >>> neg = tl.trace(lm, torch.randn(6, 4))
+    >>> direction = tl.intervention.fit_direction(pos, neg, "linear_1_1", read_token_index=None)
+    >>> isinstance(direction, Direction), direction.site, direction.num_pairs
+    (True, 'linear_1_1', 6)
     """
 
     vector: torch.Tensor
@@ -331,6 +340,15 @@ def fit_direction(
         ``direction_site_unsaved``, ``direction_read_token_rank``,
         ``direction_read_token_count``, ``direction_mask_shape``,
         ``direction_mask_empty_row`` or ``direction_logistic_unconverged``.
+
+    Examples
+    --------
+    >>> lm = nn.Sequential(nn.Linear(4, 4), nn.Tanh()).eval()
+    >>> pos = tl.trace(lm, torch.randn(6, 4))
+    >>> neg = tl.trace(lm, torch.randn(6, 4))
+    >>> direction = tl.intervention.fit_direction(pos, neg, "linear_1_1", read_token_index=None)
+    >>> tuple(direction.vector.shape), direction.method
+    ((4,), 'mean_diff')
     """
 
     if method not in METHODS:

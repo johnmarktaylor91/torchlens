@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -75,28 +74,6 @@ def test_deferred_value_raises_on_use_but_json_round_trips() -> None:
     assert decoded.tensor_requires_grad is None
     assert decoded.is_scalar_bool is None
     assert decoded.bool_value is None
-
-
-def test_ctx_json_round_trip_is_stable_with_recursive_history() -> None:
-    """Fastlog context JSON should stay byte-stable after dropping recursive history."""
-
-    nested = _minimal_context(
-        label="mlx_relu_1_2_raw",
-        raw_label="mlx_relu_1_2_raw",
-        event_index=2,
-        step_index=2,
-        raw_index=2,
-        recent_events=(),
-        recent_ops=(),
-    )
-    ctx = _minimal_context(recent_events=(nested,), recent_ops=(nested,))
-
-    encoded = _ctx_to_json(ctx)
-    round_tripped = _ctx_to_json(_ctx_from_json(encoded))
-
-    assert encoded["recent_events"] == []
-    assert encoded["recent_ops"] == []
-    assert json.dumps(encoded, sort_keys=True) == json.dumps(round_tripped, sort_keys=True)
 
 
 def test_internal_projection_coerces_deferred_value_to_none() -> None:

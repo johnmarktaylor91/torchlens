@@ -9,9 +9,9 @@ import torch
 
 from .._debug_report import Report, rows_of
 from .._utils._record_group_table import record_member
-from ._common import _compute_ops
+from ._common import _compute_ops, _nonfinite_kind
 from ._gradients import grad_health
-from ._nan import _nonfinite_kind, bisect_nan, find_nan_in_trace
+from ._nan import bisect_nan, find_nan_in_trace
 
 if TYPE_CHECKING:
     from torchlens._data_classes.trace import Trace
@@ -40,6 +40,9 @@ class AuditFinding:
         Offending module addresses.
     follow_up:
         Call users can run to inspect the issue further.
+    source_line:
+        ``"file:line"`` of the user code that ran the offending op, when the
+        finding names one op and its location was recorded.
     """
 
     severity: AuditSeverity
@@ -48,6 +51,7 @@ class AuditFinding:
     ops: tuple[str, ...]
     modules: tuple[str, ...]
     follow_up: str
+    source_line: str | None = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +66,14 @@ class HealthReport(Report):
         Names of diagnostics that ran.
     skipped:
         ``(check, reason)`` entries for diagnostics not supported by the capture.
+
+    Examples
+    --------
+    >>> report = tl.trace(model, x).audit()
+    >>> isinstance(report, HealthReport), "find_nan" in report.checks_run
+    (True, True)
+    >>> ("compare", "requires a second trace") in report.skipped
+    True
     """
 
     findings: tuple[AuditFinding, ...]
@@ -156,7 +168,10 @@ def _has_saved_gradients(trace: Trace) -> tuple[bool, str | None]:
         if len(trace.autograd.backward_passes) == 0:
             return False, "forward-only trace; no backward pass was captured"
         if len(trace.saved_grad_ops) == 0:
-            return False, "no saved gradients; re-trace with save_grads=True and backward()"
+            return (
+                False,
+                "no saved gradients; re-trace with save_grads=True and backward()",
+            )
     except ValueError as exc:
         return False, str(exc)
     return True, None

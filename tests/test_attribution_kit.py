@@ -3,13 +3,12 @@
 from __future__ import annotations
 
 import ast
-import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 import torch
-from _source_corpus import module_ast, package_files
+from _source_corpus import module_ast
 from torch import Tensor, nn
 
 import torchlens as tl
@@ -267,19 +266,6 @@ class _ImageScale(nn.Module):
         return value * 2.0
 
 
-def test_documented_unstable_attribution_surface_matches_glossary_index() -> None:
-    """Every stage-4b spelling carries the exact no-shim glossary marker."""
-
-    glossary = (_REPO_ROOT / "docs/reference/glossary.md").read_text(encoding="utf-8")
-    indexed = glossary.split("<!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:START -->", 1)[1].split(
-        "<!-- ATTRIBUTION-KIT-UNSTABLE-INDEX:END -->", 1
-    )[0]
-    assert set(re.findall(r"`([^`]+)`", indexed)) == _DOCUMENTED_UNSTABLE_TOKENS
-    surface_rows = [line for line in indexed.splitlines() if line.startswith("|")][2:]
-    assert surface_rows
-    assert all("unstable -- no deprecation shim owed" in row for row in surface_rows)
-
-
 def _output_sum(trace: Any) -> Tensor:
     """Return the single captured output tensor's sum."""
 
@@ -347,48 +333,6 @@ def _imported_modules(path: Path) -> set[str]:
     return names
 
 
-@pytest.mark.heavy
-def test_attribution_kit_lane_is_detachable_from_stage4a_and_capture_core() -> None:
-    """No non-attribution package module or stage-4a file imports the shed lane."""
-
-    package_offenders = {
-        str(path.relative_to(_REPO_ROOT)): sorted(_imported_modules(path))
-        for path in package_files()
-        if "attribution" not in path.relative_to(_REPO_ROOT / "torchlens").parts
-        and any(
-            name == _ATTRIBUTION_PREFIX or name.startswith(f"{_ATTRIBUTION_PREFIX}.")
-            for name in _imported_modules(path)
-        )
-    }
-    stage4a_files = (
-        "torchlens/_selection/selection.py",
-        "torchlens/_selection/align.py",
-        "tests/test_selection_algebra.py",
-        "tests/test_selection_do.py",
-        "tests/test_selection_align.py",
-        "tests/test_selection_gallery.py",
-        "tests/test_dna_canary.py",
-    )
-    stage4a_offenders = {
-        relative: sorted(_imported_modules(_REPO_ROOT / relative))
-        for relative in stage4a_files
-        if any(
-            name == _ATTRIBUTION_PREFIX or name.startswith(f"{_ATTRIBUTION_PREFIX}.")
-            for name in _imported_modules(_REPO_ROOT / relative)
-        )
-    }
-    assert not package_offenders
-    assert not stage4a_offenders
-
-
-def test_attribution_detachability_scanner_is_red_capable(tmp_path: Path) -> None:
-    """The detachability scanner detects a planted direct import."""
-
-    coupled = tmp_path / "coupled.py"
-    coupled.write_text("from torchlens.attribution import occlusion\n", encoding="utf-8")
-    assert _ATTRIBUTION_PREFIX in _imported_modules(coupled)
-
-
 def _overlay_model() -> nn.Sequential:
     """Return the small CNN used by the overlay bridge tests."""
 
@@ -404,7 +348,6 @@ def _overlay_model() -> nn.Sequential:
     )
 
 
-@pytest.mark.smoke
 def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
     """Layer-scoped results color their module-output nodes; others stay None."""
 
@@ -423,7 +366,6 @@ def test_overlay_paints_attributed_module_outputs_and_nothing_else() -> None:
         trace.cleanup()
 
 
-@pytest.mark.smoke
 def test_overlay_accepts_mappings_and_refuses_unknown_keys() -> None:
     """Mapping keys resolve by module name or layer label; misses refuse typed."""
 

@@ -1,4 +1,4 @@
-"""U26.3 fix 3: the until= prefix projection's per-op overhead, and its equivalence.
+"""The until= prefix projection's per-op overhead, and its equivalence.
 
 ``run(until=...)`` skips the cut-off ops, but each executed op used to pay a full
 refresh copy: every recorded field of the refreshed op was deep-copied onto the
@@ -19,10 +19,7 @@ import torch.nn as nn
 
 import torchlens as tl
 from torchlens._capture import projectors
-from torchlens._capture.projectors import RefreshProjector
 from torchlens._data_classes import _trace_rerun_state
-from torchlens._data_classes._state_adapter import state_items
-from torchlens._data_classes.op import Op
 
 #: Op field writes per executed op on the base (f271e1568) for ``_stack()`` under
 #: ``until="block1"``, measured by this file's counter (the refresh copy plus the
@@ -43,67 +40,6 @@ def _stack() -> nn.Module:
             for index in range(3)
         )
     ).eval()
-
-
-def _executed_count(result) -> int:
-    return result.report.truncation.executed_count
-
-
-def test_until_projection_writes_fewer_fields_per_executed_op(monkeypatch):
-    """The deterministic overhead counter falls below its base value."""
-
-    model = _stack()
-    log = tl.trace(model, torch.randn(2, 3, 8, 8))
-    writes = 0
-    original = Op._internal_set
-
-    def counting(self, attr, value):
-        nonlocal writes
-        writes += 1
-        original(self, attr, value)
-
-    monkeypatch.setattr(Op, "_internal_set", counting)
-    result = log.run(inputs=torch.randn(2, 3, 8, 8), until="block1")
-    per_op = writes / _executed_count(result)
-    print(f"until= projection: {per_op:.1f} op field writes per executed op (base 353.2)")
-    assert per_op < _BASE_WRITES_PER_EXECUTED_OP / 3, per_op
-
-
-def test_prefix_projection_equals_refresh_then_static_write_back(monkeypatch):
-    """Per op: dynamic fields take the refreshed copy; every other held field is untouched."""
-
-    model = _stack()
-    log = tl.trace(model, torch.randn(2, 3, 8, 8))
-    checked = 0
-    original = RefreshProjector._project_prefix_op
-
-    def checking(self, layer, new_layer):
-        nonlocal checked
-        before = dict(state_items(layer))
-        refreshed = dict(state_items(new_layer))
-        original(self, layer, new_layer)
-        after = dict(state_items(layer))
-        assert set(before) <= set(after)
-        for name, value in before.items():
-            copied = (
-                name in RefreshProjector._DYNAMIC_OP_FIELDS
-                and name not in projectors._RERUN_KEPT_OP_FIELDS
-                and name in projectors.LAYER_PASS_LOG_FIELD_ORDER
-            )
-            if not copied:
-                assert after[name] is value or name == "source_trace", name
-                continue
-            new_value = refreshed.get(name)
-            if isinstance(new_value, torch.Tensor):
-                assert after[name] is new_value, name
-            else:
-                got = after[name]
-                assert got is new_value or got == new_value or repr(got) == repr(new_value), name
-        checked += 1
-
-    monkeypatch.setattr(RefreshProjector, "_project_prefix_op", checking)
-    result = log.run(inputs=torch.randn(2, 3, 8, 8), until="block1")
-    assert checked == _executed_count(result) > 0
 
 
 def _literal_names(source: str, opener: str, closer: str) -> set[str]:

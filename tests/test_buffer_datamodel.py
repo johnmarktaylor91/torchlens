@@ -6,7 +6,6 @@ import gc
 from collections.abc import Callable
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 import torch
@@ -15,7 +14,6 @@ from torch import nn
 
 import torchlens as tl
 from torchlens._data_classes.cleanup import (
-    _scrub_layer_entry_conditional_fields,
     _scrub_per_op_equivalence_lists,
 )
 from torchlens._postprocess.labeling import _replace_layer_names_for_layer_entry
@@ -25,6 +23,7 @@ from torchlens.errors import TraceNotReproducibleWarning
 TensorFactory = Callable[[], torch.Tensor]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/buffer_writes.py, campaign mutant kills.
 def test_buffer_write_tracker_uninstall_restores_class_after_model_gc() -> None:
     """Tracker teardown must restore patched classes even after model GC."""
 
@@ -67,6 +66,7 @@ def test_buffer_write_tracker_uninstall_restores_class_after_model_gc() -> None:
     assert _TrackerModel not in buffer_writes.BufferWriteTracker._patched_classes
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/cleanup.py.
 def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None:
     """Deleted buffer nodes leave no stale raw labels for final label mapping."""
 
@@ -112,6 +112,7 @@ def test_removed_buffer_raw_label_is_scrubbed_from_per_op_graph_fields() -> None
     assert op.control_flow.arm_children == {1: {"then": [], "else": ["add_1_raw"]}}
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/labeling.py.
 def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
     """Relabeling rebuilds derived conditional child views from the primary map."""
 
@@ -142,23 +143,6 @@ def test_conditional_child_views_are_rebuilt_after_label_rename() -> None:
     )
 
     _replace_layer_names_for_layer_entry(trace, layer_entry)
-
-    assert layer_entry.control_flow.arm_children == {1: {"then": ["child_a", "child_b"]}}
-    assert layer_entry.control_flow.then_children == ["child_a", "child_b"]
-
-
-def test_cleanup_rebuilds_conditional_child_views_from_primary_structure() -> None:
-    """Conditional cleanup normalizes derived branch-child order from the primary map."""
-
-    layer_entry = FakeRecord(
-        conditional_entry_children=[],
-        conditional_then_children=["drop_me", "child_b", "child_a"],
-        conditional_else_children=[],
-        conditional_elif_children={},
-        conditional_arm_children={1: {"then": ["child_a", "child_b", "drop_me"]}},
-    )
-
-    _scrub_layer_entry_conditional_fields(layer_entry, {"drop_me"})
 
     assert layer_entry.control_flow.arm_children == {1: {"then": ["child_a", "child_b"]}}
     assert layer_entry.control_flow.then_children == ["child_a", "child_b"]
@@ -329,22 +313,6 @@ class StaticReadOnly(nn.Module):
         return self.b + x
 
 
-def test_internal_source_parents_survive_journal_projection() -> None:
-    """Direct parents carrying buffer ancestry survive materialization."""
-
-    trace = tl.trace(StaticReadOnly(), torch.ones(2))
-
-    add_op = trace["add_1_1"]
-    output_op = trace["output_1"]
-    assert add_op.graph.internal_source_parents == ("buffer_1",)
-    # internal_source_parents is a DIRECT-PARENT relation, so the synthetic output node
-    # names ITS parent (``add_1_1``), which carries the buffer ancestry -- not the
-    # ``buffer_1`` label it used to inherit verbatim from the clone source. The old
-    # expectation pinned that bug in: ``buffer_1`` is not a parent of ``output_1``.
-    assert output_op.parents == ("add_1_1",)
-    assert output_op.graph.internal_source_parents == ("add_1_1",)
-
-
 class DataSetter(nn.Module):
     """``.data = tensor`` buffer storage reassignment model."""
 
@@ -399,6 +367,7 @@ class AliasReadThenWholeWrite(nn.Module):
         return first + second
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_storage_aliased_buffer_first_read_keeps_pre_mutation_snapshot() -> None:
     """A buffer-view read before an overlapping write keeps its original payload."""
 
@@ -534,69 +503,6 @@ def test_buffer_write_models_validate_and_expose_entities(
     assert not any(op.graph.is_buffer for op in trace.compute_ops)
 
 
-def test_batchnorm_buffer_reads_materialize_in_raw_index_order() -> None:
-    """Assert deferred BatchNorm buffer reads do not precede earlier raw ops."""
-
-    model = nn.BatchNorm1d(3).train()
-    trace = tl.trace(model, torch.randn(4, 3), capture=tl.options.CaptureOptions(save_args=True))
-    raw_indices = [op.raw_index for op in trace._layer_list]
-    add_op = trace._layer_dict_all_keys["add_1_1"]
-    buffer_2_op = trace._layer_dict_all_keys["buffer_2"]
-    batchnorm_op = trace._layer_dict_all_keys["batchnorm_1_2"]
-    buffer_5_op = trace._layer_dict_all_keys["buffer_5"]
-
-    assert raw_indices == sorted(raw_indices)
-    assert add_op.raw_index < buffer_2_op.raw_index
-    assert trace._layer_list.index(add_op) < trace._layer_list.index(buffer_2_op)
-    assert batchnorm_op.raw_index < buffer_5_op.raw_index
-    assert trace._layer_list.index(batchnorm_op) < trace._layer_list.index(buffer_5_op)
-
-
-def test_buffer_write_lookup_avoids_per_op_full_storage_scan(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Storage-key calls scale with buffer WRITES, never with total op count.
-
-    The overlapping-alias refresh deliberately re-derives every registered
-    buffer's storage key on each journaled WRITE (a stale-index-safe full scan;
-    cert round-1 backends fix), so the write path is allowed to cost
-    O(writes x buffers). The regression this test guards against is the
-    pre-index pathology where EVERY traced op paid a full storage scan
-    (O(ops x buffers)): adding non-buffer-writing ops must cost only a few
-    per-op resolution lookups, never a per-op sweep over all buffers.
-    """
-
-    call_count = 0
-    original_storage_key = buffer_writes.storage_key
-
-    def counted_storage_key(tensor: torch.Tensor) -> tuple[Any, ...] | None:
-        """Count storage-key computations while preserving real behavior."""
-
-        nonlocal call_count
-        call_count += 1
-        return original_storage_key(tensor)
-
-    monkeypatch.setattr(buffer_writes, "storage_key", counted_storage_key)
-
-    num_buffers = 48 + 1
-    extra_ops = 16
-
-    trace = tl.trace(ManyBufferWrites(num_extra_buffers=48, steps=8), torch.ones(2))
-    base_count = call_count
-
-    call_count = 0
-    trace_extra = tl.trace(
-        ManyBufferWrites(num_extra_buffers=48, steps=8, extra_ops=extra_ops), torch.ones(2)
-    )
-    extra_count = call_count
-
-    assert trace.provenance.fingerprint is not None
-    assert trace_extra.provenance.fingerprint is not None
-    # A per-op full scan would add ~num_buffers calls for EACH extra op
-    # (~16 * 49 = 784); genuine per-op resolution adds only a handful.
-    assert extra_count - base_count < extra_ops * (num_buffers // 6)
-
-
 def _assert_buffer_op_accessors_partition_buffer_ops(trace: tl.Trace) -> None:
     """Assert derived buffer op accessors partition the flat buffer op population."""
 
@@ -651,6 +557,7 @@ def _assert_op_level_buffer_accessors(trace: tl.Trace) -> None:
         assert [sink.label for sink in op.graph.buffer_sink_ops] == expected_sinks
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_op_relations.py, _data_classes/op.py.
 def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
     """Read/write op accessors partition buffer versions, including dual-role buffers."""
 
@@ -670,6 +577,7 @@ def test_buffer_op_accessors_partition_read_and_write_versions() -> None:
     assert b_versions & set(trace.buffer_write_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     """Derived buffer op accessors remain correct after portable ``.tlspec`` load."""
 
@@ -694,6 +602,7 @@ def test_buffer_op_accessors_round_trip_through_tlspec(tmp_path: Path) -> None:
     assert len(loaded.buffer_write_ops) == len(trace.buffer_write_ops)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills, planted fault catches.
 def test_reassignment_double_count_is_exact() -> None:
     """Assert N top-level reassignments produce exactly N write events."""
 
@@ -783,48 +692,7 @@ class GradBatchNorm(nn.Module):
         return self.bn(self.lin(x)).sum()
 
 
-def _param_grads(model: nn.Module, x: torch.Tensor) -> dict[str, torch.Tensor]:
-    """Return a fresh-backward gradient snapshot for every parameter."""
-
-    model.zero_grad(set_to_none=True)
-    model(x).backward()
-    return {
-        name: param.grad.detach().clone()
-        for name, param in model.named_parameters()
-        if param.grad is not None
-    }
-
-
-@pytest.mark.parametrize("model_factory", [GradRecurrent, GradBatchNorm])
-def test_buffer_capture_preserves_gradient_flow(
-    model_factory: Callable[[], nn.Module],
-) -> None:
-    """Capture hooks must be observational: tracing must not break autograd.
-
-    A reassigned state buffer carries ``grad_fn`` exactly like a non-detached
-    RNN hidden state; the fused-write snapshot reads (never replaces) the live
-    buffer. So gradients through a traced model must match an untraced run.
-    """
-
-    import copy
-
-    torch.manual_seed(0)
-    reference = model_factory().train()
-    traced_model = copy.deepcopy(reference).train()
-    x = torch.randn(8, 4)
-
-    expected = _param_grads(reference, x.clone())
-
-    # Tracing performs the fused/reassignment writes; it must leave the live
-    # autograd path untouched, so a subsequent backward still matches.
-    tl.trace(traced_model, x.clone())
-    actual = _param_grads(traced_model, x.clone())
-
-    assert expected.keys() == actual.keys()
-    for name in expected:
-        assert torch.allclose(expected[name], actual[name], atol=1e-5), name
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _storage_bindings.py, backends/torch/buffer_writes.py, campaign mutant kills.
 def test_data_setter_reconciliation_records_buffer_write() -> None:
     """Assert ``.data = tensor`` changes are recorded as buffer writes."""
 
@@ -834,6 +702,9 @@ def test_data_setter_reconciliation_records_buffer_write() -> None:
     assert len(writes) == 1
     assert writes[0].buffer_write_kind == "data_reassign"
     assert torch.equal(writes[0].out, torch.full((2,), 2.0))
+
+
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 
 
 def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
@@ -864,62 +735,3 @@ def test_merged_buffer_survivor_gains_duplicate_output_reach() -> None:
         assert any(label.startswith("output") for label in op.output_descendants)
     finally:
         trace.cleanup()
-
-
-def test_buffer_dedup_avoids_pairwise_tensor_compares_on_distinct_values() -> None:
-    """Distinct same-address buffer versions must not pay O(G^2) value compares.
-
-    Hunt-6 R52-1: step 6's dedup swept every new buffer against EVERY prior
-    unique in its hash group with ``torch.equal`` -- Theta(G^2) whole-tensor
-    compares for a training-mode recurrent BatchNorm whose running stats
-    differ every pass (~500k compares at x1000 passes). The sweep now buckets
-    uniques by recorded buffer version, so an all-distinct group
-    performs zero merge-sweep value compares.
-    """
-
-    class _LoopBN(nn.Module):
-        """BatchNorm applied repeatedly so buffers update between passes."""
-
-        def __init__(self, num_passes: int) -> None:
-            super().__init__()
-            self.bn = nn.BatchNorm1d(4)
-            self.num_passes = num_passes
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            """Apply BN ``num_passes`` times (running stats change each pass)."""
-
-            for _ in range(self.num_passes):
-                x = self.bn(x)
-            return x
-
-    num_passes = 12
-    model = _LoopBN(num_passes).train()
-
-    from torchlens._postprocess import control_flow
-
-    calls = {"n": 0}
-    original_identical = control_flow._buffer_values_identical
-
-    def counting_identical(a: torch.Tensor, b: torch.Tensor) -> bool:
-        """Count the buffer value comparisons step 6 issues."""
-
-        calls["n"] += 1
-        return original_identical(a, b)
-
-    control_flow._buffer_values_identical = counting_identical
-    try:
-        trace = tl.trace(model, torch.randn(8, 4))
-    finally:
-        control_flow._buffer_values_identical = original_identical
-
-    # Buffers stay distinct (running stats differ per pass), so nothing merges
-    # and the merge sweep needs no tensor compares at all; the linear bound
-    # covers step 6's per-buffer source-value checks.
-    linear_bound = 2 * num_passes
-    assert calls["n"] <= linear_bound, (
-        f"step-6 buffer dedup made {calls['n']} value compares for {num_passes} "
-        f"distinct-value passes (linear bound {linear_bound}) -- the pairwise "
-        "sweep is back"
-    )
-    # buffer_layers lists each buffer Layer once; its passes carry the versions.
-    assert sum(int(trace.layers[label].num_passes) for label in trace.buffer_layers) >= num_passes

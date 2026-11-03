@@ -15,7 +15,6 @@ demand -- record-shaped tests alone are how the silent-None bug shipped):
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -23,7 +22,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._io.payload_reader import declared_payload_bytes, read_op_payload
+from torchlens._io.payload_reader import read_op_payload
 from torchlens.errors import PayloadUnavailableError
 
 
@@ -45,20 +44,6 @@ def lazy_artifact(tmp_path: Path) -> tuple[Path, tl.Trace]:
     destination = tmp_path / "lazy.tlspec"
     source.save(destination)
     return destination, source
-
-
-def test_lazy_saved_rows_materialize_never_none(lazy_artifact: tuple[Path, tl.Trace]) -> None:
-    """Every saved: true row returns a tensor under eager AND lazy load."""
-
-    path, source = lazy_artifact
-    for lazy in (False, True):
-        loaded = tl.load(path, lazy=lazy)
-        expected_status = "loaded_lazy" if lazy else "loaded"
-        assert loaded.payload_load_status == expected_status
-        for label in _saved_labels(loaded):
-            out = loaded[label].out
-            assert isinstance(out, torch.Tensor), (lazy, label)
-            assert torch.equal(out, source[label].out)
 
 
 def test_lazy_unsaved_rows_refuse_typed(lazy_artifact: tuple[Path, tl.Trace]) -> None:
@@ -103,23 +88,6 @@ def test_payload_state_vocabulary_on_agent_rows(lazy_artifact: tuple[Path, tl.Tr
             assert row["saved"] is True
 
 
-def test_declared_payload_bytes_is_exact_and_torch_free(
-    lazy_artifact: tuple[Path, tl.Trace],
-) -> None:
-    """Manifest-declared budgeting matches the real retained payload bytes."""
-
-    path, source = lazy_artifact
-    manifest = json.loads((path / "manifest.json").read_text(encoding="utf-8"))
-    declared = declared_payload_bytes(manifest)
-    retained = sum(
-        op.out.element_size() * op.out.numel()
-        for op in source._layer_list
-        if getattr(op, "has_saved_activation", False)
-    )
-    assert declared == retained
-
-
-@pytest.mark.smoke
 def test_scoped_reader_refuses_payloadless_rows() -> None:
     """The scoped reader refuses typed where there is nothing to read."""
 

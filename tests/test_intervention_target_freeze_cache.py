@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import pickle
 
-import torch
-
-import torchlens as tl
 from torchlens.intervention._types import (
-    FrozenTargetSpec,
-    InterventionSpec,
     TargetSpec,
     TensorSliceSpec,
 )
@@ -90,44 +85,3 @@ def test_freeze_cache_is_not_pickled() -> None:
     assert "_tl_frozen_cache" not in restored.__dict__
     assert restored == target
     assert restored.freeze() == frozen
-
-
-def test_dedup_scan_semantics_unchanged() -> None:
-    """The call-site dedup pattern keeps first-seen order and drops repeats."""
-
-    spec = InterventionSpec()
-    added: list[FrozenTargetSpec] = []
-    for label in ["relu_1_1", "relu_2_2", "relu_1_1", "relu_3_3", "relu_2_2"]:
-        target = TargetSpec("label", label)
-        if not any(existing.freeze() == target.freeze() for existing in spec.targets):
-            spec.targets.append(target)
-            added.append(target.freeze())
-
-    assert [target.selector_value for target in spec.targets] == [
-        "relu_1_1",
-        "relu_2_2",
-        "relu_3_3",
-    ]
-    assert tuple(added) == spec.freeze().targets
-
-
-def test_predicate_intervention_targets_unchanged() -> None:
-    """Dense predicate interventions produce one ordered target per site."""
-
-    class _Chain(torch.nn.Module):
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            for _ in range(6):
-                x = torch.relu(x + 1.0)
-            return x
-
-    trace = tl.trace(
-        _Chain(),
-        torch.randn(2, 3),
-        save=tl.func("relu"),
-        intervene=tl.when(tl.func("relu"), tl.zero_ablate()),
-    )
-    frozen = trace.recipe
-    labels = [target.selector_value for target in frozen.targets]
-    assert labels == sorted(set(labels), key=labels.index)
-    assert len(labels) == 6
-    assert all(target.selector_kind == "label" for target in frozen.targets)

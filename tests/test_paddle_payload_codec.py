@@ -16,7 +16,7 @@ from torchlens._io.tensor_policy import Ok  # noqa: E402
 from torchlens.validation import validate_tlspec  # noqa: E402
 from torchlens.validation._invariants import check_metadata_invariants  # noqa: E402
 
-pytestmark = pytest.mark.backend_paddle
+pytestmark = [pytest.mark.backend_paddle, pytest.mark.rare]
 
 paddle.seed(0)
 

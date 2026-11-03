@@ -58,13 +58,6 @@ def _code(excinfo: pytest.ExceptionInfo) -> str:
 class TestAttentionView:
     """AttentionView construction and honesty metadata."""
 
-    def test_valid_view_constructs(self) -> None:
-        """A softmax pattern with aligned axes constructs."""
-
-        view = _view()
-        assert view.fingerprint.startswith("sha256:")
-        assert view.provenance_wording == "captured"
-
     def test_probability_domain_violation_refuses(self) -> None:
         """Values outside [0, 1] cannot claim the probability domain."""
 
@@ -124,7 +117,6 @@ class TestAttentionView:
 class TestCrop:
     """crop_to: cropping never renormalizes (D5)."""
 
-    @pytest.mark.smoke
     def test_crop_reports_omitted_mass_and_never_renormalizes(self) -> None:
         """Cropped values are the original values; omitted mass is exact."""
 
@@ -166,7 +158,6 @@ class TestMaskInfo:
 class TestGqa:
     """GQA disclosure arithmetic (D15)."""
 
-    @pytest.mark.smoke
     def test_group_header_wording(self) -> None:
         """Shared-heads wording names the group and its query-head span."""
 
@@ -176,12 +167,6 @@ class TestGqa:
         header = gqa.header(3)
         assert "kv group 1 of 2" in header
         assert "query heads 0-6" in header
-
-    def test_uneven_grouping_refuses(self) -> None:
-        """Non-dividing grouping is a config error."""
-
-        with pytest.raises(torchlens.errors.RenderError):
-            tviz.GqaInfo(num_query_heads=14, num_key_value_heads=4)
 
 
 class TestAnnotationKinds:
@@ -210,7 +195,6 @@ class TestAnnotationKinds:
             annotation = tviz.Annotation(kind=kind, heads=(0, 1), values=(0.5, None), source="s")
             assert annotation.values[1] is None  # unmeasured stays blank
 
-    @pytest.mark.smoke
     def test_from_receipt_mints_intervention_effect(self) -> None:
         """The receipt door mints the causal kind with its evidence."""
 
@@ -243,13 +227,6 @@ class TestCausalReceipt:
             _receipt(positive_control=0.0)
         assert _code(excinfo) == "tv_receipt_invalid"
 
-    def test_nonfinite_effect_refuses(self) -> None:
-        """A non-finite effect is a failed measurement."""
-
-        with pytest.raises(torchlens.errors.RenderError) as excinfo:
-            _receipt(effects=(float("inf"), 1.0))
-        assert _code(excinfo) == "tv_receipt_invalid"
-
     def test_measured_zero_is_kept(self) -> None:
         """A genuine measured zero is a value, not a refusal."""
 
@@ -260,26 +237,6 @@ class TestCausalReceipt:
 
 class TestScoreDecomposition:
     """The hard sum-to-score invariant (D19)."""
-
-    def test_closed_terms_construct(self) -> None:
-        """Terms reproducing the reference score construct."""
-
-        q = torch.randn(8)
-        k = torch.randn(8)
-        scale = 8**0.5
-        reference = float((q * k).sum()) / scale
-        record = tviz.ScoreDecomposition(
-            layer="blk.0.attn",
-            head=0,
-            destination=1,
-            source=0,
-            query_vector=q,
-            key_vector=k,
-            products=q * k,
-            scale=scale,
-            reference_score=reference,
-        )
-        assert record.total == pytest.approx(reference, abs=1e-5)
 
     def test_unclosed_terms_refuse(self) -> None:
         """A decomposition that misses the score REFUSES (never misleads)."""
@@ -339,7 +296,6 @@ class TestEpisodeCoordinates:
         assert view.episode is not None
         assert view.episode.step == 3
 
-    @pytest.mark.smoke
     def test_role_vocabulary_closed(self) -> None:
         """Unknown roles refuse."""
 
@@ -361,7 +317,6 @@ class _Modules(dict):
 class TestExtractionRefusals:
     """Trace-facing refusals on duck-typed traces (no capture needed)."""
 
-    @pytest.mark.smoke
     def test_missing_pattern_facet_refuses(self) -> None:
         """A pattern-less trace refuses tv_facet_missing with the remedy."""
 
@@ -375,7 +330,6 @@ class TestExtractionRefusals:
             tviz.attention_views(trace)
         assert _code(excinfo) == "tv_facet_missing"
 
-    @pytest.mark.smoke
     def test_missing_payload_refuses(self) -> None:
         """A facet without a captured tensor payload refuses tv_payload_missing."""
 

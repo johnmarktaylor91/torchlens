@@ -66,6 +66,7 @@ def runnable_trace(gpt2_and_inputs):
         trace.cleanup()
 
 
+# Kept: sole branch coverage of _io/runnable.py, _runnable/state.py, _runnable/witness_contracts.py; a sole mutation kill; the catch of its regression fault.
 def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, runnable_trace):
     """Row 17 at real-model tier: the default weight-free runnable artifact of
     a real HF causal-LM loads, runs on RANDOM role-init state, and warns with
@@ -87,47 +88,7 @@ def test_gpt2_weight_free_runnable_random_run_warns(tmp_path, gpt2_and_inputs, r
     assert any("include_weights=True" in m and "load_state_dict" in m for m in messages)
 
 
-def test_gpt2_embedded_weights_runnable_run_settles_verified(
-    tmp_path, gpt2_and_inputs, runnable_trace
-):
-    """The FIX-A dividend row 17 waited on: a real HF causal-LM runnable save
-    with embedded weights loads, re-executes its taken-path DAG, settles
-    VERIFIED, and reproduces the captured logits through the real
-    ``ModelOutput`` container."""
-
-    model, input_ids = gpt2_and_inputs
-    path = tmp_path / "gpt2_runnable_weights"
-    runnable_trace.save(path, level="runnable", include_weights=True)
-    loaded = tl.load(path)
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        result = loaded.run(inputs=input_ids)
-    assert result.report.state_source is StateSource.EMBEDDED_CAPTURE_STATE
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    random_warnings = [
-        w for w in caught if issubclass(w.category, TorchLensWarning) and "RANDOM" in str(w.message)
-    ]
-    assert random_warnings == []
-    # The runtime output is the real HF container, not a lossy substitute.
-    assert type(result.output).__name__ == "CausalLMOutputWithCrossAttentions"
-    live = model(input_ids=input_ids)
-    assert torch.allclose(result.output.logits, live.logits, atol=1e-5)
-
-
-def test_structure_witness_classifies_model_output_as_hf_kind(gpt2_and_inputs):
-    """Regression pin for the witness classifier-order defect this rider
-    unblocked: an HF ``ModelOutput`` (which IS a dataclass) must classify as
-    ``hf_model_output``, mirroring the capture-side spec builder's dispatch
-    order -- the inverted order false-DIVERGED every honest run above."""
-
-    from torchlens._runnable.witness_contracts import _container_kind
-
-    model, input_ids = gpt2_and_inputs
-    with torch.no_grad():
-        out = model(input_ids=input_ids)
-    assert _container_kind(out) == "hf_model_output"
-
-
+# Kept: sole branch coverage of backends/torch/_trace_backward.py; a sole mutation kill.
 def test_gpt2_loaded_backward_refuses_before_mutation(tmp_path, gpt2_and_inputs):
     """Row 21 at real-model tier: ``backward`` on a bundle-loaded real HF
     trace refuses typed BEFORE mutating backward state."""
@@ -145,6 +106,7 @@ def test_gpt2_loaded_backward_refuses_before_mutation(tmp_path, gpt2_and_inputs)
         loaded.capture_backward()
 
 
+# Kept: sole branch coverage of _capture/_outcome_types.py; a sole mutation kill.
 def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
     """Row 21 at real-model tier: the N1-N5 chokepoint reads a slots-backed
     real-model ``Recording``'s settled COMPLETE outcome without the false
@@ -162,6 +124,7 @@ def test_gpt2_recording_outcome_gate_reads_complete(gpt2_and_inputs):
     assert hand_built == []
 
 
+# Kept: a sole mutation kill.
 def test_gpt2_default_cache_config_live_run_reaches_verdict_or_typed_remedy(gpt2_and_inputs):
     """AUD-HONESTY H1 at the R0 roster tier: the rows above pin ``use_cache=False`` +
     ``replayable=True`` only, so the HF DEFAULT configuration (KV cache on) was

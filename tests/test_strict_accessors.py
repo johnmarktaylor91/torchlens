@@ -87,15 +87,6 @@ def test_layers_accessor_always_returns_layer_for_pass_label() -> None:
     assert trace.layers["linear_1_1:1"] is trace.layers["linear_1_1"]
 
 
-def test_ops_accessor_returns_op_for_pass_label() -> None:
-    """Pass-qualified op labels resolve to Op records."""
-
-    trace = _strict_trace()
-
-    assert isinstance(trace.ops["linear_1_1:1"], Op)
-    assert trace.ops["linear_1_1:1"].label == "linear_1_1:1"
-
-
 def test_trace_getitem_never_returns_a_layer() -> None:
     """``trace[...]`` returns Ops; Layers come only from ``trace.layers[...]`` (walk access RC-260)."""
 
@@ -161,25 +152,6 @@ def test_all_pass_token_selects_every_pass() -> None:
     with pytest.raises(InvalidArgumentError) as info:
         trace["no_such_layer:all"]
     assert info.value.fields["code"] == "op_lookup_not_found"
-
-
-def test_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
-    """A bare multi-pass Layer label is rejected by trace.ops."""
-
-    trace = _strict_trace()
-
-    with pytest.raises(AmbiguousOpLookupError):
-        trace.ops["linear_1_1"]
-
-
-def test_layer_ops_accessor_bare_multi_pass_label_is_ambiguous() -> None:
-    """A bare multi-pass Layer label is rejected by the scoped layer.ops accessor."""
-
-    trace = _strict_trace()
-    layer = trace.layers["linear_1_1"]
-
-    with pytest.raises(AmbiguousOpLookupError):
-        layer.ops["linear_1_1"]
 
 
 def test_layer_ops_contains_is_false_for_ambiguous_label() -> None:

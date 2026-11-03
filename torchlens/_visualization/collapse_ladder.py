@@ -12,7 +12,7 @@ duplicate ``t`` values and no-op steps existed. The documented story
 This module makes them the same truth: ONE nested ladder of typed
 condensation events (:class:`CollapseEvent`) is derived from the max-mode
 endpoint, and ``auto``, float-level selection, and the public
-``Drawing.collapse_schedule()`` all read it.
+``Drawing.collapse_schedule`` all read it.
 
 - Interior ``t`` maps GEOMETRICALLY in realized count:
   ``target(t) = full * (max/full)**t``, i.e.
@@ -608,7 +608,11 @@ def _may_box_expanded(trace: Trace, address: str, signal: Any, boxes: set[str]) 
 
 
 def _has_expanded_twin(
-    trace: Trace, signal: Any, siblings: list[str], boxes: set[str], signals: Mapping[str, Any]
+    trace: Trace,
+    signal: Any,
+    siblings: list[str],
+    boxes: set[str],
+    signals: Mapping[str, Any],
 ) -> bool:
     """Return whether a sibling with the same structure is also fully expanded."""
 
@@ -692,7 +696,14 @@ def _identical_run(
         return ()
     analysis, hidden_counts, total_units = legality
     run = _optimizer()._legal_plan_child_segment_run(
-        trace, context, analysis, nodes, start, hidden_counts, total_units, dominance_limit=0.75
+        trace,
+        context,
+        analysis,
+        nodes,
+        start,
+        hidden_counts,
+        total_units,
+        dominance_limit=0.75,
     )
     if not run:
         return ()

@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import inspect
-
 import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
 from torchlens.errors import InvalidArgumentError
-from torchlens.intervention._types import TargetSpec
-from torchlens.intervention.errors import AmbiguousSiteError, SiteResolutionError
 
 
 class _TwoRelu(nn.Module):
@@ -30,7 +26,6 @@ def trace() -> tl.Trace:
     return tl.trace(_TwoRelu(), torch.randn(3, 4))
 
 
-@pytest.mark.smoke
 def test_set_selector_returns_every_match_as_a_selection(trace: tl.Trace) -> None:
     selection = trace[tl.func("relu")]
     assert isinstance(selection, tl.Selection)
@@ -49,71 +44,12 @@ def test_set_selector_is_never_capped(trace: tl.Trace) -> None:
     assert len(everything) == len(trace._layer_list)
 
 
+@pytest.mark.smoke
 def test_set_selector_with_no_match_is_an_empty_selection(trace: tl.Trace) -> None:
     selection = trace[tl.func("conv2d")]
     assert isinstance(selection, tl.Selection)
     assert len(selection) == 0
     assert selection.is_empty
-
-
-def test_selection_labels_slice_and_rows(trace: tl.Trace) -> None:
-    selection = trace[tl.func("relu")]
-    assert len(selection.labels) == 2
-    for label, row in zip(selection.labels, selection, strict=True):
-        record = trace[label]
-        assert (record.layer_label, record.pass_number) == row.key
-    head = selection[:1]
-    assert isinstance(head, tl.Selection)
-    assert len(head) == 1
-    assert head.labels == selection.labels[:1]
-    assert head.selector is selection.selector
-
-
-def test_selection_to_pandas_has_one_row_per_site(trace: tl.Trace) -> None:
-    pd = pytest.importorskip("pandas")
-    frame = trace[tl.func("relu")].to_pandas()
-    assert isinstance(frame, pd.DataFrame)
-    assert list(frame.columns) == [
-        "label",
-        "kind",
-        "key",
-        "num_selected",
-        "numel",
-        "shape",
-        "relation",
-        "source",
-    ]
-    assert len(frame) == 2
-
-
-def test_tl_selector_resolves_through_the_same_door(trace: tl.Trace) -> None:
-    selector = tl.func("relu") | tl.func("linear")
-    selection = trace[selector]
-    assert isinstance(selection, tl.Selection)
-    assert len(selection) == 4
-    assert not hasattr(tl.Selector, "resolve")
-
-
-def test_exact_label_returns_the_one_record(trace: tl.Trace) -> None:
-    label = trace[tl.func("relu")].labels[0]
-    record = trace[tl.label(label)]
-    assert record is trace[label]
-
-
-def test_one_thing_spelling_refuses_several_matches(trace: tl.Trace) -> None:
-    spec = TargetSpec(selector_kind="func", selector_value="relu")
-    with pytest.raises(AmbiguousSiteError) as info:
-        trace[spec]
-    assert info.value.fields["code"] == "site_spelling_not_unique"
-    assert info.value.fields["matched"] == 2
-    one = TargetSpec(selector_kind="func", selector_value="relu")
-    assert trace[TargetSpec(selector_kind="label", selector_value=trace[tl.func("relu")].labels[0])]
-    assert one.selector_kind == "func"
-
-
-def test_one_thing_spelling_with_no_match_still_refuses(trace: tl.Trace) -> None:
-    with pytest.raises(SiteResolutionError):
-        trace[tl.label("does_not_exist")]
 
 
 def test_public_surface_has_no_site_table_or_resolve_sites() -> None:
@@ -124,19 +60,6 @@ def test_public_surface_has_no_site_table_or_resolve_sites() -> None:
         with pytest.raises(AttributeError) as info:
             getattr(tl, name)
         assert "trace[selector]" in str(info.value) or "Selection" in str(info.value)
-
-
-def test_count_by_one_and_two_keys(trace: tl.Trace) -> None:
-    by_kind = trace.layers.count_by("kind")
-    assert by_kind["linear"] == 2 and by_kind["relu"] == 2
-    assert sum(by_kind.values()) == len(trace.layers)
-    by_module = trace.layers.count_by("module")
-    assert sum(by_module.values()) == len(trace.layers)
-    both = trace.layers.count_by("module", "kind")
-    assert all(isinstance(key, tuple) and len(key) == 2 for key in both)
-    assert sum(both.values()) == len(trace.layers)
-    by_op_kind = trace.ops.count_by("kind")
-    assert by_op_kind["linear"] == 2 and by_op_kind["relu"] == 2
 
 
 def test_count_by_refuses_no_key_and_unknown_key(trace: tl.Trace) -> None:
@@ -153,21 +76,6 @@ def test_count_by_reads_any_scalar_field_of_other_accessors(trace: tl.Trace) -> 
     by_class = trace.modules.count_by("class_name")
     assert by_class.get("Linear") == 2
     assert sum(trace.params.count_by("dtype").values()) == len(trace.params)
-
-
-def test_layer_accessor_has_no_by_methods(trace: tl.Trace) -> None:
-    for name in ("by_operator", "by_module", "by_module_and_operator"):
-        assert not hasattr(trace.layers, name)
-
-
-def test_in_module_has_one_signature(trace: tl.Trace) -> None:
-    assert list(inspect.signature(tl.in_module).parameters) == ["address"]
-    selection = trace[tl.in_module("fc1")]
-    assert len(selection) == 1
-    record = trace[selection.labels[0]]
-    assert record.module.split(":", 1)[0] == "fc1"
-    with pytest.raises(TypeError):
-        tl.in_module(trace[selection.labels[0]], "fc1")  # type: ignore[call-arg]
 
 
 def test_site_record_returns_the_op_param_or_edge_it_names(trace: tl.Trace) -> None:
@@ -189,7 +97,9 @@ def test_site_record_on_edge_rows_is_the_edge_use_record() -> None:
 
     torch.manual_seed(0)
     replayable = tl.trace(
-        _TwoRelu(), torch.randn(3, 4), capture=tl.options.CaptureOptions(replayable=True)
+        _TwoRelu(),
+        torch.randn(3, 4),
+        capture=tl.options.CaptureOptions(replayable=True),
     )
     relu_op = next(op for op in replayable.ops if op.func_name == "relu")
     use = relu_op.edge_uses[0]

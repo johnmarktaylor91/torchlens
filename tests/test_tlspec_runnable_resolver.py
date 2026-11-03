@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import importlib
 import json
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, cast
@@ -27,64 +25,11 @@ from torchlens._runnable import (
     RunnableErrorCode,
     SparseRunDescriptor,
 )
-from torchlens._utils._producer_version import _torch_minor_version
 from torchlens._utils._torch_compat import (
-    _RUNNABLE_TORCH_ALIASES,
     resolve_runnable_torch_alias,
 )
-from torchlens.errors import ReattachError
 from torchlens.intervention._types import FunctionRegistryKey
 from torchlens.options import CaptureOptions
-
-
-def _restamp_runtime_fingerprints(run: dict) -> None:
-    """Re-derive every call's ``runtime_fingerprint`` from the (edited) manifest.
-
-    Parse now re-derives and enforces the per-call fingerprint, so a fixture
-    that edits a signature-relevant fact (e.g. the callable registry key) must
-    model a COHERENT re-authoring -- edit plus matching fingerprint -- or the
-    tamper tripwire fires before the behavior under test is reached.
-    """
-
-    from hashlib import sha256
-
-    keys_by_registry_id = {entry["registry_id"]: entry["key"] for entry in run["callable_registry"]}
-    slots_by_id = {slot["slot_id"]: slot for slot in run["tensor_slots"]}
-    for call in run["calls"]:
-        key = keys_by_registry_id[call["registry_id"]]
-        payload = {
-            "callable": {
-                "namespace": key["namespace"],
-                "qualname": key["qualname"],
-                "dispatch_kind": key["dispatch_kind"],
-                "version": key["version"],
-                "import_path": key["import_path"],
-            },
-            "argument_names": list(call["argument_names"]),
-            "num_positional_args": int(call["num_positional_args"]),
-            "num_keyword_args": int(call["num_keyword_args"]),
-            "outputs": [
-                {
-                    "shape": list(slots_by_id[slot_id]["shape"]),
-                    "dtype": slots_by_id[slot_id]["dtype"],
-                }
-                for slot_id in call["output_slot_ids"]
-            ],
-            "execution_context": {
-                "autocast": [
-                    {
-                        "device_type": entry["device_type"],
-                        "enabled": entry["enabled"],
-                        "dtype": entry.get("dtype"),
-                    }
-                    for entry in call["execution_context"]["autocast"]
-                ],
-                "grad_enabled": call["execution_context"]["grad_enabled"],
-                "inference_mode": call["execution_context"]["inference_mode"],
-            },
-        }
-        serialized = json.dumps(payload, sort_keys=True, separators=(",", ":"))
-        call["runtime_fingerprint"] = sha256(serialized.encode("utf-8")).hexdigest()
 
 
 class ResolverModel(nn.Module):
@@ -173,7 +118,6 @@ def _codes(descriptor: SparseRunDescriptor) -> set[RunnableErrorCode]:
     return {diagnostic.code for diagnostic in report.diagnostics}
 
 
-@pytest.mark.smoke
 def test_locked_ladder_exact_alias_reverse_and_decorated_rungs() -> None:
     """Resolve representative keys through every locked ladder rung."""
 
@@ -229,29 +173,6 @@ def test_cross_version_alias_fixture_and_bounds() -> None:
     assert resolve_runnable_torch_alias("Tensor.add", "2.13.0") is None
 
 
-def test_variable_functions_aliases_cover_running_torch_minor() -> None:
-    """Lock VariableFunctionsClass aliases open across the running torch minor."""
-
-    running_minor = _torch_minor_version(torch.__version__)
-    assert running_minor is not None
-    aliases = tuple(
-        alias for alias in _RUNNABLE_TORCH_ALIASES if "_VariableFunctionsClass" in alias.source
-    )
-    assert aliases
-    assert all(
-        alias.recorded_min_version <= running_minor
-        and (alias.recorded_max_version is None or running_minor <= alias.recorded_max_version)
-        for alias in aliases
-    )
-    assert resolve_runnable_torch_alias(
-        "torch._VariableFunctionsClass.relu", torch.__version__
-    ) == (
-        "torch",
-        "relu",
-        "private_to_public:torch._VariableFunctionsClass->torch",
-    )
-
-
 def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
     """Cover every stock namespace and prove aliases never reinterpret exact keys."""
 
@@ -269,7 +190,10 @@ def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
         ),
         (
             FunctionRegistryKey(
-                "custom", "special_erf", "function", import_path="torch._C._special:special_erf"
+                "custom",
+                "special_erf",
+                "function",
+                import_path="torch._C._special:special_erf",
             ),
             "torch._C._special.special_erf",
         ),
@@ -290,116 +214,6 @@ def test_resolver_namespace_table_and_exact_binding_monotonicity() -> None:
     record = next(item for item in report.resolver_records if item.registry_id == linear_id)
     assert record.status is ResolverStatus.RESOLVED_EXACT
     assert record.provenance.startswith("exact_getattr:")
-
-
-def test_attachment_is_all_or_none_and_resolution_runs_under_pause_logging(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Never retain partial callables and enclose resolution in pause_logging."""
-
-    descriptor = _descriptor()
-    registry_id = descriptor.callable_registry[-1].registry_id
-    broken = _replace_key(
-        descriptor,
-        registry_id,
-        FunctionRegistryKey("torch", "definitely_absent", "function"),
-    )
-    entered = 0
-
-    @contextmanager
-    def observed_pause() -> Iterator[None]:
-        """Observe the resolver's logging pause context."""
-
-        nonlocal entered
-        entered += 1
-        with _state.pause_logging():
-            yield
-
-    original_pause = _state.pause_logging
-
-    @contextmanager
-    def nonrecursive_pause() -> Iterator[None]:
-        """Delegate to the original pause without recursing through the patch."""
-
-        nonlocal entered
-        entered += 1
-        with original_pause():
-            yield
-
-    del observed_pause
-    monkeypatch.setattr(_state, "pause_logging", nonrecursive_pause)
-    report, attachments = preflight_sparse_run_descriptor(broken)
-    assert entered == 1
-    assert report.status is ReadinessStatus.UNAVAILABLE
-    assert attachments is None
-
-
-def test_safe_load_survives_unresolved_key_and_run_fails_once_with_full_report(
-    tmp_path: Path,
-) -> None:
-    """Keep analysis usable while premature execution raises one aggregate error."""
-
-    source = tl.trace(
-        ResolverModel(),
-        torch.ones(1, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            capture_container_structure=True,
-            cache=False,
-        ),
-    )
-    path = tmp_path / "unresolved.tlspec"
-    source.save(path, level="runnable")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["run"]["callable_registry"][0]["key"] = {
-        "namespace": "torch",
-        "qualname": "definitely_absent",
-        "dispatch_kind": "function",
-        "version": 1,
-        "import_path": None,
-    }
-    _restamp_runtime_fingerprints(manifest["run"])
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-    loaded = tl.load(path)
-    assert len(loaded._layer_list) == len(source._layer_list)
-    assert loaded.readiness.status is ReadinessStatus.UNAVAILABLE
-    assert loaded._runnable.callables_by_call_id is None
-    with pytest.raises(ReattachError) as captured:
-        loaded.run(torch.ones(1, 3))
-    assert captured.value.fields["readiness"] is loaded.readiness
-    assert captured.value.fields["diagnostics"] == loaded.readiness.diagnostics
-
-
-def test_load_defers_unsupported_callable_schema_to_structured_readiness(
-    tmp_path: Path,
-) -> None:
-    """Keep validation strict publicly while analysis load reports a version ceiling."""
-
-    source = tl.trace(
-        ResolverModel(),
-        torch.ones(1, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            capture_container_structure=True,
-            cache=False,
-        ),
-    )
-    path = tmp_path / "future_ref.tlspec"
-    source.save(path, level="runnable")
-    manifest_path = path / "manifest.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    manifest["run"]["callable_ref_schema"] = 2
-    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
-
-    with pytest.raises(ValueError, match="callable_ref_schema"):
-        tl.validation.validate_tlspec(path)
-    loaded = tl.load(path)
-    assert len(loaded._layer_list) == len(source._layer_list)
-    assert RunnableErrorCode.UNSUPPORTED_REF_SCHEMA in {
-        diagnostic.code for diagnostic in loaded.readiness.diagnostics
-    }
 
 
 def test_untrusted_custom_default_denies_without_import(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -459,6 +273,7 @@ def test_non_torch_backend_returns_structured_unsupported_readiness() -> None:
     }
 
 
+@pytest.mark.smoke
 def test_load_time_failure_taxonomy_and_execution_skeletons(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

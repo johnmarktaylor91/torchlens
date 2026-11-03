@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 from .layer import Layer
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from .trace import Trace
 
 from collections import OrderedDict
@@ -399,11 +401,27 @@ def layers_compute(trace: Trace) -> Accessor[Layer]:
     )
 
 
+def _boundary_entry(trace: Trace) -> Callable[[str], Layer | Op]:
+    """Resolve one boundary list entry: a bare label to its Layer, a pass-qualified one to its Op.
+
+    Torch lists bare layer labels; preview finalizers list a multi-pass layer's
+    output by its pass-qualified label (``_finalize`` boundary relabel), which
+    the Layer store does not key.
+    """
+
+    def resolve(label: str) -> Layer | Op:
+        """Return the Layer keyed by ``label``, else the Op its pass-qualified label names."""
+        layer = trace._layer_logs.get(label)
+        return layer if layer is not None else trace[label]
+
+    return resolve
+
+
 def input_ops(trace: Trace) -> Accessor[Op]:
     """Body of ``Trace.input_ops``; the record keeps the thin spelling and docstring."""
 
     return TraceOpAccessor(
-        boundary_label_ops(trace.input_layers, trace._layer_logs.__getitem__),
+        boundary_label_ops(trace.input_layers, _boundary_entry(trace)),
         trace._layer_num_calls,
     )
 
@@ -412,7 +430,7 @@ def output_ops(trace: Trace) -> Accessor[Op]:
     """Body of ``Trace.output_ops``; the record keeps the thin spelling and docstring."""
 
     return TraceOpAccessor(
-        boundary_label_ops(trace.output_layers, trace._layer_logs.__getitem__),
+        boundary_label_ops(trace.output_layers, _boundary_entry(trace)),
         trace._layer_num_calls,
     )
 
@@ -553,8 +571,8 @@ def find_sites(trace: Trace, selector: Any, *, strict: bool = False, max_fanout:
     return find_sites(trace, selector, strict=strict, max_fanout=max_fanout)
 
 
-def find_layers(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
-    """Return layer labels matching a fuzzy query.
+def suggest_layer_labels(trace: Trace, selector: str, *, limit: int = 10) -> list[str]:
+    """Return layer labels matching a fuzzy query (the did-you-mean candidates of a refusal).
 
     Parameters
     ----------

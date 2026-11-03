@@ -98,6 +98,13 @@ class RecordingOptions:
     These are the knobs that belong to the recorder itself. Capture knobs ride
     ``capture=CaptureOptions(...)``, the stop predicate is the door's
     ``stop_after=``, narration is ``narrate=`` and the disk sink is ``storage=``.
+
+    Examples
+    --------
+    >>> opts = RecordingOptions(history_size=4)
+    >>> opts.history_size, opts.on_forward_error
+    (4, 'raise')
+
     """
 
     keep_op: PredicateFn | None

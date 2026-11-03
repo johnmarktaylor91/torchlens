@@ -5,9 +5,11 @@ written here once so ``backend.py`` only calls them:
 
 - Typed refusals (SPEC 1.3): a payload that has no readable buffer refuses
   ``constant_unrealizable`` naming the op instead of surfacing tinygrad's
-  ``NotImplementedError("need copyin")``; a forward graph that carries lazy
-  RNG counter state refuses ``rng_state_in_graph`` before any per-op
-  realization could re-evaluate it (FORKS F-K interim until realize-once).
+  ``NotImplementedError("need copyin")``; a forward that draws random
+  numbers itself (lazy RNG state the forward created) refuses
+  ``rng_state_in_graph`` before anything is realized. Random-init weights
+  created before the forward are realized once with the capture instead
+  (``_realize_once``).
 - Named validation verdicts (SPEC 4.3): replay validation reports the first
   offending op and a reason from ``VALIDATION_REASONS`` instead of a bare
   boolean.
@@ -52,8 +54,9 @@ CONSTANT_KIND_ANNOTATION = "tinygrad_constant_kind"
 #: UOp names tinygrad's Threefry generator leaves in a graph that consumed RNG.
 RNG_UOP_NAMES: frozenset[str] = frozenset({"THREEFRY"})
 
-#: The payload policy the interim per-uop realization records on a trace.
-PER_UOP_PAYLOAD_POLICY = "dev_python_realized_copy"
+#: The payload policy a live capture records on a trace: every recorded value
+#: realized by one ``realize_once`` call after the forward (``_realize_once``).
+REALIZE_ONCE_PAYLOAD_POLICY = "realize_once"
 
 
 def describe_uop(uop: Any) -> str:
@@ -146,7 +149,7 @@ def refuse_rng_state_in_graph(uop: Any, *, code: str) -> BackendUnsupportedError
     Parameters
     ----------
     uop
-        The first RNG-bearing UOp met in the graph.
+        The first generator UOp the forward itself created.
     code
         The refusal code, spelled at the raise site (:data:`RNG_STATE_IN_GRAPH_CODE`).
 
@@ -157,12 +160,15 @@ def refuse_rng_state_in_graph(uop: Any, *, code: str) -> BackendUnsupportedError
     """
 
     return BackendUnsupportedError(
-        "tinygrad backend preview cannot capture a forward whose graph carries lazy RNG "
-        f"generator state (op {describe_uop(uop)}): a per-op realization would re-evaluate "
-        "the random values, so random-init tinygrad.nn layers and in-forward Tensor.rand "
-        "calls are refused until realize-once capture lands",
+        "tinygrad backend preview cannot capture a forward that draws random numbers "
+        f"itself (op {describe_uop(uop)}): replay validation would draw them again and get "
+        "different values. Random-init weights created before the forward are captured; "
+        "Tensor.rand, dropout or other RNG calls inside the traced callable are refused",
         code=code,
-        remedy="realize random-init parameters before capture (for example by one eager forward)",
+        remedy=(
+            "draw the random values before capture and pass them in as inputs or closure "
+            "tensors, or disable in-forward randomness (for example dropout) while tracing"
+        ),
         op=describe_uop(uop),
     )
 
@@ -300,8 +306,8 @@ class ReplayVerdict:
             return ()
         return (
             {
-                "label": self.failed_label,
-                "verdict": "failed",
+                "op_label": self.failed_label,
+                "decision": "failed",
                 "reason": self.reason,
                 "detail": self.detail,
             },

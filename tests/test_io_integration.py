@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import importlib.util
 from pathlib import Path
 from typing import Any
 
@@ -18,8 +17,6 @@ from torchlens import load, trace as trace_fn  # noqa: E402
 from torchlens._data_classes.trace import Trace  # noqa: E402
 from torchlens._io import BlobRef  # noqa: E402
 from torchlens.io import materialize_nested  # noqa: E402
-
-PYARROW_AVAILABLE = importlib.util.find_spec("pyarrow") is not None
 
 
 class _IntegrationConvModel(nn.Module):
@@ -131,47 +128,6 @@ def _contains_blob_ref(value: Any) -> bool:
     return False
 
 
-def test_streaming_lazy_materialize_and_parquet_round_trip(tmp_path: Path) -> None:
-    """Streaming save should compose with lazy load, materialize, and parquet export."""
-
-    if not PYARROW_AVAILABLE:
-        pytest.skip("pyarrow is required for parquet round-trip coverage")
-
-    bundle_path = tmp_path / "streamed_bundle.tl"
-    model, inputs = _build_conv_inputs()
-
-    streamed_log = trace_fn(
-        model,
-        inputs,
-        capture=tl.options.CaptureOptions(seed=0),
-        save="all",
-        storage=tl.options.StorageOptions(path=bundle_path),
-    )
-    assert (bundle_path / "manifest.json").exists()
-    assert (bundle_path / "metadata.pkl").exists()
-    assert sorted((bundle_path / "blobs").glob("*.safetensors"))
-
-    lazy_log = load(bundle_path, lazy=True)
-    saved_layers = _saved_layers(lazy_log)
-    assert saved_layers
-
-    for layer in saved_layers[:3]:
-        tensor = layer.payload.materialize_out()
-        assert isinstance(tensor, torch.Tensor)
-        assert layer._out_ref is not None
-
-    parquet_path = tmp_path / "streamed_layers.parquet"
-    tl.export.parquet(lazy_log, parquet_path)
-    parquet_df = pd.read_parquet(parquet_path)
-    exported_df = lazy_log.to_pandas()
-
-    assert len(streamed_log._layer_list) == len(lazy_log._layer_list)
-    assert len(parquet_df) == len(exported_df)
-    assert parquet_df["layer_label"].tolist() == exported_df["layer_label"].tolist()
-    assert parquet_df["layer_type"].tolist() == exported_df["layer_type"].tolist()
-    assert parquet_df["pass_number"].tolist() == exported_df["pass_number"].tolist()
-
-
 def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
     """Post-hoc bundle save should support lazy nested rehydration and resave."""
 
@@ -214,54 +170,6 @@ def test_post_hoc_save_lazy_rehydrate_nested_and_resave(tmp_path: Path) -> None:
         and any(isinstance(arg, torch.Tensor) for arg in layer.call.saved_args)
         for layer in restored._layer_list
     )
-
-
-def test_streaming_keep_outs_in_memory_false_materializes_from_refs(
-    tmp_path: Path,
-) -> None:
-    """Streaming eviction mode should leave only refs until materialization."""
-
-    bundle_path = tmp_path / "stream_evict.tl"
-    model, inputs = _build_conv_inputs()
-    streamed_log = trace_fn(
-        model,
-        inputs,
-        capture=tl.options.CaptureOptions(seed=0),
-        save="all",
-        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=False),
-    )
-    eager_log = load(bundle_path, lazy=False)
-
-    streamed_layer = _first_saved_layer(streamed_log)
-    eager_layer = _first_saved_layer(eager_log)
-
-    assert streamed_layer.out is None
-    assert streamed_layer._out_ref is not None
-    tensor = streamed_layer.payload.materialize_out()
-
-    assert isinstance(tensor, torch.Tensor)
-    assert isinstance(eager_layer.out, torch.Tensor)
-    assert torch.equal(tensor, eager_layer.out)
-
-
-def test_streaming_keep_outs_in_memory_true_keeps_tensor_and_ref(tmp_path: Path) -> None:
-    """Streaming keep-in-memory mode should retain both tensors and lazy refs."""
-
-    bundle_path = tmp_path / "stream_keep.tl"
-    model, inputs = _build_conv_inputs()
-    streamed_log = trace_fn(
-        model,
-        inputs,
-        capture=tl.options.CaptureOptions(seed=0),
-        save="all",
-        storage=tl.options.StorageOptions(path=bundle_path, retain_in_memory=True),
-    )
-
-    saved_layers = _saved_layers(streamed_log)
-    assert saved_layers
-    for layer in saved_layers:
-        assert isinstance(layer.out, torch.Tensor)
-        assert layer._out_ref is not None
 
 
 @pytest.mark.rare

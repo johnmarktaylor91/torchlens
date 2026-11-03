@@ -1201,7 +1201,7 @@ def resolve_view(
     if level == "op":
         rows = []
         for fact in index.pass_facts:
-            row = _op_row(fact, 1, None)
+            row = _op_row(fact, 1, fact.owner_address or None)  # owner feeds where=
             if len(fact.qualified_labels) == 1 and ":" in fact.qualified_labels[0]:
                 pass_index = fact.qualified_labels[0].rsplit(":", 1)[1]
                 layer_passes = sum(1 for f in index.pass_facts if f.label == fact.label)

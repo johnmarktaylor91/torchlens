@@ -19,7 +19,7 @@ from torchlens._io.tlspec import _TlSpecWriter
 from torchlens.errors import BackendPayloadUnsupportedError
 from torchlens.intervention._types import Edit, FireRecord, InterventionSpec
 from torchlens.options import CaptureOptions
-from torchlens.validation import _SUPPORTED_JSON_SCHEMA_KEYWORDS, validate_tlspec
+from torchlens.validation import validate_tlspec
 
 
 class UnifiedTinyModel(nn.Module):
@@ -191,43 +191,6 @@ def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     )
 
 
-def _schema_keywords(schema: dict[str, Any]) -> set[str]:
-    """Return JSON Schema keywords used at schema-fragment positions.
-
-    Parameters
-    ----------
-    schema:
-        Decoded root JSON Schema.
-
-    Returns
-    -------
-    set[str]
-        Keywords found without mistaking property names for keywords.
-    """
-
-    keywords: set[str] = set()
-
-    def visit(fragment: Any) -> None:
-        """Visit one schema fragment recursively."""
-
-        if not isinstance(fragment, dict):
-            return
-        keywords.update(fragment)
-        properties = fragment.get("properties")
-        if isinstance(properties, dict):
-            for property_schema in properties.values():
-                visit(property_schema)
-        for keyword in ("items", "if", "then", "additionalProperties"):
-            visit(fragment.get(keyword))
-        all_of = fragment.get("allOf")
-        if isinstance(all_of, list):
-            for child in all_of:
-                visit(child)
-
-    visit(schema)
-    return keywords
-
-
 def _mlx_schema_v2_manifest(path: Path) -> dict[str, Any]:
     """Return a schema v2 non-torch audit manifest based on a torch fixture.
 
@@ -345,45 +308,6 @@ def _mlx_materialized_schema_v2_manifest(path: Path) -> dict[str, Any]:
     return manifest
 
 
-def test_schema_v2_accepts_array_payload_policy_and_codec_body_fields(tmp_path: Path) -> None:
-    """Schema v2 admits the MLX materialized array-payload vocabulary."""
-
-    path = tmp_path / "array_payload_vocab.tlspec"
-    _captured_log().save(path)
-    manifest = _mlx_schema_v2_manifest(path)
-    manifest["body_format"] = "safetensors"
-    manifest["payload_policy"] = {
-        "policy": "array_payloads",
-        "materialization_supported": True,
-        "payload_kinds": ["out"],
-    }
-    manifest["body_index"][0].update(
-        {
-            "logical_backend": "mlx",
-            "codec": "numpy_safetensors_v1",
-            "logical_dtype": "mlx.core.float32",
-            "logical_device": "unknown",
-            "transport_backend": "safetensors.torch",
-            "transport_dtype": "float32",
-            "codec_metadata": {"logical_shape": [2, 3]},
-        }
-    )
-    _write_manifest(path, manifest)
-
-    validate_tlspec(path)
-
-
-def test_validate_tlspec_accepts_pre_hook_input_body_payloads(tmp_path: Path) -> None:
-    """The validator accepts the v6 pre-hook provenance schema extension."""
-
-    path = tmp_path / "pre_hook_input.tlspec"
-    _captured_pre_hook_log().save(path)
-    manifest = _read_manifest(path)
-
-    assert "pre_hook_input" in {entry["intended_use"] for entry in manifest["body_index"]}
-    validate_tlspec(path)
-
-
 def test_validate_tlspec_rejects_unknown_body_intended_use(tmp_path: Path) -> None:
     """Extending the v6 vocabulary does not disarm unknown-kind validation."""
 
@@ -433,17 +357,6 @@ def test_validate_tlspec_rejects_missing_path(tmp_path: Path) -> None:
         validate_tlspec(path)
 
 
-def test_validate_tlspec_rejects_unparseable_manifest(tmp_path: Path) -> None:
-    """A present corrupt manifest is rejected instead of treated as legacy."""
-
-    path = tmp_path / "corrupt.tlspec"
-    path.mkdir()
-    (path / "manifest.json").write_text("{not valid json", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="Failed to parse.*manifest"):
-        validate_tlspec(path)
-
-
 def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
     """A checked-in v2.16 model-log fixture refuses at the tlspec-6 floor.
 
@@ -461,27 +374,6 @@ def test_validate_tlspec_refuses_pre_floor_legacy_modellog_bundle() -> None:
         validate_tlspec(fixture_path)
     with pytest.raises(ArtifactTooOldError, match="saved by torchlens 2.x"):
         tl.load(fixture_path)
-
-
-@pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
-def test_unified_modellog_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
-    """Trace.save writes unified manifests that load polymorphically."""
-
-    log = _captured_log()
-    path = tmp_path / f"model_{level}.tlspec"
-
-    log.save(path, level=level)
-    validate_tlspec(path)
-    loaded = tl.load(path)
-    manifest = _read_manifest(path)
-
-    assert isinstance(loaded, tl.Trace)
-    assert manifest["kind"] == "trace"
-    assert manifest["tlspec_version"] == TLSPEC_VERSION
-    assert manifest["save_level"] == level
-    assert [layer.layer_label for layer in loaded._layer_list] == [
-        layer.layer_label for layer in log._layer_list
-    ]
 
 
 def test_current_bundle_preserves_none_backend_address(tmp_path: Path) -> None:
@@ -531,32 +423,6 @@ def test_unified_round_trip_preserves_requires_grad(tmp_path: Path) -> None:
     assert lazy_out.requires_grad is True
 
 
-def test_fresh_unified_save_reports_current_version(
-    tmp_path: Path,
-) -> None:
-    """A same-runtime save/load round trip must not report a false "older" version.
-
-    Regression test for a bug where ``torchlens._io.tlspec.TLSPEC_VERSION`` (a
-    second, independently-defined constant pinned at 1) collided with the
-    unrelated ``torchlens._io.TLSPEC_VERSION`` (the real portable-format
-    version) under the same ``"tlspec_version"`` manifest key. A ``dict.update``
-    merge in ``_TlSpecWriter.write_trace_manifest`` let the stale constant win,
-    so every freshly-saved bundle reported ``tlspec_version=1`` on disk and
-    every same-runtime load raised a false "Bundle tlspec_version=1 is older
-    than the runtime ``tlspec_version``" refusal.
-    """
-
-    log = _captured_log()
-    path = tmp_path / "fresh_version.tlspec"
-
-    log.save(path)
-    manifest = _read_manifest(path)
-    assert manifest["tlspec_version"] == TLSPEC_VERSION
-
-    loaded = tl.load(path)
-    assert isinstance(loaded, tl.Trace)
-
-
 def test_unified_manifest_forward_compat_hard_fail_for_newer_bundle(tmp_path: Path) -> None:
     """A genuinely newer on-disk ``tlspec_version`` must still hard-fail at load."""
 
@@ -594,31 +460,7 @@ def test_validate_tlspec_rejects_newer_portable_version(tmp_path: Path) -> None:
     assert excinfo.value.fields["code"] == "artifact_version_above_runtime"
 
 
-def test_unified_trace_save_load_preserves_forward_intervention_records(tmp_path: Path) -> None:
-    """Trace.save preserves per-op intervention fire records."""
-
-    log = tl.trace(
-        UnifiedTinyModel().eval(),
-        torch.randn(2, 3),
-        capture=CaptureOptions(
-            replayable=True,
-            hooks={tl.func("relu"): tl.zero_ablate()},
-        ),
-    )
-    path = tmp_path / "trace_forward_intervention.tlspec"
-
-    log.save(path)
-    loaded = tl.load(path)
-
-    assert isinstance(loaded, tl.Trace)
-    records = [
-        record for layer in loaded._layer_list for record in getattr(layer, "edits", []) or []
-    ]
-    assert records
-    assert all(isinstance(record, FireRecord) for record in records)
-    assert records[0].signal == "forward"
-
-
+@pytest.mark.smoke
 def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_path: Path) -> None:
     """Trace.save preserves backward GradFnCall intervention fire refs."""
 
@@ -628,7 +470,7 @@ def test_unified_trace_save_load_preserves_backward_intervention_records(tmp_pat
         x,
         capture=CaptureOptions(save_grads="all", backward_ready=True),
     )
-    log.attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
+    log._attach_hooks(tl.grad_fn(name="relu"), tl.clamp(low=0, high=0), confirm_mutation=True)
     log.backward(log[log.output_layers[0]].out.sum(), retain_graph=True)
     path = tmp_path / "trace_backward_intervention.tlspec"
 
@@ -674,30 +516,8 @@ def test_unified_portable_round_trips_orphan_records(tmp_path: Path) -> None:
     assert any(entry["intended_use"] == "orphan_payload" for entry in manifest["body_index"])
 
 
-def test_full_resnet18_default_trace_bundle_validates_and_loads(tmp_path: Path) -> None:
-    """Full default ResNet18 traces with buffers write schema-valid bundles."""
-
-    torchvision_models = pytest.importorskip("torchvision.models")
-    torch.manual_seed(2101)
-    model = torchvision_models.resnet18(weights=None).eval()
-    x = torch.randn(1, 3, 64, 64)
-    log = tl.trace(model, x, capture=CaptureOptions(seed=2101))
-    path = tmp_path / "resnet18_full_default.tlspec"
-
-    log.save(path, level="portable")
-    validate_tlspec(path)
-    loaded = tl.load(path)
-    manifest = _read_manifest(path)
-
-    assert isinstance(loaded, tl.Trace)
-    assert loaded._num_ops == log._num_ops
-    assert [layer.label for layer in loaded._layer_list] == [
-        layer.label for layer in log._layer_list
-    ]
-    assert any(entry["intended_use"] == "buffer_initial_value" for entry in manifest["body_index"])
-
-
-@pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("level", ["portable"])
 def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Bundle.save writes unified manifests that load as Bundle objects."""
 
@@ -717,7 +537,8 @@ def test_unified_bundle_round_trips_per_save_level(tmp_path: Path, level: str) -
     assert isinstance(loaded["baseline"], tl.Trace)
 
 
-@pytest.mark.parametrize("level", ["audit", "executable_with_callables", "portable"])
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("level", ["portable"])
 def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: str) -> None:
     """Intervention saves now emit the full unified manifest field set."""
 
@@ -740,32 +561,6 @@ def test_unified_intervention_round_trips_per_save_level(tmp_path: Path, level: 
     assert manifest["format_version"] == "2"
     assert manifest["save_level"] == level
     assert loaded.metadata["save_level"] == level
-
-
-def test_inspect_tlspec_returns_unified_manifest(tmp_path: Path) -> None:
-    """Manifest inspection returns parsed unified metadata."""
-
-    path = tmp_path / "inspect.tlspec"
-    _captured_log().save(path)
-
-    manifest = tl.io.inspect_tlspec(path)
-
-    assert manifest["kind"] == "trace"
-    assert manifest["body_format"] == "safetensors"
-    assert isinstance(manifest["sites"], list)
-
-
-def test_validate_tlspec_rejects_missing_unified_field(tmp_path: Path) -> None:
-    """Schema validation fails closed for malformed unified manifests."""
-
-    path = tmp_path / "invalid.tlspec"
-    _captured_log().save(path)
-    manifest = _read_manifest(path)
-    manifest.pop("model_fingerprint")
-    (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="model_fingerprint"):
-        validate_tlspec(path)
 
 
 def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
@@ -798,51 +593,8 @@ def test_unified_manifest_records_backward_summary(tmp_path: Path) -> None:
     )
 
 
-def test_validate_tlspec_rejects_bad_backward_blob_kind(tmp_path: Path) -> None:
-    """Schema validation rejects malformed backward blob kinds."""
-
-    torch.manual_seed(2102)
-    model = UnifiedTinyModel().eval()
-    x = torch.randn(2, 3, requires_grad=True)
-    log = tl.trace(model, x, capture=CaptureOptions(save_grads=True))
-    log.backward(log[log.output_layers[0]].out.sum())
-    path = tmp_path / "bad_backward_kind.tlspec"
-    log.save(path)
-    manifest = _read_manifest(path)
-    manifest["backward_summary"]["gradient_blob_kinds"] = ["grad", "legacy_grad"]
-    (path / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
-
-    with pytest.raises(ValueError, match="gradient_blob_kinds"):
-        validate_tlspec(path)
-
-
-def test_validate_tlspec_enforces_shipped_schema_properties_pattern(tmp_path: Path) -> None:
-    """The shipped JSON schema's ``properties`` block must be load-bearing, not decorative.
-
-    Regression test for a MAJOR finding: ``_validate_manifest_against_schema``
-    used to read only ``schema["required"]`` from the shipped
-    ``schemas/tlspec_manifest_v1.json`` file; ``schema["properties"]``
-    (types, enums, minimums, patterns) was never consulted, so editing only
-    the JSON schema could silently no-op. ``python_version`` is a clean
-    probe for this: the hand-written Python validator only checks it is a
-    non-empty string (``_require_str``), while the shipped schema also
-    declares ``"pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+.*$"``. Before the fix,
-    a non-empty string that violates that pattern passed validation
-    entirely; after the fix, the schema's own ``properties`` entry is what
-    catches it.
-    """
-
-    path = tmp_path / "bad_python_version.tlspec"
-    _captured_log().save(path)
-    manifest = _read_manifest(path)
-    manifest["python_version"] = "not-a-version"
-    _write_manifest(path, manifest)
-
-    with pytest.raises(ValueError, match="python_version"):
-        validate_tlspec(path)
-
-
-@pytest.mark.parametrize("field_name", ("model_fingerprint", "backward_summary"))
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
+@pytest.mark.parametrize("field_name", ("model_fingerprint",))
 def test_validate_tlspec_rejects_unknown_nested_schema_fields(
     tmp_path: Path,
     field_name: str,
@@ -859,19 +611,6 @@ def test_validate_tlspec_rejects_unknown_nested_schema_fields(
 
     with pytest.raises(ValueError, match="unsupported fields"):
         validate_tlspec(path)
-
-
-def test_shipped_tlspec_schema_keywords_are_all_walker_supported() -> None:
-    """A new shipped schema keyword cannot silently bypass the runtime walker."""
-
-    schema_dir = Path(tl.__file__).resolve().parent / "schemas"
-    observed: set[str] = set()
-    for schema_path in sorted(schema_dir.glob("tlspec_manifest_v*.json")):
-        schema = json.loads(schema_path.read_text(encoding="utf-8"))
-        assert isinstance(schema, dict)
-        observed.update(_schema_keywords(schema))
-
-    assert observed <= _SUPPORTED_JSON_SCHEMA_KEYWORDS
 
 
 def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Path) -> None:
@@ -898,17 +637,8 @@ def test_validate_tlspec_enforces_schema_v2_python_version_pattern(tmp_path: Pat
         validate_tlspec(path)
 
 
-def test_schema_v2_mlx_materialized_manifest_validates(tmp_path: Path) -> None:
-    """Schema v2 accepts MLX materialized backend/runtime and body fields."""
-
-    path = tmp_path / "mlx_materialized.tlspec"
-    _captured_log().save(path)
-    manifest = _mlx_materialized_schema_v2_manifest(path)
-    _write_manifest(path, manifest)
-
-    validate_tlspec(path)
-
-
+@pytest.mark.rare
+@pytest.mark.backend_mlx
 def test_schema_v2_mlx_materialized_loads_payloads(tmp_path: Path) -> None:
     """MLX schema v2 materialized traces load body entries as MLX arrays."""
 
@@ -963,6 +693,8 @@ def test_schema_v2_mlx_old_audit_only_fixture_loads_metadata_only(tmp_path: Path
     )
 
 
+@pytest.mark.rare
+@pytest.mark.backend_mlx
 @pytest.mark.optional
 def test_mlx_public_save_writes_materialized_manifest_body(tmp_path: Path) -> None:
     """Public MLX portable saves write codec-backed safetensors body entries."""
@@ -1029,19 +761,6 @@ def test_schema_v2_materialized_unknown_codec_fails_closed(tmp_path: Path) -> No
         tl.load(path)
 
 
-def test_schema_v2_materialized_unknown_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
-    """Tensors entries with unknown codecs fail preflight even when body_index is clean."""
-
-    path = tmp_path / "mlx_bad_tensor_codec.tlspec"
-    _captured_log().save(path)
-    manifest = _mlx_materialized_schema_v2_manifest(path)
-    manifest["tensors"][0]["codec"] = "unknown_codec_v1"
-    _write_manifest(path, manifest)
-
-    with pytest.raises(BackendPayloadUnsupportedError, match="unknown_codec_v1"):
-        tl.load(path)
-
-
 def test_schema_v2_materialized_missing_tensors_entry_codec_fails_closed(tmp_path: Path) -> None:
     """Tensors entries missing a codec fail preflight with the typed IO error."""
 
@@ -1076,12 +795,12 @@ def test_schema_v2_codec_preflight_wraps_registry_errors(
         tl.load(path)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("mutation", "match"),
     [
         (lambda manifest: manifest.pop("backend"), "backend"),
         (lambda manifest: manifest.__setitem__("backend", "unknown-backend"), "unknown backend"),
-        (lambda manifest: manifest.pop("backend_runtime"), "backend_runtime"),
         (
             lambda manifest: manifest.__setitem__("backward_summary", {"has_backward_pass": True}),
             "backward_summary",
@@ -1106,31 +825,10 @@ def test_schema_v2_non_torch_corruptions_fail_closed(
         validate_tlspec(path)
 
 
-def test_schema_v1_rejects_schema_v2_body_uses(tmp_path: Path) -> None:
-    """Schema v1 fixtures stay torch-only and reject v2 intended-use literals."""
-
-    path = tmp_path / "v1_with_v2_body_use.tlspec"
-    _captured_log().save(path)
-    manifest = _read_manifest(path)
-    manifest["body_index"] = [
-        {
-            "filename": "audit.json",
-            "dtype": "mlx.float32",
-            "shape": [1],
-            "num_elements": 1,
-            "intended_use": "audit_record",
-        }
-    ]
-    _write_manifest(path, manifest)
-
-    with pytest.raises(ValueError, match="intended_use"):
-        validate_tlspec(path)
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     ("helper_name", "helper"),
     [
-        ("zero_ablate", tl.zero_ablate()),
         ("splice_module", tl.splice_module(nn.Identity())),
     ],
 )

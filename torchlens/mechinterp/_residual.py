@@ -207,6 +207,17 @@ def residual_accumulation(
         Real merges only; nothing is fabricated for parallel blocks.
     positions:
         Optional position indices; rows are views sliced on axis 1.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> len(tl.mechinterp.residual_accumulation(trace))
+    5
     """
 
     target_op = _resolve_target_op(trace, target)
@@ -363,6 +374,17 @@ def residual_decomposition(
     positions:
         Optional position indices; row VIEWS are sliced on axis 1 after the
         identity gate runs on the full tensors.
+
+    Examples
+    --------
+    >>> # requires: transformers
+    >>> from transformers import GPT2Config, GPT2LMHeadModel
+    >>> lm = GPT2LMHeadModel(GPT2Config(n_layer=2, n_head=2, n_embd=8, vocab_size=32,
+    ...                                 n_positions=16, use_cache=False,
+    ...                                 attn_implementation="eager")).eval()
+    >>> trace = tl.trace(lm, torch.randint(0, 32, (1, 6)))
+    >>> tl.mechinterp.residual_decomposition(trace).grading
+    'complete'
     """
 
     target_op = _resolve_target_op(trace, target)

@@ -44,7 +44,7 @@ def conv_log():
     return log
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of _utils/facade.py, bridge/__init__.py and more.
 def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
     """torchlens.bridge exposes adapters lazily and refuses unknown attributes."""
 
@@ -57,7 +57,7 @@ def test_bridge_namespace_lazily_imports_and_rejects_unknown_names() -> None:
         _ = bridge.does_not_exist
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/_utils.py, repgeom/_annotation_gate.py.
 def test_bridge_utils_error_contracts(conv_log) -> None:
     """source_model/out_at/first_input_tensor fail with actionable errors."""
 
@@ -76,7 +76,7 @@ def test_bridge_utils_error_contracts(conv_log) -> None:
     assert not any(layer.is_input for layer in layers)
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/_utils.py, bridge/pytorch_grad_cam.py.
 def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> None:
     """layer() honors 'self', module addresses, resolved sites, and refusals."""
 
@@ -92,7 +92,7 @@ def test_gradcam_layer_resolves_self_addresses_and_site_fallback(conv_log) -> No
         pytorch_grad_cam.layer(conv_log, conv_log["input_1"])
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/_utils.py, bridge/pytorch_grad_cam.py.
 def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -131,6 +131,7 @@ def test_gradcam_cam_runs_context_manager_runner_with_resolved_inputs(
     assert calls["entered"] and calls["exited"]
 
 
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/pytorch_grad_cam.py.
 def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.MonkeyPatch) -> None:
     """cam() raises ImportError naming the gradcam extra when the package is absent."""
 
@@ -141,7 +142,7 @@ def test_gradcam_missing_dependency_names_extra(conv_log, monkeypatch: pytest.Mo
         pytorch_grad_cam.cam(conv_log, "conv")
 
 
-@pytest.mark.smoke
+# Kept by the shrink-r4 coverage proof: sole branch coverage of bridge/_utils.py, bridge/sae_lens.py.
 def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
     conv_log, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -182,8 +183,9 @@ def test_sae_lens_bridge_dispatches_encode_reconstruct_and_refuses_junk(
         sae_bridge.encode(conv_log, "relu_1_2", _Sae())
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_profiler_execution_trace_is_removed() -> None:
-    """U53.1: the profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
+    """The profiler bridge keeps only ``join``; ``execution_trace`` is gone."""
 
     from torchlens.bridge import profiler
 

@@ -62,7 +62,15 @@ def _buffer_log_to_row(buffer_log: Buffer) -> dict[str, Any]:
 
 
 class Buffer:
-    """Persistent metadata entity for one registered buffer address."""
+    """Persistent metadata entity for one registered buffer address.
+
+    Examples
+    --------
+    >>> norm = nn.Sequential(nn.BatchNorm2d(3)).eval()
+    >>> buffer = tl.trace(norm, x).buffers["0.running_mean"]
+    >>> type(buffer).__name__
+    'Buffer'
+    """
 
     _PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
         "address": FieldPolicy.KEEP,

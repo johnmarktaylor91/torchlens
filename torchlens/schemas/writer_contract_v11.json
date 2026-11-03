@@ -46,6 +46,7 @@
     "mutation_kind": "keep",
     "namespace": "keep",
     "operator": "keep",
+    "out": "blob_recursive",
     "outcome": "keep",
     "output_tensor_facts": "keep",
     "overload": "keep",
@@ -747,8 +748,8 @@
     "_args": "blob_recursive",
     "_kwargs": "blob_recursive",
     "incomplete_reasons": "keep",
+    "input_structure": "keep",
     "is_capture_complete": "keep",
-    "structure": "keep",
     "summary": "keep",
     "tensor_observations": "keep"
    },
@@ -1332,6 +1333,7 @@
      "mutation_kind": "keep",
      "namespace": "keep",
      "operator": "keep",
+     "out": "blob_recursive",
      "outcome": "keep",
      "output_tensor_facts": "keep",
      "overload": "keep",
@@ -1366,6 +1368,7 @@
      "mutation_kind": "fact",
      "namespace": "fact",
      "operator": "fact",
+     "out": "fact",
      "outcome": "fact",
      "output_tensor_facts": "fact",
      "overload": "fact",
@@ -1400,6 +1403,7 @@
      "mutation_kind",
      "namespace",
      "operator",
+     "out",
      "outcome",
      "output_tensor_facts",
      "overload",
@@ -4008,5 +4012,5 @@
    "created_at"
   ]
  },
- "writer_contract_digest": "8e07954c99363d0e7bda8aa3f1f5a6b982695f73a3ff12f70b855f8cd6afbd38"
+ "writer_contract_digest": "774604708ad892a3bd7949ad92e4ae4cbc356a85b645ff27dda7f5288e82648f"
 }

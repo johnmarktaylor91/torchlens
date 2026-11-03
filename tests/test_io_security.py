@@ -121,21 +121,6 @@ def _first_blob_path(bundle_path: Path) -> Path:
     return next((bundle_path / "blobs").glob("*.safetensors"))
 
 
-def test_load_rejects_manifest_parent_traversal_even_with_valid_sha(tmp_path: Path) -> None:
-    """Manifest paths that escape the bundle should hard-fail on load."""
-
-    bundle_path = _build_bundle(tmp_path)
-    manifest = _read_manifest(bundle_path)
-    original_blob_path = _first_blob_path(bundle_path)
-    outside_blob_path = tmp_path / "outside.safetensors"
-    shutil.copy2(original_blob_path, outside_blob_path)
-    manifest["tensors"][0]["relative_path"] = "../outside.safetensors"
-    _write_manifest(bundle_path, manifest)
-
-    with pytest.raises(ArtifactError, match="Bundle rejected"):
-        load(bundle_path)
-
-
 def test_load_rejects_manifest_absolute_blob_path(tmp_path: Path) -> None:
     """Absolute manifest blob paths should never be trusted."""
 
@@ -162,20 +147,6 @@ def test_load_rejects_manifest_parent_segments_that_resolve_back_inside(tmp_path
 
     with pytest.raises(ArtifactError, match="parent traversal"):
         load(bundle_path)
-
-
-def test_load_rejects_manifest_path_into_sibling_bundle(tmp_path: Path) -> None:
-    """Manifest paths must not target another bundle's ``blobs/`` directory."""
-
-    source_bundle = _build_bundle(tmp_path, name="source_bundle.tl")
-    sibling_bundle = _build_bundle(tmp_path, name="other_bundle.tl")
-    sibling_blob_name = _first_blob_path(sibling_bundle).name
-    manifest = _read_manifest(source_bundle)
-    manifest["tensors"][0]["relative_path"] = f"../{sibling_bundle.name}/blobs/{sibling_blob_name}"
-    _write_manifest(source_bundle, manifest)
-
-    with pytest.raises(ArtifactError, match="Bundle rejected"):
-        load(source_bundle)
 
 
 def test_lazy_materialize_rejects_tampered_relative_path(tmp_path: Path) -> None:

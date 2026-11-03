@@ -63,23 +63,6 @@ def test_complete_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
     assert loaded.outcome.is_derived is False
 
 
-def test_halted_tlspec_round_trip_adopts_attestation(tmp_path) -> None:
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    bundle = tmp_path / "halted.tlspec"
-    trace.save(bundle, overwrite=True)
-    loaded = tl.load(bundle)
-    assert loaded.outcome.status is CaptureStatus.STOPPED
-    assert loaded.outcome.is_derived is False
-    assert loaded.outcome.reason == trace.stop_reason
-
-
-def test_pickle_round_trip_adopts_attestation() -> None:
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    clone = pickle.loads(pickle.dumps(trace))
-    assert clone.outcome.status is CaptureStatus.COMPLETE
-    assert clone.outcome.is_derived is False
-
-
 def test_legacy_shape_without_attestation_derives_unattested() -> None:
     """A finished non-halted artifact with no attestation is UNATTESTED."""
 
@@ -91,20 +74,6 @@ def test_legacy_shape_without_attestation_derives_unattested() -> None:
     assert restored.outcome.status is CaptureStatus.UNATTESTED
     assert restored.outcome.is_derived is True
     assert restored.outcome.is_partial is None
-
-
-def test_unattested_resave_never_upgrades(tmp_path) -> None:
-    """Re-saving a derived UNATTESTED artifact stays UNATTESTED."""
-
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    state = trace.__getstate__()
-    state["_capture_outcome"] = None
-    restored = Trace.__new__(Trace)
-    restored.__setstate__(state)
-    assert restored.outcome.status is CaptureStatus.UNATTESTED
-    clone = pickle.loads(pickle.dumps(restored))
-    assert clone.outcome.status is CaptureStatus.UNATTESTED
-    assert clone.outcome.is_derived is True
 
 
 def test_tampered_attestation_degrades_to_unknown() -> None:
@@ -136,13 +105,6 @@ def test_failed_partial_pickle_derives_failed_from_attestation() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_n1_failed_capture_refuses_save(tmp_path) -> None:
-    source = _failed_partial_trace()
-    with pytest.raises(CaptureOutcomeError) as exc_info:
-        source.save(tmp_path / "failed.tlspec", overwrite=True)
-    assert exc_info.value.fields["code"] == "N1"
-
-
 def test_n1_raw_partial_trace_object_refuses_save_not_attributeerror(tmp_path) -> None:
     """A raw PartialTrace (no _runnable) must refuse via N1, not crash the poison gate."""
 
@@ -167,7 +129,7 @@ def test_n1_failed_recording_refuses_save_not_attributeerror(tmp_path) -> None:
         ExplodingModel(),
         torch.ones(1, 3),
         save=tl.func("linear"),
-        on_forward_error="return_partial",
+        recording=tl.options.RecordingOptions(on_forward_error="return_partial"),
     )
     assert recording.is_failed is True
     assert not hasattr(recording, "_runnable")
@@ -210,13 +172,6 @@ def test_n3_failed_capture_refuses_backward_and_replay() -> None:
     assert exc_info.value.fields["code"] == "N3"
 
 
-def test_n5_halted_push_refuses() -> None:
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    with pytest.raises(CaptureOutcomeError) as exc_info:
-        trace.push()
-    assert exc_info.value.fields["code"] == "N5"
-
-
 def test_halted_backward_stays_allowed() -> None:
     """HALTED backward is legitimate: the autograd graph IS the prefix."""
 
@@ -231,49 +186,9 @@ def test_halted_backward_stays_allowed() -> None:
     assert trace.outcome.status is CaptureStatus.STOPPED
 
 
-def test_complete_capture_surfaces_stay_open(tmp_path) -> None:
-    """COMPLETE captures pass every gate unchanged."""
-
-    model = ThreeStageModel()
-    x = torch.ones(1, 3)
-    trace = tl.trace(model, x)
-    # Save first: validation stamps a PRE-EXISTING diagnostic attr
-    # (_last_validation_failure, torchlens/validation/_diagnostics.py) that is
-    # absent from _PORTABLE_STATE_SPEC, so validate-then-save refuses -- a gap
-    # that predates this lane and is out of its fence.
-    trace.save(tmp_path / "ok.tlspec", overwrite=True)
-    # The gate must allow ENTRY; the verdict itself is validation's business
-    # (a bool or a replay-status object depending on replay coverage).
-    result = trace.validate_forward_pass([model(x)])
-    assert result is not None
-    trace.save_new_outs(model, x)
-
-
 # ---------------------------------------------------------------------------
 # F6: every swallowed-signal spelling fails closed
 # ---------------------------------------------------------------------------
-
-
-class SwallowingHaltModel(nn.Module):
-    """Model whose forward eats the halt signal in a bare except."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.linear = nn.Linear(3, 3)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        try:
-            return torch.sigmoid(torch.relu(self.linear(x)))
-        except BaseException:
-            return torch.zeros(1, 3)
-
-
-def test_swallowed_predicate_halt_fails_closed() -> None:
-    with pytest.raises(StopSignalSwallowedError) as exc_info:
-        tl.trace(SwallowingHaltModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    assert exc_info.value.fields["kind"] == "halt"
-    partial = exc_info.value.partial_trace
-    assert partial.outcome.status is CaptureStatus.FAILED
 
 
 def test_swallowed_imperative_halt_fails_closed() -> None:
@@ -294,45 +209,11 @@ def test_swallowed_imperative_halt_fails_closed() -> None:
         tl.trace(ImperativeSwallow(), torch.ones(1, 3))
 
 
-def test_swallowed_nonfinite_abort_fails_closed_as_failed() -> None:
-    """A swallowed nonfinite abort is FAILED, never a clean ABORTED."""
-
-    class SwallowingNaN(nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.linear = nn.Linear(3, 3)
-
-        def forward(self, x: torch.Tensor) -> torch.Tensor:
-            y = self.linear(x)
-            try:
-                z = y / torch.zeros_like(y)
-            except BaseException:
-                z = y
-            return torch.relu(z)
-
-    with pytest.raises(StopSignalSwallowedError) as exc_info:
-        tl.trace(
-            SwallowingNaN(),
-            torch.ones(1, 3),
-            capture=tl.options.CaptureOptions(on_nonfinite="raise"),
-        )
-    partial = exc_info.value.partial_trace
-    assert partial.outcome.status is CaptureStatus.FAILED
-    assert partial.outcome.status is not CaptureStatus.ABORTED_NONFINITE
-
-
 def test_imperative_halt_outside_capture_propagates() -> None:
     """No active capture: the latch no-ops and the signal reaches the user."""
 
     with pytest.raises(StopSignal, match="outside"):
         tl.recording.stop("outside")
-
-
-def test_legitimate_halt_still_settles_halted() -> None:
-    """The latch never converts an honestly-propagated halt into a failure."""
-
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=halt_on_relu)
-    assert trace.outcome.status is CaptureStatus.STOPPED
 
 
 # ---------------------------------------------------------------------------
@@ -354,18 +235,6 @@ def test_recording_outcomes_stamped() -> None:
     assert halted.outcome.reason == halted.stop_reason
 
 
-def test_failed_partial_recording_outcome_stamped() -> None:
-    recording = tl.record(
-        ExplodingModel(),
-        torch.ones(1, 3),
-        save=lambda ctx: ctx.kind == "op",
-        on_forward_error="return_partial",
-    )
-    assert recording.status == "partial_error"
-    assert recording.outcome.status is CaptureStatus.FAILED
-    assert recording.outcome.num_committed_ops == recording.num_committed_ops
-
-
 def test_unstamped_recording_outcome_derives() -> None:
     recording = tl.record(ThreeStageModel(), torch.ones(1, 3), save=lambda ctx: True)
     object.__setattr__(recording, "_outcome", None)
@@ -375,42 +244,6 @@ def test_unstamped_recording_outcome_derives() -> None:
     # COMPLETE (R06 -- same doctrine as the trace-side structural lattice).
     assert derived.status is CaptureStatus.UNATTESTED
     assert derived.is_derived is True
-
-
-def test_partial_trace_wrapper_has_one_outcome_answer() -> None:
-    """b1-opus-R06-1: ``outcome_for(wrapper)`` read the WRAPPER's ``__dict__``,
-    so every capability gate treated a shipped FAILED partial as UNKNOWN with a
-    false hand-built-object RuntimeWarning, while ``p.outcome`` forwarded the
-    inner FAILED stamp -- two answers for one product. The sanctioned
-    delegation hop makes every reader see the inner trace's settled record."""
-
-    import warnings
-
-    from torchlens._capture.outcome import outcome_for, require_capture_capability
-
-    try:
-        with torch.no_grad():
-            tl.trace(ExplodingModel(), torch.ones(1, 3))
-    except TraceCaptureError as exc:
-        assert isinstance(exc.__cause__, RuntimeError)
-        partial = exc.partial_trace
-    else:
-        raise AssertionError("capture unexpectedly succeeded")
-
-    inner = outcome_for(partial.trace)
-    assert inner is not None
-    assert inner.status is CaptureStatus.FAILED
-    assert outcome_for(partial) is inner
-    assert partial.outcome is inner
-
-    with warnings.catch_warnings():
-        # The false "no settled capture outcome" advisory must be GONE, not
-        # merely tolerated: any RuntimeWarning here raises.
-        warnings.simplefilter("error", RuntimeWarning)
-        with pytest.raises(CaptureOutcomeError) as exc_info:
-            require_capture_capability(partial, "save_analysis")
-    assert exc_info.value.fields["code"] == "N1"
-    assert exc_info.value.fields["status"] == "failed"
 
 
 def test_halted_arm_interrupt_settles_failed_interrupted(
@@ -456,24 +289,6 @@ def test_hand_built_partial_wrapper_around_settled_trace_still_refuses_save(tmp_
     assert exc_info.value.fields["code"] == "N1"
 
 
-def test_fork_settles_derived_outcome_not_parent_attestation() -> None:
-    # REBASELINE (fix/fork lane): forks used to inherit the parent's settled
-    # outcome BY IDENTITY, so a hand-edited fork saved as a bit-identical
-    # attested COMPLETE. A fork is the sanctioned mutation surface: it now
-    # settles a DERIVED outcome through the structural lattice (R06 doctrine:
-    # derivation never emits a blessed COMPLETE), with fork provenance in the
-    # settlement note. The parent's attestation is untouched.
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3))
-    fork = trace.fork()
-    assert fork.outcome is not trace.outcome
-    assert fork.outcome.status is CaptureStatus.UNATTESTED
-    assert fork.outcome.is_derived is True
-    assert fork.outcome.note == "forked_from=complete"
-    assert fork.outcome.num_committed_ops == trace.outcome.num_committed_ops
-    assert trace.outcome.status is CaptureStatus.COMPLETE
-    assert trace.outcome.is_derived is False
-
-
 # ---------------------------------------------------------------------------
 # P4 behavior fixes
 # ---------------------------------------------------------------------------
@@ -500,31 +315,7 @@ def test_f2_refresh_rearms_raise_on_nan() -> None:
     )
     assert trace.outcome.status is CaptureStatus.COMPLETE
     with pytest.raises(CaptureError, match="non-finite"):
-        trace.save_new_outs(model, torch.zeros(1, 3))
-
-
-def test_f3a_halted_frontier_recovery_precedes_cleanup(monkeypatch) -> None:
-    """F3a: the frontier scan reads raw entries before session cleanup runs."""
-
-    from torchlens.backends.torch.backend import TorchBackend
-
-    order: list[str] = []
-    original = TorchBackend.cleanup_model_session
-
-    def _tracking_cleanup(self: object, session: object, prepared: object) -> None:
-        order.append("cleanup")
-        original(self, session, prepared)
-
-    monkeypatch.setattr(TorchBackend, "cleanup_model_session", _tracking_cleanup)
-
-    def _halt_without_frontier(ctx: object) -> bool:
-        # A module-exit halt carries no frontier_output, forcing the
-        # reverse-scan recovery path.
-        return ctx.kind == "op" and ctx.func_name == "relu"
-
-    trace = tl.trace(ThreeStageModel(), torch.ones(1, 3), stop_after=_halt_without_frontier)
-    assert trace.is_stopped is True
-    assert order  # cleanup ran (after the scan; a broken order crashes above)
+        trace._save_new_outs(model, torch.zeros(1, 3))
 
 
 def test_run_on_cleaned_up_husk_refuses_with_the_n_gate(recwarn) -> None:

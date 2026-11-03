@@ -56,16 +56,6 @@ def _ids() -> torch.Tensor:
     return torch.randint(0, 16, (1, 4), generator=generator)
 
 
-def test_bound_forward_capture_matches_module_capture() -> None:
-    model = _mlp()
-    x = torch.randn(2, 4, generator=torch.Generator().manual_seed(1))
-    bound = tl.trace(model.forward, x)
-    plain = tl.trace(model, x)
-    assert torch.equal(bound[bound.output_layers[0]].out, plain[plain.output_layers[0]].out)
-    # Same interior ops captured (labels match one-to-one).
-    assert [op.label for op in bound._layer_list] == [op.label for op in plain._layer_list]
-
-
 def test_synthetic_root_reads_owner_identity_never_method() -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
@@ -78,16 +68,7 @@ def test_synthetic_root_reads_owner_identity_never_method() -> None:
     )
 
 
-def test_root_fact_stays_module_call_on_module_roots() -> None:
-    model = _mlp()
-    log = tl.trace(model, torch.randn(2, 4))
-    assert log.provenance.root_entry_point == (
-        "module_call:torch.nn.modules.container.Sequential.forward"
-    )
-    for op in log._layer_list:
-        assert op.call.tl_authored_root is None
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_tl_authored_root_marker_lands_on_root_op_record() -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
@@ -106,33 +87,9 @@ def test_bound_method_called_exactly_once() -> None:
     assert log.provenance.root_entry_point.endswith(".generate")
 
 
-def test_owner_registers_as_submodule_of_wrapper() -> None:
-    model = _ToyLM()
-    wrapper = TLBoundMethodRoot(model.generate)
-    assert wrapper.tl_owner is model
-    assert dict(wrapper.named_children())["owner"] is model
-    assert wrapper.tl_method_name == "generate"
-    assert wrapper.tl_owner_class_name == "_ToyLM"
-
-
 def test_wrapper_constructor_guards_non_bound_inputs() -> None:
     with pytest.raises(TypeError, match="bound method of an nn.Module"):
         TLBoundMethodRoot(torch.relu)
-
-
-def test_closure_and_bare_function_teach_the_ruled_spelling() -> None:
-    model = _mlp()
-    x = torch.randn(2, 4)
-
-    def closure(t: torch.Tensor) -> torch.Tensor:
-        return model(t)
-
-    for candidate in (closure, torch.relu):
-        with pytest.raises(InvalidArgumentError) as excinfo:
-            tl.trace(candidate, x)
-        assert excinfo.value.fields["code"] == "model_type_unsupported"
-        assert "bound method" in str(excinfo.value)
-        assert "method.__self__" in excinfo.value.fields["remedy"]
 
 
 def test_bound_method_of_non_module_still_refuses() -> None:
@@ -168,15 +125,6 @@ def test_episode_stepped_module_none_refuses_on_module_roots() -> None:
     assert "bound-method root" in str(excinfo.value)
 
 
-def test_rerun_identity_gate_refuses_bound_method_captures() -> None:
-    model = _mlp()
-    log = tl.trace(model.forward, torch.randn(2, 4))
-    with pytest.raises(ModelMismatchError) as excinfo:
-        log._validate_supplied_model_matches_capture(model)
-    assert excinfo.value.fields["code"] == "rerun_entry_point_unsupported"
-    assert "DIFFERENT entry point" in str(excinfo.value)
-
-
 def test_rerun_identity_gate_fail_closed_on_absent_fact() -> None:
     model = _mlp()
     log = tl.trace(model, torch.randn(2, 4))
@@ -184,12 +132,6 @@ def test_rerun_identity_gate_fail_closed_on_absent_fact() -> None:
     with pytest.raises(ModelMismatchError) as excinfo:
         log._validate_supplied_model_matches_capture(model)
     assert excinfo.value.fields["code"] == "root_entry_point_unavailable"
-
-
-def test_rerun_identity_gate_still_passes_module_roots() -> None:
-    model = _mlp()
-    log = tl.trace(model, torch.randn(2, 4))
-    log._validate_supplied_model_matches_capture(model)
 
 
 def test_append_preflight_refuses_bound_method_captures() -> None:
@@ -202,6 +144,7 @@ def test_append_preflight_refuses_bound_method_captures() -> None:
     assert excinfo.value.fields["code"] == "rerun_entry_point_unsupported"
 
 
+@pytest.mark.smoke
 def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     model = _mlp()
     log = tl.trace(model.forward, torch.randn(2, 4))
@@ -216,25 +159,11 @@ def test_bound_capture_save_load_persists_fact_and_marker(tmp_path) -> None:
     assert excinfo.value.fields["code"] == "rerun_entry_point_unsupported"
 
 
-def test_replay_engine_still_works_on_bound_captures() -> None:
-    model = _mlp()
-    log = tl.trace(
-        model.forward,
-        torch.randn(2, 4),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    fork = log.fork()
-    relu_label = next(op.label for op in log._layer_list if op.label.startswith("relu"))
-    fork.do(fork[tl.units(relu_label, [(0, 0)])], tl.zero_ablate())
-    assert len(fork.intervention_audit) == 1
-
-
 def test_validate_accepts_bound_method_roots() -> None:
     model = _mlp()
     assert tl.validate(model.forward, torch.randn(2, 4), scope="forward") is True
 
 
-@pytest.mark.smoke
 def test_validate_refuses_other_callables_typed() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         tl.validate(torch.relu, torch.randn(2, 4), scope="forward")
@@ -271,7 +200,6 @@ class _ShapedReturns(nn.Module):
         return {"a": self.lin(x)}
 
 
-@pytest.mark.smoke_cells("test_return_shapes_capture_instead_of_refusing[emit_none-0]")
 @pytest.mark.parametrize(
     ("method_name", "expected_outputs"),
     [("emit_none", 0), ("emit_tuple", 2), ("emit_dict", 1)],

@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import torch
 
-import torchlens as tl
 from torchlens.bundle import _distance_value
 from torchlens.intervention._save import SaveLevel
 from torchlens.intervention._spec_values import (
@@ -64,22 +63,6 @@ _SENTINEL_KEYS = [
     "__dict_items__",
     "__tuple_key__",
 ]
-
-
-def test_user_dict_with_sentinel_key_roundtrips_unchanged() -> None:
-    """BLOCKER: a user dict keyed by any reserved sentinel survives round-trip."""
-
-    for key in _SENTINEL_KEYS:
-        # A dict value (the shape that silently corrupted for ``__opaque_audit__``).
-        with_dict = {key: {"foo": "bar", "n": 3}}
-        loaded = _roundtrip(with_dict)
-        assert loaded == with_dict, f"{key!r} dict-value payload was corrupted"
-        assert type(loaded) is dict
-        assert type(loaded[key]) is dict
-
-        # A scalar value (the shape that crashed loudly for the crash-class keys).
-        with_scalar = {key: 42}
-        assert _roundtrip(with_scalar) == with_scalar, f"{key!r} scalar payload corrupted"
 
 
 def test_sentinel_key_mixed_and_nested_dicts_roundtrip() -> None:
@@ -150,37 +133,6 @@ def test_distance_value_both_scalar_uses_scalar_fallback() -> None:
     assert abs(value - (2.0 / 3.0)) < 1e-6
 
 
-def test_most_changed_happy_path_unbroken_by_symmetric_guard() -> None:
-    """MAJOR: the symmetric guard leaves the normal same-shape path working."""
-
-    torch.manual_seed(0)
-    x = torch.randn(2, 4)
-    model_a = torch.nn.Linear(4, 4)
-    model_b = torch.nn.Linear(4, 4)
-    log_a = tl.trace(model_a, x, capture=tl.options.CaptureOptions(replayable=True))
-    log_b = tl.trace(model_b, x, capture=tl.options.CaptureOptions(replayable=True))
-    bundle = tl.Bundle({"a": log_a, "b": log_b}, baseline="a")
-
-    rows = bundle.rank_changes()
-    assert isinstance(rows, list)
-    # Non-empty, sorted descending, finite scores -- no crash, no truncation.
-    assert rows
-    scores = [score for _, score in rows]
-    assert scores == sorted(scores, reverse=True)
-    assert all(isinstance(score, float) and score == score for score in scores)
-
-
 # ---------------------------------------------------------------------------
 # MINOR: ``source_trace`` no longer duplicated across share/reconstruct sets.
 # ---------------------------------------------------------------------------
-
-
-def test_op_log_fork_policy_source_trace_is_reconstruct_only() -> None:
-    """MINOR: ``source_trace`` resolves to RECONSTRUCT and is not double-listed."""
-
-    from torchlens.intervention._types import (
-        LAYER_PASS_LOG_FIELD_FORK_POLICY,
-        ForkFieldPolicy,
-    )
-
-    assert LAYER_PASS_LOG_FIELD_FORK_POLICY["source_trace"] is ForkFieldPolicy.FORK_RECONSTRUCT

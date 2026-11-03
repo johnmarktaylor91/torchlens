@@ -47,6 +47,14 @@ class HealthFacts:
     (per-op capture-time checks), ``saved_payloads`` (post-hoc scan over
     retained payloads), or ``persisted`` (loaded from the artifact record,
     with the ORIGINAL basis in ``source_basis``).
+
+    Examples
+    --------
+    >>> facts = tl.trace(model, x).health_facts
+    >>> facts.num_nonfinite_ops
+    0
+    >>> facts.verdict in ("checked_and_clean", "not_checked")
+    True
     """
 
     schema_version: int

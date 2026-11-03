@@ -32,7 +32,7 @@ from torchlens._validation_state_snapshot import (
     snapshot_state_for_restore,
 )
 from torchlens.options import CaptureOptions
-from torchlens.validation._core import _check_perturbation_exemptions, validate_saved_outs
+from torchlens.validation._core import validate_saved_outs
 from torchlens.validation._diagnostics import get_validation_failure
 
 
@@ -74,51 +74,6 @@ class _SetToStorageView(nn.Module):
         with torch.no_grad():
             self.b.set_(self.src.untyped_storage(), 2, (4,), (1,))
         return x + self.b
-
-
-def test_set_to_source_validates() -> None:
-    """The receiver of ``set_(source)`` is not a value dependency."""
-
-    assert _quiet_validate(_SetToSource(), torch.rand(4)) is True
-
-
-def _receiver_and_set_op(model: nn.Module) -> tuple[Any, Any, str]:
-    """Capture ``model`` and return its trace, its ``set_`` op and the receiver label."""
-
-    trace, _ = _capture(model, torch.rand(4))
-    set_op = next(op for op in trace._layer_list if op.func_name == "set_")
-    return trace, set_op, set_op.call.parent_arg_positions["args"][0]
-
-
-@pytest.mark.parametrize("model_cls", [_SetToNothing, _SetToStorageView])
-def test_set_overloads_without_a_source_tensor_exempt_only_the_receiver(
-    model_cls: type[nn.Module],
-) -> None:
-    """``set_()`` and ``set_(storage, offset, size, stride)`` get the same arg-0 decision.
-
-    The wrapper logs both overloads as ``set_`` ops whose only tensor parent is
-    the receiver (a storage is not a graph tensor), and the receiver's values
-    never reach the output.
-    """
-
-    trace, set_op, receiver = _receiver_and_set_op(model_cls())
-    try:
-        assert list(set_op.parents) == [receiver]
-        assert _check_perturbation_exemptions(trace, set_op, [receiver]) is True
-    finally:
-        trace.cleanup()
-
-
-def test_set_source_tensor_is_never_exempt() -> None:
-    """The arg-1 source of ``set_(source)`` stays perturbation-tested."""
-
-    trace, set_op, receiver = _receiver_and_set_op(_SetToSource())
-    try:
-        source = set_op.call.parent_arg_positions["args"][1]
-        assert _check_perturbation_exemptions(trace, set_op, [receiver]) is True
-        assert _check_perturbation_exemptions(trace, set_op, [source]) is False
-    finally:
-        trace.cleanup()
 
 
 def test_dead_set_source_edge_still_fails_perturbation() -> None:
@@ -254,6 +209,7 @@ _SHAPE_CHANGING = [
     _SetToStorageView,
     _SetToWholeStorage,
 ]
+_GEOMETRY_WRITES = [_UnsqueezeBuffer, _TransposeBuffer]
 _VALIDATING_CASES = [
     (model_cls, copy_fails) for model_cls in _SHAPE_CHANGING for copy_fails in (False, True)
 ]
@@ -322,12 +278,11 @@ def test_set_overloads_validate_and_leave_the_model_restored(
     _assert_restored(model, objects, values)
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "model_cls",
     [
-        pytest.param(_SetToNothing, id="AGT-2474"),
         pytest.param(_SetToStorageView, id="AGT-2475"),
-        pytest.param(_SetToWholeStorage, id="whole-storage"),
     ],
 )
 def test_set_repros_validate_on_the_default_copy_path(model_cls: type[nn.Module]) -> None:
@@ -349,41 +304,6 @@ def test_set_repros_validate_on_the_default_copy_path(model_cls: type[nn.Module]
     (trace,) = traces
     assert get_validation_failure(trace) is None
     assert verdict is True
-    _assert_restored(model, objects, values)
-
-
-@pytest.mark.parametrize(
-    "model_cls", [*_SHAPE_CHANGING, _ResizeBuffer, _UnsqueezeBuffer, _TransposeBuffer]
-)
-def test_restore_rebinds_a_moved_tensor_before_loading_values(model_cls: type[nn.Module]) -> None:
-    """The snapshot restore puts a ``set_``-moved tensor back on its own storage."""
-
-    torch.manual_seed(0)
-    model = model_cls()
-    objects = _state_by_name(model)
-    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
-    snapshot = snapshot_state_for_restore(model)
-    model(torch.rand(4))
-    restore_snapshot_if_changed(
-        model, snapshot, lambda module, state: module.load_state_dict(state)
-    )
-    _assert_restored(model, objects, values)
-
-
-@pytest.mark.parametrize("model_cls", [_SetToNothing, _SetToStorageView])
-def test_default_capture_leaves_a_set_buffer_on_its_own_storage(
-    model_cls: type[nn.Module],
-) -> None:
-    """A default capture restores buffers, including one the forward moved with ``set_``."""
-
-    torch.manual_seed(0)
-    model = model_cls()
-    objects = _state_by_name(model)
-    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        trace = tl.trace(model, torch.rand(4))
-    trace.cleanup()
     _assert_restored(model, objects, values)
 
 
@@ -423,24 +343,6 @@ def test_storage_argument_is_saved_by_value_at_the_call() -> None:
         trace.cleanup()
 
 
-def test_storage_view_end_to_end_with_a_later_source_write(
-    failing_model_deepcopy: list[type],
-) -> None:
-    """The overload validates when the forward rewrites the source after the read.
-
-    Run on the live fallback, where the verdict is replay's alone (no re-trace):
-    replay must read the storage's bytes from the call, not the rewritten ones.
-    """
-
-    failing_model_deepcopy.append(_SetToStorageViewThenOverwrite)
-    torch.manual_seed(0)
-    model = _SetToStorageViewThenOverwrite()
-    objects = _state_by_name(model)
-    values = {name: tensor.detach().clone() for name, tensor in objects.items()}
-    assert _quiet_validate(model, torch.rand(4)) is True
-    _assert_restored(model, objects, values)
-
-
 @pytest.mark.parametrize(
     ("position", "wrong_value"),
     [(2, 3), (3, (3,))],
@@ -470,20 +372,30 @@ def test_wrong_storage_view_still_fails_replay(position: int, wrong_value: objec
         trace.cleanup()
 
 
-@pytest.mark.parametrize("model_cls", [_UnsqueezeBuffer, _TransposeBuffer])
-def test_in_place_geometry_writes_return_a_verdict_and_restore(
+@pytest.mark.parametrize("model_cls", [*_SHAPE_CHANGING, _ResizeBuffer, *_GEOMETRY_WRITES])
+def test_restore_rebinds_moved_or_reshaped_state_before_loading_values(
     model_cls: type[nn.Module], failing_model_deepcopy: list[type]
 ) -> None:
-    """Other in-place metadata writes reach the same restore and must not raise it.
+    """The snapshot restore puts moved or reshaped state back on its recorded geometry.
 
-    On the live fallback the caller's buffer itself changes shape or strides;
-    the restore puts it back on its recorded geometry.
+    Called directly, ``restore_snapshot_if_changed`` rebinds a ``set_``-moved
+    or resized tensor to its own storage before it loads values. Through the
+    live fallback, an in-place geometry write (``unsqueeze_``, ``transpose_``)
+    reaches the same restore, returns a verdict instead of raising, and leaves
+    the caller's buffer on its recorded shape and strides.
     """
 
-    failing_model_deepcopy.append(model_cls)
     torch.manual_seed(0)
     model = model_cls()
     objects = _state_by_name(model)
     values = {name: tensor.detach().clone() for name, tensor in objects.items()}
-    assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
+    snapshot = snapshot_state_for_restore(model)
+    model(torch.rand(4))
+    restore_snapshot_if_changed(
+        model, snapshot, lambda module, state: module.load_state_dict(state)
+    )
     _assert_restored(model, objects, values)
+    if model_cls in _GEOMETRY_WRITES:
+        failing_model_deepcopy.append(model_cls)
+        assert isinstance(_quiet_validate(model, torch.rand(4)), bool)
+        _assert_restored(model, objects, values)

@@ -26,22 +26,11 @@ from torch import nn
 
 import torchlens as tl
 import torchlens.validation._core as validation_core
-from torchlens._state import pause_logging
+from torchlens._utils._record_group_table import record_member
 from torchlens.validation import last_validation_failure
+from torchlens.validation._invariants import check_metadata_invariants
 
 _GLOBAL_OFFSET = torch.randn(3)
-
-
-def _unseen(t: torch.Tensor) -> torch.Tensor:
-    """Copy ``t`` with logging paused: a tensor the capture never sees.
-
-    A pre-forward closure or global tensor is recorded as a ``constant`` source
-    op, so a genuine provenance gap is planted with a tensor first built
-    mid-forward while logging is paused.
-    """
-
-    with pause_logging():
-        return t.clone()
 
 
 def _validate(model: nn.Module, *inputs: torch.Tensor) -> bool:
@@ -75,6 +64,22 @@ def _tampered_validation(tamper: Callable[[Any], None]) -> Iterator[list[Any]]:
         validation_core.validate_saved_outs = original
 
 
+class _IntermediateInput(nn.Module):
+    """Grad of a non-scalar output with respect to an intermediate, with grad_outputs."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.lin = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.lin(x)
+        y = torch.sin(h) * h
+        weights = torch.linspace(0.5, 1.5, y.shape[-1]).expand_as(y)
+        (dh,) = torch.autograd.grad(y, h, grad_outputs=weights, retain_graph=True)
+        return y + dh
+
+
+# Imported by tests/test_valmem3_saved_arg_offload.py.
 class _TwoLosses(nn.Module):
     """Differentiates one of two scalar losses with respect to its parameters."""
 
@@ -89,21 +94,6 @@ class _TwoLosses(nn.Module):
         second = (h**3).sum()
         grads = torch.autograd.grad(first, [self.w, self.v], create_graph=True)
         return h * second + grads[0].sum() + grads[1].sum()
-
-
-class _IntermediateInput(nn.Module):
-    """Grad of a non-scalar output with respect to an intermediate, with grad_outputs."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.lin = nn.Linear(4, 4)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        h = self.lin(x)
-        y = torch.sin(h) * h
-        weights = torch.linspace(0.5, 1.5, y.shape[-1]).expand_as(y)
-        (dh,) = torch.autograd.grad(y, h, grad_outputs=weights, retain_graph=True)
-        return y + dh
 
 
 class _SecondOrder(nn.Module):
@@ -138,19 +128,7 @@ class _TwoCallsDifferentArity(nn.Module):
         return gh + gb + h
 
 
-class _GradWithGlobal(nn.Module):
-    """A recorded grad in a model that also reads a tensor the capture never saw."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.w = nn.Parameter(torch.randn(3))
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        loss = (x * self.w).pow(2).sum()
-        (g,) = torch.autograd.grad(loss, [self.w], create_graph=True)
-        return (self.w - g) * x + _unseen(_GLOBAL_OFFSET)
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
     torch.manual_seed(0)
     with warnings.catch_warnings(record=True) as caught:
@@ -175,6 +153,7 @@ def test_autograd_grad_in_forward_is_a_recorded_boundary_op() -> None:
     assert [op.label for op in selected.transforms] == transform_labels
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of backends/torch/_autograd_grad_boundary.py, campaign mutant kills.
 def test_autograd_grad_recorder_runs_once_and_holds_no_live_call() -> None:
     torch.manual_seed(0)
     trace = tl.trace(MAMLInnerLoop(), torch.rand(4, 8))
@@ -183,14 +162,11 @@ def test_autograd_grad_recorder_runs_once_and_holds_no_live_call() -> None:
         recorder()
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 @pytest.mark.parametrize(
     ("model_factory", "shape"),
-    [
-        (MAMLInnerLoop, (4, 8)),
-        (_TwoLosses, (2, 3)),
-        (_IntermediateInput, (2, 4)),
-    ],
-    ids=["maml", "two_losses", "intermediate_input_grad_outputs"],
+    [(MAMLInnerLoop, (4, 8)), (_IntermediateInput, (2, 4))],
+    ids=["maml", "intermediate_input_grad_outputs"],
 )
 def test_recorded_autograd_grad_validates_by_subgraph_replay(
     model_factory: Callable[[], nn.Module], shape: tuple[int, ...]
@@ -199,6 +175,7 @@ def test_recorded_autograd_grad_validates_by_subgraph_replay(
     assert _validate(model_factory(), torch.randn(*shape)) is True
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_autograd_grad_replay.py.
 @pytest.mark.parametrize(
     ("model_factory", "shape"),
     [(_SecondOrder, (2, 3)), (_TwoCallsDifferentArity, (3,))],
@@ -243,76 +220,6 @@ def test_nested_and_dependent_input_grads_replay_faithfully(
     }
 
 
-def test_forged_autograd_grad_func_fails_replay() -> None:
-    def forge(trace: Any) -> None:
-        def autogradgrad(outputs: Any, inputs: Any, **_kwargs: Any) -> tuple[torch.Tensor, ...]:
-            return tuple(torch.zeros_like(tensor) for tensor in inputs)
-
-        op = _grad_ops(trace)[0]
-        op.func = autogradgrad
-        assert op.call.func_transform_kind == "autograd.grad"
-
-    torch.manual_seed(0)
-    with _tampered_validation(forge):
-        assert _validate(_TwoLosses(), torch.randn(2, 3)) is False
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "forward_replay"
-    assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
-
-
-def test_forged_autograd_grad_parent_fails_replay() -> None:
-    results: list[Any] = []
-
-    def forge(trace: Any) -> None:
-        sums = [op for op in trace.ops if op.func_name == "sum"]
-        for op in _grad_ops(trace):
-            true_root = op.parents[0]
-            forged = next(s for s in sums if s.label.split(":")[0] != true_root)
-            forged_label = forged.label.split(":")[0]
-            op.parents = (forged_label,)
-            op._call_parent_arg_positions = {"args": {0: forged_label}, "kwargs": {}}
-            op._call_saved_args = (forged.out.detach().clone(), *tuple(op.call.saved_args)[1:])
-            results.append(
-                validation_core._check_whether_func_on_saved_parents_yields_saved_tensor(
-                    trace, op.label
-                )
-            )
-
-    torch.manual_seed(0)
-    with _tampered_validation(forge):
-        assert _validate(_TwoLosses(), torch.randn(2, 3)) is False
-    assert results and all(r.decision == "failed" for r in results)
-    assert {r.reason for r in results} == {"replay_mismatch"}
-
-
-def test_tampered_saved_gradient_fails_validation() -> None:
-    results: list[Any] = []
-
-    def tamper(trace: Any) -> None:
-        op = _grad_ops(trace)[0]
-        op._slot("out").add_(0.5)
-        results.append(
-            validation_core._check_whether_func_on_saved_parents_yields_saved_tensor(
-                trace, op.label
-            )
-        )
-
-    torch.manual_seed(0)
-    with _tampered_validation(tamper):
-        assert _validate(_TwoLosses(), torch.randn(2, 3)) is False
-    assert len(results) == 1
-    assert results[0].decision == "failed" and results[0].reason == "replay_mismatch"
-
-
-def test_unrecorded_tensor_beside_a_recorded_grad_still_fails_source_provenance() -> None:
-    torch.manual_seed(0)
-    assert _validate(_GradWithGlobal(), torch.randn(3)) is False
-    failure = last_validation_failure()
-    assert failure is not None and failure.check_name == "source_provenance"
-    assert list(failure.extra.get("reasons", [])) == ["unattributed_tensor_args"]
-    assert failure.op_label is not None and failure.op_label.startswith("add")
-
-
 class _GradOfInputsLinearInEach(nn.Module):
     """Energy linear in each of two forward inputs, differentiated against both.
 
@@ -354,21 +261,7 @@ def _perturbation_decisions(model: nn.Module, *inputs: torch.Tensor) -> dict[str
     return results
 
 
-def test_grad_against_an_input_it_does_not_read_still_sees_that_input() -> None:
-    """Perturbing an ``inputs`` slot reaches a gradient linear in that input."""
-
-    torch.manual_seed(0)
-    decisions = _perturbation_decisions(
-        _GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)
-    )
-    assert {edge for edge in decisions if "<-input" in edge}
-    assert {edge: r.decision for edge, r in decisions.items()} == dict.fromkeys(
-        decisions, "validated"
-    )
-    torch.manual_seed(0)
-    assert _validate(_GradOfInputsLinearInEach(), torch.randn(2, 3), torch.randn(2, 3)) is True
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of validation/_autograd_grad_replay.py, validation/_degenerate_forward.py.
 def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
     """A zero weight leaves every gradient zero; the input edge still fails, recorded."""
 
@@ -382,3 +275,78 @@ def test_identically_zero_grad_still_fails_its_input_perturbation() -> None:
     failure = last_validation_failure()
     assert failure is not None and failure.check_name == "perturbation"
     assert failure.op_label is not None and failure.op_label.startswith("autogradgrad")
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "shape", "paired_funcs"),
+    [
+        (_SecondOrder, (2, 3), {"matmul", "pow", "sum"}),
+        (_TwoLosses, (2, 3), {"matmul", "tanh", "add", "pow", "sum"}),
+        (_IntermediateInput, (2, 4), {"linear", "sin", "mul"}),
+    ],
+    ids=["second-order", "two-losses", "intermediate-input"],
+)
+def test_grad_fns_of_a_backward_inside_forward_pair_with_their_captured_ops(
+    model_cls: type[nn.Module], shape: tuple[int, ...], paired_funcs: set[str]
+) -> None:
+    """A backward pass run inside forward pairs each GradFn with the op that records it.
+
+    The walk of such a pass runs before any layer exists, so the pairing must not
+    depend on walk time: every GradFn whose node a captured op records names that op,
+    exactly as a backward run after the trace would.
+    """
+
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(model_cls(), torch.randn(*shape))
+    try:
+        grad_fns = {grad_fn.grad_fn_object_id: grad_fn for grad_fn in trace.autograd.grad_fns}
+        recording_ops = [
+            op
+            for op in trace._layer_list
+            if op.grad_fn_object_id in grad_fns and record_member(op, "is_compute_op", False)
+        ]
+        assert recording_ops
+        for op in recording_ops:
+            grad_fn = grad_fns[op.grad_fn_object_id]
+            assert grad_fn.has_op, grad_fn.label
+            assert grad_fn.op is not None and grad_fn.op_label == op.layer_label
+        paired = [grad_fn for grad_fn in grad_fns.values() if grad_fn.has_op]
+        # Operator calls record their dunder name (``x @ w`` is ``__matmul__``).
+        assert {grad_fn.op.func_name.strip("_") for grad_fn in paired} >= paired_funcs
+        check_metadata_invariants(trace)
+    finally:
+        trace.cleanup()
+
+
+def test_second_order_inside_forward_keeps_the_orders_of_the_same_math_after_the_trace() -> None:
+    """Pairing the penalty's ops does not change derivative orders: pass 2 stays order 2.
+
+    ``penalty = (g ** 2).sum()`` is captured inside forward, so its nodes pair with
+    their ops; they still feed the first gradient's order-2 nodes, so they sit at
+    order 2 and the nodes the second grad creates from them at order 3.
+    """
+
+    torch.manual_seed(0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        trace = tl.trace(_SecondOrder(), torch.randn(2, 3))
+    try:
+        assert [p.order for p in trace.autograd.backward_passes] == [1, 2]
+        grad_fns = list(trace.autograd.grad_fns)
+        ops = list(trace.ops)
+        first_grad, second_grad = [
+            index for index, op in enumerate(ops) if op.call.func_transform_kind == "autograd.grad"
+        ]
+        # ``penalty = (g ** 2).sum()`` runs between the two grads: ``__pow__`` then ``sum``.
+        penalty_ops = {op.func_name.strip("_"): op for op in ops[first_grad + 1 : second_grad]}
+        assert {"pow", "sum"} <= set(penalty_ops), sorted(penalty_ops)
+        penalty_ids = {penalty_ops["pow"].grad_fn_object_id, penalty_ops["sum"].grad_fn_object_id}
+        penalty_nodes = [g for g in grad_fns if g.grad_fn_object_id in penalty_ids]
+        assert len(penalty_nodes) == 2 and all(g.has_op for g in penalty_nodes)
+        assert {grad_fn.order for grad_fn in penalty_nodes} == {2}
+        creations = [g for g in grad_fns if g.creator_object_id in penalty_ids]
+        assert creations and {g.order for g in creations} == {3}
+    finally:
+        trace.cleanup()

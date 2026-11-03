@@ -77,6 +77,17 @@ class HtmlReportOptions:
     get written -- redaction, byte-stability, renderer depth, size
     budgets -- bundles here. Every spelling is [UI-SPRINT] /
     DOCUMENTED-UNSTABLE.
+
+    Examples
+    --------
+    >>> import tempfile, pathlib
+    >>> options = HtmlReportOptions(deterministic=True, share_safe=True)
+    >>> trace = tl.trace(model, x)
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     out = tl.export.html(trace, pathlib.Path(tmp) / "r.html", options=options, graph="none")
+    ...     text = out.read_text(encoding="utf-8")
+    >>> text.startswith("<!DOCTYPE html>")
+    True
     """
 
     #: Strip EVERY embedded value including the frontier.

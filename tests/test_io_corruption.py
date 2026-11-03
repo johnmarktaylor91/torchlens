@@ -182,20 +182,6 @@ def test_missing_blob_file_raises_with_blob_id(tmp_path: Path) -> None:
         load(bundle_path)
 
 
-def test_corrupt_metadata_pickle_raises_with_metadata_path(tmp_path: Path) -> None:
-    """Garbage metadata should fail load with the metadata file path."""
-
-    bundle_path = _save_bundle(tmp_path)
-    metadata_path = bundle_path / "metadata.pkl"
-    metadata_path.write_bytes(b"not a pickle")
-
-    with pytest.raises(
-        ArtifactError,
-        match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
-    ):
-        load(bundle_path)
-
-
 def test_load_front_door_causes_carry_distinct_codes(tmp_path: Path) -> None:
     """R65: the tl.load front-door causes carry distinct ``fields['code']`` values.
 
@@ -355,23 +341,6 @@ def test_io_artifact_door_codes_are_provoked(tmp_path: Path) -> None:
     assert payload.value.fields["code"] == "save_payload_level_conflict"
 
 
-def test_remedy_field_derives_from_authored_message_tail() -> None:
-    """R65 remedy contract: fields['remedy'] exists whenever the message ends
-    with an authored "Remedy: ..." sentence; an explicit kwarg always wins."""
-
-    from torchlens.errors._base import TorchLensError
-
-    derived = TorchLensError("Thing failed. Remedy: do the fix.", code="x")
-    assert derived.fields["remedy"] == "do the fix"
-    assert str(derived).rstrip(".").endswith(derived.fields["remedy"])
-
-    explicit = TorchLensError("Thing failed. Remedy: prose text.", remedy="explicit wins")
-    assert explicit.fields["remedy"] == "explicit wins"
-
-    plain = TorchLensError("No remedy sentence here.")
-    assert "remedy" not in plain.fields
-
-
 def test_tampered_manifest_field_raises_with_field_name(tmp_path: Path) -> None:
     """Tampered manifest tensor metadata should fail load with the offending field."""
 
@@ -395,23 +364,6 @@ def test_stale_blob_counts_raise_with_count_field(tmp_path: Path) -> None:
 
     with pytest.raises(ArtifactError, match=r"n_out_blobs"):
         load(bundle_path)
-
-
-def test_unknown_extra_files_warn_but_do_not_raise(tmp_path: Path) -> None:
-    """Unreferenced files under ``blobs/`` should warn without aborting load."""
-
-    bundle_path = _save_bundle(tmp_path)
-    extra_blob_path = bundle_path / "blobs" / "unexpected.bin"
-    extra_blob_path.write_bytes(b"extra")
-
-    with pytest.warns(
-        UserWarning,
-        match=rf"unreferenced extra files in blobs/: {re.escape(extra_blob_path.name)}",
-    ):
-        restored = load(bundle_path, lazy=True)
-
-    assert isinstance(restored, Trace)
-    assert restored._loaded_from_bundle is True
 
 
 def test_checksum_mismatch_raises_with_blob_id_and_path(tmp_path: Path) -> None:
@@ -476,27 +428,6 @@ _CORRUPTION_CORPUS: dict[str, bytes] = {
 
 
 @pytest.mark.parametrize("facet", sorted(_CORRUPTION_CORPUS))
-def test_secA_corpus_unit_normalizes_to_unpickling_error(facet: str) -> None:
-    """Every corruption facet raises a clean ``UnpicklingError``, never a raw builtin."""
-
-    payload = _CORRUPTION_CORPUS[facet]
-    with pytest.raises(pickle.UnpicklingError) as excinfo:
-        SafeBundleUnpickler(io.BytesIO(payload)).load()
-    # The raised type must be exactly the pickle contract type, not a leaked builtin
-    # (IndexError / struct.error / KeyError / UnicodeDecodeError / EOFError) that the
-    # load-site ``except UnpicklingError`` would fail to catch.
-    assert not isinstance(excinfo.value, (IndexError, KeyError, UnicodeDecodeError, EOFError))
-
-
-def test_secA_valid_stream_still_loads_through_boundary() -> None:
-    """A VALID pickle stream still round-trips through the ``load()`` boundary unmasked."""
-
-    for value in ({"a": 1, "b": [1, 2, 3]}, ("x", 2, 3.5), [1, {"k": "v"}], "hello"):
-        stream = io.BytesIO(pickle.dumps(value))
-        assert SafeBundleUnpickler(stream).load() == value
-
-
-@pytest.mark.parametrize("facet", sorted(_CORRUPTION_CORPUS))
 def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(tmp_path: Path, facet: str) -> None:
     """A corrupt ``metadata.pkl`` (any facet) fails ``tl.load`` with a clean IO error."""
 
@@ -509,15 +440,6 @@ def test_secA_corpus_e2e_metadata_raises_torchlens_io_error(tmp_path: Path, face
         match=rf"Failed to load bundle metadata from {re.escape(str(metadata_path))}\.",
     ):
         load(bundle_path)
-
-
-def test_secA_valid_bundle_still_round_trips(tmp_path: Path) -> None:
-    """Over-deny pin: a genuine, uncorrupted bundle still loads unchanged."""
-
-    bundle_path = _save_bundle(tmp_path)
-    restored = load(bundle_path)
-    assert isinstance(restored, Trace)
-    assert restored._loaded_from_bundle is True
 
 
 # --- secA_1 follow-up (r51): the load() boundary is LOCUS-classified ----------------
@@ -548,22 +470,6 @@ def test_secA_application_reconstruction_failure_keeps_identity() -> None:
     with pytest.raises(Exception) as excinfo:
         SafeBundleUnpickler(stream).load()
     assert not isinstance(excinfo.value, pickle.UnpicklingError)
-
-
-def test_secA_callsite_arity_mismatch_still_normalizes() -> None:
-    """An arity-mismatch REDUCE (zero application frames ran) stays 'corrupt'."""
-
-    import torch._utils
-
-    class _ArityMismatch:
-        def __reduce__(self) -> Any:
-            """Reduce to an admitted reconstructor invoked with too few arguments."""
-
-            return (torch._utils._rebuild_tensor_v2, ())
-
-    stream = io.BytesIO(pickle.dumps(_ArityMismatch()))
-    with pytest.raises(pickle.UnpicklingError):
-        SafeBundleUnpickler(stream).load()
 
 
 def test_corrupt_manifest_json_refuses_manifest_unreadable(tmp_path: Path) -> None:

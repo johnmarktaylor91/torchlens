@@ -973,6 +973,16 @@ def layer_integrated_gradients(
         Layer attribution values with the same shape as the captured activation.
         ``extra`` carries the layer-space completeness fields with the
         bottleneck caveat, plus cost and audit disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_integrated_gradients(
+    ...     model, x, target=0, layer="0", num_steps=4
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.extra["layer"]
+    '0'
     """
 
     _validate_positive_int("n_steps", num_steps)
@@ -1090,6 +1100,16 @@ def layer_conductance(
         Layer conductance values with the same shape as the captured activation.
         ``extra`` carries the layer-space completeness fields with the
         bottleneck caveat, plus cost and audit disclosure.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_conductance(
+    ...     model, x, target=0, layer="0", num_steps=4
+    ... )
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.method
+    'layer_conductance'
     """
 
     _validate_positive_int("n_steps", num_steps)
@@ -1199,6 +1219,14 @@ def layer_attribution(
     AttributionError
         If ``method`` is unsupported, or a reused layer produced mismatched
         activation shapes across firings.
+
+    Examples
+    --------
+    >>> result = tl.attribution.layer_attribution(model, x, target=0, layer="0")
+    >>> tuple(result.values.shape)
+    (1, 4, 8, 8)
+    >>> result.method
+    'layer_activation_x_grad'
     """
 
     if method not in ("activation_x_grad", "grad"):

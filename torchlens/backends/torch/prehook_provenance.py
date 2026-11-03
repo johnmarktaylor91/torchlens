@@ -631,7 +631,7 @@ def _snapshot_with_reasons(
     return ModuleInputSnapshot(
         _args=snapshot._args,
         _kwargs=snapshot._kwargs,
-        structure=snapshot.structure,
+        input_structure=snapshot.input_structure,
         tensor_observations=snapshot.tensor_observations,
         is_capture_complete=not merged,
         incomplete_reasons=merged,
@@ -988,7 +988,7 @@ def _snapshot_state(
     return ModuleInputSnapshot(
         _args=cloned_args,
         _kwargs=cloned_kwargs,
-        structure=observation.structure,
+        input_structure=observation.structure,
         tensor_observations=tuple(tensor_observations),
         is_capture_complete=not reasons,
         incomplete_reasons=tuple(sorted(reasons)),

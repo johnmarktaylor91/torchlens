@@ -99,6 +99,16 @@ class PaddingWaste:
     positions; ``unclassified_flops`` is the known mass whose scaling
     class could not be determined (excluded from the estimate and
     disclosed, never scaled by a guess).
+
+    Examples
+    --------
+    >>> tokens = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
+    >>> trace = tl.trace(tokens, torch.randn(2, 3, 4))
+    >>> waste = tl.report.padding_waste(trace, padded_length=3, real_lengths=[3, 2])
+    >>> (waste.padded_length, waste.real_lengths)
+    (3, (3, 2))
+    >>> waste.waste_flops >= 0
+    True
     """
 
     waste_flops: int
@@ -178,6 +188,18 @@ def padding_waste(
     Per class: ``linear_in_tokens`` wastes ``1 - sum(r_i)/(B*S)`` of its
     mass; ``quadratic_in_sequence`` wastes ``1 - sum(r_i^2)/(B*S^2)``;
     ``invariant`` wastes nothing; ``unknown`` is excluded and disclosed.
+
+    Examples
+    --------
+    >>> tokens = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
+    >>> trace = tl.trace(tokens, torch.randn(2, 3, 4))
+    >>> tl.report.padding_waste(trace, padded_length=3, real_lengths=[3, 2]).forward_flops > 0
+    True
+    >>> try:
+    ...     tl.report.padding_waste(trace, padded_length=0, real_lengths=[3, 2])
+    ... except tl.errors.InvalidArgumentError as err:
+    ...     print(type(err).__name__)
+    InvalidArgumentError
     """
 
     if not isinstance(padded_length, int) or isinstance(padded_length, bool) or padded_length < 1:

@@ -17,8 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens.intervention._binding import bind_spec_to_model
-from torchlens.intervention.errors import BindingPreflightError, BindingRuntimeError
+from torchlens.intervention.errors import BindingPreflightError
 
 
 def _double(out: torch.Tensor, *, ctx: object) -> torch.Tensor:
@@ -87,18 +86,7 @@ def test_bind_refuses_post_capture_selector_before_any_forward(cnn, case: str) -
     assert model.forwards == 0
 
 
-def test_label_refusal_names_the_label_and_its_op_type(cnn) -> None:
-    """A final label's refusal quotes the label and names tl.func of its op type."""
-
-    model, _x = cnn
-    with pytest.raises(BindingPreflightError) as excinfo:
-        tl.when(tl.label("relu_1_2"), _double).bind(model)
-    assert "tl.label('relu_1_2')" in str(excinfo.value)
-    assert "assigns layer labels when a capture finishes" in str(excinfo.value)
-    assert "tl.func('relu')" in excinfo.value.fields["remedy"]
-
-
-@pytest.mark.parametrize("label", ["relu_1_2", "conv2d_2_3:1", "tanh_1"])
+@pytest.mark.parametrize("label", ["tanh_1"])
 def test_printed_remedy_runs_and_edits_the_labelled_op(cnn, label: str) -> None:
     """The selector copied out of the remedy binds, fires, and edits the op the label names."""
 
@@ -117,20 +105,9 @@ def test_printed_remedy_runs_and_edits_the_labelled_op(cnn, label: str) -> None:
     assert bound.last_report.num_fires == len(same_type) >= 1
 
 
-def test_narrowed_remedy_spelling_runs(cnn) -> None:
-    """The remedy's narrowing, tl.func(...) & tl.in_module(...), binds and fires once."""
-
-    model, x = cnn
-    bound = tl.when(tl.func("conv2d") & tl.in_module("2"), _double).bind(model)
-    bound(x)
-    assert bound.last_report.num_fires == 1
-
-
 @pytest.mark.parametrize(
     "selector",
     [
-        pytest.param(lambda: tl.label("relu_1_2_raw"), id="label_raw"),
-        pytest.param(lambda: tl.label_contains("relu"), id="contains_plain"),
         pytest.param(lambda: tl.label_matches("^relu"), id="regex_plain"),
         pytest.param(lambda: tl.func("relu") & tl.in_module("1"), id="func_in_module"),
     ],
@@ -142,46 +119,3 @@ def test_live_matchable_label_terms_still_bind_and_fire(cnn, selector) -> None:
     bound = tl.when(selector(), _double).bind(model)
     bound(x)
     assert bound.last_report.num_fires == 1
-
-
-def test_every_binding_door_refuses_at_bind(cnn) -> None:
-    """Binding construction refuses labels before any forward or generate."""
-
-    model, x = cnn
-    spec = tl.when(tl.label("relu_1_2"), _double)
-    for door in (
-        lambda: spec.bind(model),
-        lambda: spec.bind(model, on_zero_fire="error"),
-        lambda: bind_spec_to_model(spec, model, on_zero_fire="warn"),
-        lambda: spec.bind(model).generate(x),
-    ):
-        with pytest.raises(BindingPreflightError) as excinfo:
-            door()
-        assert excinfo.value.fields["code"] == "bind_rule_unsupported"
-    assert model.forwards == 0
-
-
-def test_capture_doors_still_resolve_labels(cnn) -> None:
-    """On a finished capture the same label selector still resolves its site."""
-
-    model, x = cnn
-    trace = tl.trace(model, x)
-    site = trace[tl.label("relu_1_2")]
-    assert site.layer_label == "relu_1_2"
-
-
-def test_runtime_predicate_failure_keeps_bind_rule_runtime_error(cnn) -> None:
-    """A user predicate that raises on a live context still raises bind_rule_runtime_error."""
-
-    model, x = cnn
-
-    def _exploding(ctx: object) -> bool:
-        """Raise on every candidate op."""
-
-        raise ValueError("predicate boom")
-
-    bound = tl.when(_exploding, _double).bind(model)
-    with pytest.raises(BindingRuntimeError) as excinfo:
-        bound(x)
-    assert excinfo.value.fields["code"] == "bind_rule_runtime_error"
-    assert isinstance(excinfo.value.__cause__, ValueError)

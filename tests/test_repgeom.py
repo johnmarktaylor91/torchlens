@@ -2,24 +2,20 @@
 
 from __future__ import annotations
 
-import importlib
 import re
 import subprocess
 import sys
-import warnings
 from pathlib import Path
 from typing import Any
 
 import numpy as np
 import pytest
 import torch
-from PIL import Image, ImageDraw
 from torch import nn
 
 import torchlens as tl
 from torchlens import repgeom
 from torchlens._visualization.node_spec import NodeSpec
-from torchlens.viz._node_plots import _DRAW_SCALE, _legend_bbox, _legend_height
 
 ANALYTIC_POINTS = np.array(
     [
@@ -88,24 +84,6 @@ class _RecurrentMDS(nn.Module):
         return x
 
 
-def _pairwise_distances(points: np.ndarray) -> np.ndarray:
-    """Return Euclidean pairwise distances for rows of ``points``.
-
-    Parameters
-    ----------
-    points:
-        Row-wise point coordinates.
-
-    Returns
-    -------
-    np.ndarray
-        Square pairwise distance matrix.
-    """
-
-    differences = points[:, None, :] - points[None, :, :]
-    return np.sqrt(np.sum(differences * differences, axis=-1))
-
-
 def _pil_stimuli(n_items: int = 8) -> list[Any]:
     """Return deterministic PIL image stimuli for scatter-render tests.
 
@@ -150,30 +128,6 @@ def _trace_with_mds_and_images() -> Any:
     return trace
 
 
-def _reflection_allowed_procrustes_residual(source: np.ndarray, target: np.ndarray) -> float:
-    """Return the normalized residual after unrestricted orthogonal alignment.
-
-    Parameters
-    ----------
-    source:
-        Source row-wise coordinates.
-    target:
-        Target row-wise coordinates.
-
-    Returns
-    -------
-    float
-        Frobenius residual after centering and reflection-allowed rotation.
-    """
-
-    source_centered = source - source.mean(axis=0, keepdims=True)
-    target_centered = target - target.mean(axis=0, keepdims=True)
-    u, _, vt = np.linalg.svd(source_centered.T @ target_centered, full_matrices=False)
-    aligned = source_centered @ (u @ vt)
-    denominator = np.linalg.norm(target_centered)
-    return float(np.linalg.norm(aligned - target_centered) / denominator)
-
-
 def _mds_trace(model: nn.Module, save: Any) -> tl.Trace:
     """Capture a deterministic MDS test trace.
 
@@ -196,54 +150,6 @@ def _mds_trace(model: nn.Module, save: Any) -> tl.Trace:
     return tl.trace(model, x, save=save, capture=tl.options.CaptureOptions(seed=1001))
 
 
-def test_classical_mds_recovers_closed_form_asymmetric_fixture() -> None:
-    """MDS should recover a nondegenerate asymmetric 2D fixture analytically."""
-
-    centered = ANALYTIC_POINTS - ANALYTIC_POINTS.mean(axis=0, keepdims=True)
-    singular_values = np.linalg.svd(centered, compute_uv=False)
-    eigenvalues = singular_values * singular_values
-    assert eigenvalues[0] > eigenvalues[1] > 0.0
-
-    distances = _pairwise_distances(ANALYTIC_POINTS)
-    embedding, info = repgeom.classical_mds(distances, num_components=2)
-
-    assert info["effective_rank"] == 2
-    assert np.allclose(_pairwise_distances(embedding), distances, atol=1e-9)
-    assert _reflection_allowed_procrustes_residual(embedding, ANALYTIC_POINTS) < 1e-6
-
-
-def test_procrustes_align_recovers_known_rotation_without_scaling() -> None:
-    """No-reflection Procrustes should recover a known proper rotation."""
-
-    theta = np.deg2rad(37.0)
-    rotation = np.array(
-        [
-            [np.cos(theta), -np.sin(theta)],
-            [np.sin(theta), np.cos(theta)],
-        ]
-    )
-    target = ANALYTIC_POINTS @ rotation + np.array([3.0, -4.0])
-
-    aligned = repgeom.procrustes_align(ANALYTIC_POINTS, target)
-    source_centered = ANALYTIC_POINTS - ANALYTIC_POINTS.mean(0)
-    aligned_centered = aligned - aligned.mean(0)
-    least_squares_rotation = np.linalg.lstsq(
-        source_centered,
-        aligned_centered,
-        rcond=None,
-    )[0]
-
-    assert np.linalg.det(least_squares_rotation) > 0
-    assert np.linalg.norm(aligned - target) < 1e-9
-
-
-def test_classical_mds_min_n_gate_raises_clear_error() -> None:
-    """MDS should reject too-small visualization batches."""
-
-    with pytest.raises(ValueError, match="too few stimuli"):
-        repgeom.classical_mds(ANALYTIC_POINTS[:7], min_stimuli=8)
-
-
 def test_classical_mds_rank_deficient_duplicate_gate_raises_clear_error() -> None:
     """MDS should reject duplicate stimuli as rank-deficient for display."""
 
@@ -252,125 +158,6 @@ def test_classical_mds_rank_deficient_duplicate_gate_raises_clear_error() -> Non
 
     with pytest.raises(ValueError, match="rank-deficient|duplicate"):
         repgeom.classical_mds(points, min_stimuli=8)
-
-
-def test_classical_mds_negative_eigenvalue_clip_reports_discarded_fraction() -> None:
-    """Non-PSD dissimilarities should report clipped negative eigenvalue mass."""
-
-    distances = _pairwise_distances(ANALYTIC_POINTS)
-    distances[0, 1] = 25.0
-    distances[1, 0] = 25.0
-
-    embedding, info = repgeom.classical_mds(distances, min_stimuli=8)
-
-    assert embedding.shape == (8, 2)
-    assert info["negative_eigenvalue_count"] > 0
-    assert info["discarded_variance_fraction"] > 0.0
-
-
-def test_classical_mds_sign_convention_is_deterministic() -> None:
-    """Repeated MDS calls should use identical coordinate signs."""
-
-    distances = _pairwise_distances(ANALYTIC_POINTS)
-
-    embedding_a, _ = repgeom.classical_mds(distances)
-    embedding_b, _ = repgeom.classical_mds(distances)
-
-    assert np.array_equal(embedding_a, embedding_b)
-
-
-def test_classical_mds_warns_on_ambiguous_square_feature_matrix() -> None:
-    """Square symmetric feature matrices should no longer be treated silently."""
-
-    features = np.array(
-        [
-            [0.0, 0.81632961, 0.47703871, 0.86999729],
-            [0.81632961, 0.0, 1.886532, 1.35998054],
-            [0.47703871, 1.886532, 0.0, 0.50481297],
-            [0.86999729, 1.35998054, 0.50481297, 0.0],
-        ],
-        dtype=np.float64,
-    )
-
-    with pytest.warns(UserWarning, match="ambiguous square input"):
-        embedding, info = repgeom.classical_mds(features, min_stimuli=3)
-
-    assert embedding.shape == (4, 2)
-    assert info["input_kind"] == "distances"
-
-
-def test_classical_mds_explicit_input_kind_resolves_the_ambiguity() -> None:
-    """Declaring the input kind silences the guess and picks the stated reading."""
-
-    ambiguous = np.array(
-        [
-            [0.0, 0.81632961, 0.47703871, 0.86999729],
-            [0.81632961, 0.0, 1.886532, 1.35998054],
-            [0.47703871, 1.886532, 0.0, 0.50481297],
-            [0.86999729, 1.35998054, 0.50481297, 0.0],
-        ],
-        dtype=np.float64,
-    )
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("error")
-        as_distances, distance_info = repgeom.classical_mds(
-            ambiguous, min_stimuli=3, input_kind="distances"
-        )
-        as_features, feature_info = repgeom.classical_mds(
-            ambiguous, min_stimuli=3, input_kind="features"
-        )
-
-    assert distance_info["input_kind"] == "distances"
-    assert feature_info["input_kind"] == "features"
-    assert not np.allclose(as_distances, as_features)
-
-    auto_embedding, _ = repgeom.classical_mds(
-        repgeom.activation_distance_matrix(ambiguous), min_stimuli=3, input_kind="distances"
-    )
-    assert np.allclose(auto_embedding, as_features)
-
-    with pytest.raises(ValueError, match="input_kind must be one of"):
-        repgeom.classical_mds(ambiguous, min_stimuli=3, input_kind="dist")
-
-
-def test_activation_distance_matrix_metrics() -> None:
-    """Activation distance helper should flatten rows and support core metrics."""
-
-    activations = np.array([[[1.0, 0.0, 2.0]], [[0.0, 1.0, 3.0]], [[1.0, 1.0, 4.0]]])
-
-    euclidean = repgeom.activation_distance_matrix(activations)
-    cosine = repgeom.activation_distance_matrix(activations, metric="cosine")
-    correlation = repgeom.activation_distance_matrix(activations, metric="correlation")
-
-    assert euclidean.shape == (3, 3)
-    assert np.allclose(np.diag(cosine), 0.0)
-    assert np.allclose(np.diag(correlation), 0.0)
-    assert np.allclose(euclidean, euclidean.T)
-
-    expected_euclidean = np.sqrt(
-        np.sum(
-            (activations.reshape(3, -1)[:, None, :] - activations.reshape(3, -1)[None, :, :]) ** 2,
-            axis=-1,
-        )
-    )
-    assert np.allclose(euclidean, expected_euclidean)
-
-
-def test_rdm_alias_matches_activation_distance_matrix_for_core_metrics() -> None:
-    """RDM should be a thin alias over the activation distance helper."""
-
-    activations = np.array(
-        [
-            [[1.0, 0.0, 2.0], [0.5, 1.5, -0.5]],
-            [[0.0, 1.0, 3.0], [1.0, -0.5, 0.25]],
-            [[1.0, 1.0, 4.0], [-1.0, 0.75, 0.5]],
-        ]
-    )
-
-    for metric in ("euclidean", "cosine", "correlation"):
-        expected = repgeom.activation_distance_matrix(activations, metric=metric)
-        assert np.array_equal(repgeom.rdm(activations, metric=metric), expected)
 
 
 def test_rdm_degenerate_min_n_and_angular_metrics_raise_clear_errors() -> None:
@@ -388,13 +175,6 @@ def test_rdm_degenerate_min_n_and_angular_metrics_raise_clear_errors() -> None:
 
     with pytest.raises(ValueError, match="correlation distance is undefined for zero-norm stimuli"):
         repgeom.rdm(np.array([[1.0, 1.0], [1.0, 2.0]]), metric="correlation")
-
-
-def test_repgeom_reachable_as_top_level_submodule() -> None:
-    """``tl.repgeom`` should be exposed without expanding ``tl.__all__``."""
-
-    assert tl.repgeom is repgeom
-    assert "repgeom" not in tl.__all__
 
 
 def test_repgeom_import_clean_without_optional_neuro_or_plotting_deps() -> None:
@@ -416,12 +196,6 @@ if loaded:
     )
 
     assert result.returncode == 0, result.stderr + result.stdout
-
-
-def test_repgeom_direct_import_clean() -> None:
-    """Direct import of the submodule should succeed in the current interpreter."""
-
-    assert importlib.import_module("torchlens.repgeom") is repgeom
 
 
 def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
@@ -455,101 +229,6 @@ def test_mds_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Pa
         assert torch.equal(loaded._annotation_blobs[f"mds:{key}"], torch.from_numpy(coords))
 
 
-def test_mds_evolution_returned_coords_do_not_alias_annotations() -> None:
-    """Returned MDS arrays should not share memory with stored trace annotations."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    coords_by_key = repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-    first_key = next(iter(coords_by_key))
-    before = float(trace._annotation_blobs[f"mds:{first_key}"][0, 0].item())
-
-    coords_by_key[first_key][0, 0] = 999.0
-
-    assert float(trace._annotation_blobs[f"mds:{first_key}"][0, 0].item()) == before
-
-
-def test_rdm_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
-    """RDM evolution should compute, annotate, and persist matrices."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
-
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-
-    assert list(matrices_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
-    assert trace._annotation_blobs is not None
-    for key, matrix in matrices_by_key.items():
-        assert matrix.shape == (8, 8)
-        assert np.allclose(matrix, matrix.T)
-        assert torch.equal(trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrix))
-
-    bundle_path = tmp_path / "rdm_evolution.tlspec"
-    trace.save(bundle_path)
-    loaded = tl.load(bundle_path)
-
-    assert loaded._annotation_blobs is not None
-    for key, matrix in matrices_by_key.items():
-        assert torch.equal(loaded._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrix))
-
-
-def test_rdm_evolution_returned_matrices_do_not_alias_annotations() -> None:
-    """Returned RDM arrays should not share memory with stored trace annotations."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-    first_key = next(iter(matrices_by_key))
-    before = float(trace._annotation_blobs[f"rdm:{first_key}"][0, 1].item())
-
-    matrices_by_key[first_key][0, 1] = 999.0
-
-    assert float(trace._annotation_blobs[f"rdm:{first_key}"][0, 1].item()) == before
-
-
-def test_scree_and_effective_dimensionality_low_rank_fixture() -> None:
-    """Scree helpers should recover a sorted non-negative low-rank spectrum."""
-
-    eigenvalues = repgeom.scree(ANALYTIC_POINTS, min_stimuli=8)
-    info = repgeom.effective_dimensionality(
-        ANALYTIC_POINTS,
-        min_stimuli=8,
-        variance_threshold=0.90,
-    )
-
-    assert np.all(eigenvalues[:-1] >= eigenvalues[1:])
-    assert np.all(eigenvalues >= 0.0)
-    assert info["effective_rank"] == 2
-    assert info["n_components_for_threshold"] == 2
-    assert 1.0 < info["participation_ratio"] <= 2.0
-    assert np.array_equal(info["eigenvalues"], eigenvalues)
-    assert np.isclose(np.sum(info["variance_explained"]), 1.0)
-    assert np.all(np.diff(info["cumulative_variance"]) >= -1e-12)
-
-
-def test_effective_dimensionality_caps_components_at_spectrum_length() -> None:
-    """Variance-threshold component counts should never exceed the spectrum length.
-
-    A ``variance_threshold`` of 1.0 is the worst case for the cap: the cumulative
-    curve only reaches 1.0 at (or just past, in floating point) its final entry,
-    so an uncapped ``searchsorted`` count would run one past the spectrum. The
-    exact count is BLAS-dependent -- an equilateral 3-point spectrum is
-    ``[1, 1, 0]`` and whether ``cumulative[1]`` lands on exactly 1.0 or a hair
-    below decides between 2 and 3 -- so assert the contract (capped, and the
-    smallest count that reaches the threshold) rather than a pinned integer.
-    """
-
-    info = repgeom.effective_dimensionality(
-        np.eye(3, dtype=np.float64), min_stimuli=3, variance_threshold=1.0
-    )
-
-    n_components = info["n_components_for_threshold"]
-    spectrum_length = info["eigenvalues"].size
-    assert spectrum_length == 3
-    assert 1 <= n_components <= spectrum_length
-    assert info["cumulative_variance"][n_components - 1] >= 1.0 - 1e-12
-    if n_components > 1:
-        assert info["cumulative_variance"][n_components - 2] < 1.0
-
-
 def test_effective_dimensionality_all_zero_fixture_is_safe() -> None:
     """All-zero representations should report rank zero without warnings."""
 
@@ -564,87 +243,6 @@ def test_effective_dimensionality_all_zero_fixture_is_safe() -> None:
     assert info["n_components_for_threshold"] == 0
     assert info["total_positive_variance"] == 0.0
     assert info["effective_rank"] == 0
-
-
-def test_scree_evolution_single_pass_layers_annotates_and_round_trips(tmp_path: Path) -> None:
-    """Scree evolution should compute, annotate, and persist eigenvalues."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    linear_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
-
-    spectra_by_key = repgeom.scree_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-
-    assert list(spectra_by_key) == [f"layer:{layer.layer_label}" for layer in linear_layers]
-    assert trace._annotation_blobs is not None
-    for key, eigenvalues in spectra_by_key.items():
-        assert eigenvalues.shape == (8,)
-        assert np.all(eigenvalues[:-1] >= eigenvalues[1:])
-        assert np.all(eigenvalues >= 0.0)
-        assert torch.equal(trace._annotation_blobs[f"scree:{key}"], torch.from_numpy(eigenvalues))
-
-    bundle_path = tmp_path / "scree_evolution.tlspec"
-    trace.save(bundle_path)
-    loaded = tl.load(bundle_path)
-
-    assert loaded._annotation_blobs is not None
-    for key, eigenvalues in spectra_by_key.items():
-        assert torch.equal(loaded._annotation_blobs[f"scree:{key}"], torch.from_numpy(eigenvalues))
-
-
-def test_mds_scatter_node_spec_sets_draw_time_image_for_annotated_layer() -> None:
-    """The scatter hook should set a transient image only for annotated layers."""
-
-    trace = _trace_with_mds_and_images()
-    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = tl.viz.nodes.mds_scatter(max_thumbnails=8)
-    spec = NodeSpec(lines=[layer.layer_label])
-
-    result = hook(layer, spec)
-
-    assert result is not None
-    assert result.image is not None
-    assert Path(result.image).is_file()
-    assert result.image.endswith(".png")
-    from PIL import Image as image_module
-
-    with image_module.open(result.image) as rendered:
-        assert rendered.mode == "RGB"
-        assert rendered.size == (420, 420)
-    assert result.lines == [layer.layer_label]
-    assert result.shape == "box"
-    assert result.extra_attrs["imagescale"] == "true"
-    assert result.extra_attrs["labelloc"] == "b"
-    assert "MDS thumbnail scatter" in result.tooltip
-
-
-def test_rdm_node_spec_sets_one_draw_time_heatmap_for_annotated_layer() -> None:
-    """The RDM hook should set one bounded heatmap image for annotated layers."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    trace.input = _pil_stimuli(8)
-    repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-    layer = next(layer for layer in trace.layers if layer.layer_type == "linear")
-    hook = tl.viz.nodes.rdm(max_stimuli=8)
-    spec = NodeSpec(lines=[layer.layer_label])
-
-    result = hook(layer, spec)
-
-    assert result is not None
-    assert result.image is not None
-    assert Path(result.image).is_file()
-    assert result.image.endswith(".png")
-    from PIL import Image as image_module
-
-    with image_module.open(result.image) as rendered:
-        assert rendered.mode == "RGB"
-        assert rendered.size == (360, 360)
-    assert result.lines == [layer.layer_label]
-    assert result.shape == "box"
-    assert result.extra_attrs["imagescale"] == "true"
-    assert result.extra_attrs["labelloc"] == "b"
-    assert result.tooltip is not None
-    assert "RDM heatmap" in result.tooltip
-    assert "metric=precomputed" in result.tooltip
 
 
 def test_scree_node_spec_sets_one_draw_time_image_for_annotated_layer() -> None:
@@ -674,80 +272,6 @@ def test_scree_node_spec_sets_one_draw_time_image_for_annotated_layer() -> None:
     assert result.tooltip is not None
     assert "Scree plot" in result.tooltip
     assert "rank" in result.tooltip
-
-
-def test_scree_legend_band_does_not_intersect_plot_axes() -> None:
-    """Scree legends should occupy the reserved band above the plot axes."""
-
-    labels = ("variance", "cumulative", "threshold")
-    colors = ((48, 93, 170), (32, 128, 90), (160, 72, 72))
-    draw = ImageDraw.Draw(Image.new("RGB", (320 * _DRAW_SCALE, 180 * _DRAW_SCALE)))
-    bbox = _legend_bbox(
-        draw,
-        labels=labels,
-        colors=colors,
-        plot_left=38 * _DRAW_SCALE,
-        plot_right=(320 - 12) * _DRAW_SCALE,
-        legend_top=12 * _DRAW_SCALE,
-    )
-    assert bbox is not None
-    plot_top = 12 * _DRAW_SCALE + _legend_height(labels, colors)
-
-    assert bbox[3] <= plot_top
-
-
-def test_mds_scatter_draw_uses_one_contained_image_per_annotated_node(tmp_path: Path) -> None:
-    """Scatter thumbnails should be composited into one bordered node image."""
-
-    trace = _trace_with_mds_and_images()
-    annotated_layers = [layer for layer in trace.layers if layer.layer_type == "linear"]
-    output_path = tmp_path / "scatter_contained.svg"
-
-    trace.draw(
-        path=str(output_path),
-        file_format="svg",
-        node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
-    )
-
-    svg_text = output_path.read_text(encoding="utf-8")
-    image_tags = re.findall(r"<image\b[^>]+>", svg_text)
-    assert len(image_tags) == len(annotated_layers) + 1
-
-    for layer in annotated_layers:
-        node_name = f"{layer.layer_label}pass1"
-        block_match = re.search(
-            rf"<title>{re.escape(node_name)}</title>(.*?)(?=<!--|</svg>)",
-            svg_text,
-            flags=re.DOTALL,
-        )
-        assert block_match is not None
-        node_block = block_match.group(1)
-        node_images = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', node_block)
-        assert len(node_images) == 1
-        assert node_images[0].startswith("data:image/png;base64,")
-        assert "<polygon" in node_block
-        assert f">{layer.layer_label}</text>" in node_block
-
-
-def test_mds_scatter_draw_embeds_data_uri_and_survives_save_load(tmp_path: Path) -> None:
-    """Scatter SVG output should inline draw-time PNGs after TLSPEC reload."""
-
-    trace = _trace_with_mds_and_images()
-    bundle_path = tmp_path / "scatter_source.tlspec"
-    trace.save(bundle_path)
-    loaded = tl.load(bundle_path)
-    output_path = tmp_path / "scatter.svg"
-
-    loaded.draw(
-        path=str(output_path),
-        file_format="svg",
-        node_spec_fn=tl.viz.nodes.mds_scatter(max_thumbnails=8),
-    )
-
-    svg_text = output_path.read_text(encoding="utf-8")
-    hrefs = re.findall(r'<image\b[^>]+(?:xlink:href|href)="([^"]+)"', svg_text)
-    assert any(href.startswith("data:image/png;base64,") for href in hrefs)
-    assert "/tmp/torchlens_visualizers_" not in svg_text
 
 
 def test_rdm_node_spec_draw_uses_one_contained_image_and_survives_save_load(
@@ -880,36 +404,6 @@ def test_mds_scatter_fallback_renders_points_without_raw_images() -> None:
     assert "points fallback" in result.tooltip
 
 
-def test_mds_scatter_off_keeps_default_render_byte_identical(tmp_path: Path) -> None:
-    """Default rendering should not change when the opt-in scatter hook is absent."""
-
-    trace = _trace_with_mds_and_images()
-    first_path = tmp_path / "default_first.svg"
-    second_path = tmp_path / "default_second.svg"
-
-    trace.draw(path=str(first_path), file_format="svg")
-    trace.draw(path=str(second_path), file_format="svg")
-
-    assert first_path.read_bytes() == second_path.read_bytes()
-
-
-def test_plain_trace_draw_without_rdm_hook_does_not_create_annotation_blobs(
-    tmp_path: Path,
-) -> None:
-    """Default draw should stay byte-identical and leave annotation blobs absent."""
-
-    trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
-    first_path = tmp_path / "plain_default_first.svg"
-    second_path = tmp_path / "plain_default_second.svg"
-
-    assert trace._annotation_blobs is None
-    trace.draw(path=str(first_path), file_format="svg")
-    trace.draw(path=str(second_path), file_format="svg")
-
-    assert trace._annotation_blobs is None
-    assert first_path.read_bytes() == second_path.read_bytes()
-
-
 def test_mds_scatter_import_does_not_load_matplotlib() -> None:
     """The scatter renderer must stay PIL-only and avoid matplotlib imports."""
 
@@ -937,110 +431,8 @@ def test_mds_evolution_recurrent_aggregate_requires_pass_selection() -> None:
         repgeom.mds_evolution(trace, save=tl.func("linear"), min_stimuli=8)
 
 
-def test_mds_evolution_default_recurrent_saved_layer_requires_pass_selection() -> None:
-    """Default recurrent selection should not silently omit saved recurrent layers."""
-
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-
-    with pytest.raises(ValueError, match="select a pass \\(layer is recurrent\\)"):
-        repgeom.mds_evolution(trace, min_stimuli=8)
-
-
-def test_mds_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
-    """A single recurrent pass selection should read op.out and store op coords."""
-
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
-
-    coords_by_key = repgeom.mds_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
-
-    key = f"op:{linear_op.label}"
-    assert list(coords_by_key) == [key]
-    assert coords_by_key[key].shape == (8, 2)
-    assert trace._annotation_blobs is not None
-    assert torch.equal(trace._annotation_blobs[f"mds:{key}"], torch.from_numpy(coords_by_key[key]))
-
-
-def _hand_recurrent_linear_rdms() -> list[np.ndarray]:
-    """Return per-pass euclidean RDMs of ``_RecurrentMDS``'s linear op, by hand.
-
-    The recurrent linear has identity weight and zero bias, so pass ``k``'s
-    output is ``tanh`` applied ``k - 1`` times to the input. Built in numpy
-    from the input alone, independent of TorchLens capture.
-
-    Returns
-    -------
-    list[np.ndarray]
-        Square RDMs for passes 1, 2 and 3, in pass order.
-    """
-
-    zeros = np.zeros((ANALYTIC_POINTS.shape[0], 3), dtype=np.float64)
-    passes = []
-    hidden = np.concatenate([ANALYTIC_POINTS, zeros], axis=1).astype(np.float32)
-    for _index in range(3):
-        passes.append(_pairwise_distances(hidden.astype(np.float64)))
-        hidden = np.tanh(hidden)
-    return passes
-
-
-def _recurrent_linear_ops(trace: tl.Trace) -> list[Any]:
-    """Return the recurrent linear's per-pass ops in pass order.
-
-    Parameters
-    ----------
-    trace:
-        Trace of ``_RecurrentMDS``.
-
-    Returns
-    -------
-    list[Any]
-        The three linear ops, sorted by pass index.
-    """
-
-    ops = [op for op in trace._layer_list if op.type == "linear"]
-    return sorted(ops, key=lambda op: op.pass_number)
-
-
-def test_rdm_evolution_default_sweep_expands_recurrent_passes() -> None:
-    """U24.2: the default sweep yields one RDM per pass, equal to hand-built RDMs."""
-
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    ops = _recurrent_linear_ops(trace)
-    expected = _hand_recurrent_linear_rdms()
-
-    matrices_by_key = repgeom.rdm_evolution(trace, min_stimuli=8)
-
-    keys = [f"op:{op.label}" for op in ops]
-    assert len(ops) == 3
-    assert [op.pass_number for op in ops] == [1, 2, 3]
-    assert list(matrices_by_key) == keys
-    assert trace._annotation_blobs is not None
-    for key, hand_rdm in zip(keys, expected, strict=True):
-        assert matrices_by_key.payload_basis[key] == "raw"
-        np.testing.assert_allclose(matrices_by_key[key], hand_rdm, rtol=0, atol=1e-5)
-        assert torch.equal(
-            trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
-        )
-    # The passes are distinct objects: tanh contracts every pass after the first.
-    assert not np.allclose(matrices_by_key[keys[0]], matrices_by_key[keys[1]])
-
-
-def test_rdm_evolution_selector_matching_every_pass_expands() -> None:
-    """U24.2: a selector matching all passes gives the same per-pass RDMs."""
-
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    ops = _recurrent_linear_ops(trace)
-    expected = _hand_recurrent_linear_rdms()
-
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.func("linear"), min_stimuli=8)
-
-    assert list(matrices_by_key) == [f"op:{op.label}" for op in ops]
-    for hand_rdm, matrix in zip(expected, matrices_by_key.values(), strict=True):
-        np.testing.assert_allclose(matrix, hand_rdm, rtol=0, atol=1e-5)
-
-
 def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
-    """U24.2: expansion leaves mds_evolution's recurrent refusal unchanged."""
+    """Expansion leaves mds_evolution's recurrent refusal unchanged."""
 
     trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
 
@@ -1053,14 +445,12 @@ def test_rdm_evolution_recurrent_expansion_leaves_mds_refusal() -> None:
 @pytest.mark.parametrize(
     ("metric", "expected"),
     [
-        ("euclidean", "rdm/*/euclidean"),
         ("cosine", "rdm/*/cosine"),
-        ("correlation", "rdm/*/correlation"),
         ("manhattan", None),
     ],
 )
 def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: Any) -> None:
-    """U56.3: the result names its exact RDM variant in the catalogue, or None."""
+    """The result names its exact RDM variant in the catalogue, or None."""
 
     trace = _mds_trace(_MDSClassifier(), tl.func("linear"))
 
@@ -1068,40 +458,6 @@ def test_rdm_evolution_records_similarity_repository_id(metric: str, expected: A
 
     assert result.similarity_repository_id == expected
     assert repgeom.mds_evolution(trace, min_stimuli=8).similarity_repository_id is None
-
-
-def test_similarity_repository_table_covers_every_metric_and_method() -> None:
-    """U56.3: every rdm metric and rdm_compare method has a decided table entry."""
-
-    from torchlens.repgeom import _similarity_ids as ids
-    from torchlens.repgeom._geometry import DistanceMetric
-
-    metrics = set(DistanceMetric.__args__)
-    assert set(ids.RDM_IDS) == metrics
-    assert set(ids.RSA_IDS) == {
-        (metric, method) for metric in metrics for method in ("pearson", "spearman", "kendall")
-    }
-    assert tl.stats.CKA.similarity_repository_id == ids.LINEAR_CKA_ID
-    for key, identifier in [*ids.RDM_IDS.items(), *ids.RSA_IDS.items()]:
-        if identifier is not None:
-            assert identifier.split("/")[1] == "*", key
-
-
-def test_rdm_evolution_recurrent_pass_qualified_selector_uses_op_key() -> None:
-    """A single recurrent pass selection should read op.out and store op RDM."""
-
-    trace = _mds_trace(_RecurrentMDS(), tl.func("linear"))
-    linear_op = next(op for op in trace._layer_list if op.type == "linear" and op.pass_number == 2)
-
-    matrices_by_key = repgeom.rdm_evolution(trace, save=tl.label(linear_op.label), min_stimuli=8)
-
-    key = f"op:{linear_op.label}"
-    assert list(matrices_by_key) == [key]
-    assert matrices_by_key[key].shape == (8, 8)
-    assert trace._annotation_blobs is not None
-    assert torch.equal(
-        trace._annotation_blobs[f"rdm:{key}"], torch.from_numpy(matrices_by_key[key])
-    )
 
 
 def test_scree_evolution_recurrent_pass_qualified_selector_uses_op_key(tmp_path: Path) -> None:

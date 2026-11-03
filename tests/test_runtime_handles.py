@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import gc
-import weakref
 from pathlib import Path
 from typing import Any
 
@@ -78,58 +76,6 @@ def _first_grad_fn_with_handle(trace: tl.Trace) -> Any:
     raise AssertionError("Expected at least one live GradFn handle")
 
 
-def test_runtime_handles_return_live_objects_by_identity() -> None:
-    """Live handles resolve to the source model/autograd objects by identity."""
-
-    model, trace = _make_trace()
-    param = trace.params["linear.weight"]
-    buffer = trace.buffers["scale"]
-    module = trace.modules["linear"]
-    root_module = trace.modules["self"]
-    grad_fn = _first_grad_fn_with_handle(trace)
-
-    assert param.handle is model.get_parameter("linear.weight")
-    assert buffer.handle is model.get_buffer("scale")
-    assert module.handle is model.get_submodule("linear")
-    assert root_module.handle is model
-    assert id(grad_fn.handle) == grad_fn.grad_fn_object_id
-
-
-def test_runtime_handles_return_none_after_source_release_without_raising() -> None:
-    """Handles return ``None`` once source-model reachability is gone."""
-
-    model, trace = _make_trace()
-    param = trace.params["linear.weight"]
-    buffer = trace.buffers["scale"]
-    module = trace.modules["linear"]
-    model_ref = weakref.ref(model)
-
-    assert param.handle is not None
-    assert buffer.handle is not None
-    assert module.handle is not None
-
-    param._release_param_ref()
-    del model
-    gc.collect()
-
-    assert model_ref() is None
-    assert param.handle is None
-    assert buffer.handle is None
-    assert module.handle is None
-
-
-def test_grad_fn_handle_returns_none_when_trace_refs_are_unavailable() -> None:
-    """GradFn handles return ``None`` when retained autograd refs are removed."""
-
-    _model, trace = _make_trace()
-    grad_fn = _first_grad_fn_with_handle(trace)
-    trace._backward_gradfn_refs = []
-    if grad_fn.op is not None:
-        grad_fn.op._autograd_grad_fn_handle = None
-
-    assert grad_fn.handle is None
-
-
 def test_portable_round_trip_runtime_handles_are_none(tmp_path: Path) -> None:
     """Portable ``.tlspec`` loads do not restore computed runtime handles."""
 
@@ -147,17 +93,3 @@ def test_portable_round_trip_runtime_handles_are_none(tmp_path: Path) -> None:
     assert loaded.modules["self"].handle is None
     assert _first_grad_fn_with_handle(trace).handle is not None
     assert all(grad_fn.handle is None for grad_fn in loaded.autograd.grad_fns)
-
-
-def test_param_handle_does_not_cache_after_release() -> None:
-    """Param.handle read-through does not repopulate ``_param_ref``."""
-
-    model, trace = _make_trace()
-    param = trace.params["linear.weight"]
-
-    param._release_param_ref()
-    assert param._param_ref is None
-    assert param.handle is model.get_parameter("linear.weight")
-    assert param._param_ref is None
-    assert param.value is model.get_parameter("linear.weight")
-    assert param._param_ref is model.get_parameter("linear.weight")

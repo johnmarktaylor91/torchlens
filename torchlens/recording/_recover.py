@@ -135,6 +135,17 @@ def recover(path: str | Path) -> Recording:
     ------
     RecoveryError
         If no recoverable index exists.
+
+    Examples
+    --------
+    >>> import tempfile
+    >>> from pathlib import Path
+    >>> with tempfile.TemporaryDirectory() as folder:
+    ...     bundle = Path(folder) / "run.tlfast"
+    ...     store = tl.options.StorageOptions(path=bundle, retain_in_memory=False)
+    ...     original = tl.record(model, x, save=tl.func("relu"), storage=store)
+    ...     print(len(recover(bundle).records) == len(original.records))
+    True
     """
 
     bundle_path = Path(path)

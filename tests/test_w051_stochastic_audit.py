@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 import torch
 from support.sampling import sampling_draws
 from torch import nn
@@ -44,7 +43,6 @@ def test_eligible_count_is_the_eligible_class_size() -> None:
     assert len(record.draw_indices) == 3
 
 
-@pytest.mark.smoke
 def test_eligible_count_under_agreement_is_the_union_of_row_classes() -> None:
     """Conditioned per row: eligible == members eligible for at least one subject row."""
 

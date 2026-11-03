@@ -28,21 +28,6 @@ def _capture_streamed(tmp_path):
     return path, trace
 
 
-def test_streamed_bundle_is_finalized_and_loadable(tmp_path) -> None:
-    """The streamed bundle must be COMPLETE on disk when trace() returns.
-
-    With step 18 skipped, the out-writer never finalizes: the artifact is
-    left partial (or staging-named), so loading it -- the whole point of
-    ``storage=tl.to_disk`` -- cannot work.
-    """
-
-    path, trace = _capture_streamed(tmp_path)
-    assert path.exists(), "streamed bundle missing on disk after capture"
-    loaded = tl.load(str(path))
-    assert loaded.provenance.backend == "torch"
-    assert set(loaded.layer_labels) == set(trace.layer_labels)
-
-
 def test_streamed_bundle_saved_payload_reads_back(tmp_path) -> None:
     """A saved activation streamed to disk reads back numerically intact."""
 

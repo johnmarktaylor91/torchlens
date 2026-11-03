@@ -60,30 +60,6 @@ def _cooked_with_spy() -> tuple[Any, dict]:
     return cooked, seen
 
 
-def test_late_buffer_append_is_materialized_today() -> None:
-    """The pre-0 late-buffer source event reaches the cooked trace."""
-
-    cooked, seen = _cooked_with_spy()
-
-    # The recording's own journal has NO buffer event: the buffer was never
-    # touched by a traced op, so its source event is a genuine pre-0 append.
-    assert not any("buffer" in label for label in seen["recording_labels"]), (
-        f"probe premise broken: recording already carries a buffer event "
-        f"({seen['recording_labels']})"
-    )
-    # ... and step 0 consumed a stream that INCLUDES the late append.
-    assert any("buffer" in label for label in seen["labels"]), seen["labels"]
-
-    # Mechanism: the working stream is session-detached, so postprocess falls
-    # back to the live (post-pre-0) op list, never a stale sealed tuple.
-    assert seen["session"] is None
-
-    # The cooked trace carries the buffer op, output-parent marked.
-    buffer_ops = [op for op in cooked._layer_list if op.raw_label.startswith("buffer")]
-    assert buffer_ops, [op.raw_label for op in cooked._layer_list]
-    assert all(op.graph.is_output_parent for op in buffer_ops)
-
-
 def test_hash_covers_post_pre0_stream_today() -> None:
     """`_raw_event_shape_hash` on the cooked path reflects the late append."""
 

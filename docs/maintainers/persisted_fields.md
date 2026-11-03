@@ -5,12 +5,12 @@ the storage bindings or a record class changes and commit the result;
 `tests/test_persisted_fields_doc.py` fails when this page and the generator disagree.
 
 Contract of record: `torchlens/schemas/writer_contract_v11.json`, digest
-`8e07954c99363d0e7bda8aa3f1f5a6b982695f73a3ff12f70b855f8cd6afbd38`.
+`774604708ad892a3bd7949ad92e4ae4cbc356a85b645ff27dda7f5288e82648f`.
 Previous contract: `torchlens/schemas/writer_contract_v10.json`, digest
 `9e2dbda0727524e6d2de8c27c78348d6694c054e185d01269baaff74f18896f5` (tlspec 10).
 Reader floor: tlspec 11.
 
-12 record contracts, 779 persisted keys.
+12 record contracts, 780 persisted keys.
 
 ## Columns
 
@@ -68,7 +68,7 @@ Payload codecs: `torch_safetensors_v1`, `numpy_safetensors_v1`.
 | `trace` | `torchlens._data_classes.trace.Trace` | 183 | 157 |
 | `op` | `torchlens._data_classes.op.Op` | 174 | 28 |
 | `layer` | `torchlens._data_classes.layer.Layer` | 92 | 8 |
-| `aten_op` | `torchlens._data_classes.aten_op.AtenOp` | 32 | 0 |
+| `aten_op` | `torchlens._data_classes.aten_op.AtenOp` | 33 | 0 |
 | `backward_pass` | `torchlens._data_classes.backward_pass.BackwardPass` | 20 | 0 |
 | `buffer` | `torchlens._data_classes.buffer.Buffer` | 21 | 0 |
 | `func_call_location` | `torchlens._data_classes.func_call_location.FuncCallLocation` | 23 | 2 |
@@ -85,6 +85,7 @@ record, by record; a rename appears as one removed and one added row.
 
 | record | key | change |
 | --- | --- | --- |
+| `aten_op` | `out` | added |
 | `backward_pass` | `_executed_flops_record` | added |
 | `backward_pass` | `executed_flops_record` | removed |
 | `backward_pass` | `pass_index` | removed |
@@ -442,7 +443,7 @@ record, by record; a rename appears as one removed and one added row.
 | `_layer_dict_all_keys` | scalar | required: every level | keep | fact | `Trace.grad_fn_site_summary` |
 | `_layer_dict_main_keys` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_list` | scalar | required: every level | keep | fact | `Trace.buffer_read_ops`, `Trace.buffer_write_ops`, `Trace.compute_ops`, `Trace.model_ops` and 16 more |
-| `_layer_logs` | scalar | required: every level | keep | fact | `Trace.input_ops`, `Trace.layers`, `Trace.output_ops`, `Trace.saved_layers` |
+| `_layer_logs` | scalar | required: every level | keep | fact | `Trace.layers`, `Trace.saved_layers` |
 | `_layer_num_calls` | scalar | required: every level | keep | fact | `Trace.compute_ops`, `Trace.input_ops`, `Trace.ops`, `Trace.ops_with_params` and 7 more |
 | `_layer_num_to_lookup_keys_dict` | scalar | required: every level | keep | fact | none (storage only) |
 | `_layer_nums_to_save` | scalar | required: every level | keep | fact | none (storage only) |
@@ -858,7 +859,7 @@ Session-only (`drop`): `_arg_expressions_cache`, `_construction_done`, `_facets_
 
 Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handle`, `is_in_conditional_body`, `source_trace`, `transformed_grad`, `transformed_out`.
 
-## `aten_op` (AtenOp, 32 persisted keys)
+## `aten_op` (AtenOp, 33 persisted keys)
 
 | key | type | written | policy | tier | accessor |
 | --- | --- | --- | --- | --- | --- |
@@ -883,6 +884,7 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | `mutation_kind` | scalar: `str` | required: every level | keep | fact | `AtenOp.mutation_kind` (field) |
 | `namespace` | interned: `str` | required: every level | keep | fact | `AtenOp.namespace` (field) |
 | `operator` | interned: `str` | required: every level | keep | fact | `AtenOp.operator` (field) |
+| `out` | payload: `Any` | optional: `include_outs` (executable_with_callables, portable) | blob_recursive | fact | `AtenOp.out` (field) |
 | `outcome` | scalar: `str` | required: every level | keep | fact | `AtenOp.outcome` (field) |
 | `output_tensor_facts` | scalar: `tuple[Any, ...]` | required: every level | keep | fact | `AtenOp.output_tensor_facts` (field) |
 | `overload` | interned: `str` | required: every level | keep | fact | `AtenOp.overload` (field) |
@@ -953,10 +955,10 @@ Session-only (`drop`): `activation_transform`, `func`, `grad_fn`, `grad_fn_handl
 | `_call_line` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_code_context` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_code_context_labeled` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_func_docstring` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_func_signature` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
+| `_func_docstring` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
+| `_func_signature` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
 | `_num_context_lines` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
-| `_num_context_lines_requested` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
+| `_num_context_lines_requested` | scalar | required: every level | keep | fact | `FuncCallLocation.func_docstring`, `FuncCallLocation.func_signature` |
 | `_source_context` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `_source_loaded` | scalar | required: every level | keep | fact | `FuncCallLocation.call_line`, `FuncCallLocation.code_context`, `FuncCallLocation.code_context_labeled`, `FuncCallLocation.func_docstring` and 3 more |
 | `call_line` | computed | required: every level | keep | fact | `FuncCallLocation.call_line` (field) |

@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Any
 from .._io import _json
 from .._user_funcs import (
     validate_backward_pass,
-    validate_batch_of_models_and_inputs,
     validate_forward_pass,
 )
 from ._diagnostics import (
@@ -56,6 +55,15 @@ def validate_tlspec(
         If a unified manifest file is missing.
     torchlens.errors.ArtifactTooOldError
         If the artifact is a portable ModelLog bundle of torchlens 2.16.
+
+    Examples
+    --------
+    >>> import os, tempfile
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = os.path.join(tmp, "run.tlspec")
+    ...     _ = tl.trace(model, x).save(path)
+    ...     print(tl.validation.validate_tlspec(path))
+    None
     """
 
     from ..io import detect_tlspec_format, inspect_tlspec
@@ -1335,7 +1343,6 @@ __all__ = [
     "last_validation_failure",
     "last_validation_peak_memory",
     "validate_backward_pass",
-    "validate_batch_of_models_and_inputs",
     "validate_forward_pass",
     "check_metadata_invariants",
     "validate_tlspec",

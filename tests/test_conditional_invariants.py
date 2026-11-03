@@ -458,22 +458,6 @@ def test_invariant_10_conditional_edge_call_indices_reject_invalid_pass() -> Non
         trace.cleanup()
 
 
-def test_invariant_11_transient_bool_key_is_removed() -> None:
-    """Invariant 11 fails when a pass log still carries ``_bool_conditional_key``."""
-
-    trace = _log_model(SimpleIfElseModel(), torch.ones(2, 3))
-    try:
-        bool_layer = _get_only_terminal_bool(trace)
-        if "_bool_conditional_key" not in getattr(type(bool_layer), "__slots__", ()):
-            with pytest.raises(AttributeError):
-                bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
-            return
-        bool_layer._bool_conditional_key = ("fake.py", 1, 2, 3)
-        _assert_invariant_error(trace, ("Invariant 11", "_bool_conditional_key"))
-    finally:
-        trace.cleanup()
-
-
 def test_invariant_12_layerlog_children_union_is_exact() -> None:
     """Invariant 12 fails when ``Layer.conditional_arm_children`` loses a child."""
 

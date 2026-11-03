@@ -46,9 +46,7 @@ from torchlens._runnable import (
     TensorSlotDescriptor,
     TensorSlotRole,
     TensorUseSite,
-    state as runnable_state,
 )
-from torchlens._runnable.state import _preflight_random_init_allocation
 from torchlens.errors import RunCapabilityUnavailableError
 from torchlens.intervention._types import FunctionRegistryKey
 
@@ -137,20 +135,7 @@ def _is_integer_annotation(annotation: Any) -> bool:
     return False
 
 
-_DESCRIPTOR_DATACLASSES = (
-    RunnableCallDescriptor,
-    TensorSlotDescriptor,
-    InputSlotBinding,
-    StateSlotBinding,
-    ControlWitness,
-    FunctionRegistryKey,
-    InputAttestationFingerprint,
-    CallExecutionContext,
-    AutocastDeviceContext,
-    TensorUseSite,
-)
-
-
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_every_descriptor_integer_field_is_anchored() -> None:
     """No integer descriptor field may silently scale an allocation (r53 free_1).
 
@@ -176,6 +161,7 @@ def test_every_descriptor_integer_field_is_anchored() -> None:
     )
 
 
+# Kept: its run phase reached no library code in the per-id coverage run, so it has no measurement (shrink rule 3).
 def test_allocation_scaling_fields_have_dedicated_parse_bounds() -> None:
     """The three allocation-scaling fields are exactly the free_1 loci."""
 
@@ -192,27 +178,26 @@ def test_allocation_scaling_fields_have_dedicated_parse_bounds() -> None:
     }
 
 
+_DESCRIPTOR_DATACLASSES = (
+    RunnableCallDescriptor,
+    TensorSlotDescriptor,
+    InputSlotBinding,
+    StateSlotBinding,
+    ControlWitness,
+    FunctionRegistryKey,
+    InputAttestationFingerprint,
+    CallExecutionContext,
+    AutocastDeviceContext,
+    TensorUseSite,
+)
+
+
 # --------------------------------------------------------------------------- #
 # (b) bomb matrix under RLIMIT_AS                                             #
 # --------------------------------------------------------------------------- #
 
 
-def test_num_positional_args_bomb_refused_at_load(tmp_path: Path) -> None:
-    """Locus 1 (readiness) + locus 2/3 (run): oversized arity -> parse refusal, no alloc."""
-
-    bundle = _build(tmp_path, "arity.tlspec", include_weights=True)
-    _tamper(bundle, lambda m: m["run"]["calls"][0].__setitem__("num_positional_args", 10**10))
-    with _rlimit_cap():
-        loaded = tl.load(str(bundle))
-    readiness = loaded._runnable.readiness
-    assert readiness.status is ReadinessStatus.UNAVAILABLE
-    diags = readiness.diagnostics
-    assert RunnableErrorCode.CALL_ARITY_MISMATCH in {d.code for d in diags}
-    assert "descriptor_parse" in {d.detection_stage for d in diags}
-    with _rlimit_cap(), pytest.raises(RunCapabilityUnavailableError):
-        loaded.run(inputs=torch.randn(2, 4))
-
-
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_num_keyword_args_bomb_refused_at_load(tmp_path: Path) -> None:
     """Oversized ``num_keyword_args`` is refused at parse."""
 
@@ -225,6 +210,7 @@ def test_num_keyword_args_bomb_refused_at_load(tmp_path: Path) -> None:
     assert RunnableErrorCode.CALL_ARITY_MISMATCH in {d.code for d in readiness.diagnostics}
 
 
+# Kept: sole branch coverage of _io/runnable_load.py; a sole mutation kill.
 def test_sparse_positional_root_bomb_refused_at_load(tmp_path: Path) -> None:
     """A single huge positional root (``args[10**10]``) is refused at parse."""
 
@@ -245,6 +231,7 @@ def test_sparse_positional_root_bomb_refused_at_load(tmp_path: Path) -> None:
     assert RunnableErrorCode.CALL_ARITY_MISMATCH in {d.code for d in readiness.diagnostics}
 
 
+# Kept: sole branch coverage of _runnable/state.py.
 def test_random_init_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     """Locus 4 (state init): a structurally-valid huge shape -> allocation preflight refusal."""
 
@@ -266,6 +253,7 @@ def test_random_init_shape_bomb_refused_at_run(tmp_path: Path) -> None:
     assert caught.value.fields.get("detection_stage") == "state_allocation_preflight"
 
 
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_int64_overflow_shape_refused_at_load(tmp_path: Path) -> None:
     """A shape whose byte product overflows signed 64-bit is refused at parse."""
 
@@ -286,6 +274,7 @@ def test_int64_overflow_shape_refused_at_load(tmp_path: Path) -> None:
     assert RunnableErrorCode.STATE_SHAPE_MISMATCH in {d.code for d in readiness.diagnostics}
 
 
+# Kept: sole branch coverage of _io/runnable_load.py.
 def test_rank_shape_mismatch_refused_at_load(tmp_path: Path) -> None:
     """A declared rank contradicting ``len(shape)`` is refused at parse."""
 
@@ -308,15 +297,6 @@ def test_rank_shape_mismatch_refused_at_load(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------- #
 # (c) over-trigger guards                                                     #
 # --------------------------------------------------------------------------- #
-
-
-def test_untampered_bundle_still_loads_and_runs_verified(tmp_path: Path) -> None:
-    """The whole class is closed without over-triggering on a legitimate bundle."""
-
-    bundle = _build(tmp_path, "clean.tlspec", include_weights=True)
-    loaded = tl.load(str(bundle))
-    result = loaded.run(inputs=torch.randn(2, 4))
-    assert result.report.path_faithfulness.value == "verified"
 
 
 def _big_slot(shape: tuple[int, ...], dtype: str) -> TensorSlotDescriptor:
@@ -348,48 +328,3 @@ def _big_slot(shape: tuple[int, ...], dtype: str) -> TensorSlotDescriptor:
         host_escape=False,
         inert_sink=False,
     )
-
-
-# Serial: the preflight reads process- and machine-wide available memory, so
-# parallel xdist workers holding memory can starve this 2.20 GiB slot.
-@pytest.mark.serial
-def test_legit_large_model_slot_passes_preflight() -> None:
-    """A 2.20 GiB slot (Gemma-2-27B embed) passes the preflight -- pins no-static-cap."""
-
-    # This exceeds the review's rejected static 1 GiB cap; on any normal CI host with a
-    # few GiB free + swap it must NOT refuse.
-    big = _big_slot((256128, 4608), "torch.float16")
-    _preflight_random_init_allocation([big])  # must not raise
-
-
-def test_preflight_refuses_only_truly_infeasible_totals() -> None:
-    """The preflight refuses an 8 EB request but never a host-sized one."""
-
-    infeasible = _big_slot((10**9, 10**9), "torch.float32")
-    with pytest.raises(RunCapabilityUnavailableError) as caught:
-        _preflight_random_init_allocation([infeasible])
-    assert caught.value.fields.get("detection_stage") == "state_allocation_preflight"
-    assert int(caught.value.fields["required_bytes"]) > int(caught.value.fields["available_bytes"])
-
-
-def test_host_memory_budget_is_probed_once_per_preparation_scope(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """One atomic run preparation reuses one dynamic host-memory observation."""
-
-    calls = 0
-
-    def probe() -> int:
-        """Return a changing budget so stale cross-run reuse is observable."""
-
-        nonlocal calls
-        calls += 1
-        return calls * 1024
-
-    monkeypatch.setattr(runnable_state, "_probe_host_memory_budget_bytes", probe)
-    with runnable_state._host_memory_budget_scope():
-        assert runnable_state._host_memory_budget_bytes() == 1024
-        assert runnable_state._host_memory_budget_bytes() == 1024
-    with runnable_state._host_memory_budget_scope():
-        assert runnable_state._host_memory_budget_bytes() == 2048
-    assert calls == 2

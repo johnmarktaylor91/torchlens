@@ -42,7 +42,6 @@ from ._types import (
 )
 from ._validation import cross_validate
 from ._view import ReceptiveFieldView
-from ._viz import node_spec
 
 rules = _registered_rules
 
@@ -50,11 +49,52 @@ rules = _registered_rules
 if TYPE_CHECKING:
     from .._data_classes.op import Op
     from .._data_classes.trace import Trace
+    from ._viz import node_spec
+
+
+def __getattr__(name: str) -> object:
+    """Resolve the Pillow-backed drawing helper ``node_spec`` on first access.
+
+    ``_viz`` imports Pillow at module level, and forward validation imports
+    this package for its error types, so an eager import would make
+    ``tl.validate`` fail where Pillow is not installed.
+
+    Parameters
+    ----------
+    name:
+        Attribute requested from the package.
+
+    Returns
+    -------
+    object
+        The resolved attribute.
+
+    Raises
+    ------
+    AttributeError
+        If ``name`` is not a lazily resolved attribute.
+    """
+
+    if name == "node_spec":
+        from ._viz import node_spec
+
+        return node_spec
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 @dataclass(frozen=True)
 class EmpiricalAdjointCheck:
-    """One sampled comparison of receptive and projective empirical derivatives."""
+    """One sampled comparison of receptive and projective empirical derivatives.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> checks = tl.receptive_field.verify(armed, units="center").empirical_adjoint
+    >>> (len(checks) > 0, all(isinstance(check, EmpiricalAdjointCheck) for check in checks))
+    (True, True)
+    """
 
     source_label: str
     target_label: str
@@ -68,7 +108,17 @@ class EmpiricalAdjointCheck:
 
 @dataclass(frozen=True)
 class ReceptiveFieldVerification:
-    """Combined containment and empirical-adjoint diagnostic report."""
+    """Combined containment and empirical-adjoint diagnostic report.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> report = tl.receptive_field.verify(armed, units="center")
+    >>> (isinstance(report, ReceptiveFieldVerification), len(report.containment) > 0)
+    (True, True)
+    """
 
     containment: tuple[ReceptiveFieldValidation, ...]
     empirical_adjoint: tuple[EmpiricalAdjointCheck, ...]
@@ -339,6 +389,15 @@ def verify(
     ReceptiveFieldVerification
         Containment results together with one empirical-adjoint report for each
         sampled receptive gradient.
+
+    Examples
+    --------
+    >>> net = nn.Conv2d(1, 1, 3, padding=1)
+    >>> armed = tl.trace(net, torch.randn(1, 1, 6, 6, requires_grad=True),
+    ...     capture=tl.options.CaptureOptions(backward_ready=True, save_mode="reference"))
+    >>> report = verify(armed, units="center")
+    >>> (report.verdict.value, report.passed)
+    ('pass', True)
     """
 
     if (empirical_adjoint_atol is not None and empirical_adjoint_atol < 0) or (

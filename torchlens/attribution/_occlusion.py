@@ -222,6 +222,18 @@ def occlusion(
     AttributionResult
         Scalar scored delta in ``values`` plus both endpoint scores and baseline
         disclosure in ``extra``.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> result = tl.attribution.occlusion(
+    ...     trace, trace.input_ops[0], score=lambda t: t.output_ops[0].out.sum()
+    ... )
+    >>> result.method
+    'occlusion'
+    >>> result.extra["baseline"]
+    'zeros'
+    >>> trace.cleanup()
     """
 
     resolved = _resolve_selection(trace, selection)
@@ -555,6 +567,18 @@ def occlusion_map(
     ------
     AttributionError
         On geometry violations or a pass budget overrun.
+
+    Examples
+    --------
+    >>> clf = nn.Sequential(
+    ...     nn.Conv2d(3, 4, 3, padding=1), nn.ReLU(), nn.AdaptiveAvgPool2d(1), nn.Flatten(),
+    ...     nn.Linear(4, 3),
+    ... ).eval()
+    >>> result = tl.attribution.occlusion_map(clf, x, target=0, window=(4, 4))
+    >>> tuple(result.values.shape)
+    (1, 3, 8, 8)
+    >>> result.extra["perturbation_count"]
+    4
     """
 
     if overlap not in ("average", "sum"):

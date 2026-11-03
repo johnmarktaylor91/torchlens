@@ -353,7 +353,16 @@ PREDICATE_FEATURES = frozenset({"save", "halt", "intervene"})
 
 
 def _predicate_capture(cell: Cell) -> bool:
-    return any(feature.name in PREDICATE_FEATURES for feature in cell.features)
+    """Whether the capture passed a predicate keyword (``save=``, ``stop_after=``, ``intervene=``).
+
+    The predicate features always pass theirs. Any other feature counts only when
+    its capture really passed ``intervene=`` (the hooks feature does, through
+    ``_merge_intervene``): that is what makes ``op.out`` materialize the blob.
+    """
+
+    if any(feature.name in PREDICATE_FEATURES for feature in cell.features):
+        return True
+    return cell.trace_kwargs.get("intervene") is not None
 
 
 def _stream_path(cell: Cell) -> Path:

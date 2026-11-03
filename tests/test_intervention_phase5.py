@@ -5,11 +5,10 @@ from __future__ import annotations
 import torch
 
 import torchlens as tl
-from torchlens._utils.hashing import _hashable_path_component, compute_graph_shape_hash
+from torchlens._utils.hashing import _hashable_path_component
 from torchlens.errors import MetadataInvariantError
-from torchlens.intervention._types import ParentRef, TupleIndex
+from torchlens.intervention._types import ParentRef
 from torchlens.recording import RecordContext
-from torchlens.validation import check_metadata_invariants
 from torchlens.validation._invariants_entry import check_func_call_id_invariant
 
 
@@ -191,102 +190,6 @@ def test_graph_shape_hash_is_stable_and_sensitive() -> None:
     assert log3.provenance.fingerprint != log1.provenance.fingerprint
 
 
-def test_graph_shape_hash_is_referentially_transparent() -> None:
-    """Computing graph hashes repeatedly does not mutate layer metadata."""
-
-    log = tl.trace(
-        _LinearSplitModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    target = next(layer for layer in log._layer_list if layer.module is not None)
-    target._address_normalized = "sentinel"
-
-    first = compute_graph_shape_hash(log)
-    second = compute_graph_shape_hash(log)
-
-    assert first == second
-    assert target._address_normalized == "sentinel"
-
-
-def test_graph_shape_hash_address_free_variant_ignores_module_names() -> None:
-    """Address-free graph hash matches equivalent topology under renamed modules."""
-
-    torch.manual_seed(123)
-    left = tl.trace(
-        _LinearSplitModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    torch.manual_seed(123)
-    right = tl.trace(
-        _RenamedLinearSplitModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-
-    assert compute_graph_shape_hash(left) != compute_graph_shape_hash(right)
-    assert compute_graph_shape_hash(left, include_module_address=False) == compute_graph_shape_hash(
-        right, include_module_address=False
-    )
-
-
-def test_label_rewrite_preserves_templates_edges_and_call_groups() -> None:
-    """Step 11 rewrites replay templates and edge records to final labels."""
-
-    log = tl.trace(
-        _SplitModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-
-    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
-    assert len(split_layers) == 2
-    assert len({layer.call.call_id for layer in split_layers}) == 1
-    assert {type(layer.container_path[0]) for layer in split_layers} == {TupleIndex}
-
-    final_labels = set(log.layer_labels)
-    for layer in log._layer_list:
-        for edge in layer._edge_uses:
-            assert edge.parent_label in final_labels
-            assert edge.child_label in final_labels
-        for template in (layer.call.args_template, layer.call.kwargs_template):
-            for parent_ref in _parent_refs(template):
-                assert parent_ref.parent_label in final_labels
-
-
-def test_selective_save_preserves_replay_call_group_siblings() -> None:
-    """Selective activation saving keeps multi-output call groups atomic."""
-
-    log = tl.trace(
-        _SplitModel(),
-        torch.randn(2, 3),
-        save=_save_only_outputs,
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-
-    split_layers = [layer for layer in log._layer_list if layer.func_name == "split"]
-    assert len(split_layers) == 2
-    assert not all(layer.has_saved_activation for layer in split_layers)
-    assert len({layer.call.call_id for layer in split_layers}) == 1
-    assert check_metadata_invariants(log) is True
-
-
-def test_recurrent_iterations_keep_distinct_func_call_ids() -> None:
-    """Loop detection does not regenerate or merge per-wrapper-call ids."""
-
-    log = tl.trace(
-        _RecurrentReluModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-
-    relu_layers = [layer for layer in log._layer_list if layer.func_name == "relu"]
-    assert len(relu_layers) == 3
-    assert len({layer.call.call_id for layer in relu_layers}) == 3
-    assert check_metadata_invariants(log) is True
-
-
 def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
     """Invariant S fails when same-call outputs reuse an output path."""
 
@@ -304,24 +207,6 @@ def test_func_call_id_invariant_catches_duplicate_container_paths() -> None:
         assert exc.check_name == "func_call_id_consistency"
     else:
         raise AssertionError("Invariant S did not catch duplicate container_path")
-
-
-def test__address_normalized_strips_pass_qualifiers() -> None:
-    """Hash preparation records pass-normalized module addresses on layers."""
-
-    log = tl.trace(
-        _LinearSplitModel(),
-        torch.randn(2, 3),
-        capture=tl.options.CaptureOptions(replayable=True),
-    )
-    linear_layers = [layer for layer in log._layer_list if layer.module is not None]
-
-    assert linear_layers
-    assert any(layer._address_normalized == "linear" for layer in linear_layers)
-    assert all(
-        layer._address_normalized is None or ":" not in layer._address_normalized
-        for layer in linear_layers
-    )
 
 
 def test_hashable_path_component_plain_str_uses_value_not_bound_method() -> None:

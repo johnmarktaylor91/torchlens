@@ -26,7 +26,17 @@ _DEFERRED_VALUE_FIELDS = frozenset({"tensor_requires_grad", "is_scalar_bool", "b
 
 
 class MLXValueUnavailableError(RuntimeError):
-    """Raised when MLX lazy evaluation makes a predicate value unavailable."""
+    """Raised when MLX lazy evaluation makes a predicate value unavailable.
+
+    Examples
+    --------
+    >>> issubclass(tl.errors.MLXValueUnavailableError, RuntimeError)
+    True
+    >>> try:
+    ...     raise tl.errors.MLXValueUnavailableError("needs mx.eval")
+    ... except RuntimeError as e:
+    ...     print(type(e).__name__)
+    MLXValueUnavailableError"""
 
 
 class _DeferredValue:
@@ -119,7 +129,17 @@ def coerce_deferred_value(value: Any) -> Any:
 
 @dataclass(frozen=True, slots=True)
 class ModuleStackFrame:
-    """One frame in the active module stack."""
+    """One frame in the active module stack.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> recording = tl.record(model, x, save=lambda ctx: seen.append(ctx) or False)
+    >>> frame = next(c for c in seen if c.kind == "op").module_stack[-1]
+    >>> isinstance(frame, ModuleStackFrame)
+    True
+    >>> frame.address, frame.module_type, frame.pass_number
+    ('0', 'Conv2d', 1)"""
 
     address: str
     module_type: str
@@ -219,6 +239,19 @@ class RecordContext:
         Labels of the module calls whose output this event is. Empty for events
         that are not a module-call output; a provisional op carries ``()`` until
         the module-exit hook resolves its membership.
+
+    Examples
+    --------
+    >>> seen = []
+    >>> def spy(ctx):
+    ...     seen.append(ctx)
+    ...     return False
+    >>> recording = tl.record(model, x, save=spy)
+    >>> ctx = next(c for c in seen if c.kind == "op")
+    >>> isinstance(ctx, tl.recording.RecordContext)
+    True
+    >>> ctx.layer_type, ctx.shape, ctx.pass_number
+    ('conv2d', (1, 4, 8, 8), 1)
     """
 
     kind: EventKind | str
@@ -330,6 +363,13 @@ class CaptureSpec:
         Optional target dtype for retained payloads.
     save_mode:
         Tensor retention mode for saved payloads.
+
+    Examples
+    --------
+    >>> spec = CaptureSpec(save_grad=True)
+    >>> spec.save_out, spec.save_grad, spec.save_mode
+    (True, True, 'copy')
+
     """
 
     save_out: bool = True
@@ -396,6 +436,13 @@ class ActivationRecord:
         Auxiliary record metadata, including disk blob entries when present.
     recorded_at:
         Wall-clock time the record was created.
+
+    Examples
+    --------
+    >>> activation = tl.record(model, x, save=tl.func("relu")).records[0]
+    >>> type(activation).__name__, tuple(activation.ram_payload.shape)
+    ('ActivationRecord', (1, 4, 8, 8))
+
     """
 
     ctx: RecordContext
@@ -455,6 +502,18 @@ class GradRecordContext:
         Whether this backward node corresponds to a predicate-mode forward op.
     has_op:
         Whether this backward node has a joined forward op.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> recording = tl.record(net, torch.randn(2, 4), save=tl.func("relu"),
+    ...                       capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True))
+    >>> out = recording.output
+    >>> _ = recording.backward(out.sum(), save_grads=True)
+    >>> context = recording.grad_records[0].ctx
+    >>> type(context).__name__, context.grad_kind in ("grad_input", "grad_output")
+    ('GradRecordContext', True)
+
     """
 
     label: str
@@ -485,7 +544,18 @@ class GradRecordContext:
 
 @dataclass(frozen=True, slots=True)
 class GradRecord:
-    """One retained fastlog gradient event."""
+    """One retained fastlog gradient event.
+
+    Examples
+    --------
+    >>> net = nn.Sequential(nn.Linear(4, 3), nn.ReLU())
+    >>> recording = tl.record(net, torch.randn(2, 4), save=tl.func("relu"),
+    ...                       capture=tl.options.CaptureOptions(backward_ready=True, save_grads=True))
+    >>> out = recording.output
+    >>> _ = recording.backward(out.sum(), save_grads=True)
+    >>> type(recording.grad_records[0]).__name__
+    'GradRecord'
+    """
 
     ctx: GradRecordContext
     spec: CaptureSpec

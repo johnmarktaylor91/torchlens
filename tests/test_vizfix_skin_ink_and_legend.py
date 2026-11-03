@@ -190,7 +190,11 @@ def test_dark_skin_node_text_is_readable_on_every_fill(tmp_path: Path) -> None:
 
 
 def test_legend_lists_only_the_roles_drawn(tmp_path: Path) -> None:
-    """A Linear+ReLU graph keys input, output, both weight grays and the module box."""
+    """A Linear+ReLU graph keys input, output, both weight fills and the module box.
+
+    Both modules are drawn as one box each and no module frame is drawn, so
+    the module entry is the box, not a frame.
+    """
 
     dot = _draw(
         nn.Sequential(nn.Linear(3, 3), nn.ReLU()),
@@ -204,7 +208,7 @@ def test_legend_lists_only_the_roles_drawn(tmp_path: Path) -> None:
         "output",
         "trainable weights",
         "frozen weights",
-        "module",
+        "module run as one op",
     ]
 
 

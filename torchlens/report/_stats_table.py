@@ -73,18 +73,27 @@ _SORTABLE_FIELDS: dict[str, str | None] = {
 class StatsTableRow:
     """One per-op observation row.
 
-    ``stats`` is the frozen TensorStats record on ``state == 'ok'`` rows and
+    ``value_stats`` is the frozen TensorStats record on ``state == 'ok'`` rows and
     ``None`` otherwise; ``state`` names WHY numbers are absent.
     ``parent_mark`` carries the D28 ``= parent`` disclosure (the parent
     label) with its proof provenance in ``relation_basis`` -- populated
     ONLY from a corroborated capture-time distribution verdict.
+
+    Examples
+    --------
+    >>> rows = tl.trace(model, x).summary(view="stats").rows
+    >>> row = [r for r in rows if r.state == "ok"][0]
+    >>> row.row_id == f"op:{row.label}"
+    True
+    >>> row.value_stats.numel > 0
+    True
     """
 
     row_id: str
     label: str
     site_key: str | None
     state: str
-    stats: TensorStats | None
+    value_stats: TensorStats | None
     reason: str | None
     parent_mark: str | None = None
     relation_basis: str | None = None
@@ -92,7 +101,17 @@ class StatsTableRow:
 
 @dataclass(frozen=True)
 class StatsTable:
-    """The typed observation table (a FactCore projection, session-only)."""
+    """The typed observation table (a FactCore projection, session-only).
+
+    Examples
+    --------
+    >>> rows = tl.trace(model, x).summary(view="stats").rows
+    >>> table = tl.report.StatsTable(rows=rows, basis="demo", scan_cost_policy="demo", capture_fingerprint="demo")
+    >>> len(table.ok_rows) > 0
+    True
+    >>> table.sort_rows("numel").sort_disclosure
+    'sorted by numel (descending)'
+    """
 
     rows: tuple[StatsTableRow, ...]
     basis: str
@@ -144,13 +163,13 @@ class StatsTable:
         def value_of(row: StatsTableRow) -> float | None:
             """Extract the sort value from one row, or None."""
 
-            if row.stats is None:
+            if row.value_stats is None:
                 return None
             if by == "min":
-                return row.stats.finite_min
+                return row.value_stats.finite_min
             if by == "max":
-                return row.stats.finite_max
-            value = getattr(row.stats, by, None)
+                return row.value_stats.finite_max
+            value = getattr(row.value_stats, by, None)
             return None if value is None else float(value)
 
         valued = [(value_of(row), index, row) for index, row in enumerate(self.rows)]
@@ -162,7 +181,7 @@ class StatsTable:
         sampled = False
         if evidence_field is not None:
             sampled = any(
-                row.stats is not None and getattr(row.stats, evidence_field).is_sampled
+                row.value_stats is not None and getattr(row.value_stats, evidence_field).is_sampled
                 for row in ordered
             )
         disclosure = f"sorted by {by} ({'descending' if descending else 'ascending'})"
@@ -195,7 +214,7 @@ class StatsTable:
 
         records = []
         for row in self.rows:
-            stats = row.stats
+            stats = row.value_stats
             records.append(
                 {
                     "row_id": row.row_id,
@@ -333,7 +352,7 @@ def build_stats_table(
                     skipped_by_budget += 1
                 else:
                     scanned_elements += payload.numel()
-                    stats = tensor_stats(payload, identity=label)
+                    stats = tensor_stats(payload, _identity=label)
                     if stats.mean is None and stats.num_true is None and stats.numel > 0:
                         unavailable = stats.mean_evidence.reason
                         if unavailable and "unsupported" in unavailable:
@@ -347,7 +366,7 @@ def build_stats_table(
                 label=label,
                 site_key=record_member(op, "site_key", None),
                 state=state,
-                stats=stats,
+                value_stats=stats,
                 reason=reason,
                 parent_mark=parent_mark,
                 relation_basis=relation_basis,

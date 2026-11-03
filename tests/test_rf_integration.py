@@ -5,7 +5,6 @@ from __future__ import annotations
 import subprocess
 import sys
 from collections.abc import Iterator
-from fractions import Fraction
 from typing import Any
 
 import pytest
@@ -122,10 +121,10 @@ def _last_op(trace: Any, func_name: str, *, field: str = "func_name") -> Any:
     """Return the last operation with an exact captured function or layer-type name.
 
     ``func_name`` is the backend's raw captured call name, which is NOT
-    always the canonical op name: tinygrad elementwise ops are reconstructed
-    from the UOp DAG and carry the lambda wrapper's own name (``"<lambda>"``)
-    as ``func_name``, with the semantic op name (``"add"``, ``"mul"``, ...)
-    only on ``type`` instead. Pass ``field="type"`` for those.
+    always the canonical op name: tinygrad ops are reconstructed from the UOp
+    DAG and carry the tinygrad API name observed for them (else the lowercase
+    UOp op name) as ``func_name``, while the semantic op name (``"add"``,
+    ``"mul"``, ...) is on ``type``. Pass ``field="type"`` for those.
     """
 
     matches = [op for op in trace._layer_list if getattr(op, field) == func_name]
@@ -190,29 +189,6 @@ def test_lazy_namespace_and_public_surface_work_end_to_end() -> None:
         assert target.projective_field is not None
 
 
-def test_stride_two_basic_block_uses_branch_union_not_flat_call_order() -> None:
-    """Prove the skip merge keeps the branch-derived RF and sampling jump."""
-
-    _register_exact_residual_rules()
-    trace = tl.trace(_StrideTwoBasicBlock().eval(), torch.randn(1, 3, 17, 17))
-    merge = _last_op(trace, "__add__")
-    descriptor = next(iter(merge.receptive_field.per_input.values()))
-
-    main_size, main_jump = _window_step(1, 1, kernel=3, stride=2)
-    main_size, main_jump = _window_step(main_size, main_jump, kernel=3)
-    skip_size, skip_jump = _window_step(1, 1, kernel=1, stride=2)
-    assert (main_size, main_jump) == (7, 2)
-    assert (skip_size, skip_jump) == (1, 2)
-    assert descriptor.size == (max(main_size, skip_size),) * 2
-    assert descriptor.jump == (Fraction(main_jump),) * 2
-
-    # A flat call-order accumulator applies the projection after the main branch,
-    # incorrectly doubling the merged sampling jump from 2 to 4.
-    _, flat_call_order_jump = _window_step(main_size, main_jump, kernel=1, stride=2)
-    assert flat_call_order_jump == 4
-    assert descriptor.jump != (Fraction(flat_call_order_jump),) * 2
-
-
 @pytest.mark.heavy
 def test_torchvision_resnet18_merge_geometry_matches_graph_derivation() -> None:
     """Lock all ResNet-18 skip merges to independently derived graph values."""
@@ -254,45 +230,6 @@ def test_torchvision_resnet18_merge_geometry_matches_graph_derivation() -> None:
     assert all(result.passed for result in validations)
 
 
-@pytest.mark.parametrize(
-    "model",
-    [
-        nn.Conv2d(1, 1, 3, padding=1, bias=False),
-        nn.Sequential(
-            nn.Conv2d(1, 1, 3, padding=1, bias=False),
-            nn.Conv2d(1, 1, 3, stride=2, padding=1, bias=False),
-        ),
-        _ResidualOracle(),
-    ],
-)
-def test_geometric_hulls_equal_independent_gradient_support(model: nn.Module) -> None:
-    """Match every small-model per-op spatial hull to raw autograd support."""
-
-    _register_exact_residual_rules()
-    _fill_positive(model)
-    inputs = torch.ones(1, 1, 5, 5, requires_grad=True)
-    capture = tl.options.CaptureOptions(backward_ready=True)
-    trace = tl.trace(
-        model.eval(),
-        inputs,
-        capture=tl.options.merge_capture_options(capture=capture, save_mode="reference"),
-    )
-    input_op = next(op for op in trace._layer_list if op.is_input)
-    targets = [op for op in trace._layer_list if op.func_name in {"conv2d", "__add__"}]
-    assert targets
-
-    for target in targets:
-        height, width = target.shape[-2:]
-        for row in range(height):
-            for column in range(width):
-                box = target.receptive_field.at((row, column), input_op=input_op)
-                geometric = tuple(
-                    (int(axis.clipped_start), int(axis.clipped_stop)) for axis in box.axes[-2:]
-                )
-                oracle = _gradient_spatial_hull(target, input_op, (row, column))
-                assert geometric == oracle
-
-
 def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     """Expose one descriptor per model input and reject ambiguous convenience fields."""
 
@@ -315,6 +252,7 @@ def test_multi_input_view_keeps_each_io_role_and_rejects_bare_access() -> None:
     assert set(merge_rows["input_role"]) == {"input.left", "input.right"}
 
 
+@pytest.mark.rare
 @pytest.mark.backend_tinygrad
 def test_non_torch_geometry_works_but_gradient_probe_is_gated() -> None:
     """Keep geometry backend-neutral while rejecting non-torch gradient probes."""

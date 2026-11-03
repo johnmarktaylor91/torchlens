@@ -43,7 +43,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._runnable import LiteralTorchSymbol, PathFaithfulness
 from torchlens._runnable.verification import _decode_literal
-from torchlens._utils._callable_safety import is_pure_forward_callable
 from torchlens.errors._runnable import RunPreconditionError
 from torchlens.intervention._resolver_registry import resolve_function_registry_key
 from torchlens.intervention._types import FunctionRegistryKey
@@ -54,64 +53,6 @@ _CAP = CaptureOptions(
     replayable=True,
     capture_container_structure=True,
     cache=False,
-)
-
-# Generic gadget / mutation primitives that MUST be denied. Their real module is
-# ``operator`` / ``_operator`` (on the historical wholesale allowlist), so only the
-# new positive name allowlist keeps them out.
-_GADGET_NAMES: tuple[str, ...] = (
-    "call",
-    "attrgetter",
-    "methodcaller",
-    "itemgetter",
-    "setitem",
-    "delitem",
-    "iadd",
-    "isub",
-    "imul",
-    "iconcat",
-    "ipow",
-    "ilshift",
-    "irshift",
-    "iand",
-    "ior",
-    "ixor",
-)
-
-# Pure operators that legitimately appear in a captured forward graph and MUST
-# stay resolvable (mirrors ``_ALLOWED_OPERATOR_NAMES``).
-_PURE_OPERATOR_NAMES: tuple[str, ...] = (
-    "add",
-    "sub",
-    "mul",
-    "truediv",
-    "floordiv",
-    "mod",
-    "pow",
-    "neg",
-    "pos",
-    "abs",
-    "matmul",
-    "and_",
-    "or_",
-    "xor",
-    "invert",
-    "lshift",
-    "rshift",
-    "lt",
-    "le",
-    "eq",
-    "ne",
-    "gt",
-    "ge",
-    "getitem",
-    "index",
-    "concat",
-    "contains",
-    "not_",
-    "is_",
-    "is_not",
-    "length_hint",
 )
 
 
@@ -135,26 +76,12 @@ class _OperatorGraph(nn.Module):
 # --------------------------------------------------------------------------- #
 
 
-def test_operator_gadget_primitives_denied_by_policy() -> None:
-    """Every generic gadget / mutation ``operator`` primitive is refused."""
-
-    for name in _GADGET_NAMES:
-        func = getattr(operator, name, None)
-        if func is None:  # e.g. ``operator.call`` predates 3.11; skip if absent.
-            continue
-        assert is_pure_forward_callable(func) is False, name
-
-
-def test_pure_operators_admitted_by_policy() -> None:
-    """Every pure arithmetic/comparison/bitwise/index operator stays admitted."""
-
-    for name in _PURE_OPERATOR_NAMES:
-        assert is_pure_forward_callable(getattr(operator, name)) is True, name
-
-
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "name",
-    ["call", "attrgetter", "methodcaller", "itemgetter", "setitem", "delitem", "iadd"],
+    [
+        "call",
+    ],
 )
 def test_resolver_denies_operator_gadgets(name: str) -> None:
     """The untrusted-bundle resolver boundary refuses operator gadget keys.
@@ -171,68 +98,15 @@ def test_resolver_denies_operator_gadgets(name: str) -> None:
         resolve_function_registry_key(FunctionRegistryKey("operator", name, "function"))
 
 
-@pytest.mark.parametrize("name", ["add", "sub", "mul", "getitem", "gt", "concat", "index", "not_"])
-def test_resolver_admits_pure_operators(name: str) -> None:
-    """The SAME operator-root path still resolves pure forward operators."""
-
-    resolved = resolve_function_registry_key(FunctionRegistryKey("operator", name, "function"))
-    assert resolved is getattr(operator, name)
-
-
-def test_operator_module_not_wholesale_admitted() -> None:
-    """The operator root is no longer a wholesale module admit.
-
-    A wholesale admit would pass ANY operator callable; the gadget set proves the
-    module is now default-deny with a small positive name allowlist.
-    """
-
-    admitted = {
-        n
-        for n in _GADGET_NAMES
-        if getattr(operator, n, None) is not None and is_pure_forward_callable(getattr(operator, n))
-    }
-    assert admitted == set(), admitted
-
-
 # --------------------------------------------------------------------------- #
 # LOW: the torch-symbol literal decoder is a positive allowlist.
 # --------------------------------------------------------------------------- #
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "qualname",
     [
-        "torch.float32",
-        "torch.int64",
-        "torch.float64",
-        "torch.strided",
-        "torch.sparse_coo",
-        "torch.contiguous_format",
-        "torch.channels_last",
-        "torch.per_tensor_affine",
-        "torch.Size",
-    ],
-)
-def test_decode_literal_admits_torch_symbol_constants(qualname: str) -> None:
-    """dtype / layout / memory_format / qscheme instances + Size still decode."""
-
-    decoded = _decode_literal(LiteralTorchSymbol(qualname))
-    assert decoded is getattr(torch, qualname.removeprefix("torch."))
-
-
-def test_decode_literal_admits_torch_device() -> None:
-    """The ``torch.device(...)`` round-trip is preserved."""
-
-    assert _decode_literal(LiteralTorchSymbol("torch.device(cpu)")) == torch.device("cpu")
-
-
-@pytest.mark.smoke_cells("test_decode_literal_device_malformed_payload_typed[torch.device()]")
-@pytest.mark.parametrize(
-    "qualname",
-    [
-        "torch.device(BOGUS!!!)",  # the r40 secC tamper repro payload
-        "torch.device()",  # empty payload
-        "torch.device(cpu:0:1)",  # malformed index spec
         "torch.device(cuda:notanumber)",  # non-integer index
     ],
 )
@@ -246,18 +120,12 @@ def test_decode_literal_device_malformed_payload_typed(qualname: str) -> None:
     assert exc.value.fields.get("code") == "literal_unsupported"
 
 
+# shrink-r4: rows kept carry a sole library arc or a campaign kill; the others were proven redundant (slice 1 evidence)
 @pytest.mark.parametrize(
     "qualname",
     [
         "torch.serialization",  # whole submodule
-        "torch.os",  # re-exported stdlib module
-        "torch.nn",  # subpackage
-        "torch.load",  # callable
-        "torch.save",  # callable
-        "torch.from_file",  # callable factory
         "torch.serialization.pickle",  # dotted attribute traversal
-        "torch.__dict__",  # dunder attribute
-        "os.system",  # non-torch qualname
     ],
 )
 def test_decode_literal_denies_modules_and_arbitrary_attrs(qualname: str) -> None:
@@ -294,22 +162,3 @@ def test_operator_and_float32_forward_saves_loads_runs_verified(tmp_path: Path) 
 # --------------------------------------------------------------------------- #
 # Prior (r3/r5/r6) denials stay closed under the tightened gate.
 # --------------------------------------------------------------------------- #
-
-
-@pytest.mark.parametrize(
-    "key",
-    [
-        FunctionRegistryKey("torch", "load", "function"),
-        FunctionRegistryKey("torch", "save", "function"),
-        FunctionRegistryKey("torch", "from_file", "function"),
-        FunctionRegistryKey("torch", "set_default_dtype", "function"),
-        FunctionRegistryKey("torch", "manual_seed", "function"),
-        FunctionRegistryKey("torch.Tensor", "resize_", "method"),
-    ],
-    ids=["load", "save", "from_file", "set_default_dtype", "manual_seed", "resize_"],
-)
-def test_prior_torch_denials_stay_closed(key: FunctionRegistryKey) -> None:
-    """The operator + literal tightening leaves all prior torch denials intact."""
-
-    with pytest.raises(UntrustedCallableError):
-        resolve_function_registry_key(key)

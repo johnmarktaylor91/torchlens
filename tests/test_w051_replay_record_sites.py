@@ -106,7 +106,7 @@ def test_do_single_pass_layer_record(loop) -> None:
 def test_attach_hooks_op_record_then_push(loop) -> None:
     model, x, trace = loop
     fork = trace.fork()
-    fork.attach_hooks(trace["relu_1_2:2"], tl.zero_ablate())
+    fork._attach_hooks(trace["relu_1_2:2"], tl.zero_ablate())
     fork.push()
     _assert_matches(fork, _truth(model, x, {2}))
 

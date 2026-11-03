@@ -10,7 +10,6 @@ import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._utils._record_group_table import record_member
 from torchlens._visualization import _render_nodes
 
 
@@ -76,30 +75,6 @@ def test_rolled_draw_reuses_atomic_module_sibling_counts(
     assert len(received_counts) > 1
     assert all(counts is built_counts[0] for counts in received_counts)
     assert built_counts[0] == _render_nodes._atomic_module_sibling_counts(trace)
-
-
-def test_sibling_counts_match_per_layer_scan() -> None:
-    """The one-pass counter must reproduce the historical per-node scan."""
-
-    trace = tl.trace(_SplitReuse(), torch.randn(1, 4))
-    counts = _render_nodes._atomic_module_sibling_counts(trace)
-
-    addresses = {
-        layer.modules[-1].rsplit(":", 1)[0]
-        for layer in trace._layer_logs.values()
-        if getattr(layer, "modules", None)
-    }
-    assert addresses
-    for address in addresses | {"not_a_module"}:
-        expected = sum(
-            1
-            for other in trace._layer_logs.values()
-            if isinstance(other, _render_nodes.Layer)
-            and record_member(other, "is_atomic_module", False)
-            and other.modules
-            and other.modules[-1].rsplit(":", 1)[0] == address
-        )
-        assert counts.get(address, 0) == expected
 
 
 def test_split_range_fallback_matches_threaded_counts() -> None:

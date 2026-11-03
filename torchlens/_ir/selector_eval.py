@@ -451,7 +451,7 @@ def _capability_error(kind: str, lifecycle: str) -> SelectorCapabilityError:
     if kind == "facet":
         return SelectorCapabilityError(
             "tl.facet(...) / tl.head(...) selectors resolve through intervention mutators "
-            "(attach_hooks, do) and, on a finished trace, as a bare selector "
+            "(Trace.set, Trace.do) and, on a finished trace, as a bare selector "
             "through trace[selector]; not through "
             f"{where}{' (find_sites, composite selectors)' if lifecycle == 'site' else ''}.",
             code="facet_selector_unsupported",
@@ -751,7 +751,8 @@ def _refuse_predicate_payload(subject: Any) -> bool:
     """Refuse a predicate selector whose payload is not callable."""
 
     raise SiteResolutionError(
-        "tl.where(...) requires a callable predicate.", code="where_predicate_not_callable"
+        "tl.where(...) requires a callable predicate.",
+        code="where_predicate_not_callable",
     )
 
 
@@ -1135,7 +1136,9 @@ def _site_input_path_matches(subject: Any, requested_path: tuple[Any, ...]) -> b
 
 
 def _occurrence_path_matches(
-    occurrences: Any, requested_path: tuple[Any, ...], producer_labels: set[str] | None = None
+    occurrences: Any,
+    requested_path: tuple[Any, ...],
+    producer_labels: set[str] | None = None,
 ) -> bool:
     """Return whether any leaf occurrence sits at ``requested_path``."""
 
@@ -1255,7 +1258,8 @@ def selector_from_spec(
     selector = None if builder is None else builder(kind, value, metadata or {}, lifecycle)
     if selector is None:
         raise SiteResolutionError(
-            f"Unsupported target spec selector kind {kind!r}.", code="selector_kind_unsupported"
+            f"Unsupported target spec selector kind {kind!r}.",
+            code="selector_kind_unsupported",
         )
     return selector
 
@@ -1442,7 +1446,12 @@ def _spec_grad_fn(
 
 
 def _spec_grad_kind(
-    kind: str, value: Any, metadata: dict[str, Any], lifecycle: str, *, factory: tuple[Any, Any]
+    kind: str,
+    value: Any,
+    metadata: dict[str, Any],
+    lifecycle: str,
+    *,
+    factory: tuple[Any, Any],
 ) -> BaseSelector:
     """Build ``grad_kind`` from the ``(grad_input, grad_output)`` factory pair."""
 
@@ -1632,7 +1641,10 @@ def _spec_selector_like(selector_like: Any, lifecycle: Lifecycle) -> BaseSelecto
     else:
         return None
     return selector_from_spec(
-        selector_like.selector_kind, selector_like.selector_value, metadata, lifecycle=lifecycle
+        selector_like.selector_kind,
+        selector_like.selector_value,
+        metadata,
+        lifecycle=lifecycle,
     )
 
 

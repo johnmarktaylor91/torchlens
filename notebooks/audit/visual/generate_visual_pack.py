@@ -47,10 +47,6 @@ matplotlib.use("Agg")
 import torch
 
 import torchlens as tl
-from torchlens._visualization._trace_collapse import (
-    collapse_plan as _trace_collapse_plan,
-    collapse_schedule as _trace_collapse_schedule,
-)
 
 # Guard: a pip -e install of a DIFFERENT checkout must never silently supply
 # the renderer under audit (that would render the wrong code and lie to the pack).
@@ -234,7 +230,9 @@ def _raw_input_trace(model_key: str):
     def _build():
         m, x = MODELS[model_key]()
         return tl.trace(
-            m, x, capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5)
+            m,
+            x,
+            capture=tl.options.CaptureOptions(input_transform=lambda z: (z - 0.5) / 0.5),
         )
 
     return _build
@@ -420,7 +418,10 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
     VacuousDemoGuard("dpi", "tiny_mlp", {"dpi": 100}, {"dpi": 200}, file_bytes=True),
     VacuousDemoGuard("for_paper", "tiny_mlp", {}, {"theme": "paper"}),
     VacuousDemoGuard(
-        "order_siblings", "mini_inception", {"order_siblings": False}, {"order_siblings": True}
+        "order_siblings",
+        "mini_inception",
+        {"order_siblings": False},
+        {"order_siblings": True},
     ),
     VacuousDemoGuard(
         "vis_node_placement",
@@ -429,7 +430,10 @@ VACUOUS_DEMO_GUARDS: tuple[VacuousDemoGuard, ...] = (
         {"layout": "rank"},
     ),
     VacuousDemoGuard(
-        "vis_graph_overrides", "tiny_mlp", {}, {"graph_overrides": {"bgcolor": "#FFFBE6"}}
+        "vis_graph_overrides",
+        "tiny_mlp",
+        {},
+        {"graph_overrides": {"bgcolor": "#FFFBE6"}},
     ),
     VacuousDemoGuard(
         "vis_edge_overrides",
@@ -534,10 +538,21 @@ def _run_vacuous_demo_guards() -> None:
         raise RuntimeError(f"Vacuous visual-audit demos: {joined}")
 
 
+def _plan_from_draw(trace, mode: str | float):
+    """Draw ``trace`` at ``collapse=mode`` to a scratch DOT file and return its plan.
+
+    The plan is ``Drawing.collapse_plan``: the one that drawing rendered from.
+    """
+    diag_dir = _PAGES_DIR / "_collapse_diagnostics"
+    diag_dir.mkdir(parents=True, exist_ok=True)
+    stem = diag_dir / f"collapse_{str(mode).replace('.', 'p')}"
+    return trace.draw(collapse=mode, path=str(stem), file_format="dot").collapse_plan
+
+
 def _plan_subtitle(t: float):
     def _fn(trace) -> str:
         try:
-            plan = _trace_collapse_plan(trace, mode=t)
+            plan = _plan_from_draw(trace, t)
             return f"t={t} -- {len(plan.nodes)} visible nodes"
         except Exception as exc:  # diagnostic subtitle must never kill the page
             return f"t={t} (plan unavailable: {type(exc).__name__})"
@@ -549,22 +564,27 @@ def _collapse_diag_text() -> str:
     """Text body for the collapse diagnostics page (resnet18)."""
     trace = get_trace("resnet18")
     lines: list[str] = []
-    lines.append("Drawing.collapse_plan(mode=...) -- renderer-faithful plan per mode (resnet18):")
+    lines.append(
+        "trace.draw(collapse=...).collapse_plan -- renderer-faithful plan per mode (resnet18):"
+    )
     lines.append("")
     for mode in ("auto", "max", 0.5):
         try:
-            plan = _trace_collapse_plan(trace, mode=mode)
-            lines.append(f"  collapse_plan(mode={mode!r}):")
+            plan = _plan_from_draw(trace, mode)
+            lines.append(f"  draw(collapse={mode!r}).collapse_plan:")
             lines.append(f"    {plan!r}")
         except Exception as exc:
-            lines.append(f"  collapse_plan(mode={mode!r}) FAILED: {exc}")
+            lines.append(f"  draw(collapse={mode!r}).collapse_plan FAILED: {exc}")
     lines.append("")
-    lines.append("Drawing.collapse_schedule() -- ordered monotone float schedule:")
+    lines.append("trace.draw(...).collapse_schedule -- ordered monotone float schedule:")
     lines.append("")
     lines.append("      t      target  visible  #collapsed-module-addresses")
     lines.append("      ('=' marks steps sharing the same t as the row above)")
     try:
-        schedule = _trace_collapse_schedule(trace)
+        diag_dir = _PAGES_DIR / "_collapse_diagnostics"
+        diag_dir.mkdir(parents=True, exist_ok=True)
+        drawing = trace.draw(path=str(diag_dir / "schedule"), file_format="dot")
+        schedule = drawing.collapse_schedule
         steps = list(schedule.steps)
         shown = steps if len(steps) <= 28 else steps[:14] + steps[-14:]
         skipped = len(steps) - len(shown)
@@ -584,7 +604,7 @@ def _collapse_diag_text() -> str:
         lines.append(f"  Total steps: {len(steps)}.  Monotone contract: visible count never")
         lines.append("  increases with t; collapsed-address sets are nested supersets.")
     except Exception as exc:
-        lines.append(f"    collapse_schedule() FAILED: {exc}")
+        lines.append(f"    Drawing.collapse_schedule FAILED: {exc}")
     return "\n".join(lines)
 
 
@@ -626,7 +646,7 @@ AXES: dict[str, str] = {
     "containers:nodes": "show_containers='nodes' container overlay nodes (renderer-internal)",
     "container_max_inline": "container_max_inline threshold",
     "module_focus": "module= submodule focus with boundary stubs",
-    "depth": "vis_call_depth module-box nesting cutoff",
+    "depth": "depth= module-box nesting cutoff",
     "skip_fn": "skip_fn layer-hiding predicate (edges chain through)",
     "collapse_fn": "collapse_fn custom module-collapse predicate",
     "node_spec_fn": "node_spec_fn per-node customization callback",
@@ -654,7 +674,7 @@ AXES: dict[str, str] = {
     "cone:on": "show_cone=True downstream highlighter",
     "cone:off": "show_cone=False (default)",
     "input_transform_summary": "show_input_transform_summary=True input xlabel",
-    "raw_io_render": "save_raw_input/save_raw_output thumbnails on boundary nodes",
+    "raw_io_render": "save_raw_input/save_transformed_output thumbnails on boundary nodes",
     # --- draw_backward / draw_combined ---
     "draw_backward:rolled": "draw_backward default rolled grad_fn graph",
     "draw_backward:unrolled": "draw_backward rolled=False",
@@ -706,8 +726,8 @@ AXES: dict[str, str] = {
     "degenerate": "degenerate graphs (single op, no modules, scalar out)",
     "regression:large_bbox": "large-graph bbox non-blank regression",
     "artifact:apparent_cycle": "interleaved repeat-fold apparent-cycle artifact (known)",
-    "diag:collapse_plan": "Drawing.collapse_plan() diagnostic",
-    "diag:collapse_schedule": "Drawing.collapse_schedule() diagnostic",
+    "diag:collapse_plan": "Drawing.collapse_plan diagnostic",
+    "diag:collapse_schedule": "Drawing.collapse_schedule diagnostic",
     "labels:checked_suppression": (
         "default-on checked suppression of constructor args proven equal to captured shape dims"
     ),
@@ -936,7 +956,9 @@ SECTIONS: list[Section] = [
                         kwargs={"order_siblings": True},
                     ),
                     Panel(
-                        "order_siblings=False", "mini_inception", kwargs={"order_siblings": False}
+                        "order_siblings=False",
+                        "mini_inception",
+                        kwargs={"order_siblings": False},
                     ),
                 ],
                 covers=["order_siblings:on", "order_siblings:off", "topology:parallel"],
@@ -1104,9 +1126,9 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="c4_call_depth",
-                title="vis_call_depth: limiting module-box nesting",
+                title="depth=: limiting module-box nesting",
                 caption=(
-                    "vis_call_depth caps how deep module boxes nest. LEFT: unlimited (default 1000) shows "
+                    "depth= caps how deep module boxes nest. LEFT: unlimited (default 1000) shows "
                     "inner_module containing loop_module at full detail. RIGHT: depth 1 keeps only the "
                     "outermost module level -- modules deeper than the cap COLLAPSE into single summary "
                     "boxes carrying an honest 'N ops + M buffers' contents remainder (the same collapsed-box element "
@@ -1379,7 +1401,7 @@ SECTIONS: list[Section] = [
         "The smart-collapse engine: string modes none/auto/max, the continuous "
         "float slider with its monotone schedule, run folding ('+N more' "
         "ellipsis), segment boxes, remainder labels, known artifacts, and the "
-        "collapse_plan/collapse_schedule diagnostics.",
+        "Drawing.collapse_plan/collapse_schedule diagnostics.",
         [
             Page(
                 label="e1_collapse_modes",
@@ -1412,12 +1434,12 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e2_float_filmstrip",
-                title="Float collapse slider: t = 0.0 to 1.0 filmstrip",
+                title="Float collapse slider: level 0.0 to 1.0 filmstrip",
                 caption=(
                     "collapse accepts a float t in [0, 1] selecting a deterministic MONOTONE schedule: "
                     "t=0.0 is byte-identical to 'none', t=1.0 to 'max', and increasing t never uncollapses "
                     "anything (collapsed sets are nested). Subtitles show the visible node count reported by "
-                    "Drawing.collapse_plan(mode=t).\n"
+                    "trace.draw(collapse=t).collapse_plan.\n"
                     "CHECK: visible counts never increase left-to-right; each frame looks like a strictly "
                     "further-condensed version of the previous one, never a re-arrangement."
                 ),
@@ -1607,7 +1629,7 @@ SECTIONS: list[Section] = [
             ),
             Page(
                 label="e9_collapse_diagnostics",
-                title="Diagnostics: Drawing.collapse_plan() and Drawing.collapse_schedule()",
+                title="Diagnostics: Drawing.collapse_plan and Drawing.collapse_schedule",
                 caption="",
                 text_fn=_collapse_diag_text,
                 covers=["diag:collapse_plan", "diag:collapse_schedule"],

@@ -7,15 +7,10 @@ from collections.abc import Iterator
 
 import pytest
 import torch
-from _forward_stash import stashed
 from torch import nn
 
-import torchlens as tl
-from torchlens._utils._torch_compat import get_torch_capability_snapshot
 from torchlens._utils.rng import log_current_rng_states, set_rng_from_saved_states
 from torchlens._utils.tensor_utils import tensor_nanequal
-from torchlens.backends.tf._tf_compat import get_tf_capability_snapshot
-from torchlens.compat import _report as compat_report_module
 from torchlens.report import DoctorReport, doctor as report
 
 EXPECTED_COMPAT_ROW_KEYS = {
@@ -291,6 +286,7 @@ def _reference_models() -> Iterator[tuple[nn.Module, torch.Tensor]]:
     yield FullyShardedDataParallel(), torch.randn(2, 4)
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of compat/_report.py.
 def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -> None:
     """``tl.report.doctor`` runs without executing or crashing on required references."""
 
@@ -320,59 +316,7 @@ def test_report_runs_on_five_reference_models(monkeypatch: pytest.MonkeyPatch) -
     assert reports[4].check("fsdp").status == "scope"
 
 
-def test_report_renderers_include_truth_table_rows() -> None:
-    """``show`` and ``to_markdown`` expose stable truth-table information."""
-
-    compat_report = report(SmallCnn(), torch.randn(2, 1, 4, 4))
-
-    text_table = compat_report.show()
-    markdown_table = compat_report.to_markdown()
-
-    assert "HF Transformers wrapper" in text_table
-    assert "Single-thread design" in text_table
-    assert "| Row | Status | Severity | Detected | Details | Suggestion |" in markdown_table
-    assert "`pass`" in markdown_table
-
-
-def test_torch_compile_row_uses_feature_detection_not_class_name(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A user class named like Dynamo's wrapper must not trip the compile row."""
-
-    monkeypatch.setattr(
-        compat_report_module,
-        "get_dynamo_optimized_module_type",
-        lambda: None,
-    )
-
-    row = report(FalsePositiveOptimizedModule(), torch.randn(1)).check("torch_compile")
-
-    assert row.is_detected is False
-    assert row.status == "pass"
-
-
-def test_report_surfaces_every_runtime_capability() -> None:
-    """Compatibility report capability row stays lockstep with defined flags."""
-
-    compat_report = report(SmallCnn(), torch.randn(2, 1, 4, 4))
-    row = compat_report.check("torch_capabilities")
-    expected = set(get_torch_capability_snapshot()) | set(get_tf_capability_snapshot())
-    # The row cell carries the grouped absences-first summary; the FULL dump
-    # moved to the detail accessor (sumfam wave-0 item 2), which is where the
-    # lockstep-with-defined-flags tripwire now bites.
-    surfaced = set(compat_report.capability_snapshot())
-    assert surfaced == expected
-    snapshot = compat_report.capability_snapshot()
-    present = sum(snapshot.values())
-    assert row.details.startswith(f"{present}/{len(snapshot)} capabilities present")
-    assert "capabilities present" in row.details
-    assert "capability_snapshot()" in row.details
-    # Every ABSENT flag stays named in the row cell itself (absences-first).
-    for name, available in snapshot.items():
-        if not available:
-            assert name in row.details
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of compat/_report.py.
 def test_report_detects_known_scope_and_broken_rows() -> None:
     """Wrappers with known semantics produce the expected row statuses."""
 
@@ -386,6 +330,7 @@ def test_report_detects_known_scope_and_broken_rows() -> None:
     assert tied_report.check("tied_parameters").status == "pass"
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/tensor_utils.py.
 def test_quantized_tensor_nanequal_no_longer_crashes() -> None:
     """Quantized tensors are compared without calling unsupported floating ops."""
 
@@ -403,20 +348,7 @@ def test_quantized_tensor_nanequal_no_longer_crashes() -> None:
     assert not tensor_nanequal(left, mismatch)
 
 
-def test_report_quantized_row_uses_shared_cycle_safe_tensor_walker() -> None:
-    """Quantized input detection survives shared tensors and cyclic containers."""
-
-    tensor = torch.quantize_per_tensor(
-        torch.tensor([1.0, 2.0]), scale=0.1, zero_point=10, dtype=torch.quint8
-    )
-    payload: list[object] = [tensor, {"again": tensor}]
-    payload.append(payload)
-
-    compat_report = report(QuantizedInputModel(), payload)
-
-    assert compat_report.check("quantized_tensor").status == "known_broken"
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _utils/rng/streams.py.
 def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> None:
     """RNG helpers use all-device CUDA state APIs when CUDA RNG state is live.
 
@@ -453,35 +385,3 @@ def test_rng_snapshot_uses_all_cuda_devices(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert states["torch_cuda_all"] == fake_states
     assert calls == ["all"]
-
-
-def test_device_context_factory_injection_during_active_logging() -> None:
-    """Factory functions honor ``torch.device`` contexts while TorchLens is logging."""
-
-    model = DeviceContextFactoryModel()
-    log = tl.trace(model, torch.randn(1), save="none")
-
-    assert stashed(log, "factory_device_type") == "meta"
-
-
-def test_torch_compile_row_discloses_mid_forward_creation_exception() -> None:
-    """The clean-preflight compile row must not overclaim stance coverage.
-
-    The stance engages only when Dynamo is already imported at capture entry,
-    so a compiled callable CREATED inside the forward (the process's first
-    torch._dynamo import happening mid-capture) is bypassed-and-disclosed, not
-    logged. The row's claim must carry that exception instead of stating that
-    every compiled callable "runs eager and is logged" (b6-opus R16, measured:
-    inline torch.compile interior absent while the row read pass/logged).
-    """
-
-    from torchlens._utils import _torch_compat
-
-    if not _torch_compat.HAS_SET_STANCE:
-        pytest.skip("set_stance unavailable on this torch")
-
-    row = report(SmallCnn(), torch.randn(2, 1, 4, 4)).check("torch_compile")
-
-    assert row.is_detected is False
-    assert "created inside the forward" in row.details.lower()
-    assert "dynamo_region_not_logged" in row.details

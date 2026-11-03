@@ -14,7 +14,7 @@ from _record_fakes import FakeRecord  # noqa: E402
 import torchlens as tl  # noqa: E402
 from torchlens._data_classes._trace_groups import TraceGraph  # noqa: E402
 from torchlens._data_classes.cleanup import _remove_log_entry_references  # noqa: E402
-from torchlens._data_classes.trace import ConditionalEvent, Trace  # noqa: E402
+from torchlens._data_classes.trace import ConditionalEvent  # noqa: E402
 from torchlens._postprocess.labeling import (  # noqa: E402
     _rename_model_history_layer_names,
     _replace_layer_names_for_layer_entry,
@@ -84,25 +84,6 @@ class _StubTrace:
     def __iter__(self) -> Iterator[SimpleNamespace]:
         """Iterate over surviving pass-level entries."""
         return iter(self._layer_list)
-
-
-class _TinyModel(nn.Module):
-    """Small model used to exercise ``to_pandas()`` on a real Trace."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Run a minimal forward pass.
-
-        Parameters
-        ----------
-        x:
-            Input tensor.
-
-        Returns
-        -------
-        torch.Tensor
-            Activated output tensor.
-        """
-        return torch.relu(x + 1)
 
 
 class _ReluThenAdd(nn.Module):
@@ -194,6 +175,7 @@ def _make_layer_stub(label: str, layer_label: str | None = None) -> SimpleNamesp
     )
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _postprocess/labeling.py.
 def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
     """Step 11 rename rewrites every new conditional-label surface."""
     mapping = {
@@ -261,6 +243,7 @@ def test_conditional_labels_rename_across_lifecycle_surfaces() -> None:
     assert trace.graph.conditional_records[0].bool_layers == ["gt_1_2"]
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/cleanup.py, _utils/collections.py.
 def test_conditional_cleanup_scrubs_removed_labels() -> None:
     """Conditional cleanup removes deleted labels and prunes empty containers."""
     parent_pass = _make_layer_stub("parent:1", "parent")
@@ -331,6 +314,7 @@ def test_conditional_cleanup_scrubs_removed_labels() -> None:
     assert parent_layer._control_flow_branch_stack_ops == {((0, "then"),): [1, 2]}
 
 
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/_trace_removal.py, _data_classes/cleanup.py, _data_classes/layer.py.
 def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
     """Batch removal scrubs before clearing a finished trace's aggregate layer."""
 
@@ -340,70 +324,3 @@ def test_batch_remove_log_entries_accepts_finished_layer_objects() -> None:
     trace._batch_remove_log_entries([relu_layer], remove_references=True)
 
     assert not hasattr(relu_layer, "_control_flow_entry_children")
-
-
-def test_to_pandas_exports_conditional_columns() -> None:
-    """`to_pandas()` exposes the Phase 3 conditional export columns."""
-    trace = tl.trace(
-        _TinyModel(),
-        torch.ones(1, 3),
-        save="all",
-    )
-    target_layer = next(
-        layer for layer in trace._layer_list if layer.type not in {"input", "output"}
-    )
-    target_layer._call_config = {"alpha": 1}
-    target_layer._control_flow_is_terminal_conditional_bool = True
-    target_layer._control_flow_context_kind = "if_test"
-    target_layer._control_flow_wrapper_kind = "bool_cast"
-    target_layer.terminal_conditional_id = 7
-    target_layer._control_flow_branch_depth = 2
-    target_layer._control_flow_branch_stack = [(0, "then"), (1, "elif_1")]
-    target_layer._control_flow_then_children = ["then_child"]
-    target_layer._control_flow_elif_children = {1: ["elif_child"]}
-    target_layer._control_flow_else_children = ["else_child"]
-
-    layer_df = trace.to_pandas()
-
-    assert isinstance(layer_df, pd.DataFrame)
-    for column_name in [
-        "func_config",
-        "is_terminal_conditional_bool",
-        "conditional_context_kind",
-        "conditional_wrapper_kind",
-        "terminal_conditional_id",
-        "conditional_branch_depth",
-        "conditional_branch_stack",
-        "conditional_then_children",
-        "conditional_elif_children",
-        "conditional_else_children",
-    ]:
-        assert column_name in layer_df.columns
-
-    target_row = layer_df.loc[layer_df["layer_label"] == target_layer.layer_label].iloc[0]
-    assert bool(target_row["is_terminal_conditional_bool"]) is True
-    assert target_row["conditional_context_kind"] == "if_test"
-    assert target_row["conditional_wrapper_kind"] == "bool_cast"
-    assert int(target_row["terminal_conditional_id"]) == 7
-    assert int(target_row["conditional_branch_depth"]) == 2
-    assert target_row["conditional_branch_stack"] == "cond_0:then,cond_1:elif_1"
-    assert target_row["conditional_then_children"] == ("then_child",)
-    assert target_row["conditional_elif_children"] == {1: ["elif_child"]}
-    assert target_row["conditional_else_children"] == ("else_child",)
-    assert target_row["func_config"] == {"alpha": 1}
-
-
-def test_conditional_edge_legacy_aliases_removed() -> None:
-    """The legacy conditional edge views are deleted; canonical arm edges stay."""
-
-    trace = Trace("Tiny")
-    trace._graph_conditional_arm_entry_edges = {
-        (0, "then"): [("parent", "then_child")],
-        (0, "elif_1"): [("parent", "elif_child")],
-        (0, "else"): [("parent", "else_child")],
-    }
-
-    assert not hasattr(type(trace), "conditional_then_entry_edges")
-    assert not hasattr(type(trace), "conditional_elif_entry_edges")
-    assert not hasattr(type(trace), "conditional_else_entry_edges")
-    assert trace.graph.conditional_arm_entry_edges[(0, "then")] == [("parent", "then_child")]

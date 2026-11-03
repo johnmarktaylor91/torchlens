@@ -441,6 +441,14 @@ def compare_topology(a: Trace, b: Trace) -> TopologyDiff:
     architecture), the greedy scan can mis-pair them.  In those cases the
     user should treat the bundle as divergent and rely on per-trace
     accessors (``.outs``, not ``.out``).
+
+    Examples
+    --------
+    >>> first = tl.trace(model, x)
+    >>> second = tl.trace(model, torch.randn(1, 3, 8, 8))
+    >>> diff = tl.report.compare_topology(first, second)
+    >>> diff.is_identical, diff.unmatched_a
+    (True, [])
     """
 
     a_layers = _ordered_layers(a)

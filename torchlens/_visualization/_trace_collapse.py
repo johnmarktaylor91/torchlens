@@ -1,10 +1,11 @@
-"""Trace collapse functions reached from the records through ``_data_classes._doors.visualization``.
+"""Collapse diagnostics as ``f(trace, ...)`` functions.
 
-Bodies of ``Trace.module_collapse_order`` and ``collapse_order`` live here as
-``f(trace, ...)`` functions; the record keeps one thin method per name with its
-public docstring and forwards to these through the door. ``collapse_plan`` and
-``collapse_schedule`` are served by ``Drawing.collapse_plan`` and
-``Drawing.collapse_schedule`` on the retained trace.
+``module_collapse_order`` is the body of ``Trace.module_collapse_order`` (reached
+through ``_data_classes._doors.visualization``). ``collapse_plan`` and
+``collapse_schedule`` are the bodies of ``Drawing.collapse_plan`` and
+``Drawing.collapse_schedule``: ``Trace.draw`` hands them to the ``Drawing`` with
+the render request it resolved, so the plan is the one the picture shows.
+``collapse_order`` is the ranking the plan is built from, kept for internal use.
 """
 
 from __future__ import annotations
@@ -48,7 +49,7 @@ def collapse_order(
     trace: Trace,
     mode: Literal["auto", "max"] = "auto",
 ) -> list[tuple[str, float]]:
-    """Body of ``Trace.collapse_order``; the record keeps the thin spelling and docstring."""
+    """Smart-collapse ranking for a landmark policy (``(module_address, score)``, highest first)."""
 
     return _collapse_order(trace, mode=mode)
 
@@ -58,7 +59,7 @@ def collapse_plan(
     mode: Literal["auto", "max"] | float = "auto",
     context: RenderContext | None = None,
 ) -> CollapsePlan:
-    """Body of ``Drawing.collapse_plan``; the drawing carries the public docstring."""
+    """Body of ``Drawing.collapse_plan``: the renderer-faithful plan for ``mode`` under ``context``."""
 
     if isinstance(mode, float):
         if not 0.0 <= mode <= 1.0:
@@ -97,7 +98,7 @@ def collapse_schedule(
     trace: Trace,
     context: RenderContext | None = None,
 ) -> CollapseSchedule:
-    """Body of ``Drawing.collapse_schedule``; the drawing carries the public docstring."""
+    """Body of ``Drawing.collapse_schedule``: the monotone float schedule under ``context``."""
 
     resolved_context = RenderContext() if context is None else context
     return _collapse_schedule(trace, resolved_context)

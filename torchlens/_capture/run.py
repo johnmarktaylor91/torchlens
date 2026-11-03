@@ -139,7 +139,7 @@ def _fetch_label_move_input_tensors(
                 f"backend={spec.name!r} does not expose a shared capture Protocol adapter."
             )
         backend = spec.capture_backend()
-    return backend.fetch_label_move_input_tensors(
+    return backend._fetch_label_move_input_tensors(
         session,
         input_args,
         input_arg_names,

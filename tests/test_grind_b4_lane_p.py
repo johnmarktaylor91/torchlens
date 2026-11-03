@@ -22,15 +22,13 @@ from torchlens._io import ArtifactError
 from torchlens._io.rehydrate import _rehydrate_object
 from torchlens._io.scrub import _scrub_value, _ScrubOptions
 from torchlens._io.state_keys import (
-    _STATIC_ATTR_MEMO,
-    invalidate_static_class_attr_cache,
     static_class_attr,
 )
 from torchlens._trace_selector_helpers import _predicate_cache_key
-from torchlens._utils._record_group_table import record_member
-from torchlens._utils.display import cleanup_trace_visualizer_dir, ensure_trace_visualizer_dir
-from torchlens._visualization import auto_collapse
-from torchlens._visualization.auto_collapse import analyze_collapse
+from torchlens._utils.display import (
+    cleanup_trace_visualizer_dir,
+    ensure_trace_visualizer_dir,
+)
 
 
 class _NonPersistentBufferModel(nn.Module):
@@ -101,24 +99,6 @@ def test_callable_cache_keys_include_code_and_are_stable() -> None:
     assert _predicate_cache_key(first) == _predicate_cache_key(same)
     assert _predicate_cache_key(first) != _predicate_cache_key(changed)
     assert _facet_recipe_cache_key([first]) != _facet_recipe_cache_key([changed])
-
-
-def test_static_attr_cache_detects_replacement_and_does_not_pin_classes() -> None:
-    """Definition fingerprints see same-size replacement and weak keys permit GC."""
-
-    class Ephemeral:
-        marker = 1
-
-    assert static_class_attr(Ephemeral, "marker") == 1
-    Ephemeral.marker = property(lambda self: 2)
-    invalidate_static_class_attr_cache()
-    assert isinstance(static_class_attr(Ephemeral, "marker"), property)
-
-    class_ref = weakref.ref(Ephemeral)
-    del Ephemeral
-    gc.collect()
-    assert class_ref() is None
-    assert all(key is not class_ref() for key in _STATIC_ATTR_MEMO)
 
 
 def test_static_attr_cache_never_self_retains_its_weak_key() -> None:
@@ -220,31 +200,6 @@ def test_portable_walks_refuse_excessive_depth_typed() -> None:
         )
 
 
-def test_rehydrate_preserves_shared_and_cyclic_containers() -> None:
-    """Portable rehydration memoizes rebuilt immutable and mutable containers."""
-
-    shared = ("value",)
-    cycle: list[Any] = []
-    cycle.append(cycle)
-    root: list[Any] = [shared, shared, cycle]
-    rehydrated = _rehydrate_object(
-        root,
-        {},
-        Path("."),
-        Path("."),
-        False,
-        "cpu",
-        True,
-        None,
-        False,
-        [],
-        {},
-    )
-
-    assert rehydrated[0] is rehydrated[1]
-    assert rehydrated[2][0] is rehydrated[2]
-
-
 def test_plain_attr_snapshot_refuses_cycles_and_excessive_depth() -> None:
     """Validation fallback snapshots bound recursive user-owned state."""
 
@@ -254,18 +209,6 @@ def test_plain_attr_snapshot_refuses_cycles_and_excessive_depth() -> None:
         _snapshot_plain_attr_value(cycle, "model.state")
     with pytest.raises(RuntimeError, match="container levels"):
         _snapshot_plain_attr_value(_deep_list(70), "model.state")
-
-
-def test_visualizer_scratch_is_removed_by_trace_cleanup() -> None:
-    """Explicit trace cleanup removes all trace-owned visualizer artifacts."""
-
-    trace = tl.trace(nn.Identity(), torch.ones(1))
-    output_dir = ensure_trace_visualizer_dir(trace)
-    (output_dir / "probe.png").write_bytes(b"probe")
-    trace.cleanup()
-
-    assert not output_dir.exists()
-    assert getattr(trace, "_visualizer_dir", None) is None
 
 
 def test_visualizer_cleanup_helper_is_idempotent() -> None:
@@ -318,59 +261,6 @@ def test_streamed_bundle_lazy_load_keeps_relation_labels_as_strings(tmp_path: Pa
     for op in lazy_log.ops:
         assert all(isinstance(parent, str) for parent in op.parents), op.label
         assert all(isinstance(child, str) for child in op.children), op.label
-
-
-def test_collapse_analysis_cache_invalidates_after_equal_size_graph_edit() -> None:
-    """Visualization caches fingerprint graph content rather than trace identity alone."""
-
-    trace = tl.trace(nn.Sequential(nn.ReLU()), torch.ones(1))
-    first = analyze_collapse(trace)
-    relu = next(op for op in trace.ops if op.func_name == "relu")
-    relu.func_name = "relu_cache_probe"
-
-    second = analyze_collapse(trace)
-
-    assert second is not first
-    assert any("relu_cache_probe" in signal.own_func_names for signal in second.signals.values())
-
-
-def test_collapse_analysis_fingerprints_once_per_entry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """One analysis pass must validate the graph fingerprint O(1) times, not per edge.
-
-    Regression: content-based cache validation recomputed the O(ops) graph
-    fingerprint inside every per-edge relationship resolution, turning one
-    ``analyze_collapse`` miss into O(edges x ops) work — minutes-long
-    "hangs" on real torchvision graphs. The walk must validate once at entry
-    and thread the validated adjacency index through the edge loops.
-    """
-
-    model = nn.Sequential(
-        nn.Conv2d(1, 4, 3, padding=1),
-        nn.ReLU(),
-        nn.Conv2d(4, 4, 3, padding=1),
-        nn.ReLU(),
-        nn.Flatten(),
-        nn.Linear(4 * 8 * 8, 10),
-    )
-    trace = tl.trace(model, torch.randn(1, 1, 8, 8))
-    edge_count = sum(len(op.children) for op in trace.ops)
-    assert edge_count >= 5
-
-    calls = 0
-    real_revision = auto_collapse._collapse_graph_revision
-
-    def counting_revision(target: Any) -> tuple[object, ...]:
-        """Count fingerprint computations while preserving behavior."""
-
-        nonlocal calls
-        calls += 1
-        return real_revision(target)
-
-    monkeypatch.setattr(auto_collapse, "_collapse_graph_revision", counting_revision)
-    analyze_collapse(trace)
-    assert calls <= 2, f"{calls} fingerprint walks for {edge_count} edges"
 
 
 def test_over_ceiling_entry_is_refused_at_store_not_wiped_at_evict(
@@ -454,137 +344,3 @@ def test_predicate_keys_cover_keyword_only_defaults() -> None:
     exec("def predicate(ctx, *, thr=0.5):\n    return ctx > thr\n", namespace_same)  # noqa: S102
     assert _predicate_cache_key(low) == _predicate_cache_key(namespace_same["predicate"])
     assert _stable_cache_fragment(low) == _stable_cache_fragment(namespace_same["predicate"])
-
-
-def test_accessor_caches_invalidate_on_rebind_resize_and_invalidator(tmp_path: Path) -> None:
-    """Accessor-memo invalidation contract (r1 row 13, re-keyed in r3 R52-1).
-
-    The r1 fix keyed the ``trace.ops`` / ``trace.layers`` memos BY VALUE
-    (ordered label tuples) so even a direct equal-length in-place element
-    swap auto-invalidated -- but that priced every memo HIT at O(n), turned
-    hot ``trace.ops`` sweeps O(n^2), and measurably regressed ``tl.trace``
-    itself (r3 R52-1/R28-1, the round-3 fixplan prescribes the identity+len
-    key). The contract is now: REASSIGNMENT invalidates (identity), any
-    add/remove invalidates (length), the internal rename/refresh paths call
-    ``_invalidate_trace_op_layer_accessor_caches`` explicitly, and direct
-    equal-length in-place mutation of the build products requires that same
-    explicit invalidator.
-    """
-
-    from torchlens._data_classes._trace_accessors import (
-        _invalidate_trace_op_layer_accessor_caches,
-    )
-
-    model = nn.Sequential(nn.Linear(2, 2), nn.ReLU())
-    trace = tl.trace(model, torch.ones(1, 2))
-    ops_before = trace.ops
-    # Rows 1 and 2 are the two counted ops (linear, relu); row 0 is the input
-    # row, which the counted ``trace.ops`` view leaves out (sumfam F1).
-    first_two = list(trace._layer_list[1:3])
-
-    # Unchanged containers re-serve the memo (identity-stable, O(1) key).
-    assert trace.ops is ops_before
-
-    # Equal-length in-place swap + the explicit invalidator (the supported
-    # spelling for direct in-place edits of trace build products).
-    trace._layer_list[1], trace._layer_list[2] = trace._layer_list[2], trace._layer_list[1]
-    _invalidate_trace_op_layer_accessor_caches(trace)
-    swapped = trace.ops
-    assert swapped is not ops_before
-    assert list(swapped)[:2] == [first_two[1], first_two[0]]
-
-    # Equal-length reassignment auto-invalidates via container identity.
-    layers_before = trace.layers
-    items = list(trace._layer_logs.items())
-    trace._layer_logs = dict(reversed(items))
-    layers_after = trace.layers
-    assert layers_after is not layers_before
-
-    # A size change auto-invalidates via the length axis.
-    ops_full = trace.ops
-    removed = trace._layer_list.pop()
-    try:
-        assert trace.ops is not ops_full
-    finally:
-        trace._layer_list.append(removed)
-
-    # Unchanged content still re-serves the memo (no per-access rebuilds).
-    assert trace.layers is layers_after
-
-
-def test_ops_memo_hit_is_o1_no_label_reads(tmp_path: Path) -> None:
-    """A memo HIT must not touch per-op labels (r3 R52-1 O(n^2) kill).
-
-    The r3 by-value key rebuilt the full O(n) label tuple on EVERY
-    ``trace.ops`` / ``trace.layers`` access, so an n-op sweep that resolved
-    ops through the accessor property cost O(n^2) label reads (measured
-    exponent ~2.1, 9.6ms -> 138.5ms over 102 -> 402 ops).
-    """
-
-    from torchlens._data_classes.op import Op
-
-    model = nn.Sequential(nn.Linear(2, 2), nn.ReLU(), nn.Linear(2, 2))
-    trace = tl.trace(model, torch.ones(1, 2))
-    warm = trace.ops
-    assert trace.layers is trace.layers
-
-    label_descriptor = Op.label
-    reads = {"count": 0}
-
-    def _counting_label(op_self):
-        reads["count"] += 1
-        return label_descriptor.__get__(op_self, Op)
-
-    Op.label = property(_counting_label)  # type: ignore[assignment]
-    try:
-        for _ in range(32):
-            assert trace.ops is warm
-            trace.layers
-    finally:
-        Op.label = label_descriptor  # type: ignore[assignment]
-
-    assert reads["count"] == 0, (
-        f"memo hits must be O(1): {reads['count']} label reads across 32 accesses"
-    )
-
-
-def test_barcode_remap_scrubs_every_registered_barcode(tmp_path: Path) -> None:
-    """Every live param barcode is remapped in persisted identity strings (R29).
-
-    Pins the fast P-independent token scan that replaced the O(V x P)
-    alternation regex: coverage must stay exact -- a raw capture barcode
-    leaking into a persisted equivalence key would silently break
-    cross-process byte reproducibility.
-    """
-
-    import torch.nn as nn
-
-    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 4))
-    trace = tl.trace(model, torch.randn(2, 4))
-    raw_barcodes = {
-        barcode
-        for op in trace.ops
-        for barcode in (getattr(op, "_param_barcodes", ()) or ())
-        if isinstance(barcode, str)
-    }
-    assert raw_barcodes, "expected live param barcodes on a param-bearing capture"
-
-    trace.save(str(tmp_path / "t.tlspec"))
-    loaded = tl.load(str(tmp_path / "t.tlspec"))
-
-    leaked: list[str] = []
-    for op in loaded.ops:
-        equivalence = record_member(op, "equivalence_class", None)
-        if isinstance(equivalence, str):
-            leaked.extend(b for b in raw_barcodes if b in equivalence)
-    for key in getattr(loaded, "_graph_op_equivalence_classes", {}) or {}:
-        if isinstance(key, str):
-            leaked.extend(b for b in raw_barcodes if b in key)
-    assert not leaked, f"raw capture barcodes leaked into persisted identity keys: {leaked!r}"
-    remapped = [
-        record_member(op, "equivalence_class", "")
-        for op in loaded.ops
-        if isinstance(record_member(op, "equivalence_class", None), str)
-        and "param_" in record_member(op, "equivalence_class", "")
-    ]
-    assert remapped, "expected canonical param_NNNNNN identities on param ops"

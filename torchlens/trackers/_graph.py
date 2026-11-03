@@ -41,7 +41,14 @@ TIMING_EVIDENCE = "instrumented_host_bracket"
 
 @dataclass(frozen=True)
 class GraphNodeIR:
-    """One executed-op node: name, op kind, inputs, shapes, evidence."""
+    """One executed-op node: name, op kind, inputs, shapes, evidence.
+
+    Examples
+    --------
+    >>> node = GraphNodeIR(name="0/conv2d_1_1", op="conv2d", inputs=("input_1",), label="conv2d_1_1", shape=(1, 4, 8, 8))
+    >>> (node.op, node.inputs, node.shape)
+    ('conv2d', ('input_1',), (1, 4, 8, 8))
+    """
 
     name: str
     op: str
@@ -55,7 +62,17 @@ class GraphNodeIR:
 
 @dataclass(frozen=True)
 class GraphIR:
-    """The dep-free executed-DAG graph payload (sink capability ``graph``)."""
+    """The dep-free executed-DAG graph payload (sink capability ``graph``).
+
+    Examples
+    --------
+    >>> from torchlens.trackers import build_graph_ir
+    >>> ir = build_graph_ir(tl.trace(model, x))
+    >>> isinstance(ir, GraphIR) and len(ir.nodes) > 0
+    True
+    >>> (ir.coverage, ir.join_oracle())
+    ('executed_paths_only', ())
+    """
 
     nodes: tuple[GraphNodeIR, ...]
     device: str = "/device:CPU:0"
@@ -113,6 +130,13 @@ def node_name_for(layer: Any) -> str:
     Namespaces from ``module_call_stack`` (``module_address`` is verified
     empty on real models), with ``:`` replaced -- the same slash-grouped
     spelling the TB Graphs dashboard collapses on and the site tokens use.
+
+    Examples
+    --------
+    >>> from types import SimpleNamespace
+    >>> layer = SimpleNamespace(module_call_stack=("features", "features.0:1"), layer_label="conv2d_1_1")
+    >>> node_name_for(layer)
+    'features/features.0_1/conv2d_1_1'
     """
 
     stack = record_member(layer, "module_call_stack", None) or ()
@@ -133,6 +157,15 @@ def build_graph_ir(trace: Any, *, include_timing: bool = True) -> GraphIR:
     stock ``add_graph`` failure classes). Dynamic-path coverage is marked
     ``executed_paths_only`` -- one capture shows one taken path, disclosed,
     never guessed.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> ir = build_graph_ir(trace)
+    >>> len(ir.nodes) > 0
+    True
+    >>> ir.disclosures[0]
+    'memory_coloring: unavailable (no allocator source)'
     """
 
     layers = list(trace._layer_list or ())
@@ -196,6 +229,17 @@ def graph_ir_to_tensorboard(ir: GraphIR, logdir: str) -> str:
     ``FileWriter.add_graph`` entry point -- the exact path the 151/151
     real-resnet18 StepStats binding was measured through. Requires the
     tensorboard package (typed refusal naming the extra otherwise).
+
+    Examples
+    --------
+    >>> # requires: tensorboard
+    >>> import os, tempfile
+    >>> from torchlens.trackers import build_graph_ir
+    >>> with tempfile.TemporaryDirectory() as logdir:
+    ...     returned = graph_ir_to_tensorboard(build_graph_ir(tl.trace(model, x)), logdir)
+    ...     wrote = returned == logdir and len(os.listdir(logdir)) > 0
+    >>> wrote
+    True
     """
 
     try:

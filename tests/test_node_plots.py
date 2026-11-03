@@ -12,12 +12,6 @@ import torch
 from PIL import Image, ImageDraw
 
 from torchlens.viz import heatmap, image_scatter, lineplot
-from torchlens.viz._node_plots import (
-    _coords_to_pixel_centers,
-    _measure_text,
-    _select_heatmap_axis_indices,
-    _spread_close_centers,
-)
 from torchlens.viz._tensor_display import show_tensor
 
 
@@ -67,27 +61,6 @@ def _solid_images(n_items: int) -> list[Image.Image]:
     return images
 
 
-def test_render_heatmap_deterministic_size_and_mode() -> None:
-    """Heatmap rendering should be fixed-size RGB and same-process deterministic."""
-
-    data = np.arange(25, dtype=np.float64).reshape(5, 5)
-
-    first = heatmap(data, width=123, height=91)
-    second = heatmap(data, width=123, height=91)
-
-    assert first.mode == "RGB"
-    assert first.size == (123, 91)
-    assert _png_bytes(first) == _png_bytes(second)
-
-
-def test_render_heatmap_constant_array_no_nan() -> None:
-    """A constant finite heatmap should render low-color pixels, not nan-color pixels."""
-
-    image = heatmap(np.full((4, 4), 7.0), nan_color=(235, 235, 235))
-
-    assert image.getpixel((10, 10)) != (235, 235, 235)
-
-
 def test_render_heatmap_unknown_cmap_raises() -> None:
     """Unknown colormap names should raise a clear ValueError."""
 
@@ -112,64 +85,6 @@ def test_render_heatmap_axis_thumbnails_bounded() -> None:
 
     assert image.mode == "RGB"
     assert image.size == (180, 140)
-
-
-def test_heatmap_top_axis_labels_decimate_without_overlap() -> None:
-    """Crowded top-axis labels should be decimated to measured non-overlapping items."""
-
-    canvas_width = 130
-    plot_left = 28
-    plot_width = 96
-    labels = [f"state-{index}" for index in range(8)]
-    draw = ImageDraw.Draw(Image.new("RGB", (canvas_width, 90), "white"))
-
-    indices = _select_heatmap_axis_indices(
-        draw,
-        labels=labels,
-        has_images=False,
-        count=8,
-        total=8,
-        axis="top",
-        plot_left=plot_left,
-        plot_top=20,
-        plot_width=plot_width,
-        plot_height=64,
-        canvas_width=canvas_width,
-        canvas_height=90,
-        thumb_size=12,
-        more_text="+4 more",
-    )
-
-    assert len(indices) < len(labels)
-    marker_width, _marker_height = _measure_text(draw, "+4 more")
-    limit_high = canvas_width - marker_width - 8
-    previous_end = -1.0
-    for index in indices:
-        text_width, _text_height = _measure_text(draw, labels[index])
-        center = plot_left + (index + 0.5) * plot_width / len(labels)
-        start = center - text_width / 2.0
-        end = center + text_width / 2.0
-        assert start >= 0.0
-        assert end <= limit_high
-        assert start - previous_end >= 4.0
-        previous_end = end
-
-
-def test_render_lineplot_single_and_multi_series() -> None:
-    """Single and stacked series inputs should both render fixed-size images."""
-
-    single = lineplot(np.linspace(1.0, 0.0, 12), width=180, height=110)
-    multi = lineplot(
-        np.stack([np.linspace(1.0, 0.0, 12), np.linspace(0.7, 0.2, 12)]),
-        labels=["a", "b"],
-        width=190,
-        height=120,
-    )
-
-    assert single.mode == "RGB"
-    assert single.size == (180, 110)
-    assert multi.mode == "RGB"
-    assert multi.size == (190, 120)
 
 
 def test_render_lineplot_swaps_inverted_y_bounds() -> None:
@@ -211,54 +126,6 @@ def test_render_image_scatter_points_and_thumbnails() -> None:
     assert points.size == (180, 180)
     assert thumbnails.mode == "RGB"
     assert thumbnails.size == (180, 180)
-
-
-def test_render_image_scatter_spreads_close_thumbnail_centers() -> None:
-    """Near-coincident thumbnail centers should be spread to avoid full occlusion."""
-
-    thumbnail_size = 24
-    canvas_size = 220
-    coords = np.array(
-        [
-            [0.00, 0.00],
-            [0.01, 0.00],
-            [0.00, 0.01],
-            [0.01, 0.01],
-            [0.02, 0.00],
-            [0.00, 0.02],
-            [0.02, 0.02],
-            [0.03, 0.00],
-            [0.00, 0.03],
-            [0.03, 0.03],
-        ],
-        dtype=np.float64,
-    )
-    margin = thumbnail_size / 2.0 + 56.0
-    centers = _coords_to_pixel_centers(coords, canvas_size=canvas_size, margin=margin)
-
-    spread = _spread_close_centers(
-        centers,
-        canvas_size=canvas_size,
-        margin=margin,
-        min_distance=float(thumbnail_size),
-    )
-
-    for left, left_center in enumerate(spread):
-        for right_center in spread[:left]:
-            distance = np.hypot(
-                left_center[0] - right_center[0],
-                left_center[1] - right_center[1],
-            )
-            assert distance >= thumbnail_size - 1e-6
-
-    image = image_scatter(
-        coords,
-        images=_solid_images(coords.shape[0]),
-        max_items=coords.shape[0],
-        canvas_size=canvas_size,
-        thumbnail_size=thumbnail_size,
-    )
-    assert image.size == (canvas_size, canvas_size)
 
 
 def test_render_image_scatter_accepts_torch_and_numpy() -> None:

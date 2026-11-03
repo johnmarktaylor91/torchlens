@@ -133,9 +133,9 @@ quality planner is admitted when `U <= 2000` AND the predicted cost fits the bud
 - Only PATHOLOGICAL inputs (raw ops above 20x the constant) still decline outright:
   `draw` warns (`collapse_pathological_skip`) and renders a bounded top-level
   module overview plus an expansion manifest (forks.11 FK4; uncollapsed only when
-  the root has no child module), `Drawing.collapse_plan()` refuses typed (`collapse_plan_unavailable`, reason
-  `collapse_ops_ceiling`), and `Drawing.collapse_schedule()` degrades to its single
-  full-graph step.
+  the root has no child module), a forward drawing's `Drawing.collapse_plan` refuses typed
+  (`collapse_plan_unavailable`, reason `collapse_ops_ceiling`), and its `Drawing.collapse_schedule`
+  degrades to a single full-graph step.
 - Over-ceiling residuals (forks.11 FK4, DOCUMENTED-UNSTABLE): when the served
   overview is still above the readable band -- a floor-fallback plan, or the
   pathological top-level overview -- `draw` writes `<outpath>.expansion.json` beside
@@ -156,15 +156,33 @@ The decline is disclosed, never silent. To get a collapsed view of a very large 
 the rendered graph first with `module=` focus, `depth=`, or rolled mode; `fold_repeats`
 and `show_containers` styling are unaffected.
 
-## `collapse_plan()` diagnostics
+## `Drawing.collapse_plan` diagnostics
 
-`Drawing.collapse_plan(mode=...)` exposes the renderer-faithful plan for one requested mode. The
-diagnostics live on the draw result, so draw the trace and ask the drawing
-(`trace.draw(path).collapse_plan("max")`); a `tl.draw` picture or a closed drawing keeps no trace and
-refuses with the typed `trace_cleaned_up` error.
-`Drawing.collapse_schedule()` exposes its ordered float steps, targets, visible counts, and collapsed
-module addresses. Use these diagnostics to inspect a rendering decision rather than inferring it
-from pixels.
+The `Drawing` a forward `trace.draw(...)` returns carries the diagnostics for the picture it
+rendered. `Drawing.collapse_plan` is the renderer-faithful plan the drawing was built from: its
+mode is the draw call's `collapse=` (`"auto"`, `"max"`, or a float level) and its context is the
+render request the draw resolved, so rolled or unrolled, `module=` focus, `depth=`, and theme all
+follow the draw call. `Drawing.collapse_schedule` exposes the ordered float steps, targets, visible
+counts, and collapsed module addresses under that same context. Use these diagnostics to inspect a
+rendering decision rather than inferring it from pixels.
+
+```python
+import torch
+from torch import nn
+
+import torchlens as tl
+
+model = nn.Sequential(nn.Linear(4, 4), nn.ReLU()).eval()
+trace = tl.trace(model, torch.randn(2, 4))
+drawing = trace.draw(collapse="auto", file_format="dot")
+plan = drawing.collapse_plan
+schedule = drawing.collapse_schedule
+level_plan = trace.draw(collapse=0.5, file_format="dot").collapse_plan
+```
+
+Both properties refuse typed (`collapse_plan_unavailable`) for a backward or combined graph, an
+animation, or once the source trace has been released; `collapse_plan` also refuses for a drawing
+made with `collapse="none"`, which has no plan. To compare modes, make one draw call per mode.
 
 ![Collapse plan and schedule diagnostics](../images/collapse/diagnostics.svg)
 

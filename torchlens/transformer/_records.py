@@ -125,6 +125,14 @@ class TokenAxis:
         Display strings, one per axis position, never merged.
     ids:
         Optional tokenizer ids aligned with ``tokens``.
+
+    Examples
+    --------
+    >>> axis = tl.transformer.TokenAxis(role="query", tokens=("The", "cat", "sat"))
+    >>> len(axis)
+    3
+    >>> axis.role
+    'query'
     """
 
     role: str
@@ -169,6 +177,12 @@ class EpisodeCoordinates:
         ``"interrupted"`` / ``"absent"``).
     member:
         Optional bundle member label when the record came from a Bundle.
+
+    Examples
+    --------
+    >>> coords = tl.transformer.EpisodeCoordinates(step=0, role="prefill")
+    >>> coords.step, coords.role, coords.completion
+    (0, 'prefill', 'complete')
     """
 
     step: int
@@ -204,6 +218,13 @@ class MaskInfo:
     source:
         One of ``"sdpa_call_args"``, ``"eager_additive_mask"``,
         ``"user_metadata"``.
+
+    Examples
+    --------
+    >>> causal = torch.triu(torch.ones(3, 3, dtype=torch.bool), diagonal=1)
+    >>> info = tl.transformer.MaskInfo(mask=causal, source="user_metadata")
+    >>> int(info.mask.sum())
+    3
     """
 
     mask: torch.Tensor
@@ -241,6 +262,14 @@ class CropInfo:
     omitted_mass_max:
         Maximum probability mass omitted from any kept destination row --
         measured on the UNCROPPED pattern, so the disclosure is exact.
+
+    Examples
+    --------
+    >>> crop = tl.transformer.CropInfo(
+    ...     query_range=(0, 2), key_range=(0, 2), omitted_keys=1, omitted_mass_max=0.25
+    ... )
+    >>> crop.disclosure().startswith("cropped: keys 0..1, queries 0..1")
+    True
     """
 
     query_range: tuple[int, int]
@@ -270,6 +299,14 @@ class GqaInfo:
     num_key_value_heads:
         Number of key/value heads (groups); shared storage is never
         presented as independent heads.
+
+    Examples
+    --------
+    >>> gqa = tl.transformer.GqaInfo(num_query_heads=8, num_key_value_heads=2)
+    >>> gqa.group(5)
+    1
+    >>> gqa.query_heads(1)
+    (4, 5, 6, 7)
     """
 
     num_query_heads: int
@@ -427,6 +464,21 @@ class AttentionView:
         Optional grouped-query-attention disclosure.
     episode:
         Optional episode coordinates (tviz memo D22).
+
+    Examples
+    --------
+    >>> toks = ("a", "b", "c")
+    >>> view = tl.transformer.AttentionView(
+    ...     pattern=torch.full((2, 3, 3), 1 / 3),
+    ...     query_tokens=tl.transformer.TokenAxis("query", toks),
+    ...     key_tokens=tl.transformer.TokenAxis("key", toks),
+    ...     heads=(0, 1),
+    ...     layer="blocks.0.attn",
+    ... )
+    >>> tuple(view.pattern.shape), view.provenance
+    ((2, 3, 3), 'captured')
+    >>> tuple(view.head_view(1).pattern.shape)
+    (1, 3, 3)
     """
 
     pattern: torch.Tensor
@@ -566,6 +618,12 @@ class TokenScoreRow:
     scores:
         One float per token; ``None`` marks a not-applicable cell (rendered
         N/A, never zero).
+
+    Examples
+    --------
+    >>> row = tl.transformer.TokenScoreRow(label="saliency", scores=(0.5, None, -0.25))
+    >>> row.label, len(row.scores)
+    ('saliency', 3)
     """
 
     label: str
@@ -595,6 +653,15 @@ class TokenScores:
         Producer description (method + source).
     ids:
         Optional tokenizer ids aligned with ``tokens``.
+
+    Examples
+    --------
+    >>> row = tl.transformer.TokenScoreRow(label="saliency", scores=(0.5, -0.25, 0.1))
+    >>> scores = tl.transformer.TokenScores(tokens=("the", "cat", "sat"), rows=(row,))
+    >>> scores.domain
+    'zero_centered_diverging'
+    >>> len(scores.rows)
+    1
     """
 
     tokens: tuple[str, ...]
@@ -688,6 +755,18 @@ class PredictionTrajectory:
         for user lenses, rendered as unvalidated.
     tie_convention:
         Recorded rank tie convention.
+
+    Examples
+    --------
+    >>> trajectory = tl.transformer.PredictionTrajectory(
+    ...     module_addresses=("blocks.0", "blocks.1"),
+    ...     provenance=("projected through final norm/head", "native output"),
+    ...     position=-1,
+    ...     top_tokens=(("a", "b"), ("c", "a")),
+    ...     top_probs=((0.5, 0.2), (0.9, 0.05)),
+    ... )
+    >>> len(trajectory.module_addresses), trajectory.lens_source
+    (2, 'model_head')
     """
 
     module_addresses: tuple[str, ...]
@@ -739,6 +818,19 @@ class PredictionTable:
         ``[n_positions][k]`` full-vocabulary-denominator probabilities.
     provenance:
         Source wording (native output vs projected).
+
+    Examples
+    --------
+    >>> table = tl.transformer.PredictionTable(
+    ...     positions=(0, 1),
+    ...     context_tokens=("The", "cat"),
+    ...     top_tokens=(("cat", "dog"), ("sat", "ran")),
+    ...     top_probs=((0.6, 0.2), (0.5, 0.3)),
+    ... )
+    >>> table.provenance
+    'native output'
+    >>> len(table.positions)
+    2
     """
 
     positions: tuple[int, ...]
@@ -777,6 +869,16 @@ class TokenMetrics:
     source_fingerprint:
         Fingerprint of the ONE logits tensor both metrics were computed
         from -- the position-alignment proof travels with the record.
+
+    Examples
+    --------
+    >>> loss, entropy = tl.transformer.token_metrics(
+    ...     torch.randn(3, 5), torch.tensor([0, 1, 2]), ("a", "b", "c")
+    ... )
+    >>> loss.metric, entropy.metric
+    ('loss', 'entropy')
+    >>> loss.values[0] is None
+    True
     """
 
     tokens: tuple[str, ...]
@@ -836,6 +938,17 @@ class ScoreDecomposition:
         The captured scores-facet value this decomposition claims to equal.
     tolerance:
         Closure tolerance used by the invariant.
+
+    Examples
+    --------
+    >>> q = torch.tensor([1.0, 2.0, 3.0, 4.0])
+    >>> k = torch.ones(4)
+    >>> decomp = tl.transformer.ScoreDecomposition(
+    ...     layer="blocks.0.attn", head=0, destination=1, source=0,
+    ...     query_vector=q, key_vector=k, products=q * k, scale=2.0, reference_score=5.0,
+    ... )
+    >>> decomp.total
+    5.0
     """
 
     layer: str
@@ -975,6 +1088,17 @@ class CausalReceipt:
     baseline_run:
         Which run ``baseline_metric`` comes from, as printed on the figure
         (``"unpatched corrupted run"`` for a patch-grid receipt).
+
+    Examples
+    --------
+    >>> receipt = tl.transformer.CausalReceipt(
+    ...     module_address="blocks.0.attn", heads=(0, 1), effects=(0.5, None),
+    ...     metric="logit difference", intervention="head contribution zeroed",
+    ...     engine="rerun", disclosure="direct", fires=2,
+    ...     negative_control=0.0, positive_control=1.0, joint_effect=0.4,
+    ... )
+    >>> receipt.unit, receipt.num_measured_heads
+    ('head', 1)
     """
 
     module_address: str
@@ -1077,6 +1201,15 @@ class Annotation:
         Kind legend line.
     receipt:
         The validating receipt; REQUIRED for ``intervention_effect``.
+
+    Examples
+    --------
+    >>> note = tl.transformer.Annotation(
+    ...     kind="descriptive_head_score", heads=(0, 1), values=(0.3, None),
+    ...     source="mean attention entropy",
+    ... )
+    >>> note.kind, len(note.heads)
+    ('descriptive_head_score', 2)
     """
 
     kind: str
@@ -1165,6 +1298,17 @@ class SavedFigure:
         is the editing opt-in), recorded per the memo's manifest rule.
     num_pages:
         Total page count (equals ``len(paths)`` for file output).
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> row = tl.transformer.TokenScoreRow(label="score", scores=(0.5, -0.5))
+    >>> strip = tl.transformer.TokenScores(tokens=("a", "b"), rows=(row,))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     saved = tl.viz.token_strip(strip, pathlib.Path(tmp) / "strip.png")
+    ...     n_files = len(saved.paths)
+    >>> type(saved).__name__, saved.file_format, n_files
+    ('SavedFigure', 'png', 1)
     """
 
     paths: tuple[Path, ...]

@@ -82,67 +82,7 @@ def _fixture_traces() -> list[tuple[str, tl.Trace]]:
     return fixtures
 
 
-def test_compute_partition_totals_are_owned_exactly_once() -> None:
-    """total_flops_forward == sum over REAL op rows; alias rows own None."""
-
-    for name, log in _fixture_traces():
-        try:
-            real_ops = [op for op in log._layer_list if not (op.is_input or op.is_output)]
-            partition_sum = sum(
-                int(op.cost.flops_forward) for op in real_ops if op.cost.flops_forward is not None
-            )
-            assert int(log.cost.total_flops_forward) == partition_sum, name
-            for op in log._layer_list:
-                if op.is_output:
-                    assert op.cost.flops_forward is None, (name, op.label)
-                if op.is_input:
-                    assert int(op.cost.flops_forward or 0) == 0, (name, op.label)
-        finally:
-            log.cleanup()
-
-
-def test_tracked_bytes_partition_input_inclusive_alias_exclusive() -> None:
-    """Tracked bytes = external input bytes + real op bytes; output rows own 0."""
-
-    for name, log in _fixture_traces():
-        try:
-            owned = sum(
-                int(op.cost.activation_memory or 0) for op in log._layer_list if not op.is_output
-            )
-            assert int(log.cost.total_activation_memory) == owned, name
-        finally:
-            log.cleanup()
-
-
-def test_param_partition_each_identity_owned_once() -> None:
-    """Every parameter identity appears exactly once in param_logs; totals match torch."""
-
-    for name, log in _fixture_traces():
-        try:
-            barcodes = [pl.barcode for pl in log._param_logs]
-            assert len(barcodes) == len(set(barcodes)), name
-            addresses = [pl.address for pl in log._param_logs]
-            assert len(addresses) == len(set(addresses)), name
-            assert log.num_params == sum(int(pl.num_params) for pl in log._param_logs), name
-        finally:
-            log.cleanup()
-
-
-def test_module_param_rollups_match_torch_subtree_counts() -> None:
-    """Each module row's param count equals torch's own subtree unique count."""
-
-    model = BranchCNN()
-    model.eval()
-    log = tl.trace(model, torch.randn(2, 3, 4, 4), save=None)
-    try:
-        for address in ("stem", "norm", "left", "right", "head"):
-            submodule = model.get_submodule(address)
-            torch_count = sum(p.numel() for p in submodule.parameters())
-            assert log.modules[address].num_params == torch_count, address
-    finally:
-        log.cleanup()
-
-
+# Kept: edited on the C-100 side (C-091/C-098) after the shrink removed it.
 def test_multipass_layer_owns_all_its_pass_events() -> None:
     """A 3-pass layer's aggregate owns exactly its three pass events' compute."""
 

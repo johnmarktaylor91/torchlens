@@ -68,6 +68,21 @@ class CaptureAttemptFailedWarning(RuntimeWarning, TorchLensWarning):
     exception actually propagates. A successful rescue swallows the failure,
     so the deferred advisory is dropped; every path that re-raises flushes it
     first.
+
+    Examples
+    --------
+    >>> import warnings
+    >>> class Boom(nn.Module):
+    ...     def forward(self, t):
+    ...         raise RuntimeError("mid-forward failure")
+    >>> with warnings.catch_warnings(record=True) as caught:
+    ...     warnings.simplefilter("always")
+    ...     try:
+    ...         _ = tl.trace(Boom(), x)
+    ...     except tl.errors.TraceCaptureError:
+    ...         pass
+    >>> any(w.category is CaptureAttemptFailedWarning for w in caught)
+    True
     """
 
 

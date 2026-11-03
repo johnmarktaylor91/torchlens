@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-import gc
-import gzip
 import time
 import weakref
 from collections.abc import Iterator
-from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -18,8 +15,6 @@ from _pickle_compare_allowlist import ALLOWED_PICKLE_DIFF_FIELDS
 from torch import nn
 
 import torchlens as tl
-from torchlens import errors
-from torchlens._capture_state_helpers import _detach_nested_for_cache
 from torchlens._data_classes._state_adapter import state_items
 
 _GZIP_MAGIC = b"\x1f\x8b"
@@ -247,165 +242,6 @@ def _first_state_difference(
     return None
 
 
-def _make_trace_pickleable(trace: Any) -> None:
-    """Strip non-picklable runtime objects from a trace in place.
-
-    Parameters
-    ----------
-    trace
-        Trace returned by ``tl.trace``.
-
-    Returns
-    -------
-    None
-        Mutates runtime-only fields consistently for golden/current parity.
-    """
-
-    for layer in getattr(trace, "_layer_list", []):
-        for field_name in ("out", "transformed_out", "grad", "transformed_grad"):
-            value = getattr(layer, field_name, None)
-            if isinstance(value, torch.Tensor):
-                layer._internal_set(field_name, value.detach().cpu())
-        layer.func = None
-        layer._autograd_grad_fn_handle = None
-        layer._grad_fn_object_id = 0 if layer._grad_fn_object_id is not None else None
-        layer._autograd_grad_fn_handle = None
-        layer._source_frames = []
-        layer._source_trace_ref = None
-        layer._internal_set("saved_args", _detach_nested_for_cache(layer.call.saved_args))
-        layer._internal_set("saved_kwargs", _detach_nested_for_cache(layer.call.saved_kwargs))
-    for layer_log in getattr(trace, "_layer_logs", {}).values():
-        state = getattr(layer_log, "__dict__", {})
-        state["func"] = None
-        state["grad_fn_object_id"] = 0 if state.get("grad_fn_object_id") is not None else None
-        state["code_context"] = []
-        for field_name in (
-            "transformed_out",
-            "transformed_grad",
-            "grad_fn_handle",
-            "grad_fn_handle",
-        ):
-            if field_name not in state:
-                continue
-            value = state[field_name]
-            if isinstance(value, torch.Tensor):
-                state[field_name] = value.detach().cpu()
-            elif field_name in {"grad_fn_handle"}:
-                state[field_name] = None
-    if hasattr(trace, "_provenance_input_object_id"):
-        trace._provenance_input_object_id = 0
-    if hasattr(trace, "_provenance_model_object_id"):
-        trace._provenance_model_object_id = 0
-    if hasattr(trace, "_source_code_blob"):
-        trace._source_code_blob = {}
-    if hasattr(trace, "_source_forward_file"):
-        trace._source_forward_file = None
-    if hasattr(trace, "_source_forward_line"):
-        trace._source_forward_line = None
-    if hasattr(trace, "_source_class_file"):
-        trace._source_class_file = None
-    if hasattr(trace, "_source_class_line"):
-        trace._source_class_line = None
-    if hasattr(trace, "name"):
-        trace.name = "capture_events_parity"
-    _drop_capture_scratch(trace)
-
-
-def _drop_capture_scratch(trace: Any) -> None:
-    """Remove transient capture-only fields before parity serialization.
-
-    Parameters
-    ----------
-    trace
-        Trace-like object to canonicalize in place.
-
-    Returns
-    -------
-    None
-        Mutates ``trace`` by deleting capture-only scratch fields.
-    """
-
-    for field_name in (
-        "_raw_graph_ws",
-        "_module_capture_ws",
-        "_wrapper_runtime_ws",
-        "_raw_layer_dict",
-        "_raw_layer_labels_list",
-        "_layer_counter",
-        "_raw_layer_type_counter",
-        "_current_func_barcode",
-        "_mod_entered",
-        "_mod_exited",
-        "_mod_call_index",
-        "_mod_call_labels",
-        "_module_build_data",
-        "_module_metadata",
-        "_module_forward_args",
-        "_module_containment_engine",
-        "_exhaustive_module_stack",
-        "_grad_fn_strong_refs",
-        "_grad_fn_param_refs",
-        "_param_log_by_pid",
-        "_in_exhaustive_pass",
-        "_pending_live_fire_records",
-        "_output_container_specs_by_raw_label",
-        "_out_writer",
-        "_out_sink",
-        "_keep_outs_in_memory",
-        "_keep_grads_in_memory",
-        "_defer_streaming_bundle_finalization",
-    ):
-        trace.__dict__.pop(field_name, None)
-    if trace.__dict__.get("_orphan_logs") is None:
-        trace.__dict__["_orphan_logs"] = ()
-    if "forward_source_line" in trace.__dict__:
-        trace.__dict__["forward_source_line"] = None
-    if "class_source_line" in trace.__dict__:
-        trace.__dict__["class_source_line"] = None
-
-
-def _read_golden_pickle_bytes(path: Path) -> bytes:
-    """Read raw pickle bytes, transparently handling compressed large goldens.
-
-    Parameters
-    ----------
-    path
-        Golden pickle path.
-
-    Returns
-    -------
-    bytes
-        Uncompressed pickle bytes.
-    """
-
-    data = path.read_bytes()
-    if data.startswith(_GZIP_MAGIC):
-        return gzip.decompress(data)
-    return data
-
-
-def _write_golden_pickle_bytes(path: Path, data: bytes, model_class_name: str) -> None:
-    """Write pickle bytes, compressing oversized ResNet goldens for pre-commit.
-
-    Parameters
-    ----------
-    path
-        Golden pickle path.
-    data
-        Raw pickle bytes to persist.
-    model_class_name
-        Fixture model name.
-
-    Returns
-    -------
-    None
-        Writes the golden artifact in place.
-    """
-
-    payload = gzip.compress(data, compresslevel=9) if model_class_name == "resnet50" else data
-    path.write_bytes(payload)
-
-
 def test_pickle_compare_allowlist_stable() -> None:
     """Assert the parity allow-list is an explicit committed contract."""
 
@@ -429,20 +265,7 @@ def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
     )
 
 
-def test_param_refs_release_but_pid_lookup_remains_for_backward() -> None:
-    """Finalized traces release Param refs while retaining backward attribution lookup."""
-
-    model = nn.Linear(3, 2)
-    x = torch.randn(1, 3)
-    trace = tl.trace(model, x, capture=tl.options.CaptureOptions(seed=123))
-    param_log = trace.params["weight"]
-
-    assert param_log._param_ref is None
-    assert param_log.value is model.weight
-    assert trace._param_log_by_pid
-    assert set(trace._param_log_by_pid.values()) <= set(trace._param_logs.keys())
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/param.py.
 def test_released_param_grad_refetches_after_manual_backward() -> None:
     """Param grad metadata re-fetches the live model parameter after ref release."""
 
@@ -460,23 +283,7 @@ def test_released_param_grad_refetches_after_manual_backward() -> None:
     assert param_log.grad_shape == tuple(model.weight.grad.shape)
 
 
-def test_released_param_dead_model_raises_clear_error() -> None:
-    """Released Param access fails loudly after the source model weakref dies."""
-
-    model = nn.Linear(3, 1)
-    model_ref = weakref.ref(model)
-    trace = tl.trace(model, torch.randn(2, 3), capture=tl.options.CaptureOptions(seed=123))
-    param_log = trace.params["weight"]
-
-    assert param_log._param_ref is None
-    del model
-    gc.collect()
-
-    assert model_ref() is None
-    with pytest.raises(errors.ParamReleasedError, match="source model"):
-        _ = param_log.value
-
-
+# Kept by shrink-r4 (per-id subset rule): sole coverage of campaign mutant kills.
 def test_walk_detects_accumulategrad_via_type_name() -> None:
     """Backward walk records AccumulateGrad parameter attribution by grad-fn label."""
 

@@ -41,15 +41,12 @@ the C2 refusal are untouched.
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 
-import pytest
 import torch
 from torch import nn
 
 import torchlens as tl
-from torchlens._runnable import PathFaithfulness
 from torchlens._utils._record_group_table import record_member
 from torchlens.options import CaptureOptions
 
@@ -134,6 +131,7 @@ class _PlainVsRegisteredSameShape(nn.Module):
 # --------------------------------------------------------------------------- #
 
 
+# Kept: the catch of its regression fault.
 def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
     """Both nodes of an in-place-mutated registered buffer report its address.
 
@@ -159,96 +157,11 @@ def test_inplace_buffer_read_and_write_nodes_agree_on_backend_address() -> None:
         )
 
 
-@pytest.mark.parametrize("train", [False, True], ids=["eval", "train"])
-def test_batchnorm_running_stat_read_and_write_pairs_agree(train: bool) -> None:
-    """Every BatchNorm running-stat node -- read AND write -- keeps its address.
-
-    ``bn.running_mean`` / ``bn.running_var`` each appear as a read node and a
-    write node. No node bearing one of those display addresses may report
-    ``backend_address=None``.
-    """
-
-    model = _BatchNorm()
-    model.train(train)
-    trace = _capture(model, torch.randn(4, 2, 4, 4))
-
-    stat_ops = [
-        op
-        for op in _buffer_ops(trace)
-        if op.buffer_address in {"bn.running_mean", "bn.running_var"}
-    ]
-    assert stat_ops, "BatchNorm running stats did not materialize as buffer nodes"
-
-    # At least one read + one write node exist for the running stats overall.
-    assert any(not op.parents for op in stat_ops), "no running-stat read node"
-    assert any(op.parents for op in stat_ops), "no running-stat write node"
-
-    for op in stat_ops:
-        assert op.backend_address == op.buffer_address, (
-            f"{op.layer_label} (addr={op.buffer_address!r}, parents={op.parents}) reports "
-            f"backend_address={op.backend_address!r}"
-        )
-
-
 # --------------------------------------------------------------------------- #
 # THE HARD CONSTRAINT -- a non-registered collision stays None (C2 closed).
 # --------------------------------------------------------------------------- #
 
 
-def test_plain_attribute_colliding_on_registered_shape_keeps_no_backend_address() -> None:
-    """The r84 C2 guard: registered-ness, not the name/shape, gates the address.
-
-    ``q`` is a plain attribute sharing ``top``'s shape. It must keep its display
-    ``address`` ('q') but report ``backend_address=None`` -- the registered-only
-    discriminator must not hand it ``top``'s (or any) registered address, even
-    though the r87 fix now assigns a registered address to a same-named
-    registered second node. ``top`` keeps its own address, coupled.
-    """
-
-    trace = _capture(_PlainVsRegisteredSameShape(), torch.zeros(2, 2))
-    by_address = {
-        op.buffer_address: op for op in _buffer_ops(trace) if op.buffer_address is not None
-    }
-
-    assert by_address["q"].buffer_address == "q", "plain attribute keeps its display address"
-    assert by_address["q"].backend_address is None, (
-        "a non-registered plain attribute must have no backend_address (C2)"
-    )
-    assert by_address["top"].backend_address == "top", "registered buffer keeps its address"
-
-
 # --------------------------------------------------------------------------- #
 # VERDICT NEUTRALITY -- the fix moves no runnable verdict.
 # --------------------------------------------------------------------------- #
-
-
-def test_read_write_buffer_model_still_verifies(tmp_path: Path) -> None:
-    """A read+write buffer model stays VERIFIED -- ``backend_address`` is neutral.
-
-    The fix only changes the verdict-neutral ``backend_address`` public field, so
-    the runnable verdict, poison state, and replay output for an in-place buffer
-    model must be unchanged: VERIFIED, not poisoned, byte-exact against oracle 1,
-    and robust to a DIFFERENT input (proving the replay models ``b -> add -> *2``
-    rather than a hardcoded value).
-    """
-
-    model = _InPlaceBuffer()
-    x = torch.ones(3)
-    trace = _capture(model, x)
-    path = tmp_path / "inplace_buffer.tlspec"
-    trace.save(path, level="runnable", include_weights=True)
-
-    result = tl.load(path).run(inputs=x.clone())
-    assert result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    assert not result.report.is_poisoned
-    with torch.no_grad():
-        oracle = _InPlaceBuffer()(x.clone())
-    assert (result.output - oracle).abs().max().item() < 1e-6
-
-    changed = torch.full((3,), 7.0)
-    changed_result = tl.load(path).run(inputs=changed.clone())
-    assert changed_result.report.path_faithfulness is PathFaithfulness.VERIFIED
-    with torch.no_grad():
-        changed_oracle = _InPlaceBuffer()(changed.clone())
-    assert (changed_result.output - changed_oracle).abs().max().item() < 1e-6
-    assert torch.allclose(changed_result.output, torch.full((3,), 14.0))

@@ -165,7 +165,16 @@ class WitnessCompleteness(str, Enum):
 
 
 class PathFaithfulness(str, Enum):
-    """Honesty states reported by a completed sparse run."""
+    """Honesty states reported by a completed sparse run.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report.path_faithfulness in PathFaithfulness
+    True
+    >>> PathFaithfulness("verified") is PathFaithfulness.VERIFIED
+    True"""
 
     VERIFIED = "verified"
     DIVERGED = "diverged"
@@ -180,14 +189,32 @@ class DivergencePolicy(str, Enum):
 
 
 class ReadinessStatus(str, Enum):
-    """Overall non-executing runnable readiness states."""
+    """Overall non-executing runnable readiness states.
+
+    Examples
+    --------
+    >>> [status.value for status in ReadinessStatus]
+    ['ready', 'unavailable']
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report.readiness.status in ReadinessStatus
+    True"""
 
     READY = "ready"
     UNAVAILABLE = "unavailable"
 
 
 class RunProvider(str, Enum):
-    """Providers selected by the unified ``Trace.run`` contract."""
+    """Providers selected by the unified ``Trace.run`` contract.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report.readiness.provider is RunProvider.LIVE
+    True
+    >>> RunProvider("loaded_sparse") is RunProvider.LOADED_SPARSE
+    True"""
 
     LIVE = "live"
     LOADED_SPARSE = "loaded_sparse"
@@ -205,7 +232,16 @@ class StateSource(str, Enum):
 
 
 class NumericAttestationStatus(str, Enum):
-    """Result states for the optional saved-activation oracle."""
+    """Result states for the optional saved-activation oracle.
+
+    Examples
+    --------
+    >>> NumericAttestationStatus.ATTESTED.value
+    'attested'
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> report.numeric_attestation in NumericAttestationStatus
+    True"""
 
     ATTESTED = "attested"
     NUMERIC_ATTESTATION_FAILED = "numeric_attestation_failed"
@@ -1167,7 +1203,17 @@ class RunnableRngProfile:
 
 @dataclass(frozen=True, slots=True)
 class RunnableCompatibility:
-    """Producer/runtime versions recorded for readiness diagnostics."""
+    """Producer/runtime versions recorded for readiness diagnostics.
+
+    Examples
+    --------
+    >>> compat = RunnableCompatibility(
+    ...     torchlens_version="2.0.0", python_version="3.10", backend_version="2.5.0",
+    ...     descriptor_version="1", call_recipe_version="1", callable_ref_schema_version=1,
+    ...     initializer_policy_version="torchlens_role_init_v2",
+    ... )
+    >>> compat.callable_ref_schema_version, compat.python_version
+    (1, '3.10')"""
 
     torchlens_version: str
     python_version: str
@@ -1180,7 +1226,17 @@ class RunnableCompatibility:
 
 @dataclass(frozen=True, slots=True)
 class RunnableDiagnostic:
-    """Structured diagnostic shared by preflight, readiness, and run reports."""
+    """Structured diagnostic shared by preflight, readiness, and run reports.
+
+    Examples
+    --------
+    >>> import dataclasses
+    >>> [field.name for field in dataclasses.fields(RunnableDiagnostic)][:3]
+    ['code', 'message', 'registry_id']
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> all(c.diagnostic is None or isinstance(c.diagnostic, RunnableDiagnostic) for c in report.contract_checks)
+    True"""
 
     code: RunnableErrorCode
     message: str
@@ -1388,7 +1444,18 @@ class ResolverRecord:
 
 @dataclass(frozen=True, slots=True)
 class ReadinessReport:
-    """Complete non-executing readiness report for a Trace provider."""
+    """Complete non-executing readiness report for a Trace provider.
+
+    Examples
+    --------
+    >>> import pathlib, tempfile
+    >>> trace = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    >>> with tempfile.TemporaryDirectory() as tmp:
+    ...     path = pathlib.Path(tmp) / "model.tlspec"
+    ...     _ = trace.save(path, level="runnable")
+    ...     readiness = tl.load(path).readiness
+    >>> isinstance(readiness, ReadinessReport), readiness.status.value
+    (True, 'ready')"""
 
     status: ReadinessStatus
     provider: RunProvider
@@ -1413,7 +1480,17 @@ class ReadinessReport:
 
 @dataclass(frozen=True, slots=True)
 class ContractCheck:
-    """One contract check recorded in a run report."""
+    """One contract check recorded in a run report.
+
+    Examples
+    --------
+    >>> check = ContractCheck(name="demo", passed=True, diagnostic=None)
+    >>> check.passed
+    True
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> all(isinstance(c, ContractCheck) for c in report.contract_checks)
+    True"""
 
     name: str
     passed: bool
@@ -1499,6 +1576,13 @@ class RunReport:
     declared-nondeterministic path-only ``verified`` (an unseeded ``torch.rand``
     or an uninitialized ``empty`` product escaping to the output) from a
     deterministic ``verified``; it never alters verdict semantics.
+
+    Examples
+    --------
+    >>> trace = tl.trace(model, x)
+    >>> report = trace.run(inputs=torch.randn(1, 3, 8, 8)).report
+    >>> isinstance(report, RunReport), report.truncated
+    (True, False)
     """
 
     readiness: ReadinessReport
