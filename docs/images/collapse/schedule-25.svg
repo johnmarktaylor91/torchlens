@@ -181,7 +181,7 @@
 <g id="node7" class="node">
 <title>conv2d_6_17pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="351.75,-961.11 48.25,-961.11 48.25,-854.36 351.75,-854.36 351.75,-961.11"/>
-<text xml:space="preserve" text-anchor="start" x="157.62" y="-942.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_6_19</text>
+<text xml:space="preserve" text-anchor="start" x="157.62" y="-942.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_6_17</text>
 <text xml:space="preserve" text-anchor="start" x="132.5" y="-922.06" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="58.25" y="-902.31" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="110" y="-882.56" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128, 64, 3, 3)</text>
@@ -197,7 +197,7 @@
 <g id="node8" class="node">
 <title>conv2d_8_22pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="600.12,-961.11 391.88,-961.11 391.88,-854.36 600.12,-854.36 600.12,-961.11"/>
-<text xml:space="preserve" text-anchor="start" x="453.62" y="-942.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_8_24</text>
+<text xml:space="preserve" text-anchor="start" x="453.62" y="-942.81" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_8_22</text>
 <text xml:space="preserve" text-anchor="start" x="428.5" y="-922.06" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="401.88" y="-902.31" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(1, 1), stride=(2, 2)</text>
 <text xml:space="preserve" text-anchor="start" x="406" y="-882.56" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128, 64, 1, 1)</text>
@@ -217,7 +217,7 @@
 <g id="a_node9"><a xlink:title="Hidden buffers: layer2.0.bn1.running_mean, layer2.0.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="330.5,-1108.86 103.5,-1108.86 103.5,-1002.11 330.5,-1002.11 330.5,-1108.86"/>
 <polygon fill="none" stroke="black" points="334.5,-1112.86 99.5,-1112.86 99.5,-998.11 334.5,-998.11 334.5,-1112.86"/>
-<text xml:space="preserve" text-anchor="start" x="163" y="-1090.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_6_20</text>
+<text xml:space="preserve" text-anchor="start" x="163" y="-1090.56" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_6_18</text>
 <text xml:space="preserve" text-anchor="start" x="149.5" y="-1069.81" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="132.62" y="-1050.06" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="113.5" y="-1030.31" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128,) · bias (128,)</text>
@@ -237,7 +237,7 @@
 <g id="a_node13"><a xlink:title="Hidden buffers: layer2.0.downsample.1.running_mean, layer2.0.downsample.1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="623.5,-1241.61 396.5,-1241.61 396.5,-1134.86 623.5,-1134.86 623.5,-1241.61"/>
 <polygon fill="none" stroke="black" points="627.5,-1245.61 392.5,-1245.61 392.5,-1130.86 627.5,-1130.86 627.5,-1245.61"/>
-<text xml:space="preserve" text-anchor="start" x="456" y="-1223.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_8_25</text>
+<text xml:space="preserve" text-anchor="start" x="456" y="-1223.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_8_23</text>
 <text xml:space="preserve" text-anchor="start" x="442.5" y="-1202.56" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="425.62" y="-1182.81" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="406.5" y="-1163.06" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128,) · bias (128,)</text>
@@ -269,7 +269,7 @@
 <g id="node11" class="node">
 <title>conv2d_7_20pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="398.62,-1520.61 175.38,-1520.61 175.38,-1413.86 398.62,-1413.86 398.62,-1520.61"/>
-<text xml:space="preserve" text-anchor="start" x="244.62" y="-1502.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_7_22</text>
+<text xml:space="preserve" text-anchor="start" x="244.62" y="-1502.31" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_7_20</text>
 <text xml:space="preserve" text-anchor="start" x="219.5" y="-1481.56" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="185.38" y="-1461.81" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="193.25" y="-1442.06" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128, 128, 3, 3)</text>
@@ -287,7 +287,7 @@
 <g id="a_node12"><a xlink:title="Hidden buffers: layer2.0.bn2.running_mean, layer2.0.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="428.5,-1668.36 201.5,-1668.36 201.5,-1561.61 428.5,-1561.61 428.5,-1668.36"/>
 <polygon fill="none" stroke="black" points="432.5,-1672.36 197.5,-1672.36 197.5,-1557.61 432.5,-1557.61 432.5,-1672.36"/>
-<text xml:space="preserve" text-anchor="start" x="261" y="-1650.06" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_7_23</text>
+<text xml:space="preserve" text-anchor="start" x="261" y="-1650.06" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_7_21</text>
 <text xml:space="preserve" text-anchor="start" x="247.5" y="-1629.31" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="230.62" y="-1609.56" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="211.5" y="-1589.81" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128,) · bias (128,)</text>
@@ -305,7 +305,7 @@
 <g id="node14" class="node">
 <title>iadd_3_24pass1</title>
 <ellipse fill="white" stroke="black" cx="348" cy="-1742.94" rx="109.6" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="315.38" y="-1748.39" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_3_26</text>
+<text xml:space="preserve" text-anchor="start" x="315.38" y="-1748.39" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_3_24</text>
 <text xml:space="preserve" text-anchor="start" x="280.5" y="-1727.64" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 </g>
 <!-- batchnorm_7_21pass1&#45;&gt;iadd_3_24pass1 -->
@@ -340,7 +340,7 @@
 <g id="node16" class="node">
 <title>conv2d_9_25pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="423.62,-2080.53 200.38,-2080.53 200.38,-1973.78 423.62,-1973.78 423.62,-2080.53"/>
-<text xml:space="preserve" text-anchor="start" x="269.62" y="-2062.23" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_9_28</text>
+<text xml:space="preserve" text-anchor="start" x="269.62" y="-2062.23" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_9_25</text>
 <text xml:space="preserve" text-anchor="start" x="244.5" y="-2041.48" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="210.38" y="-2021.73" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="218.25" y="-2001.98" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128, 128, 3, 3)</text>
@@ -356,7 +356,7 @@
 <g id="node21" class="node">
 <title>iadd_4_30pass1</title>
 <ellipse fill="white" stroke="black" cx="314" cy="-2702.62" rx="109.6" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="281.38" y="-2708.07" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_4_33</text>
+<text xml:space="preserve" text-anchor="start" x="281.38" y="-2708.07" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_4_30</text>
 <text xml:space="preserve" text-anchor="start" x="246.5" y="-2687.32" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 </g>
 <!-- relu_4_19pass2&#45;&gt;iadd_4_30pass1 -->
@@ -372,7 +372,7 @@
 <g id="a_node17"><a xlink:title="Hidden buffers: layer2.1.bn1.running_mean, layer2.1.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="421.5,-2228.28 194.5,-2228.28 194.5,-2121.53 421.5,-2121.53 421.5,-2228.28"/>
 <polygon fill="none" stroke="black" points="425.5,-2232.28 190.5,-2232.28 190.5,-2117.53 425.5,-2117.53 425.5,-2232.28"/>
-<text xml:space="preserve" text-anchor="start" x="254" y="-2209.98" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_9_29</text>
+<text xml:space="preserve" text-anchor="start" x="254" y="-2209.98" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_9_26</text>
 <text xml:space="preserve" text-anchor="start" x="240.5" y="-2189.23" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="223.62" y="-2169.48" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="204.5" y="-2149.73" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128,) · bias (128,)</text>
@@ -404,7 +404,7 @@
 <g id="node19" class="node">
 <title>conv2d_10_28pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="419.62,-2480.28 196.38,-2480.28 196.38,-2373.53 419.62,-2373.53 419.62,-2480.28"/>
-<text xml:space="preserve" text-anchor="start" x="261.88" y="-2461.98" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_10_31</text>
+<text xml:space="preserve" text-anchor="start" x="261.88" y="-2461.98" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_10_28</text>
 <text xml:space="preserve" text-anchor="start" x="240.5" y="-2441.23" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="206.38" y="-2421.48" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="214.25" y="-2401.73" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128, 128, 3, 3)</text>
@@ -422,7 +422,7 @@
 <g id="a_node20"><a xlink:title="Hidden buffers: layer2.1.bn2.running_mean, layer2.1.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="421.5,-2628.03 194.5,-2628.03 194.5,-2521.28 421.5,-2521.28 421.5,-2628.03"/>
 <polygon fill="none" stroke="black" points="425.5,-2632.03 190.5,-2632.03 190.5,-2517.28 425.5,-2517.28 425.5,-2632.03"/>
-<text xml:space="preserve" text-anchor="start" x="250.25" y="-2609.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_10_32</text>
+<text xml:space="preserve" text-anchor="start" x="250.25" y="-2609.73" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_10_29</text>
 <text xml:space="preserve" text-anchor="start" x="240.5" y="-2588.98" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 128, 8, 8), 32.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="223.62" y="-2569.23" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="204.5" y="-2549.48" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (128,) · bias (128,)</text>
@@ -461,7 +461,7 @@
 <g id="node23" class="node">
 <title>conv2d_11_31pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="442.75,-3136.21 139.25,-3136.21 139.25,-3029.46 442.75,-3029.46 442.75,-3136.21"/>
-<text xml:space="preserve" text-anchor="start" x="245.25" y="-3117.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_11_35</text>
+<text xml:space="preserve" text-anchor="start" x="245.25" y="-3117.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_11_31</text>
 <text xml:space="preserve" text-anchor="start" x="223.5" y="-3097.16" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="149.25" y="-3077.41" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="197.25" y="-3057.66" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256, 128, 3, 3)</text>
@@ -477,7 +477,7 @@
 <g id="node24" class="node">
 <title>conv2d_13_36pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="691.12,-3136.21 482.88,-3136.21 482.88,-3029.46 691.12,-3029.46 691.12,-3136.21"/>
-<text xml:space="preserve" text-anchor="start" x="540.88" y="-3117.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_13_40</text>
+<text xml:space="preserve" text-anchor="start" x="540.88" y="-3117.91" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_13_36</text>
 <text xml:space="preserve" text-anchor="start" x="519.5" y="-3097.16" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="492.88" y="-3077.41" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(1, 1), stride=(2, 2)</text>
 <text xml:space="preserve" text-anchor="start" x="493.25" y="-3057.66" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256, 128, 1, 1)</text>
@@ -497,7 +497,7 @@
 <g id="a_node25"><a xlink:title="Hidden buffers: layer3.0.bn1.running_mean, layer3.0.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="421.5,-3283.96 194.5,-3283.96 194.5,-3177.21 421.5,-3177.21 421.5,-3283.96"/>
 <polygon fill="none" stroke="black" points="425.5,-3287.96 190.5,-3287.96 190.5,-3173.21 425.5,-3173.21 425.5,-3287.96"/>
-<text xml:space="preserve" text-anchor="start" x="250.62" y="-3265.66" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_11_36</text>
+<text xml:space="preserve" text-anchor="start" x="250.62" y="-3265.66" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_11_32</text>
 <text xml:space="preserve" text-anchor="start" x="240.5" y="-3244.91" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="223.62" y="-3225.16" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="204.5" y="-3205.41" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256,) · bias (256,)</text>
@@ -517,7 +517,7 @@
 <g id="a_node29"><a xlink:title="Hidden buffers: layer3.0.downsample.1.running_mean, layer3.0.downsample.1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="714.5,-3416.71 487.5,-3416.71 487.5,-3309.96 714.5,-3309.96 714.5,-3416.71"/>
 <polygon fill="none" stroke="black" points="718.5,-3420.71 483.5,-3420.71 483.5,-3305.96 718.5,-3305.96 718.5,-3420.71"/>
-<text xml:space="preserve" text-anchor="start" x="543.25" y="-3398.41" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_13_41</text>
+<text xml:space="preserve" text-anchor="start" x="543.25" y="-3398.41" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_13_37</text>
 <text xml:space="preserve" text-anchor="start" x="533.5" y="-3377.66" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="516.62" y="-3357.91" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="497.5" y="-3338.16" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256,) · bias (256,)</text>
@@ -549,7 +549,7 @@
 <g id="node27" class="node">
 <title>conv2d_12_34pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="485.62,-3695.71 262.38,-3695.71 262.38,-3588.96 485.62,-3588.96 485.62,-3695.71"/>
-<text xml:space="preserve" text-anchor="start" x="327.88" y="-3677.41" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_12_38</text>
+<text xml:space="preserve" text-anchor="start" x="327.88" y="-3677.41" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_12_34</text>
 <text xml:space="preserve" text-anchor="start" x="306.5" y="-3656.66" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="272.38" y="-3636.91" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="280.25" y="-3617.16" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256, 256, 3, 3)</text>
@@ -567,7 +567,7 @@
 <g id="a_node28"><a xlink:title="Hidden buffers: layer3.0.bn2.running_mean, layer3.0.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="500.5,-3843.46 273.5,-3843.46 273.5,-3736.71 500.5,-3736.71 500.5,-3843.46"/>
 <polygon fill="none" stroke="black" points="504.5,-3847.46 269.5,-3847.46 269.5,-3732.71 504.5,-3732.71 504.5,-3847.46"/>
-<text xml:space="preserve" text-anchor="start" x="329.25" y="-3825.16" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_12_39</text>
+<text xml:space="preserve" text-anchor="start" x="329.25" y="-3825.16" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_12_35</text>
 <text xml:space="preserve" text-anchor="start" x="319.5" y="-3804.41" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="302.62" y="-3784.66" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="283.5" y="-3764.91" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256,) · bias (256,)</text>
@@ -585,7 +585,7 @@
 <g id="node30" class="node">
 <title>iadd_5_38pass1</title>
 <ellipse fill="white" stroke="black" cx="401" cy="-3918.04" rx="109.6" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="368.38" y="-3923.49" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_5_42</text>
+<text xml:space="preserve" text-anchor="start" x="368.38" y="-3923.49" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_5_38</text>
 <text xml:space="preserve" text-anchor="start" x="333.5" y="-3902.74" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 </g>
 <!-- batchnorm_12_35pass1&#45;&gt;iadd_5_38pass1 -->
@@ -620,7 +620,7 @@
 <g id="node32" class="node">
 <title>conv2d_14_39pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="381.62,-4255.63 158.38,-4255.63 158.38,-4148.88 381.62,-4148.88 381.62,-4255.63"/>
-<text xml:space="preserve" text-anchor="start" x="223.88" y="-4237.33" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_14_44</text>
+<text xml:space="preserve" text-anchor="start" x="223.88" y="-4237.33" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_14_39</text>
 <text xml:space="preserve" text-anchor="start" x="202.5" y="-4216.58" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="168.38" y="-4196.83" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="176.25" y="-4177.08" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256, 256, 3, 3)</text>
@@ -636,7 +636,7 @@
 <g id="node37" class="node">
 <title>iadd_6_44pass1</title>
 <ellipse fill="white" stroke="black" cx="271" cy="-4877.72" rx="109.6" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="238.38" y="-4883.17" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_6_49</text>
+<text xml:space="preserve" text-anchor="start" x="238.38" y="-4883.17" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_6_44</text>
 <text xml:space="preserve" text-anchor="start" x="203.5" y="-4862.42" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 </g>
 <!-- relu_6_33pass2&#45;&gt;iadd_6_44pass1 -->
@@ -652,7 +652,7 @@
 <g id="a_node33"><a xlink:title="Hidden buffers: layer3.1.bn1.running_mean, layer3.1.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="378.5,-4403.38 151.5,-4403.38 151.5,-4296.63 378.5,-4296.63 378.5,-4403.38"/>
 <polygon fill="none" stroke="black" points="382.5,-4407.38 147.5,-4407.38 147.5,-4292.63 382.5,-4292.63 382.5,-4407.38"/>
-<text xml:space="preserve" text-anchor="start" x="207.25" y="-4385.08" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_14_45</text>
+<text xml:space="preserve" text-anchor="start" x="207.25" y="-4385.08" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_14_40</text>
 <text xml:space="preserve" text-anchor="start" x="197.5" y="-4364.33" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="180.62" y="-4344.58" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="161.5" y="-4324.83" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256,) · bias (256,)</text>
@@ -684,7 +684,7 @@
 <g id="node35" class="node">
 <title>conv2d_15_42pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="376.62,-4655.38 153.38,-4655.38 153.38,-4548.63 376.62,-4548.63 376.62,-4655.38"/>
-<text xml:space="preserve" text-anchor="start" x="218.88" y="-4637.08" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_15_47</text>
+<text xml:space="preserve" text-anchor="start" x="218.88" y="-4637.08" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_15_42</text>
 <text xml:space="preserve" text-anchor="start" x="197.5" y="-4616.33" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="163.38" y="-4596.58" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="171.25" y="-4576.83" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256, 256, 3, 3)</text>
@@ -702,7 +702,7 @@
 <g id="a_node36"><a xlink:title="Hidden buffers: layer3.1.bn2.running_mean, layer3.1.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="378.5,-4803.13 151.5,-4803.13 151.5,-4696.38 378.5,-4696.38 378.5,-4803.13"/>
 <polygon fill="none" stroke="black" points="382.5,-4807.13 147.5,-4807.13 147.5,-4692.38 382.5,-4692.38 382.5,-4807.13"/>
-<text xml:space="preserve" text-anchor="start" x="207.25" y="-4784.83" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_15_48</text>
+<text xml:space="preserve" text-anchor="start" x="207.25" y="-4784.83" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_15_43</text>
 <text xml:space="preserve" text-anchor="start" x="197.5" y="-4764.08" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 256, 4, 4), 16.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="180.62" y="-4744.33" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="161.5" y="-4724.58" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (256,) · bias (256,)</text>
@@ -741,7 +741,7 @@
 <g id="node39" class="node">
 <title>conv2d_16_45pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="403.75,-5311.31 100.25,-5311.31 100.25,-5204.56 403.75,-5204.56 403.75,-5311.31"/>
-<text xml:space="preserve" text-anchor="start" x="205.88" y="-5293.01" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_16_51</text>
+<text xml:space="preserve" text-anchor="start" x="205.88" y="-5293.01" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_16_45</text>
 <text xml:space="preserve" text-anchor="start" x="188.25" y="-5272.26" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="110.25" y="-5252.51" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), stride=(2, 2), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="158.25" y="-5232.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512, 256, 3, 3)</text>
@@ -757,7 +757,7 @@
 <g id="node40" class="node">
 <title>conv2d_18_50pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="652.12,-5311.31 443.88,-5311.31 443.88,-5204.56 652.12,-5204.56 652.12,-5311.31"/>
-<text xml:space="preserve" text-anchor="start" x="501.88" y="-5293.01" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_18_56</text>
+<text xml:space="preserve" text-anchor="start" x="501.88" y="-5293.01" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_18_50</text>
 <text xml:space="preserve" text-anchor="start" x="484.25" y="-5272.26" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="453.88" y="-5252.51" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(1, 1), stride=(2, 2)</text>
 <text xml:space="preserve" text-anchor="start" x="454.25" y="-5232.76" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512, 256, 1, 1)</text>
@@ -777,7 +777,7 @@
 <g id="a_node41"><a xlink:title="Hidden buffers: layer4.0.bn1.running_mean, layer4.0.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="383.5,-5459.06 156.5,-5459.06 156.5,-5352.31 383.5,-5352.31 383.5,-5459.06"/>
 <polygon fill="none" stroke="black" points="387.5,-5463.06 152.5,-5463.06 152.5,-5348.31 387.5,-5348.31 387.5,-5463.06"/>
-<text xml:space="preserve" text-anchor="start" x="212.25" y="-5440.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_16_52</text>
+<text xml:space="preserve" text-anchor="start" x="212.25" y="-5440.76" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_16_46</text>
 <text xml:space="preserve" text-anchor="start" x="206.25" y="-5420.01" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="185.62" y="-5400.26" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="166.5" y="-5380.51" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512,) · bias (512,)</text>
@@ -797,7 +797,7 @@
 <g id="a_node45"><a xlink:title="Hidden buffers: layer4.0.downsample.1.running_mean, layer4.0.downsample.1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="675.5,-5591.81 448.5,-5591.81 448.5,-5485.06 675.5,-5485.06 675.5,-5591.81"/>
 <polygon fill="none" stroke="black" points="679.5,-5595.81 444.5,-5595.81 444.5,-5481.06 679.5,-5481.06 679.5,-5595.81"/>
-<text xml:space="preserve" text-anchor="start" x="504.25" y="-5573.51" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_18_57</text>
+<text xml:space="preserve" text-anchor="start" x="504.25" y="-5573.51" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_18_51</text>
 <text xml:space="preserve" text-anchor="start" x="498.25" y="-5552.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="477.62" y="-5533.01" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="458.5" y="-5513.26" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512,) · bias (512,)</text>
@@ -829,7 +829,7 @@
 <g id="node43" class="node">
 <title>conv2d_17_48pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="505.62,-5870.81 282.38,-5870.81 282.38,-5764.06 505.62,-5764.06 505.62,-5870.81"/>
-<text xml:space="preserve" text-anchor="start" x="347.88" y="-5852.51" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_17_54</text>
+<text xml:space="preserve" text-anchor="start" x="347.88" y="-5852.51" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_17_48</text>
 <text xml:space="preserve" text-anchor="start" x="330.25" y="-5831.76" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="292.38" y="-5812.01" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="300.25" y="-5792.26" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512, 512, 3, 3)</text>
@@ -847,7 +847,7 @@
 <g id="a_node44"><a xlink:title="Hidden buffers: layer4.0.bn2.running_mean, layer4.0.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="527.5,-6018.56 300.5,-6018.56 300.5,-5911.81 527.5,-5911.81 527.5,-6018.56"/>
 <polygon fill="none" stroke="black" points="531.5,-6022.56 296.5,-6022.56 296.5,-5907.81 531.5,-5907.81 531.5,-6022.56"/>
-<text xml:space="preserve" text-anchor="start" x="356.25" y="-6000.26" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_17_55</text>
+<text xml:space="preserve" text-anchor="start" x="356.25" y="-6000.26" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_17_49</text>
 <text xml:space="preserve" text-anchor="start" x="350.25" y="-5979.51" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="329.62" y="-5959.76" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="310.5" y="-5940.01" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512,) · bias (512,)</text>
@@ -865,7 +865,7 @@
 <g id="node46" class="node">
 <title>iadd_7_52pass1</title>
 <ellipse fill="white" stroke="black" cx="524" cy="-6093.14" rx="104.3" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="491.38" y="-6098.59" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_7_58</text>
+<text xml:space="preserve" text-anchor="start" x="491.38" y="-6098.59" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_7_52</text>
 <text xml:space="preserve" text-anchor="start" x="460.25" y="-6077.84" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 </g>
 <!-- batchnorm_17_49pass1&#45;&gt;iadd_7_52pass1 -->
@@ -900,7 +900,7 @@
 <g id="node48" class="node">
 <title>conv2d_19_53pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="536.62,-6430.73 313.38,-6430.73 313.38,-6323.98 536.62,-6323.98 536.62,-6430.73"/>
-<text xml:space="preserve" text-anchor="start" x="378.88" y="-6412.43" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_19_60</text>
+<text xml:space="preserve" text-anchor="start" x="378.88" y="-6412.43" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_19_53</text>
 <text xml:space="preserve" text-anchor="start" x="361.25" y="-6391.68" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="323.38" y="-6371.93" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="331.25" y="-6352.18" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512, 512, 3, 3)</text>
@@ -916,7 +916,7 @@
 <g id="node53" class="node">
 <title>iadd_8_58pass1</title>
 <ellipse fill="white" stroke="black" cx="431" cy="-7052.82" rx="104.3" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="398.38" y="-7058.27" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_8_65</text>
+<text xml:space="preserve" text-anchor="start" x="398.38" y="-7058.27" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">iadd_8_58</text>
 <text xml:space="preserve" text-anchor="start" x="367.25" y="-7037.52" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 </g>
 <!-- relu_8_47pass2&#45;&gt;iadd_8_58pass1 -->
@@ -932,7 +932,7 @@
 <g id="a_node49"><a xlink:title="Hidden buffers: layer4.1.bn1.running_mean, layer4.1.bn1.running_var">
 <polygon fill="#56b4e9" stroke="black" points="534.5,-6578.48 307.5,-6578.48 307.5,-6471.73 534.5,-6471.73 534.5,-6578.48"/>
 <polygon fill="none" stroke="black" points="538.5,-6582.48 303.5,-6582.48 303.5,-6467.73 538.5,-6467.73 538.5,-6582.48"/>
-<text xml:space="preserve" text-anchor="start" x="363.25" y="-6560.18" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_19_61</text>
+<text xml:space="preserve" text-anchor="start" x="363.25" y="-6560.18" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_19_54</text>
 <text xml:space="preserve" text-anchor="start" x="357.25" y="-6539.43" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="336.62" y="-6519.68" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="317.5" y="-6499.93" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512,) · bias (512,)</text>
@@ -964,7 +964,7 @@
 <g id="node51" class="node">
 <title>conv2d_20_56pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="532.62,-6830.48 309.38,-6830.48 309.38,-6723.73 532.62,-6723.73 532.62,-6830.48"/>
-<text xml:space="preserve" text-anchor="start" x="374.88" y="-6812.18" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_20_63</text>
+<text xml:space="preserve" text-anchor="start" x="374.88" y="-6812.18" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">conv2d_20_56</text>
 <text xml:space="preserve" text-anchor="start" x="357.25" y="-6791.43" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="319.38" y="-6771.68" font-family="Helvetica,sans-Serif" font-size="14.00">kernel_size=(3, 3), padding=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="327.25" y="-6751.93" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512, 512, 3, 3)</text>
@@ -982,7 +982,7 @@
 <g id="a_node52"><a xlink:title="Hidden buffers: layer4.1.bn2.running_mean, layer4.1.bn2.running_var">
 <polygon fill="#56b4e9" stroke="black" points="534.5,-6978.23 307.5,-6978.23 307.5,-6871.48 534.5,-6871.48 534.5,-6978.23"/>
 <polygon fill="none" stroke="black" points="538.5,-6982.23 303.5,-6982.23 303.5,-6867.48 538.5,-6867.48 538.5,-6982.23"/>
-<text xml:space="preserve" text-anchor="start" x="363.25" y="-6959.93" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_20_64</text>
+<text xml:space="preserve" text-anchor="start" x="363.25" y="-6959.93" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">batchnorm_20_57</text>
 <text xml:space="preserve" text-anchor="start" x="357.25" y="-6939.18" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 2, 2), 8.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="336.62" y="-6919.43" font-family="Helvetica,sans-Serif" font-size="14.00">eps=1e&#45;05, momentum=0.1</text>
 <text xml:space="preserve" text-anchor="start" x="317.5" y="-6899.68" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (512,) · bias (512,)</text>
@@ -1021,7 +1021,7 @@
 <g id="node55" class="node">
 <title>adaptiveavgpool2d_1_59pass1</title>
 <polygon fill="white" stroke="black" points="520.88,-7416.66 341.12,-7416.66 341.12,-7329.66 520.88,-7329.66 520.88,-7416.66"/>
-<text xml:space="preserve" text-anchor="start" x="351.12" y="-7398.36" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_67</text>
+<text xml:space="preserve" text-anchor="start" x="351.12" y="-7398.36" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">adaptiveavgpool2d_1_59</text>
 <text xml:space="preserve" text-anchor="start" x="367.25" y="-7377.61" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512, 1, 1), 2.0 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="376.62" y="-7357.86" font-family="Helvetica,sans-Serif" font-size="14.00">output_size=(1, 1)</text>
 <text xml:space="preserve" text-anchor="start" x="400.25" y="-7338.11" font-family="Helvetica,sans-Serif" font-size="14.00">@avgpool</text>
@@ -1036,7 +1036,7 @@
 <g id="node56" class="node">
 <title>flatten_1_60pass1</title>
 <ellipse fill="white" stroke="black" cx="431" cy="-7487.24" rx="83.09" ry="33.59"/>
-<text xml:space="preserve" text-anchor="start" x="392" y="-7492.69" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_68</text>
+<text xml:space="preserve" text-anchor="start" x="392" y="-7492.69" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">flatten_1_60</text>
 <text xml:space="preserve" text-anchor="start" x="382.25" y="-7471.94" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 512), 2.0 KiB</text>
 </g>
 <!-- adaptiveavgpool2d_1_59pass1&#45;&gt;flatten_1_60pass1 -->
@@ -1049,7 +1049,7 @@
 <g id="node57" class="node">
 <title>linear_1_61pass1</title>
 <polygon fill="#56b4e9" stroke="black" points="565.12,-7644.83 296.88,-7644.83 296.88,-7557.83 565.12,-7557.83 565.12,-7644.83"/>
-<text xml:space="preserve" text-anchor="start" x="394.25" y="-7626.53" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_69</text>
+<text xml:space="preserve" text-anchor="start" x="394.25" y="-7626.53" font-family="Helvetica,sans-Serif" font-weight="bold" font-size="14.00">linear_1_61</text>
 <text xml:space="preserve" text-anchor="start" x="378.5" y="-7605.78" font-family="Helvetica,sans-Serif" font-size="14.00">(1, 1000), 3.9 KiB</text>
 <text xml:space="preserve" text-anchor="start" x="306.88" y="-7586.03" font-family="Helvetica,sans-Serif" font-size="14.00">params: weight (1000, 512) · bias (1000,)</text>
 <text xml:space="preserve" text-anchor="start" x="418.62" y="-7566.28" font-family="Helvetica,sans-Serif" font-size="14.00">@fc</text>
