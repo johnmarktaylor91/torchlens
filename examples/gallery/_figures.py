@@ -379,8 +379,8 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         bar.ax.tick_params(labelsize=13.5)  # single digits read small
         curve = fig.add_subplot(spec[1, :])
         curve.set_title(
-            f"{arch}, {n_stimuli} Fashion-MNIST images; RDM = representational dissimilarity "
-            f"matrix over the stimuli;\nthe {len(rdms)} stage RDMs above are TorchLens's",
+            f"{arch}, {n_stimuli} Fashion-MNIST images\nRDM = representational dissimilarity "
+            f"matrix over the stimuli\nthe {len(rdms)} stage RDMs above are TorchLens's",
             loc="left",
             fontsize=SMALL,
             color=MUTED,
@@ -434,7 +434,7 @@ def draw_neuro_rdms(out: Path) -> list[Path]:
         curve.grid(axis="y")
         fig.suptitle(
             f"All {len(keys)} sites match the plain-hooks RDMs (r rounds to "
-            f"{min(aligned.values()):.3f}; pass bar {correlation_min:g});\n"
+            f"{min(aligned.values()):.3f}; bar {correlation_min:g});\n"
             f"shuffling one side's stimulus order drops r to {max(shuffled.values()):.2f} or less",
             fontsize=TITLE,
         )
