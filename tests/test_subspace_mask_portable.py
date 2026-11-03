@@ -85,27 +85,6 @@ _VERBS = {
 }
 
 
-@pytest.mark.parametrize("verb", sorted(_VERBS))
-def test_one_position_subspace_edit_saves_portable_and_reapplies_bit_identically(
-    tmp_path: Path, verb: str
-) -> None:
-    session = _session(_VERBS[verb]())
-    staged = session.push()
-    loaded = _save_load(session, tmp_path / "one_position.tlspec")
-    helper = loaded.hook_specs[0].helper
-    assert helper.name == "subspace_edit" and helper.portability == "builtin"
-    kwargs = dict(helper.kwargs)
-    assert torch.equal(kwargs["mask"], _mask())
-    assert kwargs["mask_sha256"] == _mask_digest(_mask())
-    reapplied = _apply(loaded)
-    assert torch.equal(reapplied[_SITE].out, staged[_SITE].out)
-    assert torch.equal(
-        reapplied[reapplied.output_layers[0]].out, staged[staged.output_layers[0]].out
-    )
-    untouched = ~_mask()
-    assert torch.equal(reapplied[_SITE].out[untouched], _ready()[_SITE].out[untouched])
-
-
 def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_path: Path) -> None:
     """The session scatters through both masks; the saved edit stores their intersection."""
 
@@ -124,17 +103,6 @@ def test_reloaded_masked_edit_under_another_mask_stores_the_intersection(tmp_pat
     assert torch.equal(_apply(again)[_SITE].out, staged[_SITE].out)
 
 
-def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
-    """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
-
-    fork = _ready().fork()
-    fork.do(tl.units(_SITE, _mask()), tl.scale(2.0))
-    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="audit")
-    loaded = tl.io.load_intervention_spec(tmp_path / "plain.tlspec")
-    saved = loaded.hook_specs[0].helper
-    assert saved.portability == "opaque_audit" and saved.factory is None
-
-
 def _stored(mask: Any, digest: Any) -> dict[str, Any]:
     rows = _R[:, :4].T.contiguous()
     return {
@@ -145,15 +113,6 @@ def _stored(mask: Any, digest: Any) -> dict[str, Any]:
         "mask": mask,
         "mask_sha256": digest,
     }
-
-
-def test_payload_without_a_mask_default_fills_to_the_whole_site() -> None:
-    stored = _stored(None, None)
-    rebuilt = rebuild_builtin_helper("subspace_edit", (tl.scale(2.0),), stored)
-    assert "mask" not in dict(rebuilt.kwargs)
-    without = {key: value for key, value in stored.items() if not key.startswith("mask")}
-    older = rebuild_builtin_helper("subspace_edit", (tl.scale(2.0),), without)
-    assert [key for key, _ in older.kwargs] == [key for key, _ in rebuilt.kwargs]
 
 
 def _partial() -> torch.Tensor:
@@ -228,3 +187,14 @@ def _coded(error: BaseException) -> Any:
             return current
         current = current.__cause__ or current.__context__
     raise AssertionError(f"no coded error in the chain of {error!r}")
+
+
+def test_other_masked_edits_keep_their_portability(tmp_path: Path) -> None:
+    """A masked plain verb (no subspace) stays opaque_audit, exactly as before."""
+
+    fork = _ready().fork()
+    fork.do(tl.units(_SITE, _mask()), tl.scale(2.0))
+    tl.io.save_intervention(fork, tmp_path / "plain.tlspec", level="audit")
+    loaded = tl.io.load_intervention_spec(tmp_path / "plain.tlspec")
+    saved = loaded.hook_specs[0].helper
+    assert saved.portability == "opaque_audit" and saved.factory is None

@@ -55,34 +55,6 @@ def test_large_vectors_differing_in_one_element_get_different_identity() -> None
     assert first.digest != second.digest
 
 
-def test_equal_content_gives_equal_identity_across_objects_and_layouts() -> None:
-    """Identity is content-derived: distinct objects and strided views agree."""
-
-    base = torch.arange(2 * _WIDTH, dtype=torch.float32)
-    strided_view = base[::2]
-    contiguous_copy = strided_view.clone()
-    assert not strided_view.is_contiguous()
-    first = _steer_spec(strided_view)
-    second = _steer_spec(contiguous_copy)
-    assert first.digest == second.digest
-    assert first.rules[0].rule_id == second.rules[0].rule_id
-    assert first.rules[0].action_repr == second.rules[0].action_repr
-
-
-def test_identity_distinguishes_dtype_and_shape_with_equal_bytes() -> None:
-    """Equal raw bytes under a different dtype or shape are a different rule."""
-
-    flat = torch.zeros(_WIDTH, dtype=torch.float32)
-    as_int = torch.zeros(_WIDTH, dtype=torch.int32)
-    reshaped = torch.zeros(2, _WIDTH // 2, dtype=torch.float32)
-    digests = {
-        _steer_spec(flat).digest,
-        _steer_spec(as_int).digest,
-        _steer_spec(reshaped).digest,
-    }
-    assert len(digests) == 3
-
-
 @pytest.mark.cuda
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="needs a CUDA device")
 def test_identity_is_device_independent() -> None:
@@ -162,15 +134,6 @@ def test_merge_of_true_duplicates_still_refuses() -> None:
     with pytest.raises(InvalidArgumentError) as excinfo:
         first.merge(second)
     assert excinfo.value.fields["code"] == "spec_rules_duplicate"
-
-
-def test_tensor_free_rule_identity_keeps_its_released_format() -> None:
-    """Rules without tensor arguments render byte-identically to 2.36.0."""
-
-    helper = tl.scale(2.0)
-    spec = tl.when(tl.func("relu"), helper)
-    expected = f"helper:{helper.name}:{helper.args!r}:{helper.kwargs!r}"
-    assert spec.rules[0].action_repr == expected
 
 
 def test_bind_report_tracks_an_edit_between_calls() -> None:

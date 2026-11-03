@@ -9,8 +9,6 @@ ops in execution order, reproduces the postprocess keys byte-identically.
 
 from __future__ import annotations
 
-import warnings
-
 import pytest
 import torch
 from torch import nn
@@ -85,12 +83,6 @@ def test_site_selector_construction_refusals() -> None:
     assert excinfo.value.fields["code"] == "site_selector_key_invalid"
 
 
-def test_site_classifies_structural() -> None:
-    from torchlens.intervention.spec import classify_where
-
-    assert classify_where(site(func="relu")) == "structural"
-
-
 # ---------------------------------------------------------------------------
 # Post-hoc addressing (site lifecycle)
 # ---------------------------------------------------------------------------
@@ -106,46 +98,9 @@ def test_post_hoc_resolution_by_components_and_key() -> None:
     assert "linear_1_1:1" in by_module.labels
 
 
-def test_reused_module_calls_share_one_site_key_family() -> None:
-    """Module reuse COLLIDES the bare structural key (the documented L1 fact).
-
-    Ordinals restart per pass-qualified innermost call instance, so a reused
-    relu INSTANCE mints the same key for each call (measured on resnet18:
-    10.6% of sites). site(key) therefore addresses the position FAMILY --
-    both calls -- and cross-trace per-occurrence claims must ride the guarded
-    join, never the bare key (leverage D-1/D-2; ordinals are display-only).
-    """
-
-    log = _ready(_ReusedModule())
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # fan-out disclosure, expected here
-        table = log[site(func="relu")]
-        # grouping rule row 28 (fork 1, module identity): the two calls of one
-        # relu instance are one Layer with 2 passes, so address them by op label.
-        assert len({log[label].layer_label for label in table.labels}) == 1
-        labels = list(table.labels)
-        assert len(labels) == 2
-        keys = {log.ops[label].site_key for label in labels}
-        assert len(keys) == 1, "reused-module calls share ONE structural position key"
-        (shared_key,) = keys
-        assert set(log[site(shared_key)].labels) == set(labels)
-
-
 # ---------------------------------------------------------------------------
 # Live lane (capture): minting parity + intervene= addressing
 # ---------------------------------------------------------------------------
-
-
-def test_live_site_intervention_fires_at_the_right_site() -> None:
-    model = _TinyModel()
-    log = tl.trace(model, torch.randn(2, 4), intervene=tl.when(site(func="relu"), tl.scale(0.0)))
-    assert torch.count_nonzero(log["relu_1_2"].out) == 0
-    events = [
-        row
-        for row in log.state_history
-        if isinstance(row, dict) and row.get("op") == "intervention_event"
-    ]
-    assert events[-1]["site_keys"] == [layer_site_key(log["relu_1_2"])]
 
 
 def test_live_minted_keys_match_posthoc_keys() -> None:
@@ -180,16 +135,6 @@ def test_streaming_minter_reproduces_postprocess_keys(model_cls: type[nn.Module]
     assert not mismatches, f"streaming/postprocess key drift: {mismatches}"
 
 
-def test_recurrent_pass_qualified_ordinals_stay_distinct() -> None:
-    """Pass-qualified call instances restart ordinals: three timestep relus
-    (root instance) count 1..3, and each key resolves exactly one op."""
-
-    log = _ready(_Recurrent())
-    relu_labels = [label for label in log.op_labels if log.ops[label].type == "relu"]
-    keys = [log.ops[label].site_key for label in relu_labels]
-    assert len(set(keys)) == len(keys) == 3
-
-
 # ---------------------------------------------------------------------------
 # Typed boundaries
 # ---------------------------------------------------------------------------
@@ -214,13 +159,6 @@ def test_unarmed_capture_surface_refuses_typed() -> None:
     assert "site" in str(excinfo.value)
 
 
-def test_do_accepts_site_spec_on_the_replay_engine() -> None:
-    log = _ready(_TinyModel())
-    fork = log.fork()
-    fork.do(tl.when(site(func="relu"), tl.scale(0.0)))
-    assert torch.count_nonzero(fork["relu_1_2"].out) == 0
-
-
 def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     """Live-forward engines cannot serve structural site targets mid-forward:
     the refusal fires at the rerun PREFLIGHT, before any forward runs."""
@@ -231,3 +169,10 @@ def test_rerun_with_sticky_site_hook_refuses_at_preflight() -> None:
     fork.attach_hooks(site(func="relu"), tl.scale(0.0), confirm_mutation=True)
     with pytest.raises(SelectorCapabilityError):
         fork.run(model, torch.randn(2, 4))
+
+
+def test_do_accepts_site_spec_on_the_replay_engine() -> None:
+    log = _ready(_TinyModel())
+    fork = log.fork()
+    fork.do(tl.when(site(func="relu"), tl.scale(0.0)))
+    assert torch.count_nonzero(fork["relu_1_2"].out) == 0

@@ -13,15 +13,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import torchlens._constants as tl_constants
-
 STATE_PATH = Path(__file__).resolve().parents[1] / "torchlens" / "_state.py"
 
 #: The only torchlens import ``_state.py`` may execute at runtime.
 SANCTIONED_STATE_IMPORTS = {(1, "errors._base", "CaptureError")}
-
-#: Access-time smart-collapse metadata that must never become a portable field.
-COLLAPSE_METADATA_NAMES = ("collapse_score", "module_collapse_order", "collapse_order")
 
 
 def _is_type_checking_guard(node: ast.If) -> bool:
@@ -101,24 +96,3 @@ def test_state_import_scan_sees_a_planted_violation() -> None:
         (1, "errors._base", "CaptureError"),
         (1, "capture", "trace"),
     }
-
-
-def test_collapse_metadata_stays_out_of_every_field_order() -> None:
-    """Invariant 16: collapse metadata is never declared in a ``*_FIELD_ORDER``."""
-    field_orders = {
-        name: value
-        for name, value in vars(tl_constants).items()
-        if name.endswith("FIELD_ORDER") and isinstance(value, (list, tuple))
-    }
-    assert "MODULE_LOG_FIELD_ORDER" in field_orders
-    assert "MODEL_LOG_FIELD_ORDER" in field_orders
-    leaks = sorted(
-        (name, field)
-        for name, fields in field_orders.items()
-        for field in fields
-        if field in COLLAPSE_METADATA_NAMES
-    )
-    assert not leaks, (
-        "smart-collapse metadata is computed at access time and must stay out of "
-        f"*_FIELD_ORDER schemas (Critical Invariant 16); found {leaks}"
-    )

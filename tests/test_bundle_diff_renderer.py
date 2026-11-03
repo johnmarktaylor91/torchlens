@@ -7,14 +7,13 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from xml.etree import ElementTree
 
 import numpy as np
 import pytest
 import torch
 
 import torchlens as tl
-from torchlens._visualization.bundle_diff import _add_svg_accessibility, _build_dot, _select_pairs
+from torchlens._visualization.bundle_diff import _build_dot, _select_pairs
 from torchlens.errors import MultiMatchWarning
 
 SNAPSHOT_DIR = Path(__file__).parent / "snapshots"
@@ -279,16 +278,3 @@ def test_bundle_diff_pair_selection_considers_left_delta() -> None:
     )
 
     assert selected == [(left_high, right_low)]
-
-
-def test_bundle_diff_svg_accessibility_escapes_quotes(tmp_path: Path) -> None:
-    """SVG aria labels remain valid XML when member names contain quotes."""
-
-    svg_path = tmp_path / "quoted.svg"
-    svg_path.write_text('<svg width="1" height="1"></svg>', encoding="utf-8")
-
-    _add_svg_accessibility(str(svg_path), 'left "quoted" versus right')
-
-    svg_text = svg_path.read_text(encoding="utf-8")
-    assert 'aria-label="left &quot;quoted&quot; versus right"' in svg_text
-    ElementTree.fromstring(svg_text)

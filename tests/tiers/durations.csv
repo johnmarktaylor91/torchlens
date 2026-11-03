@@ -1205,7 +1205,6 @@ tests/test_site_key_portability.py,8,5.55,1.09,unmarked
 tests/test_site_sweep_unit_candidates.py,4,2.01,1.09,heavy
 tests/test_sites.py,2,0.17,0.15,unmarked
 tests/test_skeleton_recipe_docs.py,5,2.95,2.89,heavy
-tests/test_skinfill_plain_param_separation.py,7,0.09,0.01,unmarked
 tests/test_skip_audit.py,15,11.61,3.94,missing
 tests/test_snoop_core.py,10,1.07,0.21,smoke
 tests/test_snoop_failure.py,10,1.66,0.38,smoke
@@ -1395,7 +1394,6 @@ tests/test_trace_autoroute_image.py,9,7.92,6.76,slow
 tests/test_trace_autoroute_input_preprocessor.py,4,1.40,1.12,slow
 tests/test_trace_autoroute_multimodal.py,5,0.31,0.10,slow
 tests/test_trace_boundary_ops_multipass.py,10,5.61,2.57,unmarked
-tests/test_trace_component_ownership.py,4,0.06,0.02,unmarked
 tests/test_trace_core_op_store.py,17,0.42,0.04,smoke
 tests/test_trace_core_substrate.py,28,4.69,1.68,smoke
 tests/test_trace_field_invariant.py,2,0.78,0.63,unmarked
@@ -1513,13 +1511,11 @@ tests/test_vizmech_typography.py,7,0.25,0.14,unmarked
 tests/test_vizr2_boundary_bundle.py,8,11.25,3.56,unmarked
 tests/test_vizr2_rank_segments.py,8,6.47,1.27,unmarked
 tests/test_vizr_backward_rows.py,3,2.45,1.02,unmarked
-tests/test_vizr_collapse_ratified.py,1,1.25,1.25,unmarked
 tests/test_vizr_layout_and_outpath.py,6,2.80,0.81,unmarked
 tests/test_vizr_render_counters.py,4,3.56,1.33,unmarked
 tests/test_vizr_render_leans.py,14,8.04,2.22,unmarked
 tests/test_vizx_export_honesty_parity.py,9,3.55,0.95,unmarked
 tests/test_vizx_model_explorer_episode_remedy.py,2,0.33,0.21,unmarked
-tests/test_vizx_model_explorer_extra.py,1,0.03,0.03,unmarked
 tests/test_vizx_netron_baseline_diff.py,10,1.39,0.35,unmarked
 tests/test_vizx_netron_sidecar_default.py,11,0.48,0.18,unmarked
 tests/test_w051_agent_budgets.py,5,8.53,7.42,heavy
@@ -1532,7 +1528,6 @@ tests/test_w051_capt2_relation_grades.py,9,1.44,1.32,missing
 tests/test_w051_capt2_replay_record_sites.py,6,0.64,0.46,smoke
 tests/test_w051_capt2_validate_forward_invariant.py,3,3.76,1.53,unmarked
 tests/test_w051_capt3_merged_ledger_shape.py,34,0.53,0.02,smoke
-tests/test_w051_capt3_paper_era_redirects.py,3,0.05,0.02,unmarked
 tests/test_w051_episode_binding.py,12,15.63,2.25,unmarked
 tests/test_w051_episode_chain_positions.py,15,5.05,2.17,smoke
 tests/test_w051_episode_entry_basis.py,5,1.07,0.66,smoke

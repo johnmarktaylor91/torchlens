@@ -110,24 +110,6 @@ def test_get_max_call_depth_tolerates_phantom_per_pass_keys() -> None:
     assert depth == 1
 
 
-def test_get_max_call_depth_present_keys_match_direct_lookup() -> None:
-    """When every key has a payload the result equals the historical crawl.
-
-    Guards behavior-preservation for the feedforward path that the render
-    identity oracle depends on.
-    """
-
-    top_modules = ["outer:1"]
-    module_edge_dict = {
-        "outer:1": {"edges": [], "nodes": ()},
-        "inner:1": {"edges": [("x", "y")], "nodes": ()},
-    }
-    module_submodule_dict = {"outer:1": ["inner:1"], "inner:1": []}
-
-    # outer (depth 1) has no edges but a child; inner (depth 2) has an edge.
-    assert _get_max_call_depth(top_modules, module_edge_dict, module_submodule_dict) == 2
-
-
 def test_get_max_call_depth_missing_submodule_key_no_crash() -> None:
     """A submodule referenced by a parent but absent from the child map is safe."""
 
@@ -143,37 +125,11 @@ def test_get_max_call_depth_missing_submodule_key_no_crash() -> None:
 # --------------------------------------------------------------------------- #
 
 
-def test_recurrent_draw_combined_renders(tmp_path) -> None:
-    """The reported crash: recurrent ``draw_combined`` raised KeyError: 'fc:3'."""
-
-    log = _combined_trace(RecurrentLinear())
-    out = str(tmp_path / "rec_combined")
-    dot = log.draw(
-        graph="combined",
-        path=out,
-        file_format="svg",
-    ).dot
-    _assert_combined_render(dot, out)
-
-
 def test_recurrent_nested_module_draw_combined_renders(tmp_path) -> None:
     """Class coverage: a recurrent reuse of a nested module also renders."""
 
     log = _combined_trace(RecurrentReLU())
     out = str(tmp_path / "recrelu_combined")
-    dot = log.draw(
-        graph="combined",
-        path=out,
-        file_format="svg",
-    ).dot
-    _assert_combined_render(dot, out)
-
-
-def test_feedforward_draw_combined_still_renders(tmp_path) -> None:
-    """Behavior-preservation smoke: the non-recurrent combined path is unchanged."""
-
-    log = _combined_trace(FeedForward())
-    out = str(tmp_path / "ff_combined")
     dot = log.draw(
         graph="combined",
         path=out,

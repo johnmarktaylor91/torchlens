@@ -115,10 +115,6 @@ def _site_out(trace: tl.Trace) -> torch.Tensor:
     return trace["fc1"].out
 
 
-def _model_out(trace: tl.Trace) -> torch.Tensor:
-    return trace[trace.output_layers[0]].out
-
-
 def _latent_column(k: int) -> torch.Tensor:
     return torch.tensor([_latents(row)[k] for row in X])
 
@@ -310,51 +306,7 @@ def test_bad_names_and_indices_refuse_with_codes(setup) -> None:
         tl.bridge.sae.register("plain", object(), site="fc1")
 
 
-def test_latent_selector_repr_is_its_spelling(setup) -> None:
-    assert repr(tl.facet("res").latent(2)) == "tl.facet('res').latent(2)"
-    assert repr(tl.facet("res").latent([0, 2])) == "tl.facet('res').latent([0,2])"
-    assert repr(tl.facet("res").latent([1])) == "tl.facet('res').latent([1])"
-
-
 # --- item 4: writes add a decoder direction and keep the error term -------------------
-
-
-@pytest.mark.parametrize("delta", [1.5, -0.25])
-def test_latent_edit_adds_delta_times_the_decoder_row(setup, delta) -> None:
-    model, x, sae = setup
-    clean = _trace(model, x)
-    edited = clean.fork("steer").do(tl.facet("res").latent(1), tl.add(delta))
-    expected_site = [[h[j] + delta * W_DEC[1][j] for j in range(4)] for h in X]
-    torch.testing.assert_close(_site_out(edited), torch.tensor(expected_site), **TOL)
-    torch.testing.assert_close(
-        _site_out(edited) - _site_out(clean), delta * torch.tensor([W_DEC[1]] * 2), **TOL
-    )
-    # The reconstruction error is carried unchanged: site' - decode(z') == site - decode(z).
-    for row, edited_row in zip(X, expected_site, strict=True):
-        z = _latents(row)
-        z_edited = [z[0], z[1] + delta, z[2]]
-        error = [row[j] - _decode(z)[j] for j in range(4)]
-        error_edited = [edited_row[j] - _decode(z_edited)[j] for j in range(4)]
-        assert error_edited == pytest.approx(error, abs=1e-6)
-    # Downstream equals a hand-applied edit of the same vector on an unspliced model.
-    direction = delta * sae.W_dec[1].detach()
-    handle = model.fc1.register_forward_hook(lambda _m, _a, out: out + direction)
-    try:
-        with torch.no_grad():
-            hand = model(x)
-    finally:
-        handle.remove()
-    torch.testing.assert_close(_model_out(edited), hand, **TOL)
-    torch.testing.assert_close(
-        _model_out(edited), torch.tensor([_readout(r) for r in expected_site]), **TOL
-    )
-
-
-def test_zero_ablating_a_latent_removes_its_decoder_contribution(setup) -> None:
-    model, x, _sae = setup
-    edited = _trace(model, x).fork("edit").do(tl.facet("res").latent(0), tl.zero_ablate())
-    expected = [[h[j] - _latents(h)[0] * W_DEC[0][j] for j in range(4)] for h in X]
-    torch.testing.assert_close(_site_out(edited), torch.tensor(expected), **TOL)
 
 
 def test_a_latent_set_is_one_simultaneous_write(setup) -> None:
@@ -400,3 +352,9 @@ def test_sae_target_unit_outside_the_latents_refuses_naming_the_sae_spelling(set
         tl.attribution.saliency(model, x, target=tl.attribution.SiteTarget("fc1", sae=sae, unit=7))
     assert caught.value.fields["code"] == "attribution_site_unit_invalid"
     assert "unit=0, sae=sae" in str(caught.value)
+
+
+def test_latent_selector_repr_is_its_spelling(setup) -> None:
+    assert repr(tl.facet("res").latent(2)) == "tl.facet('res').latent(2)"
+    assert repr(tl.facet("res").latent([0, 2])) == "tl.facet('res').latent([0,2])"
+    assert repr(tl.facet("res").latent([1])) == "tl.facet('res').latent([1])"

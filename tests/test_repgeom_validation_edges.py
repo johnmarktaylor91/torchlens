@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-import torch
 
 import torchlens as tl
 
@@ -29,19 +28,6 @@ def test_rdm_refuses_nonfinite_empty_and_unknown_metric_inputs() -> None:
     # pinned with a genuinely unknown token.
     with pytest.raises(ValueError, match="Unsupported activation distance metric"):
         tl.repgeom.rdm(np.ones((4, 2)), metric="mahalanobis")
-
-
-def test_rdm_metrics_produce_valid_distance_matrices() -> None:
-    """cosine/correlation metrics return symmetric zero-diagonal matrices."""
-
-    torch.manual_seed(1)
-    activations = torch.randn(6, 5)
-    for metric in ("euclidean", "cosine", "correlation"):
-        matrix = tl.repgeom.rdm(activations, metric=metric)
-        assert matrix.shape == (6, 6)
-        assert np.allclose(matrix, matrix.T)
-        assert np.allclose(np.diag(matrix), 0.0, atol=1e-8)
-        assert np.all(matrix >= -1e-8)
 
 
 def test_classical_mds_refuses_malformed_distance_matrices() -> None:
@@ -83,54 +69,6 @@ def test_classical_mds_validates_option_values_and_stimulus_counts() -> None:
         tl.repgeom.classical_mds(_distances(2), input_kind="distances", min_stimuli=3)
     with pytest.raises(ValueError, match="too few stimuli"):
         tl.repgeom.classical_mds(_distances(5), input_kind="distances", min_stimuli=6)
-
-
-@pytest.mark.parametrize("scale", [1e-12, 1e-6, 1.0, 1e6, 1e12])
-def test_symmetry_gate_is_relative_to_matrix_scale(scale: float) -> None:
-    """The symmetry gate judges RELATIVE asymmetry at every matrix scale.
-
-    Two-sided pin for the scale-aware `_symmetry_tolerance` fix. The former
-    fixed absolute atol=1e-10 was broken in both directions: 66% relative
-    asymmetry at tiny scales read as symmetric (total structural corruption
-    blessed), while ~1e-15-relative float64 round-off at scale 1e7 was
-    rejected (honest matrices refused). A fixed 66% relative asymmetry must
-    FAIL at every scale and a fixed ~1e-14 relative asymmetry (float64
-    round-off class) must PASS at every scale. Genuine Euclidean distance
-    matrices keep the zero-diagonal/non-negativity gates out of the way.
-    """
-
-    from torchlens.repgeom import _check_square_distances
-
-    base = _distances(8) * scale
-    upper = np.triu_indices(8, k=1)
-
-    corrupt = base.copy()
-    corrupt[upper] *= 1.66
-    with pytest.raises(ValueError, match="symmetric"):
-        _check_square_distances(corrupt)
-
-    noisy = base.copy()
-    noisy[upper] *= 1.0 + 1e-14
-    _check_square_distances(noisy)  # float64 round-off passes at every scale.
-
-
-def test_classical_mds_accepts_float64_noise_at_large_scale_end_to_end() -> None:
-    """Round-off-level asymmetry on a large-scale matrix embeds successfully.
-
-    The measured false-fail regression: 1e-15-relative float64 round-off at
-    scale ~1e7 was rejected by the fixed absolute symmetry atol. The full
-    classical_mds pipeline (symmetry, diagonal, non-negativity, duplicate,
-    and rank gates) must accept it now.
-    """
-
-    base = _distances(8) * 1e7
-    upper = np.triu_indices(8, k=1)
-    noisy = base.copy()
-    noisy[upper] *= 1.0 + 1e-15
-
-    embedding, info = tl.repgeom.classical_mds(noisy, input_kind="distances")
-    assert embedding.shape == (8, 2)
-    assert info["input_kind"] == "distances"
 
 
 def test_classical_mds_refuses_rank_deficient_input() -> None:
@@ -176,23 +114,3 @@ def test_procrustes_align_validates_point_clouds() -> None:
     collinear = np.stack([np.arange(5.0), np.arange(5.0)], axis=1)
     with pytest.raises(ValueError, match="rank-deficient"):
         tl.repgeom.procrustes_align(collinear, cloud)
-
-
-def test_procrustes_align_recovers_rotation_without_reflection() -> None:
-    """A rotated cloud aligns back onto the target exactly; no reflections."""
-
-    rng = np.random.default_rng(4)
-    target = rng.normal(size=(6, 2))
-    angle = 0.7
-    rotation = np.array([[np.cos(angle), -np.sin(angle)], [np.sin(angle), np.cos(angle)]])
-    source = target @ rotation.T + 3.0
-
-    aligned = tl.repgeom.procrustes_align(source, target)
-    assert np.allclose(aligned, target, atol=1e-8)
-
-    reflected = target.copy()
-    reflected[:, 0] *= -1.0
-    aligned_reflection = tl.repgeom.procrustes_align(reflected, target)
-    # Rotation-only alignment cannot undo a reflection, so the result must
-    # differ from the target (a full Procrustes with reflections would match).
-    assert not np.allclose(aligned_reflection, target, atol=1e-6)

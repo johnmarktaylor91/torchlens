@@ -508,10 +508,12 @@ _MAX_LEDGER_SLACK = 100
 #: test_real_world_models 5150->5200 (ci-fix's pyg-lib skip, deberta jit gap
 #: and documented-limitation acknowledgements, measured 5193). Next 50-line
 #: step above each measurement.
+#: 2026-11-03 test shrink: test_real_world_models 5100->3250 (measured 3247
+#: after per-id deletions). Next 50-line step above the measurement.
 _TEST_FILE_CEILINGS: dict[str, int] = {
     "tests/test_validation.py": 8750,
     "tests/example_models.py": 5500,
-    "tests/test_real_world_models.py": 5100,
+    "tests/test_real_world_models.py": 3250,
     "tests/test_toy_models.py": 4400,
     "tests/test_auto_collapse_metrics.py": 3200,
     "tests/test_backward.py": 2550,

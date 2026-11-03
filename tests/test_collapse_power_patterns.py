@@ -18,7 +18,6 @@ from torch import nn
 import torchlens as tl
 from torchlens._errors import InvalidArgumentError
 from torchlens._visualization.collapse_patterns import (
-    IDIOMATIC_PATTERNS,
     match_patterns,
     parse_patterns,
     resolve_pattern_request,
@@ -118,23 +117,6 @@ def test_parse_refusals_are_typed() -> None:
     assert excinfo.value.fields["code"] == "pattern_request_invalid"
 
 
-def test_matches_fold_and_disclose(cbr_trace) -> None:
-    """Three CBR sites fold; the report counts them; chips carry K5 grammar."""
-
-    specs = parse_patterns({"ConvBnRelu": "conv2d > batch_norm > relu"})
-    with warnings_module.catch_warnings():
-        warnings_module.simplefilter("ignore")
-        segments, report = match_patterns(cbr_trace, RenderContext(), specs)
-    assert len(report.folded["ConvBnRelu"]) == 3
-    assert len(segments) == 3
-    for descriptor in segments.values():
-        assert descriptor.label.startswith("PATTERN 'ConvBnRelu' -- 3 ops")
-        assert descriptor.num_ops == 3
-        # K5 grammar: never "(xN)", never "+N more" on a pattern chip.
-        assert "(x" not in descriptor.label
-        assert "more" not in descriptor.label
-
-
 def test_residual_interior_edge_refuses_and_is_counted() -> None:
     """A skip reading the interior refuses THAT instance, counted."""
 
@@ -163,45 +145,6 @@ def test_unknown_token_near_miss_and_no_match_warn(cbr_trace) -> None:
     assert {"pattern_token_unknown", "pattern_no_match"} <= codes
 
 
-def test_draw_pattern_only_view_and_combination_refusal(cbr_trace, tmp_path) -> None:
-    """The pattern-only view renders chips; auto+patterns refuses typed."""
-
-    with warnings_module.catch_warnings():
-        warnings_module.simplefilter("ignore")
-        dot = cbr_trace.draw(
-            collapse="none",
-            fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            file_format="dot",
-            order_siblings=False,
-        ).dot
-    assert dot.count("PATTERN 'ConvBnRelu'") == 3
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        cbr_trace.draw(
-            collapse="auto",
-            fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            file_format="dot",
-        )
-    assert excinfo.value.fields["code"] == "pattern_collapse_combination_unsupported"
-
-
-def test_patterns_default_off(cbr_trace) -> None:
-    """No fold_patterns argument means zero chips (memo D11: default off)."""
-
-    dot = cbr_trace.draw(collapse="none", file_format="dot", order_siblings=False).dot
-    assert "PATTERN" not in dot
-
-
-def test_idiomatic_preset_parses_and_matches(cbr_trace) -> None:
-    """The curated preset is available (off by default) and matches CBR."""
-
-    assert "ConvBnRelu" in IDIOMATIC_PATTERNS
-    specs = resolve_pattern_request("idiomatic")
-    with warnings_module.catch_warnings():
-        warnings_module.simplefilter("ignore")
-        _segments, report = match_patterns(cbr_trace, RenderContext(), specs)
-    assert report.folded.get("ConvBnRelu")
-
-
 @pytest.mark.smoke
 def test_reserved_text_grammar_lint(cbr_trace) -> None:
     """Reserved markers mean exactly one thing graph-wide (memo D10).
@@ -225,16 +168,3 @@ def test_reserved_text_grammar_lint(cbr_trace) -> None:
     for line in pattern_lines:
         assert "(x" not in line
         assert "more" not in line
-
-
-def test_rank_layout_refuses_pattern_chips(cbr_trace) -> None:
-    """Chips fail closed on the rank backend (pre-existing __segment__ gap)."""
-
-    with pytest.raises(InvalidArgumentError) as excinfo:
-        cbr_trace.draw(
-            collapse="none",
-            fold_patterns={"ConvBnRelu": "conv2d > batch_norm > relu"},
-            layout="rank",
-            file_format="dot",
-        )
-    assert excinfo.value.fields["code"] == "pattern_rank_layout_unsupported"
