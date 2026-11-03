@@ -125,7 +125,7 @@ def write_members(
             "The bundle writer expected a mapping of member traces.",
             "build the bundle with tl.Bundle({name: trace, ...})",
         )
-    (bundle_root / MEMBERS_DIR).mkdir()
+    (bundle_root / MEMBERS_DIR).mkdir(mode=0o700)
     references: list[dict[str, str]] = []
     for index, (name, trace) in enumerate(members.items()):
         relative_path = member_relative_path(index, str(name))

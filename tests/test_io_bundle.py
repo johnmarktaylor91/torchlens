@@ -642,9 +642,11 @@ def test_bundle_version_policy_rows(
     resolved_expected_text = expected_text() if callable(expected_text) else expected_text
 
     if expectation == "python_major_mismatch":
+        # The 3.0 artifact is JSON plus safetensors: a Python major mismatch is advisory
+        # (the 2.x refusal came from its pickle failing under the other interpreter).
         with pytest.warns(UserWarning, match="python_version=999.0.0"):
-            with pytest.raises(ArtifactError, match="python_version=999.0.0"):
-                load(bundle_path)
+            loaded = load(bundle_path)
+        assert loaded.source.class_name == "_ConvBundleModel"
         return
 
     if expectation == "extra_blob_warning":

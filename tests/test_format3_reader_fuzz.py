@@ -69,7 +69,12 @@ def _load(root):
 
 
 def _expect_refusal_or_roundtrip(root, original, built_counter):
-    """Load the mutated ``root``: a typed refusal, or a load that resaves equal to ``original``."""
+    """Load the mutated ``root``: a typed refusal, or a load whose resave equals what it loaded.
+
+    ``original`` names the save level. A mutation the reader accepts is a value change (a
+    free-text cell swapped for another string), so fidelity is measured against ``root``, the
+    artifact that was loaded, never against the pristine copy.
+    """
 
     try:
         loaded = _load(root)
@@ -80,7 +85,7 @@ def _expect_refusal_or_roundtrip(root, original, built_counter):
     again = resave(
         loaded, root.parent / (root.name + "-again"), read_manifest(original)["save_level"]
     )
-    assert record_table_diffs(original, again) == []
+    assert record_table_diffs(root, again) == []
     return "roundtrip"
 
 

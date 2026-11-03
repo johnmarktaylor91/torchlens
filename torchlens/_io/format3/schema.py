@@ -530,6 +530,44 @@ _AUDIT_FAMILIES: dict[str, dict[str, Any]] = {
             },
         ),
     },
+    # Call-site scalars: a swapped cell type refuses instead of loading as the wrong kind.
+    "call_location_file": {"record": "func_call_location", "column": "file", **_STR},
+    "call_location_line": {
+        "record": "func_call_location",
+        "column": "line_number",
+        **_INT,
+        "nullable": True,
+    },
+    "call_location_func_name": {
+        "record": "func_call_location",
+        "column": "func_name",
+        **_STR,
+        "nullable": True,
+    },
+    "call_location_func_qualname": {
+        "record": "func_call_location",
+        "column": "func_qualname",
+        **_STR,
+        "nullable": True,
+    },
+    "call_location_firstlineno": {
+        "record": "func_call_location",
+        "column": "code_firstlineno",
+        **_INT,
+        "nullable": True,
+    },
+    "call_location_col_offset": {
+        "record": "func_call_location",
+        "column": "col_offset",
+        **_INT,
+        "nullable": True,
+    },
+    "call_location_source_loading": {
+        "record": "func_call_location",
+        "column": "source_loading_enabled",
+        **_BOOL,
+        "nullable": True,
+    },
     "selection_recipes": {
         "requires": ("trace", "intervention_audit", "present"),
         "record": "op",
