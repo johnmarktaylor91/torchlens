@@ -30,6 +30,7 @@ from typing import Any, Final
 
 import torch
 
+from ._container_errors import ContainerReconstructionError
 from ._container_type_probes import (
     _fields_are_inert_settable,
     _inert_new,
@@ -254,8 +255,6 @@ def rebuild_distribution(
     ContainerReconstructionError
         If the type is not loaded or the recorded data is not admissible.
     """
-
-    from .container import ContainerReconstructionError
 
     state, aliases, problem = _parse_aux_data(spec.aux_data, tuple(spec.fields))
     if container_type is None:
