@@ -20,9 +20,9 @@ import torch.nn as nn
 import torchlens as tl
 from torchlens._capture import projectors
 from torchlens._capture.projectors import RefreshProjector
+from torchlens._data_classes import _trace_rerun_state
 from torchlens._data_classes._state_adapter import state_items
 from torchlens._data_classes.op import Op
-from torchlens._data_classes.trace import Trace
 
 #: Op field writes per executed op on the base (f271e1568) for ``_stack()`` under
 #: ``until="block1"``, measured by this file's counter (the refresh copy plus the
@@ -114,7 +114,7 @@ def _literal_names(source: str, opener: str, closer: str) -> set[str]:
 def test_mirrored_field_lists_match_the_trace_refresh():
     """The projection's mirrored field lists equal the ones the full refresh uses."""
 
-    source = inspect.getsource(Trace._refresh_rerun_op_from)
+    source = inspect.getsource(_trace_rerun_state.refresh_rerun_op_from)
     kept = _literal_names(source, "preserved_fields = {", "}")
     extra = _literal_names(source, "for field_name in (", ")")
     assert kept == set(projectors._RERUN_KEPT_OP_FIELDS)
