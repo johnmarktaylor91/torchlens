@@ -10,7 +10,7 @@ import pytest
 from torchlens.backends.paddle import wrappers as paddle_wrappers
 from torchlens.backends.paddle.wrappers import PaddleInventory, _PaddleWrapperRegistry
 
-pytestmark = pytest.mark.rare
+pytestmark = [pytest.mark.rare, pytest.mark.backend_paddle]
 
 paddle = pytest.importorskip("paddle")
 

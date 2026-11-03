@@ -107,7 +107,7 @@ def test_record_tier_disposition_trio_flushes_the_tail() -> None:
                     ShapeCrash(),
                     x,
                     narrate=NarrationOptions(sites=True, sink=sink),
-                    on_forward_error=mode,
+                    recording=tl.options.RecordingOptions(on_forward_error=mode),
                 )
         except TraceCaptureError as exc:
             assert isinstance(exc.__cause__, RuntimeError)

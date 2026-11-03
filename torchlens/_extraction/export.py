@@ -241,7 +241,7 @@ def export_extraction(
     path: str | Path,
     dest: str | Path,
     *,
-    format: str = "npy",
+    file_format: str = "npy",
     keys: list[str] | None = None,
     widen_unsupported: bool = True,
 ) -> Path:
@@ -253,7 +253,7 @@ def export_extraction(
         Source artifact directory.
     dest:
         Destination directory (created; published atomically by rename).
-    format:
+    file_format:
         ``"npy"`` (base install) | ``"hdf5"`` | ``"mat"`` (both behind the
         named optional extra; lazy imports).
     keys:
@@ -277,12 +277,12 @@ def export_extraction(
         ``extraction_export_mat_v5_limit`` for MAT members over 2 GB.
     """
 
-    if format not in EXPORT_FORMATS:
+    if file_format not in EXPORT_FORMATS:
         raise InvalidArgumentError(
-            f"format= value {format!r} is not in the closed vocabulary {EXPORT_FORMATS}.",
+            f"file_format= value {file_format!r} is not in the closed vocabulary {EXPORT_FORMATS}.",
             code="extraction_export_format_invalid",
             remedy="pass 'npy', 'hdf5', or 'mat'",
-            value=repr(format),
+            value=repr(file_format),
         )
     from .reader import open_extraction
 
@@ -321,14 +321,14 @@ def export_extraction(
         widen_unsupported=widen_unsupported,
         conversions=conversions,
     )
-    if format == "npy":
+    if file_format == "npy":
         members = _export_npy(job)
-    elif format == "hdf5":
+    elif file_format == "hdf5":
         members = _export_hdf5(job)
     else:
         members = _export_mat(job)
     _write_provenance(reader, temp)
-    _write_contract(job, format, members)
+    _write_contract(job, file_format, members)
     for path in sorted(temp.rglob("*")):
         if path.is_file():
             fsync_file(path)
@@ -549,7 +549,7 @@ def _export_mat(job: _ExportJob) -> list[dict[str, Any]]:
                 "arbitrary HDF5 file is never mislabeled MAT v7.3.",
                 code="extraction_export_mat_v5_limit",
                 remedy=(
-                    "export format='hdf5' and read it in MATLAB with "
+                    "export with file_format='hdf5' and read it in MATLAB with "
                     "h5read('extraction.h5', '/<key>')"
                 ),
                 key=key,

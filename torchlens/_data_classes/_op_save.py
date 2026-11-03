@@ -212,6 +212,12 @@ def _warn_reference_save_mode_once() -> None:
     _WARNED_REFERENCE_SAVE_MODE = True
 
 
+def _is_inplace_func_name(func_name: str | None) -> bool:
+    """Return whether ``func_name`` is an in-place torch spelling (``add_``, not ``__add__``)."""
+
+    return func_name is not None and func_name.endswith("_") and not func_name.endswith("__")
+
+
 def _effective_activation_save_mode(
     trace: Trace | None,
     *,
@@ -231,7 +237,12 @@ def _effective_activation_save_mode(
         )
     if save_mode == "reference":
         _warn_reference_save_mode_once()
-        if is_inplace or (func_name is not None and func_name.endswith("_")):
+        # In-place torch names end in one underscore (``add_``); the operator
+        # dunders (``__add__``, ``__matmul__``, ``__getitem__``) end in two and
+        # are out-of-place, so a reference-mode capture keeps their outputs by
+        # reference like any other op. The version-counter ``is_inplace`` flag
+        # still catches ``__iadd__`` and ``__setitem__``.
+        if is_inplace or _is_inplace_func_name(func_name):
             return "copy"
     return save_mode
 

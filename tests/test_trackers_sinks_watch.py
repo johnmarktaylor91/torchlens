@@ -117,7 +117,7 @@ class TestLoudFailures:
 
     # Kept by the shrink-r4 coverage proof: sole branch coverage of trackers/_op_grain.py, trackers/_watch.py.
     def test_tier_o_ships_and_activation_grads_defer_typed(self) -> None:
-        """Removal test (U32.1): op grain is no longer a deferred tier.
+        """Removal test: op grain is no longer a deferred tier.
 
         ``grain="op"`` used to refuse ``watch_tier_unavailable`` ("not shipped
         in this build"); it now ships behind consent, so the same call refuses

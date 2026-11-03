@@ -217,15 +217,16 @@ _CAPTURE_FIELDS = {
 def _door_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     """Spell former flat record keywords the way the door takes them now.
 
-    Recorder knobs stay flat door keywords, capture knobs ride
+    Recorder knobs ride ``recording=RecordingOptions(...)``, capture knobs ride
     ``capture=CaptureOptions(...)`` and ``halt`` is ``stop_after=``; the typed
-    refusal still fires where the Recorder resolves the merged values.
+    refusal still fires inside the door call (the option constructors validate).
     """
 
     out: dict[str, Any] = {}
     recording = {k: v for k, v in kwargs.items() if k in _RECORDING_FIELDS}
     capture = {k: v for k, v in kwargs.items() if k in _CAPTURE_FIELDS}
-    out.update(recording)
+    if recording:
+        out["recording"] = tl.options.RecordingOptions(**recording)
     if capture:
         out["capture"] = tl.options.CaptureOptions(**capture)
     for key, value in kwargs.items():

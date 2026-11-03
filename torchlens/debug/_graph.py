@@ -419,7 +419,7 @@ def first_divergence(
 
 
 def dead_neurons_rows(
-    trace: Trace, *, dim: int = 1, threshold: float = 0.0
+    trace: Trace, *, dim: int = 1, max_activation: float = 0.0
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     """Pandas-free core of :func:`dead_neurons` (agent stage-0 item 4).
 
@@ -429,7 +429,7 @@ def dead_neurons_rows(
         Completed TorchLens trace.
     dim:
         Feature dimension.
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -482,7 +482,7 @@ def dead_neurons_rows(
         else:
             max_by_unit = out.detach()
             var_by_unit = torch.zeros_like(out.detach())
-        dead_mask = (max_by_unit <= threshold) | (var_by_unit == 0)
+        dead_mask = (max_by_unit <= max_activation) | (var_by_unit == 0)
         dead_indices = torch.nonzero(dead_mask, as_tuple=False).flatten().tolist()
         total_units = int(out.shape[feature_dim])
         dead_count = len(dead_indices)
@@ -501,7 +501,7 @@ def dead_neurons_rows(
 
     attrs: dict[str, Any] = {
         "skipped": skipped,
-        "threshold": threshold,
+        "max_activation": max_activation,
         "dim": dim,
         "note": "single-trace zero-variance is insufficient sample",
         "torchlens_capture_honesty": capture_honesty_facts(trace),
@@ -509,7 +509,7 @@ def dead_neurons_rows(
     return rows, attrs
 
 
-def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Report:
+def dead_neurons(trace: Trace, *, dim: int = 1, max_activation: float = 0.0) -> Report:
     """Find units that are inactive or zero-variance in one completed trace.
 
     A single trace is a single example; zero-variance here is an insufficient-sample
@@ -522,7 +522,7 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
         Completed TorchLens trace.
     dim:
         Feature dimension.
-    threshold:
+    max_activation:
         Maximum activation value for post-activation death.
 
     Returns
@@ -535,7 +535,7 @@ def dead_neurons(trace: Trace, *, dim: int = 1, threshold: float = 0.0) -> Repor
         :func:`dead_neurons_rows` (the pandas-free core).
     """
 
-    rows, attrs = dead_neurons_rows(trace, dim=dim, threshold=threshold)
+    rows, attrs = dead_neurons_rows(trace, dim=dim, max_activation=max_activation)
     pd = _require_pandas()
     frame = pd.DataFrame(
         rows,

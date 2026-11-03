@@ -40,7 +40,7 @@ def test_save_predicate_invalid_return_carries_predicate_return_invalid() -> Non
             _model(),
             _x(),
             save=lambda ctx: "bogus",
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(on_predicate_error="fail-fast"),
         )
     assert exc_info.value.fields["code"] == "predicate_return_invalid"
     assert exc_info.value.fields["remedy"]
@@ -61,8 +61,9 @@ def test_invalid_default_capture_decision_carries_predicate_default_invalid() ->
         tl.record(
             _model(),
             _x(),
-            default_op="bogus",
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(
+                default_op="bogus", on_predicate_error="fail-fast"
+            ),
         )
     assert exc_info.value.fields["code"] == "predicate_default_invalid"
 
@@ -78,7 +79,7 @@ def test_accumulated_predicate_failures_carry_predicate_evaluation_failed() -> N
             _model(),
             _x(),
             save=raising_predicate,
-            on_predicate_error="accumulate",
+            recording=tl.options.RecordingOptions(on_predicate_error="accumulate"),
         )
     assert exc_info.value.fields["code"] == "predicate_evaluation_failed"
     assert exc_info.value.failures
@@ -91,8 +92,10 @@ def test_keep_grad_integer_dtype_carries_predicate_storage_conflict() -> None:
         tl.record(
             _model(),
             _x(),
-            default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
-            on_predicate_error="fail-fast",
+            recording=tl.options.RecordingOptions(
+                default_op=CaptureSpec(save_grad=True, dtype=torch.int32),
+                on_predicate_error="fail-fast",
+            ),
         )
     assert exc_info.value.fields["code"] == "predicate_storage_conflict"
 

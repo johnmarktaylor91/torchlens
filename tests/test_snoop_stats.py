@@ -86,7 +86,7 @@ def test_exact_budget_refusal_fails_the_capture_typed() -> None:
                 tl.trace(
                     nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
                     torch.randn(2, 4),
-                    narrate=NarrationOptions(sites=True, sink=io.StringIO(), stats="exact"),
+                    narrate=NarrationOptions(sites=True, sink=io.StringIO(), value_stats="exact"),
                 )
     finally:
         stats_module.EXACT_NUMEL_BUDGET = original
@@ -99,14 +99,14 @@ def test_reuse_rung_prints_only_paid_for_facts() -> None:
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        narrate=NarrationOptions(sites=True, sink=sink, stats="reuse"),
+        narrate=NarrationOptions(sites=True, sink=sink, value_stats="reuse"),
     )
     assert "|" not in sink.getvalue()
     sink_armed = io.StringIO()
     tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        narrate=NarrationOptions(sites=True, sink=sink_armed, stats="reuse"),
+        narrate=NarrationOptions(sites=True, sink=sink_armed, value_stats="reuse"),
         capture=tl.options.CaptureOptions(on_nonfinite="track"),
     )
     armed_lines = [line for line in sink_armed.getvalue().split("\n") if "relu" in line]
@@ -215,7 +215,7 @@ def test_two_stage_tripwire_verdict_identity(case: str) -> None:
 
 
 def test_metadata_echo_reads_no_payload() -> None:
-    """stats='off' narration never touches the tensor (zero value reads)."""
+    """value_stats='off' narration never touches the tensor (zero value reads)."""
 
     reads: list[str] = []
 
@@ -226,7 +226,7 @@ def test_metadata_echo_reads_no_payload() -> None:
     log = tl.trace(
         nn.Sequential(nn.Linear(4, 8), nn.ReLU()),
         torch.randn(2, 4),
-        narrate=NarrationOptions(sites=True, sink=sink, stats="off"),
+        narrate=NarrationOptions(sites=True, sink=sink, value_stats="off"),
     )
     del log, reads, SpyTensor
     transcript = sink.getvalue()

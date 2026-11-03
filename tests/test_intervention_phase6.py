@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import importlib
+import pickle
+import warnings
 from collections.abc import Callable
 from typing import Any, cast
 
@@ -464,9 +466,83 @@ def test_replay_warns_on_saved_edge_divergence() -> None:
 
 
 def test_replay_rejects_non_intervention_ready_logs() -> None:
-    """Replay requires intervention-ready metadata."""
+    """Replay requires per-op argument templates; a predicate recording keeps none."""
+
+    log = tl.record(ResidualRelu(), torch.randn(2, 3), save=tl.func("relu")).to_trace()
+
+    with pytest.raises(ReplayPreconditionError, match="argument templates"):
+        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+
+
+def test_replay_runs_on_default_capture() -> None:
+    """A default capture records argument templates, so replay needs no replayable=True."""
 
     log = tl.trace(ResidualRelu(), torch.randn(2, 3))
 
-    with pytest.raises(ReplayPreconditionError):
-        log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+    log.push(replay=tl.options.ReplayOptions(hooks={tl.func("relu"): _identity_hook}))
+
+    assert log.last_run["engine"] == "replay"
+
+
+class _GeluStages(torch.nn.Module):
+    """Two stages of linear + GELU, so a selector can fan out to several sites."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.stages = torch.nn.ModuleList(
+            [
+                torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.GELU(), torch.nn.GELU()),
+                torch.nn.Sequential(torch.nn.Linear(4, 4), torch.nn.GELU(), torch.nn.GELU()),
+            ]
+        )
+        self.head = torch.nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        for stage in self.stages:
+            x = stage(x)
+        return self.head(x)
+
+
+def test_default_trace_do_matches_replayable_replay_and_rerun() -> None:
+    """The README shape trace.do(site, edit) works on a default trace and agrees exactly."""
+
+    torch.manual_seed(0)
+    model = _GeluStages().eval()
+    x = torch.randn(3, 4)
+    site = tl.func("gelu") & tl.in_module("stages.1")
+
+    default = tl.trace(model, x)
+    assert default.is_replayable is False
+    replayable = tl.trace(model, x, capture=tl.options.CaptureOptions(replayable=True))
+    rerun = tl.trace(model, x).fork()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", tl.errors.InterventionWarning)
+        default.do(site, tl.zero_ablate())
+        replayable.do(site, tl.zero_ablate())
+        rerun.do(site, tl.zero_ablate(), model=model, inputs=x)
+    assert default.last_run["engine"] == "replay"
+
+    def final(trace: Any) -> torch.Tensor:
+        return cast(torch.Tensor, trace[trace.output_layers[0]].out)
+
+    with torch.no_grad():
+        hooked_in = model.stages[0](x)
+        expected = model.head(torch.zeros_like(model.stages[1][0](hooked_in)))
+    assert torch.equal(final(default), final(replayable))
+    assert torch.equal(final(default), final(rerun))
+    assert torch.allclose(final(default), expected)
+
+
+def test_default_trace_pickle_drops_argument_templates() -> None:
+    """Templates hold live parameters; a pickled default trace must not carry the weights."""
+
+    model = torch.nn.Sequential(torch.nn.Linear(1024, 1024), torch.nn.ReLU())
+    log = tl.trace(model, torch.randn(1, 1024))
+    assert any(op.args_template is not None for op in log.ops)
+
+    data = pickle.dumps(log)
+    restored = pickle.loads(data)
+
+    weight_bytes = model[0].weight.numel() * model[0].weight.element_size()
+    assert len(data) < weight_bytes
+    assert all(op.args_template is None for op in restored.ops)

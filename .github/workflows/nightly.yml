@@ -4,8 +4,8 @@ name: Nightly
 # smoke matrix (torch floors to newest admitted, every advertised python), the
 # latest-torch canary, the not-slow tier in the shards test-tiers.json
 # declares, the stress matrix's pre-merge subset, coverage floors, the byte oracles, the preview backends, the
-# packaging and wheel gates, the real-dependency bridge legs and the
-# dependency audit.
+# packaging and wheel gates, the extended packaging install sets, the
+# real-dependency bridge legs and the dependency audit.
 on:
   schedule:
     - cron: "17 4 * * *"
@@ -1024,6 +1024,13 @@ jobs:
             dev: PYTHON
             import_check: "import tinygrad"
             executed_floor: 25
+            # Tests that drive MLX and tinygrad in one process carry both
+            # markers (tests/test_backends_finalize_cert10.py) and run as a
+            # second selection here, after MLX (the mlx leg's pin) is added.
+            pair_install: '"mlx==0.26.3"'
+            pair_marker: backend_mlx and backend_tinygrad
+            pair_import_check: "import mlx.core, mlx.nn, tinygrad"
+            pair_floor: 4
           - backend: paddle
             # Pinned to the 3.3 minor stream the preview suite is validated
             # against (paddle 3.3.x in the parity env); paddle minors have
@@ -1104,6 +1111,7 @@ jobs:
         with:
           path: |
             ~/.cache/huggingface
+            ~/.cache/kagglehub
             ~/.keras
             ~/.cache/paddle
             ~/.cache/tinygrad
@@ -1124,6 +1132,38 @@ jobs:
           mkdir -p "${{ runner.temp }}/ecosystem"
           python -m tests.conformance.scorecard --backend "$BACKEND" \
             > "${{ runner.temp }}/ecosystem/scorecard-$BACKEND.json"
+
+      - name: Run the ${{ matrix.backend }} slow preview tests
+        # Rare preview tests that are also slow (the pretrained ecosystem
+        # rows, e.g. tests/test_paddle_ecosystem.py) run here with the
+        # ecosystem switch on, after the roster step fetched or restored their
+        # weights. A leg with no such test collects nothing (pytest exit 5).
+        env:
+          TORCHLENS_CONFORMANCE_ECOSYSTEM: "1"
+          MLX_DISABLE_COMPILE: "1"
+          TORCHLENS_RUN_UNSTABLE_MLX_TESTS: "1"
+          DEV: ${{ matrix.dev || '' }}
+        run: |
+          mkdir -p "${{ runner.temp }}/ecosystem"
+          rc=0
+          pytest tests/ -m "${{ matrix.marker }} and slow" --tb=short \
+            --junitxml="${{ runner.temp }}/ecosystem/preview-slow-${{ matrix.backend }}.junit.xml" || rc=$?
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 5 ]; then exit "$rc"; fi
+
+      - name: Run the ${{ matrix.backend }} leg's cross-framework preview tests
+        # Only legs that declare a pair: add the second framework, prove both
+        # import, run the tests marked for both, and declare their floor.
+        if: ${{ !cancelled() && matrix.pair_marker }}
+        env:
+          MLX_DISABLE_COMPILE: "1"
+          TORCHLENS_RUN_UNSTABLE_MLX_TESTS: "1"
+          DEV: ${{ matrix.dev || '' }}
+        run: |
+          uv pip install --system ${{ matrix.pair_install }}
+          python -c '${{ matrix.pair_import_check }}'
+          pytest tests/ -m "${{ matrix.pair_marker }} and not slow" --tb=short \
+            --junitxml="${{ runner.temp }}/junit/preview-${{ matrix.backend }}-pair.junit.xml"
+          echo "preview-${{ matrix.backend }}-pair.junit.xml ${{ matrix.pair_floor }}" >> "${{ runner.temp }}/junit/legs.floor"
 
       - name: Upload the ${{ matrix.backend }} ecosystem scorecard
         if: ${{ !cancelled() }}
@@ -1256,7 +1296,7 @@ jobs:
                 tqdm.__version__, graphviz.__version__, torch.__version__,
                 safetensors.__version__)
           trace = tl.trace(nn.Sequential(nn.Linear(4, 3), nn.ReLU()), torch.randn(2, 4))
-          assert trace.num_ops >= 2
+          assert len(trace.ops) >= 2
           # r7 R83-3: the floors for safetensors (tlspec blobs) and pillow
           # (drawing surfaces) resolved here but were never EXERCISED -- a
           # floor too low to carry the API TorchLens calls still passed. One
@@ -1265,8 +1305,8 @@ jobs:
               bundle = Path(tmp) / "floor.tlspec"
               tl.save(trace, str(bundle))
               loaded = tl.load(str(bundle))
-              assert loaded.num_ops == trace.num_ops
-              loaded.draw(vis_save_only=True, vis_outpath=str(Path(tmp) / "floor_graph"))
+              assert len(loaded.ops) == len(trace.ops)
+              loaded.draw(path=str(Path(tmp) / "floor_graph"))
               loaded.cleanup()
           print("floor-env capture + save/load + draw OK")
           PY
@@ -1826,7 +1866,7 @@ jobs:
     # which permits this CI use.
     name: Recipe pages with every peer installed
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -1876,6 +1916,7 @@ jobs:
             himalaya==0.4.11 scikit-learn==1.7.2 scipy==1.15.3 \
             sae-lens==6.54.0 eai-sparsify==1.3.3 "nnsight>=0.6" wandb \
             timm fancy-einsum "open_clip_torch==3.3.0" line_profiler \
+            "transformer-lens==3.8.0" huggingface_hub safetensors \
             "netrep @ git+https://github.com/ahwillia/netrep@0186b8a77ec1ebaf541cc8f7173cb2556df8a8f0" \
             "torch==$TV" "transformers==$TF" "torchvision==$TVV"
           # These declare dependencies that would move torch, transformers or
@@ -1905,7 +1946,7 @@ jobs:
         # A skip counts as a failure on this leg (maximum skipped fraction 0):
         # every page's peer is installed, so a skip means a page went unrun.
         run: |
-          echo "peer-recipes.junit.xml 51 0" >> "$RUNNER_TEMP/junit/legs.floor"
+          echo "peer-recipes.junit.xml 53 0" >> "$RUNNER_TEMP/junit/legs.floor"
 
       # The SAE export consumers install last and run in their own step: one
       # of them ships a top-level ``tests`` package that shadows the repo's,
@@ -2340,12 +2381,154 @@ jobs:
             --ignore-vuln PYSEC-2026-3624
 
 
+  notebooks:
+    # Nothing executed the user notebooks, so eight of them (the
+    # README's ten-minute tutorial included) rotted unnoticed through two rename
+    # rounds. This leg executes every user notebook (notebooks/*.ipynb, the
+    # learning path notebooks/learn/*.ipynb and examples/**/*.ipynb; the
+    # developer audit notebooks are not in the set)
+    # with nbclient, one kernel per notebook, a per-cell and a whole-notebook
+    # timeout, and names the notebook and cell of every failure. Nightly only:
+    # the HF model downloads and about twelve minutes of execution do not belong
+    # on every push. It runs no pytest, so it declares no executed-test floor.
+    name: User notebooks (nbclient)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "pyproject.toml"
+
+      - name: Install graphviz
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y graphviz
+          echo 'graph { a -- b }' | neato -Tsvg > /dev/null
+
+      - name: Install torch, TorchLens and the notebook kernel
+        run: |
+          # --index-strategy unsafe-best-match rationale (R61, reviewed): both indexes are reputable and the torch pins are exact `==X+cpu` local versions only the torch index serves, so cross-index confusion cannot select a different name/version; first-index would break resolving torch's +cpu artifacts alongside PyPI deps.
+          # The [test] extra carries nbclient and ipykernel.
+          uv pip install --system \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple \
+            --index-strategy unsafe-best-match \
+            -e ".[dev,test,tabular,viz]" \
+            "torch==2.13.0+cpu" \
+            "torchvision==0.28.0+cpu" \
+            "transformers==5.18.0"
+          uv pip check
+          python -c "import nbclient, ipykernel, torch; print('nbclient', nbclient.__version__, 'ipykernel', ipykernel.__version__, 'torch', torch.__version__)"
+
+      - name: Restore the Hugging Face model cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/hf-cache
+          # Keyed on the notebooks: a notebook edit that pulls a new model
+          # refreshes the cache; the restore key reuses the last one meanwhile.
+          key: notebooks-hf-${{ hashFiles('notebooks/*.ipynb', 'notebooks/learn/*.ipynb', 'examples/**/*.ipynb') }}
+          restore-keys: notebooks-hf-
+
+      - name: Execute every user notebook
+        env:
+          HF_HOME: ${{ runner.temp }}/hf-cache
+          MPLBACKEND: Agg
+          OMP_NUM_THREADS: "2"
+        run: python scripts/run_notebooks.py -j 2
+
+  packaging-extended-sets:
+    name: Packaging install sets (extended group)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # pr.yml's packaging-sets/packaging-install legs run the `pr` group of
+    # tools/packaging/matrix.toml on every pull request; the `extended` group
+    # (every other extras set) runs here once a night. Both read the same
+    # generated constraints, and the steps below mirror pr.yml's: keep the
+    # two in lockstep. A leg of its own rather than calling pr.yml, which
+    # would rerun the whole pull-request gate every night.
+    outputs:
+      include: ${{ steps.sets.outputs.include }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Check the generated constraints and list the extended sets
+        id: sets
+        run: |
+          python tools/packaging/generate_constraints.py --check
+          echo "include=$(python tools/packaging/generate_constraints.py --list-sets --group extended)" >> "$GITHUB_OUTPUT"
+
+  packaging-extended-install:
+    name: Clean install (${{ matrix.set }}, python ${{ matrix.python }})
+    needs: packaging-extended-sets
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    # Builds the wheel and sdist, installs each into a fresh venv with the
+    # set's extras under tools/packaging/constraints/<set>.txt and probes it
+    # (tests/packaging_install/); the extended sets resolve against the live
+    # indexes only here and on manual dispatch of pr.yml.
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.packaging-extended-sets.outputs.include) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          cache-dependency-glob: "tools/packaging/constraints/*.txt"
+
+      - name: Install the test runner
+        # The runner environment only builds and drives the venvs; torchlens
+        # and its extras install inside each fresh venv, never here.
+        run: uv pip install --system "pytest>=8,<10" "build>=1.2" "tomli>=2; python_version < '3.11'"
+
+      - name: Run the clean-install tests for this set (PASSED-count attested)
+        env:
+          TORCHLENS_PACKAGING_SETS: ${{ matrix.set }}
+        # --noconftest: tests/conftest.py imports torch and torchlens, which
+        # this runner environment deliberately lacks. One set is two install
+        # cases (wheel and sdist), so both must pass.
+        run: |
+          mkdir -p "${{ runner.temp }}/junit"
+          python -m pytest tests/packaging_install -m packaging --noconftest -p no:cacheprovider --tb=short -q \
+            --junitxml="${{ runner.temp }}/junit/packaging-${{ matrix.set }}.junit.xml"
+          echo "packaging-${{ matrix.set }}.junit.xml 0 --min-passed 2" >> "${{ runner.temp }}/junit/legs.floor"
+
+      - name: Upload junit and executed-test floors
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-${{ github.job }}-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/junit/
+          if-no-files-found: error
+          retention-days: 30
+
   attest:
     name: Executed-test floors (every leg)
     # One check for the whole workflow: every test job above declares its
     # legs' floors in a legs.floor file beside its junit; this job checks all
     # of them, so a leg whose suite silently skipped or hollowed out is red.
-    needs: [smoke-matrix, tier, stress-subset, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract]
+    needs: [smoke-matrix, tier, stress-subset, latest-canary, capture-byte-oracle, preview-backends, hf-band-legs, lit-real, bridges-real, peer-recipes, brainscore-live, tlens-oracle-canary, netron-vendor, model-explorer-contract, packaging-extended-install]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10

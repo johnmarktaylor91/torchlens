@@ -119,7 +119,9 @@ class ProfileReport:
     # one row per op. DOCUMENTED-UNSTABLE spelling.
     group_by: str | None = None
 
-    def to_pandas(self, *, include_totals: bool = False, evidence: bool = False) -> pd.DataFrame:
+    def to_pandas(
+        self, *, include_totals: bool = False, include_evidence: bool = False
+    ) -> pd.DataFrame:
         """Return a copy of the underlying profile dataframe.
 
         The stamped capture-honesty facts and the column-additivity map
@@ -133,7 +135,7 @@ class ProfileReport:
             additive families carry the whole-capture partition totals --
             the sort/top_k view above it never changes these denominators
             (D6).
-        evidence:
+        include_evidence:
             Interleave per-cell evidence columns (``<column>_evidence``)
             into the frame (costreport D9's inline form). The labels are
             the same :meth:`honesty` projection; the ``TOTAL`` row carries
@@ -144,9 +146,8 @@ class ProfileReport:
         pandas.DataFrame
             Resource profile rows.
         """
-
         frame = self.frame.copy()
-        if evidence:
+        if include_evidence:
             honesty_frame = self._honesty_table()
             for column in ("time", "flops", "activation_memory", "param_count"):
                 frame.insert(
@@ -174,7 +175,6 @@ class ProfileReport:
 
     def _totals_row(self) -> dict[str, Any]:
         """The explicit totals row (sumfam item 12): partition denominators."""
-
         row: dict[str, Any] = dict.fromkeys(self.frame.columns)
         row["name"] = "TOTAL"
         row["kind"] = "total"

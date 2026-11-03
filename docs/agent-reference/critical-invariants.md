@@ -193,7 +193,7 @@
     `save=` predicate or the save-all default), each module call collected by its call number.
     Per-call input, path, output structure/shape/dtype, and control-witness guards remain
     mandatory; divergence always raises. `until=` on a live fast run cuts the native forward
-    after the saved site (U26.3): the cut is a `live_stop_after` truncation, later sites read
+    after the saved site: the cut is a `live_stop_after` truncation, later sites read
     `None` for that run, and the verdict is `unverifiable` (no whole-forward fingerprint), which
     marks the live trace monotonically like every truncated run product. `fast=False`
     preserves the full transaction and attestation contract. The live session also fires a
@@ -244,3 +244,9 @@
   `AtenOpsUnavailableError`; with the switch on, a loaded profile's foreign keys are hostile input
   and still validate, and `mode_paused_interior` gaps are disclosed through `aten_gaps`, never
   filled with synthetic rows.
+- ATen values (`CaptureOptions(aten_ops="values")`) are graph-detached snapshots in `AtenOp.out`
+  kept only for calls whose `Op` saved its output: `aten_values_consistent` fails a kept value whose
+  leaf count, shapes or dtypes disagree with `output_tensor_facts`, a forward row with a value whose
+  owner saved nothing, and (under `save_mode="copy"`, no disclosed gap) a saved op none of whose
+  rows reproduces its `out`. With `aten_ops=True` or off, no value is ever copied (tripwire in
+  `tests/test_aten_values.py`).

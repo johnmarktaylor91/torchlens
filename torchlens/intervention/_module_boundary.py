@@ -26,7 +26,10 @@ from .. import _state
 from .._ir.intervention import FireResult
 from .._state import pause_logging
 from ..backends.torch._tl import clear_tensor_label, get_tensor_label
+from ._rule_match import _match_rules, _rule_decision
+from ._zero_fire import note_capture_rule_fired
 from .hooks import make_live_site_proxy
+from .spec import Recipe
 
 
 @dataclass(frozen=True)
@@ -42,23 +45,54 @@ class _BoundaryCall:
     call_kwargs:
         Original module keyword inputs.
     predicate:
-        ``(predicate_options, selector)`` when a module-kind predicate
-        ``intervene=`` rule is armed on the trace, else ``None``.
+        The armed module-kind predicate ``intervene=`` rules, else ``None``.
     """
 
     trace: Any
     call_args: tuple[Any, ...]
     call_kwargs: dict[str, Any]
-    predicate: tuple[Any, Any] | None
+    predicate: _BoundaryPredicate | None
 
 
-def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
-    """Return ``(predicate_options, selector)`` for an armed module-kind rule.
+@dataclass(frozen=True)
+class _BoundaryPredicate:
+    """The capture-time ``intervene=`` rules the boundary door evaluates.
+
+    Attributes
+    ----------
+    options:
+        The trace's predicate options (``options.intervene`` is the request).
+    rules:
+        For a public spec, every rule whose WHERE term contains a ``module``
+        term, in spec order; each is evaluated on its own at a boundary site.
+    selector:
+        For a non-spec request carrying a single ``.selector``, that selector
+        (the request itself is evaluated); ``None`` for a public spec.
+    """
+
+    options: Any
+    rules: tuple[Any, ...] = ()
+    selector: Any = None
+
+
+def _addresses_module(selector: Any) -> bool:
+    """Return whether ``selector`` is a ``BaseSelector`` with a ``module`` term."""
+
+    from .._ir.selector_eval import selector_contains_kind
+    from .._selection.selectors import BaseSelector
+
+    return isinstance(selector, BaseSelector) and selector_contains_kind(selector, "module")
+
+
+def _resolve_boundary_predicate(trace: Any) -> _BoundaryPredicate | None:
+    """Return the armed module-kind ``intervene=`` rules, or ``None``.
 
     Only a ``BaseSelector`` that contains a ``module`` term can match a
-    boundary site; anything else (no predicate options, an op-only selector,
-    an opaque callable) yields ``None`` and the boundary door fires the hook
-    plan alone.
+    boundary site. A public spec contributes every such rule, one clause or
+    many (a multi-clause spec has no single ``.selector``, and reading that
+    attribute alone dropped all of its module rules silently). Anything else
+    (no predicate options, op-only rules, an opaque callable) yields ``None``
+    and the boundary door fires the hook plan alone.
     """
 
     if trace is None:
@@ -68,17 +102,36 @@ def _resolve_boundary_predicate(trace: Any) -> tuple[Any, Any] | None:
     except AttributeError:
         predicate_options = None
     predicate_intervene = getattr(predicate_options, "intervene", None)
+    if predicate_intervene is None:
+        return None
+    if isinstance(predicate_intervene, Recipe):
+        rules = tuple(rule for rule in predicate_intervene.rules if _addresses_module(rule.target))
+        return _BoundaryPredicate(predicate_options, rules=rules) if rules else None
     predicate_selector = getattr(predicate_intervene, "selector", None)
-    if predicate_selector is None:
+    if not _addresses_module(predicate_selector):
         return None
-    from .._ir.selector_eval import selector_contains_kind
-    from .._selection.selectors import BaseSelector
+    return _BoundaryPredicate(predicate_options, selector=predicate_selector)
 
-    if not isinstance(predicate_selector, BaseSelector):
-        return None
-    if not selector_contains_kind(predicate_selector, "module"):
-        return None
-    return predicate_options, predicate_selector
+
+def _boundary_decision(predicate: _BoundaryPredicate, site: Any) -> tuple[Any, Any] | None:
+    """Return ``(decision, default_site_target)`` for one boundary site, or ``None``.
+
+    A public spec's module rules are matched together under the spec's
+    overlap law (two rules matching one boundary site refuse typed
+    ``spec_rules_overlap``); the matched rule's own WHERE term is the site
+    target its action fires under, and its decision carries its rule id.
+    """
+
+    if predicate.rules:
+        rule = _match_rules(predicate.rules, site)
+        if rule is None:
+            return None
+        decision = _rule_decision(rule)
+        return None if decision is None else (decision, rule.target)
+    from .._capture.predicates import _evaluate_intervene_op
+
+    decision = _evaluate_intervene_op(site, predicate.options)
+    return None if decision is None else (decision, predicate.selector)
 
 
 def _produced_inside_call(out: torch.Tensor, trace: Any, module_call: tuple[str, int]) -> bool:
@@ -161,7 +214,6 @@ def _fire_boundary_predicate_hooks(
     tuple means the predicate declined this site.
     """
 
-    from .._capture.predicates import _evaluate_intervene_op
     from ..backends.torch._ops_interventions import _record_predicate_intervention_spec
     from .hooks import normalize_hook_plan
     from .runtime import (
@@ -173,15 +225,15 @@ def _fire_boundary_predicate_hooks(
 
     if boundary.predicate is None:
         return hooked, ()
-    predicate_options, predicate_selector = boundary.predicate
-    trace = boundary.trace
-    decision = _evaluate_intervene_op(site, predicate_options)
-    if decision is None:
+    matched = _boundary_decision(boundary.predicate, site)
+    if matched is None:
         return hooked, ()
+    decision, site_target = matched
+    trace = boundary.trace
     _record_predicate_intervention_spec(trace, site, decision)
     hook_entries = normalize_hook_plan(
         decision.hook,
-        default_site_target=predicate_selector,
+        default_site_target=site_target,
     )
     # F01 log_injections: anchor this boundary firing's injected ops to the
     # PERSISTED rule id (the public spec threads it through the decision),
@@ -207,6 +259,7 @@ def _fire_boundary_predicate_hooks(
         except AttributeError:
             previous_count = 0
         trace._tl_intervene_selector_fire_count = int(previous_count) + len(fire_results)
+        note_capture_rule_fired(getattr(decision, "rule_id", None))
     return hooked, tuple(fire_results)
 
 

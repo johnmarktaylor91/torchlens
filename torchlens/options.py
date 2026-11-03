@@ -35,11 +35,13 @@ from ._literals import (
 from ._mutate_warnings import _MutateWarningSuppression
 from ._option_receipt import (
     NarrationOptions,
+    _build_option,
     _explicit_fields,
     _field_is_explicit,
     _resolve_option_value,
     _set_frozen_fields,
 )
+from ._options_removed import REMOVED_CAPTURE_MEMBERS, REMOVED_VISUALIZATION_MEMBERS
 from ._options_validation import (
     _normalize_layout,
     _validate_buffer_visibility,
@@ -52,6 +54,7 @@ from ._options_validation import (
     visualization_to_render_kwargs as visualization_to_render_kwargs,
 )
 from ._save_budget import SaveBudgetOption
+from ._utils.facade import refuse_removed_keywords, refuse_removed_member
 from ._utils.tensor_utils import SaveMode
 from ._vocab.node_spec import NodeSpec
 
@@ -359,17 +362,6 @@ def _merge_grouped_options(
     return _build_option(option_factory, values, specified_fields)
 
 
-def _build_option(
-    option_factory: Any, values: Mapping[str, Any], specified_fields: frozenset[str]
-) -> Any:
-    """Build an option object from resolved values through its (possibly private) builder."""
-
-    builder = getattr(option_factory, "_from_values", None)
-    if builder is None:
-        builder = option_factory.from_values
-    return builder(values, specified_fields)
-
-
 @dataclass(frozen=True, init=False)
 class CaptureOptions:
     """Grouped capture options for ``trace``.
@@ -388,7 +380,7 @@ class CaptureOptions:
             ``"shape_only"``.
         output_transform:
             Optional callable applied once to the model output after ``model.forward``.
-        save_raw_output:
+        save_transformed_output:
             Raw model-output save policy for portable bundles. ``"small"`` stores a
             bounded representation, ``True`` stores the full object, and ``False``
             drops it when saving.
@@ -445,7 +437,11 @@ class CaptureOptions:
         recurrence_detection:
             Whether repeated graph patterns are detected during postprocess.
         replayable:
-            Whether replay-template metadata is captured for intervention APIs.
+            Whether the runnable apparatus is captured: the state, RNG and escape
+            records a ``level="runnable"`` save and a sparse run need, plus edge
+            provenance. Saved-graph replay (``do()`` without ``model=``) does not need
+            it: every capture records the per-op argument templates replay uses.
+            Measured capture premium on CPU: 5-8x wall time.
         capture_container_structure:
             Whether to persist input and output container structure without
             enabling intervention replay metadata.
@@ -642,10 +638,15 @@ class CaptureOptions:
             Whether the capture records the public ATen operations that each logged
             torch call dispatched to, served by ``Op.aten_ops`` and ``Trace.aten_ops``
             (a session-time knob; ``Trace.has_aten_ops`` reports it after capture or
-            load). Recording installs a dispatch mode for the forward pass and for
-            ``Trace.backward()`` with ``backward_ready=True``, so it is opt-in. The
-            default ``False`` installs no dispatch mode and the accessors raise
-            ``AtenOpsUnavailableError``. GPU kernel recording is out of scope.
+            load). ``True`` records value-free rows; ``"values"`` also keeps each
+            call's returned tensor(s) as ``AtenOp.out`` under the same rules as
+            ``Op.out`` (the ``save=`` selection of the owning torch call,
+            ``detach_saved_activations``, ``output_device``, ``save_mode`` and the
+            save budget). Recording installs a dispatch mode for the forward pass
+            and for ``Trace.backward()`` with ``backward_ready=True``, so it is
+            opt-in. The default ``False`` installs no dispatch mode and the
+            accessors raise ``AtenOpsUnavailableError``. GPU kernel recording is
+            out of scope.
 
         Examples
         --------
@@ -713,9 +714,10 @@ class CaptureOptions:
     jax_static_argnums: int | Sequence[int] | None = None
     grad_options: Any | None = None
     chunk_size: int | None = None
-    aten_ops: bool = False
+    aten_ops: bool | Literal["values"] = False
     _specified_fields: frozenset[str] = field(default_factory=frozenset, init=False, repr=False)
 
+    @refuse_removed_keywords("CaptureOptions", REMOVED_CAPTURE_MEMBERS)
     def __init__(
         self,
         input_transform: Callable[[Any], Any] | None | MissingType = MISSING,
@@ -776,7 +778,7 @@ class CaptureOptions:
         jax_static_argnums: int | Sequence[int] | None | MissingType = MISSING,
         grad_options: Any | None | MissingType = MISSING,
         chunk_size: int | None | MissingType = MISSING,
-        aten_ops: bool | MissingType = MISSING,
+        aten_ops: bool | Literal["values"] | MissingType = MISSING,
     ) -> None:
         """Initialize a frozen capture option bundle."""
 
@@ -791,6 +793,16 @@ class CaptureOptions:
         _validate_capture_values(values)
         _set_frozen_fields(self, _CAPTURE_FIELDS, values)
         object.__setattr__(self, "_specified_fields", frozenset(specified))
+
+    # Runtime only: under TYPE_CHECKING the hook would make every attribute
+    # type-check as Any, hiding typos and the removed spellings from mypy.
+    if not TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            """Name the replacement for a removed public member, else fail as usual."""
+
+            refuse_removed_member("CaptureOptions", name, REMOVED_CAPTURE_MEMBERS)
+            return object.__getattribute__(self, name)
 
     def as_dict(self) -> dict[str, Any]:
         """Return the option values as a plain dictionary."""
@@ -914,20 +926,6 @@ class _SaveTransforms:
         _set_frozen_fields(instance, _SAVE_FIELDS, values)
         object.__setattr__(instance, "_specified_fields", specified_fields)
         return instance
-
-
-#: Alias properties removed by the 2026-10-01 shim removal (no alias kept).
-_REMOVED_VISUALIZATION_OPTION_MEMBERS: dict[str, str] = {
-    "mode": "use VisualizationOptions.rolled (a bool) -- the mode alias was removed",
-    "view": "use VisualizationOptions.rolled (True for the rolled graph); a picture is drawn whenever visualization options are passed",
-    "save_only": "use VisualizationOptions.open_viewer (True opens the viewer; the default never does)",
-    "for_paper": 'use VisualizationOptions.theme="paper"',
-    "return_graph": "read Drawing.dot on the returned Drawing",
-    "max_module_depth": "use VisualizationOptions.depth -- the max_module_depth alias was removed",
-    "layout_engine": "use VisualizationOptions.layout -- the layout_engine alias was removed",
-    "node_mode": "use VisualizationOptions.node_style -- the node_mode alias was removed",
-    "animate": "use trace.animate(site) -- the animation is its own door, not a draw keyword",
-}
 
 
 @dataclass(frozen=True, init=False)
@@ -1202,11 +1200,7 @@ class VisualizationOptions:
         def __getattr__(self, name: str) -> Any:
             """Name the replacement for a removed public member, else fail as usual."""
 
-            from ._utils.facade import refuse_removed_member
-
-            refuse_removed_member(
-                "VisualizationOptions", name, _REMOVED_VISUALIZATION_OPTION_MEMBERS
-            )
+            refuse_removed_member("VisualizationOptions", name, REMOVED_VISUALIZATION_MEMBERS)
             return object.__getattribute__(self, name)
 
     def to_dict(self) -> dict[str, Any]:

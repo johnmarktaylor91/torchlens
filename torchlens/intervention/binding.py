@@ -44,7 +44,7 @@ from .._selection.module_alias_guard import (
     refuse_module_alias_spellings,
 )
 from ._bind_step import ACTIVE_BIND_SESSION, active_bind_decode_step
-from ._binding_calls import _alias_disclosure, _has_tensor, _is_in_place_call
+from ._binding_calls import _alias_disclosure, _bound_leaves, _has_tensor, _is_in_place_call
 from ._helper_fingerprint import helper_versions
 from ._zero_fire import (
     DEFAULT_ZERO_FIRE_POLICY,
@@ -899,7 +899,7 @@ def _make_boundary_hook(
         if not _decode_step_admits(plan) or _output_has_no_tensor(session, address, output):
             return None
         replacements: dict[tuple[Any, ...], Any] = {}
-        for out, container_path, _spec in _iter_loggable_live_outputs(output, True):
+        for out, container_path in _bound_leaves(output, _iter_loggable_live_outputs(output, True)):
             hook_ctx = make_hook_context(
                 name=plan.display_name,
                 timing="post",

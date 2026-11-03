@@ -1,4 +1,4 @@
-"""U04.4: ``tl.summary("<hub name>", input_shape=...)`` builds on the meta path.
+"""``tl.summary("<hub name>", input_shape=...)`` builds on the meta path.
 
 Offline-safe: the config fetch is replaced by a tiny local config and any
 weight download fails the test, so no network is touched.

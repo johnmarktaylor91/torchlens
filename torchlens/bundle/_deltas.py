@@ -62,6 +62,86 @@ def _tensor_field(layer: Any, field: Literal["out", "grad"]) -> torch.Tensor | N
     return value if isinstance(value, torch.Tensor) else None
 
 
+def _pass_tensor_fields(
+    layer: Any, field: Literal["out", "grad"]
+) -> tuple[torch.Tensor | None, ...]:
+    """Return a tensor field once per pass of a layer.
+
+    A multi-pass layer (a module called twice, a recurrence) has no single
+    ``out``: ``Layer.out`` refuses with ``layer_pass_ambiguous``. Each pass is
+    then read from its own op in ``layer.ops``; a single-pass layer or an op
+    reads the field directly.
+
+    Parameters
+    ----------
+    layer:
+        Layer or Op-like object.
+    field:
+        Tensor field to read.
+
+    Returns
+    -------
+    tuple[torch.Tensor | None, ...]
+        One entry per pass, ``None`` where that pass holds no tensor.
+    """
+
+    if int(getattr(layer, "num_passes", 1) or 1) > 1:
+        # ``Layer.ops`` is an accessor that iterates its ops in pass order;
+        # an Op has no ``ops`` and reads its own field below.
+        passes = getattr(layer, "ops", None)
+        if passes is not None:
+            return tuple(_tensor_field(op, field) for op in passes)
+    return (_tensor_field(layer, field),)
+
+
+def _layer_distance(
+    reference_passes: tuple[torch.Tensor | None, ...],
+    candidate_passes: tuple[torch.Tensor | None, ...],
+    metric: str | Callable[[torch.Tensor, torch.Tensor], torch.Tensor],
+    *,
+    site: str,
+) -> float | None:
+    """Return the largest per-pass distance between two aligned layers.
+
+    A supergraph node is one layer, so a multi-pass layer gets one value: the
+    distance of its most-changed pass, which never hides a pass that moved.
+
+    Parameters
+    ----------
+    reference_passes:
+        Baseline layer's tensors, one per pass.
+    candidate_passes:
+        Compared layer's tensors, one per pass.
+    metric:
+        Metric name or callable.
+    site:
+        Supergraph node label, named in refusals (pass-qualified per pass).
+
+    Returns
+    -------
+    float | None
+        The largest pass distance, or ``None`` when the pass counts differ or
+        no pass holds a tensor on both sides.
+    """
+
+    if len(reference_passes) != len(candidate_passes):
+        return None
+    multi_pass = len(reference_passes) > 1
+    distances = [
+        _distance_value(
+            reference,
+            candidate,
+            metric,
+            site=f"{site}:{index}" if multi_pass else site,
+        )
+        for index, (reference, candidate) in enumerate(
+            zip(reference_passes, candidate_passes, strict=True), start=1
+        )
+        if reference is not None and candidate is not None
+    ]
+    return max(distances) if distances else None
+
+
 def _same_payload(reference: torch.Tensor, candidate: torch.Tensor) -> bool:
     """Return whether two tensors hold the same shape, dtype and values.
 
@@ -180,8 +260,8 @@ def _distance_value(
             f"{tuple(reference.shape)} and {tuple(candidate.shape)}",
             code="metric_shape_mismatch",
             remedy=(
-                "compare members whose aligned sites hold the same shape; a "
-                "shape-changing edit has no element-wise distance at that site"
+                "compare members whose aligned sites hold the same shape; a shape-changing "
+                "edit or input (a longer prompt) has no element-wise distance at that site"
             ),
             site=site,
             reference_shape=tuple(reference.shape),
@@ -247,7 +327,8 @@ def _bundle_delta_map(
     -------
     dict[str, dict[str, float]]
         Mapping of supergraph node name to member-name distance values. Members
-        without a tensor at a node are omitted for that node.
+        without a tensor at a node are omitted for that node. A multi-pass
+        layer is compared pass by pass and reads its largest pass distance.
 
     Raises
     ------
@@ -267,9 +348,11 @@ def _gated_baseline(self: Bundle, operation: str, baseline: str | Trace | None) 
     """Resolve the delta baseline, then gate every (baseline, member) operand pair.
 
     The baseline defaults to the configured one, then the first member; the
-    comparison gate (topology, model-axis floor, value-level input identity)
-    then refuses any pair a per-node distance would not mean anything for,
-    such as two unrelated prompts in one harness bundle.
+    comparison gate (topology, model-axis floor, site line-up) then refuses
+    any pair whose sites do not pair one to one, such as two runs whose
+    data-dependent control flow took different branches. Runs on different
+    inputs whose graphs line up compare; a site whose shapes differ refuses
+    at the metric (``metric_shape_mismatch``).
     """
 
     baseline_name = (
@@ -302,25 +385,25 @@ def _delta_map_values(
         reference_layer = node.layer_refs.get(baseline_name)
         if reference_layer is None:
             continue
-        reference = _tensor_field(reference_layer, on)
-        if reference is None:
+        reference_passes = _pass_tensor_fields(reference_layer, on)
+        if all(reference is None for reference in reference_passes):
             continue
         values: dict[str, float] = {}
         for member_name in self.names if members is None else members:
             layer = node.layer_refs.get(member_name)
-            candidate = _tensor_field(layer, on) if layer is not None else None
-            if candidate is None:
+            if layer is None:
                 continue
-            values[member_name] = (
-                0.0
-                if member_name == baseline_name
-                else _distance_value(
-                    reference,
-                    candidate,
-                    metric,
-                    site=graph_node_label,
-                )
+            if member_name == baseline_name:
+                values[member_name] = 0.0
+                continue
+            distance = _layer_distance(
+                reference_passes,
+                _pass_tensor_fields(layer, on),
+                metric,
+                site=graph_node_label,
             )
+            if distance is not None:
+                values[member_name] = distance
         if values:
             result[graph_node_label] = values
     return result

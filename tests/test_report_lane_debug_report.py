@@ -1,4 +1,4 @@
-"""U42.2: every report-shaped diagnostic helper returns the one ``tl.report.Report``.
+"""Every report-shaped diagnostic helper returns the one ``tl.report.Report``.
 
 One test per helper checks the common surface (type, lead facts, ``to_dict``,
 ``to_pandas``, the printed form). The six table helpers additionally pin that
@@ -17,6 +17,7 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens.debug._graph import dead_neurons_rows as _dead_neurons_rows
 from torchlens.options import CaptureOptions
 from torchlens.report._report_protocol import REPORT_MAX_FINDINGS, BoundedReport
 
@@ -153,6 +154,13 @@ def _assert_same(report: Any, expected: Any) -> None:
     assert_frame_equal(actual, expected)
     for key, value in expected.attrs.items():
         assert actual.attrs[key] == value
+
+
+# Kept at the C-063 stack merge: debug/_graph.py changed after the coverage proof.
+def test_dead_neurons_frame_is_unchanged(trace: Any) -> None:
+    rows, attrs = _dead_neurons_rows(trace, dim=1, max_activation=0.0)
+    columns = ["op", "total_units", "dead_count", "dead_frac", "sample_dead_idx", "reason"]
+    _assert_same(tl.debug.dead_neurons(trace), _frame(rows, columns, attrs))
 
 
 # Kept by the shrink-r4 coverage proof: sole branch coverage of debug/_gradients.py.

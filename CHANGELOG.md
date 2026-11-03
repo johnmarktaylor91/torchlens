@@ -5,6 +5,10 @@
 
 ### Behavior changes
 
+- **viz**: `tl.viz.bundle_diff` takes `open_viewer=` (`True` opens a viewer after the picture is
+  written; the default never does) in place of `vis_save_only=`. `Trace.to_dagua_graph` and
+  `tl.experimental.dagua.trace_to_dagua_graph` take `rolled=` (a bool) and `depth=` in place of
+  `vis_mode=` and `vis_call_depth=`, the same spellings as `trace.draw`.
 - **io**: files saved by torchlens 2.x do not load. A saved trace below `tlspec_version` 11, a
   pickled 2.x module path, the two 2.16 `.tlspec` formats, a v1 extraction and any recording,
   merged or extraction directory stamped with a 2.x `torchlens_version` refuse at `tl.load` (and at
@@ -45,7 +49,10 @@
   serves `decode_output(style="my_style")`. The read-time result is returned, not stored in
   `decoded_output`. An unknown style refuses `decode_style_unknown`
   (`tl.errors.DecodeStyleUnknownError`; was `output_style_unknown` /
-  `OutputStyleUnknownError`).
+  `OutputStyleUnknownError`). `style="hf_text"` on a trace captured without a tokenizer
+  returns the argmax `token_ids` with `text` `None` instead of refusing. Passing
+  `output_style=` or `output_head=` to `CaptureOptions` or `tl.trace` refuses
+  (`facade_redirect` / `trace_forward_kwargs_unrouted`) naming the read-time call.
 - **output decode**: `CaptureOptions.output_head` is gone. Name the head of a multi-output
   model at read time instead: `trace.decode_output(head="logits")` or
   `trace.output_table(head="0")`, where the head is an output container path (`"logits"`,
@@ -485,6 +492,16 @@
   assignment now runs the creator rule and the topology inference to a fixed point, so the nodes
   created by differentiating an inferred-order node sit one order above it. The invariant is
   unchanged.
+- **backward**: a backward pass or `torch.autograd.grad` run inside forward now pairs the GradFn
+  of every captured op it walked with that op (`GradFn.has_op` is True).
+  The walk runs before any layer exists, so every GradFn was left unpaired; the projection rebuild
+  now pairs these discoveries once the final layers are known. Order inference applies to paired
+  nodes as it does to unpaired ones, so the GradFn orders of a second-order gradient inside forward
+  match those of the same math run after the trace.
+- **runnable**: bind checks a direct version alias's recorded shape and dtype against the value it
+  binds, as it already did for the producer slot. A crafted `.tlspec` whose alias recorded a
+  different shape or dtype bound the producer's value unchecked; it now raises
+  `PathDivergenceError` with `OUTPUT_SHAPE_MISMATCH` or `OUTPUT_DTYPE_MISMATCH` naming the alias.
 - **capture, to_disk**: a forward that returns one tensor in two output slots (`return a, a`)
   gets one output op per slot, so the trace rebuilds. A streamed save no longer attaches another
   op's tensor to an output after an orphan op shifted the blob numbering: save-time ids start

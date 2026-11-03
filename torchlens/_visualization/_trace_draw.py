@@ -15,6 +15,7 @@ from .._errors import InvalidArgumentError
 from .._literals import (
     BufferVisibilityLiteral,
     CollapseLiteral,
+    DrawHighlightLiteral,
     FoldRepeatsLiteral,
     VisDirectionLiteral,
     VisInterventionModeLiteral,
@@ -24,12 +25,12 @@ from .._literals import (
     VisRendererLiteral,
 )
 from ..intervention.types import FireRecord
-from ..viz._drawing import Drawing
+from ..viz._drawing import Drawing, resolve_draw_target
 from ._color_sources import resolve_color_source
 from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
-from ._render_utils import DEFAULT_DRAW_STEM, collision_safe_outpath, strip_known_extension
+from ._render_utils import _KNOWN_EXTS, DEFAULT_DRAW_STEM, collision_safe_outpath
 from ._trace_draw_arguments import _forward_render_arguments
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
@@ -103,6 +104,21 @@ def _render_backward(  # noqa: PLR0913 - the backward branch of the one draw doo
     )
 
 
+def _draw_policy(
+    graph: str, rolled: bool, theme: str, collapse: Any, module: Any, depth: Any
+) -> dict[str, Any]:
+    """Return the policy a :class:`Drawing` records: the options that shaped it."""
+
+    return {
+        "graph": graph,
+        "rolled": rolled,
+        "theme": theme,
+        "collapse": collapse,
+        "module": module,
+        "depth": depth,
+    }
+
+
 def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field is a keyword
     trace: Trace,
     path: str | None = None,
@@ -152,10 +168,17 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     show_grad_values: bool = False,
     backward_node_spec_fn: Callable[..., Any] | None = None,
     intervening_cluster: Literal["upstream", "outside", "downstream", "own"] = "upstream",
-    file_format: str = "pdf",
+    file_format: str | None = None,
     open_viewer: bool = False,
+    highlight: DrawHighlightLiteral | None = None,
 ) -> Drawing:
     """Body of ``Trace.draw``; the method docstring is the contract."""
+
+    if highlight is not None:
+        from ._highlight import draw_highlighted, explicit_draw_kwargs
+
+        # locals() is read before any parameter below is reassigned.
+        return draw_highlighted(trace, highlight, explicit_draw_kwargs(draw, locals()))
 
     if graph not in ("forward", "backward", "combined"):
         raise InvalidArgumentError(
@@ -165,14 +188,9 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
             argument="graph",
         )
     num_ops = len(trace) if hasattr(trace, "__len__") else None
-    policy: dict[str, Any] = {
-        "graph": graph,
-        "rolled": rolled,
-        "theme": theme,
-        "collapse": collapse,
-        "module": module,
-        "depth": depth,
-    }
+    policy = _draw_policy(graph, rolled, theme, collapse, module, depth)
+    target = resolve_draw_target(path, file_format, _KNOWN_EXTS)
+    path, file_format = target.path, target.file_format
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
@@ -216,14 +234,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
         rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
-    written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
-    return Drawing(
-        dot=str(rendered),
-        file_format=file_format,
-        path=written if written.exists() else None,
-        num_ops=num_ops,
-        policy=policy,
-    )
+    return target.finish(str(rendered), str(outpath), num_ops=num_ops, policy=policy)
 
 
 def animate(
@@ -305,8 +316,8 @@ def last_run_records(trace: Trace) -> tuple[FireRecord, ...]:
 
 def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Trace.to_dagua_graph
     trace: Trace,
-    vis_mode: str = "unrolled",
-    vis_call_depth: int = 1000,
+    rolled: bool = False,
+    depth: int = 1000,
     show_buffers: bool = False,
     direction: str = "bottomup",
     include_grad_edges: bool | None = None,
@@ -316,8 +327,8 @@ def to_dagua_graph(  # noqa: PLR0913 - mirrors the ratified public grammar of Tr
 
     return _impl(
         trace,
-        vis_mode=vis_mode,
-        vis_call_depth=vis_call_depth,
+        rolled=rolled,
+        depth=depth,
         show_buffers=show_buffers,
         direction=direction,
         include_grad_edges=include_grad_edges,

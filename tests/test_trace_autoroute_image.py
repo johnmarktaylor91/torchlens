@@ -116,7 +116,7 @@ def test_timm_model_uses_default_cfg_transform() -> None:
 
 
 def test_unknown_cnn_refuses_and_names_imagenet_opt_in() -> None:
-    """A PIL image with no resolvable preprocessing refuses typed (walk U02.4).
+    """A PIL image with no resolvable preprocessing refuses typed.
 
     The ImageNet default is never applied silently; the refusal names the
     explicit opt-in.

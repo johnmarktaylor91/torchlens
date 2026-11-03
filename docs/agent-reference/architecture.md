@@ -286,7 +286,8 @@ Key entry points:
   `docs/reference/attribution.md`; glossary carries the unstable index.
 - Kernel telemetry (optional CUDA/CUPTI adapter, DOCUMENTED-UNSTABLE):
   importing `torchlens._kernel_telemetry` installs `gpu_kernels` views over
-  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, served by
+  the ATen execution profile (recorded by `CaptureOptions(aten_ops=True)`, or `"values"` to
+  keep each call's returned tensors in `AtenOp.out`; served by
   `Trace.aten_ops` / `Op.aten_ops`, read in `_completeness_finalize._resolve_witness_requests`
   from the trace's `_options_aten_ops` session knob); rows persist as of tlspec v8 (`FieldPolicy.KEEP`)
   and counts are lower bounds wherever `mode_paused_interior` is non-empty.

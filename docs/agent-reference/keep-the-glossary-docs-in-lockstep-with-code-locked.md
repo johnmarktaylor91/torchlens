@@ -6,6 +6,7 @@ The glossary is the **canonical** API spec (maintained privately; `docs/referenc
 - A change that touches code but leaves the glossary/docs stale is **INCOMPLETE.** This is exactly how the v7 `memory → activation_memory` gap and the stale `log_forward_pass`/`vis_opt` examples slipped through.
 - After a rename/conformance sprint: re-file the updated canonical glossary (it supersedes the prior dated version), and confirm a `grep` of every old name is clean across `torchlens/`, `tests/`, `examples/`, `notebooks/`, AND the glossary itself.
 - Tooling: `python tools/name_lockstep check --base ref:<base-branch>` lists every new, renamed and removed public name of the working tree against a base (a member whose defining module or class moved but whose public `Class.name` spelling did not, including a mixin member folded onto the class it was reached through, is `moved`: it keeps only the glossary-entry obligation) (ids `root:tl.X`, `export:tl.ns.X`, `member:<module>:<Class>.<name>`, `param:<name>`) and exits 1 with each missing glossary entry, missing agent-reference mention and stale old spelling (`--glossary PATH` adds the canonical copy; a `.member` or `kw=` hit that is a live head name, an imported third-party object's attribute, a URL or an assignment target is attributed there and not reported). `codemod --proposals FILE` applies renames from rows carrying `id` and `proposed`, dry run unless `--apply`; `gate-input` writes each new name with its call-site snippet for the legibility check.
+- Keywords: every parameter a caller can pass by name to a public callable (keyword-only and positional-or-keyword, no leading underscore) needs a glossary keyword row naming that callable after "keyword of" (`| `k=` | keyword of `Bundle.rank_changes` (keyword-only; default `10`): ... |`). `tests/test_glossary_params.py` enforces it over the whole public surface; `PYTHONPATH=tools python tools/name_lockstep/glossary_params.py --dump rows.json` lists every public parameter (needs torch) and `PYTHONPATH=tools python -m name_lockstep.glossary_backfill rows.json` writes the missing rows from the code (kind, default, docstring meaning).
 
 ### Trusted custom callable imports
 
@@ -61,7 +62,7 @@ mode claims) and train-mode BatchNorm (`buffer_value_changed=True` from a mode-s
 call whose every recorded mode claim says train, plus the in-place `num_batches_tracked` counter
 advanced in that same module call) are refresh-eligible and runnable through
 `trace.run(inputs=...)`, on the DEFAULT path and under `until=`: a default capture is a pure
-observer and a default run restores the declared state it changed (U40.1), so every run starts
+observer and a default run restores the declared state it changed, so every run starts
 from the state the trace was captured from. The legacy `save_new_outs` refresh restores nothing
 and keeps refusing train-mode writers. Unproven (`None`) evidence, a value-changing write by anything else (counters, caches), a
 mode claim contradicting the evidence, a refreshed rerun's own journal recording a

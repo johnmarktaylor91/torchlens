@@ -192,7 +192,7 @@ def test_vs_direction_verifies_on_the_un_differenced_basis(gpt2_trace) -> None:
 
 @pytest.mark.heavy
 def test_head_grain_partial_stack_uses_the_same_receipt_shape(gpt2_trace) -> None:
-    heads = mi.attention_head_contributions(gpt2_trace, layers=[0])
+    heads = mi.attention_head_contributions(gpt2_trace, modules=[0])
     dla = mi.direct_logit_contributions(gpt2_trace, heads, answer=7, positions=[-1])
     receipt = dla.identity_receipt
     assert receipt["check"].startswith("sum_rows_vs_projected_target")

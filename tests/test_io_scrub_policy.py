@@ -748,7 +748,7 @@ def test_r69_sparse_runnable_save_always_drops_raw_fields(tmp_path: Path, raw_po
     """r69 E: effective DROP wins before the Trace raw-value special case.
 
     Sparse runnable saves scrub ``raw_input``/``raw_output`` to ``None`` regardless
-    of the ordinary ``save_raw_input``/``save_raw_output`` policy (``True`` or
+    of the ordinary ``save_raw_input``/``save_transformed_output`` policy (``True`` or
     ``"small"``), for nested tensor/string containers included -- no raw blob or
     tensor may enter the value-free sparse core (the payload assertion stays the
     unchanged final tripwire, pinned by the genuine-stray negatives in

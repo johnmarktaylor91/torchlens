@@ -35,7 +35,7 @@ from .._output_slot import (
 )
 from .._training_validation import TrainingModeConfigError, reject_compiled_model
 from .._utils._torch_compat import get_fsdp_wrapper_type
-from ..intervention.predicates import InterventionPredicate
+from ..intervention.predicates import InterventionPredicate, _warn_intervene_fired_nowhere
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal
@@ -71,7 +71,6 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
     """
 
     from .._selection.selectors import BaseSelector
-    from ..intervention.hooks import site_universe
 
     save_selector = state.options.keep_op
     if isinstance(save_selector, BaseSelector):
@@ -85,18 +84,7 @@ def _warn_zero_match_capture_selectors(state: RecordingState) -> None:
                 UserWarning,
                 stacklevel=3,
             )
-    intervene_selector = getattr(state.options.intervene, "selector", None)
-    if (
-        isinstance(intervene_selector, BaseSelector)
-        and site_universe(intervene_selector) == "activation"
-        and state.intervene_selector_fire_count == 0
-    ):
-        warnings.warn(
-            f"Capture-time intervention selector {intervene_selector!r} matched zero sites; "
-            "no intervention fired.",
-            UserWarning,
-            stacklevel=3,
-        )
+    _warn_intervene_fired_nowhere(state.options.intervene, state.intervene_selector_fire_count)
 
 
 def _unwrap_ddp_for_fastlog(
@@ -694,8 +682,7 @@ class Recorder:
             # trusted (matching the historical recovery behavior).
             combined_events.concat(failed_events, lanes=("op_events", "pre_hook_events"))
         self._capture_events = combined_events
-        trace.capture_events = combined_events
-        trace._capture_events = combined_events
+        trace.capture_events = trace._capture_events = combined_events
         self._state.runtime_trace = trace
         session = type("_FastlogCaptureSession", (), {})()
         session.capture_events = self._capture_events
@@ -706,6 +693,7 @@ class Recorder:
         session.captured_run_cores = self._captured_run_cores
         recording = Recording.from_capture_events(session)
         self._stamp_failed_recording(recording, exc)
+        object.__setattr__(recording, "_output", output_forward_failed(safe_exception_str(exc)))
         return recording
 
     def _stamp_failed_recording(self, recording: Recording, exc: BaseException) -> None:

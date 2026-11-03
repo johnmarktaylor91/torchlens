@@ -1,6 +1,6 @@
-"""Right-to-left layout (U07.2) and the collision-safe bare ``draw()`` (forks.12).
+"""Right-to-left layout and the collision-safe bare ``draw()`` (forks.12).
 
-U07.2 adds ``"rightleft"`` as the fourth layout direction: it maps to the
+The change adds ``"rightleft"`` as the fourth layout direction: it maps to the
 Graphviz ``rankdir=RL`` on the forward and backward entrypoints, and the
 unknown-direction refusal teaches all four values.
 

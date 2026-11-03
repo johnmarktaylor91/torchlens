@@ -312,7 +312,12 @@ def test_torch_scorecard_is_checked_in_its_pinned_smoke_row() -> None:
 
 
 def test_nightly_runs_the_ecosystem_rosters() -> None:
-    """The nightly preview matrix runs each backend's ecosystem roster with networked weights."""
+    """The nightly preview matrix runs each backend's ecosystem roster with networked weights.
+
+    Two steps switch the ecosystem rows on: the roster scorecard run, then the
+    leg's slow preview tests (the pretrained rows' pytest suites), in that order
+    so the tests reuse the weights the roster run fetched.
+    """
 
     job = _workflow(_NIGHTLY_WORKFLOW)["jobs"]["preview-backends"]
     ecosystem = [
@@ -320,8 +325,9 @@ def test_nightly_runs_the_ecosystem_rosters() -> None:
         for step in job["steps"]
         if step.get("env", {}).get("TORCHLENS_CONFORMANCE_ECOSYSTEM") == "1"
     ]
-    assert len(ecosystem) == 1
+    assert len(ecosystem) == 2
     assert "tests.conformance.scorecard --backend" in ecosystem[0]["run"]
+    assert '-m "${{ matrix.marker }} and slow"' in ecosystem[1]["run"]
     assert any(str(step.get("uses", "")).startswith("actions/cache@") for step in job["steps"])
 
 

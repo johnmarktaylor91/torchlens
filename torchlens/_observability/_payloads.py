@@ -122,7 +122,7 @@ def histogram_payload(observation: ObservationRecord) -> dict[str, Any]:
             descriptor.lo_exp,
             descriptor.hi_exp,
             descriptor.signed,
-            descriptor.encoding,
+            descriptor.bin_encoding,
         ),
     }
 

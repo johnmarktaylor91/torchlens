@@ -30,6 +30,19 @@
   `AtenOpsUnavailableError` (`aten_ops_unavailable`) rather than returning an empty tuple. Pass
   `capture=tl.options.CaptureOptions(aten_ops=True)`; the switch is a session knob (not persisted,
   inherited by `run()` refreshes, fast or not) while the recorded rows persist.
+- ATen values need `aten_ops="values"`, not `True`: with `True` every `row.out` is `None`. Values are
+  snapshots copied below autograd, so they never carry `grad_fn` even with
+  `detach_saved_activations=False`; they follow the owning call's `save=` decision (a dropped op's
+  rows read `None`), count against `save_budget`, and are not retained when activations stream to
+  disk or an out sink is active. Values are compared only through `aten_values_consistent` under
+  `save_mode="copy"`; a `"reference"` capture still keeps them but skips the owner comparison.
+  Both recorder hooks run inside the owning wrapper call under `pause_logging()`
+  (`_recorder_paused`): a wrapped tensor method (`stride`, `untyped_storage`, `numel`, the clone)
+  reached from the dispatch hook with logging on resets the wrapper's bottom-level barcode (an
+  in-place owner's op silently dropped) and counts in the ordered call fingerprint (a rows capture
+  then refused the fast tier). `test_values_leave_the_op_graph_unchanged` pins the op list, the
+  raw-event hash and the call fingerprint equal across `aten_ops` spellings. A `run()` refresh
+  re-records the profile; `run(..., fast=True)` refuses a values capture.
 - Distributed/sharded state is detected in `torchlens/_distributed.py` and refused at capture entry
   with `DistributedCaptureUnsupportedError`; the same detection feeds the `dtensor` / `device_mesh` /
   `tensor_parallel` / `pipeline_parallel` rows of `tl.report.doctor`, so the two cannot drift.
@@ -256,7 +269,9 @@
   only when RNG states were saved). A trace loaded from a
   saved file carries no callables at any level, so every replay edit on it refuses
   `ReplayPreconditionError` naming that condition (remedy: re-capture in-process with
-  `replayable=True`, or `trace.run(model, inputs)`). A torch failure inside a replayed
+  `tl.trace(model, inputs)`, or `trace.run(model, inputs)`). An in-process capture replays
+  without any capture option: every eager capture records the per-op argument templates
+  replay needs (`trace.options.save_arg_templates`); a structure-only capture records none. A torch failure inside a replayed
   callable (an edit that drives an index lookup past its table) is re-raised as
   `ReplayPreconditionError` naming the op that raised and the edit origins, the torch error
   chained as `__cause__`, with nothing committed. Pinned in

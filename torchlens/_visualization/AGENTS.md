@@ -47,6 +47,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_render_regions.py` | Nested module-cluster (region) subgraph emission and empty-subtree pruning |
 | `_svg_compose.py` | SVG post-processing (image inlining, viewBox normalization) and code-panel composition |
 | `_render_utils.py` | Internal Graphviz helpers shared across rendering paths (subprocess execution, HTML escaping) |
+| `_render_names.py` | Leaf names the renderer shares with the lens and surgery layers (rendered-node slot, bare-draw stem, optimizer ceiling) |
 | `_label_format.py` | Node label formatting helpers |
 | `_typography.py` | The one typography record (vizmech D29): pinned font family + semantic size roles consumed by every label builder |
 | `_legend.py` | The one compact HTML-table legend node in a dedicated rank (role legend, channel disclosures, backward key as sections; vizmech D28/D30) |
@@ -58,7 +59,7 @@ The `_render_dot.py` entry point is split across sibling helper modules; all are
 | `_segment_descriptors.py` | Segment descriptor construction and label derivation for collapse plans |
 | `_collapse_disclosures.py` | Human-facing collapse disclosure warnings (no-silent-floor, memo D4) |
 | `_collapse_frontier.py` | Collapse-optimizer frontier records (`_DecisionPoint` and the decision witnesses), `K_CAP`/`FRONTIER_CAP`, and the pure frontier-merge helpers |
-| `_bundle_graph.py` | Graphviz node/cluster/edge construction helpers behind `torchlens._visualization.show_bundle_graph` |
+| `_bundle_graph.py` | `Bundle.draw`'s keyword checks (`draw_bundle`) and the Graphviz node/cluster/edge construction of the merged bundle graph |
 | `_rank_layout_internal/`, `_summary_internal/` | Rank-layout backend internals and `summary()` internals |
 | `renderers/` | Renderer protocol (`base.py`) and the Graphviz backend (`graphviz.py`) |
 
@@ -157,7 +158,7 @@ pure-Python rank layout above 20,000 cost units.
   collapse memo D4; R43 split from `auto_collapse.py`).
 - `_collapse_frontier.py`: frontier records, `K_CAP`/`FRONTIER_CAP` and the pure
   frontier-merge helpers (R43 split from `collapse_optimizer.py`).
-- `_bundle_graph.py`: Graphviz construction helpers for `torchlens._visualization.show_bundle_graph` (R43 split
+- `_bundle_graph.py`: the merged bundle graph behind `Bundle.draw` (R43 split
   from `_user_public_impls.py`).
 - `request.py`: resolved visualization requests and output targets.
 

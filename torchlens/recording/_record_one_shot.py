@@ -10,7 +10,7 @@ from torch import nn
 from torchlens.backends.registry import BackendUnsupportedError
 
 from .._capture_state_helpers import unwrap_compiled_model
-from .._deprecations import MISSING, MissingType
+from .._deprecations import MISSING
 from .._errors import ArgumentTypeError
 from .._input_coerce import _coerce_input_args
 from .._output_slot import returned as output_returned
@@ -22,12 +22,12 @@ from ..backends.registry import (
     require_capability_implementation,
 )
 from ..intervention.predicates import InterventionPredicate
-from ..options import CaptureOptions, StorageOptions
+from ..options import CaptureOptions, StorageOptions, _merge_grouped_options
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
 from ._validation import validate_postprocess
-from .options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
-from .types import CaptureSpec, Recording
+from .options import HaltPredicateFn, PredicateFn, RecordingOptions
+from .types import Recording
 
 _CAPTURE_DOOR_FIELDS: tuple[str, ...] = (
     "lookback",
@@ -55,6 +55,19 @@ _RECORD_FLAT_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _refuse_unread_fields(group: str, unread: list[str], why: str, remedy: str) -> None:
+    """Refuse grouped-option fields ``tl.record`` does not read (a silent no-op)."""
+
+    if unread:
+        raise ArgumentTypeError(
+            f"tl.record does not read {group}= field(s) {', '.join(unread)}: {why}, so they "
+            "would be a silent no-op",
+            code="record_capture_option_unsupported",
+            remedy=remedy,
+            argument=group,
+        )
+
+
 def _unfold_capture_options(capture: CaptureOptions | None) -> dict[str, Any]:
     """Read the former ``record`` door keywords off ``capture=``.
 
@@ -70,17 +83,13 @@ def _unfold_capture_options(capture: CaptureOptions | None) -> dict[str, Any]:
             for name in capture._specified_fields  # noqa: SLF001
             if name not in _CAPTURE_DOOR_FIELDS and name != "backward_ready"
         )
-        if unread:
-            raise ArgumentTypeError(
-                f"tl.record does not read CaptureOptions field(s) {', '.join(unread)}: the "
-                "recorder has no door for them, so they would be a silent no-op",
-                code="record_capture_option_unsupported",
-                remedy=(
-                    "drop the field(s) from capture= for tl.record, or use tl.trace, which "
-                    "reads every CaptureOptions field"
-                ),
-                argument="capture",
-            )
+        _refuse_unread_fields(
+            "capture",
+            unread,
+            "the recorder has no door for them",
+            "drop the field(s) from capture= for tl.record, or use tl.trace, which reads every "
+            "CaptureOptions field",
+        )
     for name in _CAPTURE_DOOR_FIELDS:
         explicit = isinstance(capture, CaptureOptions) and capture._is_field_explicit(name)  # noqa: SLF001
         flat[name] = getattr(capture, name) if explicit else MISSING
@@ -91,6 +100,53 @@ def _unfold_capture_options(capture: CaptureOptions | None) -> dict[str, Any]:
         if flat[name] is MISSING:
             flat[name] = default
     return flat
+
+
+#: The ``RecordingOptions`` fields ``tl.record`` reads off ``recording=``. An
+#: unset field without a door default here stays ``MISSING`` so the Recorder
+#: resolves it (``default_op``, ``default_module``, ``default_grad``).
+_RECORDING_DOOR_DEFAULTS: dict[str, Any] = {
+    "default_op": MISSING,
+    "default_module": MISSING,
+    "history_size": 8,
+    "include_source_events": False,
+    "max_predicate_failures": 32,
+    "on_predicate_error": "auto",
+    "on_forward_error": "raise",
+    "default_grad": MISSING,
+    "postprocess": "none",
+}
+
+
+def _unfold_recording_options(recording: RecordingOptions | None) -> dict[str, Any]:
+    """Read the recorder knobs off ``recording=``.
+
+    ``keep_op`` and ``intervene`` are the door's own ``save=`` and
+    ``intervene=``; setting them on the bundle refuses instead of being a
+    silent no-op.
+    """
+
+    if recording is None:
+        return dict(_RECORDING_DOOR_DEFAULTS)
+    recording = _merge_grouped_options(
+        option=recording,
+        option_factory=RecordingOptions,
+        flat_to_group={},
+        flat_values={},
+        group_name="recording",
+        conflict_message="",
+    )
+    unread = sorted(set(recording._specified_fields) - set(_RECORDING_DOOR_DEFAULTS))  # noqa: SLF001
+    _refuse_unread_fields(
+        "recording",
+        unread,
+        "the door takes them as save= and intervene=",
+        "pass the predicate as tl.record(save=...) and the intervention as intervene=",
+    )
+    return {
+        name: getattr(recording, name) if recording._is_field_explicit(name) else default  # noqa: SLF001
+        for name, default in _RECORDING_DOOR_DEFAULTS.items()
+    }
 
 
 def _require_torch_fastlog_backend(backend: Any) -> None:
@@ -139,15 +195,7 @@ def record(
     stop_after: HaltPredicateFn | None = None,
     storage: StorageOptions | None = None,
     capture: CaptureOptions | None = None,
-    default_op: bool | CaptureSpec | MissingType = MISSING,
-    default_module: bool | CaptureSpec | MissingType = MISSING,
-    history_size: int = 8,
-    include_source_events: bool = False,
-    max_predicate_failures: int = 32,
-    on_predicate_error: PredicateErrorMode = "auto",
-    on_forward_error: ForwardErrorMode = "raise",
-    postprocess: str = "none",
-    default_grad: bool | CaptureSpec | MissingType = MISSING,
+    recording: RecordingOptions | None = None,
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
@@ -175,16 +223,19 @@ def record(
         ``save_raw_activations``, ``save_grads``, ``grad_transform``,
         ``save_raw_grads``, ``backward_ready`` and ``detach_saved_activations``
         (meanings below).
-    default_op, default_module, history_size, include_source_events,
-    max_predicate_failures, on_predicate_error:
-        Fastlog recording options.
-    on_forward_error:
-        Controls failed-forward handling: ``"raise"`` raises the capture's
-        ``TraceCaptureError``, ``"attach_partial"`` also attaches the failed partial
-        Recording to it as ``partial_recording``, ``"return_partial"`` returns it,
-        and its ``output`` refuses with ``output_forward_failed``.
-        With ``return_output=True``, the returned output is ``None`` because no
-        valid model output exists on failure.
+    recording:
+        Grouped recorder options (``tl.options.RecordingOptions``). The fields
+        ``record`` reads: ``default_op``, ``default_module``, ``default_grad``,
+        ``history_size``, ``include_source_events``, ``max_predicate_failures``,
+        ``on_predicate_error``, ``on_forward_error`` and ``postprocess`` (see
+        ``RecordingOptions``); ``keep_op`` and ``intervene`` refuse with code
+        ``record_capture_option_unsupported`` (pass ``save=`` and ``intervene=``).
+        ``on_forward_error`` controls failed-forward handling: ``"raise"`` raises
+        the capture's ``TraceCaptureError``, ``"attach_partial"`` also attaches the
+        failed partial Recording to it as ``partial_recording``,
+        ``"return_partial"`` returns it, and its ``output`` refuses with
+        ``output_forward_failed``. ``postprocess`` is an optional enrichment preset
+        (``"none"`` by default).
     intervene:
         Optional predicate-time intervention slot evaluated on operation contexts.
     stop_after:
@@ -201,7 +252,7 @@ def record(
         copies wherever the recorded tensor carries autograd history (a spec with
         ``save_grad=True`` stays attached either way; disk payloads are always
         detached; ``backward_ready=True`` refuses an explicit ``True``).
-        ``save_grads``, ``default_grad`` (a ``record`` keyword),
+        ``save_grads``, ``default_grad`` (a ``RecordingOptions`` field),
         ``grad_transform`` and ``save_raw_grads`` configure a later
         ``Recording.backward()``: gradient hooks are installed only when
         ``backward_ready=True``, ``save_grads=`` or ``default_grad=`` is given;
@@ -209,8 +260,6 @@ def record(
         ``recording_backward_not_requested``, and a record made under
         ``torch.no_grad()`` or ``torch.inference_mode()`` implies
         ``inference_only=True`` (``recording_backward_inference_only``).
-    postprocess:
-        Optional postprocess enrichment preset (``"none"`` by default).
     narrate:
         Live narration scope: ``True``, ``"modules"``, a live selector, or a
         grouped ``tl.options.NarrationOptions``. Narration and retention are fully
@@ -242,6 +291,8 @@ def record(
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
     flat = _unfold_capture_options(capture)
+    knobs = _unfold_recording_options(recording)
+    postprocess = knobs.pop("postprocess")
     lookback = flat["lookback"]
     lookback_payload_policy = flat["lookback_payload_policy"]
     halt = stop_after
@@ -267,24 +318,17 @@ def record(
             input_kwargs,
             generate_kwargs,
             {
+                **knobs,
                 "save": save,
-                "default_op": default_op,
-                "default_module": default_module,
-                "history_size": history_size,
                 "lookback": lookback,
                 "lookback_payload_policy": lookback_payload_policy,
-                "include_source_events": include_source_events,
                 "intervene": intervene,
                 "halt": halt,
-                "max_predicate_failures": max_predicate_failures,
-                "on_predicate_error": on_predicate_error,
-                "on_forward_error": on_forward_error,
                 "storage": storage,
                 "seed": seed,
                 "activation_transform": activation_transform,
                 "save_raw_activations": save_raw_activations,
                 "save_grads": save_grads,
-                "default_grad": default_grad,
                 "grad_transform": grad_transform,
                 "save_raw_grads": save_raw_grads,
                 "backward_ready": backward_ready,
@@ -296,24 +340,17 @@ def record(
         return enrich_generation(generation, postprocess)
     with Recorder(
         model,
+        **knobs,
         save=save,
-        default_op=default_op,
-        default_module=default_module,
-        history_size=history_size,
         lookback=lookback,
         lookback_payload_policy=lookback_payload_policy,
-        include_source_events=include_source_events,
         intervene=intervene,
         halt=halt,
-        max_predicate_failures=max_predicate_failures,
-        on_predicate_error=on_predicate_error,
-        on_forward_error=on_forward_error,
         storage=storage,
         seed=seed,
         activation_transform=activation_transform,
         save_raw_activations=save_raw_activations,
         save_grads=save_grads,
-        default_grad=default_grad,
         grad_transform=grad_transform,
         save_raw_grads=save_raw_grads,
         backward_ready=backward_ready,

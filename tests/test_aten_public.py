@@ -242,6 +242,7 @@ def test_backward_rows_join_trace_aten_ops_in_order() -> None:
 
 
 @pytest.mark.rare
+@pytest.mark.backend_jax
 def test_non_torch_backend_records_nothing_and_refuses() -> None:
     """A non-torch backend ignores the switch: no profile, typed refusal, invariants hold."""
 

@@ -1,6 +1,6 @@
 """``print(trace)`` honesty: the unverified-structure guard and the not-checked hint.
 
-U35.1: an unverified capture (``capture_verified is False``, e.g. severed
+An unverified capture (``capture_verified is False``, e.g. severed
 provenance on a dynamically quantized model) no longer prints "purely
 feedforward" and marks its op and parameter counts as lower bounds; a verified
 or not-recorded capture prints exactly as before.
@@ -37,7 +37,7 @@ def _summary(trace: tl.Trace) -> str:
 
 
 def test_unverified_capture_drops_feedforward_and_bounds_its_counts() -> None:
-    """U35.1: "structure unverified" replaces the feedforward claim; counts are bounds."""
+    """The "structure unverified" label replaces the feedforward claim; counts are bounds."""
 
     trace = tl.trace(_Tiny(), torch.randn(2, 4))
     trace._provenance_verified = False
