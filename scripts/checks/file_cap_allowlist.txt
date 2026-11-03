@@ -1330,7 +1330,7 @@ torchlens/receptive_field/rules/transforms.py::pad	73
 torchlens/recording/_record_one_shot.py::record	151
 torchlens/recording/_recorder.py	828
 torchlens/recording/_recorder.py::Recorder.__init__	164
-torchlens/recording/_recorder.py::Recorder._run_unified_capture	151
+torchlens/recording/_recorder.py::Recorder._run_unified_capture	150
 torchlens/recording/_recorder.py::Recorder._stamp_failed_recording	93
 torchlens/recording/_storage_resolver.py::_resolve_storage	172
 torchlens/recording/recover.py::_load_from_index	70

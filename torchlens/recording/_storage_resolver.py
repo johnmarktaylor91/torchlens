@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import torch
 
+from .._deprecations import MISSING, MissingType
 from .._errors import UserTransformError
 from .._ir.summary_role import ensure_summary_output_owns_storage, is_summary_transform
 from .._state import pause_logging
@@ -408,3 +409,48 @@ def _validate_train_mode_transformed(
             code="transform_not_differentiable",
         )
     _ = spec
+
+
+def _resolve_train_mode_default(
+    *,
+    field_name: str,
+    value: bool | CaptureSpec | MissingType,
+    backward_ready: bool,
+) -> bool | CaptureSpec | MissingType:
+    """Resolve one default capture option for train-mode sugar."""
+
+    if backward_ready and value is MISSING:
+        return CaptureSpec(save_grad=True, save_out=True, save_metadata=True)
+    if not backward_ready or value is MISSING or value is False:
+        return value
+    if value is True:
+        raise TrainingModeConfigError(
+            f"backward_ready=True conflicts with {field_name}=True because True uses "
+            "save_grad=False; use CaptureSpec(save_grad=True) or omit the default. "
+            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
+            code="backward_ready_conflict",
+        )
+    if isinstance(value, CaptureSpec) and not value.save_grad:
+        raise TrainingModeConfigError(
+            f"backward_ready=True conflicts with {field_name}=CaptureSpec(save_grad=False). "
+            "Remedy: pass CaptureSpec(save_grad=True) or omit the default.",
+            code="backward_ready_conflict",
+        )
+    return value
+
+
+def _resolve_train_mode_defaults(
+    default_op: bool | CaptureSpec | MissingType,
+    default_module: bool | CaptureSpec | MissingType,
+    backward_ready: bool,
+) -> tuple[bool | CaptureSpec | MissingType, bool | CaptureSpec | MissingType]:
+    """Resolve both train-mode default capture options (op, then module)."""
+
+    return (
+        _resolve_train_mode_default(
+            field_name="default_op", value=default_op, backward_ready=backward_ready
+        ),
+        _resolve_train_mode_default(
+            field_name="default_module", value=default_module, backward_ready=backward_ready
+        ),
+    )

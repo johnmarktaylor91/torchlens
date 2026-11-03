@@ -39,8 +39,9 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import StorageOptions
 from ..types import _ActivationPostfunc, _GradientPostfunc
 from ._halt import StopSignal, _mark_recording_halted
-from ._recorder_config import _configure_predicate_capture, _resolve_train_mode_defaults
+from ._recorder_config import _configure_predicate_capture
 from ._recorder_streaming import _rank_prefixed_streaming_options
+from ._storage_resolver import _resolve_train_mode_defaults
 from ._validation import refuse_episode_on_record, validate_recording_options
 from .exceptions import RecorderStateError
 from .options import (
@@ -439,7 +440,6 @@ class Recorder:
 
         if self._state is None or self._capture_events is None:
             raise RecorderStateError("calling a Recorder requires an active with-block")
-        # Deferred: _training_validation sits above fastlog in the layer map.
         from .._training_validation import autograd_disabled_at_entry
 
         inference_only = not self._backward_requested and autograd_disabled_at_entry()
