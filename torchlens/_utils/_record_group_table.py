@@ -458,9 +458,14 @@ def record_member(obj: Any, name: str, default: Any = _NO_DEFAULT) -> Any:
 
     kind = _record_kind(type(obj))
     path = None if kind is None else _SPELLING_PATHS[kind].get(name)
-    if path is None and kind == "Layer":
-        # An Op-only member reads through the layer's group, which delegates to its pass.
-        path = _SPELLING_PATHS["Op"].get(name)
+    if path is None and kind == "Layer" and name in _SPELLING_PATHS["Op"]:
+        # An Op-only member reads through the layer's single pass; a multi-pass layer
+        # holds no one value, so the member reads as missing, as the flat read did.
+        if getattr(obj, "num_passes", 1) > 1:
+            if default is _NO_DEFAULT:
+                raise AttributeError(name)
+            return default
+        path = _SPELLING_PATHS["Op"][name]
     try:
         if path is None:
             return getattr(obj, name)
