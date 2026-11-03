@@ -78,6 +78,16 @@ __all__ = (
 )
 
 
+def _demanded_level(spec: CaptureSpec) -> EnrichmentLevel:
+    """Map a capture decision to the enrichment level it demands."""
+
+    if spec.save_out:
+        return EnrichmentLevel.PAYLOAD
+    if spec.save_metadata:
+        return EnrichmentLevel.METADATA
+    return EnrichmentLevel.SHELL
+
+
 def _emit_predicate_operation_events(
     self: "Trace",
     func: Callable[..., Any],
@@ -143,9 +153,7 @@ def _emit_predicate_operation_events(
                 transform_kind=getattr(func, "__tl_transform_kind__", None)
                 or (func_name if func_name in TRANSFORM_FUNC_NAMES else None),
             )
-        # A context whose decision never completed (a halt or a predicate error
-        # inside the commit) is retained like a selected one.
-        selected = True
+        selected = True  # a halt or a predicate error before the decision keeps the context
         try:
             halt_only = _is_halt_only_capture(state.options)
             if halt_only:
@@ -164,12 +172,7 @@ def _emit_predicate_operation_events(
                     "Remedy: use tl.trace(save=...) for followed_by retroactive capture.",
                     code="followed_by_unsupported",
                 )
-            if spec.save_out:
-                demanded = EnrichmentLevel.PAYLOAD
-            elif spec.save_metadata:
-                demanded = EnrichmentLevel.METADATA
-            else:
-                demanded = EnrichmentLevel.SHELL
+            demanded = _demanded_level(spec)
             selected = demanded is not EnrichmentLevel.SHELL
             bulk_default_ram = bool(
                 demanded is EnrichmentLevel.PAYLOAD

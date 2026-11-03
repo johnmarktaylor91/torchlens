@@ -660,7 +660,8 @@ class TraceGradFnCallAccessor(Accessor[Any]):
 # its Trace (``ModuleCall._source_trace``, and since M11 any fork record
 # through ``OpStoreView.record_translator`` -> translated shells stamped by
 # ``_rebind_fork_owner_refs``), so a module-global WeakKeyDictionary value
-# would reach its own weak key and the Trace could never be collected. That class re-opened a THIRD time as the
+# would reach its own weak key and the Trace could never be collected. That
+# class re-opened a THIRD time as the
 # ``trace.run()`` fork leak (R37): the op-accessor cache entry populated
 # during ``run()`` pinned the entire result fork, payloads included, for the
 # process lifetime. An instance attribute makes the same edge an ordinary

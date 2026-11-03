@@ -80,6 +80,36 @@ def _any_tensor(value: Any, predicate: Callable[[Any], bool]) -> bool:
     return False
 
 
+def _dropped_edge_at_slot(
+    provenance_labels: tuple[str, ...],
+    slot: tuple[str, Any] | None,
+    parent_arg_positions: dict[str, dict[Any, str]],
+    recorded_parent_labels: set[str],
+) -> bool:
+    """Return whether a provenanced tensor at ``slot`` is a dropped or permuted parent edge.
+
+    A RUNTIME tensor at ANY input slot is a data dependency -- including
+    schema-typed ``int``/``Scalar`` control slots (``roll`` shifts, ``softmax``
+    dim, factory size dims), whose values change the op's result (round-31 H2).
+    Extraction's runtime coverage guard parents every shallow tensor slot, so a
+    provenanced tensor missing from the recorded edges is a dropped edge, never
+    a benign metadata slot; the former ATen-schema metadata-slot suppression is
+    gone because its "deliberately excluded from parents" premise no longer
+    holds anywhere.
+
+    r29 F3c: ORDERED per-slot identity. When the recorder stamped a parent
+    label AT this exact slot it must be one of the live tensor's own provenance
+    labels, else the call recipe binds the WRONG producer here (a slot
+    permutation between value-identical producers passed the former set check).
+    Without a stamp at the slot, the set check applies.
+    """
+
+    recorded_at_slot = parent_arg_positions[slot[0]].get(slot[1]) if slot is not None else None
+    if recorded_at_slot is not None:
+        return recorded_at_slot not in provenance_labels
+    return recorded_parent_labels.isdisjoint(provenance_labels)
+
+
 def _unattributed_tensor_arg_positions(
     trace: Trace,
     args: tuple[Any, ...],
@@ -240,32 +270,12 @@ def _unattributed_tensor_arg_positions(
             return
         provenance_labels = tensor_session_parent_labels(value)
         # Branch (2): a fully-provenanced tensor whose producer label is not a
-        # recorded parent edge. A RUNTIME tensor at ANY input slot is a data
-        # dependency -- including schema-typed ``int``/``Scalar`` control slots
-        # (``roll`` shifts, ``softmax`` dim, factory size dims), whose values
-        # change the op's result (round-31 H2). Extraction's runtime coverage
-        # guard parents every shallow tensor slot, so a provenanced tensor
-        # missing from the recorded edges is a dropped edge, never a benign
-        # metadata slot; the former ATen-schema metadata-slot suppression is
-        # gone because its "deliberately excluded from parents" premise no
-        # longer holds anywhere. Un-provenanced tensors never reach here --
-        # branch (1) already caught them at every position.
-        if provenance_labels:
-            recorded_at_slot = (
-                parent_arg_positions[slot[0]].get(slot[1]) if slot is not None else None
-            )
-            if recorded_at_slot is not None:
-                # r29 F3c: ORDERED per-slot identity. The recorder stamped a
-                # parent label AT this exact slot; it must be one of the live
-                # tensor's own provenance labels, else the call recipe binds
-                # the WRONG producer here (a slot permutation between
-                # value-identical producers passed the former set check).
-                if recorded_at_slot not in provenance_labels:
-                    positions.append(path)
-                    dropped_edge_positions.append(path)
-            elif recorded_parent_labels.isdisjoint(provenance_labels):
-                positions.append(path)
-                dropped_edge_positions.append(path)
+        # recorded parent edge (un-provenanced tensors never reach here).
+        if provenance_labels and _dropped_edge_at_slot(
+            provenance_labels, slot, parent_arg_positions, recorded_parent_labels
+        ):
+            positions.append(path)
+            dropped_edge_positions.append(path)
 
     for index, arg in enumerate(args):
         _walk_arg_tree(arg, f"arg{index}", ("args", index), visit_tensor)
