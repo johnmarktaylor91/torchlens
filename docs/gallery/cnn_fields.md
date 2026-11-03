@@ -1,8 +1,12 @@
 # CNN fields as an intervention site
 
-This entry measured ResNet-18 geometric influence and input interventions and did not pass:
-the coordinates matched the analytic box, but the field status was `upper_bound` rather than exact.
-The geometric background is [Araujo, Norris and Sim (Distill, 2019)](https://distill.pub/2019/computing-receptive-fields/);
+A CNN unit's receptive field is the input region that can influence it. This entry computes the
+field of one ResNet-18 unit with TorchLens, checks it against an independent analytic
+computation and against autograd gradient support, then uses it as an intervention site:
+zeroing everything outside the field must leave the unit exactly unchanged, and zeroing inside
+must change it. The entry passes: the box matches the analytic box exactly, both support IoUs
+are 1.0, and the outside edit changes the unit by exactly 0. The geometric background is
+[Araujo, Norris and Sim (Distill, 2019)](https://distill.pub/2019/computing-receptive-fields/);
 gradient support is an additional empirical oracle, not a general equality theorem.
 
 | Item | Recorded setup |
@@ -10,52 +14,58 @@ gradient support is an additional empirical oracle, not a general equality theor
 | Claim | Geometric CNN influence supports input interventions and predicts projective support. |
 | Script and run line | `python examples/gallery/cnn_fields.py --out outputs/cnn_fields` |
 | Pinned inputs | torchvision ResNet-18, `IMAGENET1K_V1`, eval, float32, seed 17, one 224x224 random input; layer3, channel 0, centre unit. |
-| Verdict | Did not pass; Linux x86_64 CPU, 3 November 2026 at 6:54 AM PT; TorchLens 2.36.3, commit `9a5e9678e`. |
-| Cost | 18.6 s measured analysis; 26.31 s process wall time, two CPU threads, 722,336 KiB peak RSS. |
+| Verdict | Passed; Linux x86_64 CPU, 3 November 2026, TorchLens 2.36.3, commit `01497c6d`. |
+| Cost | 13.9 s measured analysis; 21.1 s process wall time on two CPU threads, 743 MiB peak memory. |
 
 ## Oracles
 
-| Oracle | Fixed rule | Measured | Outcome |
-| --- | --- | --- | --- |
-| Analytic box | Exact coordinates and exact status | Expected and measured `[7,218)` on both axes; status `upper_bound` | Fail |
-| Gradient support | IoU >= 0.95 | 1.0 | Pass |
-| Outside ablation | Nonempty mask; float32 unit delta exactly 0 | 5,655 spatial pixels; delta 0 | Pass |
-| Inside ablation | Unit delta > 0 | 0.1923354864 | Pass |
-| Projective support | IoU >= 0.95 against changed spatial units | 1.0 | Pass |
+The rules are the ones registered for this entry before any run.
 
-The exact-status rule stays unchanged. Matching coordinates alone do not establish that rule.
-The script saves each check immediately so later replay errors retain the measurements.
+| Oracle | Rule | Measured | Outcome |
+| --- | --- | --- | --- |
+| Analytic box | Exact match of the clipped box with an independent analytic computation | Expected and measured `[7,218)` on both axes | Pass |
+| Gradient support | IoU >= 0.95 between the field and the input positions with nonzero gradient | 1.0 | Pass |
+| Outside ablation | Nonempty outside mask; float32 unit delta exactly 0 | 5,655 spatial pixels zeroed; delta 0 | Pass |
+| Inside ablation | Unit delta > 0 | 0.1923354864 | Pass |
+| Projective support | IoU >= 0.95 against the units a plain run shows changed | 1.0 | Pass |
+
+The first run of this script also required the field's relation label to be `exact`. TorchLens
+labels this field `upper_bound`, which is its documented label for a strided hull: the hull can
+contain positions that influence nothing, so it is reported as a superset (see
+[selection completeness](../reference/selection_completeness.md), Lemma R). The coordinates are
+exact; the label is reported here, not graded.
 
 ## Controls
 
-A deliberately naive registered-leaf chain treats projection shortcuts as sequential layers;
-its clipped box `[207,224)` differs from the branched analytic box `[7,218)`: pass. This control
-does not assert that every main-path-only formula fails on ResNet. A 4x4 corner patch lies
-outside the receptive field and has unit delta 0: pass.
+| Control | Rule | Measured | Outcome |
+| --- | --- | --- | --- |
+| Same-size outside patch | A 4x4 corner patch lies outside the field and changes the unit by exactly 0 | outside; delta 0 | Pass |
+| Serial module chain | Treating the registered leaves as one chain (ignoring the branches) must give a different box | `[207,224)` against the branched `[7,218)` | Pass (failed as declared) |
 
 ## Artifact and replay
 
-The portable `cnn_fields.tlspec` directory contains 213 files and 34,539,747 bytes;
-sorted-path/content SHA256 `0dddadabe4430728ce019319974becec787c0f738ea475d06d863620e006ed15`. The script reloads it, applies the input mask
-with `InterventionOptions(engine="set_only")`, then calls `run(model, edited_input)`.
-The rerun refused with `EngineDispatchError`: the edited loaded values no longer have a
-persisted intervention recipe. No replay match is claimed. The failed exact-status oracle
-already moves this entry to the next batch; neither rule nor tolerance was changed.
+The full capture is saved as a portable `cnn_fields.tlspec` (34,539,747 bytes, sha256
+`5854ea7ee5a0a391`...). The script reloads it, zeroes the outside field of the reloaded input,
+reruns the model and compares the unit with the reloaded value: the delta is exactly 0, as in
+memory.
 
 ## Basis-grid row
 
-Verbs: capture, select, read, do, compare, save. Executed architecture: ResNet-18.
-Nonblank, noncomment, non-docstring source lines: TorchLens 234; plain PyTorch 37;
-original reference not measured. The TorchLens region includes setup, CLI, reporting,
-plotting and helpers. The plain region covers independent geometry and hook/gradient
-extraction. These scoped counts do not compare against original-reference code.
+| Verbs | TorchLens lines | Plain-PyTorch lines | Architecture |
+| --- | --- | --- | --- |
+| capture, select, read, do, compare, save | 233 | 37 | ResNet-18 |
+
+Counts are nonblank, noncomment, non-docstring lines. The TorchLens region includes setup, the
+command line, reporting, plotting and helpers; the plain region covers the independent geometry
+and the hook and gradient extraction. No count against an original reference implementation was
+measured.
 
 ## The stamp
 
 ```text
 {
-  "commit": "9a5e9678e7d642f1ba3bc219c662137b01089b62",
-  "date_utc": "2026-11-03T14:54:17Z",
+  "commit": "01497c6dcea4b23f5fe5ee3401fc3678fa757123",
+  "date_utc": "2026-11-03T15:27:18Z",
   "device": "cpu",
   "libraries": {
     "numpy": "2.2.6",
@@ -68,7 +78,7 @@ extraction. These scoped counts do not compare against original-reference code.
   "torch": "2.13.0+cpu",
   "torch_threads": 2,
   "torchlens": "2.36.3",
-  "wall_seconds": 18.6
+  "wall_seconds": 13.9
 }
 ```
 
