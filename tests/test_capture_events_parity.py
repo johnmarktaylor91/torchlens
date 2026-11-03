@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 import pytest
 import torch
+from _pickle_compare import _tensor_equal
 from _pickle_compare_allowlist import ALLOWED_PICKLE_DIFF_FIELDS
 from torch import nn
 
@@ -245,6 +246,23 @@ def test_pickle_compare_allowlist_stable() -> None:
     """Assert the parity allow-list is an explicit committed contract."""
 
     assert ALLOWED_PICKLE_DIFF_FIELDS == _EXPECTED_ALLOWLIST
+
+
+def test_tensor_equal_handles_bool_int_nan_dtypes() -> None:
+    """Cover dtype-sensitive exact tensor comparisons used by parity tests."""
+
+    assert _tensor_equal(torch.tensor([True, False]), torch.tensor([True, False]))
+    assert not _tensor_equal(torch.tensor([True, False]), torch.tensor([False, False]))
+    assert _tensor_equal(
+        torch.tensor([1, 2], dtype=torch.int32), torch.tensor([1, 2], dtype=torch.int32)
+    )
+    assert _tensor_equal(
+        torch.tensor([1, 2], dtype=torch.int64), torch.tensor([1, 2], dtype=torch.int64)
+    )
+    assert _tensor_equal(torch.tensor([float("nan"), 1.0]), torch.tensor([float("nan"), 1.0]))
+    assert not _tensor_equal(
+        torch.tensor([1], dtype=torch.int32), torch.tensor([1], dtype=torch.int64)
+    )
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of _data_classes/param.py.

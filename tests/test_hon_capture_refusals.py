@@ -19,7 +19,7 @@ from torch import nn
 
 import torchlens as tl
 from torchlens.backends.torch import _op_markers
-from torchlens.errors import InvalidArgumentError
+from torchlens.errors import ArgumentTypeError, InvalidArgumentError
 from torchlens.recording import Recorder
 
 
@@ -89,6 +89,18 @@ def test_recorder_compiled_refusal_is_typed_and_accurate() -> None:
     assert recorder.model is model
     with pytest.warns(UserWarning, match="compiled model detected"):
         trace = tl.trace(compiled, torch.randn(2, 4))
+    assert len(trace._layer_list) > 0
+
+
+def test_jax_two_positional_remedy_runs() -> None:
+    """U11.2 JAX leg: the refusal, then the tuple spelling the remedy names, both run."""
+
+    jnp = pytest.importorskip("jax.numpy")
+    x = jnp.ones(3)
+    with pytest.raises(ArgumentTypeError) as info:
+        tl.trace(lambda p, q: p + q, x, input_kwargs=x, backend="jax")  # type: ignore[arg-type]
+    assert info.value.fields["code"] == "input_kwargs_type_invalid"
+    trace = tl.trace(lambda p, q: p + q, (x, x), backend="jax")
     assert len(trace._layer_list) > 0
 
 

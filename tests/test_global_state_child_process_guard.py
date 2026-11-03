@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 
 import pytest
 import torch
@@ -195,6 +196,28 @@ def test_child_process_guard_import_pid_rank_reclaims_stolen_stamp(
     with pytest.raises(tl.errors.CaptureNotActiveError) as refusal:
         warn_parallel()
     assert refusal.value.fields["code"] == "child_process_capture_unsupported"
+
+
+def test_main_process_capture_is_never_refused() -> None:
+    """The guard is a no-op in the main process, including from a worker thread."""
+
+    from torchlens._utils.display import warn_parallel
+
+    warn_parallel()
+    errors: list[BaseException] = []
+
+    def call_from_thread() -> None:
+        """A capture on a worker thread is legitimate and must not be refused."""
+
+        try:
+            warn_parallel()
+        except BaseException as error:  # pragma: no cover - reported by the test
+            errors.append(error)
+
+    worker = threading.Thread(target=call_from_thread)
+    worker.start()
+    worker.join(timeout=5.0)
+    assert errors == [], f"a main-process worker thread was refused: {errors!r}"
 
 
 def test_main_process_rank_stamps_ownership_so_fork_children_stay_refused(

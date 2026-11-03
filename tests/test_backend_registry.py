@@ -31,12 +31,16 @@ from torchlens.backends.default_specs import (
     _tf_can_handle,
     _tinygrad_can_handle,
 )
+from torchlens.backends.jax import capabilities as jax_capabilities
+from torchlens.backends.mlx import capabilities as mlx_capabilities
+from torchlens.backends.paddle import capabilities as paddle_capabilities
 from torchlens.backends.registry import (
     _CAPTURE_BACKEND_REQUIRED_ATTRIBUTES,
     BackendRegistryError,
     SerializationPolicy,
 )
 from torchlens.backends.tf import TFBackend
+from torchlens.backends.tinygrad import capabilities as tinygrad_capabilities
 from torchlens.errors import (
     AmbiguousBackendError,
     BackendMismatchError,
@@ -350,6 +354,152 @@ def test_replace_backend_spec_removes_stale_aliases() -> None:
     finally:
         tl.backends.unregister("fake_alias_probe")
         tl.backends.unregister("fake_alias_probe_old")
+
+
+def test_capability_sources_agree_for_preview_backends() -> None:
+    """Compatibility capability modules read from the registered specs."""
+
+    jax_spec = tl.backends.spec("jax")
+    mlx_spec = tl.backends.spec("mlx")
+    paddle_spec = tl.backends.spec("paddle")
+    tinygrad_spec = tl.backends.spec("tinygrad")
+
+    assert jax_spec.capabilities.backward_capture == jax_capabilities.supports_backward_capture
+    assert (
+        jax_spec.capabilities.has_validation_replay == jax_capabilities.supports_validation_replay
+    )
+    assert jax_spec.capabilities.fastlog == jax_capabilities.supports_fastlog
+    assert jax_spec.capabilities.can_intervene == jax_capabilities.supports_intervention
+    assert (
+        jax_spec.capabilities.intermediate_derived_grads
+        == jax_capabilities.supports_intermediate_derived_grads
+    )
+    assert jax_spec.capabilities.rng_replay == jax_capabilities.supports_rng_replay
+    assert (
+        jax_spec.capabilities.payload_materialization
+        == jax_capabilities.supports_payload_materialization
+    )
+    assert jax_spec.capabilities.module_identity_modes == jax_capabilities.module_identity_modes
+    assert jax_spec.capabilities.trace_options == jax_capabilities.trace_options
+    assert (
+        jax_spec.capabilities.input_container_structure
+        == jax_capabilities.input_container_structure
+    )
+    assert (
+        jax_spec.capabilities.output_container_structure
+        == jax_capabilities.output_container_structure
+    )
+    assert jax_spec.serialization_policy.payload_policy == jax_capabilities.payload_policy
+
+    assert tl.backends.spec("torch").capabilities.input_container_structure == "full_spec"
+    assert tl.backends.spec("torch").capabilities.output_container_structure == "full_spec"
+
+    assert mlx_spec.capabilities.backward_capture == mlx_capabilities.supports_backward_capture
+    assert (
+        mlx_spec.capabilities.has_validation_replay == mlx_capabilities.supports_validation_replay
+    )
+    assert mlx_spec.capabilities.fastlog == mlx_capabilities.supports_fastlog
+    assert mlx_spec.capabilities.can_intervene == mlx_capabilities.supports_intervention
+    assert (
+        mlx_spec.capabilities.intermediate_derived_grads
+        == mlx_capabilities.supports_intermediate_derived_grads
+    )
+    assert mlx_spec.capabilities.rng_replay == mlx_capabilities.supports_rng_replay
+    assert (
+        mlx_spec.capabilities.payload_materialization
+        == mlx_capabilities.supports_payload_materialization
+    )
+    assert mlx_spec.capabilities.module_identity_modes == mlx_capabilities.module_identity_modes
+    assert mlx_spec.capabilities.trace_options == mlx_capabilities.trace_options
+    assert (
+        mlx_spec.capabilities.input_container_structure
+        == mlx_capabilities.input_container_structure
+    )
+    assert (
+        mlx_spec.capabilities.output_container_structure
+        == mlx_capabilities.output_container_structure
+    )
+    assert mlx_spec.serialization_policy.payload_policy == mlx_capabilities.payload_policy
+
+    assert (
+        tinygrad_spec.capabilities.backward_capture
+        == tinygrad_capabilities.supports_backward_capture
+    )
+    assert (
+        tinygrad_spec.capabilities.has_validation_replay
+        == tinygrad_capabilities.supports_validation_replay
+    )
+    assert tinygrad_spec.capabilities.fastlog == tinygrad_capabilities.supports_fastlog
+    assert tinygrad_spec.capabilities.can_intervene == tinygrad_capabilities.supports_intervention
+    assert (
+        tinygrad_spec.capabilities.intermediate_derived_grads
+        == tinygrad_capabilities.supports_intermediate_derived_grads
+    )
+    assert tinygrad_spec.capabilities.rng_replay == tinygrad_capabilities.supports_rng_replay
+    assert (
+        tinygrad_spec.capabilities.payload_materialization
+        == tinygrad_capabilities.supports_payload_materialization
+    )
+    assert (
+        tinygrad_spec.capabilities.module_identity_modes
+        == tinygrad_capabilities.module_identity_modes
+    )
+    assert tinygrad_spec.capabilities.trace_options == tinygrad_capabilities.trace_options
+    assert (
+        tinygrad_spec.capabilities.input_container_structure
+        == tinygrad_capabilities.input_container_structure
+    )
+    assert (
+        tinygrad_spec.capabilities.output_container_structure
+        == tinygrad_capabilities.output_container_structure
+    )
+    assert tinygrad_spec.serialization_policy.payload_policy == tinygrad_capabilities.payload_policy
+
+    assert (
+        paddle_spec.capabilities.backward_capture == paddle_capabilities.supports_backward_capture
+    )
+    assert (
+        paddle_spec.capabilities.has_validation_replay
+        == paddle_capabilities.supports_validation_replay
+    )
+    assert paddle_spec.capabilities.fastlog == paddle_capabilities.supports_fastlog
+    assert paddle_spec.capabilities.can_intervene == paddle_capabilities.supports_intervention
+    assert (
+        paddle_spec.capabilities.intermediate_derived_grads
+        == paddle_capabilities.supports_intermediate_derived_grads
+    )
+    assert paddle_spec.capabilities.rng_replay == paddle_capabilities.supports_rng_replay
+    assert (
+        paddle_spec.capabilities.payload_materialization
+        == paddle_capabilities.supports_payload_materialization
+    )
+    assert (
+        paddle_spec.capabilities.module_identity_modes == paddle_capabilities.module_identity_modes
+    )
+    assert paddle_spec.capabilities.trace_options == paddle_capabilities.trace_options
+    assert (
+        paddle_spec.capabilities.input_container_structure
+        == paddle_capabilities.input_container_structure
+    )
+    assert (
+        paddle_spec.capabilities.output_container_structure
+        == paddle_capabilities.output_container_structure
+    )
+    assert paddle_spec.serialization_policy.payload_policy == paddle_capabilities.payload_policy
+
+
+def test_paddle_backend_registered_with_alias_and_priority() -> None:
+    """Paddle default spec is registered with its alias and phase priority."""
+
+    spec = tl.backends.spec("paddle")
+    assert spec.name == "paddle"
+    assert spec.capture_backend is None
+    assert tl.backends.spec("paddlepaddle") is spec
+    assert spec.priority == 40
+    assert tl.backends.spec("torch").priority == 0
+    assert tl.backends.spec("mlx").priority == 10
+    assert tl.backends.spec("jax").priority == 20
+    assert tl.backends.spec("tinygrad").priority == 30
 
 
 # Kept by shrink-r4 (per-id subset rule): sole coverage of backends/default_specs.py.
@@ -724,6 +874,32 @@ def test_tf_version_gate_reports_installed_version_floor(monkeypatch: pytest.Mon
         match=r"TF backend requires Keras>=3 and TF>=2\.16; found keras 2\.13\.1 / tf 2\.14\.0",
     ):
         _tf_can_handle(keras_model_type(), (), None)
+
+
+def test_registered_capture_backends_conform_to_protocol() -> None:
+    """Every registered shared-capture adapter exposes the full protocol surface."""
+
+    required_attrs = tuple(CaptureBackend.__annotations__) + tuple(
+        name
+        for name, value in CaptureBackend.__dict__.items()
+        if not name.startswith("_") and callable(value)
+    )
+    dependency_modules = {
+        "jax": "jax",
+        "mlx": "mlx",
+        "paddle": "paddle",
+        "tf": "tensorflow",
+        "tinygrad": "tinygrad",
+    }
+
+    for spec in tl.backends.specs():
+        if spec.capture_backend is None:
+            continue
+        if spec.name in dependency_modules:
+            pytest.importorskip(dependency_modules[str(spec.name)])
+        backend = spec.capture_backend()
+        missing = [attr for attr in required_attrs if not hasattr(backend, attr)]
+        assert missing == [], f"{spec.name} capture backend missing attrs: {missing}"
 
 
 def test_dead_correctness_protocol_methods_are_not_required() -> None:
@@ -1104,3 +1280,26 @@ def test_torch_refuses_every_control_flow_record_option_explicitly() -> None:
     for option_name, value in (("jax_control_flow", "unroll"), ("jax_max_control_flow_unroll", 2)):
         with pytest.raises(BackendUnsupportedError, match="does not support explicit"):
             _reject_unsupported_torch_trace_option_values(CaptureOptions(**{option_name: value}))
+
+
+def test_registered_backends_list_only_recorded_trace_options() -> None:
+    """A backend's ``trace_options`` names only recorded, non-gated options."""
+
+    from torchlens.backends import registry
+
+    recorded = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if not record.gated
+        for option in record.trace_options
+    }
+    gated = {
+        option
+        for record in registry._BACKEND_CAPABILITIES
+        if record.gated
+        for option in record.trace_options
+    }
+    for spec in registry.registered_backend_specs():
+        listed = set(spec.capabilities.trace_options)
+        assert listed <= recorded, (spec.name, listed - recorded)
+        assert not (listed & gated), (spec.name, listed & gated)

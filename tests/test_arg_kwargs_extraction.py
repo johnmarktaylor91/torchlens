@@ -21,6 +21,11 @@ import torch
 from torch import nn
 
 import torchlens as tl
+from torchlens._capture.arg_positions import (
+    FUNC_ARG_SPECS,
+    _normalize_func_name,
+    extract_tensors_and_params,
+)
 from torchlens.intervention.types import ParentRef
 from torchlens.options import CaptureOptions
 
@@ -175,6 +180,30 @@ def _count_tensors(value: object) -> int:
 # ---------------------------------------------------------------------------
 # Integration level: kwarg tensors appear as parents in the trace graph
 # ---------------------------------------------------------------------------
+
+
+# Row kept by shrink-r4: its coverage is import-only, so the per-id rule cannot clear it.
+@pytest.mark.parametrize(
+    "func_name,args,kwargs",
+    [case for case in _KWARG_CASES if case[0] == "newzeros"],
+    ids=["newzeros"],
+)
+def test_static_table_extracts_kwarg_tensors(
+    func_name: str, args: tuple[object, ...], kwargs: dict[str, object]
+) -> None:
+    """Every tensor passed positionally OR by keyword must be extracted."""
+    spec = FUNC_ARG_SPECS.get(_normalize_func_name(func_name))
+    assert spec is not None, f"no static ArgSpec for {func_name!r}"
+
+    tensors, params = extract_tensors_and_params(spec, args, kwargs)
+    expected = sum(_count_tensors(a) for a in args) + sum(
+        _count_tensors(v) for v in kwargs.values()
+    )
+    found = len(tensors) + len(params)
+    assert found == expected, (
+        f"{func_name}: extracted {found} tensors, expected {expected} "
+        f"(spec tensor_kwargs={spec.tensor_kwargs})"
+    )
 
 
 def _layer_by_func(log: tl.Trace, func_substring: str) -> Any:

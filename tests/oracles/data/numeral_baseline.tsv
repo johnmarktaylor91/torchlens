@@ -7927,6 +7927,7 @@ test-docstrings	tests/test_hash_determinism.py	21
 test-docstrings	tests/test_hf_attention_backend.py	64
 test-docstrings	tests/test_hon_attribution_refusals.py	20.5
 test-docstrings	tests/test_hon_attribution_refusals.py	21.5
+test-docstrings	tests/test_hon_capture_refusals.py	11.2
 test-docstrings	tests/test_hon_capture_refusals.py	31.4
 test-docstrings	tests/test_hon_capture_refusals.py	35.2
 test-docstrings	tests/test_hon_capture_refusals.py	35.3
