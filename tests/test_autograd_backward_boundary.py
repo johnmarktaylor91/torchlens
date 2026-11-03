@@ -143,7 +143,7 @@ def test_backward_in_forward_is_a_recorded_boundary_op() -> None:
 @pytest.mark.parametrize(
     "model_factory",
     [_RestrictedInputs],
-    ids=["single_pass", "retain_twice", "restricted_inputs"],
+    ids=["restricted_inputs"],
 )
 def test_recorded_backward_validates_by_subgraph_replay(
     model_factory: Callable[[], nn.Module],

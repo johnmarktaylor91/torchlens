@@ -71,7 +71,7 @@ def test_small_model_default_output_golden(tiny_summary_log: tl.Trace) -> None:
     assert "TorchLens Discoverability Summary" in tiny_summary_log.provenance._summary()
 
 
-@pytest.mark.parametrize("kwargs", [{"level": "op"}], ids=["compute", "op"])
+@pytest.mark.parametrize("kwargs", [{"level": "op"}], ids=["op"])
 def test_summary_handles_multi_pass_layers(kwargs: dict[str, str]) -> None:
     """Compute and op views render a repeated layer without the multi-pass accessor error."""
 

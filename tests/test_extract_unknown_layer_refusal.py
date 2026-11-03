@@ -51,7 +51,7 @@ def tiny() -> tuple[nn.Module, torch.Tensor]:
         {"mine": "no_such_layer_anywhere"},
         ["lin:3"],
     ],
-    ids=["list", "mapping", "module-pass-beyond-count"],
+    ids=["mapping", "module-pass-beyond-count"],
 )
 def test_extract_unknown_layer_refuses_op_lookup_not_found(
     tiny: tuple[nn.Module, torch.Tensor], layers: Any
