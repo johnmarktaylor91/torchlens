@@ -1189,10 +1189,10 @@ torchlens/intervention/regions.py	1052
 torchlens/intervention/regions.py::_evaluate_instance	106
 torchlens/intervention/regions.py::apply_region_do	106
 torchlens/intervention/regions.py::region	101
-torchlens/intervention/replay.py	1753
+torchlens/intervention/replay.py	1726
 torchlens/intervention/replay.py::_commit_replay_updates	72
 torchlens/intervention/replay.py::_reconstruct_args_from_template	63
-torchlens/intervention/replay.py::_resolve_arg_component	125
+torchlens/intervention/replay.py::_resolve_arg_component	96
 torchlens/intervention/replay.py::_run_differentiable_replay	62
 torchlens/intervention/replay.py::_run_replay	153
 torchlens/intervention/rerun.py	1690
@@ -1228,7 +1228,7 @@ torchlens/intervention/stochastic.py::resample_rows_from.factory._hook	88
 torchlens/intervention/stochastic.py::sample_from	73
 torchlens/intervention/stochastic.py::set_direction_mean	144
 torchlens/intervention/sweep.py::sweep	177
-torchlens/intervention/types.py	859
+torchlens/intervention/types.py	835
 torchlens/inventory.py::SiteInventory.resolve	71
 torchlens/inventory.py::sites_of_trace	65
 torchlens/io/__init__.py::detect_tlspec_format	67
