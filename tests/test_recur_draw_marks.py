@@ -136,7 +136,7 @@ def test_edge_font_size_sizes_argument_labels(linear_trace: tl.Trace) -> None:
 
 def test_rolled_pass_range_shares_the_branch_midpoint(loop_if_trace: tl.Trace) -> None:
     line = _branch_edge(_dot(loop_if_trace, rolled=True))
-    label = line.split(" label=", 1)[1]
+    label = line.split("[label=", 1)[1]
     assert "<u>IF</u>" in label and ">Out " in label
     assert "taillabel" not in line
     assert "headlabel" not in line
