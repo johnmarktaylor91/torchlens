@@ -4377,8 +4377,10 @@ package-docstrings	torchlens/_io/writer_contract.py	2.34.1
 package-docstrings	torchlens/_io/writer_contract.py	256
 package-docstrings	torchlens/_io/writer_contract.py	3.1
 package-docstrings	torchlens/_io/writer_contract.py	3.3
+package-docstrings	torchlens/_ir/_container_errors.py	64
 package-docstrings	torchlens/_ir/_container_type_probes.py	3.11
 package-docstrings	torchlens/_ir/_container_type_probes.py	3.12
+package-docstrings	torchlens/_ir/_container_type_probes.py	42
 package-docstrings	torchlens/_ir/_container_type_probes.py	47
 package-docstrings	torchlens/_ir/_container_type_probes.py	51
 package-docstrings	torchlens/_ir/_selector_universe.py	4_27
@@ -4390,13 +4392,11 @@ package-docstrings	torchlens/_ir/container.py	25
 package-docstrings	torchlens/_ir/container.py	27
 package-docstrings	torchlens/_ir/container.py	37
 package-docstrings	torchlens/_ir/container.py	39
-package-docstrings	torchlens/_ir/container.py	42
 package-docstrings	torchlens/_ir/container.py	47
 package-docstrings	torchlens/_ir/container.py	48
 package-docstrings	torchlens/_ir/container.py	49
 package-docstrings	torchlens/_ir/container.py	51
 package-docstrings	torchlens/_ir/container.py	562
-package-docstrings	torchlens/_ir/container.py	64
 package-docstrings	torchlens/_ir/container_registry.py	23
 package-docstrings	torchlens/_ir/container_registry.py	27
 package-docstrings	torchlens/_ir/events.py	1.2

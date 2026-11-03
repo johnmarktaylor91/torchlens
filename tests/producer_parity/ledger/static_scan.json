@@ -1544,6 +1544,14 @@
   "via_getattr": false
  },
  {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_ir/_container_type_probes.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
+ },
+ {
   "ambiguous": false,
   "field": "is_transform",
   "file": "torchlens/_ir/_selector_nodes.py",
@@ -1668,7 +1676,7 @@
   "field": "kind",
   "file": "torchlens/_ir/container.py",
   "has_default": false,
-  "sites": 19,
+  "sites": 20,
   "via_getattr": false
  },
  {
@@ -1676,7 +1684,7 @@
   "field": "modules",
   "file": "torchlens/_ir/container.py",
   "has_default": false,
-  "sites": 3,
+  "sites": 2,
   "via_getattr": false
  },
  {
@@ -1694,6 +1702,14 @@
   "has_default": true,
   "sites": 1,
   "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/_ir/distribution_container.py",
+  "has_default": false,
+  "sites": 1,
+  "via_getattr": false
  },
  {
   "ambiguous": true,
@@ -3484,7 +3500,7 @@
   "field": "kind",
   "file": "torchlens/_runnable/call_outputs.py",
   "has_default": false,
-  "sites": 4,
+  "sites": 5,
   "via_getattr": false
  },
  {
@@ -6204,7 +6220,7 @@
   "field": "kind",
   "file": "torchlens/backends/torch/_ops_containers.py",
   "has_default": false,
-  "sites": 6,
+  "sites": 7,
   "via_getattr": false
  },
  {
@@ -7798,6 +7814,30 @@
   "has_default": false,
   "sites": 3,
   "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_zero_fire.py",
+  "has_default": false,
+  "sites": 2,
+  "via_getattr": false
+ },
+ {
+  "ambiguous": true,
+  "field": "kind",
+  "file": "torchlens/intervention/_zero_fire.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
+ },
+ {
+  "ambiguous": true,
+  "field": "modules",
+  "file": "torchlens/intervention/_zero_fire.py",
+  "has_default": true,
+  "sites": 1,
+  "via_getattr": true
  },
  {
   "ambiguous": true,
