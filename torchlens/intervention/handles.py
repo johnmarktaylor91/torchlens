@@ -27,6 +27,13 @@ class HookHandle:
     def remove(self) -> None:
         """Remove the hook specs owned by this handle.
 
+        Removal takes effect at once, like a torch hook handle. A rerun or
+        backward pass in progress skips the removed hooks from the next hook
+        site it reaches; the site that is firing when ``remove()`` is called
+        finishes the hooks already queued there, as a torch module call fires
+        its per-call snapshot. After the run the owning log's recipe and this
+        handle are the same as if the removal had happened between runs.
+
         Returns
         -------
         None

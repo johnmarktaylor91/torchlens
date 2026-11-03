@@ -25,6 +25,7 @@ from .._utils.hashing import compute_graph_shape_hash
 from ..backends.torch.backward import _register_forward_grad_fn
 from ..options import ReplayOptions, merge_replay_options
 from ._helper_fingerprint import refuse_changed_staged_helpers
+from ._live_hook_plan import drop_handles_removed_mid_run, reset_append_state
 from ._rerun_ledger import _build_ledger_record
 from ._rerun_predicate import (
     plan_rerun_spec,
@@ -145,6 +146,7 @@ def run(
     _refuse_shifted_raw_index_resave(trace, new_log)
     settle_predicate_rerun(spec_plan, spec, new_log)
     new_log.facet_functions = getattr(trace, "facet_functions", None)
+    hook_plan = drop_handles_removed_mid_run(hook_plan, spec)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(
         new_log, hook_plan, source_log=trace
     )
@@ -158,9 +160,7 @@ def run(
     else:
         trace.replace_state_from(new_log)
     _adopt_rerun_backward_graph(trace, new_log)
-    trace._provenance_is_appended = False
-    trace._append_sequence_id = 0
-    trace._append_history = []
+    reset_append_state(trace)
 
     history_record = _build_ledger_record(
         trace,
@@ -426,8 +426,7 @@ def _append_rerun(
 
     spec = getattr(log, "_intervention_spec", None)
     refuse_changed_staged_helpers(spec, door="rerun")
-    # Every staged helper must be batch-independent, including the
-    # predicate-door entries the capture below re-arms instead of planning.
+    # Every staged helper must be batch-independent (predicate-door entries too).
     _validate_append_hook_plan(log, normalize_hooks_from_spec(spec))
     spec_plan = plan_rerun_spec(log, spec)
     capture_spec = translate_staged_final_labels(log, spec_plan.capture_spec)
@@ -447,6 +446,7 @@ def _append_rerun(
         )
     settle_predicate_rerun(spec_plan, spec, new_log)
     new_log.facet_functions = getattr(log, "facet_functions", None)
+    hook_plan = drop_handles_removed_mid_run(hook_plan, spec)
     hook_fire_count, unfired_hook_ids = _reconcile_rerun_hook_fires(new_log, hook_plan)
 
     _validate_append_candidate(log, new_log, hook_plan=hook_plan)

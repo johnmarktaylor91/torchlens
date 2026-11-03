@@ -37,13 +37,13 @@ from ._hooks_support import (
     _validate_hook_signature,
     gradient_inner,
     make_live_site_proxy,
+    refuse_lost_facet_scatter,
 )
 from .errors import (
     HelperMountError,
     HookSignatureError,
     HookSiteCoverageError,
     LiveModeLabelError,
-    ReplayPreconditionError,
     SiteResolutionError,
 )
 from .types import (
@@ -126,6 +126,10 @@ class NormalizedHookEntry:
     normalized_callable: HookCallable
     helper_spec: Edit | None = None
     metadata: Mapping[str, Any] = field(default_factory=dict)
+    #: The sticky spec's removable handle id when the entry came from a recipe hook
+    #: attached through ``attach_hooks``; a removal through that handle mid-run
+    #: retires the entry from the live plan by this id.
+    handle: str | None = None
 
     @property
     def signal(self) -> HookDirection:
@@ -1095,24 +1099,14 @@ def _normalize_sticky_hook_specs(
             # rebuilt from the raw helper: the generic path below would silently apply the
             # helper to the WHOLE home tensor (tl.head(0, "q") + tl.zero_ablate() zeroing
             # every head). Fail closed when the wrapper is absent (e.g. a spec loaded from disk).
-            stored_hook = hook_spec.hook
-            if not getattr(stored_hook, "_tl_facet_scatter", False):
-                facet_name = hook_spec.metadata.get("facet_name", "<unknown>")
-                home_label = hook_spec.metadata.get("facet_home_label", "<unknown>")
-                raise ReplayPreconditionError(
-                    "Sticky facet-slice hook lost its scatter wrapper: the stored hook "
-                    f"for facet {facet_name!r} on home {home_label!r} is not the live "
-                    "facet scatter wrapper, so firing it would write the whole home "
-                    "tensor instead of the selected facet slice. Facet hooks cannot be "
-                    "rebuilt from a serialized helper; re-attach the facet intervention "
-                    "on a live trace (e.g. trace.attach_hooks(tl.head(...), helper))."
-                )
+            stored_hook = refuse_lost_facet_scatter(hook_spec)
             entries.append(
                 NormalizedHookEntry(
                     site_target=hook_spec.site_target,
                     normalized_callable=cast(HookCallable, stored_hook),
                     helper_spec=hook_spec.helper,
                     metadata=MappingProxyType(dict(hook_spec.metadata)),
+                    handle=hook_spec.handle,
                 )
             )
             continue
@@ -1138,6 +1132,7 @@ def _normalize_sticky_hook_specs(
                     normalized_callable=entry.normalized_callable,
                     helper_spec=entry.helper_spec,
                     metadata=MappingProxyType(metadata),
+                    handle=hook_spec.handle,
                 )
             )
     return entries
