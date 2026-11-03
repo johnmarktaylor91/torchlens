@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 class OpAtenMixin:
     """Adds ``aten_ops`` to :class:`Op`."""
 
+    # Empty: Op is slotted (``_core``/``_row``); a slotless base would give every op a __dict__.
+    __slots__ = ()
+
     @property
     def aten_ops(self) -> tuple[AtenOp, ...]:
         """The ATen operations this op's torch call dispatched to, in dispatch order.

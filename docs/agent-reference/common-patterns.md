@@ -290,7 +290,7 @@ assert torch.count_nonzero(probs[1, :, :2, 2:]) == 0  # padded keys get exactly 
 ```python
 trace = tl.trace(model, x, capture=tl.options.CaptureOptions(aten_ops=True))
 assert trace.has_aten_ops  # False on a default capture: the recorder is opt-in
-for row in trace["linear_1"].aten_ops:  # the ATen calls this op's torch call dispatched to
+for row in trace["relu_1_2"].aten_ops:  # the ATen calls this op's torch call dispatched to
     print(row.operator, row.overload, row.sequence)
 len(trace.aten_ops)  # every recorded row, forward then backward, in dispatch order
 trace.aten_gaps  # disclosed interiors the recorder could not observe; () when complete
