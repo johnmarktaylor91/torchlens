@@ -14,6 +14,11 @@ from torch import nn
 
 from torchlens._errors import ShapeInferenceError
 from torchlens.debug._infer_failure_classify import classify_nongeometric_failure
+from torchlens.debug._infer_training_states import (
+    _restore_training_states,
+    _training_states,
+    training_states_restored,
+)
 
 from .._debug_report import FoundReport
 
@@ -541,36 +546,6 @@ def _make_tensor(
             int(value_range[1]), int(value_range[2]), shape, device=device, dtype=dtype
         )
     return torch.rand(shape, device=device, dtype=dtype)
-
-
-def _training_states(model: nn.Module) -> dict[nn.Module, bool]:
-    """Capture training flags for all modules.
-
-    Parameters
-    ----------
-    model:
-        Model whose module states are captured.
-
-    Returns
-    -------
-    dict[nn.Module, bool]
-        Training flags keyed by module object.
-    """
-
-    return {module: module.training for module in model.modules()}
-
-
-def _restore_training_states(states: dict[nn.Module, bool]) -> None:
-    """Restore module training flags.
-
-    Parameters
-    ----------
-    states:
-        Training flags from :func:`_training_states`.
-    """
-
-    for module, training in states.items():
-        module.train(training)
 
 
 def _probe(model: nn.Module, example_input: Any, seed: int) -> _ProbeResult:
@@ -2186,31 +2161,29 @@ def _infer_input_shape_impl(
         return result
 
     attempts: list[tuple[tuple[int, ...] | None, str]] = []
-    training_states = _training_states(model)
-    try:
-        result = _run_search(
-            model,
-            attempts,
-            batch_size=batch_size,
-            input_dtype=input_dtype,
-            channels=channels,
-            spatial_rank=spatial_rank,
-            seq_len=seq_len,
-            min_size=min_size,
-            max_size=max_size,
-            preferred_sizes=preferred_sizes,
-            max_probes=max_probes,
-            device=device,
-            seed=seed,
-            return_trace=_return_trace,
-        )
-    except Exception as exc:  # noqa: BLE001 - the on_failure contract admits no raw escape.
-        message = f"Shape inference aborted on an unexpected internal error: {exc!r}"
-        if on_failure == "raise":
-            raise ShapeInferenceError(message) from exc
-        return _failure_result("non_shape_blocker", attempts, message)
-    finally:
-        _restore_training_states(training_states)
+    with training_states_restored(model):
+        try:
+            result = _run_search(
+                model,
+                attempts,
+                batch_size=batch_size,
+                input_dtype=input_dtype,
+                channels=channels,
+                spatial_rank=spatial_rank,
+                seq_len=seq_len,
+                min_size=min_size,
+                max_size=max_size,
+                preferred_sizes=preferred_sizes,
+                max_probes=max_probes,
+                device=device,
+                seed=seed,
+                return_trace=_return_trace,
+            )
+        except Exception as exc:  # noqa: BLE001 - the on_failure contract admits no raw escape.
+            message = f"Shape inference aborted on an unexpected internal error: {exc!r}"
+            if on_failure == "raise":
+                raise ShapeInferenceError(message) from exc
+            return _failure_result("non_shape_blocker", attempts, message)
     _maybe_raise(result, on_failure)
     return result
 
