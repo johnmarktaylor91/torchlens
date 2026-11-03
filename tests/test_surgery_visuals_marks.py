@@ -358,7 +358,6 @@ def test_render_surgery_is_removed() -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.smoke
 def test_diff_absence_is_disclosed_never_ghosted(chain_capture) -> None:
     """A one-side op is a full-strength disclosure, never execution removal."""
 

@@ -20,6 +20,7 @@ from torch import nn
 import torchlens as tl
 from torchlens._capture.structure_only import (
     StructureOnlyCapabilityError,
+    require_structure_only_capability,
 )
 from torchlens.options import CaptureOptions
 
@@ -112,6 +113,16 @@ def test_save_persists_the_marker_plainly(tmp_path) -> None:
     with pytest.raises(StructureOnlyCapabilityError) as excinfo:
         loaded.run(inputs=torch.randn(2, 4))
     assert excinfo.value.fields["code"] == "structure_only_replay_unsupported"
+
+
+# Kept: slices 1 and 3 each removed one of the two provokers of
+# structure_only_runnable_unsupported; together they removed both, so the error-code
+# ledger needs this one.
+def test_runnable_save_row_refuses_typed() -> None:
+    log = _structure_trace()
+    with pytest.raises(StructureOnlyCapabilityError) as excinfo:
+        require_structure_only_capability(log, "save_runnable")
+    assert excinfo.value.fields["code"] == "structure_only_runnable_unsupported"
 
 
 def test_validation_entry_refuses_typed() -> None:
