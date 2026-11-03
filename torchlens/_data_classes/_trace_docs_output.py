@@ -110,9 +110,8 @@ DOCS: dict[str, str] = {
         
         With no keywords this returns the rows the automatic capture-time
         decode produced. Naming a ``style``, a ``head`` or a ``tokenizer``
-        decodes again from the retained output tensors (the output ops'
-        values), the persisted ``output_id2label`` and the shipped ImageNet
-        bank, without touching ``decoded_output``.
+        decodes again from the retained output tensors, the persisted
+        ``output_id2label`` and the ImageNet bank, never ``decoded_output``.
         
         Parameters
         ----------
@@ -126,7 +125,8 @@ DOCS: dict[str, str] = {
             Output head to decode, as an output container path such as
             ``"logits"``, ``"0"`` or ``"0.logits"``.
         tokenizer:
-            Tokenizer with a ``decode`` method, required by ``"hf_text"``.
+            Tokenizer with a ``decode`` method, used by ``"hf_text"``; without
+            one the rows carry the argmax ``token_ids`` and ``text`` is ``None``.
         
         Returns
         -------
@@ -343,6 +343,18 @@ DOCS: dict[str, str] = {
         open_viewer:
             ``True`` opens the written picture in the system viewer; the
             default never opens anything.
+        highlight:
+            Keyword-only. Named highlight drawn over the graph. ``None`` (the
+            default) draws the plain graph. ``"interventions"`` draws the
+            surgery lens: every recorded intervention is marked on its node
+            (solid border = recorded fact, dashed = heuristic attribution),
+            the caption carries the per-lane census, and when a figure is
+            written the full census text lands beside it as
+            ``<path>.census.txt`` (beside the collision-safe file a bare draw
+            chose). A trace with no recorded intervention refuses
+            ``surgery_evidence_missing``; any other value refuses
+            ``draw_highlight_invalid`` naming the allowed values. The other
+            keywords you pass win over the lens's own settings.
         
         Returns
         -------
