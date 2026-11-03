@@ -187,6 +187,8 @@ def reanchor_visualizer_paths(trace: Any, bundle_path: Path) -> None:
         Root of the loaded bundle.
     """
 
+    # Essential complexity: the containment ladder (missing or symlinked directory, escape,
+    # missing file) is one security check; each rung must drop the path in place.
     layer_list = trace._layer_list
     if not layer_list:
         return

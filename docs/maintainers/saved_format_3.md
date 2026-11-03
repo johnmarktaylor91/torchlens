@@ -62,7 +62,9 @@ artifact each, and `relations.json`. A recipe saved on its own by `save_interven
 The writer identity strings (`torchlens_version`, `python_version`, `torch_version`, `platform`,
 `created_at`) follow the code-owned grammar `contract.IDENTITY_FIELD_PATTERNS`: non-empty. No
 stricter version-string pattern applies until this contract states it. After the floor and
-ceiling checks the reader applies the shared runtime identity policy: a torch major mismatch
+ceiling checks the reader applies the writer-version floor, then the shared runtime identity
+policy: a `torchlens_version` older than the first TorchLens that writes format 3 is an
+impossible pairing and refuses `artifact_version_below_floor`; a torch major mismatch
 refuses `bundle_torch_incompatible`, a torch minor mismatch, a newer TorchLens writer and a
 Python major mismatch warn, an unparsable TorchLens writer version refuses
 `bundle_producer_unverifiable`.
@@ -321,7 +323,8 @@ One table for the writer and the reader. Codes are rows of
 | manifest unreadable or over the parse bound | `manifest_unreadable` | reader |
 | manifest root not an object | `manifest_not_json_object` | reader |
 | manifest violates this contract (missing field, wrong type, `records` or `files` entry wrong) | `manifest_schema_invalid` | reader |
-| 2.x artifact, `format_version` below 3, record contract below the floor | `artifact_version_below_floor` | reader |
+| 2.x artifact, `format_version` below 3, record contract below the floor, or a `torchlens_version` older than the first TorchLens that writes format 3 | `artifact_version_below_floor` | reader |
+| `torchlens_version` not parseable under PEP 440 | `bundle_producer_unverifiable` | reader |
 | `format_version` above 3 or record contract above the runtime | `artifact_version_above_runtime` | reader |
 | specialized loader given another kind | `artifact_kind_mismatch` | reader |
 | unknown save level | `artifact_save_level_invalid` | writer, reader |

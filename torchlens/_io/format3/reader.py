@@ -23,7 +23,7 @@ from ..format_contract import BlobRef
 from ..prerelease import PRERELEASE_STATE_KEY, validate_prerelease_state
 from ..state_contract import governed_artifact_load
 from . import contract
-from ._tables import read_record_table, record_class, refuse_cell_types, refuse_table_columns
+from ._tables import read_record_table, record_class, refuse_cells, refuse_table_columns
 from .codec_policy import codec_backend
 from .container import iter_members, read_member_index
 from .decode import (
@@ -432,7 +432,7 @@ class DecodedArtifact:
                 }
                 for index, row in enumerate(raw_rows)
             ]
-            refuse_cell_types(kind, self.tables[kind])
+            refuse_cells(kind, self.tables[kind])
             cls = record_class(kind)
             self.objects[kind] = [state_new(cls) for _ in raw_rows]
             self._index_identities(kind)
@@ -483,6 +483,7 @@ class DecodedArtifact:
     def _settle(self, value: Any, at: str) -> Any:
         """Replace the references inside a decoded value with the built objects."""
 
+        # Essential complexity: one branch per decoded carrier; the carrier set is closed.
         if isinstance(value, RowRef):
             return self._lookup(value, at)
         if isinstance(value, PendingRecord):
@@ -560,6 +561,7 @@ class DecodedArtifact:
     ) -> Mapping[str, Any]:
         """Return ``row`` with each flattened accessor column rebuilt from its member rows."""
 
+        # Essential complexity: member lookup, positional and keyed forms are one rebuild.
         rebuilt: dict[str, Any] | None = None
         for (owner, column), (member_kind, key, build) in _ACCESSOR_COLUMNS.items():
             if owner != kind or row.get(column) is None:

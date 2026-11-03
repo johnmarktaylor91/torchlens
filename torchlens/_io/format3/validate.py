@@ -712,11 +712,14 @@ def _check_module_derived_cells(
                 )
             addresses = row.get("all_addresses")
             multiple = row.get("has_multiple_addresses")
-            if multiple is not None and isinstance(addresses, list):
-                if multiple != (len(addresses) > 1):
-                    raise _invariant_error(
-                        root, f"{kind}[{index}].has_multiple_addresses disagrees", code=code
-                    )
+            if (
+                multiple is not None
+                and isinstance(addresses, list)
+                and multiple != (len(addresses) > 1)
+            ):
+                raise _invariant_error(
+                    root, f"{kind}[{index}].has_multiple_addresses disagrees", code=code
+                )
     module_rows = {id(obj): i for i, obj in enumerate(objects.get("module", ()))}
     for index, row in enumerate(tables.get("module_call", ())):
         if row.get("module") is None:
@@ -735,11 +738,10 @@ def _check_module_derived_cells(
                 )
         params = module.get("params")
         count = row.get("num_param_tensors")
-        if count is not None and isinstance(params, list):
-            if count != len(params):
-                raise _invariant_error(
-                    root, f"module_call[{index}].num_param_tensors is not its module's", code=code
-                )
+        if count is not None and isinstance(params, list) and count != len(params):
+            raise _invariant_error(
+                root, f"module_call[{index}].num_param_tensors is not its module's", code=code
+            )
 
 
 class _AnchorView:

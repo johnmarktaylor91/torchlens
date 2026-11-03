@@ -7,7 +7,8 @@ strings, after their own format floor and ceiling checks have run:
 
 * torch: a different major version refuses (``bundle_torch_incompatible``);
   a different minor version warns; an unparsable pair that differs refuses.
-* TorchLens: an unparsable writer version refuses
+* TorchLens: a writer older than the first release that writes saved format 3 refuses
+  (``artifact_version_below_floor``, checked first); an unparsable writer version refuses
   (``bundle_producer_unverifiable``); a newer writer warns; an older one logs.
 * Python: a different major version warns; an unparsable, different string warns.
 """
@@ -23,13 +24,17 @@ from packaging.version import InvalidVersion, Version
 
 from .._vocab._package_version import __version__ as TORCHLENS_VERSION
 from ..errors._base import TorchLensWarning
-from .format_errors import ArtifactError, ArtifactRuntimeIncompatibleError
+from .format_errors import ArtifactError, ArtifactRuntimeIncompatibleError, ArtifactTooOldError
 
 __all__ = ["check_runtime_identity", "parse_pep440", "runtime_python_version"]
 
 LOGGER = logging.getLogger(__name__)
 
 _TORCH_REMEDY = "load the bundle under a torch runtime with the recorded major version"
+# The first TorchLens release whose writer produces saved format 3. A format 3 manifest
+# stamped by an older writer is an impossible pairing and refuses below the floor, before
+# the identity advisories; dev builds of the floor release count as the release.
+_FIRST_FORMAT3_WRITER = Version("2.36.3")
 
 
 def parse_pep440(
@@ -73,9 +78,26 @@ def check_runtime_identity(
     message (``"Bundle"`` for the 2.x path, ``"Artifact"`` for a 3.0 artifact).
     """
 
+    _check_writer_floor(torchlens_version, subject)
     _check_torch(torch_version, subject)
     _check_torchlens(torchlens_version, subject)
     _check_python(python_version, subject)
+
+
+def _check_writer_floor(recorded: str, subject: str) -> None:
+    saved = parse_pep440(recorded, label="manifest torchlens", warn_on_failure=False)
+    if saved is None or Version(saved.base_version) >= _FIRST_FORMAT3_WRITER:
+        return
+    remedy = "re-save the artifact with the current torchlens"
+    raise ArtifactTooOldError(
+        f"{subject} torchlens_version={recorded} is older than {_FIRST_FORMAT3_WRITER}, the "
+        "first TorchLens that writes saved format 3; the stamp and the format cannot both be "
+        f"honest. Remedy: {remedy}.",
+        code="artifact_version_below_floor",
+        observed=f"torchlens_version={recorded}",
+        floor_torchlens_version=str(_FIRST_FORMAT3_WRITER),
+        remedy=remedy,
+    )
 
 
 def _check_torch(recorded: str, subject: str) -> None:
