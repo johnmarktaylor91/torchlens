@@ -151,6 +151,34 @@ def test_local_ci_smoke_script_matches_the_enforcing_row() -> None:
     ]
 
 
+_SMOKE_SELECTION_RE = re.compile(r"\bpytest\b.*\s-m\s+[\"']?smoke\b")
+
+
+def test_every_smoke_step_collects_tests_through_the_smoke_skip() -> None:
+    """CI's smoke steps collect ``tests/`` and let the tiers plugin narrow it.
+
+    Under ``-m smoke`` ``tests/_tiers_plugin.py`` skips, before import, every
+    test module off the smoke file list, so ``pytest tests/ -m smoke`` imports
+    only the listed files. Passing the listed files as arguments instead costs
+    more: pytest re-walks the parent directory for every file argument. The
+    commit gate ``scripts/smoke_ci_parity.py`` runs the same command.
+    """
+
+    seen = {}
+    for workflow in ("pr.yml", "nightly.yml", "weekly.yml"):
+        for job_name, job in _load_yaml(_WORKFLOWS / workflow)["jobs"].items():
+            for step in job.get("steps", []):
+                for line in step.get("run", "").splitlines():
+                    if _SMOKE_SELECTION_RE.search(line):
+                        assert re.search(r"\bpytest tests/ -m smoke\b", line), (
+                            f"{workflow} {job_name}: {line.strip()}"
+                        )
+                        seen[workflow] = seen.get(workflow, 0) + 1
+    assert seen == {"pr.yml": 1, "nightly.yml": 3}, seen
+    parity = (_PROJECT_ROOT / "scripts" / "smoke_ci_parity.py").read_text()
+    assert '[*pytest, "tests/", "-m", "smoke",' in parity
+
+
 def test_agent_docs_name_the_ci_parity_script_as_the_commit_gate() -> None:
     """The documented commit-level gate is the CI-parity script, at its pins.
 

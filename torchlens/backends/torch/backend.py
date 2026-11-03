@@ -22,11 +22,8 @@ from ..._ir.refs import DeviceRef, DtypeRef, ReservedLabel, TensorRef
 from ..._ir.semantics import BackendSemantics, CapturePolicy
 from ..._utils._cuda_probe import _is_cuda_available
 from ..._utils._exception_notes import annotate_guarded
-from ..._utils.arg_handling import (
-    INPUT_WAS_PARAMETER_ATTR,
-    normalize_input_args,
-    safe_copy_input_tree,
-)
+from ..._utils.arg_handling import normalize_input_args, safe_copy_input_tree
+from ..._utils.input_leaves import INPUT_WAS_PARAMETER_ATTR
 from ..._utils.introspection import (
     INPUT_SEARCH_DEPTH_LIMIT,
     get_vars_of_type_from_obj,

@@ -53,7 +53,7 @@ forward that itself rejects the dtype).
 | `invariants_pass` | the metadata invariants of that same default validation (never loosened) |
 | `save_load_equals_live` | a portable save and load returns the same op labels and byte-identical saved outputs |
 | `typed_refusal_names_condition` | every error TorchLens raised is a `TorchLensError` with a stable `fields["code"]` and a message |
-| `torch_clean_after_cell` | no held capture slots, global hooks or torch-function modes left; wrappers never uninstalled or swapped; trace, save and load leave the global RNG streams as they found them (`tl.validate` documents that its seed reseeds without restoring, so its RNG effect is recorded, not judged) |
+| `torch_clean_after_cell` | no held capture slots, global hooks or torch-function modes left; wrappers never uninstalled or swapped; trace, save, load and validate leave the global RNG streams as they found them |
 | `peak_memory_within_budget` | the `tracemalloc` peak and the resident high-water growth over the cell stay under the row's budget |
 
 A cell whose eager forward itself raises (a dtype the model's own ops reject,

@@ -16,8 +16,10 @@ from .._capture.outcome import require_capture_capability
 from .._capture.structure_only import require_structure_only_capability
 from .._capture_state_helpers import unwrap_compiled_model
 from .._runnable import refuse_poisoned_trace
+from .._utils.rng import restores_rng_streams
 from ..backends.registry import get_backend_spec
 from ..backends.torch._trace_backward import _refuse_stats_capture
+from . import _degenerate_forward
 from .invariants import check_metadata_invariants as _check_metadata_invariants_impl
 from .status import ValidationStatus
 
@@ -98,6 +100,7 @@ def save_new_outs(  # noqa: PLR0913  (the thin Trace.save_new_outs shell keeps t
     )
 
 
+@restores_rng_streams
 def validate_forward_pass(
     trace: Trace,
     ground_truth_output_tensors: list[torch.Tensor] | torch.Tensor,
@@ -135,6 +138,15 @@ def validate_forward_pass(
         if isinstance(validation_result, ValidationStatus):
             trace._validation_replay_status = validation_result
             if validation_result.state in {"passed", "failed"}:
+                # A pass on entirely non-finite final outputs proves nothing:
+                # fail it as a degenerate forward (tightening only).
+                if (
+                    validation_result.passed
+                    and _degenerate_forward.fail_if_final_outputs_non_finite(
+                        trace, ground_truth_output_tensors
+                    )
+                ):
+                    return False
                 return validation_result.passed
     return validation_result
 
