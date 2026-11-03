@@ -60,6 +60,56 @@ def _input() -> mx.array:
     return mx.ones((1, 4))
 
 
+def test_mlx_module_exit_changes_output_and_validates() -> None:
+    """A module site edits its output before the downstream layer consumes it."""
+
+    model = _TwoLayerMLP()
+    trace = tl.trace(
+        model, _input(), backend="mlx", intervene=tl.when(tl.module("l1"), tl.zero_ablate())
+    )
+    producer = next(op for op in trace._layer_list if op.type == "linear")
+    assert producer.is_edited
+    assert producer.intervention_fired
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), np.asarray(model.l2.bias))
+    assert MLXBackend().validate_trace(trace).passed
+
+
+def test_mlx_module_union_fires_once_per_call() -> None:
+    """An overlapping union applies a non-idempotent action only once."""
+
+    model = _TwoLayerMLP()
+    trace = tl.trace(
+        model,
+        _input(),
+        backend="mlx",
+        intervene=tl.when(tl.module("l1") | tl.module("l1"), tl.scale(0.5)),
+    )
+    expected = np.full((1, 2), 2.1 * 0.5 * 3 * 0.25 - 0.2)
+    assert np.allclose(np.asarray(trace._layer_list[-1].out), expected)
+    assert MLXBackend().validate_trace(trace).passed
+
+
+@pytest.mark.parametrize("kind", ["and", "or", "not"])
+def test_mlx_mixed_module_selector_refuses_before_forward(kind: str) -> None:
+    """Unsupported module trees fail preflight rather than silently matching nothing."""
+
+    calls = []
+    module = tl.module("l1")
+    selector = {
+        "and": module & tl.func("linear"),
+        "or": module | tl.func("linear"),
+        "not": ~module,
+    }[kind]
+
+    def forward(x: Any) -> Any:
+        calls.append(True)
+        return x + 1
+
+    with pytest.raises(BackendUnsupportedError, match="(?i)mlx"):
+        tl.trace(forward, _input(), backend="mlx", intervene=tl.when(selector, tl.zero_ablate()))
+    assert calls == []
+
+
 def test_mlx_zero_ablate_substitutes_downstream_and_validates() -> None:
     """Ablating the relu changes downstream values; validation still passes."""
 

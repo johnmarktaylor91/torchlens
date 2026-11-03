@@ -102,6 +102,64 @@ def test_paddle_capability_lift_is_real() -> None:
     assert implementation is not None
 
 
+def test_paddle_module_exit_changes_output_and_validates() -> None:
+    """The Sequential child output is replaced before the next child consumes it."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.Sigmoid())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0"), tl.zero_ablate()),
+    )
+    producer = _relu_op(trace)
+    assert producer.is_edited
+    assert producer.intervention_fired
+    assert list(producer.edits)
+    assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+def test_paddle_module_union_fires_once_per_call() -> None:
+    """Overlapping module addresses apply scale once rather than twice."""
+
+    model = paddle.nn.Sequential(paddle.nn.ReLU(), paddle.nn.ReLU())
+    trace = tl.trace(
+        model,
+        paddle.ones([2, 4]),
+        backend="paddle",
+        intervene=tl.when(tl.module("0") | tl.module("0"), tl.scale(0.5)),
+    )
+    assert np.allclose(_output_op(trace).out.numpy(), 0.5)
+    assert PaddleBackend().validate_trace(trace) is True
+
+
+@pytest.mark.parametrize("kind", ["and", "or", "not"])
+def test_paddle_mixed_module_selector_refuses_before_forward(kind: str) -> None:
+    """Unsupported module trees must refuse before invoking user code."""
+
+    calls = []
+    module = tl.module("0")
+    selector = {
+        "and": module & tl.func("functional.relu"),
+        "or": module | tl.func("functional.relu"),
+        "not": ~module,
+    }[kind]
+
+    def forward(x: Any) -> Any:
+        calls.append(True)
+        return paddle.nn.functional.relu(x)
+
+    with pytest.raises(BackendUnsupportedError, match="(?i)paddle"):
+        tl.trace(
+            forward,
+            paddle.ones([2, 4]),
+            backend="paddle",
+            intervene=tl.when(selector, tl.zero_ablate()),
+        )
+    assert calls == []
+
+
 def test_paddle_zero_ablate_e2e_changes_downstream_and_validates() -> None:
     """Ablating relu changes downstream values and replay validation passes."""
 
