@@ -68,6 +68,7 @@ from ._save_gates import (
     _refuse_unsupported_tensor,
     _save_bundle_via_container_door,
 )
+from ._save_subject import resolve_save_subject
 from ._skipped_blobs import _apply_skipped_blobs_to_scrubbed_state
 from .lazy import LazyActivationRef
 from .manifest import Manifest, Provenance, TensorEntry, enforce_version_policy
@@ -370,39 +371,9 @@ def save(
     grant it to artifacts whose provenance you trust.
     """
 
-    # A MergedTrace is a presenter, never a Trace: trace.save() refuses it typed
-    # (contract 2.5 "merged runnable export ... refused typed") instead of the
-    # historical bare AttributeError from the poison gate. The sys.modules
-    # gate keeps ordinary saves free of any merged import: a MergedTrace can
-    # only exist after its module was imported.
-    merged_presenter = sys.modules.get("torchlens._merged._presenter")
-    if merged_presenter is not None and isinstance(trace, merged_presenter.MergedTrace):
-        from torchlens._merged._errors import MergedSurfaceUnsupportedError
-
-        from .._merged import MergedErrorCode
-
-        raise MergedSurfaceUnsupportedError(
-            "trace.save() does not support MergedTrace. Write the merged-directory "
-            "artifact with merged.save(path), or save a single rank core with "
-            "merged.ranks[r].save(path).",
-            code=MergedErrorCode.MERGED_SURFACE_UNSUPPORTED,
-        )
-    # A TraceSlice is likewise a presenter, never a Trace: a slice has
-    # dangling boundary edges whose other ends live outside it, so a
-    # persisted slice would imply replay/validation capabilities it cannot
-    # honour. Same sys.modules gate shape as the MergedTrace refusal above
-    # (owners disjoint; a slice can only exist after its module imported).
-    slice_presenter = sys.modules.get("torchlens._trace_slice")
-    if slice_presenter is not None and isinstance(trace, slice_presenter.TraceSlice):
-        from torchlens._selection.errors import SelectionError
-
-        raise SelectionError(
-            "trace.save() does not support TraceSlice: a slice is a VIEW with "
-            "declared dangling boundary edges, not a self-contained capture. "
-            "Save the trace the slice was taken from (trace.save(path)) "
-            "and re-derive the view after loading.",
-            code="slice_save_unsupported",
-        )
+    # Presenters refuse typed (MergedTrace, TraceSlice) and a Recording cooks
+    # into the Trace it stands for; see ``torchlens._io._save_subject``.
+    trace = resolve_save_subject(trace)
     # A Bundle is a CONTAINER product, never a Trace: applying the per-trace
     # N1 gate below to it read the container's empty outcome sidecar as
     # UNKNOWN and false-refused EVERY bundle tl.Bundle() built (with the

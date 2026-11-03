@@ -24,7 +24,7 @@ from ..intervention.predicates import InterventionPredicate
 from ..options import CaptureOptions, StorageOptions
 from ._generation import GenerationRecording, enrich_generation, record_generation
 from ._recorder import Recorder
-from ._validation import validate_postprocess
+from ._validation import refuse_episode_on_record, validate_postprocess
 from .options import ForwardErrorMode, HaltPredicateFn, PredicateErrorMode, PredicateFn
 from .types import CaptureSpec, Recording
 
@@ -87,6 +87,7 @@ def record(
     narrate: Any | None = None,
     backend: BackendName | None = None,
     generate_kwargs: Mapping[str, Any] | None = None,
+    episode: Any | None = None,
 ) -> Recording | GenerationRecording:
     """Record one model forward pass with capture predicates.
 
@@ -166,6 +167,8 @@ def record(
         prompts, assisted decoding, encoder-decoder models, ``use_cache=False``,
         ``intervene=``, ``stop_after=`` and partial forward-error modes refuse with
         code ``record_generation_unsupported``.
+    episode:
+        Refused typed (``episode_unsupported_on_record``); episode capture runs on ``tl.trace``.
 
     Returns
     -------
@@ -177,6 +180,7 @@ def record(
 
     _require_torch_fastlog_backend(backend)
     model = unwrap_compiled_model(model)
+    refuse_episode_on_record(episode)
     validate_postprocess(postprocess)
     inputs = _coerce_input_args(model, inputs)
     # Fail fast on tensor variants the logging pipeline cannot handle (meta tensors have no
@@ -184,48 +188,29 @@ def record(
     # record() shares trace()'s decorated hot path, so it must enforce the SAME up-front guard
     # instead of crashing deep in capture with an opaque torch error.
     check_model_and_input_variants(model, inputs, input_kwargs)
+    recorder_kwargs: dict[str, Any] = {
+        "save": save,
+        "default_op": default_op,
+        "default_module": default_module,
+        "history_size": history_size,
+        "include_source_events": include_source_events,
+        "intervene": intervene,
+        "stop_after": stop_after,
+        "max_predicate_failures": max_predicate_failures,
+        "on_predicate_error": on_predicate_error,
+        "on_forward_error": on_forward_error,
+        "storage": storage,
+        "default_grad": default_grad,
+        "narrate": narrate,
+        "capture": capture,
+    }
     if generate_kwargs is not None:
         output, generation = record_generation(
-            model,
-            inputs,
-            input_kwargs,
-            generate_kwargs,
-            {
-                "save": save,
-                "default_op": default_op,
-                "default_module": default_module,
-                "history_size": history_size,
-                "include_source_events": include_source_events,
-                "intervene": intervene,
-                "stop_after": stop_after,
-                "max_predicate_failures": max_predicate_failures,
-                "on_predicate_error": on_predicate_error,
-                "on_forward_error": on_forward_error,
-                "storage": storage,
-                "default_grad": default_grad,
-                "narrate": narrate,
-                "capture": capture,
-            },
+            model, inputs, input_kwargs, generate_kwargs, recorder_kwargs
         )
         object.__setattr__(generation.recording, "_output", output_returned(output))
         return enrich_generation(generation, postprocess)
-    with Recorder(
-        model,
-        save=save,
-        default_op=default_op,
-        default_module=default_module,
-        history_size=history_size,
-        include_source_events=include_source_events,
-        intervene=intervene,
-        stop_after=stop_after,
-        max_predicate_failures=max_predicate_failures,
-        on_predicate_error=on_predicate_error,
-        on_forward_error=on_forward_error,
-        storage=storage,
-        default_grad=default_grad,
-        narrate=narrate,
-        capture=capture,
-    ) as recorder:
+    with Recorder(model, **recorder_kwargs) as recorder:
         recorder(inputs, input_kwargs)
     result = recorder.recording
     if postprocess != "none":

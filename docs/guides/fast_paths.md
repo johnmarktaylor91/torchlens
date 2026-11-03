@@ -150,7 +150,11 @@ prompt rather than every step, see [the KV-cache recipe](kv_cache.md).
 When each step must also keep a few activations, use `tl.record` with `intervene=`. It applies
 the same edits during a recording pass and keeps only the payloads `save=` selects, without
 building the full graph a trace builds. `recording.output` is the model output, exactly as the
-model returned it. Call `recording.to_trace()` later only if you need graph structure.
+model returned it. Call `recording.to_trace()` later only if you need graph structure: a
+`Recording` has no `draw()` and no facets, and the cooked `Trace` takes every `Trace.draw`
+option and groups a reused layer into passes the way `tl.trace` does. Episode capture stays on
+`tl.trace(..., episode=...)`; `tl.record(..., episode=...)` refuses with the typed code
+`episode_unsupported_on_record`.
 
 ```python
 import torch

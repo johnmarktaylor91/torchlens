@@ -15,7 +15,7 @@ _LAZY_ATTRS = {
     "StopSignal": ("torchlens.recording._halt", "StopSignal"),
     "ModuleStackFrame": ("torchlens.recording.types", "ModuleStackFrame"),
     "Recorder": ("torchlens.recording._recorder", "Recorder"),
-    "DryRun": ("torchlens.recording.types", "DryRun"),
+    "DryRun": ("torchlens.recording._dry_run", "DryRun"),
     "RecordContext": ("torchlens.recording.types", "RecordContext"),
     "_DEFERRED_VALUE": ("torchlens._ir.predicate", "_DEFERRED_VALUE"),
     "cleanup_partial": ("torchlens.recording.cleanup", "cleanup_partial"),

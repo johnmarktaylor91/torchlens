@@ -81,7 +81,10 @@
   (beams, batches, several return sequences, `use_cache=False`, `intervene=`) refuses with
   `record_generation_unsupported`.
   `Recording.to_trace()` cooks the event stream into a full-structure `Trace`, with unsaved
-  payload reads rejected explicitly. `tl.record()`/fastlog is torch-only in the backend-v1
+  payload reads rejected explicitly; recorded ops carry capture-time equivalence classes and
+  parameter identity, so the cooked Trace groups recurrent layers into passes like `tl.trace`.
+  A `Recording` has no `draw()` and no facets (both need `to_trace()`); `tl.extract` takes only
+  `model`, `inputs`, `layers` and `detach_saved_activations`. `tl.record()`/fastlog is torch-only in the backend-v1
   registry. The old `keep_op=`/`keep_module=` alias kwargs are removed; `save=` is the only
   predicate spelling. Failed forwards default to
   the historical `on_forward_error="raise"` behavior; opt into
@@ -333,6 +336,8 @@
   `b.at(site)` takes a label or a selector (a member subset is a bundle of those members); `compare`,
   `rank_changes`, `store_comparison` and `draw(graph="diff")` run the comparison gate on every
   (baseline, member) pair; `tl.Bundle()` builds an empty bundle that saves and loads.
+  `b.summary()` (the bundle card as text), `b.to_pandas()` (one `member`-keyed table) and
+  `b.to_agent_json()` (`torchlens.agent_bundle.v1`, members keyed by name) read the bundle whole.
   `b.draw("bundle.svg", graph="forward", node_overrides={"relu_1_1": {"fillcolor": "#ffeeaa"}})`
   draws the merged bundle graph (one picture; `Trace.draw` spellings, `combined` for both passes,
   `nodes="members"` for the member relation graph) and returns the DOT source.
