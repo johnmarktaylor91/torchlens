@@ -416,10 +416,6 @@ JAX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "JAX backend preview does not support backward_ready; full-save forward capture "
             "only. Use tl.backends.jax.GradOptions for derived gradients."
         ),
-        "module_filter": (
-            "JAX backend preview does not support module_filter; full-save forward capture "
-            "only. Use full-save JAX trace capture or the PyTorch backend."
-        ),
         "transform": (
             "JAX backend preview does not support transform; full-save forward capture only. "
             "Use full-save JAX trace capture or the PyTorch backend."
@@ -458,7 +454,6 @@ TINYGRAD_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -489,7 +484,6 @@ PADDLE_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -521,7 +515,6 @@ MLX_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -551,7 +544,6 @@ TF_PREVIEW_TRACE_OPTION_POLICY = PreviewTraceOptionPolicy(
             "save_source_context",
             "save_rng",
             "backward_ready",
-            "module_filter",
             "transform",
             "layer_visualizers",
             "save_visualizations",
@@ -604,7 +596,7 @@ def resolve_optional_capture_field(capture: Any, field_name: str, flat_value: An
 
     Some preview backend ``capture_trace`` parameters predate ``CaptureOptions``
     and still spell a handful of optional fields (e.g. ``save_grads``,
-    ``module_filter``, ``transform``) with a concrete ``None`` default instead
+    ``transform``) with a concrete ``None`` default instead
     of the ``MissingType`` sentinel, so ``is_missing()`` cannot tell "the
     caller left this unset" apart from an explicit ``capture=`` value the way
     it can for every ``MISSING``-defaulted field. ``flat_value is not None``

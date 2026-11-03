@@ -283,7 +283,6 @@ class TinygradBackend:
         verbose: bool | MissingType = MISSING,
         backward_ready: bool | MissingType = MISSING,
         name: str | None | MissingType = MISSING,
-        module_filter: object | None = None,
         transform: object | None = None,
         raw_input: object | None = None,
         save_raw_input: str | bool | MissingType = MISSING,
@@ -341,8 +340,6 @@ class TinygradBackend:
             Unsupported for tinygrad in this preview.
         name
             Trace label.
-        module_filter
-            Unsupported for tinygrad in this preview.
         transform
             Unsupported for tinygrad in this preview.
         raw_input
@@ -423,7 +420,6 @@ class TinygradBackend:
         save_visualizations = capture_options.save_visualizations
         module_identity_mode = capture_options.module_identity_mode
         save_grads = _resolve_optional_capture_field(capture, "save_grads", save_grads)
-        module_filter = _resolve_optional_capture_field(capture, "module_filter", module_filter)
         transform = _resolve_optional_capture_field(capture, "transform", transform)
         output_transform = _resolve_optional_capture_field(
             capture, "output_transform", output_transform
@@ -454,7 +450,6 @@ class TinygradBackend:
         save_visualizations = _default_if_missing(save_visualizations, False)
         activation_transform = None if _is_missing(activation_transform) else activation_transform
         save_grads = None if _is_missing(save_grads) else save_grads
-        module_filter = None if _is_missing(module_filter) else module_filter
         transform = None if _is_missing(transform) else transform
         output_transform = None if _is_missing(output_transform) else output_transform
         layer_visualizers = None if _is_missing(layer_visualizers) else layer_visualizers
@@ -483,7 +478,6 @@ class TinygradBackend:
             save_source_context=save_code_context,
             save_rng=save_rng_states,
             backward_ready=backward_ready,
-            module_filter=module_filter,
             transform=transform,
             layer_visualizers=layer_visualizers,
             save_visualizations=save_visualizations,

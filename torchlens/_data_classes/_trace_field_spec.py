@@ -159,7 +159,6 @@ TRACE_PORTABLE_STATE_SPEC: dict[str, FieldPolicy] = {
     "_options_backward_ready": FieldPolicy.DROP,
     "_options_inference_only": FieldPolicy.KEEP,
     "_options_chunk_size": FieldPolicy.KEEP,
-    "_module_filter": FieldPolicy.DROP,
     "_options_emit_nvtx": FieldPolicy.KEEP,
     # Session-time measurement knob (like ``backward_ready``): it selects how
     # ``forward_peak_memory`` was measured during this capture and has no

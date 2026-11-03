@@ -73,7 +73,7 @@ CALLABLES: Mapping[str, Callable[[], Any]] = {
     "@bytes_rank": lambda: EncodingChannelRequest(source="bytes", transform="rank"),
     "@bytes_log": lambda: EncodingChannelRequest(source="bytes", transform="log"),
     "@score_map": lambda: {"mul_1_1": 0.8},
-    "@unsaved_abs": lambda: lambda op: "abs" not in str(op.func_name),
+    "@unsaved_abs": lambda: ~tl.func("abs"),
     "@badge": lambda: _badge,
     "@boxbadge": lambda: _boxbadge,
     "@to_tensor": _ToTensor,
@@ -152,6 +152,8 @@ def capture(panel: Panel) -> tuple[Any, Any]:
     kwargs: dict[str, Any] = {}
     if panel.capture:
         options = {k: _resolve(v) for k, v in panel.capture.items()}
+        if "save" in options:
+            kwargs["save"] = options.pop("save")
         kwargs["capture"] = tl.options.CaptureOptions(**options)
     if panel.intervene:
         kwargs["intervene"] = INTERVENTIONS[panel.intervene]()
