@@ -199,7 +199,7 @@
 - "Pristine" has three senses; never read one as another. `Trace.is_pristine` (documented-unstable)
   is the derived reading "nothing ever intervened on this trace", computed from the evidence the
   trace carries (`torchlens/_data_classes/_trace_pristine.py`, one function), so it survives save
-  and load and stays `False` after `clear_hooks()`, a `Trace.state` reassignment or a fork; `None`
+  and load and stays `False` after `clear_edits(...)`, a `Trace.state` reassignment or a fork; `None`
   means no evidence (an artifact older than tlspec 9, or a non-torch backend) and must never be
   treated as `True`. `TraceState.PRISTINE` is only the operational state machine's start value: an
   assignment sets it and a func-targeted `intervene=` capture keeps it. Validation's

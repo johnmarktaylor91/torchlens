@@ -1611,7 +1611,7 @@ Import surface for TorchLens intervention selectors, hooks, reruns, and bundles.
 | `_intervened_rerun_guard` | Refuse the legacy rerun of a loaded trace whose recorded values were intervened. | 108 |
 | `_metrics` | Pairwise distance metrics for the multi-trace subpackage. | 219 |
 | `_module_boundary` | Module-boundary live-hook application (the ''tl.module(...)'' door). | 566 |
-| `_op_edits` | Op-level intervention verbs: ''do'', ''set'', ''attach_hooks'', ''grad_for'', facets. | 188 |
+| `_op_edits` | Op-level intervention verbs: ''do'', ''set'', ''grad_for'', facets. | 188 |
 | `_param_fingerprint` | Capture-time parameter fingerprints: replay refuses a parameter changed since capture. | 186 |
 | `_patch_mapping` | Source-site to target-site mapping for ''patch_from'' (Patchscopes, SelfIE). | 211 |
 | `_position_edits` | Token-position editing. | 197 |

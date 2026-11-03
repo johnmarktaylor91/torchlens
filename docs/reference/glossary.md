@@ -671,7 +671,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
 **Trace.recipe and Trace.clear_edits**
 : `Trace.recipe` is a frozen snapshot of the trace's current intervention recipe.
   `Trace.clear_edits(site=None, handle=None, *, strict=False, confirm_mutation=False)` removes the
-  sticky edits attached with `attach_hooks` by site or by handle, marks the recipe stale and
+  sticky edits staged with `do` by site or by handle id, marks the recipe stale and
   returns the trace; with `strict=True` it refuses a call that names neither or matches nothing.
 
 **Region instances** *(spellings documented-unstable)*
@@ -1058,9 +1058,9 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   marks), never stored as a flag, so it survives `Trace.save`/`tl.load`, pickle and `fork()`, and no
   reset makes a touched trace read `True` again. `False` means some touch was recorded: a
   capture-time `intervene=` (including one that fired nowhere), a staged hook or value
-  replacement (even after `clear_hooks()`), `do()`, `set()`, a region edit, a hooked rerun or run,
-  a direct write. Plain reruns, plain runs, forks and `clear_hooks()` on an untouched trace are
-  not touches. `None` means no evidence: the artifact predates tlspec 9 or the backend is not
+  replacement (even after `clear_edits(site)` removes it), `do()`, `set()`, a region edit, a
+  hooked rerun or run, a direct write. Plain reruns, plain runs, forks and `clear_edits(site)` on
+  an untouched trace are not touches. `None` means no evidence: the artifact predates tlspec 9 or the backend is not
   torch, and it is never a pristine reading. Bundle's pristine label and baseline
   auto-detection count a member only when it reads `True`. It is a reading, not a verdict: it
   never changes validation or a run report. Not `Trace.state`: `TraceState.PRISTINE` is an
@@ -1387,9 +1387,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   in the same call. A non-callable refuses `do_loss_not_callable`, a plan with no gradient site
   refuses `do_loss_without_gradient_site`, and a callable that raises writes an `error` envelope,
   detaches the hooks this call attached, and re-raises. `engine="set_only"` arms the gradient rules
-  on the trace itself for its own `trace.backward(loss)`. `attach_hooks(tl.grad(s), edit)`
+  on the trace itself for its own `trace.backward(loss)`. Staging the recipe
+  `do(tl.when(tl.grad(s), edit), intervention=InterventionOptions(engine="set_only"))`
   registers the sticky rule without a rerun; when the trace holds no live backward graph its
-  `attach_hooks` history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
+  staging history row carries `armed_for="next_rerun"` (the rule waits for the next rerun's
   backward). A saved trace keeps the armed rules and records their
   count in `annotations["armed_gradient_edits"]`.
 
@@ -1418,7 +1419,7 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   `rerun_predicate_restage_mismatch` (trace unchanged) when the predicate fires at
   different ops than the staged entries name, or at the same ops with changed rule content
   (a staged steer edited since capture). A staged edit addressed by a finalized exact label
-  (`Trace.set(label, ...)`, `attach_hooks(tl.label(...))`) is translated before the forward to
+  (`Trace.set(label, ...)`, `do(tl.label(...), edit)`) is translated before the forward to
   the raw capture labels of the ops it names, the translation a mixed gradient plan's
   activation half already uses, so it fires on the rerun; each pass of a multi-pass op keeps
   its own raw label, so a pass-qualified label edits that pass alone (JMT, Sun 1 Nov 2026).
@@ -1447,10 +1448,10 @@ kernels with no expansion op refuse `mi_kv_expansion_unavailable`; several expan
   where `fast_refused` names the refusing guard as `<code>:<stage>` (for example
   `run_capability_unavailable:fast_rerun_target_unsupported` for a value replacement or a
   non-module target, `run_capability_unavailable:fast_rerun_graph_unsteered` when a staged
-  entry has never fired in the trace's recorded graph, as after `attach_hooks()` on a plain
-  capture, or when the graph records a fire no staged entry accounts for, as after
-  `clear_hooks()` on a steered capture, so the capture engine reruns once to record the current
-  plan, or
+  entry has never fired in the trace's recorded graph, as after a sticky hook staged by `do` with
+  `engine="set_only"` on a plain capture, or when the graph records a fire no staged entry
+  accounts for, as after `clear_edits(site)` on a steered capture, so the capture engine reruns
+  once to record the current plan, or
   `<divergence code>:fast_live_call_fingerprint` for a structural change); `hooks_fired` / `hooks_unfired` count the staged plans that fired, and a plan that
   never fired settles by `on_zero_fire` (default: warns `rerun_zero_fire`). Through
   `run(inputs=..., fast=True)` a run that applies staged edits reports `unverifiable`, never
@@ -2021,7 +2022,7 @@ shims, by declared contract. Each carries the same tag at its definition.
 **register / unregister (`tl.bridge.sae.register(name, sae, *, site)`, `tl.bridge.sae.unregister(name)`)** — *unstable — no deprecation shim owed*
 : Make (or stop making) an SAE's latents the facet family `name` at `site`.
   `tl.facet(name).latent(k)` then addresses latent `k` at the doors a
-  `tl.head` selector serves (`Trace.set`, `attach_hooks`, `Trace.do`,
+  `tl.head` selector serves (`Trace.set`, `Trace.do`,
   `fork().do`; and, as a bare selector, `trace[selector]`, which returns the
   `Facet` whose `.value` is
   the read, and `tl.trace(save=selector)`, which keeps the ops that read
@@ -4552,7 +4553,7 @@ alphabetical order.
 | `Trace.profile_enabled` | Whether this capture was run with profiling requested |
 | `Trace.reconstruct_container` | Rebuild a captured container selected by site and role from saved Op values |
 | `Trace.reconstruct_output` | Rebuild the traced model's final Python output object from saved Op values |
-| `Trace.remove` | Detach the hook attachments made by the most recent single-hook `attach_hooks` call |
+| `Trace.remove` | Detach the hook attachments made by the most recent single-hook `do` call |
 | `Trace.replace_state_from` | Atomically replace this trace's run state with that of another `Trace` |
 | `Trace.root_module` | The `Module` record for the top-level model, `modules["self"]` |
 | `Trace.root_trace` | The ultimate root Trace of this fork or rerun lineage, or `None` |
@@ -5817,7 +5818,7 @@ keywords of the records built by TorchLens (the table above) are not public and 
 | `enabled=` | keyword of `tl.facets.enable_transformer_lens_aliases` (default `True`): Whether alias keys such as `hook_pattern` should resolve to native TorchLens facets such as `pattern` |
 | `encoder=` | constructor keyword of `tl.stats.Quantile` (keyword-only; default `None`): Optional callable applied to each batch before it is folded, for example an SAE's encoder to estimate per-latent quantiles; constructor keyword of `tl.stats.TopK` (keyword-only; default `None`): Optional callable applied to each batch before it is folded, for example an SAE's encoder to rank examples per latent; keyword of `tl.stats.load_fitted` (keyword-only; default `None`): The `encoder=` callable the saved accumulator was built with (it is not stored in the file); required exactly when one was set |
 | `encoding=` | constructor keyword of `tl.stats.HistogramDescriptor` (default `'dense'`) |
-| `engine=` | keyword of `tl.experiment.sweep_grid` (keyword-only; default `'live_hook'`); keyword of `tl.experiment.sweep_sites` (keyword-only; default `'live_hook'`): `"live_hook"` (default; fork + attach_hooks + run(model, x) — a real forward) or `"replay"` (fork + do on saved payloads). The lane is stamped in the envelope and the effect table; keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'rerun'`): `"rerun"` (live-hook route). `"replay"` refuses typed until the known HF replay crash (FIX-A) lands; keyword of `tl.neuro.plan_extraction` (keyword-only; default `'trace'`): `"trace"` only at launch; constructor keyword of `tl.options.InterventionOptions` (optional): Propagation engine: `"auto"`, `"replay"`, `"rerun"`, or `"set_only"` |
+| `engine=` | keyword of `tl.experiment.sweep_grid` (keyword-only; default `'live_hook'`); keyword of `tl.experiment.sweep_sites` (keyword-only; default `'live_hook'`): `"live_hook"` (default; fork + do(site, hook, model=model, inputs=x), a real forward) or `"replay"` (fork + do on saved payloads). The lane is stamped in the envelope and the effect table; keyword of `tl.mechinterp.patch_grid` (keyword-only; default `'rerun'`): `"rerun"` (live-hook route). `"replay"` refuses typed until the known HF replay crash (FIX-A) lands; keyword of `tl.neuro.plan_extraction` (keyword-only; default `'trace'`): `"trace"` only at launch; constructor keyword of `tl.options.InterventionOptions` (optional): Propagation engine: `"auto"`, `"replay"`, `"rerun"`, or `"set_only"` |
 | `entries=` | constructor keyword of `tl.intervention.RegionBoundary` (required) |
 | `episode=` | keyword of `tl.trace` (keyword-only; default `None`): Torch-only episode capture declaration (`EpisodeOptions`) |
 | `episode_id=` | keyword of `Bundle.episode_status` (required): Episode entity named by `episode_member` relation rows |

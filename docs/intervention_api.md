@@ -89,7 +89,7 @@ portable selector after discovery.
 ## Forward Helpers
 
 Forward helpers return `Edit` objects that can be passed to `set`,
-`attach_hooks`, `do`, live capture `hooks=...`, replay, or rerun.
+`do`, live capture `hooks=...`, replay, or rerun.
 
 | Helper | Signature | Portability |
 | --- | --- | --- |
@@ -223,8 +223,8 @@ A full `tl.trace(...)` whose forward raises raises `tl.errors.TraceCaptureError`
 | Method | Use |
 | --- | --- |
 | `log.set(site, value)` | Record a one-shot tensor or callable replacement and mark the recipe stale. |
-| `log.attach_hooks(site, hook)` | Add sticky helper/callable hooks to the recipe. |
-| `log.do(...)` | Apply an intervention and dispatch to `push`, `run`, or `set_only`. |
+| `log.do(site, hook)` | Add a sticky helper/callable hook to the recipe and dispatch to `push`, `run` (with `model=`/`inputs=`), or `set_only` (stage without running; pass a `tl.when(site, hook)` recipe to stage a sticky hook). |
+| `log.clear_edits(site)` | Remove the sticky hooks staged at `site`. |
 | `log.fork(name=None)` | Create an isolated branch for experiments. |
 | `log.push(replay=ReplayOptions(...))` | Propagate over the saved DAG without calling `model.forward` (the former `replay()` alias is removed). |
 | `log.run(model, x, replay=ReplayOptions(append=False))` | Re-execute the model under the active spec (the former `rerun()` alias is removed). |

@@ -1074,7 +1074,7 @@
   rather than guess. BOUNDARY: a bare layer label naming a
   multi-pass layer refuses typed — `multipass_bare_label_ambiguous`
   (`AmbiguousSiteError`) on string/`tl.label` addressing
-  (do/attach_hooks/push_from/`trace[selector]`), `selection_unresolvable` /
+  (do/push_from/`trace[selector]`), `selection_unresolvable` /
   `multipass_bare_label` on `tl.units` — with a teaching message naming
   every pass-qualified spelling; bare labels on single-pass layers stay
   accepted, predicate selectors keep fan-out, and the explicit Layer
@@ -1360,7 +1360,7 @@
   nodes; spliced outputs are identical with it off. `bridge.sae.register(name, sae, site=)`
   / `unregister(name)` (DOCUMENTED-UNSTABLE) make an SAE's latents the facet family `name`:
   `tl.facet(name).latent(k)` (or a list) is edited at the doors `tl.head` serves
-  (`Trace.set`, `attach_hooks`, `Trace.do`, `fork().do`) as
+  (`Trace.set`, `Trace.do`, `fork().do`) as
   `site + decode(z') - decode(z)` (the reconstruction error stays), and
   `trace[site].facets["name[k]"]` reads the encoder activation; a string site must be one
   op of a single-pass layer (`sae_latent_site_ambiguous`), a selector site fans out. A bare
