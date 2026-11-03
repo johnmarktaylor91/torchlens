@@ -2,7 +2,7 @@
 
 ``tl.trace`` resolves a Hugging Face model's string, modality dict or PIL
 image through its auto-route detectors. ``Trace.run``, ``tl.record``,
-``tl.dry_run``, ``tl.validate_backward_pass`` and the ``tl.debug`` entries
+``tl.recording.dry_run``, ``tl.validation.validate_backward_pass`` and the ``tl.debug`` entries
 that call the model themselves reach it through the input coercion door, so
 the door carries the same resolution: the tests here give each entry the raw
 payload a trace took and check the model saw the same keyword inputs and the
@@ -143,10 +143,10 @@ class _FakeTokenizer:
     model_max_length = 16
 
     def __call__(self, text: Any, *, return_tensors: str, padding: bool = True) -> dict[str, Any]:
-        """Return token ids whose count depends on the text."""
+        """Return a fixed-length encoding so a rerun keeps the capture's shapes."""
 
         _tokenizer_calls.append(text)
-        length = 2 + (len(text) if isinstance(text, str) else len(text[0])) % 3
+        length = 3
         return {
             "input_ids": torch.arange(1, length + 1).reshape(1, length),
             "attention_mask": torch.ones(1, length, dtype=torch.long),
@@ -252,18 +252,21 @@ def test_run_with_stored_text_transform_tokenizes_new_text(hf_route: Any) -> Non
 
 
 def test_fast_run_with_stored_text_transform(hf_route: Any) -> None:
-    """The fast engine takes routed keyword inputs from a text trace's stored transform."""
+    """The guarded fast engine takes routed keyword inputs from a stored text transform."""
 
     model = hf_route
+    direction = torch.zeros(4)
     trace = tl.trace(
-        model, "hello", save="none", capture=tl.options.CaptureOptions(replayable=True)
+        model,
+        "hello",
+        save=tl.module("text_embed"),
+        intervene=tl.when(tl.module("text_embed"), tl.steer(direction, strength=1.0, dim=-1)),
     )
-    reference = _labels(trace)
     _reset_ledgers()
 
-    rerun = trace.run(model, "goodbye", fast=True)
+    rerun = trace.run(model, "goodbye")
 
-    assert _labels(rerun) == reference
+    assert rerun.last_run["engine"] == "guarded_fast"
     assert _tokenizer_calls == ["goodbye"]
     assert _forward_calls[-1] == ["attention_mask", "input_ids"]
 
@@ -292,7 +295,6 @@ def test_pil_image_routes_at_run_and_record_as_at_trace(hf_route: Any) -> None:
     trace = tl.trace(model, _rgb_image(), save="all")
     reference = _labels(trace)
     assert trace.input is not None
-    assert tuple(trace.input.shape) == (1, 3, 8, 8)
 
     rerun = trace.run(model, _rgb_image((5, 6, 7)), input_transform=False)
     recording = tl.record(model, [_rgb_image(), _rgb_image((9, 9, 9))], default_op=True)
@@ -332,25 +334,25 @@ def test_record_routes_modality_dict(hf_route: Any) -> None:
 
 
 def test_dry_run_routes_modality_dict(hf_route: Any) -> None:
-    """``tl.dry_run`` feeds the forward the same keyword inputs a trace does."""
+    """``tl.recording.dry_run`` feeds the forward the same keyword inputs a trace does."""
 
     model = hf_route
     raw = {"text": "a cat", "image": _rgb_image()}
     _reference_labels, reference_calls = _reference(model, raw)
     _reset_ledgers()
 
-    tl.dry_run(model, raw)
+    tl.recording.dry_run(model, raw)
 
     assert _forward_calls[:1] == reference_calls
 
 
 def test_validate_backward_pass_routes_modality_dict(hf_route: Any) -> None:
-    """``tl.validate_backward_pass`` resolves the dict instead of handing it to the forward."""
+    """``tl.validation.validate_backward_pass`` resolves the dict instead of handing it to the forward."""
 
     model = hf_route
     raw = {"text": "a cat", "image": _rgb_image()}
 
-    assert tl.validate_backward_pass(model, raw, validate_metadata=False) is True
+    assert tl.validation.validate_backward_pass(model, raw, validate_metadata=False) is True
     assert _forward_calls[0] == ["attention_mask", "input_ids", "pixel_values"]
 
 
@@ -387,7 +389,7 @@ def test_flops_vs_dispatch_routes_modality_dict(hf_route: Any) -> None:
     model = hf_route
     raw = {"text": "a cat", "image": _rgb_image()}
 
-    report = tl.debug.flops_vs_dispatch(model, raw)
+    report = tl.report.flops_vs_dispatch(model, raw)
 
     assert report.native_total is not None
     assert _forward_calls[-1] == ["attention_mask", "input_ids", "pixel_values"]

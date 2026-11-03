@@ -2,8 +2,8 @@
 
 ``tl.trace`` resolves Hugging Face text, modality-dict and PIL inputs through
 its auto-route detectors (``torchlens._autoroute._builtin_input``) before the
-capture door coerces anything. ``Trace.run``, ``tl.record``, ``tl.dry_run``,
-``tl.validate_backward_pass`` and the ``tl.debug`` entries that take model
+capture door coerces anything. ``Trace.run``, ``tl.record``, ``tl.recording.dry_run``,
+``tl.validation.validate_backward_pass`` and the ``tl.debug`` entries that take model
 inputs reach the model through :func:`torchlens._input_coerce._coerce_inputs`
 alone, so this module gives that door the same resolution: the same string,
 dict or image produces the same model inputs at every entry.
