@@ -118,6 +118,8 @@ def _expect_manifest_refusal(root, key, built_counter, *, code="manifest_schema_
 def _manifest_swap_code(key, value):
     """Pin the contract's format-window, level and record-coherence refusal doors."""
 
+    if key == "format":
+        return "artifact_version_below_floor"
     if key == "tlspec_version" and type(value) is int and value < contract.RECORD_CONTRACT_FLOOR:
         return "artifact_version_below_floor"
     if key in ("format_version", "tlspec_version") and type(value) is int and value >= 0:
