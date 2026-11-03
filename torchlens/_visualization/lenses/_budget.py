@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from ...errors._base import TorchLensWarning
+from .._trace_collapse import collapse_schedule as _collapse_schedule
 
 if TYPE_CHECKING:
     from ..._data_classes.trace import Trace
@@ -173,7 +174,7 @@ def resolve_budget(
     if op_count > COLLAPSE_OPTIMIZER_MAX_OPS:
         return _resolve_above_ceiling(trace, op_count, channel_active)
 
-    schedule = trace.collapse_schedule(context)
+    schedule = _collapse_schedule(trace, context)
     full_visible = schedule.steps[0].visible_count
     if full_visible <= BAND_CEILING:
         coverage = (

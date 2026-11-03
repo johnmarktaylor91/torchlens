@@ -15,6 +15,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import weakref  # noqa: F401  (weakref.ref objects arrive through _collapse_source)
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -53,6 +54,13 @@ class Drawing:
     trace:
         A retained trace when the caller asked to keep one; ``close()`` (and
         leaving the ``with`` block) releases it.
+    collapse_plan:
+        The collapse plan a forward draw with ``collapse="auto"``, ``"max"`` or
+        a float level rendered from, computed against the drawing's resolved
+        render context (property; refuses typed when the drawing has none).
+    collapse_schedule:
+        The monotone float collapse schedule of the drawn forward graph under
+        the drawing's resolved render context (property).
     """
 
     dot: str
@@ -64,6 +72,69 @@ class Drawing:
     num_ops: int | None = None
     policy: dict[str, Any] = field(default_factory=dict)
     trace: Any | None = None
+    _collapse_source: Any = field(default=None, repr=False)
+    _collapse_context: Any = field(default=None, repr=False)
+    _collapse_tools: Any = field(default=None, repr=False)
+
+    @property
+    def collapse_plan(self) -> Any:
+        """Return the collapse plan this forward drawing rendered from.
+
+        The plan's mode is the drawing's ``collapse`` policy (``"auto"``,
+        ``"max"`` or a float level) and its context is the render request the
+        draw resolved, so the plan is the one the picture shows. Refuses typed
+        (``collapse_plan_unavailable``) for a drawing made with
+        ``collapse="none"``, a backward or combined graph, an animation, or
+        once the source trace has been released.
+        """
+
+        trace, context, tools = self._collapse_inputs()
+        mode = self.policy.get("collapse", "none")
+        if mode == "none":
+            raise CaptureNotActiveError(
+                "collapse plan unavailable: this drawing was made with collapse='none'",
+                code="collapse_plan_unavailable",
+                remedy="draw with collapse='auto', 'max' or a float level in [0.0, 1.0]",
+                reason="collapse='none'",
+            )
+        return tools[0](trace, mode, context)
+
+    @property
+    def collapse_schedule(self) -> Any:
+        """Return the monotone float collapse schedule of the drawn forward graph.
+
+        Steps run from ``t=0.0`` (full graph) to ``t=1.0`` (byte-identical to
+        ``collapse="max"``) under the drawing's resolved render context.
+        Refuses typed (``collapse_plan_unavailable``) for backward, combined or
+        animation drawings and once the source trace has been released.
+        """
+
+        trace, context, tools = self._collapse_inputs()
+        return tools[1](trace, context)
+
+    def _collapse_inputs(self) -> tuple[Any, Any, Any]:
+        """Return (trace, render context, collapse functions) or refuse typed."""
+
+        if self._collapse_tools is None or self._collapse_context is None:
+            raise CaptureNotActiveError(
+                "collapse diagnostics unavailable: only a forward graph drawing carries "
+                "a collapse plan and schedule",
+                code="collapse_plan_unavailable",
+                remedy="call trace.draw(graph='forward', ...) and read the members of its result",
+                reason="not a forward drawing",
+            )
+        trace = self.trace
+        if trace is None and self._collapse_source is not None:
+            trace = self._collapse_source()
+        if trace is None:
+            raise CaptureNotActiveError(
+                "collapse diagnostics unavailable: the trace this drawing was made from "
+                "has been released",
+                code="collapse_plan_unavailable",
+                remedy="keep the trace alive while reading collapse_plan or collapse_schedule",
+                reason="trace released",
+            )
+        return trace, self._collapse_context, self._collapse_tools
 
     def save(self, path: str | os.PathLike[str], *, editable: bool = False) -> Path:
         """Write the picture to ``path`` and return the path.

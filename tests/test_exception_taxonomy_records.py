@@ -20,6 +20,10 @@ from torch import nn
 import torchlens as tl
 from torchlens import errors
 from torchlens._errors import PayloadUnavailableError, RecordBindingError
+from torchlens._visualization._trace_collapse import (
+    collapse_order as _collapse_order,
+    collapse_plan as _collapse_plan,
+)
 
 
 @pytest.fixture(scope="module")
@@ -71,12 +75,12 @@ RECORD_DOOR_CASES: tuple[tuple[str, type[BaseException], Callable[[Any], object]
     (
         "collapse_mode_invalid",
         ValueError,
-        lambda log: log.collapse_plan(mode="bogus"),  # type: ignore[arg-type]
+        lambda log: _collapse_plan(log, mode="bogus"),  # type: ignore[arg-type]
     ),
     (
         "collapse_level_invalid",
         ValueError,
-        lambda log: log.collapse_plan(mode=1.5),
+        lambda log: _collapse_plan(log, mode=1.5),
     ),
     (
         "stack_selector_no_match",
@@ -307,7 +311,7 @@ def test_visualization_doors_carry_codes_and_remedies(small_trace: Any) -> None:
     _assert_contract(exc_info.value, "summary_level_invalid", ValueError)
 
     with pytest.raises(errors.TorchLensError) as exc_info:
-        small_trace.collapse_order(mode="bogus")
+        _collapse_order(small_trace, mode="bogus")
     _assert_contract(exc_info.value, "collapse_mode_invalid", ValueError)
 
 

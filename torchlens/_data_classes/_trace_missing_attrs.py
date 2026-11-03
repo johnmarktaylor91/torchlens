@@ -59,6 +59,18 @@ _REMOVED_TRACE_MEMBERS: dict[str, str] = {
         "use trace.clear_edits(site) or trace.clear_edits(handle=...) -- clear_hooks was "
         "removed; a fresh fork() starts without staged edits"
     ),
+    "collapse_plan": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the collapse plan is a member "
+        "of the Drawing a forward draw returns"
+    ),
+    "collapse_schedule": (
+        "use trace.draw(...).collapse_schedule -- the collapse schedule is a member of the "
+        "Drawing a forward draw returns"
+    ),
+    "collapse_order": (
+        "use trace.draw(collapse='auto', ...).collapse_plan -- the plan carries the ranking; "
+        "trace.module_collapse_order still lists every module's collapse score"
+    ),
     "save_new_outs": (
         "use trace.run(model, x) -- save_new_outs left the public surface; the refresh engine is internal"
     ),

@@ -6,6 +6,7 @@ method per verb that forwards to these functions.
 
 from __future__ import annotations
 
+import weakref
 from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal
@@ -30,6 +31,10 @@ from ._pass_animation import pass_animation_html
 from ._render_dot import draw as _render_draw
 from ._render_entrypoints import render_backward_graph, render_combined_graph
 from ._render_utils import DEFAULT_DRAW_STEM, collision_safe_outpath, strip_known_extension
+from ._trace_collapse import (
+    collapse_plan as _collapse_plan,
+    collapse_schedule as _collapse_schedule,
+)
 from ._trace_draw_arguments import _forward_render_arguments
 from .fastlog_preview import preview_fastlog as _preview_fastlog
 from .request import ShowContainersLiteral
@@ -174,6 +179,7 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         "depth": depth,
     }
     vis_mode: VisModeLiteral = "rolled" if rolled else "unrolled"
+    collapse_context: Any = None
     if graph == "backward":
         outpath = "backward_modelgraph" if path is None else path
         rendered: Any = _render_backward(
@@ -215,7 +221,13 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         )
     else:
         outpath = collision_safe_outpath(DEFAULT_DRAW_STEM, file_format) if path is None else path
-        rendered = _render_draw(trace, **_forward_render_arguments(locals(), resolve_color_source))
+        request_sink: dict[str, Any] = {}
+        rendered = _render_draw(
+            trace,
+            request_sink=request_sink,
+            **_forward_render_arguments(locals(), resolve_color_source),
+        )
+        collapse_context = request_sink.get("request")
     written = Path(f"{strip_known_extension(str(outpath))}.{file_format}")
     return Drawing(
         dot=str(rendered),
@@ -223,6 +235,11 @@ def draw(  # noqa: PLR0913 - the one draw door: every VisualizationOptions field
         path=written if written.exists() else None,
         num_ops=num_ops,
         policy=policy,
+        _collapse_source=weakref.ref(trace),
+        _collapse_context=collapse_context,
+        _collapse_tools=(_collapse_plan, _collapse_schedule)
+        if collapse_context is not None
+        else None,
     )
 
 

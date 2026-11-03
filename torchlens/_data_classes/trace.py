@@ -171,7 +171,6 @@ if TYPE_CHECKING:
     from .._runnable import RunResult
     from .._trace_slice import TraceSlice
     from .._visualization.code_panel import CodePanelOption
-    from .._visualization.collapse_plan import CollapsePlan, CollapseSchedule, RenderContext
     from ..intervention.types import FireRecord
     from ..receptive_field._types import (
         ReceptiveFieldDirection,
@@ -2352,25 +2351,6 @@ class Trace(TraceOutputMixin, TraceLike):
         """Every module's smart-collapse priority (``Module.collapse_score``), highest first."""
 
         return _doors.visualization()._trace_collapse.module_collapse_order(self)
-
-    def collapse_order(self, mode: Literal["auto", "max"] = "auto") -> list[tuple[str, float]]:
-        """Return smart-collapse ranking for a policy."""
-
-        return _doors.visualization()._trace_collapse.collapse_order(self, mode)
-
-    def collapse_plan(
-        self,
-        mode: Literal["auto", "max"] | float = "auto",
-        context: "RenderContext | None" = None,
-    ) -> "CollapsePlan":
-        """Return the v2 diagnostic collapse plan for this trace."""
-
-        return _doors.visualization()._trace_collapse.collapse_plan(self, mode, context)
-
-    def collapse_schedule(self, context: "RenderContext | None" = None) -> "CollapseSchedule":
-        """Return the public monotone float collapse schedule."""
-
-        return _doors.visualization()._trace_collapse.collapse_schedule(self, context)
 
     def _suggest_layer_labels(self, selector: str, *, limit: int = 10) -> list[str]:
         """Did-you-mean layer labels for a failed lookup (the refusal text's candidates)."""

@@ -12,7 +12,7 @@ duplicate ``t`` values and no-op steps existed. The documented story
 This module makes them the same truth: ONE nested ladder of typed
 condensation events (:class:`CollapseEvent`) is derived from the max-mode
 endpoint, and ``auto``, float-level selection, and the public
-``Trace.collapse_schedule()`` all read it.
+``Drawing.collapse_schedule`` all read it.
 
 - Interior ``t`` maps GEOMETRICALLY in realized count:
   ``target(t) = full * (max/full)**t``, i.e.
