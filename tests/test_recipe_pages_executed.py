@@ -49,6 +49,7 @@ PAGES: dict[str, str] = {
     "docs/recipes/sae_trainers.md": "sae_trainers",
     "docs/recipes/sae_crosscoder_diff.md": "crosscoder",
     "docs/recipes/prisma_clip_sae.md": "prisma",
+    "docs/recipes/linear_probes.md": "sklearn",
     "docs/neuroai/netrep.md": "netrep",
     "docs/neuroai/himalaya.md": "himalaya",
     "docs/neuroai/journey.md": "cornet",
@@ -77,6 +78,7 @@ TOOL_MODULES: dict[str, tuple[str, ...]] = {
     "netrep": ("netrep",),
     "himalaya": ("himalaya",),
     "cornet": ("cornet",),
+    "sklearn": ("sklearn", "transformers"),
 }
 
 #: Pages measured above the 5 s tier (heavy, 5-20 s) in the peer-recipe leg, or
